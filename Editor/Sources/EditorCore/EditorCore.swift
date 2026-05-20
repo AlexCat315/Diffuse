@@ -1,6 +1,7 @@
 import AIRuntime
 import AssetPipeline
 import AudioRuntime
+import CapabilityRuntime
 import EngineCore
 import EngineKernel
 import IntentRuntime
@@ -54,7 +55,8 @@ public final class EditorApplication: @unchecked Sendable {
                 backendConfig: WGPUDeviceConfig? = nil,
                 backend: WGPUBackend? = nil,
                 events: PlatformEventBridge = PlatformEventBridge(),
-                initialAISettings: EditorAISettings = .default) throws {
+                initialAISettings: EditorAISettings = .default,
+                initialCapabilitySettings: EditorCapabilitySettings = .default) throws {
         let resolvedBackendConfig = backendConfig ?? .init()
         let resolvedBackend = backend ?? WGPUBackend(config: resolvedBackendConfig)
         _ = try EditorAssetCatalog.loadProject(at: projectDirectory)
@@ -66,10 +68,13 @@ public final class EditorApplication: @unchecked Sendable {
         try FileManager.default.createDirectory(at: observationDirectory,
                                                 withIntermediateDirectories: true)
         let observationBus = try ObservationBus(coldLogDirectory: observationDirectory.path)
-        let intentCoordinator = IntentRuntimeCoordinator()
+        let intentCoordinator = IntentRuntimeCoordinator(
+            capabilityPlanner: Self.makeCapabilityInvocationPlanner(for: initialCapabilitySettings)
+        )
         // Restore the AI backend from the settings passed in at launch (loaded from
         // EditorShellState by the caller) and the matching key in Keychain.
         store.dispatch(.setAISettings(initialAISettings))
+        store.dispatch(.setCapabilitySettings(initialCapabilitySettings))
         let initialSession = EditorApplication.makeSession(for: initialAISettings)
 
         self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: resolvedBackend)
@@ -851,6 +856,11 @@ public final class EditorApplication: @unchecked Sendable {
         session = newSession
     }
 
+    public func applyCapabilitySettings(_ settings: EditorCapabilitySettings) {
+        store.dispatch(.setCapabilitySettings(settings))
+        intentCoordinator.configureCapabilityPlanner(Self.makeCapabilityInvocationPlanner(for: settings))
+    }
+
     /// Removes the stored API key for the current provider and disables AI.
     public func clearAIKey() {
         AIKeychain.delete(provider: store.state.aiSettings.provider)
@@ -881,6 +891,10 @@ public final class EditorApplication: @unchecked Sendable {
             guard let key = AIKeychain.load(provider: .deepseek) else { return nil }
             return Session(config: .deepSeek(apiKey: key, model: settings.model))
         }
+    }
+
+    static func makeCapabilityInvocationPlanner(for settings: EditorCapabilitySettings) -> CapabilityInvocationPlanner {
+        CapabilityInvocationPlanner(gate: ReleasePhaseGate(activePhase: settings.releasePhase.runtimePhase))
     }
 
     private func submitResolvedIntent(_ intent: IntentIR) {

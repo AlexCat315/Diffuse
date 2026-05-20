@@ -73,13 +73,27 @@ private struct EditorCallbacks {
                     s.dispatch(.setWorkspaceMode(next))
                     let np = s.state.activeLayoutPreset
                     EditorRootViewFactory.loadLayoutPreset(into: controller, for: next, preset: np, registry: registry)
-                    EditorRootViewFactory.saveShellState(mode: next, preset: np, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode, primarySelectBehavior: s.state.primarySelectBehavior)
+                    EditorRootViewFactory.saveShellState(mode: next,
+                                                         preset: np,
+                                                         themeMode: s.state.themeMode,
+                                                         language: s.state.language,
+                                                         vsyncMode: s.state.vsyncMode,
+                                                         primarySelectBehavior: s.state.primarySelectBehavior,
+                                                         aiSettings: s.state.aiSettings,
+                                                         capabilitySettings: s.state.capabilitySettings)
                 },
                 resetLayout: {
                     let m = s.state.workspaceMode; let p = s.state.activeLayoutPreset
                     EditorRootViewFactory.resetLayout(into: controller, for: m, preset: p, registry: registry)
                     EditorRootViewFactory.saveWorkspaceLayout(controller, for: m, preset: p)
-                    EditorRootViewFactory.saveShellState(mode: m, preset: p, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode, primarySelectBehavior: s.state.primarySelectBehavior)
+                    EditorRootViewFactory.saveShellState(mode: m,
+                                                         preset: p,
+                                                         themeMode: s.state.themeMode,
+                                                         language: s.state.language,
+                                                         vsyncMode: s.state.vsyncMode,
+                                                         primarySelectBehavior: s.state.primarySelectBehavior,
+                                                         aiSettings: s.state.aiSettings,
+                                                         capabilitySettings: s.state.capabilitySettings)
                 },
                 newScene: { app.resetPreviewScene() },
                 openSettings: { app.openSettingsWindow() },
