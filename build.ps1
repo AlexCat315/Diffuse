@@ -1,4 +1,6 @@
 param(
+    [switch]$Bootstrap,
+
     [ValidateSet("engine", "editor")]
     [string]$Package = "editor",
 
@@ -10,10 +12,6 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $root = $PSScriptRoot
-$packagePath = switch ($Package) {
-    "engine" { Join-Path $root "Engine" }
-    "editor" { Join-Path $root "Editor" }
-}
 
 function Import-VSDevEnvironment {
     $isWindowsPlatform = $env:OS -eq "Windows_NT" -or [System.IO.Path]::DirectorySeparatorChar -eq "\"
@@ -55,6 +53,22 @@ function Import-VSDevEnvironment {
 
 Import-VSDevEnvironment
 $env:MIMALLOC_DISABLE_REDIRECT = "1"
+
+# ── bootstrap: compile C/C++ native deps via SPM plugin ─────────────────────
+if ($Bootstrap) {
+    & swift package --package-path (Join-Path $root "Engine") `
+        --allow-writing-to-package-directory build-native-deps @SwiftBuildArgs
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    & swift package --package-path (Join-Path $root "GuavaUI") `
+        --allow-writing-to-package-directory build-native-deps @SwiftBuildArgs
+    exit $LASTEXITCODE
+}
+
+# ── swift build ──────────────────────────────────────────────────────────────
+$packagePath = switch ($Package) {
+    "engine" { Join-Path $root "Engine" }
+    "editor" { Join-Path $root "Editor" }
+}
 
 $swiftBuild = Get-Command swift-build -ErrorAction SilentlyContinue
 if ($swiftBuild) {
