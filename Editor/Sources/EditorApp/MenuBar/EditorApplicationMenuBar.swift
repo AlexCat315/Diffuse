@@ -1,4 +1,3 @@
-#if os(Windows)
 import EditorCore
 import GuavaUICompose
 import GuavaUIRuntime
@@ -92,9 +91,17 @@ struct EditorApplicationMenuBar: View {
         if modifiers.contains(.control) { parts.append("Ctrl") }
         if modifiers.contains(.shift) { parts.append("Shift") }
         if modifiers.contains(.option) { parts.append("Alt") }
-        if modifiers.contains(.command) { parts.append("Meta") }
+        if modifiers.contains(.command) { parts.append(commandModifierLabel) }
         parts.append(key.uppercased())
         return parts.joined(separator: "+")
+    }
+
+    private var commandModifierLabel: String {
+        #if os(macOS)
+        "Cmd"
+        #else
+        "Meta"
+        #endif
     }
 
     private var menus: [ApplicationMenu] {
@@ -108,7 +115,7 @@ struct EditorApplicationMenuBar: View {
             ]),
             ApplicationMenu(title: L("Edit"), items: [
                 action(L("Undo"), key: "z", command: .undo),
-                action(L("Redo"), key: "z", modifiers: [.control, .shift], command: .redo),
+                action(L("Redo"), key: "z", modifiers: [.primary, .shift], command: .redo),
                 .separator,
                 action(L("Settings"), key: ",", command: .openSettings),
             ]),
@@ -159,7 +166,7 @@ struct EditorApplicationMenuBar: View {
 
     private func action(_ title: String,
                         key: String,
-                        modifiers: MenuKeyModifiers = [.control],
+                        modifiers: MenuKeyModifiers = [.primary],
                         selected: Bool = false,
                         command: EditorMenuCommand) -> ApplicationMenuItem {
         .action(ApplicationMenuAction(title: title,
@@ -213,5 +220,10 @@ private struct MenuKeyModifiers: OptionSet {
     static let shift = MenuKeyModifiers(rawValue: 1 << 1)
     static let option = MenuKeyModifiers(rawValue: 1 << 2)
     static let control = MenuKeyModifiers(rawValue: 1 << 3)
+
+    #if os(macOS)
+    static let primary: MenuKeyModifiers = .command
+    #else
+    static let primary: MenuKeyModifiers = .control
+    #endif
 }
-#endif
