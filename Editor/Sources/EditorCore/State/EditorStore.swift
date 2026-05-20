@@ -45,6 +45,7 @@ public final class EditorStore: @unchecked Sendable {
         case inspectorCollapsedSectionIDs
         case pendingConfirmationRequest
         case aiSettings
+        case capabilitySettings
         case aiStatusMessage
         case aiWarnings
         case chatMessages
@@ -185,6 +186,8 @@ public final class EditorStore: @unchecked Sendable {
                  new.pendingConfirmationRequest)
         case .setAISettings:
             mark(.aiSettings, old.aiSettings, new.aiSettings)
+        case .setCapabilitySettings:
+            mark(.capabilitySettings, old.capabilitySettings, new.capabilitySettings)
         case .setAIStatusMessage:
             mark(.aiStatusMessage, old.aiStatusMessage, new.aiStatusMessage)
         case .setAIWarnings:
@@ -237,6 +240,7 @@ extension EditorStore {
     public var windowOccluded: Bool { read(.windowOccluded, storage.windowOccluded) }
     public var shouldRender: Bool { read(.shouldRender, storage.shouldRender) }
     public var aiSettings: EditorAISettings { read(.aiSettings, storage.aiSettings) }
+    public var capabilitySettings: EditorCapabilitySettings { read(.capabilitySettings, storage.capabilitySettings) }
     public var aiStatusMessage: String? { read(.aiStatusMessage, storage.aiStatusMessage) }
     public var aiWarnings: [String] { read(.aiWarnings, storage.aiWarnings) }
     public var consoleEntries: [EditorConsoleEntry] { read(.consoleEntries, storage.consoleEntries) }

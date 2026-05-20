@@ -17,7 +17,8 @@ private func runEditor() throws {
                                 backendConfig: launchOptions.backendConfig,
                                 backend: backend,
                                 events: events,
-                                initialAISettings: shellState?.aiSettings ?? .default)
+                                initialAISettings: shellState?.aiSettings ?? .default,
+                                initialCapabilitySettings: shellState?.capabilitySettings ?? .default)
     app.bootstrap()
     defer { app.shutdown() }
 
@@ -48,6 +49,7 @@ private func runEditor() throws {
         app.store.dispatch(.setLanguage(shellState.language))
         app.store.dispatch(.setVSyncMode(shellState.vsyncMode))
         app.store.dispatch(.setPrimarySelectBehavior(shellState.primarySelectBehavior))
+        app.store.dispatch(.setCapabilitySettings(shellState.capabilitySettings))
         EditorLocalizationPreferences.language = shellState.language
     }
 
@@ -91,14 +93,16 @@ private func runEditor() throws {
         themeMode: app.store.state.themeMode,
         language: app.store.state.language,
         vsyncMode: app.store.state.vsyncMode,
-        primarySelectBehavior: app.store.state.primarySelectBehavior
+        primarySelectBehavior: app.store.state.primarySelectBehavior,
+        capabilitySettings: app.store.state.capabilitySettings
     )
     let shellPreferenceToken = app.store.subscribe { store in
         let next = (
             themeMode: store.state.themeMode,
             language: store.state.language,
             vsyncMode: store.state.vsyncMode,
-            primarySelectBehavior: store.state.primarySelectBehavior
+            primarySelectBehavior: store.state.primarySelectBehavior,
+            capabilitySettings: store.state.capabilitySettings
         )
         guard next != lastShellPreferences else { return }
         if next.language != lastShellPreferences.language {
@@ -115,7 +119,9 @@ private func runEditor() throws {
                                              themeMode: store.state.themeMode,
                                              language: store.state.language,
                                              vsyncMode: store.state.vsyncMode,
-                                             primarySelectBehavior: store.state.primarySelectBehavior)
+                                             primarySelectBehavior: store.state.primarySelectBehavior,
+                                             aiSettings: store.state.aiSettings,
+                                             capabilitySettings: store.state.capabilitySettings)
         app.requestDisplayRefresh()
     }
     defer { app.store.unsubscribe(shellPreferenceToken) }
@@ -169,7 +175,9 @@ private func runEditor() throws {
                                          themeMode: app.store.state.themeMode,
                                          language: app.store.state.language,
                                          vsyncMode: app.store.state.vsyncMode,
-                                         primarySelectBehavior: app.store.state.primarySelectBehavior)
+                                         primarySelectBehavior: app.store.state.primarySelectBehavior,
+                                         aiSettings: app.store.state.aiSettings,
+                                         capabilitySettings: app.store.state.capabilitySettings)
     EditorRootViewFactory.saveWorkspaceLayout(controller,
                                               for: app.store.state.workspaceMode,
                                               preset: app.store.state.activeLayoutPreset)
