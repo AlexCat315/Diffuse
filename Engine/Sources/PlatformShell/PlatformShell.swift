@@ -33,6 +33,23 @@ public enum WindowTitleBarStyle: String, Sendable, Equatable {
     case hiddenInset
 }
 
+public struct WindowChromeHitTest: Sendable, Equatable {
+    public var titleBarHeight: Float
+    public var draggableLeadingInset: Float
+    public var draggableTrailingInset: Float
+    public var resizeBorderWidth: Float
+
+    public init(titleBarHeight: Float,
+                draggableLeadingInset: Float = 0,
+                draggableTrailingInset: Float = 0,
+                resizeBorderWidth: Float = 6) {
+        self.titleBarHeight = max(0, titleBarHeight)
+        self.draggableLeadingInset = max(0, draggableLeadingInset)
+        self.draggableTrailingInset = max(0, draggableTrailingInset)
+        self.resizeBorderWidth = max(0, resizeBorderWidth)
+    }
+}
+
 public struct WindowOptions: Sendable, Equatable {
     public var width: Int32
     public var height: Int32
@@ -126,6 +143,12 @@ public protocol Shell: AnyObject {
     /// window is unknown.
     func raiseWindow(_ windowID: WindowID)
 
+    func minimizeWindow(_ windowID: WindowID)
+    func maximizeWindow(_ windowID: WindowID)
+    func restoreWindow(_ windowID: WindowID)
+    func isWindowMaximized(_ windowID: WindowID) -> Bool
+    func setWindowChromeHitTest(_ windowID: WindowID, _ hitTest: WindowChromeHitTest?)
+
     /// Refresh rate of the display currently containing `windowID`.
     /// Returns `nil` when the platform cannot report it.
     func displayRefreshRate(windowID: WindowID?) -> Double?
@@ -187,6 +210,11 @@ public extension Shell {
     func windowPosition(_ windowID: WindowID) -> (x: Float, y: Float)? { nil }
     func setWindowPosition(_ windowID: WindowID, x: Float, y: Float) {}
     func raiseWindow(_ windowID: WindowID) {}
+    func minimizeWindow(_ windowID: WindowID) {}
+    func maximizeWindow(_ windowID: WindowID) {}
+    func restoreWindow(_ windowID: WindowID) {}
+    func isWindowMaximized(_ windowID: WindowID) -> Bool { false }
+    func setWindowChromeHitTest(_ windowID: WindowID, _ hitTest: WindowChromeHitTest?) {}
     func displayRefreshRate(windowID: WindowID? = nil) -> Double? { nil }
 }
 

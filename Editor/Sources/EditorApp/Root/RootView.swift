@@ -20,12 +20,14 @@ struct EditorRootView: View {
                     Box(direction: .column, alignItems: .stretch, spacing: 0) {
                         ShortcutHost(onKeyDown: cb.handleShortcut)
 
-                        EditorApplicationMenuBar(
-                            workspaceMode: store.workspaceMode,
-                            activeLayoutPreset: store.activeLayoutPreset,
-                            playbackState: store.playbackState,
-                            onCommand: cb.handleMenuCommand
-                        )
+                        ImmersiveWindowTitleBar(draggableLeadingInset: 330) {
+                            EditorApplicationMenuBar(
+                                workspaceMode: store.workspaceMode,
+                                activeLayoutPreset: store.activeLayoutPreset,
+                                playbackState: store.playbackState,
+                                onCommand: cb.handleMenuCommand
+                            )
+                        }
 
                         Divider()
 
