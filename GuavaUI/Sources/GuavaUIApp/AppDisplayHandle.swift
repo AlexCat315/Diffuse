@@ -46,6 +46,12 @@ public final class AppDisplayHandle: @unchecked Sendable {
     private var closeMainWindowAction: (@MainActor () -> Void)?
     private var mainWindowMaximizedQuery: (@MainActor () -> Bool)?
     private var setMainWindowChromeHitTestAction: (@MainActor (WindowChromeHitTest?) -> Void)?
+    private var minimizeWindowByIDAction: (@MainActor (WindowID) -> Void)?
+    private var maximizeWindowByIDAction: (@MainActor (WindowID) -> Void)?
+    private var restoreWindowByIDAction: (@MainActor (WindowID) -> Void)?
+    private var closeWindowByIDAction: (@MainActor (WindowID) -> Void)?
+    private var windowMaximizedByIDQuery: (@MainActor (WindowID) -> Bool)?
+    private var showWindowSystemMenuAction: (@MainActor (WindowID, Float, Float) -> Void)?
 
     public init() {}
 
@@ -87,8 +93,18 @@ public final class AppDisplayHandle: @unchecked Sendable {
     }
 
     @MainActor
+    public func minimizeWindow(_ windowID: WindowID) {
+        minimizeWindowByIDAction?(windowID)
+    }
+
+    @MainActor
     public func maximizeWindow() {
         maximizeMainWindowAction?()
+    }
+
+    @MainActor
+    public func maximizeWindow(_ windowID: WindowID) {
+        maximizeWindowByIDAction?(windowID)
     }
 
     @MainActor
@@ -97,8 +113,18 @@ public final class AppDisplayHandle: @unchecked Sendable {
     }
 
     @MainActor
+    public func restoreWindow(_ windowID: WindowID) {
+        restoreWindowByIDAction?(windowID)
+    }
+
+    @MainActor
     public func toggleMaximizeWindow() {
         isWindowMaximized() ? restoreWindow() : maximizeWindow()
+    }
+
+    @MainActor
+    public func toggleMaximizeWindow(_ windowID: WindowID) {
+        isWindowMaximized(windowID) ? restoreWindow(windowID) : maximizeWindow(windowID)
     }
 
     @MainActor
@@ -109,6 +135,16 @@ public final class AppDisplayHandle: @unchecked Sendable {
     @MainActor
     public func isWindowMaximized() -> Bool {
         mainWindowMaximizedQuery?() ?? false
+    }
+
+    @MainActor
+    public func isWindowMaximized(_ windowID: WindowID) -> Bool {
+        windowMaximizedByIDQuery?(windowID) ?? false
+    }
+
+    @MainActor
+    public func showWindowSystemMenu(_ windowID: WindowID, x: Float = 0, y: Float = 0) {
+        showWindowSystemMenuAction?(windowID, x, y)
     }
 
     @MainActor
@@ -129,7 +165,11 @@ public final class AppDisplayHandle: @unchecked Sendable {
 
     @MainActor
     public func closeWindow(_ windowID: WindowID) {
-        closeAuxiliaryWindow?(windowID)
+        if let closeWindowByIDAction {
+            closeWindowByIDAction(windowID)
+        } else {
+            closeAuxiliaryWindow?(windowID)
+        }
     }
 
     @MainActor
@@ -161,6 +201,12 @@ public final class AppDisplayHandle: @unchecked Sendable {
                                 restoreWindow: @escaping @MainActor () -> Void,
                                 closeWindow: @escaping @MainActor () -> Void,
                                 isWindowMaximized: @escaping @MainActor () -> Bool,
+                                minimizeWindowByID: @escaping @MainActor (WindowID) -> Void,
+                                maximizeWindowByID: @escaping @MainActor (WindowID) -> Void,
+                                restoreWindowByID: @escaping @MainActor (WindowID) -> Void,
+                                closeWindowByID: @escaping @MainActor (WindowID) -> Void,
+                                isWindowMaximizedByID: @escaping @MainActor (WindowID) -> Bool,
+                                showWindowSystemMenu: @escaping @MainActor (WindowID, Float, Float) -> Void,
                                 setWindowChromeHitTest: @escaping @MainActor (WindowChromeHitTest?) -> Void) {
         setRuntimeTargetFrameRate = setTargetFrameRate
         setRuntimeFrameRateMode = setFrameRateMode
@@ -172,6 +218,12 @@ public final class AppDisplayHandle: @unchecked Sendable {
         restoreMainWindowAction = restoreWindow
         closeMainWindowAction = closeWindow
         mainWindowMaximizedQuery = isWindowMaximized
+        minimizeWindowByIDAction = minimizeWindowByID
+        maximizeWindowByIDAction = maximizeWindowByID
+        restoreWindowByIDAction = restoreWindowByID
+        closeWindowByIDAction = closeWindowByID
+        windowMaximizedByIDQuery = isWindowMaximizedByID
+        showWindowSystemMenuAction = showWindowSystemMenu
         setMainWindowChromeHitTestAction = setWindowChromeHitTest
     }
 }

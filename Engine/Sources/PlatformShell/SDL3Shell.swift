@@ -490,7 +490,12 @@ public final class SDL3Shell: Shell {
 
             case UInt32(GUAVA_SDL_EVENT_KEY_DOWN):
                 let windowID = WindowID(event.key.windowID)
-                guard windows[windowID] != nil else { continue }
+                guard let handle = windows[windowID] else { continue }
+                if event.key.scancode.rawValue == 44,
+                   event.key.mod & (UInt16(GUAVA_SDL_KMOD_LALT) | UInt16(GUAVA_SDL_KMOD_RALT)) != 0 {
+                    _ = SDL_ShowWindowSystemMenu(handle.window, 0, 0)
+                    continue
+                }
                 collected.append(WindowInputEvent(windowID: windowID,
                                                   event: .keyDown(makeKeyEvent(from: event))))
 
@@ -644,6 +649,11 @@ public final class SDL3Shell: Shell {
     public func isWindowMaximized(_ windowID: WindowID) -> Bool {
         guard let handle = windows[windowID] else { return false }
         return (SDL_GetWindowFlags(handle.window) & SDL_WindowFlags(GUAVA_SDL_WINDOW_MAXIMIZED)) != 0
+    }
+
+    public func showWindowSystemMenu(_ windowID: WindowID, x: Float, y: Float) {
+        guard let handle = windows[windowID] else { return }
+        _ = SDL_ShowWindowSystemMenu(handle.window, Int32(x.rounded()), Int32(y.rounded()))
     }
 
     public func setWindowChromeHitTest(_ windowID: WindowID, _ hitTest: WindowChromeHitTest?) {

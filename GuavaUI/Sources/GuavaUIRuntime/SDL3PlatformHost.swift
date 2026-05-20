@@ -223,6 +223,10 @@ public final class SDL3PlatformHost: PlatformHost {
         shell?.isWindowMaximized(windowID) ?? false
     }
 
+    public func showWindowSystemMenu(_ windowID: WindowID, x: Float, y: Float) {
+        shell?.showWindowSystemMenu(windowID, x: x, y: y)
+    }
+
     public func setWindowChromeHitTest(_ windowID: WindowID, _ hitTest: WindowChromeHitTest?) {
         shell?.setWindowChromeHitTest(windowID, hitTest)
     }
