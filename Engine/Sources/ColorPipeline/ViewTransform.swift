@@ -1,5 +1,5 @@
-import Foundation
-import simd
+﻿import Foundation
+import SIMDCompat
 
 public struct ViewTransform: Sendable {
     public let config: ACESConfig
@@ -18,12 +18,12 @@ public struct ViewTransform: Sendable {
 
     public func ocioDescription(bridge: OCIOBridge?) -> String {
         guard let bridge, bridge.isAvailable else {
-            return "sRGB (passthrough — OCIO unavailable)"
+            return "sRGB (passthrough 鈥?OCIO unavailable)"
         }
         let fromSpace = config.workingSpace.rawValue
         let toSpace = config.displayTransform.rawValue
         let vt = config.viewTransform.rawValue
-        return "OCIO: \(fromSpace) → \(toSpace) [\(vt)] exp=\(exposure) gamma=\(gamma)"
+        return "OCIO: \(fromSpace) 鈫?\(toSpace) [\(vt)] exp=\(exposure) gamma=\(gamma)"
     }
 
     public func apply(to pixels: inout [Float],

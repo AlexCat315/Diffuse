@@ -1,6 +1,6 @@
-import EngineMath
+﻿import EngineMath
 @testable import RenderBackend
-import simd
+import SIMDCompat
 import Testing
 
 @Suite("MeshBoundsRegistry", .serialized)

@@ -1,6 +1,6 @@
-import AssetPipeline
+﻿import AssetPipeline
 import Testing
-import simd
+import SIMDCompat
 
 @Suite("MeshAsset")
 struct MeshAssetTests {

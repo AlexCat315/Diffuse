@@ -1,4 +1,6 @@
+﻿#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 
 public enum TooltipOverlayRegistry {
     nonisolated(unsafe) private static var draws: [(ObjectIdentifier, (DrawList) -> Void)] = []

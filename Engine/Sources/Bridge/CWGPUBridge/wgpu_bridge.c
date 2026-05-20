@@ -9,7 +9,9 @@
 #include <webgpu/webgpu.h>
 #include <webgpu/wgpu.h>
 
+#ifndef _WIN32
 #include <pthread.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

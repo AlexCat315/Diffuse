@@ -1,6 +1,6 @@
-import SceneRuntime
+﻿import SceneRuntime
 import Testing
-import simd
+import SIMDCompat
 
 private final class SelectionRecordingPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     var prepareContexts: [PhysicsPrepareContext] = []
@@ -226,10 +226,10 @@ struct PhysicsBackendSelectionTests {
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
         let body = runtime.component(RigidBody.self, for: entity)
 
-        // Real Jolt: sphere inertia I = (2/5)·m·r² = 0.4·2·0.25 = 0.2.
-        // Linear impulse (2,0,0) on m=2  → Δv  = 1 in x
-        // Force (0,120,0) for dt=1/60  → Δv  = 120/2 · 1/60 = 1 in y
-        // Torque (0,0,120) for dt=1/60 → Δω = 120/0.2 · 1/60 = 10 in z
+        // Real Jolt: sphere inertia I = (2/5)路m路r虏 = 0.4路2路0.25 = 0.2.
+        // Linear impulse (2,0,0) on m=2  鈫?螖v  = 1 in x
+        // Force (0,120,0) for dt=1/60  鈫?螖v  = 120/2 路 1/60 = 1 in y
+        // Torque (0,0,120) for dt=1/60 鈫?螖蠅 = 120/0.2 路 1/60 = 10 in z
         let expectedAngularZ: Float = 10
         #expect(report.physicsBackendIdentifier == "jolt")
         #expect(report.physicsWritebackCount == 1)
@@ -239,7 +239,7 @@ struct PhysicsBackendSelectionTests {
         #expect(body?.accumulatedForce == .zero)
         #expect(body?.accumulatedTorque == .zero)
         #expect(body?.isSleeping == false)
-        // Symplectic Euler: position = newVelocity · dt
+        // Symplectic Euler: position = newVelocity 路 dt
         #expect(abs((runtime.worldTransform(for: entity)?.translation.x ?? 0) - Float(1.0 / 60.0)) < 0.001)
         #expect(abs((runtime.worldTransform(for: entity)?.translation.y ?? 0) - Float(1.0 / 60.0)) < 0.001)
         #expect(runtime.component(Collider.self, for: entity)?.material == PhysicsMaterial(friction: 0.9, restitution: 0.25, density: 2))
@@ -399,10 +399,10 @@ struct PhysicsBackendSelectionTests {
             for: constraintEntity
         )
 
-        // Point-to-point pulls anchor.worldPivot ↔ follower.worldPivot together.
-        // anchor at 0 with pivotA=(1,0,0) → world pivot A = (1,0,0)
-        // follower target: pos + pivotB = (1,0,0) ⇒ pos = (2,0,0)
-        // Iterative solver — converge over several frames.
+        // Point-to-point pulls anchor.worldPivot 鈫?follower.worldPivot together.
+        // anchor at 0 with pivotA=(1,0,0) 鈫?world pivot A = (1,0,0)
+        // follower target: pos + pivotB = (1,0,0) 鈬?pos = (2,0,0)
+        // Iterative solver 鈥?converge over several frames.
         var report = runtime.tick(deltaTime: 1.0 / 60.0)
         #expect(report.physicsBackendIdentifier == "jolt")
         #expect(report.physicsConstraintCount == 1)
@@ -487,7 +487,7 @@ struct PhysicsBackendSelectionTests {
 
         // Two dynamic bodies separated by 6, maxDistance=2. Constraint must:
         //   - reduce separation to ~2 (position layer)
-        //   - equalize velocities via momentum conservation (1·1 + 5·1)/(1+1) = 3
+        //   - equalize velocities via momentum conservation (1路1 + 5路1)/(1+1) = 3
         // Iterative solver converges over many frames.
         var report = runtime.tick(deltaTime: 1.0 / 60.0)
         #expect(report.physicsBackendIdentifier == "jolt")

@@ -1,4 +1,6 @@
 import Foundation
+
+#if canImport(AVFoundation)
 import AVFoundation
 
 /// Loaded audio asset ready for playback.
@@ -11,7 +13,6 @@ public final class AudioClipResource: @unchecked Sendable {
         self.buffer = buffer
     }
 
-    /// Load a clip from a file URL. Returns nil if the file cannot be decoded.
     public static func load(name: String, url: URL) -> AudioClipResource? {
         guard let file = try? AVAudioFile(forReading: url) else { return nil }
         let format = file.processingFormat
@@ -22,3 +23,11 @@ public final class AudioClipResource: @unchecked Sendable {
         return AudioClipResource(name: name, buffer: buffer)
     }
 }
+#else
+/// Stub for platforms without AVFoundation.
+public final class AudioClipResource: @unchecked Sendable {
+    public let name: String
+    public init(name: String) { self.name = name }
+    public static func load(name: String, url: URL) -> AudioClipResource? { nil }
+}
+#endif

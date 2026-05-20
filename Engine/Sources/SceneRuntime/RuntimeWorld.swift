@@ -1,5 +1,5 @@
-import Foundation
-import simd
+﻿import Foundation
+import SIMDCompat
 import EngineKernel
 
 public struct RuntimeWorldSummary: Sendable {

@@ -1,4 +1,6 @@
+﻿#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 import GuavaUIRuntime
 
 /// Bitmap image primitive backed by a renderer-registered RGBA texture.

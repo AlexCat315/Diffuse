@@ -1,13 +1,13 @@
-import Foundation
+﻿import Foundation
 import AssetPipeline
 import IntentRuntime
 import RenderBackend
 import SceneRuntime
-import simd
+import SIMDCompat
 
 extension EditorSceneAdapter {
-    /// 在场景里生成一个新实体并立即可见，返回 raw entity id。
-    /// 调用方一般紧接着把返回的 id 写回 store 作为新的选中态。
+    /// 鍦ㄥ満鏅噷鐢熸垚涓€涓柊瀹炰綋骞剁珛鍗冲彲瑙侊紝杩斿洖 raw entity id銆?
+    /// 璋冪敤鏂逛竴鑸揣鎺ョ潃鎶婅繑鍥炵殑 id 鍐欏洖 store 浣滀负鏂扮殑閫変腑鎬併€?
     @discardableResult
     public func spawnEntity(from asset: EditorAsset,
                             at position: SIMD3<Float> = SIMD3<Float>(0, 0, 0)) -> UInt64? {

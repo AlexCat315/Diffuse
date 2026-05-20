@@ -1,8 +1,8 @@
-import CapabilityRuntime
+﻿import CapabilityRuntime
 import Foundation
 import SceneRuntime
 import ScriptRuntime
-import simd
+import SIMDCompat
 
 public struct CapabilityInvocationContext: Sendable, Equatable {
     public var selectedEntityID: UInt64?

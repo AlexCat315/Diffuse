@@ -1,5 +1,5 @@
-import Foundation
-import simd
+﻿import Foundation
+import SIMDCompat
 
 public struct PathTracerConfig: Sendable {
     public var maxBounces: Int

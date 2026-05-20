@@ -1,5 +1,5 @@
-import EngineKernel
-import simd
+﻿import EngineKernel
+import SIMDCompat
 
 public enum RuntimeSystemPhase: String, CaseIterable, Sendable {
     case commandApply

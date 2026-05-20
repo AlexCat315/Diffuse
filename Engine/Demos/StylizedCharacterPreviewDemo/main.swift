@@ -1,8 +1,8 @@
-import Foundation
+﻿import Foundation
 import RenderBackend
 import RHIWGPU
 import SceneRuntime
-import simd
+import SIMDCompat
 
 enum CharacterPreviewState: String, CaseIterable {
     case idle

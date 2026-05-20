@@ -1,6 +1,6 @@
-import RHIWGPU
+﻿import RHIWGPU
 import SceneRuntime
-import simd
+import SIMDCompat
 
 /// One mesh resident on the GPU.
 struct GPUMesh {

@@ -1,5 +1,5 @@
-import Foundation
-import simd
+﻿import Foundation
+import SIMDCompat
 
 public enum AssetRegistryError: Error, CustomStringConvertible {
     case invalidProjectRoot(String)

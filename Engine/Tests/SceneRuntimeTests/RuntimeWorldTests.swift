@@ -1,7 +1,7 @@
-import SceneRuntime
+﻿import SceneRuntime
 import EngineKernel
 import Testing
-import simd
+import SIMDCompat
 
 private struct TransformStub: RuntimeComponent, Equatable {
     var x: Int

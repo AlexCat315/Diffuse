@@ -1,6 +1,6 @@
-import SceneRuntime
+﻿import SceneRuntime
 import Testing
-import simd
+import SIMDCompat
 
 @Suite("RenderExtraction")
 struct RenderExtractionTests {

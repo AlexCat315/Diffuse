@@ -1,4 +1,4 @@
-import simd
+﻿import SIMDCompat
 
 struct SkyboxUniforms {
     var invViewProj: simd_float4x4

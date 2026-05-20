@@ -1,7 +1,7 @@
-import SceneRuntime
+﻿import SceneRuntime
 import ScriptRuntime
 import Testing
-import simd
+import SIMDCompat
 
 @Suite("ScriptRuntimeQueries")
 struct ScriptRuntimeQueryTests {

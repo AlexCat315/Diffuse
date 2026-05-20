@@ -1,4 +1,6 @@
 import Foundation
+
+#if canImport(CoreText)
 import CoreText
 
 /// Bundled font assets shipped with GuavaUI.
@@ -23,4 +25,26 @@ public enum BundledFonts {
     public static func register() {
         _ = once
     }
+
+    /// URL to the bundled Inter.ttc file, for direct FreeType loading.
+    public static var bundledFontURL: URL? {
+        Bundle.module.resourceURL?.appendingPathComponent("Inter.ttc")
+    }
 }
+
+#else
+
+/// Bundled font assets shipped with GuavaUI.
+public enum BundledFonts {
+    public static let interFamily = "Inter"
+
+    /// No-op on non-Apple platforms — FreeType loads fonts directly.
+    public static func register() {}
+
+    /// URL to the bundled Inter.ttc file, for direct FreeType loading.
+    public static var bundledFontURL: URL? {
+        Bundle.module.resourceURL?.appendingPathComponent("Inter.ttc")
+    }
+}
+
+#endif

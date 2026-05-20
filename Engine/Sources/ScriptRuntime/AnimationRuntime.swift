@@ -1,6 +1,6 @@
-import AssetPipeline
+﻿import AssetPipeline
 import SceneRuntime
-import simd
+import SIMDCompat
 
 /// Evaluates animation clips and computes per-entity `JointPalette` resources.
 ///

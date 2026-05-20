@@ -11,6 +11,10 @@ set(SDL_INSTALL_TESTS OFF CACHE BOOL "" FORCE)
 set(SDL_DISABLE_INSTALL_DOCS ON CACHE BOOL "" FORCE)
 set(SDL_DISABLE_INSTALL_CPACK ON CACHE BOOL "" FORCE)
 
+if(WIN32)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL" CACHE STRING "" FORCE)
+endif()
+
 add_subdirectory(${CMAKE_SOURCE_DIR}/sdl3 sdl3-build EXCLUDE_FROM_ALL)
 
 set(SDL3_BUNDLE ${GUAVA_VENDOR_DIR}/SDL3.artifactbundle)
@@ -41,6 +45,13 @@ install(CODE "
     endforeach()
 ")
 
+# Determine platform-specific static library filename
+if(WIN32)
+    set(SDL3_LIB_FILENAME "SDL3-static.lib")
+else()
+    set(SDL3_LIB_FILENAME "libSDL3.a")
+endif()
+
 # Generate info.json for the artifactbundle (at install time so it persists with binaries)
 install(CODE "
     file(WRITE ${SDL3_BUNDLE}/info.json
@@ -52,7 +63,7 @@ install(CODE "
       \\\"version\\\": \\\"3.4.8\\\",
       \\\"variants\\\": [
         {
-          \\\"path\\\": \\\"${GUAVA_TRIPLE}/lib/libSDL3.a\\\",
+          \\\"path\\\": \\\"${GUAVA_TRIPLE}/lib/${SDL3_LIB_FILENAME}\\\",
           \\\"supportedTriples\\\": [\\\"${GUAVA_SPM_TRIPLE}\\\"],
           \\\"staticLibraryMetadata\\\": {
             \\\"headerPaths\\\": [\\\"${GUAVA_TRIPLE}/include\\\"]

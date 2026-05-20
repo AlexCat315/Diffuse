@@ -1,7 +1,7 @@
-import AssetPipeline
+﻿import AssetPipeline
 @testable import RenderBackend
 import Testing
-import simd
+import SIMDCompat
 
 @Suite("MeshMaterialRegistry")
 struct MeshMaterialRegistryTests {
