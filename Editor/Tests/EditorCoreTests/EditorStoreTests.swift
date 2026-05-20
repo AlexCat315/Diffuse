@@ -61,4 +61,26 @@ struct EditorStoreTests {
         #expect(json.contains(#""primarySelectBehavior":"toggle""#))
         #expect(!json.contains("cmdSelectBehavior"))
     }
+
+    @Test("Capability settings default when decoding legacy state")
+    func capabilitySettingsDefaultWhenDecodingLegacyState() throws {
+        let data = Data(#"{"connected":true}"#.utf8)
+
+        let state = try JSONDecoder().decode(EditorState.self, from: data)
+
+        #expect(state.capabilitySettings == .default)
+    }
+
+    @Test("Capability settings notify subscribers")
+    func capabilitySettingsNotifySubscribers() {
+        let store = EditorStore()
+        var notifications = 0
+        _ = store.subscribe { _ in notifications += 1 }
+
+        store.dispatch(.setCapabilitySettings(EditorCapabilitySettings(releasePhase: .experimental)))
+
+        #expect(store.version == 1)
+        #expect(notifications == 1)
+        #expect(store.capabilitySettings.releasePhase == .experimental)
+    }
 }

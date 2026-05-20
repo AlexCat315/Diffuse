@@ -1,4 +1,5 @@
 import AIRuntime
+import CapabilityRuntime
 import Foundation
 
 // MARK: - Provider
@@ -43,6 +44,55 @@ public struct EditorAISettings: Codable, Sendable, Equatable {
                 model: String = SessionConfig.defaultAnthropicModel) {
         self.provider = provider
         self.model = model
+    }
+}
+
+// MARK: - Capability Settings
+
+public enum EditorCapabilityReleasePhase: String, Codable, Sendable, Equatable, CaseIterable {
+    case stable
+    case beta
+    case experimental
+
+    public var displayName: String {
+        switch self {
+        case .stable:       return "Stable"
+        case .beta:         return "Beta"
+        case .experimental: return "Experimental"
+        }
+    }
+
+    var runtimePhase: CapabilityReleasePhase {
+        switch self {
+        case .stable:       return .stable
+        case .beta:         return .beta
+        case .experimental: return .experimental
+        }
+    }
+}
+
+public struct EditorCapabilitySettings: Codable, Sendable, Equatable {
+    public var releasePhase: EditorCapabilityReleasePhase
+
+    public static let `default` = EditorCapabilitySettings(releasePhase: .stable)
+
+    public init(releasePhase: EditorCapabilityReleasePhase = .stable) {
+        self.releasePhase = releasePhase
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case releasePhase
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        releasePhase = try values.decodeIfPresent(EditorCapabilityReleasePhase.self,
+                                                  forKey: .releasePhase) ?? .stable
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(releasePhase, forKey: .releasePhase)
     }
 }
 
