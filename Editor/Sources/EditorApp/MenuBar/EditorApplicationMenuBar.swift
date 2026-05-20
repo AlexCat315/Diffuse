@@ -25,11 +25,7 @@ struct EditorApplicationMenuBar: View {
             for (index, menu) in Array(menus.enumerated()) {
                 menuButton(menu, index: index)
             }
-            Spacer()
         }
-        .padding(horizontal: 6, vertical: 3)
-        .frame(height: 30)
-        .background(.surface)
         .zIndex(20_000)
         .layoutRole("editor-application-menu-bar")
         .debugName("editor-application-menu-bar")

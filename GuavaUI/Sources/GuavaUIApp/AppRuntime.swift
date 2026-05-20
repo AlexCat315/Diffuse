@@ -187,6 +187,11 @@ public final class AppRuntime {
         }
 
         let displayHandle = AppDisplayHandle()
+        let previousDisplayHandle = AppDisplayHandleHolder.current
+        AppDisplayHandleHolder.current = displayHandle
+        defer {
+            AppDisplayHandleHolder.current = previousDisplayHandle
+        }
         host.externalDisplayRequestDrain = {
             displayHandle.drainDisplayRequest()
         }
@@ -216,6 +221,30 @@ public final class AppRuntime {
             },
             installNativeMenuBar: { menuBar in
                 NativeMenuInstaller.install(menuBar)
+            },
+            minimizeWindow: { [weak self] in
+                guard let id = self?.host.mainSession?.id else { return }
+                self?.host.minimizeWindow(id)
+            },
+            maximizeWindow: { [weak self] in
+                guard let id = self?.host.mainSession?.id else { return }
+                self?.host.maximizeWindow(id)
+            },
+            restoreWindow: { [weak self] in
+                guard let id = self?.host.mainSession?.id else { return }
+                self?.host.restoreWindow(id)
+            },
+            closeWindow: { [weak self] in
+                guard let self, let id = self.host.mainSession?.id else { return }
+                self.host.closeWindow(id)
+            },
+            isWindowMaximized: { [weak self] in
+                guard let id = self?.host.mainSession?.id else { return false }
+                return self?.host.isWindowMaximized(id) ?? false
+            },
+            setWindowChromeHitTest: { [weak self] hitTest in
+                guard let id = self?.host.mainSession?.id else { return }
+                self?.host.setWindowChromeHitTest(id, hitTest)
             }
         )
         onDisplayReady?(displayHandle)

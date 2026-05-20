@@ -207,6 +207,26 @@ public final class SDL3PlatformHost: PlatformHost {
         shell?.setWindowPosition(windowID, x: x, y: y)
     }
 
+    public func minimizeWindow(_ windowID: WindowID) {
+        shell?.minimizeWindow(windowID)
+    }
+
+    public func maximizeWindow(_ windowID: WindowID) {
+        shell?.maximizeWindow(windowID)
+    }
+
+    public func restoreWindow(_ windowID: WindowID) {
+        shell?.restoreWindow(windowID)
+    }
+
+    public func isWindowMaximized(_ windowID: WindowID) -> Bool {
+        shell?.isWindowMaximized(windowID) ?? false
+    }
+
+    public func setWindowChromeHitTest(_ windowID: WindowID, _ hitTest: WindowChromeHitTest?) {
+        shell?.setWindowChromeHitTest(windowID, hitTest)
+    }
+
     /// Destroy a window. The matching `PlatformWindowSession` is dropped on
     /// the next iteration of the run loop via `pruneClosedSessions`.
     public func closeWindow(_ windowID: WindowID) {
