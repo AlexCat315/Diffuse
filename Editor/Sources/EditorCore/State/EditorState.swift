@@ -228,6 +228,7 @@ public struct EditorState: Codable, Sendable {
     public var inspectorCollapsedSectionIDs: Set<String>
     public var pendingConfirmationRequest: ConfirmationRequestBatch?
     public var aiSettings: EditorAISettings
+    public var capabilitySettings: EditorCapabilitySettings
     public var aiStatusMessage: String?
     public var aiWarnings: [String]
     public var chatMessages: [AIChatMessage]
@@ -270,6 +271,7 @@ public struct EditorState: Codable, Sendable {
         inspectorCollapsedSectionIDs: Set<String> = [],
         pendingConfirmationRequest: ConfirmationRequestBatch? = nil,
         aiSettings: EditorAISettings = .default,
+        capabilitySettings: EditorCapabilitySettings = .default,
         aiStatusMessage: String? = nil,
         aiWarnings: [String] = [],
         chatMessages: [AIChatMessage] = [],
@@ -310,6 +312,7 @@ public struct EditorState: Codable, Sendable {
         self.inspectorCollapsedSectionIDs = inspectorCollapsedSectionIDs
         self.pendingConfirmationRequest = pendingConfirmationRequest
         self.aiSettings = aiSettings
+        self.capabilitySettings = capabilitySettings
         self.aiStatusMessage = aiStatusMessage
         self.aiWarnings = aiWarnings
         self.chatMessages = chatMessages
@@ -370,6 +373,7 @@ public struct EditorState: Codable, Sendable {
         case activeAssetDrag
         case inspectorCollapsedSectionIDs
         case pendingConfirmationRequest
+        case capabilitySettings
         case aiStatusMessage
         case aiWarnings
         case consoleEntries
@@ -430,6 +434,8 @@ public struct EditorState: Codable, Sendable {
             activeAssetDrag: try c.decodeIfPresent(EditorAssetDragPayload.self, forKey: .activeAssetDrag),
             inspectorCollapsedSectionIDs: try c.decodeIfPresent(Set<String>.self, forKey: .inspectorCollapsedSectionIDs) ?? [],
             pendingConfirmationRequest: try c.decodeIfPresent(ConfirmationRequestBatch.self, forKey: .pendingConfirmationRequest),
+            capabilitySettings: try c.decodeIfPresent(EditorCapabilitySettings.self,
+                                                       forKey: .capabilitySettings) ?? .default,
             aiStatusMessage: try c.decodeIfPresent(String.self, forKey: .aiStatusMessage),
             aiWarnings: try c.decodeIfPresent([String].self, forKey: .aiWarnings) ?? [],
             consoleEntries: try c.decodeIfPresent([EditorConsoleEntry].self, forKey: .consoleEntries) ?? [],
@@ -473,6 +479,7 @@ public struct EditorState: Codable, Sendable {
         try c.encodeIfPresent(activeAssetDrag, forKey: .activeAssetDrag)
         try c.encode(inspectorCollapsedSectionIDs, forKey: .inspectorCollapsedSectionIDs)
         try c.encodeIfPresent(pendingConfirmationRequest, forKey: .pendingConfirmationRequest)
+        try c.encode(capabilitySettings, forKey: .capabilitySettings)
         try c.encodeIfPresent(aiStatusMessage, forKey: .aiStatusMessage)
         try c.encode(aiWarnings, forKey: .aiWarnings)
         try c.encode(consoleEntries, forKey: .consoleEntries)

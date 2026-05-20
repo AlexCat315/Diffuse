@@ -1,5 +1,6 @@
 import AssetPipeline
 @testable import EditorCore
+import Foundation
 import RenderBackend
 import SceneRuntime
 import simd
@@ -13,7 +14,7 @@ struct EditorSceneAdapterTests {
 
         let manifest = scene.manifest(selectedEntityID: scene.defaultSelectionID)
 
-        #expect(manifest.schemaVersion == 3)
+        #expect(manifest.schemaVersion == 4)
         #expect(manifest.revision == scene.revision)
         #expect(manifest.entityCount == scene.entityCount)
         #expect(manifest.selectedEntityID == scene.defaultSelectionID)
@@ -181,6 +182,91 @@ struct EditorSceneAdapterTests {
         )
         #expect(hit?.entity == entity)
         #expect(hit?.distance == 2)
+    }
+}
+
+@Suite("GameSaveDocument")
+struct GameSaveDocumentTests {
+    @Test("AudioSource round-trips through manifest encode/decode")
+    func audioSourceRoundTrip() {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(SceneNameComponent(value: "SFX"), for: entity)
+        _ = scene.setComponent(SceneKindComponent(value: "Audio"), for: entity)
+        _ = scene.setLocalTransform(.identity, for: entity)
+        let src = AudioSource(clipName: "explosion", volume: 0.8, pitch: 1.2,
+                              loop: true, playOnAwake: false, spatialBlend: 0.5)
+        _ = scene.setComponent(src, for: entity)
+
+        var adapter = EditorSceneAdapter()
+        adapter.scene = scene
+        let manifest = adapter.manifest()
+
+        var adapter2 = EditorSceneAdapter()
+        _ = adapter2.load(manifest: manifest, notify: false)
+        let restored = adapter2.scene.component(AudioSource.self,
+                                                for: adapter2.scene.entities().first!)
+        #expect(restored?.clipName == "explosion")
+        #expect(restored?.volume == 0.8)
+        #expect(restored?.loop == true)
+        #expect(restored?.playOnAwake == false)
+    }
+
+    @Test("AnimationPlayer round-trips through manifest encode/decode")
+    func animationPlayerRoundTrip() {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(SceneNameComponent(value: "Hero"), for: entity)
+        _ = scene.setComponent(SceneKindComponent(value: "Character"), for: entity)
+        _ = scene.setLocalTransform(.identity, for: entity)
+        let player = AnimationPlayer(clipName: "run", speed: 1.5,
+                                     loop: true, isPlaying: true, time: 3.14)
+        _ = scene.setComponent(player, for: entity)
+
+        var adapter = EditorSceneAdapter()
+        adapter.scene = scene
+        let manifest = adapter.manifest()
+
+        var adapter2 = EditorSceneAdapter()
+        _ = adapter2.load(manifest: manifest, notify: false)
+        let restored = adapter2.scene.component(AnimationPlayer.self,
+                                                for: adapter2.scene.entities().first!)
+        #expect(restored?.clipName == "run")
+        #expect(restored?.speed == 1.5)
+        #expect(restored?.time == 3.14)
+        #expect(restored?.isPlaying == true)
+    }
+
+    @Test("schemaVersion is 4 for new manifests")
+    func schemaVersionIs4() {
+        let adapter = EditorSceneAdapter()
+        let manifest = adapter.manifest()
+        #expect(manifest.schemaVersion == 4)
+    }
+
+    @Test("GameSaveDocument write and read round-trip")
+    func gameSaveDocumentWriteRead() throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let adapter = EditorSceneAdapter()
+        let manifest = adapter.manifest()
+        let doc = GameSaveDocument(slot: 0, manifest: manifest)
+        let url = GameSaveDocument.url(slot: 0, projectDirectory: tmp.path)
+        try doc.write(to: url)
+
+        let loaded = try GameSaveDocument.read(from: url)
+        #expect(loaded?.slot == 0)
+        #expect(loaded?.manifest == manifest)
+    }
+
+    @Test("GameSaveDocument.read returns nil for missing file")
+    func gameSaveReadMissingReturnsNil() throws {
+        let url = GameSaveDocument.url(slot: 99, projectDirectory: "/tmp/nonexistent-\(UUID().uuidString)")
+        let result = try GameSaveDocument.read(from: url)
+        #expect(result == nil)
     }
 }
 
