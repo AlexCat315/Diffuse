@@ -58,12 +58,36 @@ private func runEditor() throws {
                                                           preset: app.store.state.activeLayoutPreset,
                                                           registry: registry)
     var settingsWindowID: WindowID?
+    var nativeMenuDisplay: AppDisplayHandle?
+    func installEditorNativeMenu(on display: AppDisplayHandle) {
+        let state = app.store.state
+        display.installNativeMenuBar(
+            EditorNativeMenuBuilder.make(
+                workspaceMode: state.workspaceMode,
+                activeLayoutPreset: state.activeLayoutPreset,
+                playbackState: state.playbackState,
+                onCommand: { command in
+                    EditorCommandDispatcher.handle(command,
+                                                   app: app,
+                                                   controller: controller,
+                                                   registry: registry)
+                }
+            )
+        )
+    }
+
     var lastShellPreferences = (
         themeMode: app.store.state.themeMode,
         language: app.store.state.language,
         vsyncMode: app.store.state.vsyncMode,
         primarySelectBehavior: app.store.state.primarySelectBehavior,
         capabilitySettings: app.store.state.capabilitySettings
+    )
+    var lastNativeMenuState = (
+        workspaceMode: app.store.state.workspaceMode,
+        activeLayoutPreset: app.store.state.activeLayoutPreset,
+        playbackState: app.store.state.playbackState,
+        language: app.store.state.language
     )
     let shellPreferenceToken = app.store.subscribe { store in
         let next = (
@@ -94,6 +118,20 @@ private func runEditor() throws {
         app.requestDisplayRefresh()
     }
     defer { app.store.unsubscribe(shellPreferenceToken) }
+    let nativeMenuToken = app.store.subscribe { store in
+        let next = (
+            workspaceMode: store.state.workspaceMode,
+            activeLayoutPreset: store.state.activeLayoutPreset,
+            playbackState: store.state.playbackState,
+            language: store.state.language
+        )
+        guard next != lastNativeMenuState else { return }
+        lastNativeMenuState = next
+        if let nativeMenuDisplay {
+            installEditorNativeMenu(on: nativeMenuDisplay)
+        }
+    }
+    defer { app.store.unsubscribe(nativeMenuToken) }
     func applyVSyncMode(_ mode: EditorVSyncMode, to display: AppDisplayHandle) {
         display.setVSyncEnabled(mode.isEnabled)
     }
@@ -110,6 +148,8 @@ private func runEditor() throws {
             inGameUIHost.tick(width: Int(size.width), height: Int(size.height))
         },
         onDisplayReady: { display in
+            nativeMenuDisplay = display
+            installEditorNativeMenu(on: display)
             applyVSyncMode(app.store.state.vsyncMode, to: display)
             app.setVSyncModeHandler { mode in
                 applyVSyncMode(mode, to: display)

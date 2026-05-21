@@ -226,6 +226,46 @@ public final class SDL3Shell: Shell {
             NSApplication.shared.activate(ignoringOtherApps: true)
         }
 
+        func handleChromeDoubleClick(_ event: NSEvent) -> Bool {
+            guard event.type == .leftMouseDown,
+                  event.clickCount >= 2,
+                  let window = cocoaWindow,
+                  event.window === window,
+                  let contentView = window.contentView,
+                  isPointInsideDragRegion(event.locationInWindow, contentHeight: contentView.bounds.height)
+            else {
+                return false
+            }
+
+            window.performZoom(nil)
+            return true
+        }
+
+        func minimizeNativeWindow() {
+            cocoaWindow?.performMiniaturize(nil)
+        }
+
+        func maximizeNativeWindow() {
+            guard let window = cocoaWindow, !window.isZoomed else { return }
+            window.performZoom(nil)
+        }
+
+        func restoreNativeWindow() {
+            guard let window = cocoaWindow else { return }
+            if window.isMiniaturized {
+                window.deminiaturize(nil)
+            } else if window.isZoomed {
+                window.performZoom(nil)
+            } else if window.styleMask.contains(.fullScreen) {
+                window.toggleFullScreen(nil)
+            }
+        }
+
+        func isNativeWindowMaximized() -> Bool {
+            guard let window = cocoaWindow else { return false }
+            return window.isZoomed || window.styleMask.contains(.fullScreen)
+        }
+
         func performNativeWindowShortcut(scancode: UInt32, modifiers: UInt16) -> Bool {
             guard let window = cocoaWindow else { return false }
             let command = modifiers & (UInt16(GUAVA_SDL_KMOD_LGUI) | UInt16(GUAVA_SDL_KMOD_RGUI)) != 0
@@ -245,6 +285,22 @@ public final class SDL3Shell: Shell {
             default:
                 return false
             }
+        }
+
+        private func isPointInsideDragRegion(_ point: NSPoint, contentHeight: CGFloat) -> Bool {
+            guard let config = chromeHitTestState?.config else { return false }
+
+            let x = Float(point.x)
+            let y = Float(max(0, contentHeight - point.y))
+            if config.usesExplicitDragRects {
+                return config.draggableRects.contains { $0.contains(x: x, y: y) }
+            }
+
+            let width = Float(cocoaWindow?.contentView?.bounds.width ?? CGFloat(logicalSize.width))
+            return y >= 0
+                && y < config.titleBarHeight
+                && x >= config.draggableLeadingInset
+                && x < width - config.draggableTrailingInset
         }
 #endif
 
@@ -339,6 +395,9 @@ public final class SDL3Shell: Shell {
     private var windowOrder: [WindowID] = []
     private var didInitializeSDL = false
     private var isQuitting = false
+#if os(macOS)
+    private var titleBarDoubleClickMonitor: Any?
+#endif
 
     public init(width: Int32 = 1280, height: Int32 = 720) throws {
         self.defaultWindowOptions = WindowOptions(width: width, height: height)
@@ -662,22 +721,38 @@ public final class SDL3Shell: Shell {
 
     public func minimizeWindow(_ windowID: WindowID) {
         guard let handle = windows[windowID] else { return }
+#if os(macOS)
+        handle.minimizeNativeWindow()
+#else
         _ = SDL_MinimizeWindow(handle.window)
+#endif
     }
 
     public func maximizeWindow(_ windowID: WindowID) {
         guard let handle = windows[windowID] else { return }
+#if os(macOS)
+        handle.maximizeNativeWindow()
+#else
         _ = SDL_MaximizeWindow(handle.window)
+#endif
     }
 
     public func restoreWindow(_ windowID: WindowID) {
         guard let handle = windows[windowID] else { return }
+#if os(macOS)
+        handle.restoreNativeWindow()
+#else
         _ = SDL_RestoreWindow(handle.window)
+#endif
     }
 
     public func isWindowMaximized(_ windowID: WindowID) -> Bool {
         guard let handle = windows[windowID] else { return false }
+#if os(macOS)
+        return handle.isNativeWindowMaximized()
+#else
         return (SDL_GetWindowFlags(handle.window) & SDL_WindowFlags(GUAVA_SDL_WINDOW_MAXIMIZED)) != 0
+#endif
     }
 
     public func showWindowSystemMenu(_ windowID: WindowID, x: Float, y: Float) {
@@ -740,13 +815,35 @@ public final class SDL3Shell: Shell {
             throw ShellError.initializationFailed(Self.lastSDLError())
         }
         didInitializeSDL = true
+#if os(macOS)
+        installTitleBarDoubleClickMonitor()
+#endif
     }
 
     private func tearDownSDLIfNeeded() {
         guard didInitializeSDL, windows.isEmpty else { return }
+#if os(macOS)
+        if let titleBarDoubleClickMonitor {
+            NSEvent.removeMonitor(titleBarDoubleClickMonitor)
+            self.titleBarDoubleClickMonitor = nil
+        }
+#endif
         SDL_Quit()
         didInitializeSDL = false
     }
+
+#if os(macOS)
+    private func installTitleBarDoubleClickMonitor() {
+        guard titleBarDoubleClickMonitor == nil else { return }
+        titleBarDoubleClickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            guard let self else { return event }
+            for handle in self.windows.values where handle.handleChromeDoubleClick(event) {
+                return nil
+            }
+            return event
+        }
+    }
+#endif
 
     private func makeKeyEvent(from event: SDL_Event) -> KeyEvent {
         KeyEvent(
