@@ -1,4 +1,4 @@
-import yoga.core
+import CYoga
 
 /// Flex layout direction (maps to `YGFlexDirection`).
 public enum FlexDirection {
@@ -6,10 +6,10 @@ public enum FlexDirection {
 
     var ygValue: YGFlexDirection {
         switch self {
-        case .row:           return YGFlexDirectionRow
-        case .rowReverse:    return YGFlexDirectionRowReverse
-        case .column:        return YGFlexDirectionColumn
-        case .columnReverse: return YGFlexDirectionColumnReverse
+        case .row:           return .row
+        case .rowReverse:    return .rowReverse
+        case .column:        return .column
+        case .columnReverse: return .columnReverse
         }
     }
 }
@@ -20,15 +20,15 @@ public enum Align {
 
     var ygValue: YGAlign {
         switch self {
-        case .auto:         return YGAlignAuto
-        case .flexStart:    return YGAlignFlexStart
-        case .center:       return YGAlignCenter
-        case .flexEnd:      return YGAlignFlexEnd
-        case .stretch:      return YGAlignStretch
-        case .baseline:     return YGAlignBaseline
-        case .spaceBetween: return YGAlignSpaceBetween
-        case .spaceAround:  return YGAlignSpaceAround
-        case .spaceEvenly:  return YGAlignSpaceEvenly
+        case .auto:         return .auto
+        case .flexStart:    return .flexStart
+        case .center:       return .center
+        case .flexEnd:      return .flexEnd
+        case .stretch:      return .stretch
+        case .baseline:     return .baseline
+        case .spaceBetween: return .spaceBetween
+        case .spaceAround:  return .spaceAround
+        case .spaceEvenly:  return .spaceEvenly
         }
     }
 }
@@ -39,12 +39,12 @@ public enum Justify {
 
     var ygValue: YGJustify {
         switch self {
-        case .flexStart:    return YGJustifyFlexStart
-        case .center:       return YGJustifyCenter
-        case .flexEnd:      return YGJustifyFlexEnd
-        case .spaceBetween: return YGJustifySpaceBetween
-        case .spaceAround:  return YGJustifySpaceAround
-        case .spaceEvenly:  return YGJustifySpaceEvenly
+        case .flexStart:    return .flexStart
+        case .center:       return .center
+        case .flexEnd:      return .flexEnd
+        case .spaceBetween: return .spaceBetween
+        case .spaceAround:  return .spaceAround
+        case .spaceEvenly:  return .spaceEvenly
         }
     }
 }
@@ -55,15 +55,15 @@ public enum Edge {
 
     var ygValue: YGEdge {
         switch self {
-        case .left:       return YGEdgeLeft
-        case .top:        return YGEdgeTop
-        case .right:      return YGEdgeRight
-        case .bottom:     return YGEdgeBottom
-        case .start:      return YGEdgeStart
-        case .end:        return YGEdgeEnd
-        case .horizontal: return YGEdgeHorizontal
-        case .vertical:   return YGEdgeVertical
-        case .all:        return YGEdgeAll
+        case .left:       return .left
+        case .top:        return .top
+        case .right:      return .right
+        case .bottom:     return .bottom
+        case .start:      return .start
+        case .end:        return .end
+        case .horizontal: return .horizontal
+        case .vertical:   return .vertical
+        case .all:        return .all
         }
     }
 }
@@ -74,9 +74,9 @@ public enum Direction {
 
     var ygValue: YGDirection {
         switch self {
-        case .inherit: return YGDirectionInherit
-        case .ltr:     return YGDirectionLTR
-        case .rtl:     return YGDirectionRTL
+        case .inherit: return .inherit
+        case .ltr:     return .LTR
+        case .rtl:     return .RTL
         }
     }
 }
@@ -87,9 +87,9 @@ public enum PositionType {
 
     var ygValue: YGPositionType {
         switch self {
-        case .static:   return YGPositionTypeStatic
-        case .relative: return YGPositionTypeRelative
-        case .absolute: return YGPositionTypeAbsolute
+        case .static:   return .`static`
+        case .relative: return .relative
+        case .absolute: return .absolute
         }
     }
 }
@@ -100,9 +100,9 @@ public enum Wrap {
 
     var ygValue: YGWrap {
         switch self {
-        case .noWrap:      return YGWrapNoWrap
-        case .wrap:        return YGWrapWrap
-        case .wrapReverse: return YGWrapWrapReverse
+        case .noWrap:      return .noWrap
+        case .wrap:        return .wrap
+        case .wrapReverse: return .wrapReverse
         }
     }
 }
@@ -113,8 +113,8 @@ public enum Overflow {
 
     var ygValue: YGOverflow {
         switch self {
-        case .visible: return YGOverflowVisible
-        case .hidden:  return YGOverflowHidden
+        case .visible: return .visible
+        case .hidden:  return .hidden
         }
     }
 }
@@ -125,9 +125,9 @@ public enum Display {
 
     var ygValue: YGDisplay {
         switch self {
-        case .flex:     return YGDisplayFlex
-        case .none:     return YGDisplayNone
-        case .contents: return YGDisplayContents
+        case .flex:     return .flex
+        case .none:     return .none
+        case .contents: return .contents
         }
     }
 }
@@ -138,9 +138,9 @@ public enum Gutter {
 
     var ygValue: YGGutter {
         switch self {
-        case .column: return YGGutterColumn
-        case .row:    return YGGutterRow
-        case .all:    return YGGutterAll
+        case .column: return .column
+        case .row:    return .row
+        case .all:    return .all
         }
     }
 }
@@ -151,8 +151,8 @@ public enum BoxSizing {
 
     var ygValue: YGBoxSizing {
         switch self {
-        case .borderBox:  return YGBoxSizingBorderBox
-        case .contentBox: return YGBoxSizingContentBox
+        case .borderBox:  return .borderBox
+        case .contentBox: return .contentBox
         }
     }
 }
