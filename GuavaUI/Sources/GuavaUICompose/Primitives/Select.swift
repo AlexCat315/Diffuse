@@ -192,7 +192,7 @@ public struct Menu: View {
     }
 
     public var body: some View {
-        let rowHeight: Float = 32
+        let rowHeight: Float = 34
         let shouldScroll = entries.count > maxVisibleRows
         let listHeight = Float(maxVisibleRows) * rowHeight
         Box(direction: .column, alignItems: .stretch, spacing: 1) {
@@ -237,34 +237,192 @@ public struct Menu: View {
                     .background(.divider)
             )
         case .item(let item):
-            let row = Row(alignment: .center, spacing: 8) {
-                Text(item.title)
-                    .font(.body)
-                    .foregroundColor(.onSurface)
-                    .flex()
-                if let shortcut = item.shortcut {
-                    Text(shortcut)
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
-                }
-            }
-            .padding(horizontal: 10, vertical: 7)
             return AnyView(
-                Button(role: item.role == .destructive ? .destructive : .normal,
-                       isEnabled: item.isEnabled,
-                       action: {
-                    item.action()
-                    onItemActivated?()
-                }) {
-                    if isHighlighted {
-                        row.background(.surfaceVariant)
-                    } else {
-                        row
-                    }
-                }
-                .buttonStyle(.ghost)
+                _MenuItemRow(item: item,
+                             isHighlighted: isHighlighted,
+                             onActivate: {
+                                 item.action()
+                                 onItemActivated?()
+                             })
             )
         }
+    }
+}
+
+private struct _MenuItemRow: View {
+    let item: MenuItem
+    let isHighlighted: Bool
+    let onActivate: () -> Void
+    @State var isHovered: Bool = false
+    @State var isPressed: Bool = false
+
+    var body: some View {
+        _MenuItemRowHost(item: item,
+                         isHighlighted: isHighlighted,
+                         isHovered: isHovered,
+                         isPressed: isPressed,
+                         onHoverChange: { hovered in
+                             if isHovered != hovered {
+                                 isHovered = hovered
+                             }
+                         },
+                         onDown: {
+                             if !isPressed {
+                                 isPressed = true
+                             }
+                         },
+                         onUp: {
+                             isPressed = false
+                             onActivate()
+                             return true
+                         },
+                         onCancel: {
+                             if isPressed {
+                                 isPressed = false
+                             }
+                         })
+    }
+}
+
+private struct _MenuItemRowHost: _PrimitiveView {
+    let item: MenuItem
+    let isHighlighted: Bool
+    let isHovered: Bool
+    let isPressed: Bool
+    let onHoverChange: (Bool) -> Void
+    let onDown: () -> Void
+    let onUp: () -> Bool
+    let onCancel: () -> Void
+
+    private static let returnScancode: UInt32 = 40
+    private static let spaceScancode: UInt32 = 44
+    private static let keypadEnterScancode: UInt32 = 88
+
+    func _makeNode() -> Node {
+        let node = Node()
+        node.isHitTestable = true
+        node.isFocusable = true
+        return node
+    }
+
+    func _updateNode(_ node: Node) {
+        node.attachments[Self.itemIDKey] = item.id
+        node.attachments[Self.hoveredKey] = isHovered
+        node.attachments[Self.pressedKey] = isPressed
+        node.cursor = item.isEnabled ? .pointer : .notAllowed
+
+        guard item.isEnabled, let registry = InteractionRegistryHolder.current else {
+            InteractionRegistryHolder.current?.remove(node)
+            return
+        }
+
+        registry.setHover(node) { phase in
+            switch phase {
+            case .enter:
+                onHoverChange(true)
+            case .leave:
+                node.attachments.removeValue(forKey: Self.activePressKey)
+                if PointerCaptureHolder.current?.target === node {
+                    PointerCaptureHolder.current?.release()
+                }
+                onHoverChange(false)
+                onCancel()
+            }
+        }
+        registry.setPointer(node) { event, phase, _ in
+            guard event.button == .left else { return .ignored }
+            switch phase {
+            case .down:
+                node.attachments[Self.activePressKey] = ActiveMenuPress(onUp: onUp)
+                PointerCaptureHolder.current?.acquire(node)
+                onDown()
+                return .handled
+            case .up:
+                let activePress = node.attachments[Self.activePressKey] as? ActiveMenuPress
+                node.attachments.removeValue(forKey: Self.activePressKey)
+                defer {
+                    if PointerCaptureHolder.current?.target === node {
+                        PointerCaptureHolder.current?.release()
+                    }
+                }
+                guard let activePress else { return .ignored }
+                return activePress.onUp() ? .handled : .ignored
+            }
+        }
+        registry.setKey(node) { event, _ in
+            guard !event.isRepeat else { return .ignored }
+            switch event.scancode {
+            case Self.returnScancode, Self.spaceScancode, Self.keypadEnterScancode:
+                _ = onUp()
+                return .handled
+            default:
+                return .ignored
+            }
+        }
+    }
+
+    func _makeLayoutNode() -> LayoutNode? {
+        let layout = LayoutNode()
+        layout.flexDirection = .column
+        layout.alignItems = .stretch
+        layout.height = 34
+        return layout
+    }
+
+    func _updateLayout(_ layout: LayoutNode) {
+        layout.flexDirection = .column
+        layout.alignItems = .stretch
+        layout.height = 34
+    }
+
+    func _children(for node: Node) -> [any View] {
+        let theme = node.theme
+        let background: Color = {
+            guard item.isEnabled else { return Color(r: 0, g: 0, b: 0, a: 0) }
+            if isPressed { return theme.colors.stateLayerPressed }
+            if isHovered { return theme.colors.stateLayerHover }
+            if isHighlighted { return theme.colors.stateLayerSelected }
+            return Color(r: 0, g: 0, b: 0, a: 0)
+        }()
+
+        let titleColor: Color = item.role == .destructive
+            ? theme.colors.error
+            : theme.colors.onSurface
+        let textOpacity: Float = item.isEnabled ? 1 : 0.55
+
+        let row = Row(alignment: .center, spacing: 12) {
+            Text(item.title)
+                .font(.body)
+                .foregroundColor(titleColor)
+                .opacity(textOpacity)
+                .flex()
+            if let shortcut = item.shortcut {
+                Text(shortcut)
+                    .font(.caption)
+                    .foregroundColor(theme.colors.onSurfaceMuted)
+                    .opacity(textOpacity)
+            }
+        }
+        .padding(horizontal: 12, vertical: 0)
+        .frame(height: 30)
+        .background(background)
+        .cornerRadius(4)
+        .padding(horizontal: 4, vertical: 2)
+
+        return [row]
+    }
+
+    private static let hoveredKey = "__menu_item_hovered"
+    private static let itemIDKey = "__menu_item_id"
+    private static let pressedKey = "__menu_item_pressed"
+    private static let activePressKey = "__menu_item_active_press"
+}
+
+private final class ActiveMenuPress {
+    let onUp: () -> Bool
+
+    init(onUp: @escaping () -> Bool) {
+        self.onUp = onUp
     }
 }
 

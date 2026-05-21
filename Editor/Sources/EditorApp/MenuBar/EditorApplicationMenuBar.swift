@@ -48,7 +48,8 @@ struct EditorApplicationMenuBar: View {
             Text(menu.title)
                 .font(.body)
                 .foregroundColor(openMenuIndex == index ? .onSurface : .onSurfaceVariant)
-                .padding(horizontal: 10, vertical: 5)
+                .padding(horizontal: 10, vertical: 0)
+                .frame(height: 28)
                 .background(openMenuIndex == index ? .surfaceVariant : .surface)
                 .cornerRadius(4)
         } content: {
