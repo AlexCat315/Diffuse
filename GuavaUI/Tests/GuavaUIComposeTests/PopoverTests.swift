@@ -159,18 +159,16 @@ struct PopoverTests {
         _ = recomposer.commitAll()
         graph.computeLayout(width: 240, height: 180)
 
-        guard let menuButton = buttonHosts(in: tree.root)
-            .filter({ $0.origin.y > 20 })
-            .sorted(by: { $0.origin.y < $1.origin.y })
+        guard let menuItem = menuItemRows(in: tree.root, id: AnyHashable("new-scene"))
             .first
         else {
-            Issue.record("menu item button was not materialized")
+            Issue.record("menu item row was not materialized")
             return
         }
 
         click(dispatcher,
-              x: Float(menuButton.origin.x + menuButton.node.frame.width * 0.5),
-              y: Float(menuButton.origin.y + menuButton.node.frame.height * 0.5))
+              x: Float(menuItem.origin.x + menuItem.node.frame.width * 0.5),
+              y: Float(menuItem.origin.y + menuItem.node.frame.height * 0.5))
 
         #expect(box.fired == 1)
     } }
@@ -209,18 +207,16 @@ struct PopoverTests {
         _ = recomposer.commitAll()
         graph.computeLayout(width: 240, height: 180)
 
-        guard let menuButton = buttonHosts(in: tree.root)
-            .filter({ $0.origin.y > 20 })
-            .sorted(by: { $0.origin.y < $1.origin.y })
+        guard let menuItem = menuItemRows(in: tree.root, id: AnyHashable("nested-new-scene"))
             .first
         else {
-            Issue.record("nested menu item button was not materialized")
+            Issue.record("nested menu item row was not materialized")
             return
         }
 
         click(dispatcher,
-              x: Float(menuButton.origin.x + menuButton.node.frame.width * 0.5),
-              y: Float(menuButton.origin.y + menuButton.node.frame.height * 0.5))
+              x: Float(menuItem.origin.x + menuItem.node.frame.width * 0.5),
+              y: Float(menuItem.origin.y + menuItem.node.frame.height * 0.5))
 
         #expect(box.fired == 1)
     } }
@@ -231,26 +227,27 @@ struct PopoverTests {
         dispatcher.dispatch(.mouseButtonUp(event))
     }
 
-    private func buttonHosts(in node: Node?) -> [(node: Node, origin: CGPoint)] {
+    private func menuItemRows(in node: Node?, id: AnyHashable) -> [(node: Node, origin: CGPoint)] {
         var out: [(node: Node, origin: CGPoint)] = []
-        collectButtonHosts(node, parentOrigin: .zero, into: &out)
+        collectMenuItemRows(node, id: id, parentOrigin: .zero, into: &out)
         return out
     }
 
-    private func collectButtonHosts(_ node: Node?,
-                                    parentOrigin: CGPoint,
-                                    into out: inout [(node: Node, origin: CGPoint)]) {
+    private func collectMenuItemRows(_ node: Node?,
+                                     id: AnyHashable,
+                                     parentOrigin: CGPoint,
+                                     into out: inout [(node: Node, origin: CGPoint)]) {
         guard let node else { return }
         let origin = CGPoint(x: parentOrigin.x + node.frame.origin.x,
                              y: parentOrigin.y + node.frame.origin.y)
-        if node.attachments[ButtonHost.pressedKey] != nil {
+        if node.attachments["__menu_item_id"] as? AnyHashable == id {
             out.append((node, origin))
         }
 
         let childOrigin = CGPoint(x: origin.x - node.contentOffset.x,
                                   y: origin.y - node.contentOffset.y)
         for child in node.children {
-            collectButtonHosts(child, parentOrigin: childOrigin, into: &out)
+            collectMenuItemRows(child, id: id, parentOrigin: childOrigin, into: &out)
         }
     }
 
