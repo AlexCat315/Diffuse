@@ -3,149 +3,203 @@ name: Release
 on:
   release:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish assets to
+        required: true
+        default: v0.0.2
+      target:
+        description: Commit SHA or branch to use when creating a missing release
+        required: false
+        default: main
+
+permissions:
+  contents: write
 
 jobs:
-  # ── Create the GitHub Release first ──────────────────────────────────────
-  create-release:
-    name: Create Release
+  prepare-release:
+    name: Prepare Release
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Create GitHub Release
-        run: gh release create ${{ github.ref_name }} --title "${{ github.ref_name }}" --generate-notes
+      - name: Resolve release tag
+        id: release
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            tag="${{ github.event.release.tag_name }}"
+            target="${{ github.event.release.target_commitish }}"
+          else
+            tag="${{ inputs.tag }}"
+            target="${{ inputs.target }}"
+          fi
+
+          if [ -z "$tag" ]; then
+            echo "release tag is required" >&2
+            exit 1
+          fi
+
+          if [ -z "$target" ]; then
+            target="${GITHUB_SHA}"
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure GitHub Release exists
+        shell: bash
+        run: |
+          tag="${{ steps.release.outputs.tag }}"
+          target="${{ steps.release.outputs.target }}"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists"
+          else
+            gh release create "$tag" \
+              --target "$target" \
+              --title "$tag" \
+              --generate-notes
+          fi
         env:
           GH_TOKEN: ${{ github.token }}
 
-  # ── macOS: arm64 + x86_64 + universal ────────────────────────────────────
-  build-macos:
-    name: macOS
-    needs: create-release
+  build-editor-macos:
+    name: Editor macOS
+    needs: prepare-release
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.tag }}
+          submodules: recursive
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.3.app
+        shell: bash
+        run: |
+          for xcode in \
+            /Applications/Xcode_26.3.app \
+            /Applications/Xcode_16.4.app \
+            /Applications/Xcode_16.3.app \
+            /Applications/Xcode.app
+          do
+            if [ -d "$xcode" ]; then
+              sudo xcode-select -s "$xcode"
+              break
+            fi
+          done
+          xcodebuild -version
+          swift --version
 
-      - name: Build arm64
-        working-directory: guava-mcp
-        run: swift build -c release --arch arm64
+      - name: Build native dependencies
+        run: python3 bootstrap.py --force
 
-      - name: Build x86_64
-        working-directory: guava-mcp
-        run: swift build -c release --arch x86_64
+      - name: Build Editor and MCP
+        shell: bash
+        run: |
+          swift build -c release --package-path Editor --target EditorApp
+          swift build -c release --package-path guava-mcp
 
       - name: Package
-        working-directory: guava-mcp
+        id: package
+        shell: bash
         run: |
-          ARM=.build/arm64-apple-macosx/release/GuavaMCP
-          X86=.build/x86_64-apple-macosx/release/GuavaMCP
+          set -euo pipefail
 
-          cp "$ARM" guava-mcp-macos-arm64
-          zip guava-mcp-macos-arm64.zip guava-mcp-macos-arm64
+          arch="$(uname -m)"
+          editor_bin="$(swift build -c release --package-path Editor --target EditorApp --show-bin-path)"
+          mcp_bin="$(swift build -c release --package-path guava-mcp --show-bin-path)"
 
-          cp "$X86" guava-mcp-macos-x86_64
-          zip guava-mcp-macos-x86_64.zip guava-mcp-macos-x86_64
+          dist_root="$PWD/dist"
+          package_dir="$dist_root/GuavaEditor-macos-$arch"
+          rm -rf "$dist_root"
+          mkdir -p "$package_dir/Tools"
 
-          lipo -create "$ARM" "$X86" -output guava-mcp-macos-universal
-          zip guava-mcp-macos-universal.zip guava-mcp-macos-universal
+          cp "$editor_bin/EditorApp" "$package_dir/"
+          cp "$mcp_bin/GuavaMCP" "$package_dir/Tools/"
+
+          find "$editor_bin" -maxdepth 1 -type d \( -name "*.bundle" -o -name "*.resources" \) \
+            -exec cp -R {} "$package_dir/" \;
+
+          zip_path="$dist_root/guava-editor-macos-$arch.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$package_dir" "$zip_path"
+          echo "zip_path=$zip_path" >> "$GITHUB_OUTPUT"
 
       - name: Upload
-        working-directory: guava-mcp
-        run: |
-          gh release upload ${{ github.ref_name }} \
-            guava-mcp-macos-arm64.zip \
-            guava-mcp-macos-x86_64.zip \
-            guava-mcp-macos-universal.zip
+        run: gh release upload "${{ needs.prepare-release.outputs.tag }}" "${{ steps.package.outputs.zip_path }}" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
 
-  # ── Linux x86_64 ─────────────────────────────────────────────────────────
-  build-linux-x86:
-    name: Linux (x86_64)
-    needs: create-release
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Swift
-        uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: "6.0"
-
-      - name: Build
-        working-directory: guava-mcp
-        run: swift build -c release
-
-      - name: Package
-        working-directory: guava-mcp
-        run: |
-          cp .build/release/GuavaMCP guava-mcp-linux-x86_64
-          tar czf guava-mcp-linux-x86_64.tar.gz guava-mcp-linux-x86_64
-
-      - name: Upload
-        working-directory: guava-mcp
-        run: gh release upload ${{ github.ref_name }} guava-mcp-linux-x86_64.tar.gz
-        env:
-          GH_TOKEN: ${{ github.token }}
-
-  # ── Linux arm64 ──────────────────────────────────────────────────────────
-  build-linux-arm64:
-    name: Linux (arm64)
-    needs: create-release
-    runs-on: ubuntu-22.04-arm
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Swift
-        uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: "6.0"
-
-      - name: Build
-        working-directory: guava-mcp
-        run: swift build -c release
-
-      - name: Package
-        working-directory: guava-mcp
-        run: |
-          cp .build/release/GuavaMCP guava-mcp-linux-arm64
-          tar czf guava-mcp-linux-arm64.tar.gz guava-mcp-linux-arm64
-
-      - name: Upload
-        working-directory: guava-mcp
-        run: gh release upload ${{ github.ref_name }} guava-mcp-linux-arm64.tar.gz
-        env:
-          GH_TOKEN: ${{ github.token }}
-
-  # ── Windows x86_64 ───────────────────────────────────────────────────────
-  build-windows:
-    name: Windows (x86_64)
-    needs: create-release
+  build-editor-windows:
+    name: Editor Windows
+    needs: prepare-release
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.tag }}
+          submodules: recursive
 
       - name: Install Swift
         uses: compnerd/gha-setup-swift@main
         with:
-          branch: swift-6.0-release
-          tag: 6.0-RELEASE
+          branch: swift-6.1-release
+          tag: 6.1-RELEASE
 
-      - name: Build
-        working-directory: guava-mcp
-        run: swift build -c release
-
-      - name: Package
-        working-directory: guava-mcp
+      - name: Show toolchain
         shell: pwsh
         run: |
-          Copy-Item .build\release\GuavaMCP.exe guava-mcp-windows-x86_64.exe
-          Compress-Archive -Path guava-mcp-windows-x86_64.exe -DestinationPath guava-mcp-windows-x86_64.zip
+          swift --version
+          cmake --version
+
+      - name: Build native dependencies
+        shell: pwsh
+        run: python bootstrap.py --force
+
+      - name: Build Editor and MCP
+        shell: pwsh
+        run: |
+          swift build -c release --package-path Editor --target EditorApp
+          swift build -c release --package-path guava-mcp
+
+      - name: Package
+        id: package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $editorBin = (swift build -c release --package-path Editor --target EditorApp --show-bin-path).Trim()
+          $mcpBin = (swift build -c release --package-path guava-mcp --show-bin-path).Trim()
+
+          $distRoot = Join-Path $PWD "dist"
+          $packageDir = Join-Path $distRoot "GuavaEditor-windows-x86_64"
+          if (Test-Path $distRoot) {
+            Remove-Item $distRoot -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path (Join-Path $packageDir "Tools") -Force | Out-Null
+
+          Copy-Item (Join-Path $editorBin "EditorApp.exe") $packageDir
+          Copy-Item (Join-Path $mcpBin "GuavaMCP.exe") (Join-Path $packageDir "Tools")
+
+          Get-ChildItem $editorBin -Directory |
+            Where-Object { $_.Name -like "*.bundle" -or $_.Name -like "*.resources" } |
+            ForEach-Object { Copy-Item $_.FullName $packageDir -Recurse }
+
+          Get-ChildItem $editorBin -File -Filter "*.dll" |
+            ForEach-Object { Copy-Item $_.FullName $packageDir }
+
+          $swiftBin = Split-Path (Get-Command swift.exe).Source
+          Get-ChildItem $swiftBin -File -Filter "*.dll" |
+            Where-Object { $_.Name -match "^(swift|BlocksRuntime|dispatch|Foundation|FoundationXML|XCTest|icu|libxml2|curl|zlib)" } |
+            ForEach-Object { Copy-Item $_.FullName $packageDir -ErrorAction SilentlyContinue }
+
+          $zipPath = Join-Path $distRoot "guava-editor-windows-x86_64.zip"
+          Compress-Archive -Path $packageDir -DestinationPath $zipPath -Force
+          "zip_path=$zipPath" >> $env:GITHUB_OUTPUT
 
       - name: Upload
-        working-directory: guava-mcp
         shell: pwsh
-        run: gh release upload ${{ github.ref_name }} guava-mcp-windows-x86_64.zip
+        run: gh release upload "${{ needs.prepare-release.outputs.tag }}" "${{ steps.package.outputs.zip_path }}" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
