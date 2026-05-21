@@ -1,5 +1,84 @@
 import CYoga
 
+// On non-Apple platforms C enums lack NS_ENUM, so Swift doesn't strip
+// the YGFlexDirection* prefix. These extensions restore dot-notation.
+#if os(Windows) || os(Linux)
+extension YGFlexDirection {
+    static let row           = YGFlexDirectionRow
+    static let rowReverse    = YGFlexDirectionRowReverse
+    static let column        = YGFlexDirectionColumn
+    static let columnReverse = YGFlexDirectionColumnReverse
+}
+extension YGAlign {
+    static let auto         = YGAlignAuto
+    static let flexStart    = YGAlignFlexStart
+    static let center       = YGAlignCenter
+    static let flexEnd      = YGAlignFlexEnd
+    static let stretch      = YGAlignStretch
+    static let baseline     = YGAlignBaseline
+    static let spaceBetween = YGAlignSpaceBetween
+    static let spaceAround  = YGAlignSpaceAround
+    static let spaceEvenly  = YGAlignSpaceEvenly
+}
+extension YGJustify {
+    static let flexStart    = YGJustifyFlexStart
+    static let center       = YGJustifyCenter
+    static let flexEnd      = YGJustifyFlexEnd
+    static let spaceBetween = YGJustifySpaceBetween
+    static let spaceAround  = YGJustifySpaceAround
+    static let spaceEvenly  = YGJustifySpaceEvenly
+}
+extension YGEdge {
+    static let left       = YGEdgeLeft
+    static let top        = YGEdgeTop
+    static let right      = YGEdgeRight
+    static let bottom     = YGEdgeBottom
+    static let start      = YGEdgeStart
+    static let end        = YGEdgeEnd
+    static let horizontal = YGEdgeHorizontal
+    static let vertical   = YGEdgeVertical
+    static let all        = YGEdgeAll
+}
+extension YGDirection {
+    static let inherit = YGDirectionInherit
+    static let LTR     = YGDirectionLTR
+    static let RTL     = YGDirectionRTL
+}
+extension YGPositionType {
+    static let `static` = YGPositionTypeStatic
+    static let relative = YGPositionTypeRelative
+    static let absolute = YGPositionTypeAbsolute
+}
+extension YGWrap {
+    static let noWrap      = YGWrapNoWrap
+    static let wrap        = YGWrapWrap
+    static let wrapReverse = YGWrapWrapReverse
+}
+extension YGOverflow {
+    static let visible = YGOverflowVisible
+    static let hidden  = YGOverflowHidden
+}
+extension YGDisplay {
+    static let flex     = YGDisplayFlex
+    static let none     = YGDisplayNone
+    static let contents = YGDisplayContents
+}
+extension YGGutter {
+    static let column = YGGutterColumn
+    static let row    = YGGutterRow
+    static let all    = YGGutterAll
+}
+extension YGBoxSizing {
+    static let borderBox  = YGBoxSizingBorderBox
+    static let contentBox = YGBoxSizingContentBox
+}
+extension YGMeasureMode {
+    static let undefined = YGMeasureModeUndefined
+    static let exactly   = YGMeasureModeExactly
+    static let atMost    = YGMeasureModeAtMost
+}
+#endif
+
 /// Flex layout direction (maps to `YGFlexDirection`).
 public enum FlexDirection {
     case row, rowReverse, column, columnReverse
