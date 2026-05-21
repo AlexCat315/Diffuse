@@ -4,6 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "GuavaUI",
+    platforms: [.macOS(.v13)],
     products: [
         .executable(name: "GuavaUIDemo", targets: ["GuavaUIDemo"]),
         .library(name: "GuavaUIRuntime", targets: ["GuavaUIRuntime"]),
@@ -14,14 +15,11 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../Engine"),
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.12.0"),
+        .package(url: "https://github.com/facebook/yoga.git", from: "3.0.0"),
     ],
     targets: [
         // MARK: - Native deps (built by GuavaUI/third-party/CMakeLists.txt)
-        .binaryTarget(
-            name: "yoga",
-            path: "vendor/yoga.artifactbundle"
-        ),
         .binaryTarget(
             name: "CFreeType",
             path: "vendor/CFreeType.artifactbundle"
@@ -37,7 +35,7 @@ let package = Package(
         .target(
             name: "GuavaUIRuntime",
             dependencies: [
-                "yoga",
+                .product(name: "yoga", package: "yoga"),
                 "CFreeType",
                 "CHarfBuzz",
                 "GuavaUIBundledFonts",

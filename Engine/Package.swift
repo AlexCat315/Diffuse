@@ -1,36 +1,10 @@
 // swift-tools-version: 6.1
 // GuavaEngine 0.0.1
 import PackageDescription
-import Foundation
-
-// Engine package's absolute path — needed for linkerSettings.unsafeFlags so that
-// Editor / GuavaUI can find vendored dylibs even when this package is consumed
-// from a different working directory.
-let packageDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
-
-#if os(macOS)
-  #if arch(arm64)
-  let guavaTriple = "macos-arm64"
-  #else
-  let guavaTriple = "macos-x86_64"
-  #endif
-#elseif os(Windows)
-let guavaTriple = "windows-x86_64"
-#elseif os(Linux)
-  #if arch(arm64)
-  let guavaTriple = "linux-aarch64"
-  #else
-  let guavaTriple = "linux-x86_64"
-  #endif
-#else
-let guavaTriple = "unknown"
-#endif
-
-let ocioOpenEXRLibDir = "\(packageDir)/vendor/ocio_openexr/\(guavaTriple)/lib"
-let ocioOpenEXRIncDir = "\(packageDir)/vendor/ocio_openexr/\(guavaTriple)/include"
 
 let package = Package(
     name: "GuavaEngine",
+    platforms: [.macOS(.v13)],
     products: [
         .library(name: "SIMDCompat", targets: ["SIMDCompat"]),
         .library(name: "EngineKernel", targets: ["EngineKernel"]),
@@ -58,7 +32,7 @@ let package = Package(
         .executable(name: "StylizedCharacterPreviewDemo", targets: ["StylizedCharacterPreviewDemo"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.12.0"),
     ],
     targets: [
         // MARK: - C Bridges
@@ -159,46 +133,13 @@ let package = Package(
         ),
         .target(
             name: "COpenEXRBridge",
+            dependencies: ["ocio_openexr"],
             path: "Sources/Bridge/COpenEXRBridge",
-            publicHeadersPath: "include",
-            cxxSettings: [
-                .headerSearchPath("../../../vendor/ocio_openexr/\(guavaTriple)/include"),
-                .headerSearchPath("../../../vendor/ocio_openexr/\(guavaTriple)/include/OpenEXR"),
-                .headerSearchPath("../../../vendor/ocio_openexr/\(guavaTriple)/include/Imath"),
-            ],
-            linkerSettings: [
-                .unsafeFlags([
-                    "-L\(ocioOpenEXRLibDir)",
-                    "-lOpenEXR-3_4",
-                    "-lOpenEXRUtil-3_4",
-                    "-lOpenEXRCore-3_4",
-                    "-lIex-3_4",
-                    "-lIlmThread-3_4",
-                    "-lImath-3_2",
-                    "-lopenjph",
-                    "-Xlinker", "-rpath", "-Xlinker", ocioOpenEXRLibDir,
-                ], .when(platforms: [.macOS])),
-                .unsafeFlags([
-                    "\(ocioOpenEXRLibDir)/OpenEXR-3_4.lib",
-                    "\(ocioOpenEXRLibDir)/OpenEXRUtil-3_4.lib",
-                    "\(ocioOpenEXRLibDir)/OpenEXRCore-3_4.lib",
-                    "\(ocioOpenEXRLibDir)/Iex-3_4.lib",
-                    "\(ocioOpenEXRLibDir)/IlmThread-3_4.lib",
-                    "\(ocioOpenEXRLibDir)/Imath-3_2.lib",
-                    "\(ocioOpenEXRLibDir)/openjph.0.24.lib",
-                    "-Xlinker", "/NODEFAULTLIB:openjph.lib",
-                ], .when(platforms: [.windows])),
-                .unsafeFlags([
-                    "-L\(ocioOpenEXRLibDir)",
-                    "-lOpenEXR-3_4",
-                    "-lOpenEXRUtil-3_4",
-                    "-lOpenEXRCore-3_4",
-                    "-lIex-3_4",
-                    "-lIlmThread-3_4",
-                    "-lImath-3_2",
-                    "-lopenjph",
-                ], .when(platforms: [.linux])),
-            ]
+            publicHeadersPath: "include"
+        ),
+        .binaryTarget(
+            name: "ocio_openexr",
+            path: "vendor/ocio_openexr.artifactbundle"
         ),
         .binaryTarget(
             name: "lunasvg",

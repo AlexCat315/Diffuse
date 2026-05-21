@@ -1,6 +1,3 @@
-[submodule "GuavaUI/third-party/yoga"]
-	path = GuavaUI/third-party/yoga
-	url = https://github.com/facebook/yoga.git
 [submodule "GuavaUI/third-party/freetype"]
 	path = GuavaUI/third-party/freetype
 	url = https://github.com/freetype/freetype.git
