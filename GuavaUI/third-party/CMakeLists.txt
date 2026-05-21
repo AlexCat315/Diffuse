@@ -58,6 +58,5 @@ function(write_artifactbundle_info BUNDLE_DIR ARTIFACT_NAME LIB_REL_PATH)
     ")
 endfunction()
 
-include(${CMAKE_SOURCE_DIR}/cmake/BuildYoga.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/BuildFreeType.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/BuildHarfBuzz.cmake)

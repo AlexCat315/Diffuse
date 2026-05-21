@@ -1,10 +1,11 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.1
 // GuavaEditor 0.0.1
 import PackageDescription
 
 let package = Package(
     name: "GuavaEditor",
     defaultLocalization: "en",
+    platforms: [.macOS(.v13)],
     products: [
         .executable(name: "EditorApp", targets: ["EditorApp"]),
         .library(name: "EditorCore", targets: ["EditorCore"]),

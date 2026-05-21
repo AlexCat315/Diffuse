@@ -1,4 +1,4 @@
-﻿import yoga
+﻿import yoga.core
 #if canImport(CoreGraphics)
 import CoreGraphics
 #endif

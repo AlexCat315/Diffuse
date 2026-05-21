@@ -69,7 +69,7 @@ if env["VCToolsInstallDir"] == nil {
 // ── Sentinels ─────────────────────────────────────────────────────────────────
 
 let engineDone  = root.appendingPathComponent("Engine/vendor/SDL3.artifactbundle").path
-let guavaUIDone = root.appendingPathComponent("GuavaUI/vendor/yoga.artifactbundle").path
+let guavaUIDone = root.appendingPathComponent("GuavaUI/vendor/CFreeType.artifactbundle").path
 
 if !force
     && FileManager.default.fileExists(atPath: engineDone)
