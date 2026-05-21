@@ -1,4 +1,4 @@
-﻿import yoga.core
+﻿import CYoga
 #if canImport(CoreGraphics)
 import CoreGraphics
 #endif
@@ -310,9 +310,9 @@ public final class LayoutNode: @unchecked Sendable {
 
         init(_ ygMode: YGMeasureMode) {
             switch ygMode {
-            case YGMeasureModeExactly: self = .exactly
-            case YGMeasureModeAtMost:  self = .atMost
-            default:                   self = .undefined
+            case .exactly: self = .exactly
+            case .atMost:  self = .atMost
+            default:       self = .undefined
             }
         }
     }

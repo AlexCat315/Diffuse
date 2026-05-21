@@ -1,0 +1,12 @@
+module CYoga [system] {
+    header "yoga/YGConfig.h"
+    header "yoga/YGEnums.h"
+    header "yoga/YGMacros.h"
+    header "yoga/YGNode.h"
+    header "yoga/YGNodeLayout.h"
+    header "yoga/YGNodeStyle.h"
+    header "yoga/YGPixelGrid.h"
+    header "yoga/YGValue.h"
+    header "yoga/Yoga.h"
+    export *
+}

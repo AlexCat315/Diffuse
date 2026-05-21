@@ -29,13 +29,23 @@ let package = Package(
             path: "vendor/CHarfBuzz.artifactbundle"
         ),
 
+        // MARK: - Yoga C bridge
+        // Wraps the yoga SPM source package with a flat module map so that
+        // GuavaUIRuntime can use `import CYoga` and access all YG* symbols.
+        .target(
+            name: "CYoga",
+            dependencies: [.product(name: "yoga", package: "yoga")],
+            path: "Sources/Bridge/CYoga",
+            publicHeadersPath: "include"
+        ),
+
         // MARK: - Runtime
         // 平台层、布局引擎、文字渲染、节点树、recompose 运行时。
         // 依赖 Engine 的渲染抽象（RHIWGPU、PlatformShell、EngineKernel）。
         .target(
             name: "GuavaUIRuntime",
             dependencies: [
-                .product(name: "yoga", package: "yoga"),
+                "CYoga",
                 "CFreeType",
                 "CHarfBuzz",
                 "GuavaUIBundledFonts",
