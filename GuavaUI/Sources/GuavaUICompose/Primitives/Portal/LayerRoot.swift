@@ -39,6 +39,9 @@ public struct LayerRoot<Content: View, Portals: View>: _PrimitiveView {
             _PortalLayer {
                 portals
             }
+            // Portal layer must always win hit-test priority over any sibling
+            // content (title bars, panels). zIndex > 20_000 (title bar max).
+            .zIndex(30_000)
         ]
     }
 }

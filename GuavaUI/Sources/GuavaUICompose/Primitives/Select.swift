@@ -346,26 +346,14 @@ private struct _PopoverFrontmostModifier: ViewModifier {
     let isPresented: Bool
 
     func apply(node: Node) {
-        guard isPresented else {
-            if let entryID = node.attachments["__popover_entry_id"] as? String {
-                PortalRegistry.unregister(entryID)
-                node.attachments.removeValue(forKey: "__popover_entry_id")
-            }
-            return
-        }
-        var current: Node? = node
-        while let child = current, let parent = child.parent {
-            guard let index = parent.children.firstIndex(where: { $0 === child }) else {
-                current = parent
-                continue
-            }
-            if index != parent.children.count - 1 {
-                var reordered = parent.children
-                reordered.remove(at: index)
-                reordered.append(child)
-                parent.reorderChildren(reordered)
-            }
-            current = parent
+        // When the popover closes, clean up the portal entry that
+        // _PopoverOverlayHost registered. Visual ordering is already
+        // handled by _PortalLayer's elevated zIndex — reordering the
+        // node tree is unnecessary and inverts hit-test priority.
+        guard !isPresented else { return }
+        if let entryID = node.attachments["__popover_entry_id"] as? String {
+            PortalRegistry.unregister(entryID)
+            node.attachments.removeValue(forKey: "__popover_entry_id")
         }
     }
 }
