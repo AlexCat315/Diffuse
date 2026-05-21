@@ -26,6 +26,8 @@ struct EditorApplicationMenuBar: View {
                 menuButton(menu, index: index)
             }
         }
+        .frame(height: 28, minWidth: menuBarMinimumWidth)
+        .flex(0, shrink: 0)
         .zIndex(20_000)
         .layoutRole("editor-application-menu-bar")
         .debugName("editor-application-menu-bar")
@@ -60,6 +62,12 @@ struct EditorApplicationMenuBar: View {
                 openMenuIndex = nil
             })
         })
+    }
+
+    private var menuBarMinimumWidth: Float {
+        menus.reduce(Float(0)) { width, menu in
+            width + max(44, Float(menu.title.count * 9 + 24))
+        } + Float(max(0, menus.count - 1) * 2)
     }
 
     private func entries(for menu: EditorApplicationMenu) -> [MenuEntry] {
