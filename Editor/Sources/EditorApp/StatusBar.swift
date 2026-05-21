@@ -49,9 +49,17 @@ struct EditorStatusBar: View {
                 Divider()
                     .frame(width: 1, height: 14)
 
-                Text(statusText(store: store))
-                    .font(.caption)
-                    .foregroundColor(statusColor(store: store))
+                // Status message can be long (AI output, console entries); cap
+                // width and clip so it never pushes other items off screen.
+                Box {
+                    Text(statusText(store: store))
+                        .lineLimit(1)
+                        .font(.caption)
+                        .foregroundColor(statusColor(store: store))
+                }
+                .frame(maxWidth: 260)
+                .flex(0, shrink: 1)
+                .clipped()
             }
             .padding(horizontal: 10, vertical: 5)
             .background(.surfaceSunken)
