@@ -132,12 +132,39 @@ public struct WindowDragRegion: _PrimitiveView {
 
     public func _makeNode() -> Node {
         let node = Node()
+        // On non-macOS we need to intercept double-clicks for maximize; macOS
+        // handles title-bar double-click natively through the window manager.
+        #if os(macOS)
         node.isHitTestable = false
+        #else
+        node.isHitTestable = true
+        #endif
         return node
     }
 
     public func _updateNode(_ node: Node) {
         node.attachments[WindowChromeAttachmentKey.dragRegion] = true
+
+        #if !os(macOS)
+        if let registry = InteractionRegistryHolder.current {
+            registry.setPointer(node) { event, phase, _ in
+                guard phase == .down, event.button == .left, event.clicks >= 2 else {
+                    return .ignored
+                }
+                withAppDisplayHandle { handle in
+                    let windowID = AppWindowChromeContextHolder.current?.windowID
+                    if let windowID {
+                        handle.toggleMaximizeWindow(windowID)
+                    } else {
+                        handle.toggleMaximizeWindow()
+                    }
+                }
+                return .handled
+            }
+        }
+        #else
+        InteractionRegistryHolder.current?.remove(node)
+        #endif
     }
 
     public func _makeLayoutNode() -> LayoutNode? {
@@ -153,13 +180,16 @@ public struct WindowDragRegion: _PrimitiveView {
 }
 
 private struct WindowControlStrip: View {
-    @State private var isMaximized: Bool = false
+    // Toggled on button click to force immediate recomposition; the actual
+    // maximize icon is derived from the real window state each render.
+    @State private var _updateRevision: Bool = false
 
     var body: some View {
         let windowID = AppWindowChromeContextHolder.current?.windowID
-        let resolvedIsMaximized = isMaximized || isWindowMaximizedForChrome(windowID)
-        let maximizeIcon = resolvedIsMaximized ? WindowChromeIcons.restore : WindowChromeIcons.maximize
-        let maximizeTooltip = resolvedIsMaximized ? "Restore" : "Maximize"
+        let isMaximized = isWindowMaximizedForChrome(windowID)
+        let _ = _updateRevision
+        let maximizeIcon = isMaximized ? WindowChromeIcons.restore : WindowChromeIcons.maximize
+        let maximizeTooltip = isMaximized ? "Restore" : "Maximize"
         Row(alignment: .center, spacing: 2) {
             WindowControlButton(icon: WindowChromeIcons.minimize, tooltip: "Minimize") {
                 withAppDisplayHandle { handle in
@@ -174,12 +204,11 @@ private struct WindowControlStrip: View {
                 withAppDisplayHandle { handle in
                     if let windowID {
                         handle.toggleMaximizeWindow(windowID)
-                        isMaximized = handle.isWindowMaximized(windowID)
                     } else {
                         handle.toggleMaximizeWindow()
-                        isMaximized = handle.isWindowMaximized()
                     }
                 }
+                _updateRevision.toggle()
             }
             WindowControlButton(icon: WindowChromeIcons.close, tooltip: "Close", isClose: true) {
                 withAppDisplayHandle { handle in
