@@ -60,10 +60,14 @@ public struct ImmersiveWindowTitleBar<Leading: View>: View {
                 WindowChromeFixedSpace(width: nativeControlsLeadingInset)
             }
             leading
+                .modifier(WindowChromeInteractiveRegionModifier())
             WindowDragRegion()
                 .frame(height: height)
             if resolvedControlStyle == .custom {
                 WindowControlStrip()
+                    .frame(width: 100, height: 24)
+                    .flex(0, shrink: 0)
+                    .modifier(WindowChromeInteractiveRegionModifier())
             }
         }
         .padding(horizontal: 6, vertical: 3)
@@ -181,7 +185,9 @@ private struct WindowControlStrip: View {
         let maximizeIcon = isMaximized ? WindowChromeIcons.restore : WindowChromeIcons.maximize
         let maximizeTooltip = isMaximized ? "Restore" : "Maximize"
         Row(alignment: .center, spacing: 2) {
-            WindowControlButton(icon: WindowChromeIcons.minimize, tooltip: "Minimize") {
+            WindowControlButton(icon: WindowChromeIcons.minimize,
+                                tooltip: "Minimize",
+                                debugName: "window-control-minimize") {
                 withAppDisplayHandle { handle in
                     if let windowID {
                         handle.minimizeWindow(windowID)
@@ -190,7 +196,9 @@ private struct WindowControlStrip: View {
                     }
                 }
             }
-            WindowControlButton(icon: maximizeIcon, tooltip: maximizeTooltip) {
+            WindowControlButton(icon: maximizeIcon,
+                                tooltip: maximizeTooltip,
+                                debugName: isMaximized ? "window-control-restore" : "window-control-maximize") {
                 withAppDisplayHandle { handle in
                     if let windowID {
                         handle.toggleMaximizeWindow(windowID)
@@ -200,7 +208,10 @@ private struct WindowControlStrip: View {
                 }
                 _updateRevision.toggle()
             }
-            WindowControlButton(icon: WindowChromeIcons.close, tooltip: "Close", isClose: true) {
+            WindowControlButton(icon: WindowChromeIcons.close,
+                                tooltip: "Close",
+                                debugName: "window-control-close",
+                                isClose: true) {
                 withAppDisplayHandle { handle in
                     if let windowID {
                         handle.closeWindow(windowID)
@@ -216,6 +227,7 @@ private struct WindowControlStrip: View {
 private struct WindowControlButton: View {
     let icon: BundleImageResource
     let tooltip: String
+    let debugName: String
     var isClose: Bool = false
     let action: () -> Void
 
@@ -228,6 +240,7 @@ private struct WindowControlButton: View {
                action: action)
             .buttonStyle(.ghost)
             .frame(width: 32, height: 24)
+            .debugName(debugName)
     }
 }
 
@@ -289,7 +302,73 @@ private struct _WindowChromeHitTestInstaller: _PrimitiveView {
     }
 }
 
+private struct WindowChromeInteractiveRegionModifier: ViewModifier {
+    func apply(node: Node) {
+        node.attachments[WindowChromeAttachmentKey.interactiveRegion] = true
+    }
+}
+
 enum WindowChromeAttachmentKey {
     static let configuration = "GuavaUIApp.windowChrome.configuration"
     static let dragRegion = "GuavaUIApp.windowChrome.dragRegion"
+    static let interactiveRegion = "GuavaUIApp.windowChrome.interactiveRegion"
+}
+
+enum WindowChromeHitTestCollector {
+    static func collect(root: Node) -> WindowChromeHitTest? {
+        var config: WindowChromeHitTest?
+        var dragRects: [WindowChromeHitTest.Rect] = []
+        var nonDraggableRects: [WindowChromeHitTest.Rect] = []
+        collect(node: root,
+                parentOrigin: .zero,
+                config: &config,
+                dragRects: &dragRects,
+                nonDraggableRects: &nonDraggableRects)
+
+        guard var hitTest = config else { return nil }
+        hitTest.draggableRects = dragRects
+        hitTest.nonDraggableRects = nonDraggableRects
+        return hitTest
+    }
+
+    private static func collect(node: Node,
+                                parentOrigin: CGPoint,
+                                config: inout WindowChromeHitTest?,
+                                dragRects: inout [WindowChromeHitTest.Rect],
+                                nonDraggableRects: inout [WindowChromeHitTest.Rect]) {
+        let origin = CGPoint(x: parentOrigin.x + node.frame.origin.x,
+                             y: parentOrigin.y + node.frame.origin.y)
+
+        if let chrome = node.attachments[WindowChromeAttachmentKey.configuration] as? WindowChromeHitTest {
+            config = chrome
+        }
+
+        if node.attachments[WindowChromeAttachmentKey.dragRegion] as? Bool == true,
+           node.frame.width > 0,
+           node.frame.height > 0 {
+            dragRects.append(WindowChromeHitTest.Rect(x: Float(origin.x),
+                                                      y: Float(origin.y),
+                                                      width: Float(node.frame.width),
+                                                      height: Float(node.frame.height)))
+        }
+
+        if node.attachments[WindowChromeAttachmentKey.interactiveRegion] as? Bool == true,
+           node.frame.width > 0,
+           node.frame.height > 0 {
+            nonDraggableRects.append(WindowChromeHitTest.Rect(x: Float(origin.x),
+                                                             y: Float(origin.y),
+                                                             width: Float(node.frame.width),
+                                                             height: Float(node.frame.height)))
+        }
+
+        let childOrigin = CGPoint(x: origin.x - node.contentOffset.x,
+                                  y: origin.y - node.contentOffset.y)
+        for child in node.children {
+            collect(node: child,
+                    parentOrigin: childOrigin,
+                    config: &config,
+                    dragRects: &dragRects,
+                    nonDraggableRects: &nonDraggableRects)
+        }
+    }
 }

@@ -376,14 +376,7 @@ public final class AppRuntime {
         guard let root = tree.root,
               let id = host.mainSession?.id else { return }
 
-        var config: WindowChromeHitTest?
-        var dragRects: [WindowChromeHitTest.Rect] = []
-        collectWindowChrome(node: root,
-                            parentOrigin: .zero,
-                            config: &config,
-                            dragRects: &dragRects)
-
-        guard var next = config else {
+        guard let next = WindowChromeHitTestCollector.collect(root: root) else {
             if lastMainWindowChromeHitTest != nil {
                 host.setWindowChromeHitTest(id, nil)
                 lastMainWindowChromeHitTest = nil
@@ -391,40 +384,9 @@ public final class AppRuntime {
             return
         }
 
-        next.draggableRects = dragRects
         guard next != lastMainWindowChromeHitTest else { return }
         host.setWindowChromeHitTest(id, next)
         lastMainWindowChromeHitTest = next
-    }
-
-    private func collectWindowChrome(node: Node,
-                                     parentOrigin: CGPoint,
-                                     config: inout WindowChromeHitTest?,
-                                     dragRects: inout [WindowChromeHitTest.Rect]) {
-        let origin = CGPoint(x: parentOrigin.x + node.frame.origin.x,
-                             y: parentOrigin.y + node.frame.origin.y)
-
-        if let chrome = node.attachments[WindowChromeAttachmentKey.configuration] as? WindowChromeHitTest {
-            config = chrome
-        }
-
-        if node.attachments[WindowChromeAttachmentKey.dragRegion] as? Bool == true,
-           node.frame.width > 0,
-           node.frame.height > 0 {
-            dragRects.append(WindowChromeHitTest.Rect(x: Float(origin.x),
-                                                      y: Float(origin.y),
-                                                      width: Float(node.frame.width),
-                                                      height: Float(node.frame.height)))
-        }
-
-        let childOrigin = CGPoint(x: origin.x - node.contentOffset.x,
-                                  y: origin.y - node.contentOffset.y)
-        for child in node.children {
-            collectWindowChrome(node: child,
-                                parentOrigin: childOrigin,
-                                config: &config,
-                                dragRects: &dragRects)
-        }
     }
 
     private func handleFrame() -> Bool {
@@ -731,36 +693,6 @@ private func withWindowChromeContext<R>(_ windowID: WindowID?, _ body: () throws
     return try body()
 }
 
-private func collectWindowChrome(node: Node,
-                                 parentOrigin: CGPoint,
-                                 config: inout WindowChromeHitTest?,
-                                 dragRects: inout [WindowChromeHitTest.Rect]) {
-    let origin = CGPoint(x: parentOrigin.x + node.frame.origin.x,
-                         y: parentOrigin.y + node.frame.origin.y)
-
-    if let chrome = node.attachments[WindowChromeAttachmentKey.configuration] as? WindowChromeHitTest {
-        config = chrome
-    }
-
-    if node.attachments[WindowChromeAttachmentKey.dragRegion] as? Bool == true,
-       node.frame.width > 0,
-       node.frame.height > 0 {
-        dragRects.append(WindowChromeHitTest.Rect(x: Float(origin.x),
-                                                  y: Float(origin.y),
-                                                  width: Float(node.frame.width),
-                                                  height: Float(node.frame.height)))
-    }
-
-    let childOrigin = CGPoint(x: origin.x - node.contentOffset.x,
-                              y: origin.y - node.contentOffset.y)
-    for child in node.children {
-        collectWindowChrome(node: child,
-                            parentOrigin: childOrigin,
-                            config: &config,
-                            dragRects: &dragRects)
-    }
-}
-
 @MainActor
 private final class AuxiliaryAppWindow {
     private let session: PlatformWindowSession
@@ -897,14 +829,7 @@ private final class AuxiliaryAppWindow {
     private func syncWindowChromeHitTest() {
         guard let root = session.tree.root else { return }
 
-        var config: WindowChromeHitTest?
-        var dragRects: [WindowChromeHitTest.Rect] = []
-        collectWindowChrome(node: root,
-                            parentOrigin: .zero,
-                            config: &config,
-                            dragRects: &dragRects)
-
-        guard var next = config else {
+        guard let next = WindowChromeHitTestCollector.collect(root: root) else {
             if lastWindowChromeHitTest != nil {
                 setWindowChromeHitTest(session.id, nil)
                 lastWindowChromeHitTest = nil
@@ -912,7 +837,6 @@ private final class AuxiliaryAppWindow {
             return
         }
 
-        next.draggableRects = dragRects
         guard next != lastWindowChromeHitTest else { return }
         setWindowChromeHitTest(session.id, next)
         lastWindowChromeHitTest = next
