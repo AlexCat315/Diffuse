@@ -112,6 +112,15 @@ public final class SDL3Shell: Shell {
             return max(1, (raw * 4).rounded() / 4)
         }
 
+        var inputCoordinateScale: Float {
+#if os(Windows)
+            let scale = SDL_GetWindowDisplayScale(window)
+            return (scale > 0 && scale.isFinite) ? scale : 1
+#else
+            return 1
+#endif
+        }
+
         func setTextInputArea(_ area: TextInputArea?) {
             guard lastTextInputArea != area else { return }
 
@@ -292,6 +301,9 @@ public final class SDL3Shell: Shell {
 
             let x = Float(point.x)
             let y = Float(max(0, contentHeight - point.y))
+            if config.nonDraggableRects.contains(where: { $0.contains(x: x, y: y) }) {
+                return false
+            }
             if config.usesExplicitDragRects {
                 return config.draggableRects.contains { $0.contains(x: x, y: y) }
             }
@@ -617,36 +629,40 @@ public final class SDL3Shell: Shell {
 
             case UInt32(GUAVA_SDL_EVENT_MOUSE_MOTION):
                 let windowID = WindowID(event.motion.windowID)
-                guard windows[windowID] != nil else { continue }
+                guard let handle = windows[windowID] else { continue }
+                let scale = handle.inputCoordinateScale
                 collected.append(WindowInputEvent(
                     windowID: windowID,
                     event: .mouseMotion(MouseMotionEvent(
-                        x: event.motion.x,
-                        y: event.motion.y,
-                        deltaX: event.motion.xrel,
-                        deltaY: event.motion.yrel
+                        x: event.motion.x / scale,
+                        y: event.motion.y / scale,
+                        deltaX: event.motion.xrel / scale,
+                        deltaY: event.motion.yrel / scale
                     ))
                 ))
 
             case UInt32(GUAVA_SDL_EVENT_MOUSE_BUTTON_DOWN):
                 let windowID = WindowID(event.button.windowID)
-                guard windows[windowID] != nil,
-                      let button = makeMouseButtonEvent(from: event)
+                guard let handle = windows[windowID],
+                      let button = makeMouseButtonEvent(from: event,
+                                                        coordinateScale: handle.inputCoordinateScale)
                 else { continue }
                 collected.append(WindowInputEvent(windowID: windowID,
                                                   event: .mouseButtonDown(button)))
 
             case UInt32(GUAVA_SDL_EVENT_MOUSE_BUTTON_UP):
                 let windowID = WindowID(event.button.windowID)
-                guard windows[windowID] != nil,
-                      let button = makeMouseButtonEvent(from: event)
+                guard let handle = windows[windowID],
+                      let button = makeMouseButtonEvent(from: event,
+                                                        coordinateScale: handle.inputCoordinateScale)
                 else { continue }
                 collected.append(WindowInputEvent(windowID: windowID,
                                                   event: .mouseButtonUp(button)))
 
             case UInt32(GUAVA_SDL_EVENT_MOUSE_WHEEL):
                 let windowID = WindowID(event.wheel.windowID)
-                guard windows[windowID] != nil else { continue }
+                guard let handle = windows[windowID] else { continue }
+                let scale = handle.inputCoordinateScale
                 let wx = event.wheel.x
                 let wy = event.wheel.y
                 var mouseX = event.wheel.mouse_x
@@ -661,8 +677,8 @@ public final class SDL3Shell: Shell {
                 collected.append(WindowInputEvent(windowID: windowID,
                                                   event: .mouseWheel(MouseWheelEvent(x: wx,
                                                                                      y: wy,
-                                                                                     mouseX: mouseX,
-                                                                                     mouseY: mouseY))))
+                                                                                     mouseX: mouseX / scale,
+                                                                                     mouseY: mouseY / scale))))
 
             default:
                 break
@@ -854,12 +870,13 @@ public final class SDL3Shell: Shell {
         )
     }
 
-    private func makeMouseButtonEvent(from event: SDL_Event) -> MouseButtonEvent? {
+    private func makeMouseButtonEvent(from event: SDL_Event,
+                                      coordinateScale: Float) -> MouseButtonEvent? {
         guard let button = MouseButton(rawValue: event.button.button) else { return nil }
         return MouseButtonEvent(
             button: button,
-            x: event.button.x,
-            y: event.button.y,
+            x: event.button.x / coordinateScale,
+            y: event.button.y / coordinateScale,
             clicks: event.button.clicks,
             modifiers: Self.convertModifiers(SDL_GetModState())
         )
@@ -965,6 +982,10 @@ private let _sdl3ChromeHitTest: @convention(c) (OpaquePointer?, UnsafePointer<SD
             if bottom { return SDL_HITTEST_RESIZE_BOTTOM }
             if left { return SDL_HITTEST_RESIZE_LEFT }
             if right { return SDL_HITTEST_RESIZE_RIGHT }
+        }
+
+        if config.nonDraggableRects.contains(where: { $0.contains(x: x, y: y) }) {
+            return SDL_HITTEST_NORMAL
         }
 
         if config.usesExplicitDragRects {
