@@ -95,6 +95,36 @@ struct PopoverTests {
         }
     }
 
+    private struct NestedPortalRootHarness: View {
+        let box: ActionBox
+
+        var body: some View {
+            LayerRoot {
+                NestedMenuHarness(box: box)
+            } portals: {
+                PortalHost()
+            }
+        }
+    }
+
+    private struct NestedMenuHarness: View {
+        let box: ActionBox
+        @State var isPresented: Bool = false
+
+        var body: some View {
+            Popover(isPresented: $isPresented,
+                    width: 140) {
+                _PopoverProbe(id: "nested-trigger", width: 80, height: 24)
+            } content: {
+                Menu([
+                    .item(MenuItem(id: "nested-new-scene", title: "New Scene") {
+                        box.fired += 1
+                    })
+                ], width: 140)
+            }
+        }
+    }
+
     @Test("Popover menu item receives pointer activation through portal layer")
     func popoverMenuItemReceivesPointerActivation() { GlobalTestLock.locked {
         PortalRegistry.clear()
@@ -135,6 +165,56 @@ struct PopoverTests {
             .first
         else {
             Issue.record("menu item button was not materialized")
+            return
+        }
+
+        click(dispatcher,
+              x: Float(menuButton.origin.x + menuButton.node.frame.width * 0.5),
+              y: Float(menuButton.origin.y + menuButton.node.frame.height * 0.5))
+
+        #expect(box.fired == 1)
+    } }
+
+    @Test("Nested popover refreshes a parent PortalHost when opened")
+    func nestedPopoverRefreshesParentPortalHost() { GlobalTestLock.locked {
+        PortalRegistry.clear()
+        defer { PortalRegistry.clear() }
+
+        let registry = InteractionRegistry()
+        let capture = PointerCapture()
+        let focus = FocusChain()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = capture
+        FocusChainHolder.current = focus
+        defer {
+            InteractionRegistryHolder.current = nil
+            PointerCaptureHolder.current = nil
+            FocusChainHolder.current = nil
+        }
+
+        let tree = NodeTree()
+        let recomposer = Recomposer()
+        let graph = ViewGraph(tree: tree, recomposer: recomposer)
+        let box = ActionBox()
+        graph.install(root: NestedPortalRootHarness(box: box))
+        graph.computeLayout(width: 240, height: 180)
+
+        let dispatcher = EventDispatcher(tree: tree,
+                                         interactions: registry,
+                                         capture: capture,
+                                         focusChain: focus)
+        dispatcher.inputScene = graph.inputScene
+
+        click(dispatcher, x: 10, y: 10)
+        _ = recomposer.commitAll()
+        graph.computeLayout(width: 240, height: 180)
+
+        guard let menuButton = buttonHosts(in: tree.root)
+            .filter({ $0.origin.y > 20 })
+            .sorted(by: { $0.origin.y < $1.origin.y })
+            .first
+        else {
+            Issue.record("nested menu item button was not materialized")
             return
         }
 
