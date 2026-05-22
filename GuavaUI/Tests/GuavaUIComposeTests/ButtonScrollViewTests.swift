@@ -120,6 +120,7 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         // Button is now a composite View → user-view anchor → _StatefulButton
         // anchor → ButtonHost primitive. Walk down two anchors.
         let buttonNode = tree.root!.children.first!.children.first!.children.first!
+        buttonNode.frame = CGRect(x: 0, y: 0, width: 80, height: 32)
         #expect(buttonNode.isHitTestable == true)
         #expect(buttonNode.isFocusable == true)
 
