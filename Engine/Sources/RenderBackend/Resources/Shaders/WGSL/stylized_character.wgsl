@@ -30,6 +30,7 @@ struct SceneLights {
 @group(0) @binding(3) var base_color_texture : texture_2d<f32>;
 @group(0) @binding(4) var<uniform> scene_lights : SceneLights;
 @group(0) @binding(8) var<storage, read> joint_palette : array<mat4x4<f32>>;
+@group(0) @binding(9) var normal_map_texture : texture_2d<f32>;
 
 struct VsIn {
     @location(0) pos            : vec3<f32>,
@@ -44,26 +45,34 @@ struct VsIn {
 
 struct VsOut {
     @builtin(position) position : vec4<f32>,
-    @location(0) color : vec3<f32>,
-    @location(1) normal : vec3<f32>,
-    @location(2) uv : vec2<f32>,
+    @location(0) color          : vec3<f32>,
+    @location(1) normal         : vec3<f32>,
+    @location(2) uv             : vec2<f32>,
     @location(3) material_index : f32,
-    @location(4) world_pos : vec3<f32>,
+    @location(4) world_pos      : vec3<f32>,
+    @location(5) tangent        : vec3<f32>,
+    @location(6) bitangent      : vec3<f32>,
 };
 
 @vertex
 fn vs_main(in : VsIn) -> VsOut {
     var out : VsOut;
-    let skin = skin_matrix(in.joints, in.weights);
-    let local = skin * vec4<f32>(in.pos, 1.0);
-    let world = u.model * local;
-    let normal = u.model * (skin * vec4<f32>(in.normal, 0.0));
-    out.position = u.mvp * local;
-    out.color = in.color;
-    out.normal = safe_normalize(normal.xyz);
-    out.uv = in.uv;
+    let skin    = skin_matrix(in.joints, in.weights);
+    let local   = skin * vec4<f32>(in.pos, 1.0);
+    let world   = u.model * local;
+    let normal  = u.model * (skin * vec4<f32>(in.normal, 0.0));
+    let tangent = u.model * (skin * vec4<f32>(in.tangent.xyz, 0.0));
+    let N = safe_normalize(normal.xyz);
+    let T = safe_normalize(tangent.xyz);
+    let B = cross(N, T) * in.tangent.w;
+    out.position   = u.mvp * local;
+    out.color      = in.color;
+    out.normal     = N;
+    out.uv         = in.uv;
     out.material_index = in.material_index;
-    out.world_pos = world.xyz;
+    out.world_pos  = world.xyz;
+    out.tangent    = T;
+    out.bitangent  = B;
     return out;
 }
 
@@ -160,7 +169,12 @@ fn scene_lambert(normal : vec3<f32>, world_pos : vec3<f32>) -> f32 {
 
 @fragment
 fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
-    let normal = normalize(in.normal);
+    let nm_sample  = textureSample(normal_map_texture, base_color_sampler, in.uv).rgb;
+    let tangent_n  = nm_sample * 2.0 - 1.0;
+    let N = safe_normalize(in.normal);
+    let T = safe_normalize(in.tangent);
+    let B = safe_normalize(in.bitangent);
+    let normal = safe_normalize(mat3x3<f32>(T, B, N) * tangent_n);
     let lambert = scene_lambert(normal, in.world_pos);
     let ramp = toon_ramp(lambert);
     let rim = smoothstep(0.38, 0.95, 1.0 - max(normal.z, 0.0));

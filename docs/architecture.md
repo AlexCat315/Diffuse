@@ -362,6 +362,7 @@ Engine/Sources/AIRuntime/
 | `architecture.md`（本文档） | 总纲：五个核心概念、数据流、实现路径 | 总纲 |
 | `ai-native-observation-bus-design.md` | World 变更流的技术实现 | 参考 Phase 1 |
 | `ai-native-semantic-pipeline-design.md` | Asset 导入时填充 World inferred 层的流水线 | 参考 Phase 2 |
+| `ai-native-perception-runtime-design.md` | 视觉/感知模型的训练、部署、许可证、IR 与 World 写入契约 | 参考 Phase 2 |
 | `ai-native-sequence-document-design.md` | World 的时间轴层（Shot/Clip/Binding）详细设计 | 参考 Phase 2 |
 | `ai-native-scene-from-image-design.md` | ReferenceImage Signal 的处理流水线 | 参考 Phase 2 |
 | `ai-native-minimal-confirmation-ui-design.md` | Confirmation 作为学习协议的 UI 实现 | 参考 Phase 3 |

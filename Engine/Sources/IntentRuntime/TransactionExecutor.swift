@@ -610,6 +610,25 @@ public struct TransactionExecutor {
                                                                    type: "RenderMeshComponent")
                 }
 
+            case let .setRenderMeshVisibility(entityID, isVisible):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(RenderMeshComponent.self, for: entity, {
+                    $0.isVisible = isVisible
+                }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "RenderMeshComponent")
+                }
+
+            case let .setRenderMaterialComponent(entityID, baseColorFactor, metallicFactor, roughnessFactor, emissiveFactor):
+                let entity = try requireEntity(entityID, in: scene)
+                let component = RenderMaterialComponent(
+                    baseColorFactor: baseColorFactor,
+                    metallicFactor: metallicFactor,
+                    roughnessFactor: roughnessFactor,
+                    emissiveFactor: emissiveFactor
+                )
+                _ = scene.setComponent(component, for: entity)
+
             case let .setScriptBindings(entityID, bindings):
                 let entity = try requireEntity(entityID, in: scene)
                 _ = scene.setComponent(ScriptComponent(bindings: bindings), for: entity)
@@ -953,6 +972,10 @@ public struct TransactionExecutor {
             return "scene:light_spot_outer:\(id)"
         case let .setMeshColorTint(id, _):
             return "scene:mesh_color:\(id)"
+        case let .setRenderMeshVisibility(id, _):
+            return "scene:mesh_visibility:\(id)"
+        case let .setRenderMaterialComponent(id, _, _, _, _):
+            return "scene:render_material:\(id)"
         case let .setScriptBindings(id, _):
             return "scene:scripts:\(id)"
         case let .setCameraPose(id, _, _, _):
@@ -1036,6 +1059,16 @@ public struct TransactionExecutor {
                 events.append(.entityAuthoredChanged(
                     ref: "scene:\(entityID)", property: "meshColor",
                     value: .vec3(color.x, color.y, color.z)))
+
+            case let .setRenderMeshVisibility(entityID, isVisible):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "meshVisibility",
+                    value: .bool(isVisible)))
+
+            case let .setRenderMaterialComponent(entityID, baseColorFactor, _, _, _):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "renderMaterial",
+                    value: .vec3(baseColorFactor.x, baseColorFactor.y, baseColorFactor.z)))
 
             case let .setLightType(entityID, type):
                 events.append(.entityAuthoredChanged(

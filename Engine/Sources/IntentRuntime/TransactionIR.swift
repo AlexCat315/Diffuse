@@ -95,6 +95,12 @@ public enum SceneMutation: Sendable, Equatable {
     case setLightSpotInnerAngle(entityID: UInt64, angleDegrees: Float)
     case setLightSpotOuterAngle(entityID: UInt64, angleDegrees: Float)
     case setMeshColorTint(entityID: UInt64, color: SIMD3<Float>)
+    case setRenderMeshVisibility(entityID: UInt64, isVisible: Bool)
+    case setRenderMaterialComponent(entityID: UInt64,
+                                    baseColorFactor: SIMD4<Float>,
+                                    metallicFactor: Float,
+                                    roughnessFactor: Float,
+                                    emissiveFactor: SIMD3<Float>)
     case setScriptBindings(entityID: UInt64, bindings: [ScriptBinding])
     case setCameraPose(entityID: UInt64,
                        localTransform: LocalTransform,
@@ -139,6 +145,8 @@ public enum SceneMutation: Sendable, Equatable {
              let .setLightSpotInnerAngle(id, _),
              let .setLightSpotOuterAngle(id, _),
              let .setMeshColorTint(id, _),
+             let .setRenderMeshVisibility(id, _),
+             let .setRenderMaterialComponent(id, _, _, _, _),
              let .setScriptBindings(id, _),
              let .setCameraPose(id, _, _, _),
              let .setAudioSource(id, _),
