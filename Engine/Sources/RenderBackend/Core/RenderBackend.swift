@@ -698,6 +698,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                     visibility: .vertex,
                     type: .uniformBuffer
                 ),
+                GPUBindGroupLayoutEntry(
+                    binding: 8,
+                    visibility: .vertex,
+                    type: .readOnlyStorageBuffer
+                ),
             ]
         )
         shadowBindGroupLayout = layout
@@ -1178,6 +1183,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 height: plan.tileSize
             )
             if let dyn = dynamicInstanceResources {
+                guard let fallbackJointPaletteBuffer else { continue }
                 let bindGroup = try backend.createBindGroup(
                     layout: bindGroupLayout,
                     entries: [
@@ -1192,6 +1198,12 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             buffer: renderUniformBuffer,
                             offset: 0,
                             size: UInt64(MemoryLayout<ShadowRenderUniforms>.stride)
+                        ),
+                        GPUBindGroupEntry(
+                            binding: 8,
+                            buffer: fallbackJointPaletteBuffer,
+                            offset: 0,
+                            size: fallbackJointPaletteBuffer.size
                         ),
                     ]
                 )
@@ -1214,6 +1226,9 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                     guard meshes.indices.contains(instance.meshIndex) else { continue }
                     let mesh = meshes[instance.meshIndex]
                     let uniformBuffer = instanceResources[i].uniformBuffer
+                    guard let paletteBuffer = instance.entity.flatMap({ jointPaletteBuffers[$0] }) ?? fallbackJointPaletteBuffer else {
+                        continue
+                    }
                     let bindGroup = try backend.createBindGroup(
                         layout: bindGroupLayout,
                         entries: [
@@ -1228,6 +1243,12 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                                 buffer: renderUniformBuffer,
                                 offset: 0,
                                 size: UInt64(MemoryLayout<ShadowRenderUniforms>.stride)
+                            ),
+                            GPUBindGroupEntry(
+                                binding: 8,
+                                buffer: paletteBuffer,
+                                offset: 0,
+                                size: paletteBuffer.size
                             ),
                         ]
                     )
