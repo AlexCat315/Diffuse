@@ -1,0 +1,389 @@
+{
+  "entityCount" : 7,
+  "lastModifiedAt" : "2026-05-22T13:25:08Z",
+  "physicsSettings" : {
+    "allowSleep" : true,
+    "backendKind" : "none",
+    "fixedTimeStepSeconds" : 0.016666666666666666,
+    "gravity" : {
+      "x" : 0,
+      "y" : -9.81,
+      "z" : 0
+    },
+    "maxSubstepsPerFrame" : 4,
+    "simulationMode" : "off"
+  },
+  "revision" : 3971,
+  "roots" : [
+    {
+      "camera" : {
+        "far" : 100,
+        "fovYRadians" : 0.7853981,
+        "isActive" : true,
+        "near" : 0.1,
+        "target" : {
+          "x" : 0,
+          "y" : 1,
+          "z" : 0
+        },
+        "up" : {
+          "x" : 0,
+          "y" : 1,
+          "z" : 0
+        }
+      },
+      "children" : [
+
+      ],
+      "id" : 0,
+      "kind" : "Camera",
+      "localTransform" : {
+        "rows" : [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          2.4,
+          0,
+          0,
+          1,
+          7.5,
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "name" : "Main Camera"
+    },
+    {
+      "children" : [
+
+      ],
+      "id" : 1,
+      "kind" : "Directional Light",
+      "light" : {
+        "color" : {
+          "x" : 1,
+          "y" : 0.95,
+          "z" : 0.86
+        },
+        "intensity" : 3,
+        "range" : 10,
+        "spotInnerAngleDegrees" : 20,
+        "spotOuterAngleDegrees" : 30,
+        "type" : "directional"
+      },
+      "localTransform" : {
+        "rows" : [
+          1,
+          0,
+          0,
+          4,
+          0,
+          1,
+          0,
+          6,
+          0,
+          0,
+          1,
+          2,
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "name" : "Key Light"
+    },
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+
+              ],
+              "id" : 4,
+              "kind" : "Locator",
+              "localTransform" : {
+                "rows" : [
+                  1,
+                  0,
+                  0,
+                  0.55,
+                  0,
+                  1,
+                  0,
+                  1.2,
+                  0,
+                  0,
+                  1,
+                  0.15,
+                  0,
+                  0,
+                  0,
+                  1
+                ]
+              },
+              "name" : "Sword Socket"
+            }
+          ],
+          "collider" : {
+            "isTrigger" : false,
+            "layerID" : 0,
+            "layerMask" : 65535,
+            "material" : {
+              "density" : 1,
+              "friction" : 0.6,
+              "restitution" : 0
+            },
+            "shape" : {
+              "center" : {
+                "x" : 0,
+                "y" : 0.9,
+                "z" : 0
+              },
+              "halfHeight" : 0.9,
+              "kind" : "capsule",
+              "radius" : 0.35
+            }
+          },
+          "id" : 3,
+          "kind" : "Static Mesh",
+          "localTransform" : {
+            "rows" : [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0.74999994,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "name" : "Hero",
+          "renderMesh" : {
+            "colorTint" : {
+              "x" : 1,
+              "y" : 1,
+              "z" : 1
+            },
+            "isVisible" : true,
+            "meshIndex" : 1
+          },
+          "rigidBody" : {
+            "accumulatedForce" : {
+              "x" : 0,
+              "y" : 0,
+              "z" : 0
+            },
+            "accumulatedTorque" : {
+              "x" : 0,
+              "y" : 0,
+              "z" : 0
+            },
+            "allowSleep" : true,
+            "angularDamping" : 0.04,
+            "angularVelocity" : {
+              "x" : 0,
+              "y" : 0,
+              "z" : 0
+            },
+            "gravityScale" : 1,
+            "isSleeping" : false,
+            "linearDamping" : 0.04,
+            "linearVelocity" : {
+              "x" : 0,
+              "y" : 0,
+              "z" : 0
+            },
+            "mass" : 80,
+            "motionType" : "dynamic"
+          }
+        },
+        {
+          "children" : [
+
+          ],
+          "collider" : {
+            "isTrigger" : false,
+            "layerID" : 0,
+            "layerMask" : 65535,
+            "material" : {
+              "density" : 1,
+              "friction" : 0.6,
+              "restitution" : 0
+            },
+            "shape" : {
+              "center" : {
+                "x" : 0,
+                "y" : -0.5,
+                "z" : 0
+              },
+              "halfExtents" : {
+                "x" : 8,
+                "y" : 0.5,
+                "z" : 8
+              },
+              "kind" : "box"
+            }
+          },
+          "id" : 5,
+          "kind" : "Static Mesh",
+          "localTransform" : {
+            "rows" : [
+              8,
+              0,
+              0,
+              0,
+              0,
+              0.5,
+              0,
+              -1,
+              0,
+              0,
+              8,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "name" : "Ground",
+          "renderMesh" : {
+            "colorTint" : {
+              "x" : 1,
+              "y" : 1,
+              "z" : 1
+            },
+            "isVisible" : true,
+            "meshIndex" : 0
+          },
+          "rigidBody" : {
+            "accumulatedForce" : {
+              "x" : 0,
+              "y" : 0,
+              "z" : 0
+            },
+            "accumulatedTorque" : {
+              "x" : 0,
+              "y" : 0,
+              "z" : 0
+            },
+            "allowSleep" : false,
+            "angularDamping" : 0.04,
+            "angularVelocity" : {
+              "x" : 0,
+              "y" : 0,
+              "z" : 0
+            },
+            "gravityScale" : 0,
+            "isSleeping" : false,
+            "linearDamping" : 0.04,
+            "linearVelocity" : {
+              "x" : 0,
+              "y" : 0,
+              "z" : 0
+            },
+            "mass" : 0,
+            "motionType" : "static"
+          }
+        },
+        {
+          "children" : [
+
+          ],
+          "constraint" : {
+            "axisA" : {
+              "x" : 0,
+              "y" : 1,
+              "z" : 0
+            },
+            "axisB" : {
+              "x" : 0,
+              "y" : 1,
+              "z" : 0
+            },
+            "constraintType" : "distance",
+            "entityA" : 3,
+            "entityB" : 0,
+            "isEnabled" : true,
+            "maxLimit" : 6,
+            "minLimit" : 2.5,
+            "pivotA" : {
+              "x" : 0,
+              "y" : 0,
+              "z" : 0
+            },
+            "pivotB" : {
+              "x" : 0,
+              "y" : 0,
+              "z" : 0
+            }
+          },
+          "id" : 6,
+          "kind" : "Constraint",
+          "localTransform" : {
+            "rows" : [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1
+            ]
+          },
+          "name" : "Hero Follow"
+        }
+      ],
+      "id" : 2,
+      "kind" : "Group",
+      "localTransform" : {
+        "rows" : [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1
+        ]
+      },
+      "name" : "Gameplay"
+    }
+  ],
+  "schemaVersion" : 4
+}
