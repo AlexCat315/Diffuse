@@ -51,6 +51,10 @@ public enum GLTFImporterError: Error, CustomStringConvertible {
 }
 
 public enum GLTFImporter {
+    private static let glbMagic: UInt32 = 0x46546C67
+    private static let chunkTypeJSON: UInt32 = 0x4E4F534A
+    private static let chunkTypeBIN: UInt32 = 0x004E4942
+
     public static func load(path: String) throws -> MeshAsset {
         try loadWithTopology(path: path).mesh
     }
@@ -61,9 +65,13 @@ public enum GLTFImporter {
             throw GLTFImporterError.fileNotFound(path)
         }
         let data = try Data(contentsOf: url)
-        return try parseWithTopology(data: data,
-                                     baseURL: url.deletingLastPathComponent(),
-                                     name: url.lastPathComponent)
+        let baseURL = url.deletingLastPathComponent()
+        let name = url.lastPathComponent
+        if isGLB(data) {
+            let (jsonData, binData) = try extractGLBChunks(data)
+            return try parseWithTopology(jsonData: jsonData, binBuffer: binData, baseURL: baseURL, name: name)
+        }
+        return try parseWithTopology(data: data, baseURL: baseURL, name: name)
     }
 
     /// Load GLTF with shared vertex pool across all primitives, useful for reducing position redundancy.
@@ -74,8 +82,12 @@ public enum GLTFImporter {
             throw GLTFImporterError.fileNotFound(path)
         }
         let data = try Data(contentsOf: url)
-        return try parseWithSharedVertexPool(data: data,
-                                             baseURL: url.deletingLastPathComponent())
+        let baseURL = url.deletingLastPathComponent()
+        if isGLB(data) {
+            let (jsonData, binData) = try extractGLBChunks(data)
+            return try parseWithSharedVertexPool(jsonData: jsonData, binBuffer: binData, baseURL: baseURL)
+        }
+        return try parseWithSharedVertexPool(data: data, baseURL: baseURL)
     }
 
     static func parse(data: Data, baseURL: URL, name: String) throws -> MeshAsset {
@@ -84,19 +96,46 @@ public enum GLTFImporter {
 
     static func parseWithTopology(data: Data, baseURL: URL, name: String)
         throws -> (mesh: MeshAsset, topologies: [MeshTopologySlice]) {
-        let document: GLTFDocument
+        let document = try decodeGLTFDocument(data)
+        let buffers = try document.buffers.map { try resolveBuffer($0, baseURL: baseURL) }
+        return try buildMeshWithTopology(document: document, buffers: buffers, name: name)
+    }
+
+    static func parseWithTopology(jsonData: Data, binBuffer: Data?, baseURL: URL, name: String)
+        throws -> (mesh: MeshAsset, topologies: [MeshTopologySlice]) {
+        let document = try decodeGLTFDocument(jsonData)
+        let buffers = try resolveGLBBuffers(document: document, binBuffer: binBuffer, baseURL: baseURL)
+        return try buildMeshWithTopology(document: document, buffers: buffers, name: name)
+    }
+
+    static func parseWithSharedVertexPool(data: Data, baseURL: URL)
+        throws -> (positions: [SIMD3<Float>], primitives: [PrimitiveMeshTopology]) {
+        let document = try decodeGLTFDocument(data)
+        let buffers = try document.buffers.map { try resolveBuffer($0, baseURL: baseURL) }
+        return try buildSharedVertexPool(document: document, buffers: buffers)
+    }
+
+    static func parseWithSharedVertexPool(jsonData: Data, binBuffer: Data?, baseURL: URL)
+        throws -> (positions: [SIMD3<Float>], primitives: [PrimitiveMeshTopology]) {
+        let document = try decodeGLTFDocument(jsonData)
+        let buffers = try resolveGLBBuffers(document: document, binBuffer: binBuffer, baseURL: baseURL)
+        return try buildSharedVertexPool(document: document, buffers: buffers)
+    }
+
+    private static func decodeGLTFDocument(_ data: Data) throws -> GLTFDocument {
         do {
-            document = try JSONDecoder().decode(GLTFDocument.self, from: data)
+            return try JSONDecoder().decode(GLTFDocument.self, from: data)
         } catch {
             throw GLTFImporterError.invalidJSON(String(describing: error))
         }
+    }
 
-        let buffers = try document.buffers.map { try resolveBuffer($0, baseURL: baseURL) }
+    private static func buildMeshWithTopology(document: GLTFDocument, buffers: [Data], name: String)
+        throws -> (mesh: MeshAsset, topologies: [MeshTopologySlice]) {
         let rootNodes = try rootNodeIndices(in: document)
         guard !rootNodes.isEmpty else {
             throw GLTFImporterError.missingSceneGraph(nil)
         }
-
         var builder = MeshBuilder(document: document, buffers: buffers)
         for nodeIndex in rootNodes {
             try builder.consumeNode(index: nodeIndex, parentTransform: matrix_identity_float4x4)
@@ -104,26 +143,61 @@ public enum GLTFImporter {
         return try builder.makeMeshWithTopology(name: name)
     }
 
-    static func parseWithSharedVertexPool(data: Data, baseURL: URL)
+    private static func buildSharedVertexPool(document: GLTFDocument, buffers: [Data])
         throws -> (positions: [SIMD3<Float>], primitives: [PrimitiveMeshTopology]) {
-        let document: GLTFDocument
-        do {
-            document = try JSONDecoder().decode(GLTFDocument.self, from: data)
-        } catch {
-            throw GLTFImporterError.invalidJSON(String(describing: error))
-        }
-
-        let buffers = try document.buffers.map { try resolveBuffer($0, baseURL: baseURL) }
         let rootNodes = try rootNodeIndices(in: document)
         guard !rootNodes.isEmpty else {
             throw GLTFImporterError.missingSceneGraph(nil)
         }
-
         var sharedBuilder = SharedVertexPoolBuilder(document: document, buffers: buffers)
         for nodeIndex in rootNodes {
             try sharedBuilder.consumeNode(index: nodeIndex, parentTransform: matrix_identity_float4x4)
         }
         return try sharedBuilder.makePrimitivesWithSharedPool()
+    }
+
+    private static func resolveGLBBuffers(document: GLTFDocument, binBuffer: Data?, baseURL: URL) throws -> [Data] {
+        try document.buffers.enumerated().map { (i, buffer) in
+            if buffer.uri == nil, i == 0, let bin = binBuffer {
+                return bin
+            }
+            return try resolveBuffer(buffer, baseURL: baseURL)
+        }
+    }
+
+    private static func isGLB(_ data: Data) -> Bool {
+        guard data.count >= 4 else { return false }
+        return data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 0, as: UInt32.self) } == glbMagic
+    }
+
+    private static func extractGLBChunks(_ data: Data) throws -> (json: Data, bin: Data?) {
+        guard data.count >= 12 else {
+            throw GLTFImporterError.unsupportedBuffer("GLB file too short")
+        }
+        var offset = 12
+        var jsonData: Data?
+        var binData: Data?
+        while offset + 8 <= data.count {
+            let chunkLength = Int(data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: UInt32.self) })
+            let chunkType = data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset + 4, as: UInt32.self) }
+            offset += 8
+            guard offset + chunkLength <= data.count else {
+                throw GLTFImporterError.unsupportedBuffer("GLB chunk extends beyond file bounds")
+            }
+            switch chunkType {
+            case chunkTypeJSON:
+                jsonData = data.subdata(in: offset..<(offset + chunkLength))
+            case chunkTypeBIN:
+                binData = data.subdata(in: offset..<(offset + chunkLength))
+            default:
+                break
+            }
+            offset += chunkLength
+        }
+        guard let json = jsonData else {
+            throw GLTFImporterError.unsupportedBuffer("GLB file missing JSON chunk")
+        }
+        return (json, binData)
     }
 
     private static func rootNodeIndices(in document: GLTFDocument) throws -> [Int] {

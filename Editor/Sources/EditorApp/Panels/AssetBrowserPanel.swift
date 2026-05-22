@@ -110,7 +110,7 @@ private struct AssetGlyph: View {
     var body: some View {
         let label: String
         switch kind {
-        case .gltf: label = "GL"
+        case .gltf, .glb: label = "GL"
         case .obj: label = "OBJ"
         }
 

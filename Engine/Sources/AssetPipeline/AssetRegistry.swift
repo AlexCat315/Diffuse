@@ -15,6 +15,7 @@ public enum AssetRegistryError: Error, CustomStringConvertible {
 
 public enum ImportableAssetKind: String, Codable, Sendable, Equatable {
     case gltf
+    case glb
     case obj
 
     public var sceneKindLabel: String { "Static Mesh" }
@@ -229,6 +230,8 @@ public final class AssetRegistry: @unchecked Sendable {
             switch url.pathExtension.lowercased() {
             case "gltf":
                 results.append((url, .gltf))
+            case "glb":
+                results.append((url, .glb))
             case "obj":
                 results.append((url, .obj))
             default:
@@ -241,7 +244,7 @@ public final class AssetRegistry: @unchecked Sendable {
     private func importMesh(at url: URL,
                             kind: ImportableAssetKind) throws -> (mesh: MeshAsset, topologySlices: [MeshTopologySlice]?) {
         switch kind {
-        case .gltf:
+        case .gltf, .glb:
             let loaded = try GLTFImporter.loadWithTopology(path: url.path)
             return (loaded.mesh, loaded.topologies)
         case .obj:
