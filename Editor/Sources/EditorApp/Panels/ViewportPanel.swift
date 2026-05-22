@@ -1375,18 +1375,9 @@ private struct ToggleChip: View {
 
     var body: some View {
         Button(action: onTap) {
-            Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                Text(label, lineLimit: 1)
-                    .font(.caption)
-                    .foregroundColor(isActive ? .onAccent : .onSurface)
-            }
-            .frame(height: 26, minWidth: 42)
-            .padding(horizontal: 5, vertical: 0)
-            .background(isActive ? .accent : .surfaceSunken)
-            .cornerRadius(3)
-            .clipped()
+            Text(label, lineLimit: 1)
         }
-        .buttonStyle(.plain)
+        .toggleButtonStyle(isActive)
     }
 }
 
