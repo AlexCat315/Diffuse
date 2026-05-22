@@ -378,6 +378,63 @@ struct RenderBackendGPUSmokeTests {
         #expect(darkerPixels > Int(width * height) / 80)
     }
 
+    @Test("skinned mesh with non-empty joint palette does not crash the GPU pipeline",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the skinned mesh GPU smoke test"))
+    func skinnedMeshPaletteDoesNotCrashGPUPipeline() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+
+        renderer.initialize()
+
+        let width: UInt32 = 64
+        let height: UInt32 = 64
+
+        let skinnedEntity = EntityID(index: 1, generation: 1)
+        var palette = JointPaletteMap()
+        palette.palettes[skinnedEntity] = JointPalette(matrices: [matrix_identity_float4x4])
+
+        let packet = RenderPacket(
+            frameIndex: 0,
+            deltaTime: 1.0 / 60.0,
+            drawableSize: RenderDrawableSize(width: width, height: height),
+            scene: Self.makeSmokeScene(),
+            sceneSnapshot: SceneRuntimeSnapshot(entityCount: 1, revision: 1),
+            renderSettings: RenderSettings(
+                stage: .r3ViewportInterop,
+                enableOffscreenViewport: true
+            ),
+            simulationTimeSeconds: 0,
+            jointPaletteMap: palette
+        )
+
+        renderer.render(packet: packet)
+
+        let stats = renderer.currentFrameStats()
+        #expect(stats.activePasses.contains(.basePass))
+        #expect(stats.activePasses.contains(.viewportResolve))
+
+        let viewport = renderer.currentViewportSurfaceState()
+        #expect(viewport.isValid)
+        #expect(viewport.width == width)
+        #expect(viewport.height == height)
+    }
+
     private static func makeSmokeScene() -> RenderScene {
         RenderScene(
             camera: RenderCamera(

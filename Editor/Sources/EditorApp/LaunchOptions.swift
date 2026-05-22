@@ -3,7 +3,7 @@ import RHIWGPU
 
 struct EditorAppLaunchOptions {
     let backendConfig: WGPUDeviceConfig
-    let projectDirectory: String
+    let projectDirectory: String?
 
     static func load(
         arguments: [String] = CommandLine.arguments,
@@ -26,7 +26,6 @@ struct EditorAppLaunchOptions {
         let libraryPath = fileConfig?.wgpu?.libraryPath
         let projectDirectory = commandLine.projectDirectory
             ?? environment["GUAVA_PROJECT_DIR"]
-            ?? FileManager.default.currentDirectoryPath
 
         return EditorAppLaunchOptions(
             backendConfig: WGPUDeviceConfig(

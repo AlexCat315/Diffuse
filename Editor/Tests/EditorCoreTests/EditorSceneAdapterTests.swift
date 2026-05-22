@@ -3,6 +3,7 @@
 import Foundation
 import RenderBackend
 import SceneRuntime
+import ScriptRuntime
 import SIMDCompat
 import Testing
 
@@ -127,6 +128,51 @@ struct EditorSceneAdapterTests {
 
         #expect(revisions == [scene.revision])
         #expect(scene.defaultSelectionID != nil)
+    }
+
+    @Test("tickScene drives AnimationRuntime and writes a non-empty joint palette for skinned entity")
+    func currentJointPaletteMapReturnsPaletteAfterTick() {
+        let meshIndex = 9001
+        AssetRegistry.shared.registerForTesting(Self.makeAnimatedMesh(), at: meshIndex)
+        defer { AssetRegistry.shared.reset() }
+
+        let adapter = EditorSceneAdapter()
+        let entity = adapter.scene.createEntity()
+        _ = adapter.scene.setComponent(AnimationPlayer(isPlaying: true), for: entity)
+        _ = adapter.scene.setComponent(
+            AssetReferenceComponent(
+                assetID: "test:\(meshIndex)",
+                name: "test",
+                relativePath: "test.gltf",
+                absolutePath: "/test.gltf",
+                kind: "gltf",
+                meshIndex: meshIndex
+            ),
+            for: entity
+        )
+
+        adapter.tickScene(deltaTime: 0.1)
+
+        let palette = adapter.currentJointPaletteMap()
+        #expect(palette.palette(for: entity) != nil)
+        #expect(palette.palette(for: entity)?.matrices.isEmpty == false)
+    }
+
+    private static func makeAnimatedMesh() -> MeshAsset {
+        let sampler = MeshAnimationSampler(
+            inputTimes: [0, 1.0],
+            outputValues: [SIMD4<Float>(0, 0, 0, 0), SIMD4<Float>(1, 0, 0, 0)]
+        )
+        let channel = MeshAnimationChannel(samplerIndex: 0, targetNodeIndex: 0, path: .translation)
+        let clip = MeshAnimation(name: "walk", samplers: [sampler], channels: [channel])
+        return MeshAsset(
+            name: "test_skinned",
+            vertices: [],
+            indices: [],
+            nodes: [MeshNode(name: "root")],
+            skins: [MeshSkin(jointNodeIndices: [0], inverseBindMatrices: [matrix_identity_float4x4])],
+            animations: [clip]
+        )
     }
 
     @Test("Spawning imported mesh attaches registered mesh collider bounds")

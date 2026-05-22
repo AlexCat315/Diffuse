@@ -366,6 +366,7 @@ let package = Package(
                 "SIMDCompat",
                 "ScriptRuntime",
                 "SceneRuntime",
+                "AssetPipeline",
             ]
         ),
         .testTarget(
