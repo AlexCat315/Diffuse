@@ -188,7 +188,8 @@ public final class EngineHost: @unchecked Sendable {
         inputEvents: [InputEvent] = [],
         drawableSize: RenderDrawableSize = .init(),
         shouldRender: Bool = true,
-        renderSceneOverride: RenderScene? = nil
+        renderSceneOverride: RenderScene? = nil,
+        jointPaletteOverride: JointPaletteMap? = nil
     ) {
         let request = state.withLock { state -> SimulationFrameRequest? in
             guard state.started else { return nil }
@@ -202,7 +203,8 @@ public final class EngineHost: @unchecked Sendable {
                 drawableSize: drawableSize,
                 shouldRender: shouldRender && renderThread != nil,
                 renderSettings: state.renderSettings,
-                renderSceneOverride: renderSceneOverride
+                renderSceneOverride: renderSceneOverride,
+                jointPaletteOverride: jointPaletteOverride
             )
         }
         guard let request, let simulationThread else { return }

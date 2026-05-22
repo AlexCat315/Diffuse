@@ -134,7 +134,8 @@ public final class EditorApplication: @unchecked Sendable {
             inputEvents: inputEvents,
             drawableSize: _viewportDrawableSize,
             shouldRender: store.state.shouldRender,
-            renderSceneOverride: scene.currentRenderScene()
+            renderSceneOverride: scene.currentRenderScene(),
+            jointPaletteOverride: scene.currentJointPaletteMap()
         )
 
         let surface = engine.currentViewportSurfaceState()
