@@ -1,3 +1,4 @@
+import AppKit
 import EditorCore
 import GuavaUICompose
 import GuavaUIRuntime
@@ -7,12 +8,47 @@ import AssetPipeline
 struct AssetBrowserPanel: View {
     let app: EditorApplication
 
+    private func importAssets() {
+        #if os(macOS)
+        let panel = NSOpenPanel()
+        panel.title = L("Import Assets")
+        panel.message = L("Choose .glb, .gltf, or .obj files to import into this project.")
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = []
+        panel.begin { response in
+            guard response == .OK else { return }
+            let dest = URL(fileURLWithPath: self.app.projectDirectory, isDirectory: true)
+            var copied = false
+            for src in panel.urls {
+                let target = dest.appendingPathComponent(src.lastPathComponent)
+                do {
+                    if FileManager.default.fileExists(atPath: target.path) {
+                        try FileManager.default.removeItem(at: target)
+                    }
+                    try FileManager.default.copyItem(at: src, to: target)
+                    copied = true
+                } catch {
+                    // Skip files that can't be copied; registry will warn on import failure.
+                }
+            }
+            if copied {
+                Task { @MainActor in _ = self.app.reloadAssets() }
+            }
+        }
+        #endif
+    }
+
     var body: some View {
         StoreScope(app.store) { store in
             let assets = EditorAssetCatalog.entries()
             Box(direction: .column, alignItems: .stretch) {
-                AssetBrowserHeader(dragLabel: store.activeAssetDrag?.displayName)
-                    .padding(horizontal: 10, vertical: 7)
+                AssetBrowserHeader(
+                    dragLabel: store.activeAssetDrag?.displayName,
+                    onImport: { importAssets() }
+                )
+                .padding(horizontal: 10, vertical: 7)
 
                 Divider()
 
@@ -35,6 +71,7 @@ struct AssetBrowserPanel: View {
 
 private struct AssetBrowserHeader: View {
     let dragLabel: String?
+    let onImport: () -> Void
 
     var body: some View {
         Row(alignment: .center, spacing: 8) {
@@ -52,6 +89,8 @@ private struct AssetBrowserHeader: View {
                 Text("\(EditorAssetCatalog.entries().count) items")
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
+                Button(L("Import…")) { onImport() }
+                    .buttonStyle(.ghost)
             }
         }
     }
@@ -68,7 +107,7 @@ private struct AssetBrowserEmptyState: View {
             Text(projectDirectory)
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
-            Text(L("Add .gltf or .obj files under the project directory and relaunch the editor."))
+            Text(L("Use the Import… button above, or copy .glb, .gltf, or .obj files anywhere inside the project directory and reload."))
                 .font(.caption)
                 .foregroundColor(.onSurfaceVariant)
         }
