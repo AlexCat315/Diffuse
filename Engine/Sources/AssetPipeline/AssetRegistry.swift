@@ -193,6 +193,19 @@ public final class AssetRegistry: @unchecked Sendable {
         lock.unlock()
     }
 
+    /// Registers a mesh asset directly at the given index.
+    /// Intended for unit tests that need a pre-built MeshAsset without loading from disk.
+    public func registerForTesting(_ mesh: MeshAsset, at meshIndex: Int) {
+        lock.lock()
+        meshes[meshIndex] = RegisteredMeshAsset(
+            meshIndex: meshIndex,
+            assetID: "test:\(meshIndex)",
+            kind: .gltf,
+            mesh: mesh
+        )
+        lock.unlock()
+    }
+
     private static let buildDirectoryNames: Set<String> = ["build", ".build", "node_modules", ".gradle"]
 
     private func findImportableAssets(in rootURL: URL) throws -> [(url: URL, kind: ImportableAssetKind)] {
