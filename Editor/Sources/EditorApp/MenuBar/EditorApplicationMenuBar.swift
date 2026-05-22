@@ -47,9 +47,11 @@ struct EditorApplicationMenuBar: View {
 
         return AnyView(Popover(isPresented: isPresented,
                                width: 220) {
-            Text(menu.title)
-                .font(.body)
-                .foregroundColor(openMenuIndex == index ? .onSurface : .onSurfaceVariant)
+            Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                Text(menu.title)
+                    .font(.body)
+                    .foregroundColor(openMenuIndex == index ? .onSurface : .onSurfaceVariant)
+            }
                 .padding(horizontal: 10, vertical: 0)
                 .frame(height: 28)
                 .background(openMenuIndex == index ? .surfaceVariant : .surface)
