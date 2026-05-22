@@ -101,6 +101,7 @@ public enum SceneMutation: Sendable, Equatable {
                        target: SIMD3<Float>,
                        up: SIMD3<Float>?)
     case setAudioSource(entityID: UInt64, source: AudioSource)
+    case setAnimationPlayer(entityID: UInt64, clipName: String?, speed: Float, loop: Bool, isPlaying: Bool)
 
     /// The primary entity targeted by this mutation, if any.
     /// `spawnImportedMeshEntity` returns `nil` because it creates entities
@@ -140,7 +141,8 @@ public enum SceneMutation: Sendable, Equatable {
              let .setMeshColorTint(id, _),
              let .setScriptBindings(id, _),
              let .setCameraPose(id, _, _, _),
-             let .setAudioSource(id, _):
+             let .setAudioSource(id, _),
+             let .setAnimationPlayer(id, _, _, _, _):
             return id
         }
     }
