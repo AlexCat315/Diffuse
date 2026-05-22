@@ -261,6 +261,7 @@ private struct MeshBuilder {
     var indices: [UInt32] = []
     var nextIndex: UInt32 = 0
     var topologies: [MeshTopologySlice] = []
+    var submeshes: [MeshSubmesh] = []
 
     mutating func consumeNode(index: Int, parentTransform: simd_float4x4) throws {
         guard let node = document.nodes?[safe: index] else {
@@ -295,9 +296,12 @@ private struct MeshBuilder {
             let tangents = try primitive.attributes["TANGENT"].map(readFloat4Accessor)
             let joints = try primitive.attributes["JOINTS_0"].map(readJoint4Accessor)
             let weights = try primitive.attributes["WEIGHTS_0"].map(readWeight4Accessor)
-            let materialIndex = Float(primitive.material ?? 0)
+            let primMaterialIndex = primitive.material ?? 0
+            let materialIndex = Float(primMaterialIndex)
             let primitiveIndices = try primitive.indices.map(readIndexAccessor)
                 ?? Array(0..<positions.count)
+
+            let submeshIndexStart = UInt32(indices.count)
 
             let topologyPositions = positions.map { local in
                 let p = transform * SIMD4<Float>(local.x, local.y, local.z, 1)
@@ -358,6 +362,10 @@ private struct MeshBuilder {
                 indices.append(nextIndex)
                 nextIndex += 1
             }
+            let submeshIndexCount = UInt32(indices.count) - submeshIndexStart
+            submeshes.append(MeshSubmesh(indexStart: submeshIndexStart,
+                                         indexCount: submeshIndexCount,
+                                         materialIndex: primMaterialIndex))
         }
     }
 
@@ -617,7 +625,8 @@ private struct MeshBuilder {
             textures: document.meshTextures(buffers: buffers),
             nodes: meshNodes(),
             skins: try meshSkins(),
-            animations: try meshAnimations()
+            animations: try meshAnimations(),
+            submeshes: submeshes
         )
         MeshNormalTools.fillMissingNormals(vertices: &mesh.vertices, indices: mesh.indices)
         return (mesh, topologies)
