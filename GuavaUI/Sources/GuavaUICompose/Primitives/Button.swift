@@ -178,6 +178,11 @@ struct _StatefulButton: View {
                 action()
                 return true
             },
+            onCancel: {
+                if isPressed {
+                    isPressed = false
+                }
+            },
             onKey: { [action] scancode, isRepeat in
                 guard !isRepeat else { return EventResult.ignored }
                 switch scancode {
@@ -210,6 +215,7 @@ struct ButtonHost: _PrimitiveView {
     let onHoverChange: (Bool) -> Void
     let onDown: () -> Void
     let onUp: () -> Bool
+    let onCancel: () -> Void
     let onKey: (UInt32, Bool) -> EventResult
 
     func _makeNode() -> Node {
@@ -317,6 +323,7 @@ struct ButtonHost: _PrimitiveView {
         let hoverChange = onHoverChange
         let down = onDown
         let up = onUp
+        let cancel = onCancel
         let key = onKey
         registry.setHover(node) { phase in
             switch phase {
@@ -340,14 +347,32 @@ struct ButtonHost: _PrimitiveView {
             case .up:
                 let activePress = node.attachments[ButtonHost.activePressKey] as? ActiveButtonPress
                 node.attachments.removeValue(forKey: ButtonHost.activePressKey)
+                let isInside = isPointInsideButton(event.x, event.y, node: node)
                 defer {
                     if PointerCaptureHolder.current?.target === node {
                         PointerCaptureHolder.current?.release()
                     }
                 }
                 guard let activePress else { return .ignored }
+                guard isInside else {
+                    cancel()
+                    return .handled
+                }
                 return activePress.onUp() ? .handled : .ignored
             }
+        }
+        registry.setMotion(node) { event, _ in
+            guard node.attachments[ButtonHost.activePressKey] is ActiveButtonPress else {
+                return .ignored
+            }
+            let isInside = isPointInsideButton(event.x, event.y, node: node)
+            hoverChange(isInside)
+            if isInside {
+                down()
+            } else {
+                cancel()
+            }
+            return .handled
         }
         registry.setKey(node) { event, _ in
             key(event.scancode, event.isRepeat)
@@ -404,4 +429,14 @@ private func absoluteOrigin(of node: Node) -> CGPoint {
         current = n.parent
     }
     return CGPoint(x: Double(x), y: Double(y))
+}
+
+private func isPointInsideButton(_ x: Float, _ y: Float, node: Node) -> Bool {
+    let origin = absoluteOrigin(of: node)
+    let px = CGFloat(x)
+    let py = CGFloat(y)
+    return px >= origin.x
+        && py >= origin.y
+        && px < origin.x + node.frame.width
+        && py < origin.y + node.frame.height
 }
