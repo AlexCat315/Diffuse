@@ -386,6 +386,14 @@ private struct CapabilityOperationProjection {
         case let .setAudioSource(_, source):
             self.verb = "scene.set_audio_source"
             self.arguments["audio_clip"] = .string(source.clipName)
+        case let .setAnimationPlayer(_, clipName, speed, loop, isPlaying):
+            self.verb = "scene.set_animation_player"
+            if let clipName {
+                self.arguments["clip_name"] = .string(clipName)
+            }
+            self.arguments["speed"] = .number(Double(speed))
+            self.arguments["loop"] = .bool(loop)
+            self.arguments["is_playing"] = .bool(isPlaying)
         }
     }
 

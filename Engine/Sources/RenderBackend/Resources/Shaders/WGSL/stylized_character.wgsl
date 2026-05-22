@@ -1,6 +1,7 @@
 struct Uniforms {
     mvp : mat4x4<f32>,
     model : mat4x4<f32>,
+    color_tint : vec4<f32>,
 };
 
 struct StylizedStyle {
@@ -28,6 +29,7 @@ struct SceneLights {
 @group(0) @binding(2) var base_color_sampler : sampler;
 @group(0) @binding(3) var base_color_texture : texture_2d<f32>;
 @group(0) @binding(4) var<uniform> scene_lights : SceneLights;
+@group(0) @binding(8) var<storage, read> joint_palette : array<mat4x4<f32>>;
 
 struct VsIn {
     @location(0) pos            : vec3<f32>,
@@ -52,14 +54,46 @@ struct VsOut {
 @vertex
 fn vs_main(in : VsIn) -> VsOut {
     var out : VsOut;
-    let world = u.model * vec4<f32>(in.pos, 1.0);
-    out.position = u.mvp * vec4<f32>(in.pos, 1.0);
+    let skin = skin_matrix(in.joints, in.weights);
+    let local = skin * vec4<f32>(in.pos, 1.0);
+    let world = u.model * local;
+    let normal = u.model * (skin * vec4<f32>(in.normal, 0.0));
+    out.position = u.mvp * local;
     out.color = in.color;
-    out.normal = safe_normalize((u.model * vec4<f32>(in.normal, 0.0)).xyz);
+    out.normal = safe_normalize(normal.xyz);
     out.uv = in.uv;
     out.material_index = in.material_index;
     out.world_pos = world.xyz;
     return out;
+}
+
+fn skin_matrix(joints : vec4<f32>, weights : vec4<f32>) -> mat4x4<f32> {
+    let total_weight = weights.x + weights.y + weights.z + weights.w;
+    if total_weight > 0.0001 && arrayLength(&joint_palette) > 0u {
+        let j = vec4<u32>(u32(joints.x), u32(joints.y), u32(joints.z), u32(joints.w));
+        let count = arrayLength(&joint_palette);
+        return joint_matrix(j.x, count) * weights.x
+            + joint_matrix(j.y, count) * weights.y
+            + joint_matrix(j.z, count) * weights.z
+            + joint_matrix(j.w, count) * weights.w;
+    }
+    return identity_matrix();
+}
+
+fn joint_matrix(index : u32, count : u32) -> mat4x4<f32> {
+    if index < count {
+        return joint_palette[index];
+    }
+    return identity_matrix();
+}
+
+fn identity_matrix() -> mat4x4<f32> {
+    return mat4x4<f32>(
+        vec4<f32>(1.0, 0.0, 0.0, 0.0),
+        vec4<f32>(0.0, 1.0, 0.0, 0.0),
+        vec4<f32>(0.0, 0.0, 1.0, 0.0),
+        vec4<f32>(0.0, 0.0, 0.0, 1.0)
+    );
 }
 
 fn safe_normalize(v : vec3<f32>) -> vec3<f32> {

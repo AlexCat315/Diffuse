@@ -15,6 +15,7 @@ struct SimulationFrameRequest: Sendable {
     let shouldRender: Bool
     let renderSettings: RenderSettings
     let renderSceneOverride: RenderScene?
+    let jointPaletteOverride: JointPaletteMap?
 
     init(
         frameIndex: Int,
@@ -23,7 +24,8 @@ struct SimulationFrameRequest: Sendable {
         drawableSize: RenderDrawableSize,
         shouldRender: Bool,
         renderSettings: RenderSettings,
-        renderSceneOverride: RenderScene? = nil
+        renderSceneOverride: RenderScene? = nil,
+        jointPaletteOverride: JointPaletteMap? = nil
     ) {
         self.frameIndex = frameIndex
         self.deltaTime = deltaTime
@@ -32,6 +34,7 @@ struct SimulationFrameRequest: Sendable {
         self.shouldRender = shouldRender
         self.renderSettings = renderSettings
         self.renderSceneOverride = renderSceneOverride
+        self.jointPaletteOverride = jointPaletteOverride
     }
 }
 
@@ -118,7 +121,9 @@ final class SimulationThread: @unchecked Sendable {
 
         if request.shouldRender {
             let scene = request.renderSceneOverride ?? sceneRuntime.renderScene
-            let paletteMap = sceneRuntime.resource(JointPaletteMap.self) ?? JointPaletteMap()
+            let paletteMap = request.jointPaletteOverride
+                ?? sceneRuntime.resource(JointPaletteMap.self)
+                ?? JointPaletteMap()
             let canvas = sceneRuntime.resource(InGameCanvas.self) ?? InGameCanvas()
             let packet = RenderPacket(
                 frameIndex: request.frameIndex,

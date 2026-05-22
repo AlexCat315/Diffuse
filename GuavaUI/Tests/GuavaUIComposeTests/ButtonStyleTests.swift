@@ -7,6 +7,29 @@ import GuavaUIRuntime
 @Suite("Phase 7.5 ButtonStyle", .serialized)
 struct ButtonStyleTests: GuavaUIComposeSerializedSuite {
 
+    private struct StatefulFillButtonStyle: ButtonStyle, Hashable {
+        let active: Bool
+
+        func makeBody(configuration: ButtonStyleConfiguration) -> some View {
+            Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                AnyView(configuration.label)
+            }
+            .frame(height: 24, minWidth: 24)
+            .background(active ? Color(r: 1, g: 0, b: 0) : Color(r: 0, g: 1, b: 0))
+        }
+    }
+
+    private struct StatefulStyleHarness: View {
+        @State var active = true
+
+        var body: some View {
+            Button(action: { active.toggle() }) {
+                Text("State")
+            }
+            .buttonStyle(StatefulFillButtonStyle(active: active))
+        }
+    }
+
     private func findButtonHost(_ root: Node) -> Node? {
         if root.attachments[ButtonHost.pressedKey] != nil { return root }
         for c in root.children {
@@ -182,5 +205,33 @@ struct ButtonStyleTests: GuavaUIComposeSerializedSuite {
             Issue.record("no ButtonHost found in tree"); return
         }
         #expect(registry.handlers(for: host).key == nil)
+    } }
+
+    @Test("Hashable ButtonStyle instance changes update composition local")
+    func hashableStyleValueUpdatesCompositionLocal() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        let tree = NodeTree()
+        let recomp = Recomposer()
+        let graph = ViewGraph(tree: tree, recomposer: recomp)
+        graph.install(root: StatefulStyleHarness())
+
+        #expect(findFilled(tree.root!)?.backgroundColor == Color(r: 1, g: 0, b: 0))
+
+        guard let host = findButtonHost(tree.root!) else {
+            Issue.record("no ButtonHost found in tree"); return
+        }
+        host.frame = CGRect(x: 0, y: 0, width: 100, height: 32)
+        let pointer = registry.handlers(for: host).pointer
+        #expect(pointer != nil)
+
+        let evt = MouseButtonEvent(button: .left, x: 10, y: 10, clicks: 1)
+        #expect(pointer?(evt, .down, .target) == .handled)
+        recomp.commitAll()
+        #expect(pointer?(evt, .up, .target) == .handled)
+        recomp.commitAll()
+
+        #expect(findFilled(tree.root!)?.backgroundColor == Color(r: 0, g: 1, b: 0))
     } }
 }
