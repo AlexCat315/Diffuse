@@ -224,7 +224,7 @@ public enum GLTFImporter {
 
     private static func resolveBuffer(_ buffer: GLTFBuffer, baseURL: URL) throws -> Data {
         guard let uri = buffer.uri else {
-            throw GLTFImporterError.unsupportedBuffer("GLB container buffers are not supported yet")
+            throw GLTFImporterError.unsupportedBuffer("buffer has no URI (use loadWithTopology for GLB files)")
         }
 
         if uri.hasPrefix("data:") {

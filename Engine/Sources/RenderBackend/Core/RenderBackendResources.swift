@@ -26,6 +26,7 @@ struct InstanceResourceKey: Equatable, Sendable {
     let entity: EntityID?
     let meshIndex: Int
     let baseColorTextureIndex: Int?
+    let normalTextureIndex: Int?
     let jointPaletteMatrixCount: Int
 }
 
