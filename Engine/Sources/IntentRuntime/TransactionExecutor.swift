@@ -349,6 +349,9 @@ public struct TransactionExecutor {
                 if let scripts = scene.component(ScriptComponent.self, for: source) {
                     _ = scene.setComponent(scripts, for: entity)
                 }
+                if let player = scene.component(AnimationPlayer.self, for: source) {
+                    _ = scene.setComponent(player, for: entity)
+                }
                 createdEntityIDs.append(entity.rawValue)
 
             case let .moveEntity(entityID, parentID, index):

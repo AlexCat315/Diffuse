@@ -743,6 +743,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     let transactionExecutor = TransactionExecutor()
     private var initialSelectionID: UInt64?
     private var initialExpandedIDs: Set<UInt64> = []
+    let animationRuntime = AnimationRuntime()
 
     public var onRevisionChanged: ((UInt64) -> Void)?
 

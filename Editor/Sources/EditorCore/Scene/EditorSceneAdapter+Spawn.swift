@@ -23,6 +23,7 @@ extension EditorSceneAdapter {
         guard let entityID = result?.createdEntityIDs.first else { return nil }
         attachAssetReference(entityID: entityID, asset: asset)
         attachMeshColliderIfAvailable(entityID: entityID, meshIndex: asset.meshIndex)
+        attachAnimationPlayerIfAvailable(entityID: entityID, meshIndex: asset.meshIndex)
         return entityID
     }
 
@@ -88,6 +89,16 @@ extension EditorSceneAdapter {
 
     private func meshColliderResourceID(for meshIndex: Int) -> String {
         "meshIndex:\(meshIndex)"
+    }
+
+    private func attachAnimationPlayerIfAvailable(entityID rawID: UInt64, meshIndex: Int) {
+        guard let entity = EntityID(rawValue: rawID),
+              scene.contains(entity),
+              let mesh = AssetRegistry.shared.meshAsset(for: meshIndex),
+              !mesh.animations.isEmpty
+        else { return }
+        _ = scene.setComponent(AnimationPlayer(), for: entity)
+        notifyRevisionChanged()
     }
 
     private func meshColliderGeometry(for meshIndex: Int) -> MeshColliderGeometry? {
