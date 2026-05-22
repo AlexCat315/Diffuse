@@ -188,6 +188,32 @@ extension WGPURenderer {
         return meshTextureResources[meshIndex]?[textureIndex]?.view
     }
 
+    func baseColorTextureView(for meshIndex: Int, materialIndex: Int) -> GPUTextureView? {
+        guard let materialSet = MeshMaterialRegistry.shared.materials(for: meshIndex),
+              materialSet.materials.indices.contains(materialIndex),
+              let textureIndex = materialSet.materials[materialIndex].baseColorTextureIndex
+        else { return nil }
+        return meshTextureResources[meshIndex]?[textureIndex]?.view
+    }
+
+    func makeSubmeshBindGroup(instanceUniformBuffer: GPUBuffer,
+                              meshIndex: Int,
+                              materialIndex: Int,
+                              jointPaletteBuffer: GPUBuffer?) throws -> GPUBindGroup {
+        guard let bindGroupLayout = meshBindGroupLayout else {
+            throw WGPUBackendError.initFailed("mesh bind group layout not initialized")
+        }
+        let textureView = baseColorTextureView(for: meshIndex, materialIndex: materialIndex)
+        return try backend.createBindGroup(
+            layout: bindGroupLayout,
+            entries: try meshBindGroupEntries(
+                instanceUniformBuffer: instanceUniformBuffer,
+                baseColorTextureView: textureView,
+                jointPaletteBuffer: jointPaletteBuffer
+            )
+        )
+    }
+
     func effectiveBaseColor(for instance: RenderInstance) -> SIMD4<Float> {
         let materialColor = instance.material.baseColorFactor
         return SIMD4<Float>(

@@ -581,7 +581,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             let fallbackFixture = GPUMesh(vertexBuffer: cubeMesh.vertexBuffer,
                                           indexBuffer: cubeMesh.indexBuffer,
                                           indexCount: cubeMesh.indexCount,
-                                          name: "builtin.fixtureFallback")
+                                          name: "builtin.fixtureFallback",
+                                          submeshes: [])
             meshes.append(fallbackFixture)
             MeshBoundsRegistry.shared.register(meshIndex: 1,
                                                min: cubeBounds.min,
@@ -883,7 +884,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             }
         }
         return GPUMesh(
-            vertexBuffer: vb, indexBuffer: ib, indexCount: mesh.indexCount, name: mesh.name)
+            vertexBuffer: vb, indexBuffer: ib, indexCount: mesh.indexCount, name: mesh.name,
+            submeshes: mesh.submeshes)
     }
 
     private func syncImportedMeshes() throws {
@@ -1355,16 +1357,33 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 drawCallCount += 1
             }
         } else {
+            var localBindGroups: [GPUBindGroup] = []
             for i in drawOrder where i < instanceResources.count {
                 let instance = scene.instances[i]
                 guard meshes.indices.contains(instance.meshIndex) else { continue }
                 let mesh = meshes[instance.meshIndex]
-                pass.setBindGroup(instanceResources[i].bindGroup, index: 0, dynamicOffsets: [0])
                 pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
                 pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
-                pass.drawIndexed(indexCount: mesh.indexCount)
-                drawCallCount += 1
+                if mesh.submeshes.count > 1 {
+                    let uniformBuffer = instanceResources[i].uniformBuffer
+                    let paletteBuffer = instance.entity.flatMap { jointPaletteBuffers[$0] } ?? fallbackJointPaletteBuffer
+                    for submesh in mesh.submeshes {
+                        let bg = try makeSubmeshBindGroup(instanceUniformBuffer: uniformBuffer,
+                                                          meshIndex: instance.meshIndex,
+                                                          materialIndex: submesh.materialIndex,
+                                                          jointPaletteBuffer: paletteBuffer)
+                        localBindGroups.append(bg)
+                        pass.setBindGroup(bg, index: 0, dynamicOffsets: [0])
+                        pass.drawIndexed(indexCount: submesh.indexCount, firstIndex: submesh.indexStart)
+                        drawCallCount += 1
+                    }
+                } else {
+                    pass.setBindGroup(instanceResources[i].bindGroup, index: 0, dynamicOffsets: [0])
+                    pass.drawIndexed(indexCount: mesh.indexCount)
+                    drawCallCount += 1
+                }
             }
+            _ = localBindGroups
         }
         pass.end()
 
@@ -1410,16 +1429,33 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 drawCallCount += 1
             }
         } else {
+            var localBindGroups: [GPUBindGroup] = []
             for i in drawOrder where i < instanceResources.count {
                 let instance = scene.instances[i]
                 guard meshes.indices.contains(instance.meshIndex) else { continue }
                 let mesh = meshes[instance.meshIndex]
-                pass.setBindGroup(instanceResources[i].bindGroup, index: 0, dynamicOffsets: [0])
                 pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
                 pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
-                pass.drawIndexed(indexCount: mesh.indexCount)
-                drawCallCount += 1
+                if mesh.submeshes.count > 1 {
+                    let uniformBuffer = instanceResources[i].uniformBuffer
+                    let paletteBuffer = instance.entity.flatMap { jointPaletteBuffers[$0] } ?? fallbackJointPaletteBuffer
+                    for submesh in mesh.submeshes {
+                        let bg = try makeSubmeshBindGroup(instanceUniformBuffer: uniformBuffer,
+                                                          meshIndex: instance.meshIndex,
+                                                          materialIndex: submesh.materialIndex,
+                                                          jointPaletteBuffer: paletteBuffer)
+                        localBindGroups.append(bg)
+                        pass.setBindGroup(bg, index: 0, dynamicOffsets: [0])
+                        pass.drawIndexed(indexCount: submesh.indexCount, firstIndex: submesh.indexStart)
+                        drawCallCount += 1
+                    }
+                } else {
+                    pass.setBindGroup(instanceResources[i].bindGroup, index: 0, dynamicOffsets: [0])
+                    pass.drawIndexed(indexCount: mesh.indexCount)
+                    drawCallCount += 1
+                }
             }
+            _ = localBindGroups
         }
         pass.end()
         return drawCallCount
