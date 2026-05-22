@@ -90,21 +90,34 @@ public protocol ButtonStyle {
 /// user styles are expected to be the same. The `@unchecked Sendable`
 /// annotation lets the closure travel through `CompositionLocal<Value>` which
 /// requires its `Value` to be `Sendable`.
+private struct _AnyButtonStyleIdentity: Hashable {
+    let styleID: ObjectIdentifier
+    let value: AnyHashable?
+}
+
 public struct AnyButtonStyle: @unchecked Sendable, Hashable {
     public let makeBody: (ButtonStyleConfiguration) -> any View
     public let styleID: ObjectIdentifier
+    private let identity: _AnyButtonStyleIdentity
 
     public init<S: ButtonStyle>(_ style: S) {
         self.makeBody = { config in style.makeBody(configuration: config) }
         self.styleID = ObjectIdentifier(S.self)
+        let value: AnyHashable?
+        if let hashableStyle = style as? any Hashable {
+            value = AnyHashable(hashableStyle)
+        } else {
+            value = nil
+        }
+        self.identity = _AnyButtonStyleIdentity(styleID: styleID, value: value)
     }
 
     public static func == (lhs: AnyButtonStyle, rhs: AnyButtonStyle) -> Bool {
-        lhs.styleID == rhs.styleID
+        lhs.identity == rhs.identity
     }
 
     public func hash(into hasher: inout Hasher) {
-        hasher.combine(styleID)
+        hasher.combine(identity)
     }
 }
 

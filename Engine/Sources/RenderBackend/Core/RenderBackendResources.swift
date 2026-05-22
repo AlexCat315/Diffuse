@@ -21,8 +21,10 @@ struct InstanceResources {
 extension InstanceResources: @unchecked Sendable {}
 
 struct InstanceResourceKey: Equatable, Sendable {
+    let entity: EntityID?
     let meshIndex: Int
     let baseColorTextureIndex: Int?
+    let jointPaletteMatrixCount: Int
 }
 
 let maxSceneLightUniformCount = 8

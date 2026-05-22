@@ -9,32 +9,39 @@ extension View {
     }
 }
 
-private struct EditorViewportToolbarButtonStyle: ButtonStyle {
+private struct EditorViewportToolbarButtonStyle: ButtonStyle, Hashable {
     let isActive: Bool
 
     func makeBody(configuration: ButtonStyleConfiguration) -> some View {
         let theme = configuration.theme
+        let base = theme.colors.surfaceSunken
         let bg: Color = {
             if !configuration.isEnabled { return theme.colors.surfaceSunken }
             if isActive {
-                if configuration.isPressed { return theme.colors.accentPressed }
-                if configuration.isHovered { return theme.colors.accentHover }
-                return theme.colors.accent
+                let selected = base.composited(over: theme.colors.stateLayerSelected)
+                if configuration.isPressed { return selected.composited(over: theme.colors.stateLayerPressed) }
+                if configuration.isHovered { return selected.composited(over: theme.colors.stateLayerHover) }
+                return selected
             }
-            if configuration.isPressed { return theme.colors.surfaceRaised }
-            if configuration.isHovered { return theme.colors.surfaceVariant }
-            return theme.colors.surfaceSunken
+            if configuration.isPressed { return base.composited(over: theme.colors.stateLayerPressed) }
+            if configuration.isHovered { return base.composited(over: theme.colors.stateLayerHover) }
+            return base
         }()
-        let border: Color = configuration.isFocused ? theme.colors.focusRing : theme.colors.border
+        let border: Color = {
+            if configuration.isFocused { return theme.colors.focusRing }
+            if isActive { return theme.colors.accentMuted }
+            return theme.colors.border
+        }()
         let borderWidth: Float = configuration.isFocused ? 2 : 1
+        let foreground: SemanticColorRef = isActive ? .accent : .onSurfaceVariant
 
         return Box(direction: .row, alignItems: .center, justifyContent: .center) {
             AnyView(configuration.label)
                 .font(SemanticFontRef.label)
-                .foregroundColor(isActive ? SemanticColorRef.onAccent : SemanticColorRef.onSurfaceVariant)
+                .foregroundColor(foreground)
         }
-        .frame(width: 28, height: 26)
-        .padding(horizontal: 0, vertical: 0)
+        .frame(height: 26, minWidth: 28)
+        .padding(horizontal: 7, vertical: 0)
         .background(bg)
         .cornerRadius(3)
         .border(border, width: borderWidth)

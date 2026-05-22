@@ -1,4 +1,5 @@
 import Testing
+import CoreGraphics
 import GuavaUIRuntime
 import EngineKernel
 @testable import GuavaUICompose
@@ -106,6 +107,110 @@ struct ButtonPressRecomposeTests: GuavaUIComposeSerializedSuite {
             recomp.commitAll()
             scheduler.tick(deltaTime: 1.0)
             #expect(findFilled(tree.root!)?.backgroundColor == resting)
+        }
+    } }
+
+    @Test("Dragging outside a pressed Button clears pressed/hover and cancels release")
+    func dragOutsideCancelsPress() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        let capture = PointerCapture()
+        PointerCaptureHolder.current = capture
+        defer { PointerCaptureHolder.current = nil }
+
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let theme = Theme.defaultDark
+            let resting = theme.colors.accent
+            let pressedColor = theme.colors.accentPressed
+
+            var fired = 0
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            graph.install(root:
+                Button(action: { fired += 1 }) { Text("Drag") }
+            )
+
+            let host = buttonHost(in: tree)
+            host.frame = CGRect(x: 0, y: 0, width: 100, height: 32)
+            let handlers = registry.handlers(for: host)
+            let pointer = handlers.pointer
+            let motion = handlers.motion
+            #expect(pointer != nil)
+            #expect(motion != nil)
+
+            let down = MouseButtonEvent(button: .left, x: 10, y: 10, clicks: 1)
+            #expect(pointer?(down, .down, .target) == .handled)
+            recomp.commitAll()
+            scheduler.tick(deltaTime: 1.0)
+            #expect(findFilled(tree.root!)?.backgroundColor == pressedColor)
+            #expect(capture.target === host)
+
+            #expect(motion?(MouseMotionEvent(x: 140, y: 10, deltaX: 130, deltaY: 0), .target) == .handled)
+            recomp.commitAll()
+            scheduler.tick(deltaTime: 1.0)
+            #expect(findFilled(tree.root!)?.backgroundColor == resting)
+
+            let upOutside = MouseButtonEvent(button: .left, x: 140, y: 10, clicks: 1)
+            #expect(pointer?(upOutside, .up, .target) == .handled)
+            recomp.commitAll()
+            scheduler.tick(deltaTime: 1.0)
+            #expect(findFilled(tree.root!)?.backgroundColor == resting)
+            #expect(fired == 0)
+            #expect(capture.target == nil)
+        }
+    } }
+
+    @Test("Dragging back inside a pressed Button restores press and commits on release")
+    func dragBackInsideCommitsPress() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        let capture = PointerCapture()
+        PointerCaptureHolder.current = capture
+        defer { PointerCaptureHolder.current = nil }
+
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let theme = Theme.defaultDark
+            let pressedColor = theme.colors.accentPressed
+
+            var fired = 0
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            graph.install(root:
+                Button(action: { fired += 1 }) { Text("Drag") }
+            )
+
+            let host = buttonHost(in: tree)
+            host.frame = CGRect(x: 0, y: 0, width: 100, height: 32)
+            let handlers = registry.handlers(for: host)
+            let pointer = handlers.pointer
+            let motion = handlers.motion
+            #expect(pointer != nil)
+            #expect(motion != nil)
+
+            #expect(pointer?(MouseButtonEvent(button: .left, x: 10, y: 10, clicks: 1), .down, .target) == .handled)
+            recomp.commitAll()
+            scheduler.tick(deltaTime: 1.0)
+
+            #expect(motion?(MouseMotionEvent(x: 140, y: 10, deltaX: 130, deltaY: 0), .target) == .handled)
+            recomp.commitAll()
+            scheduler.tick(deltaTime: 1.0)
+
+            #expect(motion?(MouseMotionEvent(x: 20, y: 10, deltaX: -120, deltaY: 0), .target) == .handled)
+            recomp.commitAll()
+            scheduler.tick(deltaTime: 1.0)
+            #expect(findFilled(tree.root!)?.backgroundColor == pressedColor)
+
+            #expect(pointer?(MouseButtonEvent(button: .left, x: 20, y: 10, clicks: 1), .up, .target) == .handled)
+            recomp.commitAll()
+            scheduler.tick(deltaTime: 1.0)
+            #expect(fired == 1)
+            #expect(capture.target == nil)
         }
     } }
 }

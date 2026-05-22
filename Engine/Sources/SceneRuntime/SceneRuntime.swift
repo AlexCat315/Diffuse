@@ -459,4 +459,21 @@ public struct SceneRuntime {
     public mutating func removeResource<Resource: Sendable>(_ type: Resource.Type) -> Resource? {
         world.removeResource(type)
     }
+
+    /// Runs a script driver against this scene's world for one frame.
+    /// Use this to drive lightweight single-system ticks (e.g. AnimationRuntime)
+    /// outside of the main simulation thread.
+    public mutating func runScriptDriver(_ driver: any RuntimeScriptDriver,
+                                        deltaTime: Double) {
+        withUnsafeMutablePointer(to: &world) { worldPointer in
+            withUnsafeMutablePointer(to: &commandBuffer) { commandPointer in
+                var context = RuntimeScriptPhaseContext(
+                    world: worldPointer,
+                    commands: commandPointer,
+                    deltaTimeSeconds: deltaTime
+                )
+                driver.run(context: &context)
+            }
+        }
+    }
 }
