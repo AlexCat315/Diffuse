@@ -57,6 +57,50 @@ struct SimulationThreadTests {
         thread.shutdown()
     }
 
+    @Test("jointPaletteOverride in request takes precedence over internal scene palette")
+    func jointPaletteOverrideAppearsInPublishedPacket() {
+        let ring = RingBuffer<RenderPacket>()
+        let runtime = IdleRuntime()
+        let packetPublished = DispatchSemaphore(value: 0)
+
+        let thread = SimulationThread(
+            runtime: runtime,
+            ringBuffer: ring,
+            onFrameReady: { _ in },
+            onPacketPublished: { packetPublished.signal() }
+        )
+
+        let sentinelEntity = EntityID(index: 99, generation: 1)
+        let override = JointPaletteMap(palettes: [
+            sentinelEntity: JointPalette(matrices: [matrix_identity_float4x4])
+        ])
+
+        thread.submit(
+            SimulationFrameRequest(
+                frameIndex: 0,
+                deltaTime: 1.0 / 60.0,
+                inputEvents: [],
+                drawableSize: .init(width: 64, height: 64),
+                shouldRender: true,
+                renderSettings: .init(),
+                jointPaletteOverride: override
+            )
+        )
+
+        #expect(packetPublished.wait(timeout: .now() + 2) == .success)
+
+        guard let packet = ring.consumeLatest() else {
+            Issue.record("expected a render packet")
+            thread.shutdown()
+            return
+        }
+
+        #expect(packet.jointPaletteMap.palette(for: sentinelEntity) != nil)
+        #expect(packet.jointPaletteMap.palette(for: sentinelEntity)?.matrices.isEmpty == false)
+
+        thread.shutdown()
+    }
+
     @Test("SimulationThread forwards input events into input phase and SceneRuntime tick")
     func simulationThreadForwardsInputEvents() {
         let ring = RingBuffer<RenderPacket>()
