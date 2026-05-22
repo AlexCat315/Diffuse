@@ -747,19 +747,6 @@ struct ViewportPanel: View {
                                         frame: ViewportScreenFrame,
                                         selectedIDs: Set<UInt64>) {
         guard !selectedIDs.isEmpty else { return }
-        var drewMeshLines = false
-        for line in scene.viewportWireframeLines(maxEdgesPerMesh: 768)
-            where selectedIDs.contains(line.entityID) {
-            drawWorldLine(list: list,
-                          frame: frame,
-                          a: line.a,
-                          b: line.b,
-                          color: Color(r: 1.0, g: 0.72, b: 0.18, a: 0.92),
-                          thickness: 2.2)
-            drewMeshLines = true
-        }
-        if drewMeshLines { return }
-
         for bounds in scene.viewportWorldBounds() where selectedIDs.contains(bounds.entityID) {
             drawAABBOverlay(list: list,
                             frame: frame,
@@ -818,26 +805,7 @@ struct ViewportPanel: View {
 
     private func projectToViewport(_ world: SIMD3<Float>,
                                    frame: ViewportScreenFrame) -> (x: Float, y: Float)? {
-        let camera = scene.currentRenderCamera()
-        let forwardRaw = camera.target - camera.eye
-        guard simd_length(forwardRaw) > 1e-5 else { return nil }
-        let forward = simd_normalize(forwardRaw)
-        let rightRaw = simd_cross(forward, camera.up)
-        guard simd_length(rightRaw) > 1e-5 else { return nil }
-        let right = simd_normalize(rightRaw)
-        let up = simd_normalize(simd_cross(right, forward))
-        let view = lookAt(eye: camera.eye, target: camera.target, up: up)
-        let proj = perspective(fovYRadians: camera.fovYRadians,
-                               aspect: frame.width / max(frame.height, 1),
-                               near: camera.near,
-                               far: camera.far)
-        let clip = proj * (view * SIMD4<Float>(world, 1))
-        guard clip.w > 1e-4 else { return nil }
-        let ndcX = clip.x / clip.w
-        let ndcY = clip.y / clip.w
-        let sx = frame.x + (ndcX * 0.5 + 0.5) * frame.width
-        let sy = frame.y + (1 - (ndcY * 0.5 + 0.5)) * frame.height
-        return (sx, sy)
+        EditorViewportProjection(camera: scene.currentRenderCamera(), frame: frame)?.project(world)
     }
 
     private func applyGizmoSnapping(_ matrix: simd_float4x4,
@@ -956,33 +924,6 @@ struct ViewportPanel: View {
         let qy = simd_quatf(angle: euler.y, axis: SIMD3<Float>(0, 1, 0))
         let qz = simd_quatf(angle: euler.z, axis: SIMD3<Float>(0, 0, 1))
         return qz * qy * qx
-    }
-
-    private func lookAt(eye: SIMD3<Float>,
-                        target: SIMD3<Float>,
-                        up: SIMD3<Float>) -> simd_float4x4 {
-        let f = simd_normalize(target - eye)
-        let s = simd_normalize(simd_cross(f, up))
-        let u = simd_cross(s, f)
-        var m = matrix_identity_float4x4
-        m.columns.0 = SIMD4<Float>(s.x, u.x, -f.x, 0)
-        m.columns.1 = SIMD4<Float>(s.y, u.y, -f.y, 0)
-        m.columns.2 = SIMD4<Float>(s.z, u.z, -f.z, 0)
-        m.columns.3 = SIMD4<Float>(-simd_dot(s, eye), -simd_dot(u, eye), simd_dot(f, eye), 1)
-        return m
-    }
-
-    private func perspective(fovYRadians: Float,
-                             aspect: Float,
-                             near: Float,
-                             far: Float) -> simd_float4x4 {
-        let f = 1 / tanf(fovYRadians * 0.5)
-        var m = simd_float4x4()
-        m.columns.0 = SIMD4<Float>(f / aspect, 0, 0, 0)
-        m.columns.1 = SIMD4<Float>(0, f, 0, 0)
-        m.columns.2 = SIMD4<Float>(0, 0, far / (near - far), -1)
-        m.columns.3 = SIMD4<Float>(0, 0, (far * near) / (near - far), 0)
-        return m
     }
 
     private func gizmoMode(for key: KeyEvent) -> EditorGizmoMode? {

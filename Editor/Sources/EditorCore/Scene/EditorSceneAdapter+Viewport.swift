@@ -212,77 +212,16 @@ extension EditorSceneAdapter {
     private func viewportRay(cursorX: Float,
                              cursorY: Float,
                              in frame: ViewportScreenFrame) -> ViewportRay? {
-        guard frame.width > 0, frame.height > 0 else { return nil }
-        let cam = currentRenderCamera()
-        let u = (cursorX - frame.x) / frame.width
-        let v = (cursorY - frame.y) / frame.height
-        let ndcX = 2 * u - 1
-        let ndcY = 1 - 2 * v
-
-        let forward = simd_normalize(cam.target - cam.eye)
-        let rightRaw = simd_cross(forward, cam.up)
-        guard simd_length(rightRaw) > 1e-5 else { return nil }
-        let right = simd_normalize(rightRaw)
-        let up = simd_normalize(simd_cross(right, forward))
-        let aspect = frame.width / frame.height
-        let tanHalfFov = tanf(cam.fovYRadians * 0.5)
-        let rightOffset = right * (ndcX * aspect * tanHalfFov)
-        let upOffset = up * (ndcY * tanHalfFov)
-        let dir = simd_normalize(forward + rightOffset + upOffset)
-        return ViewportRay(origin: cam.eye, direction: dir)
+        guard let projection = EditorViewportProjection(camera: currentRenderCamera(), frame: frame) else {
+            return nil
+        }
+        let ray = projection.cursorRay(x: cursorX, y: cursorY)
+        return ViewportRay(origin: ray.origin, direction: ray.direction)
     }
 
     private func projectToViewport(_ world: SIMD3<Float>,
                                    in frame: ViewportScreenFrame) -> (x: Float, y: Float)? {
-        guard frame.width > 0, frame.height > 0 else { return nil }
-        let cam = currentRenderCamera()
-        let forwardRaw = cam.target - cam.eye
-        guard simd_length(forwardRaw) > 1e-5 else { return nil }
-        let forward = simd_normalize(forwardRaw)
-        let rightRaw = simd_cross(forward, cam.up)
-        guard simd_length(rightRaw) > 1e-5 else { return nil }
-        let right = simd_normalize(rightRaw)
-        let up = simd_normalize(simd_cross(right, forward))
-
-        let view = lookAt(eye: cam.eye, target: cam.target, up: up)
-        let proj = perspective(fovYRadians: cam.fovYRadians,
-                               aspect: frame.width / frame.height,
-                               near: cam.near,
-                               far: cam.far)
-        let clip = proj * (view * SIMD4<Float>(world, 1))
-        guard clip.w > 1e-4 else { return nil }
-        let ndcX = clip.x / clip.w
-        let ndcY = clip.y / clip.w
-        let x = frame.x + (ndcX * 0.5 + 0.5) * frame.width
-        let y = frame.y + (1 - (ndcY * 0.5 + 0.5)) * frame.height
-        return (x, y)
-    }
-
-    private func lookAt(eye: SIMD3<Float>,
-                        target: SIMD3<Float>,
-                        up: SIMD3<Float>) -> simd_float4x4 {
-        let f = simd_normalize(target - eye)
-        let s = simd_normalize(simd_cross(f, up))
-        let u = simd_cross(s, f)
-        var m = matrix_identity_float4x4
-        m.columns.0 = SIMD4<Float>(s.x, u.x, -f.x, 0)
-        m.columns.1 = SIMD4<Float>(s.y, u.y, -f.y, 0)
-        m.columns.2 = SIMD4<Float>(s.z, u.z, -f.z, 0)
-        m.columns.3 = SIMD4<Float>(-simd_dot(s, eye), -simd_dot(u, eye), simd_dot(f, eye), 1)
-        return m
-    }
-
-    private func perspective(fovYRadians: Float,
-                             aspect: Float,
-                             near: Float,
-                             far: Float) -> simd_float4x4 {
-        let f = 1 / tanf(fovYRadians * 0.5)
-        var m = simd_float4x4()
-        m.columns.0 = SIMD4<Float>(f / aspect, 0, 0, 0)
-        m.columns.1 = SIMD4<Float>(0, f, 0, 0)
-        m.columns.2 = SIMD4<Float>(0, 0, far / (near - far), -1)
-        m.columns.3 = SIMD4<Float>(0, 0, (far * near) / (near - far), 0)
-        return m
+        EditorViewportProjection(camera: currentRenderCamera(), frame: frame)?.project(world)
     }
 
     // MARK: - Selection helpers

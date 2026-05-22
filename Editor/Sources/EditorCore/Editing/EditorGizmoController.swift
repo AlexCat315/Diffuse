@@ -701,31 +701,17 @@ public struct ScreenProjector {
 
     public init?(_ snapshot: EditorGizmoController.Snapshot) {
         let frame = snapshot.frame
-        guard frame.width > 0, frame.height > 0 else { return nil }
         let cam = snapshot.camera
-        let forwardRaw = cam.target - cam.eye
-        guard simd_length(forwardRaw) > 1e-5 else { return nil }
-        let forward = simd_normalize(forwardRaw)
-        let rightRaw = simd_cross(forward, cam.up)
-        guard simd_length(rightRaw) > 1e-5 else { return nil }
-        let right = simd_normalize(rightRaw)
-        let up = simd_normalize(simd_cross(right, forward))
-
-        let aspect = frame.width / frame.height
-        self.viewMatrix = ScreenProjector.lookAt(eye: cam.eye, target: cam.target, up: up)
-        self.projMatrix = ScreenProjector.perspective(
-            fovYRadians: cam.fovYRadians,
-            aspect: aspect,
-            near: cam.near,
-            far: cam.far
-        )
+        guard let projection = EditorViewportProjection(camera: cam, frame: frame) else { return nil }
         self.frame = frame
         self.cameraEye = cam.eye
-        self.cameraForward = forward
-        self.cameraRight = right
-        self.cameraUp = up
-        self.aspect = aspect
-        self.tanHalfFov = tanf(cam.fovYRadians * 0.5)
+        self.viewMatrix = projection.viewMatrix
+        self.projMatrix = projection.projectionMatrix
+        self.cameraForward = projection.cameraForward
+        self.cameraRight = projection.cameraRight
+        self.cameraUp = projection.cameraUp
+        self.aspect = projection.aspect
+        self.tanHalfFov = projection.tanHalfFov
     }
 
     public func project(_ worldPoint: SIMD3<Float>) -> (x: Float, y: Float)? {
@@ -750,30 +736,6 @@ public struct ScreenProjector {
         return (cameraEye, dir)
     }
 
-    private static func lookAt(eye: SIMD3<Float>, target: SIMD3<Float>, up: SIMD3<Float>) -> simd_float4x4 {
-        let f = simd_normalize(target - eye)
-        let s = simd_normalize(simd_cross(f, up))
-        let u = simd_cross(s, f)
-        var m = matrix_identity_float4x4
-        m.columns.0 = SIMD4<Float>(s.x, u.x, -f.x, 0)
-        m.columns.1 = SIMD4<Float>(s.y, u.y, -f.y, 0)
-        m.columns.2 = SIMD4<Float>(s.z, u.z, -f.z, 0)
-        m.columns.3 = SIMD4<Float>(-simd_dot(s, eye), -simd_dot(u, eye), simd_dot(f, eye), 1)
-        return m
-    }
-
-    private static func perspective(fovYRadians: Float,
-                                    aspect: Float,
-                                    near: Float,
-                                    far: Float) -> simd_float4x4 {
-        let f = 1 / tanf(fovYRadians * 0.5)
-        var m = simd_float4x4()
-        m.columns.0 = SIMD4<Float>(f / aspect, 0, 0, 0)
-        m.columns.1 = SIMD4<Float>(0, f, 0, 0)
-        m.columns.2 = SIMD4<Float>(0, 0, far / (near - far), -1)
-        m.columns.3 = SIMD4<Float>(0, 0, (far * near) / (near - far), 0)
-        return m
-    }
 }
 
 private func pointToSegmentDistance(px: Float, py: Float,
