@@ -9,7 +9,7 @@ extension View {
     }
 }
 
-private struct EditorViewportToolbarButtonStyle: ButtonStyle {
+private struct EditorViewportToolbarButtonStyle: ButtonStyle, Hashable {
     let isActive: Bool
 
     func makeBody(configuration: ButtonStyleConfiguration) -> some View {
