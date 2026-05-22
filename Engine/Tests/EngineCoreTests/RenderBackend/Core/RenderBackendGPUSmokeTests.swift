@@ -90,6 +90,61 @@ struct RenderBackendGPUSmokeTests {
         #expect(coveredPixels > Int(width * height) / 32)
     }
 
+    @Test("stylized outline pass compiles and renders through the HDR viewport path",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU stylized outline smoke test"))
+    func stylizedOutlinePassCompilesAndRenders() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+
+        renderer.initialize()
+
+        let width: UInt32 = 64
+        let height: UInt32 = 64
+        let pixels = try renderPixels(
+            renderer: renderer,
+            backend: backend,
+            scene: Self.makeSmokeScene(),
+            settings: RenderSettings(
+                stage: .r4LightingPBRShadow,
+                enableShadows: false,
+                enableOffscreenViewport: true,
+                enableStylizedCharacterShading: true
+            ),
+            frameIndex: 2,
+            width: width,
+            height: height
+        )
+
+        let stats = renderer.currentFrameStats()
+        #expect(stats.activePasses.contains(.depthPrepass))
+        #expect(stats.activePasses.contains(.basePass))
+        #expect(stats.activePasses.contains(.outline))
+        #expect(stats.activePasses.contains(.inkPaperPost))
+        #expect(stats.activePasses.contains(.viewportResolve))
+        #expect(stats.passDrawCallCounts[.depthPrepass] == 1)
+        #expect(stats.passDrawCallCounts[.basePass] == 1)
+        #expect(stats.passDrawCallCounts[.outline] == 1)
+
+        let nonTransparentPixels = pixels.count { $0.a > 0 }
+        #expect(nonTransparentPixels == Int(width * height))
+    }
+
     @Test("directional shadow pass darkens occluded framebuffer pixels",
           .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU shadow smoke test"))
     func directionalShadowPassDarkensOccludedPixels() throws {

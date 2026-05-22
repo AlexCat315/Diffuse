@@ -45,11 +45,14 @@ extension WGPURenderer {
     func ensureInstanceResources(scene: RenderScene, pipeline: GPURenderPipeline, jointPaletteMap: JointPaletteMap = JointPaletteMap()) throws {
         let instanceCount = scene.instances.count
         let resourceKeys = scene.instances.map {
-            InstanceResourceKey(meshIndex: $0.meshIndex,
-                                baseColorTextureIndex: $0.material.baseColorTextureIndex)
+            InstanceResourceKey(entity: $0.entity,
+                                meshIndex: $0.meshIndex,
+                                baseColorTextureIndex: $0.material.baseColorTextureIndex,
+                                jointPaletteMatrixCount: $0.entity.flatMap { jointPaletteMap.palette(for: $0)?.matrices.count } ?? 0)
         }
 
-        let useDynamicOffsets = instanceCount > dynamicOffsetThreshold
+        let hasJointPalettes = resourceKeys.contains { $0.jointPaletteMatrixCount > 0 }
+        let useDynamicOffsets = instanceCount > dynamicOffsetThreshold && !hasJointPalettes
         let bindGroupLayout: GPUBindGroupLayout
         if let meshBindGroupLayout {
             bindGroupLayout = meshBindGroupLayout
