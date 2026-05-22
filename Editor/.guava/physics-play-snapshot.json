@@ -1,6 +1,6 @@
 {
   "entityCount" : 7,
-  "lastModifiedAt" : "2026-05-22T13:25:08Z",
+  "lastModifiedAt" : "2026-05-22T14:11:33Z",
   "physicsSettings" : {
     "allowSleep" : true,
     "backendKind" : "none",
@@ -13,7 +13,7 @@
     "maxSubstepsPerFrame" : 4,
     "simulationMode" : "off"
   },
-  "revision" : 3971,
+  "revision" : 1083,
   "roots" : [
     {
       "camera" : {
@@ -156,18 +156,18 @@
           "kind" : "Static Mesh",
           "localTransform" : {
             "rows" : [
-              1,
-              0,
-              0,
-              0,
-              0,
-              1,
-              0,
-              0.74999994,
-              0,
-              0,
-              1,
-              0,
+              0.9993082,
+              -0.037240397,
+              -0.0014570401,
+              -0.21866737,
+              0.037240386,
+              0.9962529,
+              0.07810279,
+              0.7266811,
+              -0.001456995,
+              -0.07810289,
+              0.99694645,
+              -0.3261952,
               0,
               0,
               0,
@@ -198,17 +198,17 @@
             "allowSleep" : true,
             "angularDamping" : 0.04,
             "angularVelocity" : {
-              "x" : 0,
-              "y" : 0,
-              "z" : 0
+              "x" : -0.15994394,
+              "y" : 5.117028e-08,
+              "z" : 0.07626305
             },
             "gravityScale" : 1,
             "isSleeping" : false,
             "linearDamping" : 0.04,
             "linearVelocity" : {
-              "x" : 0,
-              "y" : 0,
-              "z" : 0
+              "x" : -0.09432799,
+              "y" : -0.0133295925,
+              "z" : -0.19783093
             },
             "mass" : 80,
             "motionType" : "dynamic"
