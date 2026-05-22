@@ -5,9 +5,16 @@ import SIMDCompat
 /// Evaluates animation clips and computes per-entity `JointPalette` resources.
 ///
 /// Call `tick(context:deltaTime:assetRegistry:)` each frame before scripts execute.
-final class AnimationRuntime: @unchecked Sendable {
+public final class AnimationRuntime: RuntimeScriptDriver, @unchecked Sendable {
+    public init() {}
 
-    func tick(context: inout RuntimeScriptPhaseContext, deltaTime: Double) {
+    public func reset() {}
+
+    public func run(context: inout RuntimeScriptPhaseContext) {
+        tick(context: &context, deltaTime: context.deltaTimeSeconds)
+    }
+
+    public func tick(context: inout RuntimeScriptPhaseContext, deltaTime: Double) {
         let entities = context.entities(with: AnimationPlayer.self)
         var paletteMap = JointPaletteMap()
 
