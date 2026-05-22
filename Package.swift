@@ -23,6 +23,7 @@ let package = Package(
                 .product(name: "CapabilityRuntime", package: "Engine"),
                 .product(name: "EngineCore", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
+                .product(name: "EngineMath", package: "Engine"),
                 .product(name: "IntentRuntime", package: "Engine"),
                 .product(name: "ObservationBus", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),

@@ -743,6 +743,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     let transactionExecutor = TransactionExecutor()
     private var initialSelectionID: UInt64?
     private var initialExpandedIDs: Set<UInt64> = []
+    let animationRuntime = AnimationRuntime()
 
     public var onRevisionChanged: ((UInt64) -> Void)?
 
@@ -936,6 +937,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         }
         if let scriptSection = scriptSection(for: entity) {
             sections.append(scriptSection)
+        }
+        if let animationPlayerSection = animationPlayerSection(for: entity) {
+            sections.append(animationPlayerSection)
         }
 
         return sections
@@ -1474,6 +1478,119 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         }
 
         return EditorInspectorSection(id: "scripts", title: L("Scripts"), fields: fields)
+    }
+
+    private func animationPlayerSection(for entity: EntityID) -> EditorInspectorSection? {
+        guard scene.hasComponent(AnimationPlayer.self, for: entity) else { return nil }
+
+        return EditorInspectorSection(
+            id: "animation-player",
+            title: L("Animation Player"),
+            fields: [
+                EditorInspectorField(
+                    id: "anim-clip",
+                    label: L("Clip"),
+                    value: .text(animationClipNameBinding(for: entity))
+                ),
+                EditorInspectorField(
+                    id: "anim-speed",
+                    label: L("Speed"),
+                    value: .constrainedNumber(animationSpeedBinding(for: entity),
+                                              min: 0, max: 10, step: 0.1, showsStepper: true)
+                ),
+                EditorInspectorField(
+                    id: "anim-loop",
+                    label: L("Loop"),
+                    value: .bool(animationLoopBinding(for: entity))
+                ),
+                EditorInspectorField(
+                    id: "anim-playing",
+                    label: L("Playing"),
+                    value: .bool(animationIsPlayingBinding(for: entity))
+                ),
+            ]
+        )
+    }
+
+    private func animationClipNameBinding(for entity: EntityID) -> Binding<String> {
+        Binding(
+            get: { [self] in
+                scene.component(AnimationPlayer.self, for: entity)?.clipName ?? ""
+            },
+            set: { [self] next in
+                guard let player = scene.component(AnimationPlayer.self, for: entity) else { return }
+                let clipName: String? = next.isEmpty ? nil : next
+                guard player.clipName != clipName else { return }
+                _ = applySceneTransaction(intentVerb: "scene.set_animation_clip",
+                                          summary: "Update animation clip",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setAnimationPlayer(entityID: entity.rawValue,
+                                                                          clipName: clipName,
+                                                                          speed: player.speed,
+                                                                          loop: player.loop,
+                                                                          isPlaying: player.isPlaying)])
+            }
+        )
+    }
+
+    private func animationSpeedBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(AnimationPlayer.self, for: entity)?.speed ?? 1
+            },
+            set: { [self] next in
+                guard let player = scene.component(AnimationPlayer.self, for: entity),
+                      player.speed != next else { return }
+                _ = applySceneTransaction(intentVerb: "scene.set_animation_speed",
+                                          summary: "Update animation speed",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setAnimationPlayer(entityID: entity.rawValue,
+                                                                          clipName: player.clipName,
+                                                                          speed: next,
+                                                                          loop: player.loop,
+                                                                          isPlaying: player.isPlaying)])
+            }
+        )
+    }
+
+    private func animationLoopBinding(for entity: EntityID) -> Binding<Bool> {
+        Binding(
+            get: { [self] in
+                scene.component(AnimationPlayer.self, for: entity)?.loop ?? true
+            },
+            set: { [self] next in
+                guard let player = scene.component(AnimationPlayer.self, for: entity),
+                      player.loop != next else { return }
+                _ = applySceneTransaction(intentVerb: "scene.set_animation_loop",
+                                          summary: "Update animation loop",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setAnimationPlayer(entityID: entity.rawValue,
+                                                                          clipName: player.clipName,
+                                                                          speed: player.speed,
+                                                                          loop: next,
+                                                                          isPlaying: player.isPlaying)])
+            }
+        )
+    }
+
+    private func animationIsPlayingBinding(for entity: EntityID) -> Binding<Bool> {
+        Binding(
+            get: { [self] in
+                scene.component(AnimationPlayer.self, for: entity)?.isPlaying ?? false
+            },
+            set: { [self] next in
+                guard let player = scene.component(AnimationPlayer.self, for: entity),
+                      player.isPlaying != next else { return }
+                _ = applySceneTransaction(intentVerb: "scene.set_animation_playing",
+                                          summary: "Update animation playing state",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setAnimationPlayer(entityID: entity.rawValue,
+                                                                          clipName: player.clipName,
+                                                                          speed: player.speed,
+                                                                          loop: player.loop,
+                                                                          isPlaying: next)])
+            }
+        )
     }
 
     private func lightTypeBinding(for entity: EntityID) -> Binding<LightType> {

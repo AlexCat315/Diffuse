@@ -65,35 +65,48 @@ struct VsOut {
 fn vs_main(in : VsIn) -> VsOut {
     var out : VsOut;
 
-    // Apply skeletal skinning when joint weights are non-zero.
-    let total_weight = in.weights.x + in.weights.y + in.weights.z + in.weights.w;
-    var model = u.model;
-    if total_weight > 0.0001 && arrayLength(&joint_palette) > 0u {
-        let j = vec4<u32>(u32(in.joints.x), u32(in.joints.y), u32(in.joints.z), u32(in.joints.w));
-        let count = arrayLength(&joint_palette);
-        let m0 = joint_matrix(j.x, count);
-        let m1 = joint_matrix(j.y, count);
-        let m2 = joint_matrix(j.z, count);
-        let m3 = joint_matrix(j.w, count);
-        let skin = m0 * in.weights.x + m1 * in.weights.y + m2 * in.weights.z + m3 * in.weights.w;
-        model = u.model * skin;
-    }
+    let skin = skin_matrix(in.joints, in.weights);
+    let local = skin * vec4<f32>(in.pos, 1.0);
+    let world = u.model * local;
+    let normal = u.model * (skin * vec4<f32>(in.normal, 0.0));
 
-    let world = model * vec4<f32>(in.pos, 1.0);
-    out.position = u.mvp * (model * vec4<f32>(in.pos, 1.0));
+    out.position = u.mvp * local;
     out.color = in.color;
-    out.normal = safe_normalize((model * vec4<f32>(in.normal, 0.0)).xyz);
+    out.normal = safe_normalize(normal.xyz);
     out.uv = in.uv;
     out.material_index = in.material_index;
     out.world_pos = world.xyz;
     return out;
 }
 
+fn skin_matrix(joints : vec4<f32>, weights : vec4<f32>) -> mat4x4<f32> {
+    let total_weight = weights.x + weights.y + weights.z + weights.w;
+    if total_weight > 0.0001 && arrayLength(&joint_palette) > 0u {
+        let j = vec4<u32>(u32(joints.x), u32(joints.y), u32(joints.z), u32(joints.w));
+        let count = arrayLength(&joint_palette);
+        return joint_matrix(j.x, count) * weights.x
+            + joint_matrix(j.y, count) * weights.y
+            + joint_matrix(j.z, count) * weights.z
+            + joint_matrix(j.w, count) * weights.w;
+    }
+    return mat4x4<f32>(
+        vec4<f32>(1.0, 0.0, 0.0, 0.0),
+        vec4<f32>(0.0, 1.0, 0.0, 0.0),
+        vec4<f32>(0.0, 0.0, 1.0, 0.0),
+        vec4<f32>(0.0, 0.0, 0.0, 1.0)
+    );
+}
+
 fn joint_matrix(index : u32, count : u32) -> mat4x4<f32> {
     if index < count {
         return joint_palette[index];
     }
-    return mat4x4<f32>();
+    return mat4x4<f32>(
+        vec4<f32>(1.0, 0.0, 0.0, 0.0),
+        vec4<f32>(0.0, 1.0, 0.0, 0.0),
+        vec4<f32>(0.0, 0.0, 1.0, 0.0),
+        vec4<f32>(0.0, 0.0, 0.0, 1.0)
+    );
 }
 
 fn safe_normalize(v : vec3<f32>) -> vec3<f32> {

@@ -156,6 +156,7 @@ struct ButtonIconTests: GuavaUIComposeSerializedSuite {
                               onHoverChange: { _ in },
                               onDown: {},
                               onUp: { false },
+                              onCancel: {},
                               onKey: { _, _ in .ignored })
         let node = host._makeNode()
         node.frame = CGRect(x: 10, y: 0, width: 34, height: 34)

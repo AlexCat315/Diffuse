@@ -349,6 +349,9 @@ public struct TransactionExecutor {
                 if let scripts = scene.component(ScriptComponent.self, for: source) {
                     _ = scene.setComponent(scripts, for: entity)
                 }
+                if let player = scene.component(AnimationPlayer.self, for: source) {
+                    _ = scene.setComponent(player, for: entity)
+                }
                 createdEntityIDs.append(entity.rawValue)
 
             case let .moveEntity(entityID, parentID, index):
@@ -629,6 +632,13 @@ public struct TransactionExecutor {
             case let .setAudioSource(entityID, source):
                 let entity = try requireEntity(entityID, in: scene)
                 _ = scene.setComponent(source, for: entity)
+
+            case let .setAnimationPlayer(entityID, clipName, speed, loop, isPlaying):
+                let entity = try requireEntity(entityID, in: scene)
+                _ = scene.setComponent(
+                    AnimationPlayer(clipName: clipName, speed: speed,
+                                    loop: loop, isPlaying: isPlaying),
+                    for: entity)
             }
         }
 
@@ -949,6 +959,8 @@ public struct TransactionExecutor {
             return "scene:camera_pose:\(id)"
         case let .setAudioSource(id, _):
             return "scene:audio_source:\(id)"
+        case let .setAnimationPlayer(id, _, _, _, _):
+            return "scene:animation_player:\(id)"
         }
     }
 
