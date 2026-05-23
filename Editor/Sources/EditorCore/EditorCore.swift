@@ -964,14 +964,15 @@ public final class EditorApplication: @unchecked Sendable {
                 // Enrich provenance with the proposal that generated this edit.
                 if let proposal = pendingSessionProposal {
                     edit.provenance.proposalID = proposal.id
-                    let stepCount = proposal.plan.steps.count
-                    let accepted = (0..<stepCount).map { "step_\($0)" }
+                    let acceptedStepIDs = (0..<proposal.plan.steps.count).map { "step_\($0)" }
                     if let session {
-                        Task { await session.recordOutcome(
-                            toolUseID: proposal.toolUseID,
-                            content: "Plan applied successfully: \(proposal.plan.summary)",
-                            proposalID: proposal.id
-                        ) }
+                        Task {
+                            _ = try? await session.process(
+                                .userCorrection(proposalID: proposal.id,
+                                               acceptedStepIDs: acceptedStepIDs,
+                                               rejectedStepIDs: [])
+                            )
+                        }
                     }
                     pendingSessionProposal = nil
                 }
