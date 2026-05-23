@@ -198,6 +198,17 @@ public enum EditPlanTool {
                     "type": "number",
                     "description": "0=2D, 1=3D positional audio for set_audio_source.",
                 ] as [String: Any],
+                "script_index": [
+                    "type": "integer",
+                    "description": "Which script binding to modify (0-based). Defaults to 0 when omitted. For set_script_property.",
+                ] as [String: Any],
+                "script_property_name": [
+                    "type": "string",
+                    "description": "The parameter key to set in the script's parametersJSON. For set_script_property.",
+                ] as [String: Any],
+                "script_property_value": [
+                    "description": "The new value for the script parameter (string, number, or boolean). For set_script_property.",
+                ] as [String: Any],
             ] as [String: Any],
         ]
     }

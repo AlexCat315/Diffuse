@@ -243,6 +243,7 @@ let package = Package(
             dependencies: [
                 "SIMDCompat",
                 "SceneRuntime",
+                "ScriptRuntime",
                 "IntentRuntime",
             ]
         ),

@@ -454,6 +454,10 @@ public actor Session {
         category, semantic role). Use high-confidence (≥0.8) inferred properties to understand \
         what the entity represents in the real world when naming, grouping, or describing it.
         - If the previous tool_result shows the user rejected your plan, adjust your approach.
+        - For set_script_property: use `script_property_name` (the parameter key) and \
+        `script_property_value` (the new value — string, number, or boolean). The entity's \
+        `scriptBindings` shows existing scripts and their current `params`. Use `script_index` \
+        (default 0) to target a specific binding when an entity has multiple scripts.
         - If the user asks a general question (capabilities, greetings, clarifications) rather \
         than requesting a scene change, call the tool with an empty steps array and put your \
         conversational reply in the summary field.
@@ -537,6 +541,17 @@ public actor Session {
         if let v = e.audioVolume          { d["audioVolume"] = v }
         if let v = e.audioLoop            { d["audioLoop"] = v }
         if let v = e.audioPlayOnAwake     { d["audioPlayOnAwake"] = v }
+        if let bindings = e.scriptBindings, !bindings.isEmpty {
+            d["scriptBindings"] = bindings.map { b -> [String: Any] in
+                var entry: [String: Any] = ["handle": b.handle, "enabled": b.isEnabled]
+                if b.parametersJSON != "{}" && !b.parametersJSON.isEmpty,
+                   let data = b.parametersJSON.data(using: .utf8),
+                   let parsed = try? JSONSerialization.jsonObject(with: data) {
+                    entry["params"] = parsed
+                }
+                return entry
+            }
+        }
         if !e.evaluated.isEmpty {
             d["evaluated"] = e.evaluated.mapValues(\.jsonValue)
         }
