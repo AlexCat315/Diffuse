@@ -539,7 +539,7 @@ public final class EditorApplication: @unchecked Sendable {
         return scene.scene.localTransform(for: entity)?.translation
     }
 
-    /// Session-era stub: returns empty 鈥?Session handles NL inference.
+    /// Session-era stub: returns empty — Session handles NL inference.
     public func localIntentSuggestions(
         for text: String,
         maxCount: Int = 3
@@ -1078,7 +1078,7 @@ public final class EditorApplication: @unchecked Sendable {
             return ["ok": false, "error": "missing 'state' field (playing|paused|stopped)"]
         }
         guard let next = PlaybackState(rawValue: stateStr) else {
-            return ["ok": false, "error": "unknown state '\(stateStr)' 鈥?expected 'playing', 'paused', or 'stopped'"]
+            return ["ok": false, "error": "unknown state '\(stateStr)' — expected 'playing', 'paused', or 'stopped'"]
         }
         applyPlaybackState(next)
         return ["ok": true, "state": next.rawValue]
