@@ -76,6 +76,70 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertNil(worldView.entityIndex["scene:2"]?.evaluated["worldPosition"])
     }
 
+    func testSnapshotPhysicsColliderAudioFieldsCopiedToEntityRecord() {
+        let entity = SceneSemanticSnapshot.Entity(
+            id: "scene:10",
+            name: "Barrel",
+            kind: "mesh",
+            parentRef: nil,
+            childRefs: [],
+            isSelected: false,
+            position: [0, 0, 0],
+            components: ["transform", "mesh", "rigidbody", "collider", "audio_source"],
+            rigidBodyMotionType: "dynamic",
+            rigidBodyMass: 12.5,
+            rigidBodyGravityScale: 0.8,
+            rigidBodyAllowSleep: true,
+            colliderShape: "capsule",
+            colliderIsTrigger: false,
+            colliderFriction: 0.6,
+            colliderRestitution: 0.2,
+            colliderDensity: 1.1,
+            audioClip: "barrel_roll",
+            audioVolume: 0.75,
+            audioLoop: false,
+            audioPlayOnAwake: true
+        )
+        var worldView = WorldView()
+        worldView.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [entity]))
+
+        let r = worldView.entityIndex["scene:10"]
+        XCTAssertEqual(r?.rigidBodyMotionType, "dynamic")
+        XCTAssertEqual(r?.rigidBodyMass, 12.5)
+        XCTAssertEqual(r?.rigidBodyGravityScale, 0.8)
+        XCTAssertEqual(r?.rigidBodyAllowSleep, true)
+        XCTAssertEqual(r?.colliderShape, "capsule")
+        XCTAssertEqual(r?.colliderIsTrigger, false)
+        XCTAssertEqual(r?.colliderFriction, 0.6)
+        XCTAssertEqual(r?.colliderRestitution, 0.2)
+        XCTAssertEqual(r?.colliderDensity, 1.1)
+        XCTAssertEqual(r?.audioClip, "barrel_roll")
+        XCTAssertEqual(r?.audioVolume, 0.75)
+        XCTAssertEqual(r?.audioLoop, false)
+        XCTAssertEqual(r?.audioPlayOnAwake, true)
+    }
+
+    func testWorldEntityRecordApplyPhysicsFromEvents() {
+        var worldView = WorldView()
+        worldView.apply(event: .entityAdded(ref: "scene:5", name: "Crate", kind: "mesh"))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:5", property: "rigidBodyMass", value: .float(8.0)))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:5", property: "rigidBodyGravityScale", value: .float(0.5)))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:5", property: "rigidBodyAllowSleep", value: .bool(false)))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:5", property: "colliderShape", value: .string("box")))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:5", property: "colliderFriction", value: .float(0.4)))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:5", property: "audioClip", value: .string("thud")))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:5", property: "audioLoop", value: .bool(true)))
+
+        let r = worldView.entityIndex["scene:5"]
+        XCTAssertEqual(r?.rigidBodyMass, 8.0)
+        XCTAssertEqual(r?.rigidBodyGravityScale, 0.5)
+        XCTAssertEqual(r?.rigidBodyAllowSleep, false)
+        XCTAssertEqual(r?.colliderShape, "box")
+        XCTAssertEqual(r?.colliderFriction, 0.4)
+        XCTAssertEqual(r?.audioClip, "thud")
+        XCTAssertEqual(r?.audioLoop, true)
+    }
+
     func testSessionCanBeSeededFromAIWorldContext() async {
         let context = AIWorldContext()
         await context.observe(events: [

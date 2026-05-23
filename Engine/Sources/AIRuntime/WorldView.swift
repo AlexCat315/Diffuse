@@ -63,8 +63,22 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     public var cameraIsActive: Bool?
     // Mesh (authored)
     public var meshColor: [Float]?           // [r, g, b] linear 0–1; nil = default white
-    // Physics (authored)
+    // Physics — rigidbody (authored)
     public var rigidBodyMotionType: String?
+    public var rigidBodyMass: Float?
+    public var rigidBodyGravityScale: Float?
+    public var rigidBodyAllowSleep: Bool?
+    // Physics — collider (authored)
+    public var colliderShape: String?        // "box" | "sphere" | "capsule" | "mesh" | "convex"
+    public var colliderIsTrigger: Bool?
+    public var colliderFriction: Float?
+    public var colliderRestitution: Float?
+    public var colliderDensity: Float?
+    // Audio (authored)
+    public var audioClip: String?
+    public var audioVolume: Float?
+    public var audioLoop: Bool?
+    public var audioPlayOnAwake: Bool?
     // Selection state (not authored — updated by selectionChanged events)
     public var isSelected: Bool
 
@@ -115,6 +129,30 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
             if case let .vec3(r, g, b) = value { meshColor = [r, g, b] }
         case "rigidBodyMotionType":
             if case let .string(s) = value { rigidBodyMotionType = s }
+        case "rigidBodyMass":
+            if case let .float(f) = value { rigidBodyMass = f }
+        case "rigidBodyGravityScale":
+            if case let .float(f) = value { rigidBodyGravityScale = f }
+        case "rigidBodyAllowSleep":
+            if case let .bool(b) = value { rigidBodyAllowSleep = b }
+        case "colliderShape":
+            if case let .string(s) = value { colliderShape = s }
+        case "colliderIsTrigger":
+            if case let .bool(b) = value { colliderIsTrigger = b }
+        case "colliderFriction":
+            if case let .float(f) = value { colliderFriction = f }
+        case "colliderRestitution":
+            if case let .float(f) = value { colliderRestitution = f }
+        case "colliderDensity":
+            if case let .float(f) = value { colliderDensity = f }
+        case "audioClip":
+            if case let .string(s) = value { audioClip = s }
+        case "audioVolume":
+            if case let .float(f) = value { audioVolume = f }
+        case "audioLoop":
+            if case let .bool(b) = value { audioLoop = b }
+        case "audioPlayOnAwake":
+            if case let .bool(b) = value { audioPlayOnAwake = b }
         default:
             break
         }
@@ -226,6 +264,18 @@ public struct WorldView: Sendable {
             record.cameraIsActive = e.cameraIsActive
             record.meshColor = e.meshColor
             record.rigidBodyMotionType = e.rigidBodyMotionType
+            record.rigidBodyMass = e.rigidBodyMass
+            record.rigidBodyGravityScale = e.rigidBodyGravityScale
+            record.rigidBodyAllowSleep = e.rigidBodyAllowSleep
+            record.colliderShape = e.colliderShape
+            record.colliderIsTrigger = e.colliderIsTrigger
+            record.colliderFriction = e.colliderFriction
+            record.colliderRestitution = e.colliderRestitution
+            record.colliderDensity = e.colliderDensity
+            record.audioClip = e.audioClip
+            record.audioVolume = e.audioVolume
+            record.audioLoop = e.audioLoop
+            record.audioPlayOnAwake = e.audioPlayOnAwake
             if let wp = e.worldPosition {
                 record.evaluated["worldPosition"] = .vec3(wp[0], wp[1], wp[2])
             }
