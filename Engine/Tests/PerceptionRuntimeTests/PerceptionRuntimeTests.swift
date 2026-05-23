@@ -48,6 +48,69 @@ final class PerceptionRuntimeTests: XCTestCase {
                                                             source: "perception:fixture_classifier"))
     }
 
+    func testObjectDetectionResultMapsToInferredWorldEvents() {
+        let result = makeObjectDetectionResult(label: "table", confidence: 0.87,
+                                               bbox: BBox2D(x: 10, y: 20, width: 200, height: 150))
+        let events = PerceptionWorldEventMapper().makeWorldEvents(from: result, targetRef: "scene:5")
+
+        let bboxEvent = events.first { event in
+            if case .entityInferredUpdated(_, "perception.bbox2d", _, _, _) = event { return true }
+            return false
+        }
+        let categoryEvent = events.first { event in
+            if case .entityInferredUpdated(_, "object_category", .string("table"), _, _) = event { return true }
+            return false
+        }
+        XCTAssertNotNil(categoryEvent)
+        XCTAssertNotNil(bboxEvent)
+    }
+
+    func testImageEmbeddingResultWritesEmbeddingAvailableFlag() {
+        let result = makeImageEmbeddingResult(vectorSpaceID: "openclip_vit_b32")
+        let events = PerceptionWorldEventMapper().makeWorldEvents(from: result, targetRef: "scene:7")
+
+        let embeddingEvent = events.first { event in
+            if case .entityInferredUpdated(_, "perception.embedding_available",
+                                           .string("openclip_vit_b32"), _, _) = event { return true }
+            return false
+        }
+        XCTAssertNotNil(embeddingEvent)
+    }
+
+    func testObjectDetectionObservationRoundTripsCodable() throws {
+        let obs = PerceptionObservation.objectDetection(DetectedObjectObservation(
+            id: "det_0",
+            label: "chair",
+            labelSpace: "coco_80",
+            confidence: 0.92,
+            bbox2D: BBox2D(x: 5, y: 10, width: 100, height: 120),
+            semanticCandidates: [PerceptionSemanticCandidate(kind: "object_category",
+                                                              label: "chair",
+                                                              confidence: 0.92)],
+            evidence: []
+        ))
+        let data = try JSONEncoder().encode(obs)
+        let decoded = try JSONDecoder().decode(PerceptionObservation.self, from: data)
+        XCTAssertEqual(decoded, obs)
+    }
+
+    func testImageEmbeddingObservationRoundTripsCodable() throws {
+        let ref = ArtifactRef(uri: "artifacts://embed/0",
+                              contentHash: "abc123",
+                              mediaType: "application/octet-stream",
+                              semanticKind: "embedding",
+                              redaction: "prompt_forbidden")
+        let obs = PerceptionObservation.imageEmbedding(ImageEmbeddingObservation(
+            id: "emb_0",
+            embeddingRef: ref,
+            modelID: "openclip_vit_b32",
+            vectorSpaceID: "openclip_vit_b32"
+        ))
+        let data = try JSONEncoder().encode(obs)
+        let decoded = try JSONDecoder().decode(PerceptionObservation.self, from: data)
+        XCTAssertEqual(decoded, obs)
+    }
+
     func testAppleVisionWorkerRunsAgainstFixtureImage() throws {
         #if canImport(Vision)
         let testFile = URL(fileURLWithPath: #filePath)
@@ -126,6 +189,59 @@ final class PerceptionRuntimeTests: XCTestCase {
 
         XCTAssertEqual(worker.lastMaxResults, 5)
         XCTAssertFalse(worker.lastRequestID.isEmpty)
+    }
+
+    private func makeObjectDetectionResult(label: String,
+                                            confidence: Double,
+                                            bbox: BBox2D? = nil) -> PerceptionResult {
+        PerceptionResult(
+            requestID: "request_det",
+            modelID: "fixture_detector",
+            modelVersion: "test",
+            task: .objectDetection,
+            status: "success",
+            observations: [
+                .objectDetection(DetectedObjectObservation(
+                    id: "det_0",
+                    label: label,
+                    labelSpace: "fixture",
+                    confidence: confidence,
+                    bbox2D: bbox,
+                    semanticCandidates: [
+                        PerceptionSemanticCandidate(kind: "object_category",
+                                                    label: label,
+                                                    confidence: confidence),
+                    ],
+                    evidence: []
+                )),
+            ],
+            timing: PerceptionTimingInfo(totalMilliseconds: 2),
+            provenance: PerceptionProvenance(source: "fixture", modelID: "fixture_detector")
+        )
+    }
+
+    private func makeImageEmbeddingResult(vectorSpaceID: String) -> PerceptionResult {
+        let ref = ArtifactRef(uri: "artifacts://embed/0",
+                              mediaType: "application/octet-stream",
+                              semanticKind: "embedding",
+                              redaction: "prompt_forbidden")
+        return PerceptionResult(
+            requestID: "request_emb",
+            modelID: "fixture_embedder",
+            modelVersion: "test",
+            task: .imageEmbedding,
+            status: "success",
+            observations: [
+                .imageEmbedding(ImageEmbeddingObservation(
+                    id: "emb_0",
+                    embeddingRef: ref,
+                    modelID: "fixture_embedder",
+                    vectorSpaceID: vectorSpaceID
+                )),
+            ],
+            timing: PerceptionTimingInfo(totalMilliseconds: 5),
+            provenance: PerceptionProvenance(source: "fixture", modelID: "fixture_embedder")
+        )
     }
 
     private func makeClassificationResult(label: String, confidence: Double) -> PerceptionResult {
