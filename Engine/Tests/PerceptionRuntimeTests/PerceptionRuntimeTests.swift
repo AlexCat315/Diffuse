@@ -67,6 +67,45 @@ final class PerceptionRuntimeTests: XCTestCase {
         #endif
     }
 
+    func testPerceptionServiceTagsEntityWithMatchingWorker() async throws {
+        let worker = MockPerceptionWorker(result: makeClassificationResult(label: "chair", confidence: 0.91))
+        let service = PerceptionService()
+        await service.register(worker)
+
+        let events = try await service.tag(entityRef: "scene:1",
+                                           imageURL: URL(fileURLWithPath: "/dev/null"),
+                                           task: .classification)
+
+        XCTAssertFalse(events.isEmpty)
+        XCTAssertEqual(events.first, .entityInferredUpdated(ref: "scene:1",
+                                                             property: "object_category",
+                                                             value: .string("chair"),
+                                                             confidence: 0.91,
+                                                             source: "perception:fixture_classifier"))
+    }
+
+    func testPerceptionServiceThrowsWhenNoWorkerForTask() async throws {
+        let service = PerceptionService()
+
+        do {
+            _ = try await service.tag(entityRef: "scene:1",
+                                      imageURL: URL(fileURLWithPath: "/dev/null"),
+                                      task: .objectDetection)
+            XCTFail("Expected workerUnavailable error")
+        } catch let PerceptionRuntimeError.workerUnavailable(reason) {
+            XCTAssertTrue(reason.contains("object_detection"))
+        }
+    }
+
+    func testPerceptionServiceSkipsLicenseDeniedWorker() async throws {
+        let ncWorker = NonCommercialMockWorker()
+        let service = PerceptionService(distributionMode: .commercialBinary)
+        await service.register(ncWorker)
+
+        let worker = await service.availableWorker(for: .classification)
+        XCTAssertNil(worker)
+    }
+
     func testAnalyzeImageAsyncCallsThroughToSync() async throws {
         let worker = MockPerceptionWorker(result: makeClassificationResult(label: "lamp", confidence: 0.77))
         let url = URL(fileURLWithPath: "/dev/null")
@@ -150,5 +189,29 @@ private final class MockPerceptionWorker: PerceptionWorker, @unchecked Sendable 
         lastRequestID = requestID
         lastMaxResults = maxResults
         return result
+    }
+}
+
+private struct NonCommercialMockWorker: PerceptionWorker {
+    var manifest: PerceptionModelManifest {
+        PerceptionModelManifest(
+            modelID: "nc_classifier",
+            displayName: "NC Classifier",
+            task: .classification,
+            backendFamily: "test",
+            runtime: PerceptionRuntimeConfig(preferredRuntime: "none"),
+            inputContract: "",
+            outputContract: "",
+            license: PerceptionLicenseMetadata(
+                codeLicense: "MIT",
+                weightsLicense: "CC-BY-NC-4.0",
+                commercialUse: "non-commercial",
+                redistribution: "restricted",
+                nonCommercialOnly: true)
+        )
+    }
+
+    func analyzeImage(at url: URL, requestID: String, maxResults: Int) throws -> PerceptionResult {
+        fatalError("should not be called — license gate must block this worker")
     }
 }
