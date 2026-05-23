@@ -27,6 +27,7 @@ let package = Package(
         .library(name: "PerceptionRuntime", targets: ["PerceptionRuntime"]),
         .library(name: "AIRuntime", targets: ["AIRuntime"]),
         .library(name: "ScriptRuntime", targets: ["ScriptRuntime"]),
+        .library(name: "SemanticPipeline", targets: ["SemanticPipeline"]),
         .library(name: "EngineCore", targets: ["EngineCore"]),
         .executable(name: "SceneRuntimeBenchmarks", targets: ["SceneRuntimeBenchmarks"]),
         .executable(name: "RenderBackendBenchmarks", targets: ["RenderBackendBenchmarks"]),
@@ -281,6 +282,7 @@ let package = Package(
                 "SceneRuntime",
             ]
         ),
+        .target(name: "SemanticPipeline"),
         .target(
             name: "RenderBackend",
             dependencies: [
@@ -417,6 +419,12 @@ let package = Package(
                 "SceneRuntime",
                 "ScriptRuntime",
                 "SequenceRuntime",
+            ]
+        ),
+        .testTarget(
+            name: "SemanticPipelineTests",
+            dependencies: [
+                "SemanticPipeline",
             ]
         ),
         .testTarget(
