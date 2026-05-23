@@ -610,7 +610,7 @@ public final class EditorApplication: @unchecked Sendable {
                     baseSceneRevision: proposal.baseSceneRevision,
                     approvalPolicy: proposal.approvalPolicy
                 )
-                _ = latencyMs
+                self.logConsole("AI inference: \(latencyMs)ms", detail: proposal.plan.summary)
                 self.pendingSessionProposal = proposal
                 self.submitPlanTransaction(
                     transaction,
