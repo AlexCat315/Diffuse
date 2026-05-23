@@ -268,6 +268,37 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(JSONValue.bool(false).jsonFragment, "false")
     }
 
+    func testConfidenceEmptyPlanIsOne() {
+        let plan = SceneEditPlan(summary: "Hello", steps: [])
+        XCTAssertEqual(Session.confidence(for: plan), 1.0)
+    }
+
+    func testConfidenceSingleSafeOpIsOne() {
+        let step = SceneEditStep(op: .setName, entityRef: "scene:1", name: "Hero")
+        let plan = SceneEditPlan(summary: "rename", steps: [step])
+        XCTAssertEqual(Session.confidence(for: plan), 1.0)
+    }
+
+    func testConfidenceMultipleStepsDecreases() {
+        let steps = (0..<4).map { _ in SceneEditStep(op: .setName, entityRef: "scene:1", name: "X") }
+        let plan = SceneEditPlan(summary: "multi", steps: steps)
+        // 1.0 - 3 * 0.03 = 0.91
+        XCTAssertEqual(Session.confidence(for: plan), 0.91, accuracy: 0.001)
+    }
+
+    func testConfidenceDestructiveOpAppliesPenalty() {
+        let step = SceneEditStep(op: .deleteEntity, entityRef: "scene:1")
+        let plan = SceneEditPlan(summary: "delete", steps: [step])
+        // 1.0 - 0.10 = 0.90
+        XCTAssertEqual(Session.confidence(for: plan), 0.90, accuracy: 0.001)
+    }
+
+    func testConfidenceFloorAt050() {
+        let steps = (0..<30).map { _ in SceneEditStep(op: .deleteEntity, entityRef: "scene:1") }
+        let plan = SceneEditPlan(summary: "massacre", steps: steps)
+        XCTAssertGreaterThanOrEqual(Session.confidence(for: plan), 0.50)
+    }
+
     func testSessionCanBeSeededFromAIWorldContext() async {
         let context = AIWorldContext()
         await context.observe(events: [
