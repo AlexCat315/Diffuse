@@ -187,6 +187,23 @@ let toolSetPlaybackState: [String: Any] = [
     ] as [String: Any],
 ]
 
+let toolAnalyzeImage: [String: Any] = [
+    "name": "analyze_image",
+    "description": "Runs Guava Perception Runtime on a local image file and writes inferred semantic observations to the selected or specified scene entity. Uses the editor's local system perception worker.",
+    "inputSchema": [
+        "type": "object",
+        "required": ["image_path"],
+        "properties": [
+            "image_path": ["type": "string",
+                           "description": "Absolute path to a local image file readable by the editor."] as [String: Any],
+            "entity_id": ["type": "string",
+                          "description": "Optional target entity ref such as 'scene:123'. Defaults to the current selection."] as [String: Any],
+            "max_results": ["type": "integer",
+                            "description": "Maximum classification observations to return. Defaults to 5."] as [String: Any],
+        ] as [String: Any],
+    ] as [String: Any],
+]
+
 // MARK: - MCP stdio protocol
 
 func writeResponse(_ obj: [String: Any]) {
@@ -241,7 +258,7 @@ func handle(_ msg: [String: Any]) {
         writeResponse([
             "jsonrpc": "2.0",
             "id": id as Any,
-            "result": ["tools": [toolGetScene, toolGetSelection, toolExecuteEditPlan, toolSetPlaybackState]] as [String: Any],
+            "result": ["tools": [toolGetScene, toolGetSelection, toolExecuteEditPlan, toolSetPlaybackState, toolAnalyzeImage]] as [String: Any],
         ])
 
     case "tools/call":
@@ -281,6 +298,27 @@ func handle(_ msg: [String: Any]) {
             if let ok = res["ok"] as? Bool, ok {
                 let state = res["state"] as? String ?? "unknown"
                 toolResult(id: id as Any, text: "Playback state set to '\(state)'")
+            } else {
+                toolResult(id: id as Any, text: res["error"] as? String ?? "unknown error", isError: true)
+            }
+
+        case "analyze_image":
+            guard let imagePath = args["image_path"] as? String else {
+                toolResult(id: id as Any, text: "missing image_path", isError: true)
+                break
+            }
+            var request: [String: Any] = ["action": "analyze_image", "image_path": imagePath]
+            if let entityID = args["entity_id"] as? String {
+                request["entity_id"] = entityID
+            }
+            if let maxResults = args["max_results"] as? Int {
+                request["max_results"] = maxResults
+            }
+            let res = editorCall(request)
+            if let ok = res["ok"] as? Bool, ok,
+               let responseData = try? JSONSerialization.data(withJSONObject: res, options: [.sortedKeys]),
+               let responseText = String(data: responseData, encoding: .utf8) {
+                toolResult(id: id as Any, text: responseText)
             } else {
                 toolResult(id: id as Any, text: res["error"] as? String ?? "unknown error", isError: true)
             }

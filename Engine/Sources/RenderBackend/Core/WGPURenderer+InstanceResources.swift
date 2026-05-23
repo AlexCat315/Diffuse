@@ -48,6 +48,7 @@ extension WGPURenderer {
             InstanceResourceKey(entity: $0.entity,
                                 meshIndex: $0.meshIndex,
                                 baseColorTextureIndex: $0.material.baseColorTextureIndex,
+                                normalTextureIndex: $0.material.normalTextureIndex,
                                 jointPaletteMatrixCount: $0.entity.flatMap { jointPaletteMap.palette(for: $0)?.matrices.count } ?? 0)
         }
 
@@ -107,6 +108,7 @@ extension WGPURenderer {
                 entries: try meshBindGroupEntries(
                     instanceUniformBuffer: uniformBuffer,
                     baseColorTextureView: baseColorTextureView(for: instance),
+                    normalMapTextureView: normalMapTextureView(for: instance),
                     jointPaletteBuffer: paletteBuffer
                 )
             )
@@ -118,6 +120,7 @@ extension WGPURenderer {
 
     func meshBindGroupEntries(instanceUniformBuffer: GPUBuffer,
                               baseColorTextureView: GPUTextureView? = nil,
+                              normalMapTextureView: GPUTextureView? = nil,
                               jointPaletteBuffer: GPUBuffer? = nil) throws -> [GPUBindGroupEntry] {
         try ensureStylizedCharacterUniformBuffer()
         try ensureMeshSamplingFallbackResources()
@@ -127,6 +130,7 @@ extension WGPURenderer {
         guard let stylizedCharacterUniformBuffer,
               let linearSampler,
               let fallbackMeshTextureView,
+              let fallbackNormalMapTextureView,
               let sceneLightUniformBuffer,
               let shadowUniformBuffer,
               let shadowSampler,
@@ -136,6 +140,7 @@ extension WGPURenderer {
             throw WGPUBackendError.initFailed("mesh bind group resources missing")
         }
         let textureView = baseColorTextureView ?? fallbackMeshTextureView
+        let normalView  = normalMapTextureView ?? fallbackNormalMapTextureView
         let paletteBuffer = jointPaletteBuffer ?? fallbackJointPaletteBuffer
         return [
             GPUBindGroupEntry(
@@ -172,6 +177,7 @@ extension WGPURenderer {
                 offset: 0,
                 size: paletteBuffer.size
             ),
+            GPUBindGroupEntry(binding: 9, textureView: normalView),
         ]
     }
 
@@ -186,6 +192,51 @@ extension WGPURenderer {
             return nil
         }
         return meshTextureResources[meshIndex]?[textureIndex]?.view
+    }
+
+    func baseColorTextureView(for meshIndex: Int, materialIndex: Int) -> GPUTextureView? {
+        guard let materialSet = MeshMaterialRegistry.shared.materials(for: meshIndex),
+              materialSet.materials.indices.contains(materialIndex),
+              let textureIndex = materialSet.materials[materialIndex].baseColorTextureIndex
+        else { return nil }
+        return meshTextureResources[meshIndex]?[textureIndex]?.view
+    }
+
+    func normalMapTextureView(for instance: RenderInstance) -> GPUTextureView? {
+        let meshIndex = instance.meshIndex
+        if let textureIndex = instance.material.normalTextureIndex {
+            return meshTextureResources[meshIndex]?[textureIndex]?.view
+        }
+        guard let materialSet = MeshMaterialRegistry.shared.materials(for: meshIndex),
+              let textureIndex = materialSet.materials.compactMap(\.normalTextureIndex).first
+        else { return nil }
+        return meshTextureResources[meshIndex]?[textureIndex]?.view
+    }
+
+    func normalMapTextureView(for meshIndex: Int, materialIndex: Int) -> GPUTextureView? {
+        guard let materialSet = MeshMaterialRegistry.shared.materials(for: meshIndex),
+              materialSet.materials.indices.contains(materialIndex),
+              let textureIndex = materialSet.materials[materialIndex].normalTextureIndex
+        else { return nil }
+        return meshTextureResources[meshIndex]?[textureIndex]?.view
+    }
+
+    func makeSubmeshBindGroup(instanceUniformBuffer: GPUBuffer,
+                              meshIndex: Int,
+                              materialIndex: Int,
+                              jointPaletteBuffer: GPUBuffer?) throws -> GPUBindGroup {
+        guard let bindGroupLayout = meshBindGroupLayout else {
+            throw WGPUBackendError.initFailed("mesh bind group layout not initialized")
+        }
+        return try backend.createBindGroup(
+            layout: bindGroupLayout,
+            entries: try meshBindGroupEntries(
+                instanceUniformBuffer: instanceUniformBuffer,
+                baseColorTextureView: baseColorTextureView(for: meshIndex, materialIndex: materialIndex),
+                normalMapTextureView: normalMapTextureView(for: meshIndex, materialIndex: materialIndex),
+                jointPaletteBuffer: jointPaletteBuffer
+            )
+        )
     }
 
     func effectiveBaseColor(for instance: RenderInstance) -> SIMD4<Float> {
@@ -291,28 +342,32 @@ extension WGPURenderer {
                 )
             )
         }
-        if fallbackMeshTextureView != nil { return }
-        let texture = try backend.createTexture(
-            width: 1,
-            height: 1,
-            format: .rgba8Unorm,
-            usage: [.textureBinding, .copyDst]
-        )
-        let whitePixel: [UInt8] = [255, 255, 255, 255]
-        whitePixel.withUnsafeBytes { raw in
-            if let base = raw.baseAddress {
-                backend.writeTexture(
-                    texture,
-                    data: base,
-                    dataSize: raw.count,
-                    bytesPerRow: 4,
-                    rowsPerImage: 1,
-                    width: 1,
-                    height: 1
-                )
+        if fallbackMeshTextureView == nil {
+            let texture = try backend.createTexture(
+                width: 1, height: 1, format: .rgba8Unorm, usage: [.textureBinding, .copyDst])
+            let whitePixel: [UInt8] = [255, 255, 255, 255]
+            whitePixel.withUnsafeBytes { raw in
+                if let base = raw.baseAddress {
+                    backend.writeTexture(texture, data: base, dataSize: raw.count,
+                                         bytesPerRow: 4, rowsPerImage: 1, width: 1, height: 1)
+                }
             }
+            fallbackMeshTexture = texture
+            fallbackMeshTextureView = try texture.createView()
         }
-        fallbackMeshTexture = texture
-        fallbackMeshTextureView = try texture.createView()
+        if fallbackNormalMapTextureView == nil {
+            let texture = try backend.createTexture(
+                width: 1, height: 1, format: .rgba8Unorm, usage: [.textureBinding, .copyDst])
+            // Flat normal in tangent space: (0,0,1) packed as (128,128,255,255)
+            let flatNormal: [UInt8] = [128, 128, 255, 255]
+            flatNormal.withUnsafeBytes { raw in
+                if let base = raw.baseAddress {
+                    backend.writeTexture(texture, data: base, dataSize: raw.count,
+                                         bytesPerRow: 4, rowsPerImage: 1, width: 1, height: 1)
+                }
+            }
+            fallbackNormalMapTexture = texture
+            fallbackNormalMapTextureView = try texture.createView()
+        }
     }
 }

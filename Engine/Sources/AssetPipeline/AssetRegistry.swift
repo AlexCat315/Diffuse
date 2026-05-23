@@ -15,6 +15,7 @@ public enum AssetRegistryError: Error, CustomStringConvertible {
 
 public enum ImportableAssetKind: String, Codable, Sendable, Equatable {
     case gltf
+    case glb
     case obj
 
     public var sceneKindLabel: String { "Static Mesh" }
@@ -74,6 +75,9 @@ public final class AssetRegistry: @unchecked Sendable {
     private var projectRoot: String?
     private var entries: [AssetRegistryEntry] = []
     private var meshes: [Int: RegisteredMeshAsset] = [:]
+    /// Stable relativePath → meshIndex map; survives across reloads so indices never change for known paths.
+    private var pathIndex: [String: Int] = [:]
+    private var nextMeshIndex = importedMeshStartIndex
 
     public init() {}
 
@@ -87,17 +91,50 @@ public final class AssetRegistry: @unchecked Sendable {
         }
 
         let candidates = try findImportableAssets(in: rootURL)
-        var nextMeshIndex = Self.importedMeshStartIndex
         var loadedEntries: [AssetRegistryEntry] = []
         var loadedMeshes: [Int: RegisteredMeshAsset] = [:]
 
+        lock.lock()
+        var currentPathIndex = pathIndex
+        var currentNextIndex = nextMeshIndex
+        let existingMeshes = meshes
+        lock.unlock()
+
         for candidate in candidates {
+            let assetURL = candidate.url.resolvingSymlinksInPath()
+            let rootPathWithSlash = rootURL.path.hasSuffix("/") ? rootURL.path : rootURL.path + "/"
+            let relativePath = assetURL.path.replacingOccurrences(of: rootPathWithSlash, with: "")
+
+            // Reuse existing index for known paths so GPU mesh slots never shift.
+            let meshIndex: Int
+            if let existing = currentPathIndex[relativePath] {
+                meshIndex = existing
+                if let existingMesh = existingMeshes[existing] {
+                    loadedMeshes[meshIndex] = existingMesh
+                    loadedEntries.append(AssetRegistryEntry(
+                        id: relativePath,
+                        name: assetURL.deletingPathExtension().lastPathComponent,
+                        relativePath: relativePath,
+                        absolutePath: assetURL.path,
+                        kind: candidate.kind,
+                        meshIndex: meshIndex
+                    ))
+                    continue
+                }
+            } else {
+                meshIndex = currentNextIndex
+                currentNextIndex += 1
+                currentPathIndex[relativePath] = meshIndex
+            }
+
             let kind = candidate.kind
             let imported: (mesh: MeshAsset, topologySlices: [MeshTopologySlice]?)
             do {
                 imported = try importMesh(at: candidate.url, kind: kind)
             } catch {
                 Logger(label: "com.guava.engine.assets").warning("AssetRegistry: skipping \(candidate.url.lastPathComponent) — \(error)")
+                currentPathIndex.removeValue(forKey: relativePath)
+                if meshIndex == currentNextIndex - 1 { currentNextIndex -= 1 }
                 continue
             }
             var mesh = imported.mesh
@@ -119,33 +156,31 @@ public final class AssetRegistry: @unchecked Sendable {
                 }
             }()
 
-            let assetURL = candidate.url.resolvingSymlinksInPath()
-            let rootPathWithSlash = rootURL.path.hasSuffix("/") ? rootURL.path : rootURL.path + "/"
-            let relativePath = assetURL.path.replacingOccurrences(of: rootPathWithSlash, with: "")
             let entry = AssetRegistryEntry(
                 id: relativePath,
                 name: assetURL.deletingPathExtension().lastPathComponent,
                 relativePath: relativePath,
                 absolutePath: assetURL.path,
                 kind: kind,
-                meshIndex: nextMeshIndex
+                meshIndex: meshIndex
             )
             loadedEntries.append(entry)
-            loadedMeshes[nextMeshIndex] = RegisteredMeshAsset(
-                meshIndex: nextMeshIndex,
+            loadedMeshes[meshIndex] = RegisteredMeshAsset(
+                meshIndex: meshIndex,
                 assetID: entry.id,
                 kind: kind,
                 sourceDirectory: assetURL.deletingLastPathComponent().path,
                 mesh: mesh,
                 topologySlices: normalizedSlices
             )
-            nextMeshIndex += 1
         }
 
         lock.lock()
         projectRoot = rootURL.path
         entries = loadedEntries
         meshes = loadedMeshes
+        pathIndex = currentPathIndex
+        nextMeshIndex = currentNextIndex
         lock.unlock()
         return loadedEntries
     }
@@ -190,6 +225,8 @@ public final class AssetRegistry: @unchecked Sendable {
         projectRoot = nil
         entries.removeAll(keepingCapacity: true)
         meshes.removeAll(keepingCapacity: true)
+        pathIndex.removeAll(keepingCapacity: true)
+        nextMeshIndex = Self.importedMeshStartIndex
         lock.unlock()
     }
 
@@ -229,6 +266,8 @@ public final class AssetRegistry: @unchecked Sendable {
             switch url.pathExtension.lowercased() {
             case "gltf":
                 results.append((url, .gltf))
+            case "glb":
+                results.append((url, .glb))
             case "obj":
                 results.append((url, .obj))
             default:
@@ -241,7 +280,7 @@ public final class AssetRegistry: @unchecked Sendable {
     private func importMesh(at url: URL,
                             kind: ImportableAssetKind) throws -> (mesh: MeshAsset, topologySlices: [MeshTopologySlice]?) {
         switch kind {
-        case .gltf:
+        case .gltf, .glb:
             let loaded = try GLTFImporter.loadWithTopology(path: url.path)
             return (loaded.mesh, loaded.topologies)
         case .obj:
