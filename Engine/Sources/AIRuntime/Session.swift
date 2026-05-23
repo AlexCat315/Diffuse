@@ -101,7 +101,7 @@ public actor Session {
                 baseSceneRevision: worldView.sceneRevision,
                 reasoning: plan.reasoning,
                 confidence: 0.85,
-                approvalPolicy: .requiresApproval,
+                approvalPolicy: config.autoApprove ? .automatic : .requiresApproval,
                 toolUseID: toolUseID
             )
 
@@ -165,7 +165,7 @@ public actor Session {
             baseSceneRevision: worldView.sceneRevision,
             reasoning: plan.reasoning,
             confidence: 0.85,
-            approvalPolicy: .requiresApproval,
+            approvalPolicy: config.autoApprove ? .automatic : .requiresApproval,
             toolUseID: newToolUseID
         )
     }
