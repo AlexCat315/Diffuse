@@ -1,5 +1,7 @@
 import Foundation
 import SceneRuntime
+import ScriptRuntime
+import SIMDCompat
 
 /// Converts a live `SceneRuntime` into a `SceneSemanticSnapshot` for AI planning.
 ///
@@ -31,9 +33,24 @@ public struct SceneSemanticEncoder: Sendable {
             let childRefs = scene.children(of: entity).map { "scene:\(rawID($0))" }
 
             var position: [Float]?
+            var scale: [Float]?
+            var eulerDegrees: [Float]?
+            var worldPosition: [Float]?
+            var worldEulerDegrees: [Float]?
             if let lt = scene.localTransform(for: entity) {
                 let t = lt.translation
                 position = [t.x, t.y, t.z]
+                let s = extractScale(lt.matrix)
+                let isUniformOne = abs(s.x - 1) < 0.0001 && abs(s.y - 1) < 0.0001 && abs(s.z - 1) < 0.0001
+                if !isUniformOne { scale = [s.x, s.y, s.z] }
+                let e = extractEulerXYZDegrees(lt.matrix)
+                let isZeroRotation = abs(e.x) < 0.01 && abs(e.y) < 0.01 && abs(e.z) < 0.01
+                if !isZeroRotation { eulerDegrees = [e.x, e.y, e.z] }
+                let wm = worldMatrix(scene, entity: entity)
+                worldPosition = [wm.columns.3.x, wm.columns.3.y, wm.columns.3.z]
+                let we = extractEulerXYZDegrees(wm)
+                let isZeroWorldRot = abs(we.x) < 0.01 && abs(we.y) < 0.01 && abs(we.z) < 0.01
+                if !isZeroWorldRot { worldEulerDegrees = [we.x, we.y, we.z] }
             }
 
             var components: [String] = []
@@ -44,16 +61,23 @@ public struct SceneSemanticEncoder: Sendable {
             if scene.hasComponent(RigidBody.self, for: entity)           { components.append("rigidbody") }
             if scene.hasComponent(Collider.self, for: entity)            { components.append("collider") }
             if scene.hasComponent(AudioSource.self, for: entity)         { components.append("audio_source") }
+            if scene.hasComponent(ScriptComponent.self, for: entity)    { components.append("script") }
 
             var lightType: String?
             var lightIntensity: Float?
             var lightColor: [Float]?
             var lightRange: Float?
+            var lightSpotInner: Float?
+            var lightSpotOuter: Float?
             if let lc = scene.component(LightComponent.self, for: entity) {
                 lightType = lc.type.rawValue
                 lightIntensity = lc.intensity
                 lightColor = [lc.color.x, lc.color.y, lc.color.z]
                 lightRange = lc.range
+                if lc.type == .spot {
+                    lightSpotInner = lc.spotInnerAngleDegrees
+                    lightSpotOuter = lc.spotOuterAngleDegrees
+                }
             }
 
             var cameraFovYDegrees: Float?
@@ -105,6 +129,17 @@ public struct SceneSemanticEncoder: Sendable {
                 audioPlayOnAwake = src.playOnAwake
             }
 
+            var scriptBindings: [SceneSemanticSnapshot.ScriptBindingRecord]?
+            if let sc = scene.component(ScriptComponent.self, for: entity), !sc.bindings.isEmpty {
+                scriptBindings = sc.bindings.map {
+                    SceneSemanticSnapshot.ScriptBindingRecord(
+                        handle: $0.script.rawValue,
+                        isEnabled: $0.isEnabled,
+                        parametersJSON: $0.parametersJSON
+                    )
+                }
+            }
+
             records.append(SceneSemanticSnapshot.Entity(
                 id: ref,
                 name: name,
@@ -113,11 +148,17 @@ public struct SceneSemanticEncoder: Sendable {
                 childRefs: childRefs,
                 isSelected: selectedRef == ref,
                 position: position,
+                scale: scale,
+                eulerDegrees: eulerDegrees,
+                worldPosition: worldPosition,
+                worldEulerDegrees: worldEulerDegrees,
                 components: components,
                 lightType: lightType,
                 lightIntensity: lightIntensity,
                 lightColor: lightColor,
                 lightRange: lightRange,
+                lightSpotInner: lightSpotInner,
+                lightSpotOuter: lightSpotOuter,
                 cameraFovYDegrees: cameraFovYDegrees,
                 cameraIsActive: cameraIsActive,
                 meshColor: meshColor,
@@ -133,7 +174,8 @@ public struct SceneSemanticEncoder: Sendable {
                 audioClip: audioClip,
                 audioVolume: audioVolume,
                 audioLoop: audioLoop,
-                audioPlayOnAwake: audioPlayOnAwake
+                audioPlayOnAwake: audioPlayOnAwake,
+                scriptBindings: scriptBindings
             ))
         }
 
@@ -166,5 +208,47 @@ public struct SceneSemanticEncoder: Sendable {
 
     private func rawID(_ entity: EntityID) -> UInt64 {
         UInt64(entity.index) | (UInt64(entity.generation) << 32)
+    }
+
+    /// Extracts XYZ intrinsic Euler angles in degrees from a TRS matrix.
+    /// Returns zero when the rotation is identity or near-identity.
+    private func extractEulerXYZDegrees(_ m: simd_float4x4) -> SIMD3<Float> {
+        let s = extractScale(m)
+        guard s.x > 0, s.y > 0, s.z > 0 else { return .zero }
+        // Normalised rotation column elements (row-major R[row][col] = columns[col][row])
+        let r02 = m.columns.2.x / s.z          // sin(y)
+        let r12 = m.columns.2.y / s.z          // -sin(x)cos(y)
+        let r22 = m.columns.2.z / s.z          // cos(x)cos(y)
+        let r01 = m.columns.1.x / s.y          // -cos(y)sin(z)
+        let r00 = m.columns.0.x / s.x          // cos(y)cos(z)
+        let sinBeta = Float.maximum(-1, Float.minimum(1, r02))
+        let beta = asin(sinBeta)
+        let toDeg: Float = 180 / .pi
+        if abs(sinBeta) < 0.9999 {
+            let alpha = atan2(-r12, r22)
+            let gamma = atan2(-r01, r00)
+            return SIMD3(alpha * toDeg, beta * toDeg, gamma * toDeg)
+        } else {
+            let r10 = m.columns.0.y / s.x      // sin(x+z) when beta=+90°
+            let r11 = m.columns.1.y / s.y      // cos(x+z) when beta=+90°
+            let alpha = atan2(r10, r11)
+            return SIMD3(alpha * toDeg, beta * toDeg, 0)
+        }
+    }
+
+    private func extractScale(_ m: simd_float4x4) -> SIMD3<Float> {
+        SIMD3(
+            length(SIMD3(m.columns.0.x, m.columns.0.y, m.columns.0.z)),
+            length(SIMD3(m.columns.1.x, m.columns.1.y, m.columns.1.z)),
+            length(SIMD3(m.columns.2.x, m.columns.2.y, m.columns.2.z))
+        )
+    }
+
+    /// Recursively computes the world-space transform by walking up the parent chain.
+    private func worldMatrix(_ scene: SceneRuntime, entity: EntityID) -> simd_float4x4 {
+        let local = scene.localTransform(for: entity)?.matrix
+            ?? simd_float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
+        guard let parent = scene.parent(of: entity) else { return local }
+        return worldMatrix(scene, entity: parent) * local
     }
 }

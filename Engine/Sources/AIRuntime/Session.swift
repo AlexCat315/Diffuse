@@ -4,6 +4,18 @@ import FoundationNetworking
 #endif
 import IntentRuntime
 
+private extension WorldPropertyValue {
+    /// JSON-serialisable form used only in the system prompt — human-readable, not tagged.
+    var jsonValue: Any {
+        switch self {
+        case let .vec3(x, y, z): return [x, y, z]
+        case let .float(v):      return v
+        case let .string(s):     return s
+        case let .bool(b):       return b
+        }
+    }
+}
+
 public enum SessionError: Error, CustomStringConvertible, LocalizedError, Sendable {
     case unsupportedSignal(String)
     case httpError(statusCode: Int, body: String?)
@@ -44,6 +56,7 @@ public actor Session {
     private let maxHistoryTurns: Int
 
     private static let anthropicAPIVersion = "2023-06-01"
+    private static let maxEntityPromptCount = 100
 
     private var inferenceEndpoint: URL {
         switch config.apiFormat {
@@ -57,39 +70,103 @@ public actor Session {
     public init(id: String = UUID().uuidString,
                 config: SessionConfig,
                 urlSession: URLSession = .shared,
-                maxHistoryTurns: Int = 40) {
+                maxHistoryTurns: Int = 40,
+                initialWorldView: WorldView = WorldView()) {
         self.id = id
         self.config = config
         self.urlSession = urlSession
-        self.worldView = WorldView()
+        self.worldView = initialWorldView
         self.conversationHistory = []
         self.maxHistoryTurns = maxHistoryTurns
     }
 
     // MARK: - Signal processing
 
-    /// Runs inference on a NaturalLanguage signal and returns a Proposal.
-    /// Use `observe()` for state-update signals.
+    /// Runs inference on a NaturalLanguage or UserCorrection signal and returns a Proposal.
+    /// Use `observe()` for state-update signals (selectionChanged, worldChanged).
     /// `onProgress` is called with partial summary text as it streams in — use it to animate the UI.
     public func process(_ signal: Signal,
                         onProgress: (@Sendable (String) -> Void)? = nil) async throws -> Proposal {
-        guard case let .naturalLanguage(text, _) = signal else {
+        switch signal {
+        case let .naturalLanguage(text, _):
+            recordTurn(ConversationTurn(kind: .userText(text)))
+            let (plan, toolUseID, inputJSON) = try await infer(onProgress: onProgress)
+            recordTurn(ConversationTurn(kind: .assistantToolCall(toolUseID: toolUseID,
+                                                                 name: "execute_edit_plan",
+                                                                 inputJSON: inputJSON)))
+            return Proposal(
+                sessionID: id,
+                semanticIntent: text,
+                plan: plan,
+                baseSceneRevision: worldView.sceneRevision,
+                reasoning: plan.reasoning,
+                confidence: planConfidence(for: plan),
+                approvalPolicy: config.autoApprove ? .automatic : .requiresApproval,
+                toolUseID: toolUseID
+            )
+
+        case let .userCorrection(proposalID, acceptedStepIDs, rejectedStepIDs):
+            return try await processCorrection(proposalID: proposalID,
+                                               acceptedStepIDs: acceptedStepIDs,
+                                               rejectedStepIDs: rejectedStepIDs,
+                                               onProgress: onProgress)
+
+        default:
             throw SessionError.unsupportedSignal(signal.kind)
         }
-        recordTurn(ConversationTurn(kind: .userText(text)))
-        let (plan, toolUseID, inputJSON) = try await infer(onProgress: onProgress)
-        recordTurn(ConversationTurn(kind: .assistantToolCall(toolUseID: toolUseID,
+    }
+
+    /// Handles a userCorrection signal: records the partial outcome as a tool_result,
+    /// then re-infers only when there are rejected steps that need revision.
+    private func processCorrection(proposalID: String,
+                                   acceptedStepIDs: [String],
+                                   rejectedStepIDs: [String],
+                                   onProgress: (@Sendable (String) -> Void)?) async throws -> Proposal {
+        // Find the most recent assistant tool call so we can close the conversation turn.
+        guard let callTurn = conversationHistory.last(where: {
+                  if case .assistantToolCall = $0.kind { return true }; return false }),
+              case let .assistantToolCall(toolUseID, _, _) = callTurn.kind
+        else { throw SessionError.unsupportedSignal("userCorrection: no prior plan in history") }
+
+        // Record the outcome so the model sees what happened.
+        let outcomeContent: String
+        if rejectedStepIDs.isEmpty {
+            outcomeContent = "All steps applied successfully."
+        } else if acceptedStepIDs.isEmpty {
+            outcomeContent = "Plan rejected entirely. Please propose a different approach."
+        } else {
+            let accepted = acceptedStepIDs.joined(separator: ", ")
+            let rejected = rejectedStepIDs.joined(separator: ", ")
+            outcomeContent = "Partial application. Accepted: [\(accepted)]. Rejected: [\(rejected)]. Revise the rejected steps."
+        }
+        recordTurn(ConversationTurn(kind: .toolResult(toolUseID: toolUseID, content: outcomeContent),
+                                    proposalID: proposalID))
+
+        // Nothing was rejected — no revision needed.
+        if rejectedStepIDs.isEmpty {
+            return Proposal(sessionID: id,
+                            semanticIntent: "",
+                            plan: SceneEditPlan(summary: "All steps accepted.", steps: []),
+                            baseSceneRevision: worldView.sceneRevision,
+                            confidence: 1.0,
+                            approvalPolicy: .automatic,
+                            toolUseID: toolUseID)
+        }
+
+        // Re-infer a revised plan for the rejected steps.
+        let (plan, newToolUseID, inputJSON) = try await infer(onProgress: onProgress)
+        recordTurn(ConversationTurn(kind: .assistantToolCall(toolUseID: newToolUseID,
                                                              name: "execute_edit_plan",
                                                              inputJSON: inputJSON)))
         return Proposal(
             sessionID: id,
-            semanticIntent: text,
+            semanticIntent: "Correction: \(rejectedStepIDs.count) step(s) to revise",
             plan: plan,
             baseSceneRevision: worldView.sceneRevision,
             reasoning: plan.reasoning,
-            confidence: 0.85,
-            approvalPolicy: .requiresApproval,
-            toolUseID: toolUseID
+            confidence: planConfidence(for: plan),
+            approvalPolicy: config.autoApprove ? .automatic : .requiresApproval,
+            toolUseID: newToolUseID
         )
     }
 
@@ -113,6 +190,19 @@ public actor Session {
     /// Applies a fine-grained WorldEvent to the entity index (Phase 5 delta path).
     public func observe(event: WorldEvent) {
         worldView.apply(event: event)
+    }
+
+    /// Applies a batch of WorldEvents in order.
+    public func observe(events: [WorldEvent]) {
+        for event in events { worldView.apply(event: event) }
+    }
+
+    public func replaceWorldView(_ worldView: WorldView) {
+        self.worldView = worldView
+    }
+
+    public func worldViewSnapshot() -> WorldView {
+        worldView
     }
 
     public func observe(editSummary: String, revision: UInt64) {
@@ -328,13 +418,19 @@ public actor Session {
         by calling the `execute_edit_plan` tool. Always call the tool — never respond with plain text.
         """)
 
-        parts.append("Scene entities (JSON):\n\(entityIndexJSON())")
+        var entitySection = "Scene entities (JSON):\n\(entityIndexJSON())"
+        if let note = entityTruncationNote() { entitySection += "\n\n" + note }
+        parts.append(entitySection)
 
         if !worldView.recentEdits.isEmpty {
             let lines = worldView.recentEdits.suffix(10)
                 .map { "- \($0.summary) (rev \($0.revision))" }
                 .joined(separator: "\n")
             parts.append("Recent edits (most recent last):\n\(lines)")
+        }
+
+        if let mode = worldView.workflowMode {
+            parts.append("Active workflow mode: \(mode)")
         }
 
         if !worldView.selectedEntityRefs.isEmpty {
@@ -346,12 +442,22 @@ public actor Session {
         - Only operate on entities that exist in the scene entities list above.
         - Use the exact entity IDs from the list (format: "scene:<number>").
         - Prefer minimal plans — only include steps necessary to satisfy the request.
-        - For set_transform, use the `position` field (local space) as the base and only change \
-        what the user asked for. When an entity is in a hierarchy, `evaluated.worldPosition` \
-        shows its actual world-space position — use it for spatial reasoning but set_transform \
-        always writes local space.
+        - For set_transform, use the `position`, `scale`, and `eulerDegrees` fields (all local \
+        space) as the base and only change what the user asked for. When an entity is in a \
+        hierarchy, `evaluated.worldPosition` shows its actual world-space position — use it \
+        for spatial reasoning but set_transform always writes local space.
+        - The `scale` field is omitted when uniform [1, 1, 1]; treat missing `scale` as [1, 1, 1].
+        - The `eulerDegrees` field is omitted when the rotation is [0, 0, 0]; treat missing \
+        `eulerDegrees` as [0, 0, 0]. Angles are XYZ intrinsic Euler in degrees.
         - For snap_to_ground, set Y position to 0.
+        - Each entity may have an `inferred` dict with AI perception observations (e.g. object \
+        category, semantic role). Use high-confidence (≥0.8) inferred properties to understand \
+        what the entity represents in the real world when naming, grouping, or describing it.
         - If the previous tool_result shows the user rejected your plan, adjust your approach.
+        - For set_script_property: use `script_property_name` (the parameter key) and \
+        `script_property_value` (the new value — string, number, or boolean). The entity's \
+        `scriptBindings` shows existing scripts and their current `params`. Use `script_index` \
+        (default 0) to target a specific binding when an entity has multiple scripts.
         - If the user asks a general question (capabilities, greetings, clarifications) rather \
         than requesting a scene change, call the tool with an empty steps array and put your \
         conversational reply in the summary field.
@@ -362,13 +468,124 @@ public actor Session {
 
     private func entityIndexJSON() -> String {
         guard !worldView.entityIndex.isEmpty else { return "[]" }
-        let entities = worldView.entityIndex.values.sorted { $0.ref < $1.ref }
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        guard let data = try? encoder.encode(entities),
+        let all = worldView.entityIndex
+        let limit = Self.maxEntityPromptCount
+
+        let prioritized: [WorldEntityRecord]
+        if all.count <= limit {
+            prioritized = all.values.sorted { $0.ref < $1.ref }
+        } else {
+            // Always include selected entities plus their immediate parents and children.
+            var priorityRefs = Set(worldView.selectedEntityRefs)
+            for ref in worldView.selectedEntityRefs {
+                if let record = all[ref] {
+                    if let parent = record.parentRef { priorityRefs.insert(parent) }
+                    priorityRefs.formUnion(record.childRefs)
+                }
+            }
+            var result = priorityRefs.compactMap { all[$0] }
+            let remainingSlots = limit - result.count
+            if remainingSlots > 0 {
+                let others = all.values
+                    .filter { !priorityRefs.contains($0.ref) }
+                    .sorted { $0.ref < $1.ref }
+                    .prefix(remainingSlots)
+                result.append(contentsOf: others)
+            }
+            prioritized = result.sorted { $0.ref < $1.ref }
+        }
+
+        let dicts = prioritized.map(compactDict(for:))
+        guard let data = try? JSONSerialization.data(withJSONObject: dicts,
+                                                     options: [.prettyPrinted, .sortedKeys]),
               let str = String(data: data, encoding: .utf8)
         else { return "[]" }
         return str
+    }
+
+    /// Returns a note string when entity count exceeds the prompt limit; nil otherwise.
+    private func entityTruncationNote() -> String? {
+        let total = worldView.entityIndex.count
+        guard total > Self.maxEntityPromptCount else { return nil }
+        return "Note: scene has \(total) entities; only \(Self.maxEntityPromptCount) are shown above " +
+               "(selected entities and their neighbours are prioritised)."
+    }
+
+    private func compactDict(for e: WorldEntityRecord) -> [String: Any] {
+        var d: [String: Any] = ["ref": e.ref, "name": e.name]
+        if let v = e.kind               { d["kind"] = v }
+        if let v = e.parentRef          { d["parentRef"] = v }
+        if !e.childRefs.isEmpty         { d["childRefs"] = e.childRefs }
+        if let v = e.position           { d["position"] = v }
+        if let v = e.scale              { d["scale"] = v }
+        if let v = e.eulerDegrees       { d["eulerDegrees"] = v }
+        if let v = e.lightType          { d["lightType"] = v }
+        if let v = e.lightIntensity     { d["lightIntensity"] = v }
+        if let v = e.lightColor         { d["lightColor"] = v }
+        if let v = e.lightRange         { d["lightRange"] = v }
+        if let v = e.lightSpotInner     { d["lightSpotInner"] = v }
+        if let v = e.lightSpotOuter     { d["lightSpotOuter"] = v }
+        if let v = e.cameraFovYDegrees  { d["cameraFovYDegrees"] = v }
+        if let v = e.cameraIsActive     { d["cameraIsActive"] = v }
+        if let v = e.meshColor          { d["meshColor"] = v }
+        if let v = e.rigidBodyMotionType  { d["rigidBodyMotionType"] = v }
+        if let v = e.rigidBodyMass        { d["rigidBodyMass"] = v }
+        if let v = e.rigidBodyGravityScale { d["rigidBodyGravityScale"] = v }
+        if let v = e.rigidBodyAllowSleep  { d["rigidBodyAllowSleep"] = v }
+        if let v = e.colliderShape        { d["colliderShape"] = v }
+        if let v = e.colliderIsTrigger    { d["colliderIsTrigger"] = v }
+        if let v = e.colliderFriction     { d["colliderFriction"] = v }
+        if let v = e.colliderRestitution  { d["colliderRestitution"] = v }
+        if let v = e.colliderDensity      { d["colliderDensity"] = v }
+        if let v = e.audioClip            { d["audioClip"] = v }
+        if let v = e.audioVolume          { d["audioVolume"] = v }
+        if let v = e.audioLoop            { d["audioLoop"] = v }
+        if let v = e.audioPlayOnAwake     { d["audioPlayOnAwake"] = v }
+        if let bindings = e.scriptBindings, !bindings.isEmpty {
+            d["scriptBindings"] = bindings.map { b -> [String: Any] in
+                var entry: [String: Any] = ["handle": b.handle, "enabled": b.isEnabled]
+                if b.parametersJSON != "{}" && !b.parametersJSON.isEmpty,
+                   let data = b.parametersJSON.data(using: .utf8),
+                   let parsed = try? JSONSerialization.jsonObject(with: data) {
+                    entry["params"] = parsed
+                }
+                return entry
+            }
+        }
+        if !e.evaluated.isEmpty {
+            d["evaluated"] = e.evaluated.mapValues(\.jsonValue)
+        }
+        if !e.inferred.isEmpty {
+            d["inferred"] = e.inferred.mapValues { inf -> [String: Any] in
+                var entry: [String: Any] = ["value": inf.displayValue, "confidence": inf.confidence]
+                if let src = inf.source { entry["source"] = src }
+                return entry
+            }
+        }
+        return d
+    }
+
+    // MARK: - Confidence
+
+    private func planConfidence(for plan: SceneEditPlan) -> Double {
+        Session.confidence(for: plan)
+    }
+
+    /// Derives a confidence score for a plan.
+    ///
+    /// Starts at 1.0 and applies penalties:
+    /// - Each step beyond the first reduces confidence slightly (large plans are riskier).
+    /// - Destructive ops (delete, duplicate) apply a larger penalty.
+    /// - Empty plans (conversational response) are always 1.0.
+    static func confidence(for plan: SceneEditPlan) -> Double {
+        guard !plan.steps.isEmpty else { return 1.0 }
+        var score = 1.0
+        let destructive: Set<SceneEditOp> = [.deleteEntity, .duplicateEntity]
+        for (i, step) in plan.steps.enumerated() {
+            if i > 0 { score -= 0.03 }
+            if destructive.contains(step.op) { score -= 0.10 }
+        }
+        return max(0.50, score)
     }
 
     // MARK: - HTTP
@@ -456,8 +673,15 @@ public actor Session {
 
     private func recordTurn(_ turn: ConversationTurn) {
         conversationHistory.append(turn)
-        if conversationHistory.count > maxHistoryTurns {
-            conversationHistory.removeFirst(conversationHistory.count - maxHistoryTurns)
+        // Remove complete interaction triples (userText + assistantToolCall + toolResult)
+        // from the front so we never leave an orphaned tool call at the start of the message list.
+        while conversationHistory.count > maxHistoryTurns {
+            if conversationHistory.count >= 3,
+               case .userText = conversationHistory[0].kind {
+                conversationHistory.removeFirst(3)
+            } else {
+                conversationHistory.removeFirst()
+            }
         }
     }
 }

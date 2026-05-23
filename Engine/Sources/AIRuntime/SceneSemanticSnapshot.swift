@@ -28,8 +28,22 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         public var childRefs: [String]
         public var isSelected: Bool
 
-        /// World-space position in metres, or `nil` if no `LocalTransform`.
+        /// Local-space position in metres, or `nil` if no `LocalTransform`.
         public var position: [Float]?          // [x, y, z]
+
+        /// Local-space scale factors, or `nil` if no `LocalTransform`.
+        public var scale: [Float]? = nil       // [x, y, z]; nil if uniform 1,1,1 or no transform
+
+        /// Local-space rotation in degrees (XYZ intrinsic Euler), or `nil` if no rotation or no transform.
+        public var eulerDegrees: [Float]? = nil // [x, y, z]; nil if all-zero
+
+        /// World-space position in metres, computed from the full parent hierarchy.
+        /// `nil` if the entity has no `LocalTransform`.
+        public var worldPosition: [Float]? = nil  // [x, y, z]
+
+        /// World-space rotation in degrees (XYZ intrinsic Euler), computed from the full parent hierarchy.
+        /// `nil` if the entity has no `LocalTransform` or the world rotation is all-zero.
+        public var worldEulerDegrees: [Float]? = nil  // [x, y, z]
 
         /// Component type names present on this entity.
         /// Possible values: `"transform"`, `"mesh"`, `"light"`, `"camera"`, `"rigidbody"`, `"collider"`, `"script"`
@@ -40,6 +54,8 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         public var lightIntensity: Float?
         public var lightColor: [Float]?        // [r, g, b] linear 0–1
         public var lightRange: Float?
+        public var lightSpotInner: Float? = nil  // degrees; non-nil only for spot lights
+        public var lightSpotOuter: Float? = nil  // degrees; non-nil only for spot lights
 
         // Camera extras — non-nil only when `"camera"` ∈ components
         public var cameraFovYDegrees: Float?
@@ -66,6 +82,23 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         public var audioVolume: Float?
         public var audioLoop: Bool?
         public var audioPlayOnAwake: Bool?
+
+        // Script extras — non-nil only when `"script"` ∈ components
+        public var scriptBindings: [ScriptBindingRecord]? = nil
+    }
+
+    /// Compact snapshot of a single ScriptBinding for AI context.
+    public struct ScriptBindingRecord: Codable, Sendable, Equatable {
+        public var handle: UInt64
+        public var isEnabled: Bool
+        /// Raw JSON string of parameters (e.g. `{"speed":5,"label":"Patrol"}`).
+        public var parametersJSON: String
+
+        public init(handle: UInt64, isEnabled: Bool, parametersJSON: String) {
+            self.handle = handle
+            self.isEnabled = isEnabled
+            self.parametersJSON = parametersJSON
+        }
     }
 
     // MARK: - Snapshot root
