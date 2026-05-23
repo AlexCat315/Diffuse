@@ -123,6 +123,10 @@ public actor Session {
         worldView.apply(selectionChanged: entityRefs)
     }
 
+    public func entityRecord(ref: String) -> WorldEntityRecord? {
+        worldView.entityIndex[ref]
+    }
+
     // MARK: - History
 
     public func clearHistory() {

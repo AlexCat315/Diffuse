@@ -185,6 +185,18 @@ public struct MeshAnimation: Sendable, Equatable {
     }
 }
 
+public struct MeshSubmesh: Sendable {
+    public let indexStart: UInt32
+    public let indexCount: UInt32
+    public let materialIndex: Int
+
+    public init(indexStart: UInt32, indexCount: UInt32, materialIndex: Int) {
+        self.indexStart = indexStart
+        self.indexCount = indexCount
+        self.materialIndex = materialIndex
+    }
+}
+
 /// Interleaved mesh vertex stream used by runtime render backends.
 ///
 /// Layout, in floats:
@@ -218,6 +230,7 @@ public struct MeshAsset: Sendable {
     public var nodes: [MeshNode]
     public var skins: [MeshSkin]
     public var animations: [MeshAnimation]
+    public var submeshes: [MeshSubmesh]
 
     public init(name: String,
                 vertices: [Float],
@@ -226,7 +239,8 @@ public struct MeshAsset: Sendable {
                 textures: [MeshTexture] = [],
                 nodes: [MeshNode] = [],
                 skins: [MeshSkin] = [],
-                animations: [MeshAnimation] = []) {
+                animations: [MeshAnimation] = [],
+                submeshes: [MeshSubmesh] = []) {
         self.name = name
         self.vertices = vertices
         self.indices = indices
@@ -235,6 +249,7 @@ public struct MeshAsset: Sendable {
         self.nodes = nodes
         self.skins = skins
         self.animations = animations
+        self.submeshes = submeshes
     }
 
     public var indexCount: UInt32 { UInt32(indices.count) }

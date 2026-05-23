@@ -1,4 +1,5 @@
-﻿import RHIWGPU
+﻿import AssetPipeline
+import RHIWGPU
 import SceneRuntime
 import SIMDCompat
 
@@ -8,6 +9,7 @@ struct GPUMesh {
     let indexBuffer: GPUBuffer
     let indexCount: UInt32
     let name: String
+    let submeshes: [MeshSubmesh]
 }
 
 extension GPUMesh: @unchecked Sendable {}
@@ -24,6 +26,7 @@ struct InstanceResourceKey: Equatable, Sendable {
     let entity: EntityID?
     let meshIndex: Int
     let baseColorTextureIndex: Int?
+    let normalTextureIndex: Int?
     let jointPaletteMatrixCount: Int
 }
 

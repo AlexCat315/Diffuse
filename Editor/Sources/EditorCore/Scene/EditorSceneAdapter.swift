@@ -941,6 +941,15 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         if let animationPlayerSection = animationPlayerSection(for: entity) {
             sections.append(animationPlayerSection)
         }
+        if let audioSourceSection = audioSourceSection(for: entity) {
+            sections.append(audioSourceSection)
+        }
+        if let renderMeshSection = renderMeshSection(for: entity) {
+            sections.append(renderMeshSection)
+        }
+        if let renderMaterialSection = renderMaterialSection(for: entity) {
+            sections.append(renderMaterialSection)
+        }
 
         return sections
     }
@@ -1589,6 +1598,333 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                                                           speed: player.speed,
                                                                           loop: player.loop,
                                                                           isPlaying: next)])
+            }
+        )
+    }
+
+    private func audioSourceSection(for entity: EntityID) -> EditorInspectorSection? {
+        guard scene.hasComponent(AudioSource.self, for: entity) else { return nil }
+        return EditorInspectorSection(
+            id: "audio-source",
+            title: L("Audio Source"),
+            fields: [
+                EditorInspectorField(
+                    id: "audio-clip",
+                    label: L("Clip"),
+                    value: .text(audioClipNameBinding(for: entity))
+                ),
+                EditorInspectorField(
+                    id: "audio-volume",
+                    label: L("Volume"),
+                    value: .constrainedNumber(audioVolumeBinding(for: entity),
+                                              min: 0, max: 1, step: 0.05, showsStepper: true)
+                ),
+                EditorInspectorField(
+                    id: "audio-pitch",
+                    label: L("Pitch"),
+                    value: .constrainedNumber(audioPitchBinding(for: entity),
+                                              min: 0.1, max: 3, step: 0.1, showsStepper: true)
+                ),
+                EditorInspectorField(
+                    id: "audio-loop",
+                    label: L("Loop"),
+                    value: .bool(audioLoopBinding(for: entity))
+                ),
+                EditorInspectorField(
+                    id: "audio-play-on-awake",
+                    label: L("Play on Awake"),
+                    value: .bool(audioPlayOnAwakeBinding(for: entity))
+                ),
+                EditorInspectorField(
+                    id: "audio-spatial-blend",
+                    label: L("Spatial Blend"),
+                    value: .constrainedNumber(audioSpatialBlendBinding(for: entity),
+                                              min: 0, max: 1, step: 0.1, showsStepper: true)
+                ),
+            ]
+        )
+    }
+
+    private func audioClipNameBinding(for entity: EntityID) -> Binding<String> {
+        Binding(
+            get: { [self] in
+                scene.component(AudioSource.self, for: entity)?.clipName ?? ""
+            },
+            set: { [self] next in
+                guard var source = scene.component(AudioSource.self, for: entity),
+                      source.clipName != next else { return }
+                source.clipName = next
+                _ = applySceneTransaction(intentVerb: "scene.set_audio_clip",
+                                          summary: "Update audio clip",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setAudioSource(entityID: entity.rawValue, source: source)])
+            }
+        )
+    }
+
+    private func audioVolumeBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(AudioSource.self, for: entity)?.volume ?? 1
+            },
+            set: { [self] next in
+                guard var source = scene.component(AudioSource.self, for: entity),
+                      source.volume != next else { return }
+                source.volume = next
+                _ = applySceneTransaction(intentVerb: "scene.set_audio_volume",
+                                          summary: "Update audio volume",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setAudioSource(entityID: entity.rawValue, source: source)])
+            }
+        )
+    }
+
+    private func audioPitchBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(AudioSource.self, for: entity)?.pitch ?? 1
+            },
+            set: { [self] next in
+                guard var source = scene.component(AudioSource.self, for: entity),
+                      source.pitch != next else { return }
+                source.pitch = next
+                _ = applySceneTransaction(intentVerb: "scene.set_audio_pitch",
+                                          summary: "Update audio pitch",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setAudioSource(entityID: entity.rawValue, source: source)])
+            }
+        )
+    }
+
+    private func audioLoopBinding(for entity: EntityID) -> Binding<Bool> {
+        Binding(
+            get: { [self] in
+                scene.component(AudioSource.self, for: entity)?.loop ?? false
+            },
+            set: { [self] next in
+                guard var source = scene.component(AudioSource.self, for: entity),
+                      source.loop != next else { return }
+                source.loop = next
+                _ = applySceneTransaction(intentVerb: "scene.set_audio_loop",
+                                          summary: "Update audio loop",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setAudioSource(entityID: entity.rawValue, source: source)])
+            }
+        )
+    }
+
+    private func audioPlayOnAwakeBinding(for entity: EntityID) -> Binding<Bool> {
+        Binding(
+            get: { [self] in
+                scene.component(AudioSource.self, for: entity)?.playOnAwake ?? true
+            },
+            set: { [self] next in
+                guard var source = scene.component(AudioSource.self, for: entity),
+                      source.playOnAwake != next else { return }
+                source.playOnAwake = next
+                _ = applySceneTransaction(intentVerb: "scene.set_audio_play_on_awake",
+                                          summary: "Update audio play on awake",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setAudioSource(entityID: entity.rawValue, source: source)])
+            }
+        )
+    }
+
+    private func audioSpatialBlendBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(AudioSource.self, for: entity)?.spatialBlend ?? 1
+            },
+            set: { [self] next in
+                guard var source = scene.component(AudioSource.self, for: entity),
+                      source.spatialBlend != next else { return }
+                source.spatialBlend = next
+                _ = applySceneTransaction(intentVerb: "scene.set_audio_spatial_blend",
+                                          summary: "Update audio spatial blend",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setAudioSource(entityID: entity.rawValue, source: source)])
+            }
+        )
+    }
+
+    private func renderMeshSection(for entity: EntityID) -> EditorInspectorSection? {
+        guard scene.hasComponent(RenderMeshComponent.self, for: entity) else { return nil }
+        return EditorInspectorSection(
+            id: "render-mesh",
+            title: L("Render Mesh"),
+            fields: [
+                EditorInspectorField(
+                    id: "mesh-visible",
+                    label: L("Visible"),
+                    value: .bool(renderMeshVisibilityBinding(for: entity))
+                ),
+                EditorInspectorField(
+                    id: "mesh-color-tint",
+                    label: L("Color Tint"),
+                    value: .color(renderMeshColorTintBinding(for: entity))
+                ),
+            ]
+        )
+    }
+
+    private func renderMeshVisibilityBinding(for entity: EntityID) -> Binding<Bool> {
+        Binding(
+            get: { [self] in
+                scene.component(RenderMeshComponent.self, for: entity)?.isVisible ?? true
+            },
+            set: { [self] next in
+                guard let mesh = scene.component(RenderMeshComponent.self, for: entity),
+                      mesh.isVisible != next else { return }
+                _ = applySceneTransaction(intentVerb: "scene.set_mesh_visibility",
+                                          summary: "Update mesh visibility",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setRenderMeshVisibility(entityID: entity.rawValue, isVisible: next)])
+            }
+        )
+    }
+
+    private func renderMeshColorTintBinding(for entity: EntityID) -> Binding<Color> {
+        Binding(
+            get: { [self] in
+                let tint = scene.component(RenderMeshComponent.self, for: entity)?.colorTint ?? SIMD3<Float>(1, 1, 1)
+                return Color(r: tint.x, g: tint.y, b: tint.z, a: 1)
+            },
+            set: { [self] next in
+                let nextColor = SIMD3<Float>(
+                    max(0, min(1, next.r)),
+                    max(0, min(1, next.g)),
+                    max(0, min(1, next.b))
+                )
+                guard scene.component(RenderMeshComponent.self, for: entity)?.colorTint != nextColor else { return }
+                _ = applySceneTransaction(intentVerb: "scene.set_mesh_color",
+                                          summary: "Update mesh color tint",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setMeshColorTint(entityID: entity.rawValue, color: nextColor)])
+            }
+        )
+    }
+
+    private func renderMaterialSection(for entity: EntityID) -> EditorInspectorSection? {
+        guard scene.hasComponent(RenderMaterialComponent.self, for: entity) else { return nil }
+        return EditorInspectorSection(
+            id: "render-material",
+            title: L("Render Material"),
+            fields: [
+                EditorInspectorField(
+                    id: "mat-base-color",
+                    label: L("Base Color"),
+                    value: .color(renderMaterialBaseColorBinding(for: entity))
+                ),
+                EditorInspectorField(
+                    id: "mat-metallic",
+                    label: L("Metallic"),
+                    value: .constrainedNumber(renderMaterialMetallicBinding(for: entity),
+                                              min: 0, max: 1, step: 0.05, showsStepper: true)
+                ),
+                EditorInspectorField(
+                    id: "mat-roughness",
+                    label: L("Roughness"),
+                    value: .constrainedNumber(renderMaterialRoughnessBinding(for: entity),
+                                              min: 0, max: 1, step: 0.05, showsStepper: true)
+                ),
+                EditorInspectorField(
+                    id: "mat-emissive",
+                    label: L("Emissive"),
+                    value: .color(renderMaterialEmissiveBinding(for: entity))
+                ),
+            ]
+        )
+    }
+
+    private func renderMaterialBaseColorBinding(for entity: EntityID) -> Binding<Color> {
+        Binding(
+            get: { [self] in
+                let c = scene.component(RenderMaterialComponent.self, for: entity)?.baseColorFactor ?? SIMD4<Float>(1, 1, 1, 1)
+                return Color(r: c.x, g: c.y, b: c.z, a: c.w)
+            },
+            set: { [self] next in
+                guard var mat = scene.component(RenderMaterialComponent.self, for: entity) else { return }
+                let nextColor = SIMD4<Float>(max(0, min(1, next.r)), max(0, min(1, next.g)),
+                                             max(0, min(1, next.b)), max(0, min(1, next.a)))
+                guard mat.baseColorFactor != nextColor else { return }
+                mat.baseColorFactor = nextColor
+                _ = applySceneTransaction(intentVerb: "scene.set_render_material",
+                                          summary: "Update material base color",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setRenderMaterialComponent(
+                                            entityID: entity.rawValue,
+                                            baseColorFactor: mat.baseColorFactor,
+                                            metallicFactor: mat.metallicFactor,
+                                            roughnessFactor: mat.roughnessFactor,
+                                            emissiveFactor: mat.emissiveFactor)])
+            }
+        )
+    }
+
+    private func renderMaterialMetallicBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(RenderMaterialComponent.self, for: entity)?.metallicFactor ?? 0
+            },
+            set: { [self] next in
+                guard var mat = scene.component(RenderMaterialComponent.self, for: entity),
+                      mat.metallicFactor != next else { return }
+                mat.metallicFactor = next
+                _ = applySceneTransaction(intentVerb: "scene.set_render_material",
+                                          summary: "Update material metallic",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setRenderMaterialComponent(
+                                            entityID: entity.rawValue,
+                                            baseColorFactor: mat.baseColorFactor,
+                                            metallicFactor: mat.metallicFactor,
+                                            roughnessFactor: mat.roughnessFactor,
+                                            emissiveFactor: mat.emissiveFactor)])
+            }
+        )
+    }
+
+    private func renderMaterialRoughnessBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(RenderMaterialComponent.self, for: entity)?.roughnessFactor ?? 1
+            },
+            set: { [self] next in
+                guard var mat = scene.component(RenderMaterialComponent.self, for: entity),
+                      mat.roughnessFactor != next else { return }
+                mat.roughnessFactor = next
+                _ = applySceneTransaction(intentVerb: "scene.set_render_material",
+                                          summary: "Update material roughness",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setRenderMaterialComponent(
+                                            entityID: entity.rawValue,
+                                            baseColorFactor: mat.baseColorFactor,
+                                            metallicFactor: mat.metallicFactor,
+                                            roughnessFactor: mat.roughnessFactor,
+                                            emissiveFactor: mat.emissiveFactor)])
+            }
+        )
+    }
+
+    private func renderMaterialEmissiveBinding(for entity: EntityID) -> Binding<Color> {
+        Binding(
+            get: { [self] in
+                let e = scene.component(RenderMaterialComponent.self, for: entity)?.emissiveFactor ?? .zero
+                return Color(r: e.x, g: e.y, b: e.z, a: 1)
+            },
+            set: { [self] next in
+                guard var mat = scene.component(RenderMaterialComponent.self, for: entity) else { return }
+                let nextEmissive = SIMD3<Float>(max(0, next.r), max(0, next.g), max(0, next.b))
+                guard mat.emissiveFactor != nextEmissive else { return }
+                mat.emissiveFactor = nextEmissive
+                _ = applySceneTransaction(intentVerb: "scene.set_render_material",
+                                          summary: "Update material emissive",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setRenderMaterialComponent(
+                                            entityID: entity.rawValue,
+                                            baseColorFactor: mat.baseColorFactor,
+                                            metallicFactor: mat.metallicFactor,
+                                            roughnessFactor: mat.roughnessFactor,
+                                            emissiveFactor: mat.emissiveFactor)])
             }
         )
     }
