@@ -331,3 +331,105 @@ private struct NonCommercialMockWorker: PerceptionWorker {
         fatalError("should not be called — license gate must block this worker")
     }
 }
+
+// MARK: - PerceptionRequest tests
+
+extension PerceptionRuntimeTests {
+    func testPerceptionRequestDefaultsAreReasonable() {
+        let req = PerceptionRequest(inputURI: "file:///tmp/test.jpg")
+        XCTAssertFalse(req.requestID.isEmpty)
+        XCTAssertEqual(req.task, .classification)
+        XCTAssertEqual(req.maxResults, 5)
+        XCTAssertEqual(req.confidenceThreshold, 0.5, accuracy: 0.001)
+    }
+
+    func testPerceptionRequestRoundTripsCodable() throws {
+        let req = PerceptionRequest(requestID: "r1",
+                                    task: .objectDetection,
+                                    inputURI: "file:///tmp/img.png",
+                                    maxResults: 10,
+                                    confidenceThreshold: 0.7,
+                                    hints: ["category_hint": "furniture"])
+        let data = try JSONEncoder().encode(req)
+        let decoded = try JSONDecoder().decode(PerceptionRequest.self, from: data)
+        XCTAssertEqual(decoded, req)
+    }
+}
+
+// MARK: - EvaluationGate tests
+
+extension PerceptionRuntimeTests {
+    func testEvaluationGateApprovesGoodDetector() {
+        let metrics = ModelMetricsRecord(
+            modelID: "rt_detr_v2",
+            task: .objectDetection,
+            dataset: "coco_val2017",
+            evaluatorVersion: "eval_v1",
+            mapAt50: 0.55,
+            meanLatencyMs: 45,
+            p95LatencyMs: 120
+        )
+        XCTAssertEqual(EvaluationGate.default.evaluate(metrics), .approved)
+    }
+
+    func testEvaluationGateRejectsLowMapDetector() {
+        let metrics = ModelMetricsRecord(
+            modelID: "weak_detector",
+            task: .objectDetection,
+            dataset: "coco_val2017",
+            evaluatorVersion: "eval_v1",
+            mapAt50: 0.25,
+            meanLatencyMs: 30,
+            p95LatencyMs: 80
+        )
+        if case let .rejectedAccuracy(actual, required) = EvaluationGate.default.evaluate(metrics) {
+            XCTAssertEqual(actual, 0.25, accuracy: 0.001)
+            XCTAssertEqual(required, 0.40, accuracy: 0.001)
+        } else {
+            XCTFail("Expected rejectedAccuracy")
+        }
+    }
+
+    func testEvaluationGateRejectsSlowModel() {
+        let metrics = ModelMetricsRecord(
+            modelID: "slow_classifier",
+            task: .classification,
+            dataset: "imagenet",
+            evaluatorVersion: "eval_v1",
+            topKAccuracy: 0.85,
+            meanLatencyMs: 800,
+            p95LatencyMs: 2500
+        )
+        if case let .rejectedLatency(p95, max) = EvaluationGate.default.evaluate(metrics) {
+            XCTAssertEqual(p95, 2500, accuracy: 1)
+            XCTAssertEqual(max, 1000, accuracy: 1)
+        } else {
+            XCTFail("Expected rejectedLatency")
+        }
+    }
+
+    func testEvaluationGateReturnsNotEvaluatedWithMissingMetrics() {
+        let metrics = ModelMetricsRecord(
+            modelID: "no_metrics_detector",
+            task: .objectDetection,
+            dataset: "unknown",
+            evaluatorVersion: "eval_v1",
+            mapAt50: nil,
+            meanLatencyMs: 50,
+            p95LatencyMs: 100
+        )
+        XCTAssertEqual(EvaluationGate.default.evaluate(metrics), .notEvaluated)
+    }
+
+    func testEvaluationGateDecisionDescription() {
+        XCTAssertEqual(EvaluationGateDecision.approved.description, "approved")
+        XCTAssertEqual(EvaluationGateDecision.notEvaluated.description,
+                       "not evaluated — no metrics record available")
+    }
+
+    func testPerceptionRequestHandleThrowsForMissingFile() {
+        let worker = MockPerceptionWorker(result: makeClassificationResult(label: "x", confidence: 1.0))
+        let req = PerceptionRequest(inputURI: "/nonexistent/path/image.jpg")
+        XCTAssertThrowsError(try worker.handle(request: req))
+    }
+}

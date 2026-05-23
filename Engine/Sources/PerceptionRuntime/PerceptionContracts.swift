@@ -1,5 +1,37 @@
 import Foundation
 
+// MARK: - Perception request
+
+/// Structured input to a PerceptionWorker. Replaces the (url, requestID, maxResults)
+/// tuple so callers can extend the contract without changing all call sites.
+public struct PerceptionRequest: Codable, Sendable, Equatable {
+    public var requestID: String
+    public var task: PerceptionTask
+    /// Local `file://` or `artifacts://` URI for the input image.
+    public var inputURI: String
+    public var maxResults: Int
+    public var confidenceThreshold: Float
+    public var locale: String?
+    /// Freeform hints forwarded to the backend (e.g. `"category_hint": "furniture"`).
+    public var hints: [String: String]
+
+    public init(requestID: String = UUID().uuidString,
+                task: PerceptionTask = .classification,
+                inputURI: String,
+                maxResults: Int = 5,
+                confidenceThreshold: Float = 0.5,
+                locale: String? = nil,
+                hints: [String: String] = [:]) {
+        self.requestID = requestID
+        self.task = task
+        self.inputURI = inputURI
+        self.maxResults = maxResults
+        self.confidenceThreshold = confidenceThreshold
+        self.locale = locale
+        self.hints = hints
+    }
+}
+
 public enum PerceptionTask: String, Codable, Sendable, Equatable {
     case classification
     case objectDetection = "object_detection"
