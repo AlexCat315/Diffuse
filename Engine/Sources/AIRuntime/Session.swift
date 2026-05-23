@@ -4,6 +4,18 @@ import FoundationNetworking
 #endif
 import IntentRuntime
 
+private extension WorldPropertyValue {
+    /// JSON-serialisable form used only in the system prompt — human-readable, not tagged.
+    var jsonValue: Any {
+        switch self {
+        case let .vec3(x, y, z): return [x, y, z]
+        case let .float(v):      return v
+        case let .string(s):     return s
+        case let .bool(b):       return b
+        }
+    }
+}
+
 public enum SessionError: Error, CustomStringConvertible, LocalizedError, Sendable {
     case unsupportedSignal(String)
     case httpError(statusCode: Int, body: String?)
@@ -446,13 +458,53 @@ public actor Session {
 
     private func entityIndexJSON() -> String {
         guard !worldView.entityIndex.isEmpty else { return "[]" }
-        let entities = worldView.entityIndex.values.sorted { $0.ref < $1.ref }
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        guard let data = try? encoder.encode(entities),
+        let entities = worldView.entityIndex.values.sorted { $0.ref < $1.ref }.map(compactDict(for:))
+        guard let data = try? JSONSerialization.data(withJSONObject: entities,
+                                                     options: [.prettyPrinted, .sortedKeys]),
               let str = String(data: data, encoding: .utf8)
         else { return "[]" }
         return str
+    }
+
+    private func compactDict(for e: WorldEntityRecord) -> [String: Any] {
+        var d: [String: Any] = ["ref": e.ref, "name": e.name]
+        if let v = e.kind               { d["kind"] = v }
+        if let v = e.parentRef          { d["parentRef"] = v }
+        if !e.childRefs.isEmpty         { d["childRefs"] = e.childRefs }
+        if let v = e.position           { d["position"] = v }
+        if let v = e.lightType          { d["lightType"] = v }
+        if let v = e.lightIntensity     { d["lightIntensity"] = v }
+        if let v = e.lightColor         { d["lightColor"] = v }
+        if let v = e.lightRange         { d["lightRange"] = v }
+        if let v = e.lightSpotInner     { d["lightSpotInner"] = v }
+        if let v = e.lightSpotOuter     { d["lightSpotOuter"] = v }
+        if let v = e.cameraFovYDegrees  { d["cameraFovYDegrees"] = v }
+        if let v = e.cameraIsActive     { d["cameraIsActive"] = v }
+        if let v = e.meshColor          { d["meshColor"] = v }
+        if let v = e.rigidBodyMotionType  { d["rigidBodyMotionType"] = v }
+        if let v = e.rigidBodyMass        { d["rigidBodyMass"] = v }
+        if let v = e.rigidBodyGravityScale { d["rigidBodyGravityScale"] = v }
+        if let v = e.rigidBodyAllowSleep  { d["rigidBodyAllowSleep"] = v }
+        if let v = e.colliderShape        { d["colliderShape"] = v }
+        if let v = e.colliderIsTrigger    { d["colliderIsTrigger"] = v }
+        if let v = e.colliderFriction     { d["colliderFriction"] = v }
+        if let v = e.colliderRestitution  { d["colliderRestitution"] = v }
+        if let v = e.colliderDensity      { d["colliderDensity"] = v }
+        if let v = e.audioClip            { d["audioClip"] = v }
+        if let v = e.audioVolume          { d["audioVolume"] = v }
+        if let v = e.audioLoop            { d["audioLoop"] = v }
+        if let v = e.audioPlayOnAwake     { d["audioPlayOnAwake"] = v }
+        if !e.evaluated.isEmpty {
+            d["evaluated"] = e.evaluated.mapValues(\.jsonValue)
+        }
+        if !e.inferred.isEmpty {
+            d["inferred"] = e.inferred.mapValues { inf -> [String: Any] in
+                var entry: [String: Any] = ["value": inf.displayValue, "confidence": inf.confidence]
+                if let src = inf.source { entry["source"] = src }
+                return entry
+            }
+        }
+        return d
     }
 
     // MARK: - HTTP
