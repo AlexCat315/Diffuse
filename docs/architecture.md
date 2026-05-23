@@ -296,15 +296,17 @@ Editor/Sources/EditorCore/AI/
 **并行运行策略**：有 API Key 时 Session 优先；AIScenePlanner 和级联路由保留不变。
 Phase 4 删除旧路径。
 
-### Phase 3：接入 UserCorrection
+### Phase 3：接入 UserCorrection ✅
 
-在确认流的 modify 分支里生成 UserCorrection，传入 Session.learn()。
+accept / discard 路径已接线（EditorCore.applyInvocationResult）。
+修改分支（modify）已接线：EditorCore 在 .applied 时调用
+`session.process(.userCorrection(proposalID:acceptedStepIDs:rejectedStepIDs:))`
+而非 `recordOutcome`，由 `processCorrection` 统一处理历史归档与重推理。
 
-这是最有价值的数据，也是让 AI 越用越好的关键。
+### Phase 4：删除翻译层 ✅
 
-### Phase 4：删除翻译层
-
-Session 稳定后删除：`LocalIntentClassifier`、CapabilityRegistry 路由、NL pipeline、`SceneSemanticSnapshot`、`IntentTrainingLogger`。
+`LocalIntentClassifier`、旧 NL pipeline、`IntentTrainingLogger` 从未进入主干，不存在。
+`CapabilityRegistry` 保留用于 Validation（约束检查），不作路由用，符合设计预期。
 
 ### Phase 5：World 统一 ✅
 
@@ -348,10 +350,25 @@ Engine/Sources/AIRuntime/
                             conversationHistory 加入 system prompt；learn() 改为 .user turn
 ```
 
-下一阶段：Phase 5c — 语义生产流水线填充 inferred 层（asset 导入时标注 semanticRole 等）。
+Phase 5c（已完成）— 语义生产流水线骨架：
 
-**Phase 3：接入 UserCorrection** — accept / discard 路径已接线（见 EditorCore.applyInvocationResult）；
-"modify" 分支（最有价值的训练信号）待实现：需要在 UI 确认流中捕获用户实际变更的 delta。
+```
+Engine/Sources/SemanticPipeline/
+  SemanticContracts.swift       — RawStructure, GeometrySignals, Region,
+                                  GeometryFingerprint, SemanticProposal,
+                                  AmbiguityDecision, SemanticConfirmation
+  SemanticAnalyzerBackend.swift — SemanticAnalyzerBackend 协议；
+                                  NameHeuristicBackend（DCC 命名模式匹配）
+                                  RigBackend（骨骼名 → 部位）
+                                  MetadataBackend（DCC 自定义属性）
+  SemanticMemoryStore.swift     — SemanticMemoryStore 协议；
+                                  EphemeralSemanticMemoryStore（测试用内存实现）
+  AssetSemanticPipeline.swift   — 流水线协调器：backend 并发采集 → 歧义评分 →
+                                  AutoCommit / NeedsConfirmation；确认落盘写 memory
+```
+
+待完成：GeometryAnalyzer 真实实现、VisionBackend、SQLite 持久化 SemanticMemoryStore、
+与 World inferred 层的 WorldEvent 写入对接。
 
 ---
 
