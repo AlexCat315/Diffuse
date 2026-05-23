@@ -1,4 +1,4 @@
-import AIRuntime
+@testable import AIRuntime
 import IntentRuntime
 import XCTest
 
@@ -33,6 +33,47 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(record?.name, "Hero")
         XCTAssertEqual(record?.inferred["object_category"]?.displayValue, "trashcan")
         XCTAssertEqual(record?.inferred["object_category"]?.source, "perception:apple_vision_classify_image_v1")
+    }
+
+    func testSnapshotWorldPositionPopulatesEvaluatedDict() {
+        let entity = SceneSemanticSnapshot.Entity(
+            id: "scene:1",
+            name: "Hero",
+            kind: "mesh",
+            parentRef: nil,
+            childRefs: [],
+            isSelected: false,
+            position: [0, 0, 0],
+            worldPosition: [3, 4, 5],
+            components: ["transform", "mesh"]
+        )
+        let snapshot = SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [entity])
+        var worldView = WorldView()
+        worldView.apply(snapshot: snapshot)
+
+        XCTAssertEqual(
+            worldView.entityIndex["scene:1"]?.evaluated["worldPosition"],
+            .vec3(3, 4, 5)
+        )
+    }
+
+    func testSnapshotWithoutWorldPositionLeavesEvaluatedEmpty() {
+        let entity = SceneSemanticSnapshot.Entity(
+            id: "scene:2",
+            name: "Root",
+            kind: "group",
+            parentRef: nil,
+            childRefs: [],
+            isSelected: false,
+            position: [1, 2, 3],
+            worldPosition: nil,
+            components: ["transform"]
+        )
+        let snapshot = SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [entity])
+        var worldView = WorldView()
+        worldView.apply(snapshot: snapshot)
+
+        XCTAssertNil(worldView.entityIndex["scene:2"]?.evaluated["worldPosition"])
     }
 
     func testSessionCanBeSeededFromAIWorldContext() async {

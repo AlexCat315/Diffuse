@@ -28,8 +28,12 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         public var childRefs: [String]
         public var isSelected: Bool
 
-        /// World-space position in metres, or `nil` if no `LocalTransform`.
+        /// Local-space position in metres, or `nil` if no `LocalTransform`.
         public var position: [Float]?          // [x, y, z]
+
+        /// World-space position in metres, computed from the full parent hierarchy.
+        /// `nil` if the entity has no `LocalTransform`.
+        public var worldPosition: [Float]? = nil  // [x, y, z]
 
         /// Component type names present on this entity.
         /// Possible values: `"transform"`, `"mesh"`, `"light"`, `"camera"`, `"rigidbody"`, `"collider"`, `"script"`

@@ -1,5 +1,6 @@
 import Foundation
 import SceneRuntime
+import SIMDCompat
 
 /// Converts a live `SceneRuntime` into a `SceneSemanticSnapshot` for AI planning.
 ///
@@ -31,9 +32,12 @@ public struct SceneSemanticEncoder: Sendable {
             let childRefs = scene.children(of: entity).map { "scene:\(rawID($0))" }
 
             var position: [Float]?
+            var worldPosition: [Float]?
             if let lt = scene.localTransform(for: entity) {
                 let t = lt.translation
                 position = [t.x, t.y, t.z]
+                let wm = worldMatrix(scene, entity: entity)
+                worldPosition = [wm.columns.3.x, wm.columns.3.y, wm.columns.3.z]
             }
 
             var components: [String] = []
@@ -113,6 +117,7 @@ public struct SceneSemanticEncoder: Sendable {
                 childRefs: childRefs,
                 isSelected: selectedRef == ref,
                 position: position,
+                worldPosition: worldPosition,
                 components: components,
                 lightType: lightType,
                 lightIntensity: lightIntensity,
@@ -166,5 +171,13 @@ public struct SceneSemanticEncoder: Sendable {
 
     private func rawID(_ entity: EntityID) -> UInt64 {
         UInt64(entity.index) | (UInt64(entity.generation) << 32)
+    }
+
+    /// Recursively computes the world-space transform by walking up the parent chain.
+    private func worldMatrix(_ scene: SceneRuntime, entity: EntityID) -> simd_float4x4 {
+        let local = scene.localTransform(for: entity)?.matrix
+            ?? simd_float4x4(diagonal: SIMD4<Float>(1, 1, 1, 1))
+        guard let parent = scene.parent(of: entity) else { return local }
+        return worldMatrix(scene, entity: parent) * local
     }
 }
