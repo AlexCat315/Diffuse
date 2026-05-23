@@ -51,6 +51,8 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     public var childRefs: [String]
     // Transform (authored)
     public var position: [Float]?       // [x, y, z] metres
+    public var scale: [Float]?          // [x, y, z]; nil when uniform 1,1,1
+    public var eulerDegrees: [Float]?   // [x, y, z] XYZ intrinsic degrees; nil when zero
     // Light (authored)
     public var lightType: String?
     public var lightIntensity: Float?
@@ -63,8 +65,24 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     public var cameraIsActive: Bool?
     // Mesh (authored)
     public var meshColor: [Float]?           // [r, g, b] linear 0–1; nil = default white
-    // Physics (authored)
+    // Physics — rigidbody (authored)
     public var rigidBodyMotionType: String?
+    public var rigidBodyMass: Float?
+    public var rigidBodyGravityScale: Float?
+    public var rigidBodyAllowSleep: Bool?
+    // Physics — collider (authored)
+    public var colliderShape: String?        // "box" | "sphere" | "capsule" | "mesh" | "convex"
+    public var colliderIsTrigger: Bool?
+    public var colliderFriction: Float?
+    public var colliderRestitution: Float?
+    public var colliderDensity: Float?
+    // Audio (authored)
+    public var audioClip: String?
+    public var audioVolume: Float?
+    public var audioLoop: Bool?
+    public var audioPlayOnAwake: Bool?
+    // Script bindings (authored)
+    public var scriptBindings: [SceneSemanticSnapshot.ScriptBindingRecord]?
     // Selection state (not authored — updated by selectionChanged events)
     public var isSelected: Bool
 
@@ -93,6 +111,10 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
             if case let .string(s) = value { kind = s }
         case "position":
             if case let .vec3(x, y, z) = value { position = [x, y, z] }
+        case "scale":
+            if case let .vec3(x, y, z) = value { scale = [x, y, z] }
+        case "eulerDegrees":
+            if case let .vec3(x, y, z) = value { eulerDegrees = [x, y, z] }
         case "parentRef":
             if case let .string(s) = value { parentRef = s.isEmpty ? nil : s }
         case "lightType":
@@ -115,6 +137,30 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
             if case let .vec3(r, g, b) = value { meshColor = [r, g, b] }
         case "rigidBodyMotionType":
             if case let .string(s) = value { rigidBodyMotionType = s }
+        case "rigidBodyMass":
+            if case let .float(f) = value { rigidBodyMass = f }
+        case "rigidBodyGravityScale":
+            if case let .float(f) = value { rigidBodyGravityScale = f }
+        case "rigidBodyAllowSleep":
+            if case let .bool(b) = value { rigidBodyAllowSleep = b }
+        case "colliderShape":
+            if case let .string(s) = value { colliderShape = s }
+        case "colliderIsTrigger":
+            if case let .bool(b) = value { colliderIsTrigger = b }
+        case "colliderFriction":
+            if case let .float(f) = value { colliderFriction = f }
+        case "colliderRestitution":
+            if case let .float(f) = value { colliderRestitution = f }
+        case "colliderDensity":
+            if case let .float(f) = value { colliderDensity = f }
+        case "audioClip":
+            if case let .string(s) = value { audioClip = s }
+        case "audioVolume":
+            if case let .float(f) = value { audioVolume = f }
+        case "audioLoop":
+            if case let .bool(b) = value { audioLoop = b }
+        case "audioPlayOnAwake":
+            if case let .bool(b) = value { audioPlayOnAwake = b }
         default:
             break
         }
@@ -192,12 +238,13 @@ public struct WorldView: Sendable {
         case let .entityEvaluatedChanged(ref, property, value):
             entityIndex[ref, default: WorldEntityRecord(ref: ref)].evaluated[property] = value
 
-        case let .entityInferredUpdated(ref, property, value, confidence):
+        case let .entityInferredUpdated(ref, property, value, confidence, source):
             var record = entityIndex[ref, default: WorldEntityRecord(ref: ref)]
             // Only update inferred if it doesn't shadow an authored property.
             let inferred = InferredProperty(
                 displayValue: value.inferredDisplayValue,
-                confidence: confidence)
+                confidence: confidence,
+                source: source)
             record.inferred[property] = inferred
             entityIndex[ref] = record
         }
@@ -215,14 +262,37 @@ public struct WorldView: Sendable {
             record.childRefs = e.childRefs
             record.isSelected = e.isSelected
             if let pos = e.position { record.position = pos }
+            if let s = e.scale { record.scale = s }
+            if let e2 = e.eulerDegrees { record.eulerDegrees = e2 }
             record.lightType = e.lightType
             record.lightIntensity = e.lightIntensity
             record.lightColor = e.lightColor
             record.lightRange = e.lightRange
+            record.lightSpotInner = e.lightSpotInner
+            record.lightSpotOuter = e.lightSpotOuter
             record.cameraFovYDegrees = e.cameraFovYDegrees
             record.cameraIsActive = e.cameraIsActive
             record.meshColor = e.meshColor
             record.rigidBodyMotionType = e.rigidBodyMotionType
+            record.rigidBodyMass = e.rigidBodyMass
+            record.rigidBodyGravityScale = e.rigidBodyGravityScale
+            record.rigidBodyAllowSleep = e.rigidBodyAllowSleep
+            record.colliderShape = e.colliderShape
+            record.colliderIsTrigger = e.colliderIsTrigger
+            record.colliderFriction = e.colliderFriction
+            record.colliderRestitution = e.colliderRestitution
+            record.colliderDensity = e.colliderDensity
+            record.audioClip = e.audioClip
+            record.audioVolume = e.audioVolume
+            record.audioLoop = e.audioLoop
+            record.audioPlayOnAwake = e.audioPlayOnAwake
+            record.scriptBindings = e.scriptBindings
+            if let wp = e.worldPosition {
+                record.evaluated["worldPosition"] = .vec3(wp[0], wp[1], wp[2])
+            }
+            if let we = e.worldEulerDegrees {
+                record.evaluated["worldEulerDegrees"] = .vec3(we[0], we[1], we[2])
+            }
             entityIndex[e.id] = record
         }
         sceneRevision = snapshot.sceneRevision

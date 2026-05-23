@@ -173,6 +173,18 @@ let toolGetSelection: [String: Any] = [
     "inputSchema": ["type": "object", "properties": [:] as [String: Any]] as [String: Any],
 ]
 
+let toolGetAIEntity: [String: Any] = [
+    "name": "get_ai_entity",
+    "description": "Returns Guava's AI-visible record for the selected or specified scene entity, including inferred semantic observations from local perception.",
+    "inputSchema": [
+        "type": "object",
+        "properties": [
+            "entity_id": ["type": "string",
+                          "description": "Optional target entity ref such as 'scene:123'. Defaults to the current selection."] as [String: Any],
+        ] as [String: Any],
+    ] as [String: Any],
+]
+
 let toolSetPlaybackState: [String: Any] = [
     "name": "set_playback_state",
     "description": "Controls the physics simulation playback state in the Guava editor. 'playing' starts the simulation (snapshots the scene first), 'paused' freezes it without losing state, 'stopped' stops and restores the original scene.",
@@ -258,7 +270,7 @@ func handle(_ msg: [String: Any]) {
         writeResponse([
             "jsonrpc": "2.0",
             "id": id as Any,
-            "result": ["tools": [toolGetScene, toolGetSelection, toolExecuteEditPlan, toolSetPlaybackState, toolAnalyzeImage]] as [String: Any],
+            "result": ["tools": [toolGetScene, toolGetSelection, toolGetAIEntity, toolExecuteEditPlan, toolSetPlaybackState, toolAnalyzeImage]] as [String: Any],
         ])
 
     case "tools/call":
@@ -280,6 +292,20 @@ func handle(_ msg: [String: Any]) {
             if let ok = res["ok"] as? Bool, ok {
                 let ref = res["selectedRef"] as? String ?? "null"
                 toolResult(id: id as Any, text: ref)
+            } else {
+                toolResult(id: id as Any, text: res["error"] as? String ?? "unknown error", isError: true)
+            }
+
+        case "get_ai_entity":
+            var request: [String: Any] = ["action": "get_ai_entity"]
+            if let entityID = args["entity_id"] as? String {
+                request["entity_id"] = entityID
+            }
+            let res = editorCall(request)
+            if let ok = res["ok"] as? Bool, ok,
+               let responseData = try? JSONSerialization.data(withJSONObject: res, options: [.sortedKeys]),
+               let responseText = String(data: responseData, encoding: .utf8) {
+                toolResult(id: id as Any, text: responseText)
             } else {
                 toolResult(id: id as Any, text: res["error"] as? String ?? "unknown error", isError: true)
             }

@@ -60,7 +60,8 @@ public struct PerceptionWorldEventMapper: Sendable {
             .entityInferredUpdated(ref: targetRef,
                                    property: write.property,
                                    value: write.value,
-                                   confidence: write.confidence)
+                                   confidence: write.confidence,
+                                   source: write.source)
         }
     }
 }

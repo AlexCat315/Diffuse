@@ -38,4 +38,14 @@ public extension PerceptionWorker {
     func analyzeImage(at url: URL, maxResults: Int) throws -> PerceptionResult {
         try analyzeImage(at: url, requestID: UUID().uuidString, maxResults: maxResults)
     }
+
+    /// Runs inference on a background thread so callers avoid blocking an actor or the main thread.
+    func analyzeImageAsync(at url: URL,
+                           requestID: String = UUID().uuidString,
+                           maxResults: Int = 5) async throws -> PerceptionResult {
+        let worker = self
+        return try await Task.detached(priority: .userInitiated) {
+            try worker.analyzeImage(at: url, requestID: requestID, maxResults: maxResults)
+        }.value
+    }
 }

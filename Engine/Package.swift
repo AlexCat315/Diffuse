@@ -243,6 +243,7 @@ let package = Package(
             dependencies: [
                 "SIMDCompat",
                 "SceneRuntime",
+                "ScriptRuntime",
                 "IntentRuntime",
             ]
         ),
@@ -423,6 +424,13 @@ let package = Package(
             dependencies: [
                 "IntentRuntime",
                 "PerceptionRuntime",
+            ]
+        ),
+        .testTarget(
+            name: "AIRuntimeTests",
+            dependencies: [
+                "AIRuntime",
+                "IntentRuntime",
             ]
         ),
         .testTarget(

@@ -1,5 +1,6 @@
 ﻿import Foundation
 import SceneRuntime
+import ScriptRuntime
 import IntentRuntime
 import SIMDCompat
 
@@ -16,7 +17,7 @@ public enum SceneEditPlanExecutorError: Error, CustomStringConvertible, Sendable
     public var description: String {
         switch self {
         case let .invalidEntityRef(ref):
-            return "invalid entity reference: '\(ref)' 鈥?expected format 'scene:<uint64>'"
+            return "invalid entity reference: '\(ref)' — expected format 'scene:<uint64>'"
         case let .missingEntityRef(op):
             return "op '\(op.rawValue)' requires entity_id"
         case let .entityNotFound(ref):
@@ -26,11 +27,11 @@ public enum SceneEditPlanExecutorError: Error, CustomStringConvertible, Sendable
         case let .invalidColor(op):
             return "op '\(op.rawValue)' color must be [r, g, b] with 3 elements"
         case let .unknownLightType(s):
-            return "unknown light type '\(s)' 鈥?expected 'directional', 'point', or 'spot'"
+            return "unknown light type '\(s)' — expected 'directional', 'point', or 'spot'"
         case let .unknownMotionType(s):
-            return "unknown motion type '\(s)' 鈥?expected 'static', 'dynamic', or 'kinematic'"
+            return "unknown motion type '\(s)' — expected 'static', 'dynamic', or 'kinematic'"
         case let .unknownColliderShape(s):
-            return "unknown collider shape '\(s)' 鈥?expected 'box', 'sphere', 'capsule', 'mesh', or 'convex'"
+            return "unknown collider shape '\(s)' — expected 'box', 'sphere', 'capsule', 'mesh', or 'convex'"
         }
     }
 }
@@ -47,7 +48,7 @@ public struct SceneEditPlanExecutor: Sendable {
     ///
     /// - Parameters:
     ///   - plan: Decoded AI plan.
-    ///   - scene: Live scene runtime 鈥?used to read current transforms and validate entity IDs.
+    ///   - scene: Live scene runtime — used to read current transforms and validate entity IDs.
     ///   - baseSceneRevision: Revision at which the AI generated the plan. Passing the
     ///     snapshot's revision prevents applying a plan against a scene that changed while
     ///     the API call was in flight. Pass `nil` to skip the revision check.
@@ -304,7 +305,48 @@ public struct SceneEditPlanExecutor: Sendable {
             if let poa   = step.audioPlayOnAwake  { source.playOnAwake = poa }
             if let blend = step.audioSpatialBlend { source.spatialBlend = blend }
             return [.setAudioSource(entityID: id, source: source)]
+
+        case .setScriptProperty:
+            let id = try resolveEntityID(step, scene: scene)
+            let eid = entityID(fromRaw: id)
+            guard let propName = step.scriptPropertyName, !propName.isEmpty else {
+                throw SceneEditPlanExecutorError.missingField(op: step.op, field: "script_property_name")
+            }
+            guard let propValue = step.scriptPropertyValue else {
+                throw SceneEditPlanExecutorError.missingField(op: step.op, field: "script_property_value")
+            }
+            let bindingIdx = step.scriptIndex ?? 0
+            var component = scene.component(ScriptComponent.self, for: eid) ?? ScriptComponent()
+            while component.bindings.count <= bindingIdx {
+                component.bindings.append(ScriptBinding(ScriptHandle(rawValue: 0)))
+            }
+            let updatedJSON = mergeScriptProperty(
+                into: component.bindings[bindingIdx].parametersJSON,
+                key: propName,
+                value: propValue
+            )
+            component.bindings[bindingIdx].parametersJSON = updatedJSON
+            return [.setScriptBindings(entityID: id, bindings: component.bindings)]
         }
+    }
+
+    // MARK: - Script helpers
+
+    private func mergeScriptProperty(into json: String, key: String, value: JSONValue) -> String {
+        guard let data = json.data(using: .utf8),
+              var dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            return "{\"\(key)\":\(value.jsonFragment)}"
+        }
+        switch value {
+        case .string(let s): dict[key] = s
+        case .number(let n): dict[key] = n
+        case .bool(let b):   dict[key] = b
+        }
+        guard let out = try? JSONSerialization.data(withJSONObject: dict),
+              let str = String(data: out, encoding: .utf8) else {
+            return "{\"\(key)\":\(value.jsonFragment)}"
+        }
+        return str
     }
 
     // MARK: - Entity ID resolution
