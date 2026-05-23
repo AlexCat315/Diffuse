@@ -885,15 +885,18 @@ public final class EditorApplication: @unchecked Sendable {
             return nil
         case .anthropic:
             guard let key = AIKeychain.load(provider: .anthropic) else { return nil }
-            return Session(config: .anthropic(apiKey: key, model: settings.model),
+            return Session(config: .anthropic(apiKey: key, model: settings.model,
+                                              autoApprove: settings.autoApprove),
                            initialWorldView: initialWorldView)
         case .openai:
             guard let key = AIKeychain.load(provider: .openai) else { return nil }
-            return Session(config: .openAI(apiKey: key, model: settings.model),
+            return Session(config: .openAI(apiKey: key, model: settings.model,
+                                           autoApprove: settings.autoApprove),
                            initialWorldView: initialWorldView)
         case .deepseek:
             guard let key = AIKeychain.load(provider: .deepseek) else { return nil }
-            return Session(config: .deepSeek(apiKey: key, model: settings.model),
+            return Session(config: .deepSeek(apiKey: key, model: settings.model,
+                                             autoApprove: settings.autoApprove),
                            initialWorldView: initialWorldView)
         }
     }
