@@ -439,10 +439,12 @@ public actor Session {
         - Only operate on entities that exist in the scene entities list above.
         - Use the exact entity IDs from the list (format: "scene:<number>").
         - Prefer minimal plans — only include steps necessary to satisfy the request.
-        - For set_transform, use the `position` field (local space) as the base and only change \
-        what the user asked for. When an entity is in a hierarchy, `evaluated.worldPosition` \
-        shows its actual world-space position — use it for spatial reasoning but set_transform \
-        always writes local space.
+        - For set_transform, use the `position` and `scale` fields (both local space) as the \
+        base and only change what the user asked for. When an entity is in a hierarchy, \
+        `evaluated.worldPosition` shows its actual world-space position — use it for spatial \
+        reasoning but set_transform always writes local space.
+        - The `scale` field in an entity is omitted when it is uniform [1, 1, 1]. Treat a \
+        missing `scale` as [1, 1, 1].
         - For snap_to_ground, set Y position to 0.
         - Each entity may have an `inferred` dict with AI perception observations (e.g. object \
         category, semantic role). Use high-confidence (≥0.8) inferred properties to understand \
