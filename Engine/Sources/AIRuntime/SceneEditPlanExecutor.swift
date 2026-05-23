@@ -16,7 +16,7 @@ public enum SceneEditPlanExecutorError: Error, CustomStringConvertible, Sendable
     public var description: String {
         switch self {
         case let .invalidEntityRef(ref):
-            return "invalid entity reference: '\(ref)' 鈥?expected format 'scene:<uint64>'"
+            return "invalid entity reference: '\(ref)' — expected format 'scene:<uint64>'"
         case let .missingEntityRef(op):
             return "op '\(op.rawValue)' requires entity_id"
         case let .entityNotFound(ref):
@@ -26,11 +26,11 @@ public enum SceneEditPlanExecutorError: Error, CustomStringConvertible, Sendable
         case let .invalidColor(op):
             return "op '\(op.rawValue)' color must be [r, g, b] with 3 elements"
         case let .unknownLightType(s):
-            return "unknown light type '\(s)' 鈥?expected 'directional', 'point', or 'spot'"
+            return "unknown light type '\(s)' — expected 'directional', 'point', or 'spot'"
         case let .unknownMotionType(s):
-            return "unknown motion type '\(s)' 鈥?expected 'static', 'dynamic', or 'kinematic'"
+            return "unknown motion type '\(s)' — expected 'static', 'dynamic', or 'kinematic'"
         case let .unknownColliderShape(s):
-            return "unknown collider shape '\(s)' 鈥?expected 'box', 'sphere', 'capsule', 'mesh', or 'convex'"
+            return "unknown collider shape '\(s)' — expected 'box', 'sphere', 'capsule', 'mesh', or 'convex'"
         }
     }
 }

@@ -142,6 +142,62 @@ public enum EditPlanTool {
                     "type": "boolean",
                     "description": "Constraint enabled flag for set_constraint_enabled.",
                 ] as [String: Any],
+                "allow_sleep": [
+                    "type": "boolean",
+                    "description": "Whether the rigidbody can sleep when at rest. For set_rigidbody_allow_sleep.",
+                ] as [String: Any],
+                "collider_shape": [
+                    "type": "string", "enum": ["box", "sphere", "capsule", "mesh", "convex"],
+                    "description": "Collider shape kind for set_collider_shape.",
+                ] as [String: Any],
+                "half_extents": [
+                    "type": "array", "items": ["type": "number"] as [String: Any],
+                    "description": "[x, y, z] box half-sizes in metres for set_collider_box_extents.",
+                ] as [String: Any],
+                "radius": [
+                    "type": "number",
+                    "description": "Sphere or capsule radius in metres for set_collider_sphere_radius or set_collider_capsule.",
+                ] as [String: Any],
+                "half_height": [
+                    "type": "number",
+                    "description": "Capsule half-height in metres for set_collider_capsule.",
+                ] as [String: Any],
+                "friction": [
+                    "type": "number",
+                    "description": "Collider surface friction (0–1) for set_collider_material.",
+                ] as [String: Any],
+                "restitution": [
+                    "type": "number",
+                    "description": "Collider bounciness (0–1) for set_collider_material.",
+                ] as [String: Any],
+                "density": [
+                    "type": "number",
+                    "description": "Collider material density for set_collider_material.",
+                ] as [String: Any],
+                "audio_clip": [
+                    "type": "string",
+                    "description": "Audio clip asset name (no extension) for set_audio_source.",
+                ] as [String: Any],
+                "audio_volume": [
+                    "type": "number",
+                    "description": "Playback volume 0–1 for set_audio_source.",
+                ] as [String: Any],
+                "audio_pitch": [
+                    "type": "number",
+                    "description": "Pitch multiplier (1=normal) for set_audio_source.",
+                ] as [String: Any],
+                "audio_loop": [
+                    "type": "boolean",
+                    "description": "Whether the clip loops for set_audio_source.",
+                ] as [String: Any],
+                "audio_play_on_awake": [
+                    "type": "boolean",
+                    "description": "Auto-play when the simulation starts for set_audio_source.",
+                ] as [String: Any],
+                "audio_spatial_blend": [
+                    "type": "number",
+                    "description": "0=2D, 1=3D positional audio for set_audio_source.",
+                ] as [String: Any],
             ] as [String: Any],
         ]
     }
