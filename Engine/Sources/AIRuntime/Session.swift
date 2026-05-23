@@ -541,6 +541,11 @@ public actor Session {
         if let v = e.audioVolume          { d["audioVolume"] = v }
         if let v = e.audioLoop            { d["audioLoop"] = v }
         if let v = e.audioPlayOnAwake     { d["audioPlayOnAwake"] = v }
+        if let v = e.meshIsVisible, !v  { d["meshIsVisible"] = false }
+        if let v = e.animationClip      { d["animationClip"] = v }
+        if let v = e.animationSpeed     { d["animationSpeed"] = v }
+        if let v = e.animationLoop      { d["animationLoop"] = v }
+        if let v = e.animationIsPlaying { d["animationIsPlaying"] = v }
         if let bindings = e.scriptBindings, !bindings.isEmpty {
             d["scriptBindings"] = bindings.map { b -> [String: Any] in
                 var entry: [String: Any] = ["handle": b.handle, "enabled": b.isEnabled]

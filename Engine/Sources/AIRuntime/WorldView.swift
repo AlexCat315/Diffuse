@@ -81,6 +81,13 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     public var audioVolume: Float?
     public var audioLoop: Bool?
     public var audioPlayOnAwake: Bool?
+    // Mesh visibility (authored) — nil means default true (visible)
+    public var meshIsVisible: Bool?
+    // Animation (authored)
+    public var animationClip: String?
+    public var animationSpeed: Float?
+    public var animationLoop: Bool?
+    public var animationIsPlaying: Bool?
     // Script bindings (authored)
     public var scriptBindings: [SceneSemanticSnapshot.ScriptBindingRecord]?
     // Selection state (not authored — updated by selectionChanged events)
@@ -161,6 +168,16 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
             if case let .bool(b) = value { audioLoop = b }
         case "audioPlayOnAwake":
             if case let .bool(b) = value { audioPlayOnAwake = b }
+        case "meshIsVisible":
+            if case let .bool(b) = value { meshIsVisible = b }
+        case "animationClip":
+            if case let .string(s) = value { animationClip = s.isEmpty ? nil : s }
+        case "animationSpeed":
+            if case let .float(f) = value { animationSpeed = f }
+        case "animationLoop":
+            if case let .bool(b) = value { animationLoop = b }
+        case "animationIsPlaying":
+            if case let .bool(b) = value { animationIsPlaying = b }
         default:
             break
         }
@@ -286,6 +303,11 @@ public struct WorldView: Sendable {
             record.audioVolume = e.audioVolume
             record.audioLoop = e.audioLoop
             record.audioPlayOnAwake = e.audioPlayOnAwake
+            record.meshIsVisible = e.meshIsVisible
+            record.animationClip = e.animationClip
+            record.animationSpeed = e.animationSpeed
+            record.animationLoop = e.animationLoop
+            record.animationIsPlaying = e.animationIsPlaying
             record.scriptBindings = e.scriptBindings
             if let wp = e.worldPosition {
                 record.evaluated["worldPosition"] = .vec3(wp[0], wp[1], wp[2])
