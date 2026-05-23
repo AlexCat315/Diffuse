@@ -24,6 +24,7 @@ let package = Package(
         .library(name: "AudioRuntime", targets: ["AudioRuntime"]),
         .library(name: "CapabilityRuntime", targets: ["CapabilityRuntime"]),
         .library(name: "IntentRuntime", targets: ["IntentRuntime"]),
+        .library(name: "PerceptionRuntime", targets: ["PerceptionRuntime"]),
         .library(name: "AIRuntime", targets: ["AIRuntime"]),
         .library(name: "ScriptRuntime", targets: ["ScriptRuntime"]),
         .library(name: "EngineCore", targets: ["EngineCore"]),
@@ -261,6 +262,16 @@ let package = Package(
             ]
         ),
         .target(
+            name: "PerceptionRuntime",
+            dependencies: [
+                "IntentRuntime",
+            ],
+            linkerSettings: [
+                .linkedFramework("Vision", .when(platforms: [.macOS])),
+                .linkedFramework("CoreImage", .when(platforms: [.macOS])),
+            ]
+        ),
+        .target(
             name: "ScriptRuntime",
             dependencies: [
                 "SIMDCompat",
@@ -405,6 +416,13 @@ let package = Package(
                 "SceneRuntime",
                 "ScriptRuntime",
                 "SequenceRuntime",
+            ]
+        ),
+        .testTarget(
+            name: "PerceptionRuntimeTests",
+            dependencies: [
+                "IntentRuntime",
+                "PerceptionRuntime",
             ]
         ),
         .testTarget(

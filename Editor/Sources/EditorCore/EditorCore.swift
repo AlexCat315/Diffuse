@@ -6,6 +6,7 @@ import EngineCore
 import EngineKernel
 import IntentRuntime
 import ObservationBus
+import PerceptionRuntime
 import RenderBackend
 import RHIWGPU
 import SceneRuntime
@@ -33,6 +34,7 @@ public final class EditorApplication: @unchecked Sendable {
     private let observationBus: ObservationBus
     private let intentCoordinator: IntentRuntimeCoordinator
     private let intentTransactionBuilder = IntentTransactionBuilder()
+    private let perceptionWorker = AppleVisionPerceptionWorker()
     private let events: PlatformEventBridge
     private var eventToken: PlatformEventBridge.SubscriptionToken?
     private var pendingViewportEvents: [InputEvent] = []
@@ -1058,6 +1060,8 @@ public final class EditorApplication: @unchecked Sendable {
             return mcpGetScene()
         case "execute_plan":
             return mcpExecutePlan(params: params)
+        case "analyze_image":
+            return mcpAnalyzeImage(params: params)
         case "get_selection":
             let ref = store.state.selectedEntityID.map { "scene:\($0)" }
             return ["ok": true, "selectedRef": ref as Any]
@@ -1092,6 +1096,75 @@ public final class EditorApplication: @unchecked Sendable {
               let json = try? JSONSerialization.jsonObject(with: data)
         else { return ["ok": false, "error": "scene encoding failed"] }
         return ["ok": true, "scene": json]
+    }
+
+    private func mcpAnalyzeImage(params: [String: Any]) -> [String: Any] {
+        guard let imagePath = params["image_path"] as? String, !imagePath.isEmpty else {
+            return ["ok": false, "error": "missing 'image_path' field"]
+        }
+        let maxResults = max(1, min((params["max_results"] as? Int) ?? 5, 20))
+        let targetRef = (params["entity_id"] as? String) ?? store.state.selectedEntityID.map { "scene:\($0)" }
+        guard let targetRef, !targetRef.isEmpty else {
+            return ["ok": false, "error": "missing target entity; pass entity_id or select an entity"]
+        }
+        guard let targetRawID = rawEntityID(fromSceneRef: targetRef),
+              let targetEntity = entityID(from: targetRawID),
+              scene.scene.contains(targetEntity)
+        else {
+            return ["ok": false, "error": "invalid target entity '\(targetRef)'"]
+        }
+
+        do {
+            let result = try perceptionWorker.analyzeImage(
+                at: URL(fileURLWithPath: imagePath),
+                requestID: UUID().uuidString,
+                maxResults: maxResults
+            )
+            let mapper = PerceptionWorldEventMapper()
+            let writeSet = mapper.makeWriteSet(from: result, targetRef: targetRef)
+            let events = mapper.makeWorldEvents(from: result, targetRef: targetRef)
+            let resultJSON = jsonObject(result) ?? [:]
+            let writeSetJSON = jsonObject(writeSet) ?? [:]
+            let sessionApplied = applyPerceptionEventsToSession(events)
+            store.dispatch(.setAIStatusMessage(
+                sessionApplied
+                    ? "Perception updated \(targetRef)"
+                    : "Perception ran; no AI session is active"
+            ))
+
+            return [
+                "ok": true,
+                "targetRef": targetRef,
+                "sessionApplied": sessionApplied,
+                "model": result.modelID,
+                "result": resultJSON,
+                "writeSet": writeSetJSON,
+            ]
+        } catch {
+            return ["ok": false, "error": error.localizedDescription]
+        }
+    }
+
+    private func applyPerceptionEventsToSession(_ events: [WorldEvent]) -> Bool {
+        guard let session, !events.isEmpty else { return false }
+        let semaphore = DispatchSemaphore(value: 0)
+        Task {
+            for event in events {
+                await session.observe(event: event)
+            }
+            semaphore.signal()
+        }
+        return semaphore.wait(timeout: .now() + 5) == .success
+    }
+
+    private func rawEntityID(fromSceneRef ref: String) -> UInt64? {
+        guard ref.hasPrefix("scene:") else { return nil }
+        return UInt64(ref.dropFirst("scene:".count))
+    }
+
+    private func jsonObject<T: Encodable>(_ value: T) -> Any? {
+        guard let data = try? JSONEncoder().encode(value) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data)
     }
 
     private func mcpExecutePlan(params: [String: Any]) -> [String: Any] {
