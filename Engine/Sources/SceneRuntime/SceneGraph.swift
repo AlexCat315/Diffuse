@@ -20,7 +20,7 @@ extension RuntimeWorld {
         return result
     }
 
-    /// All ancestors from `entity` up to the root (parent, grandparent, 鈥?.
+    /// All ancestors from `entity` up to the root (parent, grandparent, …).
     public func ancestors(of entity: EntityID) -> [EntityID] {
         guard contains(entity) else { return [] }
         var result: [EntityID] = []
