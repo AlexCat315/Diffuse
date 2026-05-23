@@ -69,28 +69,91 @@ public actor Session {
 
     // MARK: - Signal processing
 
-    /// Runs inference on a NaturalLanguage signal and returns a Proposal.
-    /// Use `observe()` for state-update signals.
+    /// Runs inference on a NaturalLanguage or UserCorrection signal and returns a Proposal.
+    /// Use `observe()` for state-update signals (selectionChanged, worldChanged).
     /// `onProgress` is called with partial summary text as it streams in — use it to animate the UI.
     public func process(_ signal: Signal,
                         onProgress: (@Sendable (String) -> Void)? = nil) async throws -> Proposal {
-        guard case let .naturalLanguage(text, _) = signal else {
+        switch signal {
+        case let .naturalLanguage(text, _):
+            recordTurn(ConversationTurn(kind: .userText(text)))
+            let (plan, toolUseID, inputJSON) = try await infer(onProgress: onProgress)
+            recordTurn(ConversationTurn(kind: .assistantToolCall(toolUseID: toolUseID,
+                                                                 name: "execute_edit_plan",
+                                                                 inputJSON: inputJSON)))
+            return Proposal(
+                sessionID: id,
+                semanticIntent: text,
+                plan: plan,
+                baseSceneRevision: worldView.sceneRevision,
+                reasoning: plan.reasoning,
+                confidence: 0.85,
+                approvalPolicy: .requiresApproval,
+                toolUseID: toolUseID
+            )
+
+        case let .userCorrection(proposalID, acceptedStepIDs, rejectedStepIDs):
+            return try await processCorrection(proposalID: proposalID,
+                                               acceptedStepIDs: acceptedStepIDs,
+                                               rejectedStepIDs: rejectedStepIDs,
+                                               onProgress: onProgress)
+
+        default:
             throw SessionError.unsupportedSignal(signal.kind)
         }
-        recordTurn(ConversationTurn(kind: .userText(text)))
-        let (plan, toolUseID, inputJSON) = try await infer(onProgress: onProgress)
-        recordTurn(ConversationTurn(kind: .assistantToolCall(toolUseID: toolUseID,
+    }
+
+    /// Handles a userCorrection signal: records the partial outcome as a tool_result,
+    /// then re-infers only when there are rejected steps that need revision.
+    private func processCorrection(proposalID: String,
+                                   acceptedStepIDs: [String],
+                                   rejectedStepIDs: [String],
+                                   onProgress: (@Sendable (String) -> Void)?) async throws -> Proposal {
+        // Find the most recent assistant tool call so we can close the conversation turn.
+        guard let callTurn = conversationHistory.last(where: {
+                  if case .assistantToolCall = $0.kind { return true }; return false }),
+              case let .assistantToolCall(toolUseID, _, _) = callTurn.kind
+        else { throw SessionError.unsupportedSignal("userCorrection: no prior plan in history") }
+
+        // Record the outcome so the model sees what happened.
+        let outcomeContent: String
+        if rejectedStepIDs.isEmpty {
+            outcomeContent = "All steps applied successfully."
+        } else if acceptedStepIDs.isEmpty {
+            outcomeContent = "Plan rejected entirely. Please propose a different approach."
+        } else {
+            let accepted = acceptedStepIDs.joined(separator: ", ")
+            let rejected = rejectedStepIDs.joined(separator: ", ")
+            outcomeContent = "Partial application. Accepted: [\(accepted)]. Rejected: [\(rejected)]. Revise the rejected steps."
+        }
+        recordTurn(ConversationTurn(kind: .toolResult(toolUseID: toolUseID, content: outcomeContent),
+                                    proposalID: proposalID))
+
+        // Nothing was rejected — no revision needed.
+        if rejectedStepIDs.isEmpty {
+            return Proposal(sessionID: id,
+                            semanticIntent: "",
+                            plan: SceneEditPlan(summary: "All steps accepted.", steps: []),
+                            baseSceneRevision: worldView.sceneRevision,
+                            confidence: 1.0,
+                            approvalPolicy: .automatic,
+                            toolUseID: toolUseID)
+        }
+
+        // Re-infer a revised plan for the rejected steps.
+        let (plan, newToolUseID, inputJSON) = try await infer(onProgress: onProgress)
+        recordTurn(ConversationTurn(kind: .assistantToolCall(toolUseID: newToolUseID,
                                                              name: "execute_edit_plan",
                                                              inputJSON: inputJSON)))
         return Proposal(
             sessionID: id,
-            semanticIntent: text,
+            semanticIntent: "Correction: \(rejectedStepIDs.count) step(s) to revise",
             plan: plan,
             baseSceneRevision: worldView.sceneRevision,
             reasoning: plan.reasoning,
             confidence: 0.85,
             approvalPolicy: .requiresApproval,
-            toolUseID: toolUseID
+            toolUseID: newToolUseID
         )
     }
 

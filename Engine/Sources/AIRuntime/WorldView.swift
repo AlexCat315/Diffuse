@@ -220,6 +220,8 @@ public struct WorldView: Sendable {
             record.lightIntensity = e.lightIntensity
             record.lightColor = e.lightColor
             record.lightRange = e.lightRange
+            record.lightSpotInner = e.lightSpotInner
+            record.lightSpotOuter = e.lightSpotOuter
             record.cameraFovYDegrees = e.cameraFovYDegrees
             record.cameraIsActive = e.cameraIsActive
             record.meshColor = e.meshColor
