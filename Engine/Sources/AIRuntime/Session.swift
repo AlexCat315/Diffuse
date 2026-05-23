@@ -414,6 +414,10 @@ public actor Session {
             parts.append("Recent edits (most recent last):\n\(lines)")
         }
 
+        if let mode = worldView.workflowMode {
+            parts.append("Active workflow mode: \(mode)")
+        }
+
         if !worldView.selectedEntityRefs.isEmpty {
             parts.append("Currently selected: \(worldView.selectedEntityRefs.joined(separator: ", "))")
         }
