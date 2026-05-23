@@ -61,6 +61,7 @@ public struct SceneSemanticEncoder: Sendable {
             if scene.hasComponent(RigidBody.self, for: entity)           { components.append("rigidbody") }
             if scene.hasComponent(Collider.self, for: entity)            { components.append("collider") }
             if scene.hasComponent(AudioSource.self, for: entity)         { components.append("audio_source") }
+            if scene.hasComponent(AnimationPlayer.self, for: entity)     { components.append("animation") }
             if scene.hasComponent(ScriptComponent.self, for: entity)    { components.append("script") }
 
             var lightType: String?
@@ -129,6 +130,22 @@ public struct SceneSemanticEncoder: Sendable {
                 audioPlayOnAwake = src.playOnAwake
             }
 
+            var meshIsVisible: Bool?
+            if let mesh = scene.component(RenderMeshComponent.self, for: entity), !mesh.isVisible {
+                meshIsVisible = false
+            }
+
+            var animationClip: String?
+            var animationSpeed: Float?
+            var animationLoop: Bool?
+            var animationIsPlaying: Bool?
+            if let anim = scene.component(AnimationPlayer.self, for: entity) {
+                animationClip = anim.clipName
+                if abs(anim.speed - 1.0) > 0.0001 { animationSpeed = anim.speed }
+                animationLoop = anim.loop
+                animationIsPlaying = anim.isPlaying
+            }
+
             var scriptBindings: [SceneSemanticSnapshot.ScriptBindingRecord]?
             if let sc = scene.component(ScriptComponent.self, for: entity), !sc.bindings.isEmpty {
                 scriptBindings = sc.bindings.map {
@@ -175,6 +192,11 @@ public struct SceneSemanticEncoder: Sendable {
                 audioVolume: audioVolume,
                 audioLoop: audioLoop,
                 audioPlayOnAwake: audioPlayOnAwake,
+                meshIsVisible: meshIsVisible,
+                animationClip: animationClip,
+                animationSpeed: animationSpeed,
+                animationLoop: animationLoop,
+                animationIsPlaying: animationIsPlaying,
                 scriptBindings: scriptBindings
             ))
         }
