@@ -14,6 +14,9 @@ public struct SessionConfig: Sendable {
     public var timeoutInterval: TimeInterval
     public var baseURL: URL
     public var apiFormat: SessionAPIFormat
+    /// When `true`, produced Proposals use `.automatic` approval — changes apply
+    /// immediately without a confirmation step. Default `false` (requires approval).
+    public var autoApprove: Bool
 
     public static let defaultModel          = "claude-sonnet-4-6"
     public static let defaultAnthropicModel = "claude-sonnet-4-6"
@@ -25,48 +28,56 @@ public struct SessionConfig: Sendable {
                 maxTokens: Int = 2048,
                 timeoutInterval: TimeInterval = 90,
                 baseURL: URL,
-                apiFormat: SessionAPIFormat) {
+                apiFormat: SessionAPIFormat,
+                autoApprove: Bool = false) {
         self.apiKey = apiKey
         self.model = model
         self.maxTokens = maxTokens
         self.timeoutInterval = timeoutInterval
         self.baseURL = baseURL
         self.apiFormat = apiFormat
+        self.autoApprove = autoApprove
     }
 
     public static func anthropic(apiKey: String,
                                   model: String = defaultAnthropicModel,
                                   maxTokens: Int = 2048,
-                                  timeoutInterval: TimeInterval = 90) -> SessionConfig {
+                                  timeoutInterval: TimeInterval = 90,
+                                  autoApprove: Bool = false) -> SessionConfig {
         SessionConfig(apiKey: apiKey,
                       model: model,
                       maxTokens: maxTokens,
                       timeoutInterval: timeoutInterval,
                       baseURL: URL(string: "https://api.anthropic.com")!,
-                      apiFormat: .anthropic)
+                      apiFormat: .anthropic,
+                      autoApprove: autoApprove)
     }
 
     public static func openAI(apiKey: String,
                                model: String = defaultOpenAIModel,
                                maxTokens: Int = 2048,
-                               timeoutInterval: TimeInterval = 90) -> SessionConfig {
+                               timeoutInterval: TimeInterval = 90,
+                               autoApprove: Bool = false) -> SessionConfig {
         SessionConfig(apiKey: apiKey,
                       model: model,
                       maxTokens: maxTokens,
                       timeoutInterval: timeoutInterval,
                       baseURL: URL(string: "https://api.openai.com")!,
-                      apiFormat: .openAICompatible)
+                      apiFormat: .openAICompatible,
+                      autoApprove: autoApprove)
     }
 
     public static func deepSeek(apiKey: String,
                                  model: String = defaultDeepSeekModel,
                                  maxTokens: Int = 2048,
-                                 timeoutInterval: TimeInterval = 90) -> SessionConfig {
+                                 timeoutInterval: TimeInterval = 90,
+                                 autoApprove: Bool = false) -> SessionConfig {
         SessionConfig(apiKey: apiKey,
                       model: model,
                       maxTokens: maxTokens,
                       timeoutInterval: timeoutInterval,
                       baseURL: URL(string: "https://api.deepseek.com")!,
-                      apiFormat: .openAICompatible)
+                      apiFormat: .openAICompatible,
+                      autoApprove: autoApprove)
     }
 }
