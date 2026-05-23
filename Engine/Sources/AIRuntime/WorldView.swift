@@ -51,6 +51,7 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     public var childRefs: [String]
     // Transform (authored)
     public var position: [Float]?       // [x, y, z] metres
+    public var scale: [Float]?          // [x, y, z]; nil when uniform 1,1,1
     // Light (authored)
     public var lightType: String?
     public var lightIntensity: Float?
@@ -107,6 +108,8 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
             if case let .string(s) = value { kind = s }
         case "position":
             if case let .vec3(x, y, z) = value { position = [x, y, z] }
+        case "scale":
+            if case let .vec3(x, y, z) = value { scale = [x, y, z] }
         case "parentRef":
             if case let .string(s) = value { parentRef = s.isEmpty ? nil : s }
         case "lightType":
@@ -254,6 +257,7 @@ public struct WorldView: Sendable {
             record.childRefs = e.childRefs
             record.isSelected = e.isSelected
             if let pos = e.position { record.position = pos }
+            if let s = e.scale { record.scale = s }
             record.lightType = e.lightType
             record.lightIntensity = e.lightIntensity
             record.lightColor = e.lightColor
