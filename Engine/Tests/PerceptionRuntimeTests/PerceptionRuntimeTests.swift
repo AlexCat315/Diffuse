@@ -44,7 +44,8 @@ final class PerceptionRuntimeTests: XCTestCase {
         XCTAssertEqual(events.first, .entityInferredUpdated(ref: "scene:1",
                                                             property: "object_category",
                                                             value: .string("chair"),
-                                                            confidence: 0.91))
+                                                            confidence: 0.91,
+                                                            source: "perception:fixture_classifier"))
     }
 
     func testAppleVisionWorkerRunsAgainstFixtureImage() throws {
