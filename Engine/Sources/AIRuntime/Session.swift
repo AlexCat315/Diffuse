@@ -100,7 +100,7 @@ public actor Session {
                 plan: plan,
                 baseSceneRevision: worldView.sceneRevision,
                 reasoning: plan.reasoning,
-                confidence: 0.85,
+                confidence: planConfidence(for: plan),
                 approvalPolicy: config.autoApprove ? .automatic : .requiresApproval,
                 toolUseID: toolUseID
             )
@@ -164,7 +164,7 @@ public actor Session {
             plan: plan,
             baseSceneRevision: worldView.sceneRevision,
             reasoning: plan.reasoning,
-            confidence: 0.85,
+            confidence: planConfidence(for: plan),
             approvalPolicy: config.autoApprove ? .automatic : .requiresApproval,
             toolUseID: newToolUseID
         )
@@ -563,6 +563,29 @@ public actor Session {
             }
         }
         return d
+    }
+
+    // MARK: - Confidence
+
+    private func planConfidence(for plan: SceneEditPlan) -> Double {
+        Session.confidence(for: plan)
+    }
+
+    /// Derives a confidence score for a plan.
+    ///
+    /// Starts at 1.0 and applies penalties:
+    /// - Each step beyond the first reduces confidence slightly (large plans are riskier).
+    /// - Destructive ops (delete, duplicate) apply a larger penalty.
+    /// - Empty plans (conversational response) are always 1.0.
+    static func confidence(for plan: SceneEditPlan) -> Double {
+        guard !plan.steps.isEmpty else { return 1.0 }
+        var score = 1.0
+        let destructive: Set<SceneEditOp> = [.deleteEntity, .duplicateEntity]
+        for (i, step) in plan.steps.enumerated() {
+            if i > 0 { score -= 0.03 }
+            if destructive.contains(step.op) { score -= 0.10 }
+        }
+        return max(0.50, score)
     }
 
     // MARK: - HTTP
