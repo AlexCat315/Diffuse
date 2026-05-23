@@ -34,6 +34,9 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         /// Local-space scale factors, or `nil` if no `LocalTransform`.
         public var scale: [Float]? = nil       // [x, y, z]; nil if uniform 1,1,1 or no transform
 
+        /// Local-space rotation in degrees (XYZ intrinsic Euler), or `nil` if no rotation or no transform.
+        public var eulerDegrees: [Float]? = nil // [x, y, z]; nil if all-zero
+
         /// World-space position in metres, computed from the full parent hierarchy.
         /// `nil` if the entity has no `LocalTransform`.
         public var worldPosition: [Float]? = nil  // [x, y, z]
