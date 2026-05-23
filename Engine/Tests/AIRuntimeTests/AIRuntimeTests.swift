@@ -184,6 +184,51 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(r?.audioLoop, true)
     }
 
+    func testSnapshotScriptBindingsCopiedToEntityRecord() {
+        let binding = SceneSemanticSnapshot.ScriptBindingRecord(
+            handle: 42,
+            isEnabled: true,
+            parametersJSON: "{\"speed\":5}"
+        )
+        let entity = SceneSemanticSnapshot.Entity(
+            id: "scene:20",
+            name: "Runner",
+            kind: "mesh",
+            parentRef: nil,
+            childRefs: [],
+            isSelected: false,
+            position: [0, 0, 0],
+            components: ["transform", "script"],
+            scriptBindings: [binding]
+        )
+        var worldView = WorldView()
+        worldView.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [entity]))
+
+        let r = worldView.entityIndex["scene:20"]
+        XCTAssertEqual(r?.scriptBindings?.count, 1)
+        XCTAssertEqual(r?.scriptBindings?.first?.handle, 42)
+        XCTAssertEqual(r?.scriptBindings?.first?.isEnabled, true)
+        XCTAssertEqual(r?.scriptBindings?.first?.parametersJSON, "{\"speed\":5}")
+    }
+
+    func testJSONValueDecoding() throws {
+        struct Wrapper: Decodable { var value: JSONValue }
+        let stringData = #"{"value":"hello"}"#.data(using: .utf8)!
+        let numberData = #"{"value":3.14}"#.data(using: .utf8)!
+        let boolData   = #"{"value":true}"#.data(using: .utf8)!
+
+        XCTAssertEqual(try JSONDecoder().decode(Wrapper.self, from: stringData).value, .string("hello"))
+        XCTAssertEqual(try JSONDecoder().decode(Wrapper.self, from: numberData).value, .number(3.14))
+        XCTAssertEqual(try JSONDecoder().decode(Wrapper.self, from: boolData).value, .bool(true))
+    }
+
+    func testJSONValueJsonFragment() {
+        XCTAssertEqual(JSONValue.string("hi").jsonFragment, "\"hi\"")
+        XCTAssertEqual(JSONValue.number(42).jsonFragment, "42")
+        XCTAssertEqual(JSONValue.number(3.5).jsonFragment, "3.5")
+        XCTAssertEqual(JSONValue.bool(false).jsonFragment, "false")
+    }
+
     func testSessionCanBeSeededFromAIWorldContext() async {
         let context = AIWorldContext()
         await context.observe(events: [

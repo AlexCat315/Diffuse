@@ -1,5 +1,6 @@
 import Foundation
 import SceneRuntime
+import ScriptRuntime
 import SIMDCompat
 
 /// Converts a live `SceneRuntime` into a `SceneSemanticSnapshot` for AI planning.
@@ -56,6 +57,7 @@ public struct SceneSemanticEncoder: Sendable {
             if scene.hasComponent(RigidBody.self, for: entity)           { components.append("rigidbody") }
             if scene.hasComponent(Collider.self, for: entity)            { components.append("collider") }
             if scene.hasComponent(AudioSource.self, for: entity)         { components.append("audio_source") }
+            if scene.hasComponent(ScriptComponent.self, for: entity)    { components.append("script") }
 
             var lightType: String?
             var lightIntensity: Float?
@@ -123,6 +125,17 @@ public struct SceneSemanticEncoder: Sendable {
                 audioPlayOnAwake = src.playOnAwake
             }
 
+            var scriptBindings: [SceneSemanticSnapshot.ScriptBindingRecord]?
+            if let sc = scene.component(ScriptComponent.self, for: entity), !sc.bindings.isEmpty {
+                scriptBindings = sc.bindings.map {
+                    SceneSemanticSnapshot.ScriptBindingRecord(
+                        handle: $0.script.rawValue,
+                        isEnabled: $0.isEnabled,
+                        parametersJSON: $0.parametersJSON
+                    )
+                }
+            }
+
             records.append(SceneSemanticSnapshot.Entity(
                 id: ref,
                 name: name,
@@ -156,7 +169,8 @@ public struct SceneSemanticEncoder: Sendable {
                 audioClip: audioClip,
                 audioVolume: audioVolume,
                 audioLoop: audioLoop,
-                audioPlayOnAwake: audioPlayOnAwake
+                audioPlayOnAwake: audioPlayOnAwake,
+                scriptBindings: scriptBindings
             ))
         }
 

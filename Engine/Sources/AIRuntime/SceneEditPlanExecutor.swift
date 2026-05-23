@@ -1,5 +1,6 @@
 ﻿import Foundation
 import SceneRuntime
+import ScriptRuntime
 import IntentRuntime
 import SIMDCompat
 
@@ -304,7 +305,48 @@ public struct SceneEditPlanExecutor: Sendable {
             if let poa   = step.audioPlayOnAwake  { source.playOnAwake = poa }
             if let blend = step.audioSpatialBlend { source.spatialBlend = blend }
             return [.setAudioSource(entityID: id, source: source)]
+
+        case .setScriptProperty:
+            let id = try resolveEntityID(step, scene: scene)
+            let eid = entityID(fromRaw: id)
+            guard let propName = step.scriptPropertyName, !propName.isEmpty else {
+                throw SceneEditPlanExecutorError.missingField(op: step.op, field: "script_property_name")
+            }
+            guard let propValue = step.scriptPropertyValue else {
+                throw SceneEditPlanExecutorError.missingField(op: step.op, field: "script_property_value")
+            }
+            let bindingIdx = step.scriptIndex ?? 0
+            var component = scene.component(ScriptComponent.self, for: eid) ?? ScriptComponent()
+            while component.bindings.count <= bindingIdx {
+                component.bindings.append(ScriptBinding(ScriptHandle(rawValue: 0)))
+            }
+            let updatedJSON = mergeScriptProperty(
+                into: component.bindings[bindingIdx].parametersJSON,
+                key: propName,
+                value: propValue
+            )
+            component.bindings[bindingIdx].parametersJSON = updatedJSON
+            return [.setScriptBindings(entityID: id, bindings: component.bindings)]
         }
+    }
+
+    // MARK: - Script helpers
+
+    private func mergeScriptProperty(into json: String, key: String, value: JSONValue) -> String {
+        guard let data = json.data(using: .utf8),
+              var dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            return "{\"\(key)\":\(value.jsonFragment)}"
+        }
+        switch value {
+        case .string(let s): dict[key] = s
+        case .number(let n): dict[key] = n
+        case .bool(let b):   dict[key] = b
+        }
+        guard let out = try? JSONSerialization.data(withJSONObject: dict),
+              let str = String(data: out, encoding: .utf8) else {
+            return "{\"\(key)\":\(value.jsonFragment)}"
+        }
+        return str
     }
 
     // MARK: - Entity ID resolution
