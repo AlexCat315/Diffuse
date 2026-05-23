@@ -426,6 +426,13 @@ let package = Package(
             ]
         ),
         .testTarget(
+            name: "AIRuntimeTests",
+            dependencies: [
+                "AIRuntime",
+                "IntentRuntime",
+            ]
+        ),
+        .testTarget(
             name: "ColorPipelineTests",
             dependencies: [
                 "ColorPipeline",

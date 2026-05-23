@@ -192,12 +192,13 @@ public struct WorldView: Sendable {
         case let .entityEvaluatedChanged(ref, property, value):
             entityIndex[ref, default: WorldEntityRecord(ref: ref)].evaluated[property] = value
 
-        case let .entityInferredUpdated(ref, property, value, confidence):
+        case let .entityInferredUpdated(ref, property, value, confidence, source):
             var record = entityIndex[ref, default: WorldEntityRecord(ref: ref)]
             // Only update inferred if it doesn't shadow an authored property.
             let inferred = InferredProperty(
                 displayValue: value.inferredDisplayValue,
-                confidence: confidence)
+                confidence: confidence,
+                source: source)
             record.inferred[property] = inferred
             entityIndex[ref] = record
         }

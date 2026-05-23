@@ -57,11 +57,12 @@ public actor Session {
     public init(id: String = UUID().uuidString,
                 config: SessionConfig,
                 urlSession: URLSession = .shared,
-                maxHistoryTurns: Int = 40) {
+                maxHistoryTurns: Int = 40,
+                initialWorldView: WorldView = WorldView()) {
         self.id = id
         self.config = config
         self.urlSession = urlSession
-        self.worldView = WorldView()
+        self.worldView = initialWorldView
         self.conversationHistory = []
         self.maxHistoryTurns = maxHistoryTurns
     }
@@ -113,6 +114,14 @@ public actor Session {
     /// Applies a fine-grained WorldEvent to the entity index (Phase 5 delta path).
     public func observe(event: WorldEvent) {
         worldView.apply(event: event)
+    }
+
+    public func replaceWorldView(_ worldView: WorldView) {
+        self.worldView = worldView
+    }
+
+    public func worldViewSnapshot() -> WorldView {
+        worldView
     }
 
     public func observe(editSummary: String, revision: UInt64) {

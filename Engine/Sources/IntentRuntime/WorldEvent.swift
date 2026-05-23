@@ -64,5 +64,9 @@ public enum WorldEvent: Sendable, Equatable {
     case entityEvaluatedChanged(ref: String, property: String, value: WorldPropertyValue)
     /// AI inferred a semantic property on an entity (e.g. role, mood, movement pattern).
     /// Emitted by the semantic pipeline or Session after analysing scene content.
-    case entityInferredUpdated(ref: String, property: String, value: WorldPropertyValue, confidence: Double)
+    case entityInferredUpdated(ref: String,
+                               property: String,
+                               value: WorldPropertyValue,
+                               confidence: Double,
+                               source: String?)
 }
