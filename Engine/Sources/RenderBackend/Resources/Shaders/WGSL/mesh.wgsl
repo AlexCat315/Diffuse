@@ -40,6 +40,7 @@ struct ShadowUniforms {
 @group(0) @binding(6) var shadow_sampler : sampler;
 @group(0) @binding(7) var shadow_texture : texture_2d<f32>;
 @group(0) @binding(8) var<storage, read> joint_palette : array<mat4x4<f32>>;
+@group(0) @binding(9) var normal_map_texture : texture_2d<f32>;
 
 struct VsIn {
     @location(0) pos            : vec3<f32>,
@@ -54,11 +55,13 @@ struct VsIn {
 
 struct VsOut {
     @builtin(position) position : vec4<f32>,
-    @location(0) color : vec3<f32>,
-    @location(1) normal : vec3<f32>,
-    @location(2) uv : vec2<f32>,
+    @location(0) color          : vec3<f32>,
+    @location(1) normal         : vec3<f32>,
+    @location(2) uv             : vec2<f32>,
     @location(3) material_index : f32,
-    @location(4) world_pos : vec3<f32>,
+    @location(4) world_pos      : vec3<f32>,
+    @location(5) tangent        : vec3<f32>,
+    @location(6) bitangent      : vec3<f32>,
 };
 
 @vertex
@@ -68,14 +71,21 @@ fn vs_main(in : VsIn) -> VsOut {
     let skin = skin_matrix(in.joints, in.weights);
     let local = skin * vec4<f32>(in.pos, 1.0);
     let world = u.model * local;
-    let normal = u.model * (skin * vec4<f32>(in.normal, 0.0));
+    let normal   = u.model * (skin * vec4<f32>(in.normal, 0.0));
+    let tangent  = u.model * (skin * vec4<f32>(in.tangent.xyz, 0.0));
 
-    out.position = u.mvp * local;
-    out.color = in.color;
-    out.normal = safe_normalize(normal.xyz);
-    out.uv = in.uv;
+    let N = safe_normalize(normal.xyz);
+    let T = safe_normalize(tangent.xyz);
+    let B = cross(N, T) * in.tangent.w;
+
+    out.position   = u.mvp * local;
+    out.color      = in.color;
+    out.normal     = N;
+    out.uv         = in.uv;
     out.material_index = in.material_index;
-    out.world_pos = world.xyz;
+    out.world_pos  = world.xyz;
+    out.tangent    = T;
+    out.bitangent  = B;
     return out;
 }
 
@@ -255,12 +265,19 @@ fn scene_lighting(normal : vec3<f32>, world_pos : vec3<f32>) -> vec3<f32> {
 
 @fragment
 fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
-    let normal = normalize(in.normal);
-    let rim = pow(1.0 - max(normal.z, 0.0), 2.0);
     let texel = textureSample(base_color_texture, base_color_sampler, in.uv);
-    let base = in.color * texel.rgb * u.color_tint.rgb;
+    let base  = in.color * texel.rgb * u.color_tint.rgb;
+
+    let nm_sample = textureSample(normal_map_texture, base_color_sampler, in.uv).rgb;
+    let tangent_n = nm_sample * 2.0 - 1.0;
+    let N = safe_normalize(in.normal);
+    let T = safe_normalize(in.tangent);
+    let B = safe_normalize(in.bitangent);
+    let normal = safe_normalize(mat3x3<f32>(T, B, N) * tangent_n);
+
+    let rim      = pow(1.0 - max(normal.z, 0.0), 2.0);
     let lighting = scene_lighting(normal, in.world_pos);
     let exposure = scene_lights.exposure_light_count.x;
-    let hdr = base * (lighting + rim * 0.18) * exposure;
+    let hdr      = base * (lighting + rim * 0.18) * exposure;
     return vec4<f32>(hdr, texel.a * u.color_tint.a);
 }
