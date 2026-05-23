@@ -67,6 +67,28 @@ final class PerceptionRuntimeTests: XCTestCase {
         #endif
     }
 
+    func testAnalyzeImageAsyncCallsThroughToSync() async throws {
+        let worker = MockPerceptionWorker(result: makeClassificationResult(label: "lamp", confidence: 0.77))
+        let url = URL(fileURLWithPath: "/dev/null")
+
+        let result = try await worker.analyzeImageAsync(at: url, requestID: "async_test", maxResults: 2)
+
+        XCTAssertEqual(worker.callCount, 1)
+        XCTAssertEqual(worker.lastRequestID, "async_test")
+        XCTAssertEqual(worker.lastMaxResults, 2)
+        XCTAssertEqual(result, worker.result)
+    }
+
+    func testAnalyzeImageAsyncDefaultParametersForwardCorrectly() async throws {
+        let worker = MockPerceptionWorker(result: makeClassificationResult(label: "table", confidence: 0.88))
+        let url = URL(fileURLWithPath: "/dev/null")
+
+        _ = try await worker.analyzeImageAsync(at: url)
+
+        XCTAssertEqual(worker.lastMaxResults, 5)
+        XCTAssertFalse(worker.lastRequestID.isEmpty)
+    }
+
     private func makeClassificationResult(label: String, confidence: Double) -> PerceptionResult {
         PerceptionResult(
             requestID: "request_1",
@@ -95,5 +117,38 @@ final class PerceptionRuntimeTests: XCTestCase {
             timing: PerceptionTimingInfo(totalMilliseconds: 1),
             provenance: PerceptionProvenance(source: "fixture", modelID: "fixture_classifier")
         )
+    }
+}
+
+private final class MockPerceptionWorker: PerceptionWorker, @unchecked Sendable {
+    let result: PerceptionResult
+    var callCount = 0
+    var lastRequestID = ""
+    var lastMaxResults = 0
+
+    init(result: PerceptionResult) { self.result = result }
+
+    var manifest: PerceptionModelManifest {
+        PerceptionModelManifest(
+            modelID: "mock",
+            displayName: "Mock",
+            task: .classification,
+            backendFamily: "test",
+            runtime: PerceptionRuntimeConfig(preferredRuntime: "none"),
+            inputContract: "",
+            outputContract: "",
+            license: PerceptionLicenseMetadata(
+                codeLicense: "MIT",
+                weightsLicense: "MIT",
+                commercialUse: "allowed",
+                redistribution: "allowed")
+        )
+    }
+
+    func analyzeImage(at url: URL, requestID: String, maxResults: Int) throws -> PerceptionResult {
+        callCount += 1
+        lastRequestID = requestID
+        lastMaxResults = maxResults
+        return result
     }
 }
