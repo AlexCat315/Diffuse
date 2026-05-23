@@ -34,6 +34,8 @@ public enum EditorAIProvider: String, Codable, Sendable, Equatable, CaseIterable
 public struct EditorAISettings: Codable, Sendable, Equatable {
     public var provider: EditorAIProvider
     public var model: String
+    /// When `true`, AI edit plans are applied immediately without a confirmation step.
+    public var autoApprove: Bool
 
     public static let `default` = EditorAISettings(
         provider: .none,
@@ -41,9 +43,20 @@ public struct EditorAISettings: Codable, Sendable, Equatable {
     )
 
     public init(provider: EditorAIProvider = .none,
-                model: String = SessionConfig.defaultAnthropicModel) {
+                model: String = SessionConfig.defaultAnthropicModel,
+                autoApprove: Bool = false) {
         self.provider = provider
         self.model = model
+        self.autoApprove = autoApprove
+    }
+
+    private enum CodingKeys: String, CodingKey { case provider, model, autoApprove }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        provider = try c.decodeIfPresent(EditorAIProvider.self, forKey: .provider) ?? .none
+        model = try c.decodeIfPresent(String.self, forKey: .model) ?? SessionConfig.defaultAnthropicModel
+        autoApprove = try c.decodeIfPresent(Bool.self, forKey: .autoApprove) ?? false
     }
 }
 
