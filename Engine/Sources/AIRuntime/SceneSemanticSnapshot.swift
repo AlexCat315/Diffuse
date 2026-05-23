@@ -41,6 +41,10 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         /// `nil` if the entity has no `LocalTransform`.
         public var worldPosition: [Float]? = nil  // [x, y, z]
 
+        /// World-space rotation in degrees (XYZ intrinsic Euler), computed from the full parent hierarchy.
+        /// `nil` if the entity has no `LocalTransform` or the world rotation is all-zero.
+        public var worldEulerDegrees: [Float]? = nil  // [x, y, z]
+
         /// Component type names present on this entity.
         /// Possible values: `"transform"`, `"mesh"`, `"light"`, `"camera"`, `"rigidbody"`, `"collider"`, `"script"`
         public var components: [String]

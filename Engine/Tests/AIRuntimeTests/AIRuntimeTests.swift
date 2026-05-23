@@ -184,6 +184,45 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(r?.audioLoop, true)
     }
 
+    func testSnapshotWorldEulerDegreesCopiedToEvaluatedDict() {
+        let entity = SceneSemanticSnapshot.Entity(
+            id: "scene:30",
+            name: "TiltedChild",
+            kind: "mesh",
+            parentRef: nil,
+            childRefs: [],
+            isSelected: false,
+            position: [0, 0, 0],
+            worldEulerDegrees: [30, 45, 0],
+            components: ["transform", "mesh"]
+        )
+        var worldView = WorldView()
+        worldView.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [entity]))
+
+        XCTAssertEqual(
+            worldView.entityIndex["scene:30"]?.evaluated["worldEulerDegrees"],
+            .vec3(30, 45, 0)
+        )
+    }
+
+    func testSnapshotWithoutWorldEulerDegreesLeavesEvaluatedEmpty() {
+        let entity = SceneSemanticSnapshot.Entity(
+            id: "scene:31",
+            name: "Upright",
+            kind: "mesh",
+            parentRef: nil,
+            childRefs: [],
+            isSelected: false,
+            position: [0, 0, 0],
+            worldEulerDegrees: nil,
+            components: ["transform", "mesh"]
+        )
+        var worldView = WorldView()
+        worldView.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [entity]))
+
+        XCTAssertNil(worldView.entityIndex["scene:31"]?.evaluated["worldEulerDegrees"])
+    }
+
     func testSnapshotScriptBindingsCopiedToEntityRecord() {
         let binding = SceneSemanticSnapshot.ScriptBindingRecord(
             handle: 42,
