@@ -1,3 +1,4 @@
+import IntentRuntime
 import SemanticPipeline
 import XCTest
 
@@ -153,5 +154,96 @@ final class SemanticPipelineTests: XCTestCase {
                                customProperties: ["rig_type": "biped", "lod_count": "3"])
         XCTAssertEqual(raw.customProperties["rig_type"], "biped")
         XCTAssertEqual(raw.customProperties["lod_count"], "3")
+    }
+
+    // MARK: - SemanticWorldEventMapper
+
+    func testMapperEmitsSemanticRoleFromMetadataProposal() {
+        let proposals = [
+            SemanticProposal(regionID: "region:n0", label: "door_handle",
+                             confidence: 0.95, source: "metadata", provenance: .structural),
+        ]
+        let events = SemanticWorldEventMapper().makeWorldEvents(from: proposals, targetRef: "scene:7")
+
+        XCTAssertFalse(events.isEmpty)
+        let roleEvent = events.first { event in
+            if case .entityInferredUpdated(_, "semanticRole", _, _, _) = event { return true }
+            return false
+        }
+        XCTAssertNotNil(roleEvent)
+        if case let .entityInferredUpdated(ref, property, value, confidence, source) = roleEvent! {
+            XCTAssertEqual(ref, "scene:7")
+            XCTAssertEqual(property, "semanticRole")
+            XCTAssertEqual(value, .string("door_handle"))
+            XCTAssertEqual(confidence, 0.95, accuracy: 0.001)
+            XCTAssertEqual(source, "semantic:metadata")
+        }
+    }
+
+    func testMapperEmitsSemanticPartsForMultipleProposals() {
+        let proposals = [
+            SemanticProposal(regionID: "region:n0", label: "seat",
+                             confidence: 0.80, source: "name_heuristic"),
+            SemanticProposal(regionID: "region:n1", label: "backrest",
+                             confidence: 0.75, source: "name_heuristic"),
+        ]
+        let events = SemanticWorldEventMapper().makeWorldEvents(from: proposals, targetRef: "scene:3")
+
+        let partsEvent = events.first { event in
+            if case .entityInferredUpdated(_, "semanticParts", _, _, _) = event { return true }
+            return false
+        }
+        XCTAssertNotNil(partsEvent)
+        if case let .entityInferredUpdated(_, _, value, _, _) = partsEvent! {
+            if case let .string(str) = value {
+                XCTAssertTrue(str.contains("seat"))
+                XCTAssertTrue(str.contains("backrest"))
+            } else { XCTFail("Expected string value") }
+        }
+    }
+
+    func testMapperEmitsRigPartsForRigBackendProposals() {
+        let proposals = [
+            SemanticProposal(regionID: "region:bone:b0", label: "head",
+                             confidence: 0.90, source: "rig"),
+            SemanticProposal(regionID: "region:bone:b1", label: "upper_arm",
+                             confidence: 0.90, source: "rig"),
+        ]
+        let events = SemanticWorldEventMapper().makeWorldEvents(from: proposals, targetRef: "scene:9")
+
+        let rigEvent = events.first { event in
+            if case .entityInferredUpdated(_, "rigParts", _, _, _) = event { return true }
+            return false
+        }
+        XCTAssertNotNil(rigEvent)
+        if case let .entityInferredUpdated(_, _, value, _, source) = rigEvent! {
+            if case let .string(str) = value {
+                XCTAssertTrue(str.contains("head"))
+            } else { XCTFail("Expected string value") }
+            XCTAssertEqual(source, "semantic:rig")
+        }
+    }
+
+    func testMapperReturnsEmptyForEmptyProposals() {
+        let events = SemanticWorldEventMapper().makeWorldEvents(from: [], targetRef: "scene:1")
+        XCTAssertTrue(events.isEmpty)
+    }
+
+    func testMapperPrefersConfirmedOverInferred() {
+        let proposals = [
+            SemanticProposal(regionID: "region:n0", label: "inferred_label",
+                             confidence: 0.99, source: "name_heuristic", provenance: .inferred),
+            SemanticProposal(regionID: "region:n0", label: "confirmed_label",
+                             confidence: 0.80, source: "user_confirmed", provenance: .confirmed),
+        ]
+        let events = SemanticWorldEventMapper().makeWorldEvents(from: proposals, targetRef: "scene:5")
+
+        let roleEvent = events.first {
+            if case .entityInferredUpdated(_, "semanticRole", _, _, _) = $0 { return true }
+            return false
+        }
+        if case let .entityInferredUpdated(_, _, value, _, _) = roleEvent! {
+            XCTAssertEqual(value, .string("confirmed_label"))
+        } else { XCTFail("Expected semanticRole event") }
     }
 }
