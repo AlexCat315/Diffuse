@@ -282,7 +282,7 @@ let package = Package(
                 "SceneRuntime",
             ]
         ),
-        .target(name: "SemanticPipeline"),
+        .target(name: "SemanticPipeline", dependencies: ["IntentRuntime"]),
         .target(
             name: "RenderBackend",
             dependencies: [
@@ -424,6 +424,7 @@ let package = Package(
         .testTarget(
             name: "SemanticPipelineTests",
             dependencies: [
+                "IntentRuntime",
                 "SemanticPipeline",
             ]
         ),
