@@ -83,6 +83,15 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         public var audioLoop: Bool?
         public var audioPlayOnAwake: Bool?
 
+        // Mesh visibility (authored) — nil means default true
+        public var meshIsVisible: Bool? = nil
+
+        // Animation extras — non-nil only when `"animation"` ∈ components
+        public var animationClip: String? = nil
+        public var animationSpeed: Float? = nil
+        public var animationLoop: Bool? = nil
+        public var animationIsPlaying: Bool? = nil
+
         // Script extras — non-nil only when `"script"` ∈ components
         public var scriptBindings: [ScriptBindingRecord]? = nil
     }

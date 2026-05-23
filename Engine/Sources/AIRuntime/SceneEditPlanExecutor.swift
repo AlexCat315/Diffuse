@@ -306,6 +306,25 @@ public struct SceneEditPlanExecutor: Sendable {
             if let blend = step.audioSpatialBlend { source.spatialBlend = blend }
             return [.setAudioSource(entityID: id, source: source)]
 
+        case .setMeshVisibility:
+            let id = try resolveEntityID(step, scene: scene)
+            guard let v = step.isVisible else {
+                throw SceneEditPlanExecutorError.missingField(op: step.op, field: "is_visible")
+            }
+            return [.setRenderMeshVisibility(entityID: id, isVisible: v)]
+
+        case .setAnimationPlayer:
+            let id = try resolveEntityID(step, scene: scene)
+            let eid = entityID(fromRaw: id)
+            var player = scene.component(AnimationPlayer.self, for: eid) ?? AnimationPlayer()
+            if let clip    = step.animationClip     { player.clipName = clip.isEmpty ? nil : clip }
+            if let speed   = step.animationSpeed    { player.speed = speed }
+            if let loop    = step.animationLoop     { player.loop = loop }
+            if let playing = step.animationIsPlaying { player.isPlaying = playing }
+            return [.setAnimationPlayer(entityID: id, clipName: player.clipName,
+                                        speed: player.speed, loop: player.loop,
+                                        isPlaying: player.isPlaying)]
+
         case .setScriptProperty:
             let id = try resolveEntityID(step, scene: scene)
             let eid = entityID(fromRaw: id)

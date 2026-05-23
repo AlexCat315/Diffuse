@@ -299,6 +299,62 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(Session.confidence(for: plan), 0.50)
     }
 
+    func testSnapshotAnimationFieldsCopiedToEntityRecord() {
+        let entity = SceneSemanticSnapshot.Entity(
+            id: "scene:40",
+            name: "Walker",
+            kind: "mesh",
+            parentRef: nil,
+            childRefs: [],
+            isSelected: false,
+            position: [0, 0, 0],
+            components: ["transform", "mesh", "animation"],
+            animationClip: "walk_cycle",
+            animationSpeed: 1.5,
+            animationLoop: true,
+            animationIsPlaying: false
+        )
+        var worldView = WorldView()
+        worldView.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [entity]))
+
+        let r = worldView.entityIndex["scene:40"]
+        XCTAssertEqual(r?.animationClip, "walk_cycle")
+        XCTAssertEqual(r?.animationSpeed, 1.5)
+        XCTAssertEqual(r?.animationLoop, true)
+        XCTAssertEqual(r?.animationIsPlaying, false)
+    }
+
+    func testSnapshotMeshIsVisibleFalseRecorded() {
+        let entity = SceneSemanticSnapshot.Entity(
+            id: "scene:41",
+            name: "HiddenMesh",
+            kind: "mesh",
+            parentRef: nil,
+            childRefs: [],
+            isSelected: false,
+            position: [0, 0, 0],
+            components: ["transform", "mesh"],
+            meshIsVisible: false
+        )
+        var worldView = WorldView()
+        worldView.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [entity]))
+
+        XCTAssertEqual(worldView.entityIndex["scene:41"]?.meshIsVisible, false)
+    }
+
+    func testEntityAuthoredChangedAnimationFieldsPopulateRecord() {
+        var worldView = WorldView()
+        worldView.apply(event: .entityAdded(ref: "scene:42", name: "Dancer", kind: "mesh"))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:42", property: "animationClip", value: .string("dance")))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:42", property: "animationIsPlaying", value: .bool(true)))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:42", property: "meshIsVisible", value: .bool(false)))
+
+        let r = worldView.entityIndex["scene:42"]
+        XCTAssertEqual(r?.animationClip, "dance")
+        XCTAssertEqual(r?.animationIsPlaying, true)
+        XCTAssertEqual(r?.meshIsVisible, false)
+    }
+
     func testSessionCanBeSeededFromAIWorldContext() async {
         let context = AIWorldContext()
         await context.observe(events: [

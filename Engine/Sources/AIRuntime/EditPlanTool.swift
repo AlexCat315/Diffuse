@@ -209,6 +209,26 @@ public enum EditPlanTool {
                 "script_property_value": [
                     "description": "The new value for the script parameter (string, number, or boolean). For set_script_property.",
                 ] as [String: Any],
+                "is_visible": [
+                    "type": "boolean",
+                    "description": "Whether the mesh is visible. For set_mesh_visibility.",
+                ] as [String: Any],
+                "animation_clip": [
+                    "type": "string",
+                    "description": "Animation clip name for set_animation_player. Empty string or omit to use the default clip.",
+                ] as [String: Any],
+                "animation_speed": [
+                    "type": "number",
+                    "description": "Playback speed multiplier (1=normal) for set_animation_player.",
+                ] as [String: Any],
+                "animation_loop": [
+                    "type": "boolean",
+                    "description": "Whether the animation loops for set_animation_player.",
+                ] as [String: Any],
+                "animation_is_playing": [
+                    "type": "boolean",
+                    "description": "Whether animation playback is active for set_animation_player.",
+                ] as [String: Any],
             ] as [String: Any],
         ]
     }

@@ -92,6 +92,12 @@ public enum SceneEditOp: String, Codable, Sendable, CaseIterable {
 
     // Script
     case setScriptProperty    = "set_script_property"
+
+    // Mesh visibility
+    case setMeshVisibility    = "set_mesh_visibility"
+
+    // Animation
+    case setAnimationPlayer   = "set_animation_player"
 }
 
 /// One atomic mutation step in a `SceneEditPlan`.
@@ -187,6 +193,15 @@ public struct SceneEditStep: Codable, Sendable {
     public var scriptPropertyName: String?
     public var scriptPropertyValue: JSONValue?
 
+    // set_mesh_visibility
+    public var isVisible: Bool?
+
+    // set_animation_player
+    public var animationClip: String?   // clip name; empty string or nil = use default
+    public var animationSpeed: Float?   // default 1.0
+    public var animationLoop: Bool?     // default true
+    public var animationIsPlaying: Bool?
+
     enum CodingKeys: String, CodingKey {
         case op
         case entityRef          = "entity_id"
@@ -227,6 +242,11 @@ public struct SceneEditStep: Codable, Sendable {
         case scriptIndex        = "script_index"
         case scriptPropertyName = "script_property_name"
         case scriptPropertyValue = "script_property_value"
+        case isVisible          = "is_visible"
+        case animationClip      = "animation_clip"
+        case animationSpeed     = "animation_speed"
+        case animationLoop      = "animation_loop"
+        case animationIsPlaying = "animation_is_playing"
     }
 }
 
