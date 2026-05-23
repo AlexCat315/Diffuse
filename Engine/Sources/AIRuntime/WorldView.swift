@@ -224,6 +224,9 @@ public struct WorldView: Sendable {
             record.cameraIsActive = e.cameraIsActive
             record.meshColor = e.meshColor
             record.rigidBodyMotionType = e.rigidBodyMotionType
+            if let wp = e.worldPosition {
+                record.evaluated["worldPosition"] = .vec3(wp[0], wp[1], wp[2])
+            }
             entityIndex[e.id] = record
         }
         sceneRevision = snapshot.sceneRevision

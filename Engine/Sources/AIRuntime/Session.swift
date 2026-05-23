@@ -116,6 +116,11 @@ public actor Session {
         worldView.apply(event: event)
     }
 
+    /// Applies a batch of WorldEvents in order.
+    public func observe(events: [WorldEvent]) {
+        for event in events { worldView.apply(event: event) }
+    }
+
     public func replaceWorldView(_ worldView: WorldView) {
         self.worldView = worldView
     }
@@ -468,8 +473,15 @@ public actor Session {
 
     private func recordTurn(_ turn: ConversationTurn) {
         conversationHistory.append(turn)
-        if conversationHistory.count > maxHistoryTurns {
-            conversationHistory.removeFirst(conversationHistory.count - maxHistoryTurns)
+        // Remove complete interaction triples (userText + assistantToolCall + toolResult)
+        // from the front so we never leave an orphaned tool call at the start of the message list.
+        while conversationHistory.count > maxHistoryTurns {
+            if conversationHistory.count >= 3,
+               case .userText = conversationHistory[0].kind {
+                conversationHistory.removeFirst(3)
+            } else {
+                conversationHistory.removeFirst()
+            }
         }
     }
 }
