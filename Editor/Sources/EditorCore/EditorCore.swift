@@ -1169,9 +1169,7 @@ public final class EditorApplication: @unchecked Sendable {
         Task {
             await worldContext.observe(events: events)
             if let session {
-                for event in events {
-                    await session.observe(event: event)
-                }
+                await session.observe(events: events)
             }
         }
     }
@@ -1190,9 +1188,7 @@ public final class EditorApplication: @unchecked Sendable {
             await worldContext.observe(events: events)
             state.localApplied = true
             if let session {
-                for event in events {
-                    await session.observe(event: event)
-                }
+                await session.observe(events: events)
                 state.sessionApplied = true
             }
             semaphore.signal()

@@ -53,11 +53,17 @@ public struct SceneSemanticEncoder: Sendable {
             var lightIntensity: Float?
             var lightColor: [Float]?
             var lightRange: Float?
+            var lightSpotInner: Float?
+            var lightSpotOuter: Float?
             if let lc = scene.component(LightComponent.self, for: entity) {
                 lightType = lc.type.rawValue
                 lightIntensity = lc.intensity
                 lightColor = [lc.color.x, lc.color.y, lc.color.z]
                 lightRange = lc.range
+                if lc.type == .spot {
+                    lightSpotInner = lc.spotInnerAngleDegrees
+                    lightSpotOuter = lc.spotOuterAngleDegrees
+                }
             }
 
             var cameraFovYDegrees: Float?
@@ -123,6 +129,8 @@ public struct SceneSemanticEncoder: Sendable {
                 lightIntensity: lightIntensity,
                 lightColor: lightColor,
                 lightRange: lightRange,
+                lightSpotInner: lightSpotInner,
+                lightSpotOuter: lightSpotOuter,
                 cameraFovYDegrees: cameraFovYDegrees,
                 cameraIsActive: cameraIsActive,
                 meshColor: meshColor,
