@@ -18,7 +18,7 @@ public struct ViewTransform: Sendable {
 
     public func ocioDescription(bridge: OCIOBridge?) -> String {
         guard let bridge, bridge.isAvailable else {
-            return "sRGB (passthrough 鈥?OCIO unavailable)"
+            return "sRGB (passthrough — OCIO unavailable)"
         }
         let fromSpace = config.workingSpace.rawValue
         let toSpace = config.displayTransform.rawValue
