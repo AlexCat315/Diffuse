@@ -81,6 +81,8 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     public var audioVolume: Float?
     public var audioLoop: Bool?
     public var audioPlayOnAwake: Bool?
+    // Script bindings (authored)
+    public var scriptBindings: [SceneSemanticSnapshot.ScriptBindingRecord]?
     // Selection state (not authored — updated by selectionChanged events)
     public var isSelected: Bool
 
@@ -284,6 +286,7 @@ public struct WorldView: Sendable {
             record.audioVolume = e.audioVolume
             record.audioLoop = e.audioLoop
             record.audioPlayOnAwake = e.audioPlayOnAwake
+            record.scriptBindings = e.scriptBindings
             if let wp = e.worldPosition {
                 record.evaluated["worldPosition"] = .vec3(wp[0], wp[1], wp[2])
             }

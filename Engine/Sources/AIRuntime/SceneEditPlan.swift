@@ -1,5 +1,46 @@
 import Foundation
 
+/// A JSON-typed value that can be a string, number, or boolean.
+/// Used for `set_script_property` where the AI sets a typed script parameter.
+public enum JSONValue: Codable, Sendable, Equatable {
+    case string(String)
+    case number(Double)
+    case bool(Bool)
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if let b = try? c.decode(Bool.self) { self = .bool(b); return }
+        if let n = try? c.decode(Double.self) { self = .number(n); return }
+        let s = try c.decode(String.self)
+        self = .string(s)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case .string(let s): try c.encode(s)
+        case .number(let n): try c.encode(n)
+        case .bool(let b):   try c.encode(b)
+        }
+    }
+
+    /// Returns the value as its JSON representation for embedding in a JSON object.
+    public var jsonFragment: String {
+        switch self {
+        case .string(let s):
+            let escaped = s
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+            return "\"\(escaped)\""
+        case .number(let n):
+            return n.truncatingRemainder(dividingBy: 1) == 0
+                ? String(format: "%.0f", n)
+                : String(n)
+        case .bool(let b): return b ? "true" : "false"
+        }
+    }
+}
+
 /// Operations Claude can request in a `SceneEditStep`.
 /// Each raw value is the JSON `"op"` string Claude returns.
 public enum SceneEditOp: String, Codable, Sendable, CaseIterable {
@@ -48,6 +89,9 @@ public enum SceneEditOp: String, Codable, Sendable, CaseIterable {
 
     // Audio
     case setAudioSource       = "set_audio_source"
+
+    // Script
+    case setScriptProperty    = "set_script_property"
 }
 
 /// One atomic mutation step in a `SceneEditPlan`.
@@ -138,6 +182,11 @@ public struct SceneEditStep: Codable, Sendable {
     public var audioPlayOnAwake: Bool?
     public var audioSpatialBlend: Float?
 
+    // set_script_property
+    public var scriptIndex: Int?        // binding index, default 0
+    public var scriptPropertyName: String?
+    public var scriptPropertyValue: JSONValue?
+
     enum CodingKeys: String, CodingKey {
         case op
         case entityRef          = "entity_id"
@@ -175,6 +224,9 @@ public struct SceneEditStep: Codable, Sendable {
         case audioLoop          = "audio_loop"
         case audioPlayOnAwake   = "audio_play_on_awake"
         case audioSpatialBlend  = "audio_spatial_blend"
+        case scriptIndex        = "script_index"
+        case scriptPropertyName = "script_property_name"
+        case scriptPropertyValue = "script_property_value"
     }
 }
 
