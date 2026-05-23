@@ -35,6 +35,32 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(record?.inferred["object_category"]?.source, "perception:apple_vision_classify_image_v1")
     }
 
+    func testSnapshotScaleCopiedToEntityRecord() {
+        let entity = SceneSemanticSnapshot.Entity(
+            id: "scene:7",
+            name: "BigBox",
+            kind: "mesh",
+            parentRef: nil,
+            childRefs: [],
+            isSelected: false,
+            position: [0, 0, 0],
+            scale: [2, 3, 0.5],
+            components: ["transform", "mesh"]
+        )
+        var worldView = WorldView()
+        worldView.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [entity]))
+
+        XCTAssertEqual(worldView.entityIndex["scene:7"]?.scale, [2, 3, 0.5])
+    }
+
+    func testEntityAuthoredScaleEventPopulatesRecord() {
+        var worldView = WorldView()
+        worldView.apply(event: .entityAdded(ref: "scene:8", name: "Crate", kind: "mesh"))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:8", property: "scale", value: .vec3(2, 2, 2)))
+
+        XCTAssertEqual(worldView.entityIndex["scene:8"]?.scale, [2, 2, 2])
+    }
+
     func testSnapshotWorldPositionPopulatesEvaluatedDict() {
         let entity = SceneSemanticSnapshot.Entity(
             id: "scene:1",

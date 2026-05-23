@@ -472,6 +472,7 @@ public actor Session {
         if let v = e.parentRef          { d["parentRef"] = v }
         if !e.childRefs.isEmpty         { d["childRefs"] = e.childRefs }
         if let v = e.position           { d["position"] = v }
+        if let v = e.scale              { d["scale"] = v }
         if let v = e.lightType          { d["lightType"] = v }
         if let v = e.lightIntensity     { d["lightIntensity"] = v }
         if let v = e.lightColor         { d["lightColor"] = v }

@@ -32,10 +32,14 @@ public struct SceneSemanticEncoder: Sendable {
             let childRefs = scene.children(of: entity).map { "scene:\(rawID($0))" }
 
             var position: [Float]?
+            var scale: [Float]?
             var worldPosition: [Float]?
             if let lt = scene.localTransform(for: entity) {
                 let t = lt.translation
                 position = [t.x, t.y, t.z]
+                let s = extractScale(lt.matrix)
+                let isUniformOne = abs(s.x - 1) < 0.0001 && abs(s.y - 1) < 0.0001 && abs(s.z - 1) < 0.0001
+                if !isUniformOne { scale = [s.x, s.y, s.z] }
                 let wm = worldMatrix(scene, entity: entity)
                 worldPosition = [wm.columns.3.x, wm.columns.3.y, wm.columns.3.z]
             }
@@ -123,6 +127,7 @@ public struct SceneSemanticEncoder: Sendable {
                 childRefs: childRefs,
                 isSelected: selectedRef == ref,
                 position: position,
+                scale: scale,
                 worldPosition: worldPosition,
                 components: components,
                 lightType: lightType,
@@ -179,6 +184,14 @@ public struct SceneSemanticEncoder: Sendable {
 
     private func rawID(_ entity: EntityID) -> UInt64 {
         UInt64(entity.index) | (UInt64(entity.generation) << 32)
+    }
+
+    private func extractScale(_ m: simd_float4x4) -> SIMD3<Float> {
+        SIMD3(
+            length(SIMD3(m.columns.0.x, m.columns.0.y, m.columns.0.z)),
+            length(SIMD3(m.columns.1.x, m.columns.1.y, m.columns.1.z)),
+            length(SIMD3(m.columns.2.x, m.columns.2.y, m.columns.2.z))
+        )
     }
 
     /// Recursively computes the world-space transform by walking up the parent chain.
