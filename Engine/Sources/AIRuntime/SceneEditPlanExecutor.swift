@@ -47,7 +47,7 @@ public struct SceneEditPlanExecutor: Sendable {
     ///
     /// - Parameters:
     ///   - plan: Decoded AI plan.
-    ///   - scene: Live scene runtime 鈥?used to read current transforms and validate entity IDs.
+    ///   - scene: Live scene runtime — used to read current transforms and validate entity IDs.
     ///   - baseSceneRevision: Revision at which the AI generated the plan. Passing the
     ///     snapshot's revision prevents applying a plan against a scene that changed while
     ///     the API call was in flight. Pass `nil` to skip the revision check.
