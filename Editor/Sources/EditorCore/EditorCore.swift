@@ -35,7 +35,7 @@ public final class EditorApplication: @unchecked Sendable {
     private let intentCoordinator: IntentRuntimeCoordinator
     private let intentTransactionBuilder = IntentTransactionBuilder()
     private let aiWorldContext: AIWorldContext
-    private let perceptionWorker = AppleVisionPerceptionWorker()
+    private let perceptionService: PerceptionService
     private let events: PlatformEventBridge
     private var eventToken: PlatformEventBridge.SubscriptionToken?
     private var pendingViewportEvents: [InputEvent] = []
@@ -90,6 +90,7 @@ public final class EditorApplication: @unchecked Sendable {
         let initialSession = EditorApplication.makeSession(for: initialAISettings,
                                                            initialWorldView: initialWorldView)
 
+        let ps = PerceptionService()
         self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: resolvedBackend)
         self.projectDirectory = projectDirectory
         self.store = store
@@ -101,6 +102,10 @@ public final class EditorApplication: @unchecked Sendable {
         self.events = events
         self.editLog = EditLog(projectDirectory: projectDirectory)
         self.session = initialSession
+        self.perceptionService = ps
+        #if canImport(Vision)
+        Task { await ps.register(AppleVisionPerceptionWorker()) }
+        #endif
 
         scene.onRevisionChanged = { revision in
             store.dispatch(.setSceneRevision(revision))
@@ -217,6 +222,26 @@ public final class EditorApplication: @unchecked Sendable {
         store.dispatch(.setSelectedEntity(id))
         logConsole("Spawned \(asset.name)", detail: "entity \(id)")
         return id
+    }
+
+    /// Runs visual perception on `imageURL` and injects the resulting inferred properties
+    /// into the World and the active Session for the given entity.
+    /// Call this from the UI or MCP after the user selects a reference image for an entity.
+    public func tagEntity(_ entityRef: String, imageURL: URL) {
+        let ps = perceptionService
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let events = try await ps.tag(entityRef: entityRef, imageURL: imageURL)
+                self.observeWorldEvents(events)
+                self.logConsole("Tagged \(entityRef)",
+                                detail: "\(events.count) inferred properties")
+            } catch {
+                self.logConsole("Perception unavailable for \(entityRef)",
+                                severity: .warning,
+                                detail: error.localizedDescription)
+            }
+        }
     }
 
     /// 澶勭悊 AssetBrowser 鍦ㄨ鍙ｅ唴鏀句笅璧勪骇鐨勪簨浠躲€傚鏋滃綋鍓嶅厜鏍囧潗鏍?
@@ -1119,36 +1144,39 @@ public final class EditorApplication: @unchecked Sendable {
             return ["ok": false, "error": "invalid target entity '\(targetRef)'"]
         }
 
-        do {
-            let result = try perceptionWorker.analyzeImage(
-                at: URL(fileURLWithPath: imagePath),
-                requestID: UUID().uuidString,
-                maxResults: maxResults
-            )
-            let mapper = PerceptionWorldEventMapper()
-            let writeSet = mapper.makeWriteSet(from: result, targetRef: targetRef)
-            let events = mapper.makeWorldEvents(from: result, targetRef: targetRef)
-            let resultJSON = jsonObject(result) ?? [:]
-            let writeSetJSON = jsonObject(writeSet) ?? [:]
-            let applicationResult = applyWorldEventsSynchronously(events)
-            store.dispatch(.setAIStatusMessage(
-                applicationResult.localApplied
-                    ? "Perception updated \(targetRef)"
-                    : "Perception ran; no AI world update was applied"
-            ))
-
-            return [
-                "ok": true,
-                "targetRef": targetRef,
-                "worldApplied": applicationResult.localApplied,
-                "sessionApplied": applicationResult.sessionApplied,
-                "model": result.modelID,
-                "result": resultJSON,
-                "writeSet": writeSetJSON,
-            ]
-        } catch {
-            return ["ok": false, "error": error.localizedDescription]
+        let ps = perceptionService
+        let semaphore = DispatchSemaphore(value: 0)
+        final class MCPState: @unchecked Sendable {
+            var result: [String: Any] = [:]
         }
+        let state = MCPState()
+        Task {
+            do {
+                let events = try await ps.tag(entityRef: targetRef,
+                                              imageURL: URL(fileURLWithPath: imagePath),
+                                              maxResults: maxResults)
+                let applicationResult = self.applyWorldEventsSynchronously(events)
+                self.store.dispatch(.setAIStatusMessage(
+                    applicationResult.localApplied
+                        ? "Perception updated \(targetRef)"
+                        : "Perception ran; no AI world update was applied"
+                ))
+                state.result = [
+                    "ok": true,
+                    "targetRef": targetRef,
+                    "worldApplied": applicationResult.localApplied,
+                    "sessionApplied": applicationResult.sessionApplied,
+                    "events": events.count,
+                ]
+            } catch {
+                state.result = ["ok": false, "error": error.localizedDescription]
+            }
+            semaphore.signal()
+        }
+        guard semaphore.wait(timeout: .now() + 10) == .success else {
+            return ["ok": false, "error": "perception timed out"]
+        }
+        return state.result
     }
 
     private func mcpGetAIEntity(params: [String: Any]) -> [String: Any] {
