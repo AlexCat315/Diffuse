@@ -48,4 +48,29 @@ public extension PerceptionWorker {
             try worker.analyzeImage(at: url, requestID: requestID, maxResults: maxResults)
         }.value
     }
+
+    /// Full-contract entry point via `PerceptionRequest`. Validates the input URI
+    /// and delegates to `analyzeImage(at:requestID:maxResults:)`.
+    func handle(request: PerceptionRequest) throws -> PerceptionResult {
+        let url: URL
+        if request.inputURI.hasPrefix("file://") {
+            url = URL(string: request.inputURI)
+                ?? URL(fileURLWithPath: String(request.inputURI.dropFirst(7)))
+        } else {
+            url = URL(fileURLWithPath: request.inputURI)
+        }
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw PerceptionRuntimeError.fileNotFound(url.path)
+        }
+        return try analyzeImage(at: url,
+                                requestID: request.requestID,
+                                maxResults: request.maxResults)
+    }
+
+    func handleAsync(request: PerceptionRequest) async throws -> PerceptionResult {
+        let worker = self
+        return try await Task.detached(priority: .userInitiated) {
+            try worker.handle(request: request)
+        }.value
+    }
 }
