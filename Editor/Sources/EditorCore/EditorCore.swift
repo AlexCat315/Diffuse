@@ -34,6 +34,7 @@ public final class EditorApplication: @unchecked Sendable {
     private let observationBus: ObservationBus
     private let intentCoordinator: IntentRuntimeCoordinator
     private let intentTransactionBuilder = IntentTransactionBuilder()
+    private let aiWorldContext: AIWorldContext
     private let perceptionWorker = AppleVisionPerceptionWorker()
     private let events: PlatformEventBridge
     private var eventToken: PlatformEventBridge.SubscriptionToken?
@@ -77,7 +78,17 @@ public final class EditorApplication: @unchecked Sendable {
         // EditorShellState by the caller) and the matching key in Keychain.
         store.dispatch(.setAISettings(initialAISettings))
         store.dispatch(.setCapabilitySettings(initialCapabilitySettings))
-        let initialSession = EditorApplication.makeSession(for: initialAISettings)
+        let initialSelectedEntityID = scene.defaultSelectionID
+        let initialSnapshot = SceneSemanticEncoder().encode(
+            scene.scene,
+            selectedEntityID: initialSelectedEntityID,
+            workspaceMode: store.state.workspaceMode.rawValue,
+            localeIdentifier: nil
+        )
+        var initialWorldView = WorldView()
+        initialWorldView.apply(snapshot: initialSnapshot)
+        let initialSession = EditorApplication.makeSession(for: initialAISettings,
+                                                           initialWorldView: initialWorldView)
 
         self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: resolvedBackend)
         self.projectDirectory = projectDirectory
@@ -86,26 +97,16 @@ public final class EditorApplication: @unchecked Sendable {
         self.scene = scene
         self.observationBus = observationBus
         self.intentCoordinator = intentCoordinator
+        self.aiWorldContext = AIWorldContext(worldView: initialWorldView)
         self.events = events
         self.editLog = EditLog(projectDirectory: projectDirectory)
         self.session = initialSession
-
-        // Bootstrap the session's entity index from the live scene.
-        if let initialSession {
-            let snapshot = SceneSemanticEncoder().encode(
-                scene.scene,
-                selectedEntityID: store.state.selectedEntityID,
-                workspaceMode: store.state.workspaceMode.rawValue,
-                localeIdentifier: nil
-            )
-            Task { await initialSession.observe(snapshot: snapshot) }
-        }
 
         scene.onRevisionChanged = { revision in
             store.dispatch(.setSceneRevision(revision))
         }
         store.dispatch(.setSceneRevision(scene.revision))
-        if let selection = scene.defaultSelectionID {
+        if let selection = initialSelectedEntityID {
             store.dispatch(.setSelectedEntity(selection))
         }
 
@@ -848,13 +849,10 @@ public final class EditorApplication: @unchecked Sendable {
         pendingAssistantMessageID = nil
         let newSession = Self.makeSession(for: settings)
         if let newSession {
-            let snapshot = SceneSemanticEncoder().encode(
-                scene.scene,
-                selectedEntityID: store.state.selectedEntityID,
-                workspaceMode: store.state.workspaceMode.rawValue,
-                localeIdentifier: store.state.language.lprojName
-            )
-            Task { await newSession.observe(snapshot: snapshot) }
+            let worldContext = self.aiWorldContext
+            Task {
+                await newSession.replaceWorldView(await worldContext.snapshot())
+            }
         }
         session = newSession
     }
@@ -880,19 +878,23 @@ public final class EditorApplication: @unchecked Sendable {
         AIKeychain.hasKey(for: store.state.aiSettings.provider)
     }
 
-    static func makeSession(for settings: EditorAISettings) -> Session? {
+    static func makeSession(for settings: EditorAISettings,
+                            initialWorldView: WorldView = WorldView()) -> Session? {
         switch settings.provider {
         case .none:
             return nil
         case .anthropic:
             guard let key = AIKeychain.load(provider: .anthropic) else { return nil }
-            return Session(config: .anthropic(apiKey: key, model: settings.model))
+            return Session(config: .anthropic(apiKey: key, model: settings.model),
+                           initialWorldView: initialWorldView)
         case .openai:
             guard let key = AIKeychain.load(provider: .openai) else { return nil }
-            return Session(config: .openAI(apiKey: key, model: settings.model))
+            return Session(config: .openAI(apiKey: key, model: settings.model),
+                           initialWorldView: initialWorldView)
         case .deepseek:
             guard let key = AIKeychain.load(provider: .deepseek) else { return nil }
-            return Session(config: .deepSeek(apiKey: key, model: settings.model))
+            return Session(config: .deepSeek(apiKey: key, model: settings.model),
+                           initialWorldView: initialWorldView)
         }
     }
 
@@ -971,12 +973,9 @@ public final class EditorApplication: @unchecked Sendable {
                     pendingSessionProposal = nil
                 }
                 editLog.append(edit)
-                // Feed WorldEvents to keep Session's entity index current (Phase 5 delta path).
-                if let session, let events = result.applyResult?.worldEvents, !events.isEmpty {
-                    Task {
-                        for event in events { await session.observe(event: event) }
-                    }
-                }
+            }
+            if let events = result.applyResult?.worldEvents, !events.isEmpty {
+                observeWorldEvents(events)
             }
         case .confirmationRequested:
             store.dispatch(.setPendingConfirmationRequest(result.confirmationRequest))
@@ -1062,6 +1061,8 @@ public final class EditorApplication: @unchecked Sendable {
             return mcpExecutePlan(params: params)
         case "analyze_image":
             return mcpAnalyzeImage(params: params)
+        case "get_ai_entity":
+            return mcpGetAIEntity(params: params)
         case "get_selection":
             let ref = store.state.selectedEntityID.map { "scene:\($0)" }
             return ["ok": true, "selectedRef": ref as Any]
@@ -1125,17 +1126,18 @@ public final class EditorApplication: @unchecked Sendable {
             let events = mapper.makeWorldEvents(from: result, targetRef: targetRef)
             let resultJSON = jsonObject(result) ?? [:]
             let writeSetJSON = jsonObject(writeSet) ?? [:]
-            let sessionApplied = applyPerceptionEventsToSession(events)
+            let applicationResult = applyWorldEventsSynchronously(events)
             store.dispatch(.setAIStatusMessage(
-                sessionApplied
+                applicationResult.localApplied
                     ? "Perception updated \(targetRef)"
-                    : "Perception ran; no AI session is active"
+                    : "Perception ran; no AI world update was applied"
             ))
 
             return [
                 "ok": true,
                 "targetRef": targetRef,
-                "sessionApplied": sessionApplied,
+                "worldApplied": applicationResult.localApplied,
+                "sessionApplied": applicationResult.sessionApplied,
                 "model": result.modelID,
                 "result": resultJSON,
                 "writeSet": writeSetJSON,
@@ -1145,16 +1147,75 @@ public final class EditorApplication: @unchecked Sendable {
         }
     }
 
-    private func applyPerceptionEventsToSession(_ events: [WorldEvent]) -> Bool {
-        guard let session, !events.isEmpty else { return false }
-        let semaphore = DispatchSemaphore(value: 0)
+    private func mcpGetAIEntity(params: [String: Any]) -> [String: Any] {
+        let targetRef = (params["entity_id"] as? String) ?? store.state.selectedEntityID.map { "scene:\($0)" }
+        guard let targetRef, !targetRef.isEmpty else {
+            return ["ok": false, "error": "missing target entity; pass entity_id or select an entity"]
+        }
+        guard let record = readAIWorldEntityRecord(ref: targetRef) else {
+            return ["ok": false, "error": "no AI world record for '\(targetRef)'"]
+        }
+        return [
+            "ok": true,
+            "targetRef": targetRef,
+            "entity": jsonObject(record) ?? [:],
+        ]
+    }
+
+    private func observeWorldEvents(_ events: [WorldEvent]) {
+        guard !events.isEmpty else { return }
+        let worldContext = self.aiWorldContext
+        let session = session
         Task {
-            for event in events {
-                await session.observe(event: event)
+            await worldContext.observe(events: events)
+            if let session {
+                for event in events {
+                    await session.observe(event: event)
+                }
+            }
+        }
+    }
+
+    private func applyWorldEventsSynchronously(_ events: [WorldEvent]) -> (localApplied: Bool, sessionApplied: Bool) {
+        guard !events.isEmpty else { return (false, false) }
+        let semaphore = DispatchSemaphore(value: 0)
+        let worldContext = self.aiWorldContext
+        let session = session
+        final class ApplyState: @unchecked Sendable {
+            var localApplied = false
+            var sessionApplied = false
+        }
+        let state = ApplyState()
+        Task {
+            await worldContext.observe(events: events)
+            state.localApplied = true
+            if let session {
+                for event in events {
+                    await session.observe(event: event)
+                }
+                state.sessionApplied = true
             }
             semaphore.signal()
         }
-        return semaphore.wait(timeout: .now() + 5) == .success
+        guard semaphore.wait(timeout: .now() + 5) == .success else {
+            return (false, false)
+        }
+        return (state.localApplied, state.sessionApplied)
+    }
+
+    private func readAIWorldEntityRecord(ref: String) -> WorldEntityRecord? {
+        let semaphore = DispatchSemaphore(value: 0)
+        let worldContext = self.aiWorldContext
+        final class ReadState: @unchecked Sendable {
+            var record: WorldEntityRecord?
+        }
+        let state = ReadState()
+        Task {
+            state.record = await worldContext.entityRecord(ref: ref)
+            semaphore.signal()
+        }
+        guard semaphore.wait(timeout: .now() + 5) == .success else { return nil }
+        return state.record
     }
 
     private func rawEntityID(fromSceneRef ref: String) -> UInt64? {
