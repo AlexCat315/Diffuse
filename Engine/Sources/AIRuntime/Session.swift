@@ -56,6 +56,7 @@ public actor Session {
     private let maxHistoryTurns: Int
 
     private static let anthropicAPIVersion = "2023-06-01"
+    private static let maxEntityPromptCount = 100
 
     private var inferenceEndpoint: URL {
         switch config.apiFormat {
@@ -417,7 +418,9 @@ public actor Session {
         by calling the `execute_edit_plan` tool. Always call the tool — never respond with plain text.
         """)
 
-        parts.append("Scene entities (JSON):\n\(entityIndexJSON())")
+        var entitySection = "Scene entities (JSON):\n\(entityIndexJSON())"
+        if let note = entityTruncationNote() { entitySection += "\n\n" + note }
+        parts.append(entitySection)
 
         if !worldView.recentEdits.isEmpty {
             let lines = worldView.recentEdits.suffix(10)
@@ -460,12 +463,47 @@ public actor Session {
 
     private func entityIndexJSON() -> String {
         guard !worldView.entityIndex.isEmpty else { return "[]" }
-        let entities = worldView.entityIndex.values.sorted { $0.ref < $1.ref }.map(compactDict(for:))
-        guard let data = try? JSONSerialization.data(withJSONObject: entities,
+        let all = worldView.entityIndex
+        let limit = Self.maxEntityPromptCount
+
+        let prioritized: [WorldEntityRecord]
+        if all.count <= limit {
+            prioritized = all.values.sorted { $0.ref < $1.ref }
+        } else {
+            // Always include selected entities plus their immediate parents and children.
+            var priorityRefs = Set(worldView.selectedEntityRefs)
+            for ref in worldView.selectedEntityRefs {
+                if let record = all[ref] {
+                    if let parent = record.parentRef { priorityRefs.insert(parent) }
+                    priorityRefs.formUnion(record.childRefs)
+                }
+            }
+            var result = priorityRefs.compactMap { all[$0] }
+            let remainingSlots = limit - result.count
+            if remainingSlots > 0 {
+                let others = all.values
+                    .filter { !priorityRefs.contains($0.ref) }
+                    .sorted { $0.ref < $1.ref }
+                    .prefix(remainingSlots)
+                result.append(contentsOf: others)
+            }
+            prioritized = result.sorted { $0.ref < $1.ref }
+        }
+
+        let dicts = prioritized.map(compactDict(for:))
+        guard let data = try? JSONSerialization.data(withJSONObject: dicts,
                                                      options: [.prettyPrinted, .sortedKeys]),
               let str = String(data: data, encoding: .utf8)
         else { return "[]" }
         return str
+    }
+
+    /// Returns a note string when entity count exceeds the prompt limit; nil otherwise.
+    private func entityTruncationNote() -> String? {
+        let total = worldView.entityIndex.count
+        guard total > Self.maxEntityPromptCount else { return nil }
+        return "Note: scene has \(total) entities; only \(Self.maxEntityPromptCount) are shown above " +
+               "(selected entities and their neighbours are prioritised)."
     }
 
     private func compactDict(for e: WorldEntityRecord) -> [String: Any] {
