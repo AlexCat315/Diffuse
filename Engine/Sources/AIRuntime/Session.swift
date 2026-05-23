@@ -360,6 +360,9 @@ public actor Session {
         shows its actual world-space position — use it for spatial reasoning but set_transform \
         always writes local space.
         - For snap_to_ground, set Y position to 0.
+        - Each entity may have an `inferred` dict with AI perception observations (e.g. object \
+        category, semantic role). Use high-confidence (≥0.8) inferred properties to understand \
+        what the entity represents in the real world when naming, grouping, or describing it.
         - If the previous tool_result shows the user rejected your plan, adjust your approach.
         - If the user asks a general question (capabilities, greetings, clarifications) rather \
         than requesting a scene change, call the tool with an empty steps array and put your \
