@@ -35,6 +35,24 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(record?.inferred["object_category"]?.source, "perception:apple_vision_classify_image_v1")
     }
 
+    func testSnapshotEulerDegreesCopiedToEntityRecord() {
+        let entity = SceneSemanticSnapshot.Entity(
+            id: "scene:9",
+            name: "TiltedBox",
+            kind: "mesh",
+            parentRef: nil,
+            childRefs: [],
+            isSelected: false,
+            position: [0, 0, 0],
+            eulerDegrees: [45, 0, 30],
+            components: ["transform", "mesh"]
+        )
+        var worldView = WorldView()
+        worldView.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [entity]))
+
+        XCTAssertEqual(worldView.entityIndex["scene:9"]?.eulerDegrees, [45, 0, 30])
+    }
+
     func testSnapshotScaleCopiedToEntityRecord() {
         let entity = SceneSemanticSnapshot.Entity(
             id: "scene:7",

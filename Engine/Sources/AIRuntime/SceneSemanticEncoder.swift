@@ -33,6 +33,7 @@ public struct SceneSemanticEncoder: Sendable {
 
             var position: [Float]?
             var scale: [Float]?
+            var eulerDegrees: [Float]?
             var worldPosition: [Float]?
             if let lt = scene.localTransform(for: entity) {
                 let t = lt.translation
@@ -40,6 +41,9 @@ public struct SceneSemanticEncoder: Sendable {
                 let s = extractScale(lt.matrix)
                 let isUniformOne = abs(s.x - 1) < 0.0001 && abs(s.y - 1) < 0.0001 && abs(s.z - 1) < 0.0001
                 if !isUniformOne { scale = [s.x, s.y, s.z] }
+                let e = extractEulerXYZDegrees(lt.matrix)
+                let isZeroRotation = abs(e.x) < 0.01 && abs(e.y) < 0.01 && abs(e.z) < 0.01
+                if !isZeroRotation { eulerDegrees = [e.x, e.y, e.z] }
                 let wm = worldMatrix(scene, entity: entity)
                 worldPosition = [wm.columns.3.x, wm.columns.3.y, wm.columns.3.z]
             }
@@ -128,6 +132,7 @@ public struct SceneSemanticEncoder: Sendable {
                 isSelected: selectedRef == ref,
                 position: position,
                 scale: scale,
+                eulerDegrees: eulerDegrees,
                 worldPosition: worldPosition,
                 components: components,
                 lightType: lightType,
@@ -184,6 +189,32 @@ public struct SceneSemanticEncoder: Sendable {
 
     private func rawID(_ entity: EntityID) -> UInt64 {
         UInt64(entity.index) | (UInt64(entity.generation) << 32)
+    }
+
+    /// Extracts XYZ intrinsic Euler angles in degrees from a TRS matrix.
+    /// Returns zero when the rotation is identity or near-identity.
+    private func extractEulerXYZDegrees(_ m: simd_float4x4) -> SIMD3<Float> {
+        let s = extractScale(m)
+        guard s.x > 0, s.y > 0, s.z > 0 else { return .zero }
+        // Normalised rotation column elements (row-major R[row][col] = columns[col][row])
+        let r02 = m.columns.2.x / s.z          // sin(y)
+        let r12 = m.columns.2.y / s.z          // -sin(x)cos(y)
+        let r22 = m.columns.2.z / s.z          // cos(x)cos(y)
+        let r01 = m.columns.1.x / s.y          // -cos(y)sin(z)
+        let r00 = m.columns.0.x / s.x          // cos(y)cos(z)
+        let sinBeta = Float.maximum(-1, Float.minimum(1, r02))
+        let beta = asin(sinBeta)
+        let toDeg: Float = 180 / .pi
+        if abs(sinBeta) < 0.9999 {
+            let alpha = atan2(-r12, r22)
+            let gamma = atan2(-r01, r00)
+            return SIMD3(alpha * toDeg, beta * toDeg, gamma * toDeg)
+        } else {
+            let r10 = m.columns.0.y / s.x      // sin(x+z) when beta=+90°
+            let r11 = m.columns.1.y / s.y      // cos(x+z) when beta=+90°
+            let alpha = atan2(r10, r11)
+            return SIMD3(alpha * toDeg, beta * toDeg, 0)
+        }
     }
 
     private func extractScale(_ m: simd_float4x4) -> SIMD3<Float> {
