@@ -604,6 +604,7 @@ public struct RuntimeWorldSchedule {
                     range: component.range,
                     spotInnerAngleRadians: degreesToRadians(component.spotInnerAngleDegrees),
                     spotOuterAngleRadians: degreesToRadians(component.spotOuterAngleDegrees),
+                    castShadows: component.castShadows,
                     entity: entity
                 )
             )
