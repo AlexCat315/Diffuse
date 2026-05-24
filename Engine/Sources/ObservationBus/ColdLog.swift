@@ -1,9 +1,11 @@
 import Foundation
 
-public enum ObservationBusError: Error, CustomStringConvertible {
+public enum ObservationBusError: Error, CustomStringConvertible, Equatable {
     case invalidColdLogDirectory(String)
     case coldLogWriteFailed(String)
     case coldLogReadFailed(String)
+    case noSnapshotProvider(scope: String)
+    case unknownSnapshotID(String)
 
     public var description: String {
         switch self {
@@ -13,6 +15,10 @@ public enum ObservationBusError: Error, CustomStringConvertible {
             return "cold log write failed: \(message)"
         case let .coldLogReadFailed(message):
             return "cold log read failed: \(message)"
+        case let .noSnapshotProvider(scope):
+            return "no snapshot provider registered for scope '\(scope)'"
+        case let .unknownSnapshotID(id):
+            return "unknown snapshot ID '\(id)'"
         }
     }
 }
