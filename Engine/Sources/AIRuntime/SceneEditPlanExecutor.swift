@@ -246,6 +246,21 @@ public struct SceneEditPlanExecutor: Sendable {
             }
             return [.setColliderTrigger(entityID: id, value: v)]
 
+        case .setColliderLayer:
+            let id = try resolveEntityID(step, scene: scene)
+            var result: [SceneMutation] = []
+            if let layerID = step.colliderLayerID {
+                result.append(.setColliderLayer(entityID: id, layerID: UInt16(clamping: layerID)))
+            }
+            if let mask = step.colliderLayerMask {
+                result.append(.setColliderLayerMask(entityID: id, layerMask: UInt16(clamping: mask)))
+            }
+            if result.isEmpty {
+                throw SceneEditPlanExecutorError.missingField(op: step.op,
+                                                               field: "collider_layer_id or collider_layer_mask")
+            }
+            return result
+
         case .setConstraintEnabled:
             let id = try resolveEntityID(step, scene: scene)
             guard let v = step.isEnabled else {

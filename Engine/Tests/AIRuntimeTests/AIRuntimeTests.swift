@@ -1,5 +1,6 @@
 @testable import AIRuntime
 import IntentRuntime
+import SceneRuntime
 import XCTest
 
 final class AIRuntimeTests: XCTestCase {
@@ -525,5 +526,36 @@ final class AIRuntimeTests: XCTestCase {
         """
         let step = try JSONDecoder().decode(SceneEditStep.self, from: Data(json.utf8))
         XCTAssertEqual(step.scriptPropertyValue, .bool(true))
+    }
+
+    func testSetColliderLayerOpRoundTrips() throws {
+        let json = """
+        {"op":"set_collider_layer","entity_id":"scene:30","collider_layer_id":2,"collider_layer_mask":5}
+        """
+        let step = try JSONDecoder().decode(SceneEditStep.self, from: Data(json.utf8))
+        XCTAssertEqual(step.op, .setColliderLayer)
+        XCTAssertEqual(step.entityRef, "scene:30")
+        XCTAssertEqual(step.colliderLayerID, 2)
+        XCTAssertEqual(step.colliderLayerMask, 5)
+    }
+
+    func testSetColliderLayerExecutorEmitsBothMutations() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .box(halfExtents: .one, center: .zero)), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"test","steps":[{"op":"set_collider_layer","entity_id":"\(ref)","collider_layer_id":3,"collider_layer_mask":12}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let executor = SceneEditPlanExecutor()
+        let transaction = try executor.buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasLayer = ops.contains { if case .setColliderLayer(_, 3) = $0 { return true }; return false }
+        let hasMask  = ops.contains { if case .setColliderLayerMask(_, 12) = $0 { return true }; return false }
+        XCTAssertTrue(hasLayer, "expected setColliderLayer mutation")
+        XCTAssertTrue(hasMask,  "expected setColliderLayerMask mutation")
     }
 }
