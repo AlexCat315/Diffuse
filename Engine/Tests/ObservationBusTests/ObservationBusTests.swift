@@ -237,4 +237,55 @@ struct ObservationBusTests {
         // should be the last 3
         #expect(view.events[0].summary["transaction_id"] == "tx.8")
     }
+
+    // MARK: - Snapshot resync (§8)
+
+    @Test("requestSnapshot throws noSnapshotProvider when no provider is registered")
+    func requestSnapshotThrowsWhenNoProvider() async throws {
+        let bus = try ObservationBus()
+        await #expect(throws: ObservationBusError.noSnapshotProvider(scope: "scene")) {
+            _ = try await bus.requestSnapshot(scope: "scene")
+        }
+    }
+
+    @Test("fromSnapshot subscriber receives events published after the snapshot cursor")
+    func fromSnapshotDeliversEventsAfterCursor() async throws {
+        let bus = try ObservationBus()
+
+        // Publish two events before the snapshot.
+        let pre1 = try bus.publish(kind: .sceneChanged, streamID: "scene:main",
+                                   payload: .inline(["entity_id": .string("e1"), "change_type": .string("added")]),
+                                   origin: .tool(), provenance: .authored)
+        _ = try bus.publish(kind: .sceneChanged, streamID: "scene:main",
+                            payload: .inline(["entity_id": .string("e2"), "change_type": .string("added")]),
+                            origin: .tool(), provenance: .authored)
+
+        // Provider says the snapshot was taken at seq == pre1.seq + 1 (i.e. after both events).
+        let cursor = StreamCursor(streamID: "scene:main", seq: pre1.seq + 1)
+        let provider = StaticSnapshotProvider(snapshotID: "snap-1", cursor: cursor)
+        bus.registerSnapshotProvider(provider, forScope: "scene")
+
+        let (snapshotID, _) = try await bus.requestSnapshot(scope: "scene")
+        #expect(snapshotID == "snap-1")
+
+        // Publish one event after the snapshot.
+        _ = try bus.publish(kind: .sceneChanged, streamID: "scene:main",
+                            payload: .inline(["entity_id": .string("e3"), "change_type": .string("added")]),
+                            origin: .tool(), provenance: .authored)
+
+        // Subscribe from the snapshot — should only see the post-snapshot event.
+        let sub = bus.subscribe(spec: SubscriptionSpec(startFrom: .fromSnapshot(snapshotID: snapshotID)))
+        let events = sub.drain()
+        #expect(events.count == 1)
+        #expect(events[0].payloadRef.inlineRecord?["entity_id"] == .string("e3"))
+    }
+}
+
+private struct StaticSnapshotProvider: SnapshotProvider {
+    let snapshotID: String
+    let cursor: StreamCursor
+
+    func materializeSnapshot(scope: String) async throws -> (snapshotID: String, cursor: StreamCursor) {
+        (snapshotID, cursor)
+    }
 }
