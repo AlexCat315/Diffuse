@@ -158,6 +158,30 @@ public struct CapabilityRegistry: Sendable {
                     camera,
                 ]
             ),
+            CapabilityDescriptor(
+                verb: "scene.set_camera_fov",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [
+                    editable,
+                    entityExists,
+                    camera,
+                ]
+            ),
+            CapabilityDescriptor(
+                verb: "scene.set_camera_active",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [
+                    editable,
+                    entityExists,
+                    camera,
+                ]
+            ),
 
             // MARK: Rigid body (beta: physics authoring not yet fully exposed in Editor)
             CapabilityDescriptor(
