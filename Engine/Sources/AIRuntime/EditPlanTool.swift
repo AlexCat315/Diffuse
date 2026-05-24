@@ -122,6 +122,14 @@ public enum EditPlanTool {
                     "type": "array", "items": ["type": "number"] as [String: Any],
                     "description": "[x, y, z] up vector for set_camera_pose. Default [0, 1, 0].",
                 ] as [String: Any],
+                "camera_fov_y": [
+                    "type": "number",
+                    "description": "Vertical field-of-view in degrees (1–179) for set_camera_fov. Typical: 30=telephoto, 50=normal, 75=wide.",
+                ] as [String: Any],
+                "camera_is_active": [
+                    "type": "boolean",
+                    "description": "Whether this camera is the active render camera for set_camera_active.",
+                ] as [String: Any],
                 "motion_type": [
                     "type": "string", "enum": ["static", "dynamic", "kinematic"],
                     "description": "Rigid body motion type for set_rigidbody_motion.",

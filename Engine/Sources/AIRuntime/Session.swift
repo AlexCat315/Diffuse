@@ -519,6 +519,8 @@ public actor Session {
         - The `eulerDegrees` field is omitted when the rotation is [0, 0, 0]; treat missing \
         `eulerDegrees` as [0, 0, 0]. Angles are XYZ intrinsic Euler in degrees.
         - For snap_to_ground, set Y position to 0.
+        - For set_camera_fov: use `camera_fov_y` (degrees, 1–179). 30≈telephoto, 50≈normal, 75≈wide.
+        - For set_camera_active: use `camera_is_active` (boolean). Only one camera should be active at a time.
         - Each entity may have an `inferred` dict with AI perception observations (e.g. object \
         category, semantic role). Use high-confidence (≥0.8) inferred properties to understand \
         what the entity represents in the real world when naming, grouping, or describing it.

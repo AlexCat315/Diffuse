@@ -64,6 +64,8 @@ public enum SceneEditOp: String, Codable, Sendable, CaseIterable {
 
     // Camera
     case setCameraPose     = "set_camera_pose"
+    case setCameraFOV      = "set_camera_fov"
+    case setCameraActive   = "set_camera_active"
 
     // Visual
     case setMeshColor         = "set_mesh_color"
@@ -193,6 +195,10 @@ public struct SceneEditStep: Codable, Sendable {
     public var scriptPropertyName: String?
     public var scriptPropertyValue: JSONValue?
 
+    // set_camera_fov / set_camera_active
+    public var cameraFovYDegrees: Float?
+    public var cameraIsActive: Bool?
+
     // set_mesh_visibility
     public var isVisible: Bool?
 
@@ -219,6 +225,8 @@ public struct SceneEditStep: Codable, Sendable {
         case spotOuterAngleDegrees = "spot_outer_angle"
         case cameraTarget       = "camera_target"
         case cameraUp           = "camera_up"
+        case cameraFovYDegrees  = "camera_fov_y"
+        case cameraIsActive     = "camera_is_active"
         case motionType         = "motion_type"
         case mass
         case gravityScale       = "gravity_scale"
