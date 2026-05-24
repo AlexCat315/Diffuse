@@ -433,3 +433,161 @@ extension PerceptionRuntimeTests {
         XCTAssertThrowsError(try worker.handle(request: req))
     }
 }
+
+// MARK: - LocalArtifactStore tests
+
+extension PerceptionRuntimeTests {
+    func testArtifactStoreWritesAndResolvesBlob() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava_artifact_test_\(UUID().uuidString)")
+        let store = try LocalArtifactStore(baseURL: dir)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let payload = Data("hello perception".utf8)
+        let ref = try await store.write(payload,
+                                        mediaType: "application/octet-stream",
+                                        semanticKind: "test_blob")
+
+        XCTAssertTrue(ref.uri.hasPrefix("artifacts://"))
+        XCTAssertFalse(ref.contentHash?.isEmpty ?? true)
+        XCTAssertEqual(ref.redaction, "prompt_forbidden")
+        let resolved = await store.resolve(ref)
+        XCTAssertNotNil(resolved)
+        let readBack = try await store.read(ref)
+        XCTAssertEqual(readBack, payload)
+    }
+
+    func testArtifactStoreIsIdempotentForSameContent() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava_artifact_idem_\(UUID().uuidString)")
+        let store = try LocalArtifactStore(baseURL: dir)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let payload = Data("stable content".utf8)
+        let ref1 = try await store.write(payload, mediaType: "application/octet-stream", semanticKind: "x")
+        let ref2 = try await store.write(payload, mediaType: "application/octet-stream", semanticKind: "x")
+
+        XCTAssertEqual(ref1.contentHash, ref2.contentHash)
+        XCTAssertEqual(ref1.uri, ref2.uri)
+    }
+}
+
+// MARK: - ManifestScanner + PerceptionSchemaValidator tests
+
+extension PerceptionRuntimeTests {
+    func testSchemaValidatorPassesValidManifest() throws {
+        let manifest = validManifest()
+        XCTAssertNoThrow(try PerceptionSchemaValidator.validate(manifest))
+    }
+
+    func testSchemaValidatorRejectsUnknownVersion() {
+        var manifest = validManifest()
+        manifest = PerceptionModelManifest(
+            schemaVersion: "guava.perception.model_manifest.v99",
+            modelID: manifest.modelID,
+            displayName: manifest.displayName,
+            task: manifest.task,
+            backendFamily: manifest.backendFamily,
+            runtime: manifest.runtime,
+            inputContract: manifest.inputContract,
+            outputContract: manifest.outputContract,
+            license: manifest.license
+        )
+        XCTAssertThrowsError(try PerceptionSchemaValidator.validate(manifest)) { error in
+            if case let PerceptionSchemaValidator.ValidationError.unsupportedSchemaVersion(v) = error {
+                XCTAssertTrue(v.contains("v99"))
+            } else {
+                XCTFail("Expected unsupportedSchemaVersion, got \(error)")
+            }
+        }
+    }
+
+    func testManifestScannerPicksUpManifestJSON() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava_manifest_scan_\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let manifest = validManifest()
+        let data = try JSONEncoder().encode(manifest)
+        try data.write(to: dir.appendingPathComponent("manifest.json"))
+
+        let result = ManifestScanner.scan(directory: dir)
+        XCTAssertEqual(result.manifests.count, 1)
+        XCTAssertEqual(result.manifests[0].modelID, "test_classifier_v1")
+        XCTAssertTrue(result.errors.isEmpty)
+    }
+
+    func testManifestScannerCollectsErrorsForInvalidJSON() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava_manifest_err_\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        try "not valid json".data(using: .utf8)!
+            .write(to: dir.appendingPathComponent("manifest.json"))
+
+        let result = ManifestScanner.scan(directory: dir)
+        XCTAssertTrue(result.manifests.isEmpty)
+        XCTAssertEqual(result.errors.count, 1)
+    }
+
+    private func validManifest() -> PerceptionModelManifest {
+        PerceptionModelManifest(
+            modelID: "test_classifier_v1",
+            displayName: "Test Classifier",
+            task: .classification,
+            backendFamily: "test",
+            runtime: PerceptionRuntimeConfig(preferredRuntime: "none"),
+            inputContract: "guava.perception.input.rgb_image.v1",
+            outputContract: "guava.perception.output.classifications.v1",
+            license: PerceptionLicenseMetadata(
+                codeLicense: "MIT",
+                weightsLicense: "MIT",
+                commercialUse: "allowed",
+                redistribution: "allowed")
+        )
+    }
+}
+
+// MARK: - PerceptionWorkerFactory tests
+
+extension PerceptionRuntimeTests {
+    func testWorkerFactoryBuildsWorkerForRegisteredBackend() {
+        var factory = PerceptionWorkerFactory()
+        let lampResult = makeClassificationResult(label: "lamp", confidence: 0.9)
+        factory.register(backendFamily: "test") { _ in
+            MockPerceptionWorker(result: lampResult)
+        }
+        let manifest = PerceptionModelManifest(
+            modelID: "lamp_detector",
+            displayName: "Lamp Detector",
+            task: .classification,
+            backendFamily: "test",
+            runtime: PerceptionRuntimeConfig(preferredRuntime: "none"),
+            inputContract: "guava.perception.input.rgb_image.v1",
+            outputContract: "guava.perception.output.classifications.v1",
+            license: PerceptionLicenseMetadata(codeLicense: "MIT", weightsLicense: "MIT",
+                                               commercialUse: "allowed",
+                                               redistribution: "allowed")
+        )
+        XCTAssertNotNil(factory.makeWorker(for: manifest))
+    }
+
+    func testWorkerFactoryReturnsNilForUnregisteredBackend() {
+        let factory = PerceptionWorkerFactory()
+        let manifest = PerceptionModelManifest(
+            modelID: "unknown",
+            displayName: "Unknown",
+            task: .classification,
+            backendFamily: "onnxruntime",
+            runtime: PerceptionRuntimeConfig(preferredRuntime: "onnxruntime"),
+            inputContract: "guava.perception.input.rgb_image.v1",
+            outputContract: "guava.perception.output.classifications.v1",
+            license: PerceptionLicenseMetadata(codeLicense: "MIT", weightsLicense: "MIT",
+                                               commercialUse: "allowed",
+                                               redistribution: "allowed")
+        )
+        XCTAssertNil(factory.makeWorker(for: manifest))
+    }
+}
