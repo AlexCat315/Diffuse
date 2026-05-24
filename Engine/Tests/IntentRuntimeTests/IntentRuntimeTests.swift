@@ -1112,6 +1112,61 @@ struct UndoStackTests {
         #expect(animClipEvent != nil, "setAnimationPlayer must emit animationClip authored event")
     }
 
+    @Test("setLocalTransform with non-uniform scale emits worldScale evaluated event")
+    func setLocalTransformNonUniformScaleEmitsWorldScale() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let scaleMatrix = simd_float4x4(columns: (
+            SIMD4<Float>(2, 0, 0, 0),
+            SIMD4<Float>(0, 3, 0, 0),
+            SIMD4<Float>(0, 0, 1, 0),
+            SIMD4<Float>(0, 0, 0, 1)
+        ))
+        let transaction = TransactionIR(
+            summary: "Scale entity",
+            operations: [.scene(.setLocalTransform(entityID: entity.rawValue,
+                                                    transform: LocalTransform(matrix: scaleMatrix)))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let scaleEvent = result.worldEvents.first {
+            if case .entityEvaluatedChanged(_, "worldScale", _) = $0 { return true }
+            return false
+        }
+        #expect(scaleEvent != nil, "non-uniform scale must emit worldScale evaluated event")
+        if case let .entityEvaluatedChanged(_, _, .vec3(sx, sy, sz)) = scaleEvent {
+            #expect(abs(sx - 2) < 0.01, "worldScale.x must be 2")
+            #expect(abs(sy - 3) < 0.01, "worldScale.y must be 3")
+            #expect(abs(sz - 1) < 0.01, "worldScale.z must be 1")
+        }
+    }
+
+    @Test("setLocalTransform with uniform scale does not emit worldScale evaluated event")
+    func setLocalTransformUniformScaleOmitsWorldScale() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let transaction = TransactionIR(
+            summary: "Identity transform",
+            operations: [.scene(.setLocalTransform(entityID: entity.rawValue,
+                                                    transform: LocalTransform(matrix: simd_float4x4(1))))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let scaleEvent = result.worldEvents.first {
+            if case .entityEvaluatedChanged(_, "worldScale", _) = $0 { return true }
+            return false
+        }
+        #expect(scaleEvent == nil, "identity transform must not emit worldScale")
+    }
+
     @Test("ring buffer discards oldest entry when capacity is exceeded")
     func ringBufferEvictsOldest() {
         let stack = UndoStack(capacity: 3)

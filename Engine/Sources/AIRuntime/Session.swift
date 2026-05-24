@@ -512,9 +512,10 @@ public actor Session {
         - Prefer minimal plans — only include steps necessary to satisfy the request.
         - For set_transform, use the `position`, `scale`, and `eulerDegrees` fields (all local \
         space) as the base and only change what the user asked for. When an entity is in a \
-        hierarchy, `evaluated.worldPosition` shows its actual world-space position and \
-        `evaluated.worldEulerDegrees` shows its world-space rotation — use these for spatial \
-        reasoning, but set_transform always writes local space.
+        hierarchy, `evaluated.worldPosition` shows its actual world-space position, \
+        `evaluated.worldEulerDegrees` shows world-space rotation, and `evaluated.worldScale` \
+        shows the cumulative world-space scale — use these for spatial reasoning, but \
+        set_transform always writes local space.
         - The `scale` field is omitted when uniform [1, 1, 1]; treat missing `scale` as [1, 1, 1].
         - The `eulerDegrees` field is omitted when the rotation is [0, 0, 0]; treat missing \
         `eulerDegrees` as [0, 0, 0]. Angles are XYZ intrinsic Euler in degrees.
