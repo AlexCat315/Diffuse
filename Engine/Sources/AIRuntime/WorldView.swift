@@ -61,6 +61,7 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     public var lightRange: Float?
     public var lightSpotInner: Float?
     public var lightSpotOuter: Float?
+    public var lightCastShadows: Bool?
     // Camera (authored)
     public var cameraFovYDegrees: Float?
     public var cameraIsActive: Bool?
@@ -137,6 +138,8 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
             if case let .float(f) = value { lightSpotInner = f }
         case "lightSpotOuter":
             if case let .float(f) = value { lightSpotOuter = f }
+        case "lightCastShadows":
+            if case let .bool(b) = value { lightCastShadows = b }
         case "cameraFovYDegrees":
             if case let .float(f) = value { cameraFovYDegrees = f }
         case "cameraIsActive":
@@ -288,6 +291,7 @@ public struct WorldView: Sendable {
             record.lightRange = e.lightRange
             record.lightSpotInner = e.lightSpotInner
             record.lightSpotOuter = e.lightSpotOuter
+            record.lightCastShadows = e.lightCastShadows
             record.cameraFovYDegrees = e.cameraFovYDegrees
             record.cameraIsActive = e.cameraIsActive
             record.meshColor = e.meshColor

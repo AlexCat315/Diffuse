@@ -94,6 +94,7 @@ public enum SceneMutation: Sendable, Equatable {
     case setLightRange(entityID: UInt64, range: Float)
     case setLightSpotInnerAngle(entityID: UInt64, angleDegrees: Float)
     case setLightSpotOuterAngle(entityID: UInt64, angleDegrees: Float)
+    case setLightCastShadows(entityID: UInt64, value: Bool)
     case setMeshColorTint(entityID: UInt64, color: SIMD3<Float>)
     case setRenderMeshVisibility(entityID: UInt64, isVisible: Bool)
     case setRenderMaterialComponent(entityID: UInt64,
@@ -146,6 +147,7 @@ public enum SceneMutation: Sendable, Equatable {
              let .setLightRange(id, _),
              let .setLightSpotInnerAngle(id, _),
              let .setLightSpotOuterAngle(id, _),
+             let .setLightCastShadows(id, _),
              let .setMeshColorTint(id, _),
              let .setRenderMeshVisibility(id, _),
              let .setRenderMaterialComponent(id, _, _, _, _),
