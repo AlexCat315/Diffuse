@@ -153,4 +153,88 @@ struct ObservationBusTests {
 
         #expect(received?.eventID == envelope.eventID)
     }
+
+    // MARK: - EventSymbolicView
+
+    @Test("symbolicView excludes redact_in_prompt and runtime tick events")
+    func symbolicViewExcludesRedactedAndTickEvents() throws {
+        let bus = try ObservationBus()
+        let origin = EventOrigin.tool()
+
+        _ = try bus.publish(kind: .runtimeTick,
+                            streamID: "runtime",
+                            payload: .inline(["frame": .integer(1)]),
+                            origin: origin, provenance: .runtime)
+        _ = try bus.publish(kind: .transactionApplied,
+                            streamID: "runtime",
+                            payload: .inline(["transaction_id": .string("tx.1"), "status": .string("applied")]),
+                            origin: origin, provenance: .authored)
+
+        let view = bus.symbolicView(streamID: "runtime", fromSeq: 0)
+        #expect(view.events.count == 1)
+        #expect(view.events[0].kind == .transactionApplied)
+    }
+
+    @Test("symbolicView compacts inline payload fields to strings")
+    func symbolicViewCompactsInlinePayload() throws {
+        let bus = try ObservationBus()
+        _ = try bus.publish(kind: .transactionApplied,
+                            streamID: "scene:main",
+                            payload: .inline([
+                                "transaction_id": .string("tx.42"),
+                                "status": .string("applied"),
+                                "count": .integer(7),
+                            ]),
+                            origin: .tool(), provenance: .authored)
+
+        let view = bus.symbolicView(streamID: "scene:main")
+        #expect(view.events.count == 1)
+        let ev = view.events[0]
+        #expect(ev.summary["transaction_id"] == "tx.42")
+        #expect(ev.summary["count"] == "7")
+    }
+
+    @Test("symbolicView handle payload yields existence marker")
+    func symbolicViewHandlePayloadYieldsMarker() throws {
+        let bus = try ObservationBus()
+        _ = try bus.publish(kind: .assetImportFinished,
+                            streamID: "asset",
+                            payload: .handle(EventPayloadHandle(store: "artifacts",
+                                                                key: "abc123",
+                                                                contentHash: "sha256:0")),
+                            origin: .tool(), provenance: .inferred)
+
+        let view = bus.symbolicView(streamID: "asset")
+        #expect(view.events.count == 1)
+        #expect(view.events[0].summary["payload"] == "<handle:artifacts/abc123>")
+    }
+
+    @Test("symbolicView promptText renders compact multi-line string")
+    func symbolicViewPromptText() throws {
+        let bus = try ObservationBus()
+        _ = try bus.publish(kind: .sceneEntityAdded,
+                            streamID: "scene:main",
+                            payload: .inline(["entity_ids": .array([.integer(1)]), "scene_revision": .integer(5)]),
+                            origin: .tool(), provenance: .authored)
+
+        let text = bus.symbolicView(streamID: "scene:main").promptText()
+        #expect(text.contains("scene.entity.added"))
+        #expect(text.contains("scene:main"))
+    }
+
+    @Test("symbolicView maxCount caps output")
+    func symbolicViewMaxCountCaps() throws {
+        let bus = try ObservationBus()
+        for i in 1...10 {
+            _ = try bus.publish(kind: .transactionApplied,
+                                streamID: "tx",
+                                payload: .inline(["transaction_id": .string("tx.\(i)"), "status": .string("applied")]),
+                                origin: .tool(), provenance: .authored)
+        }
+
+        let view = bus.symbolicView(streamID: "tx", fromSeq: 0, maxCount: 3)
+        #expect(view.events.count == 3)
+        // should be the last 3
+        #expect(view.events[0].summary["transaction_id"] == "tx.8")
+    }
 }
