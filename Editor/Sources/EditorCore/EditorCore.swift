@@ -39,6 +39,7 @@ public final class EditorApplication: @unchecked Sendable {
     private let perceptionService: PerceptionService
     private let events: PlatformEventBridge
     private var eventToken: PlatformEventBridge.SubscriptionToken?
+    private var workspaceModeToken: EditorStore.SubscriptionToken?
     private var pendingViewportEvents: [InputEvent] = []
     private var _viewportDrawableSize: RenderDrawableSize = .init(width: 1280, height: 720)
     private var lastViewportSurfaceState = ViewportSurfaceState()
@@ -117,6 +118,23 @@ public final class EditorApplication: @unchecked Sendable {
         }
 
         startMCPBridge()
+
+        // Propagate initial workflow context to Session.
+        if let initialSession {
+            let ctx = Self.workflowContext(for: store.state.workspaceMode)
+            Task { await initialSession.setWorkflowContext(ctx) }
+        }
+
+        // Keep Session's WorkflowContext in sync when the user switches workspace mode.
+        var lastObservedMode: EditorWorkspaceMode = store.state.workspaceMode
+        workspaceModeToken = store.subscribe { [weak self] s in
+            guard let self else { return }
+            let newMode = s.state.workspaceMode
+            guard newMode != lastObservedMode, let sess = self.session else { return }
+            lastObservedMode = newMode
+            let ctx = Self.workflowContext(for: newMode)
+            Task { await sess.setWorkflowContext(ctx) }
+        }
     }
 
     public func bootstrap() {
@@ -162,6 +180,10 @@ public final class EditorApplication: @unchecked Sendable {
         if let eventToken {
             events.unsubscribe(eventToken)
             self.eventToken = nil
+        }
+        if let workspaceModeToken {
+            store.unsubscribe(workspaceModeToken)
+            self.workspaceModeToken = nil
         }
         engine.shutdown()
     }
@@ -999,8 +1021,10 @@ public final class EditorApplication: @unchecked Sendable {
         let newSession = Self.makeSession(for: settings)
         if let newSession {
             let worldContext = self.aiWorldContext
+            let ctx = Self.workflowContext(for: store.state.workspaceMode)
             Task {
                 await newSession.replaceWorldView(await worldContext.snapshot())
+                await newSession.setWorkflowContext(ctx)
             }
         }
         session = newSession
@@ -1025,6 +1049,24 @@ public final class EditorApplication: @unchecked Sendable {
     /// Returns `true` if a non-empty API key is stored for the current provider.
     public func hasStoredAIKey() -> Bool {
         AIKeychain.hasKey(for: store.state.aiSettings.provider)
+    }
+
+    static func workflowContext(for mode: EditorWorkspaceMode) -> WorkflowContext {
+        let intent = GameplayIntent(genre: "game", winCondition: "not_specified", pacing: "exploration")
+        switch mode {
+        case .level:
+            return .game(GameWorkflowContext(levelPhase: .blockout,
+                                            gameplayIntent: intent,
+                                            targetExperience: "Interactive level editing"))
+        case .modeling:
+            return .game(GameWorkflowContext(levelPhase: .polish,
+                                            gameplayIntent: intent,
+                                            targetExperience: "Asset creation and modeling"))
+        case .animation:
+            return .game(GameWorkflowContext(levelPhase: .polish,
+                                            gameplayIntent: intent,
+                                            targetExperience: "Animation authoring"))
+        }
     }
 
     static func makeSession(for settings: EditorAISettings,
