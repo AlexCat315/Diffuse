@@ -1227,7 +1227,7 @@ public struct TransactionExecutor {
     }
 
     /// Returns evaluated WorldEvents for an entity's post-propagation world transform:
-    /// worldPosition always, worldEulerDegrees when the rotation is non-trivial.
+    /// worldPosition always, worldEulerDegrees when non-trivial, worldScale when non-uniform.
     private func worldTransformEvents(for entityID: UInt64, in scene: SceneRuntime?) -> [WorldEvent] {
         guard let scene else { return [] }
         let entity = EntityID(index: UInt32(entityID & 0xFFFF_FFFF),
@@ -1243,6 +1243,11 @@ public struct TransactionExecutor {
         if abs(euler.x) >= 0.01 || abs(euler.y) >= 0.01 || abs(euler.z) >= 0.01 {
             result.append(.entityEvaluatedChanged(ref: ref, property: "worldEulerDegrees",
                                                   value: .vec3(euler.x, euler.y, euler.z)))
+        }
+        let s = extractScale(wt.matrix)
+        if abs(s.x - 1) >= 0.001 || abs(s.y - 1) >= 0.001 || abs(s.z - 1) >= 0.001 {
+            result.append(.entityEvaluatedChanged(ref: ref, property: "worldScale",
+                                                  value: .vec3(s.x, s.y, s.z)))
         }
         return result
     }
