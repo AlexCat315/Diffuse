@@ -1167,6 +1167,28 @@ struct UndoStackTests {
         #expect(scaleEvent == nil, "identity transform must not emit worldScale")
     }
 
+    @Test("setLightCastShadows emits lightCastShadows authored world event")
+    func setLightCastShadowsEmitsWorldEvent() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(LightComponent(type: .directional, color: .one, intensity: 1, range: 100), for: entity)
+        let transaction = TransactionIR(
+            summary: "Enable shadow casting",
+            operations: [.scene(.setLightCastShadows(entityID: entity.rawValue, value: true))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let shadowEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "lightCastShadows", .bool(true)) = $0 { return true }
+            return false
+        }
+        #expect(shadowEvent != nil, "setLightCastShadows must emit lightCastShadows authored event")
+    }
+
     @Test("ring buffer discards oldest entry when capacity is exceeded")
     func ringBufferEvictsOldest() {
         let stack = UndoStack(capacity: 3)
