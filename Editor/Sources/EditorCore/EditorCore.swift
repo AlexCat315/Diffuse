@@ -7,6 +7,7 @@ import EngineKernel
 import IntentRuntime
 import ObservationBus
 import PerceptionRuntime
+import SemanticPipeline
 import RenderBackend
 import RHIWGPU
 import SceneRuntime
@@ -221,7 +222,130 @@ public final class EditorApplication: @unchecked Sendable {
         }
         store.dispatch(.setSelectedEntity(id))
         logConsole("Spawned \(asset.name)", detail: "entity \(id)")
+        runSemanticAnnotation(entityID: id, asset: asset)
         return id
+    }
+
+    private func runSemanticAnnotation(entityID: UInt64, asset: EditorAsset) {
+        guard let mesh = AssetRegistry.shared.meshAsset(for: asset.meshIndex) else { return }
+        let entityRef = "scene:\(entityID)"
+        let assetURI = asset.relativePath
+        let session = self.session
+
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self else { return }
+            let raw = Self.buildRawStructure(from: mesh, assetURI: assetURI)
+            let signals = Self.buildGeometrySignals(from: mesh, assetURI: assetURI)
+            let pipeline = AssetSemanticPipeline()
+            let decision = await pipeline.run(rawStructure: raw, signals: signals)
+
+            let proposals: [SemanticProposal]
+            switch decision {
+            case let .autoCommit(committed): proposals = committed
+            case .needsConfirmation: return
+            }
+
+            guard !proposals.isEmpty else { return }
+            let events = SemanticWorldEventMapper().makeWorldEvents(from: proposals, targetRef: entityRef)
+            guard !events.isEmpty else { return }
+
+            if let session {
+                await session.observe(events: events)
+            }
+            await MainActor.run {
+                self.observeWorldEvents(events)
+                self.logConsole("Semantic annotations applied to \(entityRef)",
+                                detail: "\(proposals.count) proposals")
+            }
+        }
+    }
+
+    private static func buildRawStructure(from mesh: MeshAsset, assetURI: String) -> RawStructure {
+        var nodes: [RawStructure.Node] = []
+        for (i, node) in mesh.nodes.enumerated() {
+            let t = node.localTranslation
+            let s = node.localScale
+            // Column-major 4×4 from TRS (simplified; rotation from quaternion)
+            let transform: [Float] = [
+                s.x, 0, 0, 0,
+                0, s.y, 0, 0,
+                0, 0, s.z, 0,
+                t.x, t.y, t.z, 1,
+            ]
+            nodes.append(RawStructure.Node(id: "node_\(i)",
+                                           name: node.name ?? "node_\(i)",
+                                           parentID: node.parentIndex.map { "node_\($0)" },
+                                           localTransform: transform))
+        }
+
+        let meshRecord = RawStructure.MeshRecord(id: "mesh_0",
+                                                 nodeID: nodes.first?.id ?? "node_0",
+                                                 vertexCount: mesh.vertexCount,
+                                                 faceCount: mesh.triangleCount)
+
+        var submeshRecords: [RawStructure.SubmeshRecord] = []
+        for (i, sub) in mesh.submeshes.enumerated() {
+            submeshRecords.append(RawStructure.SubmeshRecord(id: "sub_\(i)",
+                                                             meshID: "mesh_0",
+                                                             materialSlot: sub.materialIndex,
+                                                             indexStart: Int(sub.indexStart),
+                                                             indexCount: Int(sub.indexCount)))
+        }
+
+        var materialSlots: [RawStructure.MaterialSlot] = []
+        for (i, mat) in mesh.materials.enumerated() {
+            materialSlots.append(RawStructure.MaterialSlot(id: "mat_\(i)",
+                                                           name: mat.name ?? "material_\(i)",
+                                                           sourceIndex: i))
+        }
+
+        var bones: [RawStructure.Bone] = []
+        for skin in mesh.skins {
+            for jointIndex in skin.jointNodeIndices {
+                guard jointIndex < mesh.nodes.count else { continue }
+                let node = mesh.nodes[jointIndex]
+                let boneID = "bone_\(jointIndex)"
+                let parentBoneID: String? = {
+                    guard let parentIdx = node.parentIndex,
+                          skin.jointNodeIndices.contains(parentIdx) else { return nil }
+                    return "bone_\(parentIdx)"
+                }()
+                bones.append(RawStructure.Bone(id: boneID,
+                                               name: node.name ?? boneID,
+                                               parentID: parentBoneID))
+            }
+        }
+        let skeleton: RawStructure.Skeleton? = bones.isEmpty ? nil : RawStructure.Skeleton(bones: bones)
+
+        return RawStructure(assetURI: assetURI,
+                            nodes: nodes,
+                            meshes: [meshRecord],
+                            submeshes: submeshRecords,
+                            materialSlots: materialSlots,
+                            skeleton: skeleton)
+    }
+
+    private static func buildGeometrySignals(from mesh: MeshAsset, assetURI: String) -> GeometrySignals {
+        let bounds = mesh.localBounds
+        let aabb = GeometrySignals.AABB(
+            min: (bounds.min.x, bounds.min.y, bounds.min.z),
+            max: (bounds.max.x, bounds.max.y, bounds.max.z)
+        )
+        let component = GeometrySignals.ConnectedComponent(
+            id: "cc_0",
+            meshID: "mesh_0",
+            faceCount: mesh.triangleCount,
+            bounds: aabb
+        )
+        let dx = bounds.max.x - bounds.min.x
+        let dy = bounds.max.y - bounds.min.y
+        let dz = bounds.max.z - bounds.min.z
+        let surfaceArea = 2 * (dx * dy + dy * dz + dx * dz)
+        let volumeEstimate = dx * dy * dz
+        return GeometrySignals(assetURI: assetURI,
+                               connectedComponents: [component],
+                               surfaceArea: surfaceArea,
+                               volumeEstimate: volumeEstimate)
     }
 
     /// Runs visual perception on `imageURL` and injects the resulting inferred properties
