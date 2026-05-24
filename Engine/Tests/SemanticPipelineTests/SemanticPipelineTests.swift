@@ -229,6 +229,65 @@ final class SemanticPipelineTests: XCTestCase {
         XCTAssertTrue(events.isEmpty)
     }
 
+    // MARK: - FileBackedSemanticMemoryStore
+
+    func testFileBackedStoreRoundTripsConfirmedEntry() async throws {
+        let storeURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava_semantic_\(UUID().uuidString)")
+            .appendingPathComponent("memory.json")
+        let store = try FileBackedSemanticMemoryStore(storageURL: storeURL)
+        defer { try? FileManager.default.removeItem(at: storeURL.deletingLastPathComponent()) }
+
+        let fingerprint = GeometryFingerprint(genus: 0, boundaryLoops: 0, faceCountBucket: 3, version: 1)
+        let confirmation = SemanticConfirmation(regionID: "region:body",
+                                                outcome: .accepted(label: "chair"),
+                                                confirmedBy: "user")
+        await store.record(regionID: "body", fingerprint: fingerprint, confirmation: confirmation)
+
+        let results = await store.lookup(fingerprint: fingerprint)
+        XCTAssertEqual(results.count, 1)
+        XCTAssertEqual(results[0].label, "chair")
+    }
+
+    func testFileBackedStoreSurvivesReload() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava_semantic_reload_\(UUID().uuidString)")
+        let storeURL = dir.appendingPathComponent("memory.json")
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let fingerprint = GeometryFingerprint(genus: 1, boundaryLoops: 2, faceCountBucket: 5, version: 1)
+        do {
+            let store = try FileBackedSemanticMemoryStore(storageURL: storeURL)
+            let confirmation = SemanticConfirmation(regionID: "region:leg",
+                                                    outcome: .accepted(label: "table_leg"),
+                                                    confirmedBy: "pipeline")
+            await store.record(regionID: "leg", fingerprint: fingerprint, confirmation: confirmation)
+        }
+
+        // Re-open from same file
+        let store2 = try FileBackedSemanticMemoryStore(storageURL: storeURL)
+        let results = await store2.lookup(fingerprint: fingerprint)
+        XCTAssertEqual(results.count, 1)
+        XCTAssertEqual(results[0].label, "table_leg")
+    }
+
+    func testFileBackedStoreIgnoresRejectedConfirmation() async throws {
+        let storeURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava_semantic_reject_\(UUID().uuidString)")
+            .appendingPathComponent("memory.json")
+        let store = try FileBackedSemanticMemoryStore(storageURL: storeURL)
+        defer { try? FileManager.default.removeItem(at: storeURL.deletingLastPathComponent()) }
+
+        let fingerprint = GeometryFingerprint()
+        let rejection = SemanticConfirmation(regionID: "region:x",
+                                             outcome: .rejected,
+                                             confirmedBy: "user")
+        await store.record(regionID: "x", fingerprint: fingerprint, confirmation: rejection)
+
+        let results = await store.lookup(fingerprint: fingerprint)
+        XCTAssertTrue(results.isEmpty)
+    }
+
     func testMapperPrefersConfirmedOverInferred() {
         let proposals = [
             SemanticProposal(regionID: "region:n0", label: "inferred_label",
