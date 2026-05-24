@@ -345,4 +345,15 @@ struct CapabilityRuntimeTests {
         #expect(CapabilityReleasePhase.beta < .stable)
         #expect(!(CapabilityReleasePhase.stable < .beta))
     }
+
+    @Test("registry contains descriptors for set_mesh_visibility and set_animation_player")
+    func meshVisibilityAndAnimationPlayerAreRegistered() {
+        let registry = CapabilityRegistry.default
+        let meshDesc = registry.descriptor(for: "scene.set_mesh_visibility")
+        let animDesc = registry.descriptor(for: "scene.set_animation_player")
+        #expect(meshDesc != nil, "scene.set_mesh_visibility must be registered")
+        #expect(animDesc != nil, "scene.set_animation_player must be registered")
+        #expect(meshDesc?.isDestructive == false)
+        #expect(animDesc?.isDestructive == false)
+    }
 }
