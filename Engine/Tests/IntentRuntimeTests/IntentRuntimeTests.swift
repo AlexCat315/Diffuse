@@ -1049,6 +1049,69 @@ struct UndoStackTests {
         #expect(ctx.sceneRuntime?.snapshot.revision == revisionBefore)
     }
 
+    @Test("setLocalTransform emits eulerDegrees authored and worldEulerDegrees evaluated events")
+    func setLocalTransformEmitsRotationWorldEvents() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        // Build a transform matrix with 45° Y rotation
+        let angle: Float = 45 * (.pi / 180)
+        let rotMatrix = simd_float4x4(columns: (
+            SIMD4<Float>(cos(angle), 0, -sin(angle), 0),
+            SIMD4<Float>(0,          1,  0,           0),
+            SIMD4<Float>(sin(angle), 0,  cos(angle),  0),
+            SIMD4<Float>(0,          0,  0,           1)
+        ))
+        let transform = LocalTransform(matrix: rotMatrix)
+        let transaction = TransactionIR(
+            summary: "Rotate entity",
+            operations: [.scene(.setLocalTransform(entityID: entity.rawValue, transform: transform))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let eulerEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "eulerDegrees", _) = $0 { return true }
+            return false
+        }
+        #expect(eulerEvent != nil, "setLocalTransform with rotation must emit eulerDegrees authored event")
+    }
+
+    @Test("setRigidBodyMass and setAnimationPlayer emit authored world events")
+    func physicsAndAnimationOpsEmitWorldEvents() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(RigidBody(motionType: .dynamic, mass: 10,
+                                          gravityScale: 1, allowSleep: true), for: entity)
+        _ = scene.setComponent(AnimationPlayer(), for: entity)
+        let transaction = TransactionIR(
+            summary: "Update mass and animation",
+            operations: [
+                .scene(.setRigidBodyMass(entityID: entity.rawValue, value: 50)),
+                .scene(.setAnimationPlayer(entityID: entity.rawValue, clipName: "walk",
+                                           speed: 1.5, loop: true, isPlaying: true)),
+            ],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let massEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "rigidBodyMass", _) = $0 { return true }
+            return false
+        }
+        let animClipEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "animationClip", _) = $0 { return true }
+            return false
+        }
+        #expect(massEvent != nil, "setRigidBodyMass must emit rigidBodyMass authored event")
+        #expect(animClipEvent != nil, "setAnimationPlayer must emit animationClip authored event")
+    }
+
     @Test("ring buffer discards oldest entry when capacity is exceeded")
     func ringBufferEvictsOldest() {
         let stack = UndoStack(capacity: 3)

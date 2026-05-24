@@ -1008,7 +1008,7 @@ public struct TransactionExecutor {
                     events.append(.entityAdded(ref: ref, name: label, kind: kindLabel))
                     events.append(.entityAuthoredChanged(ref: ref, property: "position",
                         value: .vec3(position.x, position.y, position.z)))
-                    if let ev = worldPositionEvent(for: rawID, in: scene) { events.append(ev) }
+                    events.append(contentsOf: worldTransformEvents(for: rawID, in: scene))
                     createdIndex += 1
                 }
 
@@ -1028,7 +1028,7 @@ public struct TransactionExecutor {
                         events.append(.entityAuthoredChanged(ref: ref, property: "position",
                             value: .vec3(t.x, t.y, t.z)))
                     }
-                    if let ev = worldPositionEvent(for: rawID, in: scene) { events.append(ev) }
+                    events.append(contentsOf: worldTransformEvents(for: rawID, in: scene))
                     createdIndex += 1
                 }
 
@@ -1036,14 +1036,28 @@ public struct TransactionExecutor {
                 events.append(.entityAuthoredChanged(
                     ref: "scene:\(entityID)", property: "parentRef",
                     value: .string(parentID.map { "scene:\($0)" } ?? "")))
-                if let ev = worldPositionEvent(for: entityID, in: scene) { events.append(ev) }
+                events.append(contentsOf: worldTransformEvents(for: entityID, in: scene))
 
             case let .setLocalTransform(entityID, transform):
                 let t = transform.translation
                 events.append(.entityAuthoredChanged(
                     ref: "scene:\(entityID)", property: "position",
                     value: .vec3(t.x, t.y, t.z)))
-                if let ev = worldPositionEvent(for: entityID, in: scene) { events.append(ev) }
+                let euler = extractEulerXYZDegrees(transform.matrix)
+                let isZeroRot = abs(euler.x) < 0.01 && abs(euler.y) < 0.01 && abs(euler.z) < 0.01
+                if !isZeroRot {
+                    events.append(.entityAuthoredChanged(
+                        ref: "scene:\(entityID)", property: "eulerDegrees",
+                        value: .vec3(euler.x, euler.y, euler.z)))
+                }
+                let sc = extractScale(transform.matrix)
+                let isUniform1 = abs(sc.x - 1) < 0.0001 && abs(sc.y - 1) < 0.0001 && abs(sc.z - 1) < 0.0001
+                if !isUniform1 {
+                    events.append(.entityAuthoredChanged(
+                        ref: "scene:\(entityID)", property: "scale",
+                        value: .vec3(sc.x, sc.y, sc.z)))
+                }
+                events.append(contentsOf: worldTransformEvents(for: entityID, in: scene))
 
             case let .setSceneName(entityID, value):
                 events.append(.entityAuthoredChanged(
@@ -1062,7 +1076,7 @@ public struct TransactionExecutor {
 
             case let .setRenderMeshVisibility(entityID, isVisible):
                 events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "meshVisibility",
+                    ref: "scene:\(entityID)", property: "meshIsVisible",
                     value: .bool(isVisible)))
 
             case let .setRenderMaterialComponent(entityID, baseColorFactor, _, _, _):
@@ -1105,7 +1119,70 @@ public struct TransactionExecutor {
                 events.append(.entityAuthoredChanged(
                     ref: "scene:\(entityID)", property: "position",
                     value: .vec3(t.x, t.y, t.z)))
-                if let ev = worldPositionEvent(for: entityID, in: scene) { events.append(ev) }
+                events.append(contentsOf: worldTransformEvents(for: entityID, in: scene))
+
+            case let .setRigidBodyMass(entityID, mass):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "rigidBodyMass",
+                    value: .float(max(0, mass))))
+
+            case let .setRigidBodyGravityScale(entityID, scale):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "rigidBodyGravityScale",
+                    value: .float(scale)))
+
+            case let .setRigidBodyAllowSleep(entityID, allow):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "rigidBodyAllowSleep",
+                    value: .bool(allow)))
+
+            case let .setColliderShapeType(entityID, kind):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "colliderShape",
+                    value: .string(kind.rawValue)))
+
+            case let .setColliderTrigger(entityID, isTrigger):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "colliderIsTrigger",
+                    value: .bool(isTrigger)))
+
+            case let .setColliderMaterialFriction(entityID, friction):
+                events.append(.entityAuthoredChanged(ref: "scene:\(entityID)",
+                    property: "colliderFriction", value: .float(max(0, friction))))
+
+            case let .setColliderMaterialRestitution(entityID, restitution):
+                events.append(.entityAuthoredChanged(ref: "scene:\(entityID)",
+                    property: "colliderRestitution", value: .float(max(0, restitution))))
+
+            case let .setColliderMaterialDensity(entityID, density):
+                events.append(.entityAuthoredChanged(ref: "scene:\(entityID)",
+                    property: "colliderDensity", value: .float(max(0, density))))
+
+            case let .setAudioSource(entityID, source):
+                let ref = "scene:\(entityID)"
+                if !source.clipName.isEmpty {
+                    events.append(.entityAuthoredChanged(ref: ref, property: "audioClip",
+                        value: .string(source.clipName)))
+                }
+                events.append(.entityAuthoredChanged(ref: ref, property: "audioVolume",
+                    value: .float(source.volume)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "audioLoop",
+                    value: .bool(source.loop)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "audioPlayOnAwake",
+                    value: .bool(source.playOnAwake)))
+
+            case let .setAnimationPlayer(entityID, clipName, speed, loop, isPlaying):
+                let ref = "scene:\(entityID)"
+                if let clip = clipName, !clip.isEmpty {
+                    events.append(.entityAuthoredChanged(ref: ref, property: "animationClip",
+                        value: .string(clip)))
+                }
+                events.append(.entityAuthoredChanged(ref: ref, property: "animationSpeed",
+                    value: .float(speed)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "animationLoop",
+                    value: .bool(loop)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "animationIsPlaying",
+                    value: .bool(isPlaying)))
 
             default:
                 break
@@ -1117,15 +1194,54 @@ public struct TransactionExecutor {
         return events
     }
 
-    /// Queries the post-propagation world-space position for an entity and returns an evaluated event.
-    /// Returns nil if the scene is unavailable or the entity has no world transform.
-    private func worldPositionEvent(for entityID: UInt64, in scene: SceneRuntime?) -> WorldEvent? {
-        guard let scene else { return nil }
+    /// Returns evaluated WorldEvents for an entity's post-propagation world transform:
+    /// worldPosition always, worldEulerDegrees when the rotation is non-trivial.
+    private func worldTransformEvents(for entityID: UInt64, in scene: SceneRuntime?) -> [WorldEvent] {
+        guard let scene else { return [] }
         let entity = EntityID(index: UInt32(entityID & 0xFFFF_FFFF),
                               generation: UInt32(entityID >> 32))
-        guard let t = scene.worldTransform(for: entity)?.translation else { return nil }
-        return .entityEvaluatedChanged(ref: "scene:\(entityID)",
-                                       property: "worldPosition",
-                                       value: .vec3(t.x, t.y, t.z))
+        guard let wt = scene.worldTransform(for: entity) else { return [] }
+        let ref = "scene:\(entityID)"
+        let t = wt.translation
+        var result: [WorldEvent] = [
+            .entityEvaluatedChanged(ref: ref, property: "worldPosition",
+                                    value: .vec3(t.x, t.y, t.z)),
+        ]
+        let euler = extractEulerXYZDegrees(wt.matrix)
+        if abs(euler.x) >= 0.01 || abs(euler.y) >= 0.01 || abs(euler.z) >= 0.01 {
+            result.append(.entityEvaluatedChanged(ref: ref, property: "worldEulerDegrees",
+                                                  value: .vec3(euler.x, euler.y, euler.z)))
+        }
+        return result
+    }
+
+    private func extractEulerXYZDegrees(_ m: simd_float4x4) -> SIMD3<Float> {
+        let sx = length(SIMD3(m.columns.0.x, m.columns.0.y, m.columns.0.z))
+        let sy = length(SIMD3(m.columns.1.x, m.columns.1.y, m.columns.1.z))
+        let sz = length(SIMD3(m.columns.2.x, m.columns.2.y, m.columns.2.z))
+        guard sx > 0, sy > 0, sz > 0 else { return .zero }
+        let r02 = m.columns.2.x / sz
+        let r12 = m.columns.2.y / sz
+        let r22 = m.columns.2.z / sz
+        let r01 = m.columns.1.x / sy
+        let r00 = m.columns.0.x / sx
+        let sinBeta = Float.maximum(-1, Float.minimum(1, r02))
+        let beta = asin(sinBeta)
+        let toDeg: Float = 180 / .pi
+        if abs(sinBeta) < 0.9999 {
+            return SIMD3(atan2(-r12, r22) * toDeg, beta * toDeg, atan2(-r01, r00) * toDeg)
+        } else {
+            let r10 = m.columns.0.y / sx
+            let r11 = m.columns.1.y / sy
+            return SIMD3(atan2(r10, r11) * toDeg, beta * toDeg, 0)
+        }
+    }
+
+    private func extractScale(_ m: simd_float4x4) -> SIMD3<Float> {
+        SIMD3(
+            length(SIMD3(m.columns.0.x, m.columns.0.y, m.columns.0.z)),
+            length(SIMD3(m.columns.1.x, m.columns.1.y, m.columns.1.z)),
+            length(SIMD3(m.columns.2.x, m.columns.2.y, m.columns.2.z))
+        )
     }
 }

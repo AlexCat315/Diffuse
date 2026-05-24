@@ -148,6 +148,146 @@ struct SequenceRuntimeTests {
         #expect(decoded.colorToken == "cyan")
     }
 
+    @Test("override resolver returns blend weights at shot boundaries")
+    func overrideResolverBlendWeight() {
+        let override = ShotOverride(
+            id: "ov.brightness",
+            targetKind: .lightParam,
+            targetRef: SceneTargetReference(docURI: "scene://main", targetID: "light.key",
+                                            subPath: "intensity"),
+            valueKind: .absolute,
+            value: .number(2.5),
+            blendInFrames: 10,
+            blendOutFrames: 10,
+            ease: .linear
+        )
+        let shot = Shot(id: "shot.a",
+                        name: "sc010_sh020",
+                        range: FrameRange(start: 100, end: 160),
+                        cameraBinding: cameraBinding(),
+                        overrides: [override])
+
+        let atStart = OverrideResolver.activeOverrides(in: shot, at: 100)
+        let midBlendIn = OverrideResolver.activeOverrides(in: shot, at: 105)
+        let fullyOn = OverrideResolver.activeOverrides(in: shot, at: 120)
+        let midBlendOut = OverrideResolver.activeOverrides(in: shot, at: 155)
+        let outsideShot = OverrideResolver.activeOverrides(in: shot, at: 160)
+
+        #expect(atStart.count == 0)
+        #expect(midBlendIn.count == 1)
+        #expect(abs(midBlendIn[0].weight - 0.5) < 0.001)
+        #expect(fullyOn.count == 1)
+        #expect(abs(fullyOn[0].weight - 1.0) < 0.001)
+        #expect(midBlendOut.count == 1)
+        #expect(abs(midBlendOut[0].weight - 0.5) < 0.001)
+        #expect(outsideShot.count == 0)
+    }
+
+    @Test("cache strict policy invalidates on revision mismatch")
+    func cacheStrictPolicyInvalidatesOnRevisionMismatch() {
+        let bakedRevision = SequenceRevision(id: "rev-001")
+        let currentRevision = SequenceRevision(id: "rev-002")
+
+        let strictCache = SequenceCache(id: "cache.physics",
+                                        kind: .physics,
+                                        shotID: "shot.a",
+                                        range: FrameRange(start: 0, end: 60),
+                                        storageURI: "cache://physics.bin",
+                                        sourceRevision: bakedRevision,
+                                        invalidationPolicy: .strict)
+
+        let tolerantCache = SequenceCache(id: "cache.cloth",
+                                          kind: .cloth,
+                                          shotID: "shot.a",
+                                          range: FrameRange(start: 0, end: 60),
+                                          storageURI: "cache://cloth.bin",
+                                          sourceRevision: bakedRevision,
+                                          invalidationPolicy: .tolerant)
+
+        let strictResult = CacheValidator.validate(strictCache, currentRevision: currentRevision)
+        let tolerantResult = CacheValidator.validate(tolerantCache, currentRevision: currentRevision)
+        let freshStrict = CacheValidator.validate(strictCache,
+                                                  currentRevision: bakedRevision)
+
+        #expect(strictResult.isValid == false)
+        #expect(strictResult.isStale == true)
+        #expect(tolerantResult.isValid == true)
+        #expect(tolerantResult.isStale == true)
+        #expect(freshStrict.isValid == true)
+        #expect(freshStrict.isStale == false)
+    }
+
+    @Test("binding validator blocks render when bindings are not bound")
+    func bindingValidatorBlocksRenderWhenUnbound() {
+        let boundBinding = Binding(id: "binding.hero",
+                                   abstractRole: "main_character",
+                                   resolvedTarget: SceneTargetReference(docURI: "scene://main",
+                                                                        targetID: "entity.hero"),
+                                   resolutionStatus: .bound)
+        let staleBinding = Binding(id: "binding.prop",
+                                   abstractRole: "hero_prop",
+                                   resolutionStatus: .stale)
+
+        let clip = Clip(id: "clip.anim",
+                        name: "Hero Walk",
+                        shotRange: FrameRange(start: 0, end: 24),
+                        bindings: [boundBinding, staleBinding])
+        let track = Track(id: "track.anim", name: "Animation", kind: .animation, clips: [clip])
+        let shot = Shot(id: "shot.a",
+                        name: "sc010_sh020",
+                        range: FrameRange(start: 0, end: 60),
+                        cameraBinding: cameraBinding(),
+                        tracks: [track])
+        let sequence = SequenceDocument(name: "Test",
+                                        sceneDocumentURI: "scene://main",
+                                        frameRange: FrameRange(start: 0, end: 60),
+                                        shots: [shot])
+
+        let result = BindingValidator.validateForRender(sequence)
+        guard case let .blocked(ids) = result else {
+            Issue.record("expected .blocked but got .ok")
+            return
+        }
+        #expect(ids.contains("binding.prop"))
+        #expect(!ids.contains("binding.hero"))
+    }
+
+    @Test("document-level FPS remap scales all frame ranges proportionally")
+    func documentFPSRemapScalesAllRanges() {
+        let clip = Clip(id: "clip.anim",
+                        name: "Hero Walk",
+                        shotRange: FrameRange(start: 0, end: 24),
+                        blendInFrames: 6)
+        let track = Track(id: "track.anim", name: "Animation", kind: .animation, clips: [clip])
+        let shot = Shot(id: "shot.a",
+                        name: "sc010_sh020",
+                        range: FrameRange(start: 0, end: 48),
+                        cameraBinding: cameraBinding(),
+                        tracks: [track])
+        let cut = Cut(id: "cut.dissolve",
+                      frame: 24,
+                      transition: .dissolve,
+                      duration: 12)
+        let marker = Marker(id: "marker.beat", frame: 12, kind: .syncPoint, label: "beat")
+        let sequence = SequenceDocument(name: "Test",
+                                        sceneDocumentURI: "scene://main",
+                                        frameRange: FrameRange(start: 0, end: 48),
+                                        shots: [shot],
+                                        markers: [marker],
+                                        cuts: [cut])
+
+        let remapped = sequence.remapping(from: 24, to: 30, mode: .preserveDurationRatio)
+
+        #expect(remapped.timeBase.fps == 30)
+        #expect(remapped.frameRange == FrameRange(start: 0, end: 60))
+        #expect(remapped.shots[0].range == FrameRange(start: 0, end: 60))
+        #expect(remapped.shots[0].tracks[0].clips[0].shotRange == FrameRange(start: 0, end: 30))
+        #expect(remapped.shots[0].tracks[0].clips[0].blendInFrames == 8)
+        #expect(remapped.cuts[0].frame == 30)
+        #expect(remapped.cuts[0].duration == 15)
+        #expect(remapped.markers[0].frame == 15)
+    }
+
     private func cameraBinding() -> Binding {
         Binding(id: "binding.camera",
                 abstractRole: "main_camera",
