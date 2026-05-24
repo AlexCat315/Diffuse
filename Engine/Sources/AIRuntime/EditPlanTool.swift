@@ -186,6 +186,14 @@ public enum EditPlanTool {
                     "type": "number",
                     "description": "Collider material density for set_collider_material.",
                 ] as [String: Any],
+                "collider_layer_id": [
+                    "type": "integer",
+                    "description": "Physics layer index (0–15) this collider occupies. For set_collider_layer.",
+                ] as [String: Any],
+                "collider_layer_mask": [
+                    "type": "integer",
+                    "description": "Bitmask of physics layers this collider interacts with. For set_collider_layer.",
+                ] as [String: Any],
                 "audio_clip": [
                     "type": "string",
                     "description": "Audio clip asset name (no extension) for set_audio_source.",

@@ -88,6 +88,7 @@ public enum SceneEditOp: String, Codable, Sendable, CaseIterable {
 
     // Physics — misc
     case setColliderTrigger   = "set_collider_trigger"
+    case setColliderLayer     = "set_collider_layer"
     case setConstraintEnabled = "set_constraint_enabled"
 
     // Audio
@@ -177,6 +178,10 @@ public struct SceneEditStep: Codable, Sendable {
     // set_collider_trigger
     public var isTrigger: Bool?
 
+    // set_collider_layer
+    public var colliderLayerID: Int?     // physics layer this collider occupies (0-15)
+    public var colliderLayerMask: Int?   // bitmask of layers this collider interacts with
+
     // set_constraint_enabled
     public var isEnabled: Bool?
 
@@ -244,6 +249,8 @@ public struct SceneEditStep: Codable, Sendable {
         case restitution
         case density
         case isTrigger          = "is_trigger"
+        case colliderLayerID    = "collider_layer_id"
+        case colliderLayerMask  = "collider_layer_mask"
         case isEnabled          = "is_enabled"
         case parentRef          = "parent_id"
         case audioClip          = "audio_clip"
