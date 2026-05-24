@@ -402,6 +402,26 @@ public struct CapabilityRegistry: Sendable {
                 preconditions: [editable, entityExists]
             ),
 
+            // MARK: Mesh visibility
+            CapabilityDescriptor(
+                verb: "scene.set_mesh_visibility",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, renderMesh]
+            ),
+
+            // MARK: Animation
+            CapabilityDescriptor(
+                verb: "scene.set_animation_player",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists]
+            ),
+
             // MARK: Sequence
             CapabilityDescriptor(
                 verb: "sequence.replace_document",
