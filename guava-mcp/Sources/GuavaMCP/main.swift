@@ -200,6 +200,18 @@ let toolGetAIEntity: [String: Any] = [
     ] as [String: Any],
 ]
 
+let toolSelectEntity: [String: Any] = [
+    "name": "select_entity",
+    "description": "Sets the active selection in the Guava editor to the specified entity. Pass null entity_id to clear the selection.",
+    "inputSchema": [
+        "type": "object",
+        "properties": [
+            "entity_id": ["type": "string",
+                          "description": "Entity ref to select, e.g. 'scene:123'. Omit or pass null to clear selection."] as [String: Any],
+        ] as [String: Any],
+    ] as [String: Any],
+]
+
 let toolSetPlaybackState: [String: Any] = [
     "name": "set_playback_state",
     "description": "Controls the physics simulation playback state in the Guava editor. 'playing' starts the simulation (snapshots the scene first), 'paused' freezes it without losing state, 'stopped' stops and restores the original scene.",
@@ -285,7 +297,7 @@ func handle(_ msg: [String: Any]) {
         writeResponse([
             "jsonrpc": "2.0",
             "id": id as Any,
-            "result": ["tools": [toolGetScene, toolGetSelection, toolGetAIEntity, toolExecuteEditPlan, toolSetPlaybackState, toolAnalyzeImage]] as [String: Any],
+            "result": ["tools": [toolGetScene, toolGetSelection, toolSelectEntity, toolGetAIEntity, toolExecuteEditPlan, toolSetPlaybackState, toolAnalyzeImage]] as [String: Any],
         ])
 
     case "tools/call":
@@ -309,6 +321,19 @@ func handle(_ msg: [String: Any]) {
                 toolResult(id: id as Any, text: ref)
             } else {
                 toolResult(id: id as Any, text: res["error"] as? String ?? "unknown error", isError: true)
+            }
+
+        case "select_entity":
+            var request: [String: Any] = ["action": "select_entity"]
+            if let entityID = args["entity_id"] as? String {
+                request["entity_id"] = entityID
+            }
+            let selRes = editorCall(request)
+            if let ok = selRes["ok"] as? Bool, ok {
+                let ref = selRes["selectedRef"] as? String ?? "null"
+                toolResult(id: id as Any, text: "Selected: \(ref)")
+            } else {
+                toolResult(id: id as Any, text: selRes["error"] as? String ?? "unknown error", isError: true)
             }
 
         case "get_ai_entity":
