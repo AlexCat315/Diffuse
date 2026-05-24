@@ -53,10 +53,8 @@ public struct PerceptionWorldEventMapper: Sendable {
                                                 source: source))
                 }
                 if let bbox = obs.bbox2D {
-                    // Encode as "x,y,w,h" string — numeric fields not yet in WorldPropertyValue
-                    let bboxStr = "\(Int(bbox.x)),\(Int(bbox.y)),\(Int(bbox.width)),\(Int(bbox.height))"
                     writes.append(InferredWrite(property: "perception.bbox2d",
-                                                value: .string(bboxStr),
+                                                value: .vec4(bbox.x, bbox.y, bbox.width, bbox.height),
                                                 confidence: obs.confidence,
                                                 source: source))
                 }

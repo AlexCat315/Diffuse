@@ -7,10 +7,11 @@ extension WorldPropertyValue {
     /// Human-readable string used when storing a WorldPropertyValue as an InferredProperty.
     var inferredDisplayValue: String {
         switch self {
-        case let .string(s): return s
-        case let .float(f):  return String(format: "%.4g", f)
-        case let .bool(b):   return b ? "true" : "false"
-        case let .vec3(x, y, z): return "(\(x), \(y), \(z))"
+        case let .string(s):          return s
+        case let .float(f):           return String(format: "%.4g", f)
+        case let .bool(b):            return b ? "true" : "false"
+        case let .vec3(x, y, z):      return "(\(x), \(y), \(z))"
+        case let .vec4(x, y, z, w):   return "(\(x), \(y), \(z), \(w))"
         }
     }
 }
