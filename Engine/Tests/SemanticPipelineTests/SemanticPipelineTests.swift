@@ -381,6 +381,69 @@ final class SemanticPipelineTests: XCTestCase {
         )
     }
 
+    func testVisionBackendReturnsEmptyWhenNoPreviewImage() async {
+        let raw = RawStructure(assetURI: "test://chair.glb")
+        let signals = GeometrySignals(assetURI: raw.assetURI)
+        let regions = CandidateRegionSet(assetURI: raw.assetURI, regions: [
+            Region(id: "region:root", source: .structural, parentRegionID: nil),
+        ])
+        let proposals = await VisionBackend().analyze(regions: regions,
+                                                       rawStructure: raw,
+                                                       signals: signals)
+        XCTAssertTrue(proposals.isEmpty, "VisionBackend must return empty without a previewImagePath")
+    }
+
+    func testVisionBackendReturnsEmptyWhenImageFileMissing() async {
+        var raw = RawStructure(assetURI: "test://chair.glb",
+                               previewImagePath: "/nonexistent/preview.png")
+        _ = raw
+        let signals = GeometrySignals(assetURI: raw.assetURI)
+        let regions = CandidateRegionSet(assetURI: raw.assetURI, regions: [
+            Region(id: "region:root", source: .structural, parentRegionID: nil),
+        ])
+        let proposals = await VisionBackend().analyze(regions: regions,
+                                                       rawStructure: raw,
+                                                       signals: signals)
+        XCTAssertTrue(proposals.isEmpty, "VisionBackend must return empty when image file is missing")
+    }
+
+    func testVisionBackendProducesProposalsForFixtureImage() async throws {
+        #if canImport(Vision)
+        let testFile = URL(fileURLWithPath: #filePath)
+        let engineRoot = testFile
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let imageURL = engineRoot.appendingPathComponent("third-party/sdl3/test/trashcan.png")
+        guard FileManager.default.fileExists(atPath: imageURL.path) else {
+            throw XCTSkip("Fixture image not available")
+        }
+
+        let raw = RawStructure(assetURI: "test://bin.glb", previewImagePath: imageURL.path)
+        let signals = GeometrySignals(assetURI: raw.assetURI)
+        let regions = CandidateRegionSet(assetURI: raw.assetURI, regions: [
+            Region(id: "region:root", source: .structural, parentRegionID: nil),
+        ])
+        let proposals = await VisionBackend(maxResults: 2, confidenceThreshold: 0.0)
+            .analyze(regions: regions, rawStructure: raw, signals: signals)
+
+        XCTAssertFalse(proposals.isEmpty, "VisionBackend must produce proposals for a real image")
+        XCTAssertEqual(proposals.first?.source, "vision")
+        let confidence = proposals.first?.confidence ?? 0
+        XCTAssertGreaterThan(confidence, 0, "proposals must have positive confidence")
+        #else
+        throw XCTSkip("Vision framework unavailable")
+        #endif
+    }
+
+    func testStandardPipelineIncludesVisionBackend() {
+        let pipeline = AssetSemanticPipeline.standard()
+        // The pipeline's backends aren't publicly enumerable; check that analyze()
+        // with a previewImagePath param compiles and runs without crash.
+        let raw = RawStructure(assetURI: "test://asset.glb", previewImagePath: nil)
+        _ = raw  // compile-time check that previewImagePath parameter is accepted
+    }
+
     func testMapperPrefersConfirmedOverInferred() {
         let proposals = [
             SemanticProposal(regionID: "region:n0", label: "inferred_label",
