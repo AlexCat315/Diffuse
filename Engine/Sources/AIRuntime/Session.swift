@@ -111,6 +111,10 @@ public actor Session {
                                                rejectedStepIDs: rejectedStepIDs,
                                                onProgress: onProgress)
 
+        case let .referenceImage(url, entityRef):
+            return try await processReferenceImage(url: url, entityRef: entityRef,
+                                                   onProgress: onProgress)
+
         default:
             throw SessionError.unsupportedSignal(signal.kind)
         }
@@ -167,6 +171,47 @@ public actor Session {
             confidence: planConfidence(for: plan),
             approvalPolicy: config.autoApprove ? .automatic : .requiresApproval,
             toolUseID: newToolUseID
+        )
+    }
+
+    private func processReferenceImage(url: URL,
+                                        entityRef: String?,
+                                        onProgress: (@Sendable (String) -> Void)?) async throws -> Proposal {
+        let userMessage: String
+        if let ref = entityRef {
+            let filename = url.lastPathComponent
+            userMessage = """
+            I have attached a reference image ("\(filename)") for entity \(ref). \
+            Perception has already run and inferred properties are visible in the scene entity list. \
+            Based on those inferred observations and the surrounding scene, produce a scene edit plan \
+            that names, organizes, or extends the entity appropriately. \
+            If the inferred properties do not suggest any useful edits, reply with an empty steps array \
+            and explain in the summary.
+            """
+        } else {
+            let filename = url.lastPathComponent
+            userMessage = """
+            I have provided a reference image ("\(filename)") for scene creation. \
+            Perception has run and any inferred entity properties appear in the scene entity list. \
+            Based on those observations and the current scene context, produce a scene edit plan \
+            that populates or refines the scene to match the reference. \
+            If no actionable changes can be derived, reply with an empty steps array.
+            """
+        }
+        recordTurn(ConversationTurn(kind: .userText(userMessage)))
+        let (plan, toolUseID, inputJSON) = try await infer(onProgress: onProgress)
+        recordTurn(ConversationTurn(kind: .assistantToolCall(toolUseID: toolUseID,
+                                                             name: "execute_edit_plan",
+                                                             inputJSON: inputJSON)))
+        return Proposal(
+            sessionID: id,
+            semanticIntent: userMessage,
+            plan: plan,
+            baseSceneRevision: worldView.sceneRevision,
+            reasoning: plan.reasoning,
+            confidence: planConfidence(for: plan),
+            approvalPolicy: config.autoApprove ? .automatic : .requiresApproval,
+            toolUseID: toolUseID
         )
     }
 
@@ -444,8 +489,9 @@ public actor Session {
         - Prefer minimal plans — only include steps necessary to satisfy the request.
         - For set_transform, use the `position`, `scale`, and `eulerDegrees` fields (all local \
         space) as the base and only change what the user asked for. When an entity is in a \
-        hierarchy, `evaluated.worldPosition` shows its actual world-space position — use it \
-        for spatial reasoning but set_transform always writes local space.
+        hierarchy, `evaluated.worldPosition` shows its actual world-space position and \
+        `evaluated.worldEulerDegrees` shows its world-space rotation — use these for spatial \
+        reasoning, but set_transform always writes local space.
         - The `scale` field is omitted when uniform [1, 1, 1]; treat missing `scale` as [1, 1, 1].
         - The `eulerDegrees` field is omitted when the rotation is [0, 0, 0]; treat missing \
         `eulerDegrees` as [0, 0, 0]. Angles are XYZ intrinsic Euler in degrees.
