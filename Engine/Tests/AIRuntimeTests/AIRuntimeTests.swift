@@ -293,10 +293,76 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(Session.confidence(for: plan), 0.90, accuracy: 0.001)
     }
 
-    func testConfidenceFloorAt050() {
+    func testConfidenceFloorAt040() {
         let steps = (0..<30).map { _ in SceneEditStep(op: .deleteEntity, entityRef: "scene:1") }
         let plan = SceneEditPlan(summary: "massacre", steps: steps)
-        XCTAssertGreaterThanOrEqual(Session.confidence(for: plan), 0.50)
+        XCTAssertGreaterThanOrEqual(Session.confidence(for: plan), 0.40)
+    }
+
+    func testConfidenceBroadImpactPenalty() {
+        // 7 distinct entities → broadPenalty = 2 → -0.04
+        let steps = (1...7).map { SceneEditStep(op: .setName, entityRef: "scene:\($0)", name: "X") }
+        let plan = SceneEditPlan(summary: "rename many", steps: steps)
+        let score = Session.confidence(for: plan)
+        // 1.0 - 6*0.03 - 2*0.02 = 1.0 - 0.18 - 0.04 = 0.78
+        XCTAssertEqual(score, 0.78, accuracy: 0.001)
+    }
+
+    func testConfidenceOrphanSpawnPenalty() {
+        // Spawn with no follow-up transform → -0.05 extra
+        let step = SceneEditStep(op: .spawnEntity, entityRef: nil, name: "Prop")
+        let plan = SceneEditPlan(summary: "spawn", steps: [step])
+        let score = Session.confidence(for: plan)
+        // 1.0 - 0.05 = 0.95
+        XCTAssertEqual(score, 0.95, accuracy: 0.001)
+    }
+
+    func testWorkflowContextGameSystemPromptSection() {
+        let intent = GameplayIntent(genre: "third_person_shooter",
+                                   winCondition: "eliminate_all",
+                                   playerCount: 1,
+                                   pacing: "tight_action")
+        let ctx = GameWorkflowContext(levelPhase: .encounterDesign,
+                                      gameplayIntent: intent,
+                                      targetExperience: "Surrounded but escapable")
+        let section = ctx.systemPromptSection
+        XCTAssertTrue(section.contains("game/interactive"))
+        XCTAssertTrue(section.contains("EncounterDesign"))
+        XCTAssertTrue(section.contains("tight_action"))
+        XCTAssertTrue(section.contains("Surrounded but escapable"))
+    }
+
+    func testWorkflowContextFilmSystemPromptSection() {
+        let ctx = FilmWorkflowContext(
+            activeSequenceID: "seq_010",
+            activeShotID: "sh_020",
+            narrativePhase: .lighting,
+            directorIntent: "Moody noir feel",
+            lockedShotIDs: ["sh_010"]
+        )
+        let section = ctx.systemPromptSection
+        XCTAssertTrue(section.contains("cinematic / film"))
+        XCTAssertTrue(section.contains("lighting"))
+        XCTAssertTrue(section.contains("Moody noir feel"))
+        XCTAssertTrue(section.contains("sh_010"))
+    }
+
+    func testWorkflowContextFilmReviewPhaseNotesSticktApproval() {
+        let ctx = FilmWorkflowContext(activeSequenceID: "seq_010",
+                                      narrativePhase: .review)
+        let section = ctx.systemPromptSection
+        XCTAssertTrue(section.contains("require explicit approval"))
+    }
+
+    func testWorkflowContextRoundTripsCodable() throws {
+        let intent = GameplayIntent(genre: "puzzle_platformer", winCondition: "reach_exit")
+        let game = GameWorkflowContext(levelPhase: .polish,
+                                       gameplayIntent: intent,
+                                       targetExperience: "Serene discovery")
+        let context = WorkflowContext.game(game)
+        let data = try JSONEncoder().encode(context)
+        let decoded = try JSONDecoder().decode(WorkflowContext.self, from: data)
+        XCTAssertEqual(decoded, context)
     }
 
     func testSnapshotAnimationFieldsCopiedToEntityRecord() {
