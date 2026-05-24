@@ -149,7 +149,8 @@ public struct GeometryBackend: SemanticAnalyzerBackend, Sendable {
 
 extension AssetSemanticPipeline {
     /// Returns a pipeline configured with all built-in backends: name heuristic,
-    /// rig, metadata, and geometry. Pass `memory` to enable cross-session recall.
+    /// rig, metadata, geometry, and vision (Apple Vision classifier).
+    /// Pass `memory` to enable cross-session recall.
     public static func standard(memory: (any SemanticMemoryStore)? = nil) -> AssetSemanticPipeline {
         AssetSemanticPipeline(
             config: .default,
@@ -158,6 +159,7 @@ extension AssetSemanticPipeline {
                 RigBackend(),
                 MetadataBackend(),
                 GeometryBackend(),
+                VisionBackend(),
             ],
             memory: memory
         )
