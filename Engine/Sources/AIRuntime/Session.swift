@@ -54,6 +54,7 @@ public actor Session {
     private let config: SessionConfig
     private let urlSession: URLSession
     private let maxHistoryTurns: Int
+    public private(set) var workflowContext: WorkflowContext?
 
     private static let anthropicAPIVersion = "2023-06-01"
     private static let maxEntityPromptCount = 100
@@ -69,15 +70,21 @@ public actor Session {
 
     public init(id: String = UUID().uuidString,
                 config: SessionConfig,
+                workflowContext: WorkflowContext? = nil,
                 urlSession: URLSession = .shared,
                 maxHistoryTurns: Int = 40,
                 initialWorldView: WorldView = WorldView()) {
         self.id = id
         self.config = config
+        self.workflowContext = workflowContext
         self.urlSession = urlSession
         self.worldView = initialWorldView
         self.conversationHistory = []
         self.maxHistoryTurns = maxHistoryTurns
+    }
+
+    public func setWorkflowContext(_ context: WorkflowContext?) {
+        workflowContext = context
     }
 
     // MARK: - Signal processing
@@ -474,7 +481,9 @@ public actor Session {
             parts.append("Recent edits (most recent last):\n\(lines)")
         }
 
-        if let mode = worldView.workflowMode {
+        if let ctx = workflowContext {
+            parts.append(ctx.systemPromptSection)
+        } else if let mode = worldView.workflowMode {
             parts.append("Active workflow mode: \(mode)")
         }
 
@@ -627,16 +636,32 @@ public actor Session {
     /// Starts at 1.0 and applies penalties:
     /// - Each step beyond the first reduces confidence slightly (large plans are riskier).
     /// - Destructive ops (delete, duplicate) apply a larger penalty.
+    /// - Steps that touch many distinct entities are penalised as broad-impact.
+    /// - Spawn (createEntity) without a subsequent transform is penalised slightly.
     /// - Empty plans (conversational response) are always 1.0.
     static func confidence(for plan: SceneEditPlan) -> Double {
         guard !plan.steps.isEmpty else { return 1.0 }
         var score = 1.0
         let destructive: Set<SceneEditOp> = [.deleteEntity, .duplicateEntity]
+        var affectedEntityIDs = Set<String>()
+        var hasSpawn = false
+
         for (i, step) in plan.steps.enumerated() {
             if i > 0 { score -= 0.03 }
             if destructive.contains(step.op) { score -= 0.10 }
+            if step.op == .spawnEntity { hasSpawn = true }
+            if let ref = step.entityRef { affectedEntityIDs.insert(ref) }
         }
-        return max(0.50, score)
+
+        // Broad-impact penalty: more than 5 distinct entities touched.
+        let broadPenalty = max(0, affectedEntityIDs.count - 5)
+        score -= Double(broadPenalty) * 0.02
+
+        // Orphan spawn penalty: spawnEntity with no subsequent setTransform.
+        let hasTransformStep = plan.steps.contains { $0.op == .setTransform }
+        if hasSpawn && !hasTransformStep { score -= 0.05 }
+
+        return max(0.40, score)
     }
 
     // MARK: - HTTP
