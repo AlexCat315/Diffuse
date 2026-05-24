@@ -1,6 +1,6 @@
 import Foundation
 
-public struct SemanticMemoryEntry: Sendable {
+public struct SemanticMemoryEntry: Sendable, Codable {
     public var fingerprintHash: String
     public var assetURI: String
     public var regionAlias: String
