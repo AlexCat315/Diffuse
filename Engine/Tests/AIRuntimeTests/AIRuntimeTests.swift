@@ -497,4 +497,33 @@ final class AIRuntimeTests: XCTestCase {
                                                   value: .bool(true)))
         XCTAssertEqual(view.entityIndex["scene:12"]?.lightCastShadows, true)
     }
+
+    func testSetScriptPropertyOpRoundTrips() throws {
+        let json = """
+        {"op":"set_script_property","entity_id":"scene:20","script_index":0,"script_property_name":"speed","script_property_value":5.0}
+        """
+        let step = try JSONDecoder().decode(SceneEditStep.self, from: Data(json.utf8))
+        XCTAssertEqual(step.op, .setScriptProperty)
+        XCTAssertEqual(step.entityRef, "scene:20")
+        XCTAssertEqual(step.scriptIndex, 0)
+        XCTAssertEqual(step.scriptPropertyName, "speed")
+        XCTAssertEqual(step.scriptPropertyValue, .number(5.0))
+    }
+
+    func testSetScriptPropertyDefaultsScriptIndexToZero() throws {
+        let json = """
+        {"op":"set_script_property","entity_id":"scene:21","script_property_name":"label","script_property_value":"Patrol"}
+        """
+        let step = try JSONDecoder().decode(SceneEditStep.self, from: Data(json.utf8))
+        XCTAssertNil(step.scriptIndex)
+        XCTAssertEqual(step.scriptPropertyValue, .string("Patrol"))
+    }
+
+    func testJSONValueBoolRoundTrips() throws {
+        let json = """
+        {"op":"set_script_property","entity_id":"scene:22","script_property_name":"active","script_property_value":true}
+        """
+        let step = try JSONDecoder().decode(SceneEditStep.self, from: Data(json.utf8))
+        XCTAssertEqual(step.scriptPropertyValue, .bool(true))
+    }
 }
