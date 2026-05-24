@@ -648,6 +648,24 @@ public struct TransactionExecutor {
                                                                    type: "CameraComponent")
                 }
 
+            case let .setCameraFOV(entityID, fovYDegrees):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(CameraComponent.self, for: entity, { camera in
+                    camera.fovYRadians = fovYDegrees * .pi / 180.0
+                }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "CameraComponent")
+                }
+
+            case let .setCameraActive(entityID, isActive):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(CameraComponent.self, for: entity, { camera in
+                    camera.isActive = isActive
+                }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "CameraComponent")
+                }
+
             case let .setAudioSource(entityID, source):
                 let entity = try requireEntity(entityID, in: scene)
                 _ = scene.setComponent(source, for: entity)
@@ -980,6 +998,10 @@ public struct TransactionExecutor {
             return "scene:scripts:\(id)"
         case let .setCameraPose(id, _, _, _):
             return "scene:camera_pose:\(id)"
+        case let .setCameraFOV(id, _):
+            return "scene:camera_fov:\(id)"
+        case let .setCameraActive(id, _):
+            return "scene:camera_active:\(id)"
         case let .setAudioSource(id, _):
             return "scene:audio_source:\(id)"
         case let .setAnimationPlayer(id, _, _, _, _):
@@ -1120,6 +1142,16 @@ public struct TransactionExecutor {
                     ref: "scene:\(entityID)", property: "position",
                     value: .vec3(t.x, t.y, t.z)))
                 events.append(contentsOf: worldTransformEvents(for: entityID, in: scene))
+
+            case let .setCameraFOV(entityID, fovYDegrees):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "cameraFovYDegrees",
+                    value: .float(max(1, min(179, fovYDegrees)))))
+
+            case let .setCameraActive(entityID, isActive):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "cameraIsActive",
+                    value: .bool(isActive)))
 
             case let .setRigidBodyMass(entityID, mass):
                 events.append(.entityAuthoredChanged(

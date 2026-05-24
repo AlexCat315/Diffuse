@@ -439,4 +439,43 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(record?.inferred["object_category"]?.displayValue, "chair")
         XCTAssertEqual(record?.inferred["object_category"]?.source, "perception:fixture_classifier")
     }
+
+    // MARK: - Camera FOV / active ops
+
+    func testCameraFOVOpRoundTrips() throws {
+        let json = """
+        {"op":"set_camera_fov","entity_id":"scene:5","camera_fov_y":35.0}
+        """
+        let step = try JSONDecoder().decode(SceneEditStep.self, from: Data(json.utf8))
+        XCTAssertEqual(step.op, .setCameraFOV)
+        XCTAssertEqual(step.entityRef, "scene:5")
+        XCTAssertEqual(step.cameraFovYDegrees, 35.0)
+    }
+
+    func testCameraActiveOpRoundTrips() throws {
+        let json = """
+        {"op":"set_camera_active","entity_id":"scene:7","camera_is_active":false}
+        """
+        let step = try JSONDecoder().decode(SceneEditStep.self, from: Data(json.utf8))
+        XCTAssertEqual(step.op, .setCameraActive)
+        XCTAssertEqual(step.cameraIsActive, false)
+    }
+
+    func testWorldEntityRecordApplyCameraFovFromEvent() {
+        var view = WorldView()
+        view.apply(event: .entityAdded(ref: "scene:9", name: "MainCamera", kind: "camera"))
+        view.apply(event: .entityAuthoredChanged(ref: "scene:9",
+                                                  property: "cameraFovYDegrees",
+                                                  value: .float(50.0)))
+        XCTAssertEqual(view.entityIndex["scene:9"]?.cameraFovYDegrees, 50.0)
+    }
+
+    func testWorldEntityRecordApplyCameraActiveFromEvent() {
+        var view = WorldView()
+        view.apply(event: .entityAdded(ref: "scene:10", name: "Cam", kind: "camera"))
+        view.apply(event: .entityAuthoredChanged(ref: "scene:10",
+                                                  property: "cameraIsActive",
+                                                  value: .bool(false)))
+        XCTAssertEqual(view.entityIndex["scene:10"]?.cameraIsActive, false)
+    }
 }

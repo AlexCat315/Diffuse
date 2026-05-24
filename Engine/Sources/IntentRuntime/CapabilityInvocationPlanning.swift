@@ -391,6 +391,12 @@ private struct CapabilityOperationProjection {
             self.verb = "scene.set_camera_pose"
             self.arguments["position"] = .vec3(IntentVector3(localTransform.translation))
             self.arguments["target"] = .vec3(IntentVector3(target))
+        case let .setCameraFOV(_, fovYDegrees):
+            self.verb = "scene.set_camera_fov"
+            self.arguments["fov_y_degrees"] = .number(Double(fovYDegrees))
+        case let .setCameraActive(_, isActive):
+            self.verb = "scene.set_camera_active"
+            self.arguments["is_active"] = .bool(isActive)
         case let .setAudioSource(_, source):
             self.verb = "scene.set_audio_source"
             self.arguments["audio_clip"] = .string(source.clipName)

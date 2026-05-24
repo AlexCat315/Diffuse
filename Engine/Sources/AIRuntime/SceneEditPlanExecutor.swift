@@ -198,6 +198,18 @@ public struct SceneEditPlanExecutor: Sendable {
             let transform = LocalTransform(translation: pos)
             return [.setCameraPose(entityID: id, localTransform: transform, target: target, up: up)]
 
+        case .setCameraFOV:
+            let id = try resolveEntityID(step, scene: scene)
+            guard let fov = step.cameraFovYDegrees else {
+                throw SceneEditPlanExecutorError.missingField(op: step.op, field: "camera_fov_y")
+            }
+            return [.setCameraFOV(entityID: id, fovYDegrees: fov)]
+
+        case .setCameraActive:
+            let id = try resolveEntityID(step, scene: scene)
+            let active = step.cameraIsActive ?? true
+            return [.setCameraActive(entityID: id, isActive: active)]
+
         case .setRigidBodyMotion:
             let id = try resolveEntityID(step, scene: scene)
             guard let typeStr = step.motionType else {
