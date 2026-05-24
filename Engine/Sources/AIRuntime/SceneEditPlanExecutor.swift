@@ -190,6 +190,11 @@ public struct SceneEditPlanExecutor: Sendable {
             }
             return result
 
+        case .setLightCastShadows:
+            let id = try resolveEntityID(step, scene: scene)
+            let cast = step.lightCastShadows ?? false
+            return [.setLightCastShadows(entityID: id, value: cast)]
+
         case .setCameraPose:
             let id = try resolveEntityID(step, scene: scene)
             let pos = simd3(step.position) ?? .zero

@@ -366,6 +366,14 @@ public struct CapabilityRegistry: Sendable {
                 domain: "scene",
                 preconditions: [editable, entityExists, light]
             ),
+            CapabilityDescriptor(
+                verb: "scene.set_light_cast_shadows",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, light]
+            ),
 
             // MARK: Render/script/audio
             CapabilityDescriptor(

@@ -597,6 +597,7 @@ public actor Session {
         if let v = e.lightRange         { d["lightRange"] = v }
         if let v = e.lightSpotInner     { d["lightSpotInner"] = v }
         if let v = e.lightSpotOuter     { d["lightSpotOuter"] = v }
+        if let v = e.lightCastShadows   { d["lightCastShadows"] = v }
         if let v = e.cameraFovYDegrees  { d["cameraFovYDegrees"] = v }
         if let v = e.cameraIsActive     { d["cameraIsActive"] = v }
         if let v = e.meshColor          { d["meshColor"] = v }

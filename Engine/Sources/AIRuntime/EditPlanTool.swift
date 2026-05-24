@@ -114,6 +114,10 @@ public enum EditPlanTool {
                     "type": "number",
                     "description": "Spot cone outer angle in degrees for set_light_spot_angles.",
                 ] as [String: Any],
+                "light_cast_shadows": [
+                    "type": "boolean",
+                    "description": "Whether the light casts shadows for set_light_cast_shadows.",
+                ] as [String: Any],
                 "camera_target": [
                     "type": "array", "items": ["type": "number"] as [String: Any],
                     "description": "[x, y, z] look-at point for set_camera_pose.",

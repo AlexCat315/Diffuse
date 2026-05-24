@@ -601,6 +601,15 @@ public struct TransactionExecutor {
                                                                    type: "LightComponent")
                 }
 
+            case let .setLightCastShadows(entityID, value):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(LightComponent.self, for: entity, {
+                    $0.castShadows = value
+                }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "LightComponent")
+                }
+
             case let .setMeshColorTint(entityID, color):
                 let entity = try requireEntity(entityID, in: scene)
                 guard scene.updateComponent(RenderMeshComponent.self, for: entity, {
@@ -988,6 +997,8 @@ public struct TransactionExecutor {
             return "scene:light_spot_inner:\(id)"
         case let .setLightSpotOuterAngle(id, _):
             return "scene:light_spot_outer:\(id)"
+        case let .setLightCastShadows(id, _):
+            return "scene:light_cast_shadows:\(id)"
         case let .setMeshColorTint(id, _):
             return "scene:mesh_color:\(id)"
         case let .setRenderMeshVisibility(id, _):
@@ -1135,6 +1146,11 @@ public struct TransactionExecutor {
                 events.append(.entityAuthoredChanged(
                     ref: "scene:\(entityID)", property: "lightSpotOuter",
                     value: .float(max(1, min(179, angle)))))
+
+            case let .setLightCastShadows(entityID, value):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "lightCastShadows",
+                    value: .bool(value)))
 
             case let .setCameraPose(entityID, localTransform, _, _):
                 let t = localTransform.translation
