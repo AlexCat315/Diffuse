@@ -246,6 +246,7 @@ let package = Package(
                 "SceneRuntime",
                 "ScriptRuntime",
                 "IntentRuntime",
+                "ObservationBus",
             ]
         ),
         .target(

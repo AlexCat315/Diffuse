@@ -3,6 +3,7 @@ import Foundation
 import FoundationNetworking
 #endif
 import IntentRuntime
+import ObservationBus
 
 private extension WorldPropertyValue {
     /// JSON-serialisable form used only in the system prompt — human-readable, not tagged.
@@ -56,6 +57,7 @@ public actor Session {
     private let urlSession: URLSession
     private let maxHistoryTurns: Int
     public private(set) var workflowContext: WorkflowContext?
+    private var observationBus: ObservationBus?
 
     private static let anthropicAPIVersion = "2023-06-01"
     private static let maxEntityPromptCount = 100
@@ -86,6 +88,10 @@ public actor Session {
 
     public func setWorkflowContext(_ context: WorkflowContext?) {
         workflowContext = context
+    }
+
+    public func setObservationBus(_ bus: ObservationBus?) {
+        observationBus = bus
     }
 
     // MARK: - Signal processing
@@ -480,6 +486,13 @@ public actor Session {
                 .map { "- \($0.summary) (rev \($0.revision))" }
                 .joined(separator: "\n")
             parts.append("Recent edits (most recent last):\n\(lines)")
+        }
+
+        if let bus = observationBus {
+            let txView = bus.symbolicView(streamID: "transaction", fromSeq: 0, maxCount: 10)
+            if !txView.events.isEmpty {
+                parts.append(txView.promptText())
+            }
         }
 
         if let ctx = workflowContext {
