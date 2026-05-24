@@ -262,7 +262,7 @@ public final class EditorApplication: @unchecked Sendable {
             guard let self else { return }
             let raw = Self.buildRawStructure(from: mesh, assetURI: assetURI)
             let signals = Self.buildGeometrySignals(from: mesh, assetURI: assetURI)
-            let pipeline = AssetSemanticPipeline()
+            let pipeline = AssetSemanticPipeline.standard()
             let decision = await pipeline.run(rawStructure: raw, signals: signals)
 
             let proposals: [SemanticProposal]
