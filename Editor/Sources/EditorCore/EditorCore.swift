@@ -119,10 +119,14 @@ public final class EditorApplication: @unchecked Sendable {
 
         startMCPBridge()
 
-        // Propagate initial workflow context to Session.
+        // Propagate initial workflow context and observation bus to Session.
         if let initialSession {
             let ctx = Self.workflowContext(for: store.state.workspaceMode)
-            Task { await initialSession.setWorkflowContext(ctx) }
+            let bus = observationBus
+            Task {
+                await initialSession.setWorkflowContext(ctx)
+                await initialSession.setObservationBus(bus)
+            }
         }
 
         // Keep Session's WorkflowContext in sync when the user switches workspace mode.
@@ -1022,9 +1026,11 @@ public final class EditorApplication: @unchecked Sendable {
         if let newSession {
             let worldContext = self.aiWorldContext
             let ctx = Self.workflowContext(for: store.state.workspaceMode)
+            let bus = self.observationBus
             Task {
                 await newSession.replaceWorldView(await worldContext.snapshot())
                 await newSession.setWorkflowContext(ctx)
+                await newSession.setObservationBus(bus)
             }
         }
         session = newSession
