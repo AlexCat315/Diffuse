@@ -1281,6 +1281,8 @@ public final class EditorApplication: @unchecked Sendable {
         case "get_selection":
             let ref = store.state.selectedEntityID.map { "scene:\($0)" }
             return ["ok": true, "selectedRef": ref as Any]
+        case "select_entity":
+            return mcpSelectEntity(params: params)
         case "set_playback_state":
             return mcpSetPlaybackState(params: params)
         default:
@@ -1297,6 +1299,22 @@ public final class EditorApplication: @unchecked Sendable {
         }
         applyPlaybackState(next)
         return ["ok": true, "state": next.rawValue]
+    }
+
+    private func mcpSelectEntity(params: [String: Any]) -> [String: Any] {
+        if let refStr = params["entity_id"] as? String, !refStr.isEmpty {
+            guard refStr.hasPrefix("scene:"),
+                  let raw = UInt64(refStr.dropFirst("scene:".count)),
+                  let eid = entityID(from: raw),
+                  scene.scene.contains(eid) else {
+                return ["ok": false, "error": "invalid entity ref '\(params["entity_id"] as? String ?? "")'"]
+            }
+            store.dispatch(.setSelectedEntity(raw))
+            return ["ok": true, "selectedRef": refStr]
+        } else {
+            store.dispatch(.setSelectedEntity(nil))
+            return ["ok": true, "selectedRef": NSNull()]
+        }
     }
 
     private func mcpGetScene() -> [String: Any] {
