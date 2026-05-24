@@ -258,9 +258,11 @@ public final class EditorApplication: @unchecked Sendable {
         let assetURI = asset.relativePath
         let session = self.session
 
+        let previewImagePath = Self.siblingPreviewImagePath(for: asset.absolutePath)
         Task.detached(priority: .utility) { [weak self] in
             guard let self else { return }
-            let raw = Self.buildRawStructure(from: mesh, assetURI: assetURI)
+            let raw = Self.buildRawStructure(from: mesh, assetURI: assetURI,
+                                             previewImagePath: previewImagePath)
             let signals = Self.buildGeometrySignals(from: mesh, assetURI: assetURI)
             let pipeline = AssetSemanticPipeline.standard()
             let decision = await pipeline.run(rawStructure: raw, signals: signals)
@@ -286,7 +288,18 @@ public final class EditorApplication: @unchecked Sendable {
         }
     }
 
-    private static func buildRawStructure(from mesh: MeshAsset, assetURI: String) -> RawStructure {
+    private static func siblingPreviewImagePath(for absolutePath: String) -> String? {
+        let base = (absolutePath as NSString).deletingPathExtension
+        for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"] {
+            let candidate = "\(base).\(ext)"
+            if FileManager.default.fileExists(atPath: candidate) { return candidate }
+        }
+        return nil
+    }
+
+    private static func buildRawStructure(from mesh: MeshAsset,
+                                          assetURI: String,
+                                          previewImagePath: String? = nil) -> RawStructure {
         var nodes: [RawStructure.Node] = []
         for (i, node) in mesh.nodes.enumerated() {
             let t = node.localTranslation
@@ -344,6 +357,7 @@ public final class EditorApplication: @unchecked Sendable {
         let skeleton: RawStructure.Skeleton? = bones.isEmpty ? nil : RawStructure.Skeleton(bones: bones)
 
         return RawStructure(assetURI: assetURI,
+                            previewImagePath: previewImagePath,
                             nodes: nodes,
                             meshes: [meshRecord],
                             submeshes: submeshRecords,
