@@ -283,7 +283,11 @@ let package = Package(
                 "SceneRuntime",
             ]
         ),
-        .target(name: "SemanticPipeline", dependencies: ["IntentRuntime"]),
+        .target(name: "SemanticPipeline", dependencies: ["IntentRuntime", "PerceptionRuntime"],
+                linkerSettings: [
+                    .linkedFramework("Vision", .when(platforms: [.macOS])),
+                    .linkedFramework("CoreImage", .when(platforms: [.macOS])),
+                ]),
         .target(
             name: "RenderBackend",
             dependencies: [

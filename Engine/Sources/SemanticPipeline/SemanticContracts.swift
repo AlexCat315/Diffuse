@@ -84,6 +84,8 @@ public struct RawStructure: Sendable {
     }
 
     public var assetURI: String
+    /// Local path to a preview image (PNG/JPEG) for vision-based backends. `nil` when unavailable.
+    public var previewImagePath: String?
     public var nodes: [Node]
     public var meshes: [MeshRecord]
     public var submeshes: [SubmeshRecord]
@@ -94,6 +96,7 @@ public struct RawStructure: Sendable {
     public var customProperties: [String: String]
 
     public init(assetURI: String,
+                previewImagePath: String? = nil,
                 nodes: [Node] = [],
                 meshes: [MeshRecord] = [],
                 submeshes: [SubmeshRecord] = [],
@@ -103,6 +106,7 @@ public struct RawStructure: Sendable {
                 uvSets: [UVSet] = [],
                 customProperties: [String: String] = [:]) {
         self.assetURI = assetURI
+        self.previewImagePath = previewImagePath
         self.nodes = nodes; self.meshes = meshes; self.submeshes = submeshes
         self.materialSlots = materialSlots; self.skeleton = skeleton
         self.morphTargets = morphTargets; self.uvSets = uvSets
