@@ -54,8 +54,9 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         public var lightIntensity: Float?
         public var lightColor: [Float]?        // [r, g, b] linear 0–1
         public var lightRange: Float?
-        public var lightSpotInner: Float? = nil  // degrees; non-nil only for spot lights
-        public var lightSpotOuter: Float? = nil  // degrees; non-nil only for spot lights
+        public var lightSpotInner: Float? = nil    // degrees; non-nil only for spot lights
+        public var lightSpotOuter: Float? = nil    // degrees; non-nil only for spot lights
+        public var lightCastShadows: Bool? = nil   // nil when false (omit to keep JSON compact)
 
         // Camera extras — non-nil only when `"camera"` ∈ components
         public var cameraFovYDegrees: Float?

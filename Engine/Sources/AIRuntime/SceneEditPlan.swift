@@ -56,11 +56,12 @@ public enum SceneEditOp: String, Codable, Sendable, CaseIterable {
     case snapToGround      = "snap_to_ground"
 
     // Lighting
-    case setLightType      = "set_light_type"
-    case setLightIntensity = "set_light_intensity"
-    case setLightColor     = "set_light_color"
-    case setLightRange     = "set_light_range"
-    case setLightSpotAngles = "set_light_spot_angles"
+    case setLightType        = "set_light_type"
+    case setLightIntensity   = "set_light_intensity"
+    case setLightColor       = "set_light_color"
+    case setLightRange       = "set_light_range"
+    case setLightSpotAngles  = "set_light_spot_angles"
+    case setLightCastShadows = "set_light_cast_shadows"
 
     // Camera
     case setCameraPose     = "set_camera_pose"
@@ -195,6 +196,9 @@ public struct SceneEditStep: Codable, Sendable {
     public var scriptPropertyName: String?
     public var scriptPropertyValue: JSONValue?
 
+    // set_light_cast_shadows
+    public var lightCastShadows: Bool?
+
     // set_camera_fov / set_camera_active
     public var cameraFovYDegrees: Float?
     public var cameraIsActive: Bool?
@@ -223,6 +227,7 @@ public struct SceneEditStep: Codable, Sendable {
         case range
         case spotInnerAngleDegrees = "spot_inner_angle"
         case spotOuterAngleDegrees = "spot_outer_angle"
+        case lightCastShadows   = "light_cast_shadows"
         case cameraTarget       = "camera_target"
         case cameraUp           = "camera_up"
         case cameraFovYDegrees  = "camera_fov_y"

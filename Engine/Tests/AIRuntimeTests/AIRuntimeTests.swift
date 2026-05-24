@@ -478,4 +478,23 @@ final class AIRuntimeTests: XCTestCase {
                                                   value: .bool(false)))
         XCTAssertEqual(view.entityIndex["scene:10"]?.cameraIsActive, false)
     }
+
+    func testLightCastShadowsOpRoundTrips() throws {
+        let json = """
+        {"op":"set_light_cast_shadows","entity_id":"scene:11","light_cast_shadows":true}
+        """
+        let step = try JSONDecoder().decode(SceneEditStep.self, from: Data(json.utf8))
+        XCTAssertEqual(step.op, .setLightCastShadows)
+        XCTAssertEqual(step.entityRef, "scene:11")
+        XCTAssertEqual(step.lightCastShadows, true)
+    }
+
+    func testWorldEntityRecordApplyLightCastShadowsFromEvent() {
+        var view = WorldView()
+        view.apply(event: .entityAdded(ref: "scene:12", name: "Sun", kind: "light"))
+        view.apply(event: .entityAuthoredChanged(ref: "scene:12",
+                                                  property: "lightCastShadows",
+                                                  value: .bool(true)))
+        XCTAssertEqual(view.entityIndex["scene:12"]?.lightCastShadows, true)
+    }
 }
