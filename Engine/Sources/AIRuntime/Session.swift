@@ -8,10 +8,11 @@ private extension WorldPropertyValue {
     /// JSON-serialisable form used only in the system prompt — human-readable, not tagged.
     var jsonValue: Any {
         switch self {
-        case let .vec3(x, y, z): return [x, y, z]
-        case let .float(v):      return v
-        case let .string(s):     return s
-        case let .bool(b):       return b
+        case let .vec3(x, y, z):       return [x, y, z]
+        case let .vec4(x, y, z, w):    return [x, y, z, w]
+        case let .float(v):             return v
+        case let .string(s):            return s
+        case let .bool(b):              return b
         }
     }
 }
