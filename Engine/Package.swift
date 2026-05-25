@@ -249,6 +249,7 @@ let package = Package(
                 "IntentRuntime",
                 "ObservationBus",
                 "ContextMemory",
+                "PerceptionRuntime",
             ]
         ),
         .target(
@@ -452,6 +453,7 @@ let package = Package(
                 "AIRuntime",
                 "ContextMemory",
                 "IntentRuntime",
+                "PerceptionRuntime",
             ]
         ),
         .testTarget(

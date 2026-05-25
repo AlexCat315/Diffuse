@@ -1,6 +1,7 @@
 @testable import AIRuntime
 import ContextMemory
 import IntentRuntime
+import PerceptionRuntime
 import SceneRuntime
 import simd
 import XCTest
@@ -1074,7 +1075,136 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(record?.materialEmissive, [1.0, 0.5, 0.0])
     }
 
+    // MARK: - tagEntity perception integration
+
+    func testTagEntityAppliesInferredEventsToWorldView() async throws {
+        let session = Session(id: "percept1", config: makeTestConfig())
+
+        let result = PerceptionResult(
+            requestID: "r1",
+            modelID: "fixture_classifier",
+            modelVersion: "test",
+            task: .classification,
+            status: "success",
+            observations: [
+                .classification(ClassificationObservation(
+                    id: "c0",
+                    label: "chair",
+                    labelSpace: "fixture",
+                    confidence: 0.91,
+                    semanticCandidates: [
+                        PerceptionSemanticCandidate(kind: "object_category",
+                                                    label: "chair",
+                                                    confidence: 0.91),
+                    ],
+                    evidence: []
+                )),
+            ],
+            timing: PerceptionTimingInfo(totalMilliseconds: 1),
+            provenance: PerceptionProvenance(source: "fixture", modelID: "fixture_classifier")
+        )
+
+        let worker = StubPerceptionWorker(result: result)
+        let service = PerceptionService()
+        await service.register(worker)
+        await session.setPerceptionService(service)
+
+        // Seed a minimal entity in world view
+        await session.observe(event: .entityAdded(ref: "scene:5", name: "Chair", kind: "mesh"))
+
+        let events = try await session.tagEntity(ref: "scene:5",
+                                                 imageURL: URL(fileURLWithPath: "/dev/null"),
+                                                 task: .classification)
+        XCTAssertFalse(events.isEmpty)
+
+        // The inferred property should now be in the entity record
+        let inferred = await session.worldView.entityIndex["scene:5"]?.inferred
+        XCTAssertNotNil(inferred?["object_category"])
+        XCTAssertEqual(inferred?["object_category"]?.displayValue, "chair")
+    }
+
+    func testTagEntityWithoutServiceThrows() async {
+        let session = Session(id: "percept2", config: makeTestConfig())
+        do {
+            _ = try await session.tagEntity(ref: "scene:1",
+                                            imageURL: URL(fileURLWithPath: "/dev/null"))
+            XCTFail("Expected error when no service configured")
+        } catch {
+            let desc = error.localizedDescription
+            XCTAssertTrue(desc.contains("PerceptionService") || desc.contains("unavailable"),
+                          "Unexpected error: \(desc)")
+        }
+    }
+
+    func testTagEntityRecordsSceneAnnotationInMemory() async throws {
+        let session = Session(id: "percept3", config: makeTestConfig())
+        let store = try ContextMemoryStore()
+        await session.setContextMemory(store)
+
+        let result = PerceptionResult(
+            requestID: "r2",
+            modelID: "fixture_classifier",
+            modelVersion: "test",
+            task: .classification,
+            status: "success",
+            observations: [
+                .classification(ClassificationObservation(
+                    id: "c1",
+                    label: "table",
+                    labelSpace: "fixture",
+                    confidence: 0.85,
+                    semanticCandidates: [
+                        PerceptionSemanticCandidate(kind: "object_category",
+                                                    label: "table",
+                                                    confidence: 0.85),
+                    ],
+                    evidence: []
+                )),
+            ],
+            timing: PerceptionTimingInfo(totalMilliseconds: 1),
+            provenance: PerceptionProvenance(source: "fixture", modelID: "fixture_classifier")
+        )
+        let worker = StubPerceptionWorker(result: result)
+        let service = PerceptionService()
+        await service.register(worker)
+        await session.setPerceptionService(service)
+
+        _ = try await session.tagEntity(ref: "scene:9",
+                                        imageURL: URL(fileURLWithPath: "/dev/null"))
+        try await Task.sleep(nanoseconds: 20_000_000)
+
+        let annotations = await store.lookup(kind: .sceneAnnotation)
+        XCTAssertFalse(annotations.isEmpty)
+        XCTAssertTrue(annotations.allSatisfy { $0.subject == "scene:9" })
+        let hasCategory = annotations.contains { $0.payload["property"] == "object_category" }
+        XCTAssertTrue(hasCategory, "Expected object_category annotation")
+    }
+
     private func makeTestConfig() -> SessionConfig {
         .anthropic(apiKey: "test")
+    }
+}
+
+private final class StubPerceptionWorker: PerceptionWorker, @unchecked Sendable {
+    let result: PerceptionResult
+    init(result: PerceptionResult) { self.result = result }
+
+    var manifest: PerceptionModelManifest {
+        PerceptionModelManifest(
+            modelID: "fixture_classifier",
+            displayName: "Fixture",
+            task: .classification,
+            backendFamily: "test",
+            runtime: PerceptionRuntimeConfig(preferredRuntime: "none"),
+            inputContract: "",
+            outputContract: "",
+            license: PerceptionLicenseMetadata(codeLicense: "MIT", weightsLicense: "MIT",
+                                               commercialUse: "allowed",
+                                               redistribution: "allowed")
+        )
+    }
+
+    func analyzeImage(at url: URL, requestID: String, maxResults: Int) throws -> PerceptionResult {
+        result
     }
 }
