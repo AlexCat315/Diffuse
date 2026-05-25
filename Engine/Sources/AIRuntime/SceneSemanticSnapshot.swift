@@ -101,6 +101,9 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
 
         // Script extras — non-nil only when `"script"` ∈ components
         public var scriptBindings: [ScriptBindingRecord]? = nil
+
+        // Constraint extras — non-nil only when `"constraint"` ∈ components
+        public var constraintEnabled: Bool? = nil   // nil means component absent
     }
 
     /// Compact snapshot of a single ScriptBinding for AI context.

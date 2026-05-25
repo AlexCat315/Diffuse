@@ -449,6 +449,33 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(worldView.entityIndex["scene:41"]?.meshIsVisible, false)
     }
 
+    func testSnapshotConstraintEnabledCopiedToEntityRecord() {
+        let entity = SceneSemanticSnapshot.Entity(
+            id: "scene:50",
+            name: "Hinge",
+            kind: "mesh",
+            parentRef: nil,
+            childRefs: [],
+            isSelected: false,
+            position: [0, 0, 0],
+            components: ["transform", "constraint"],
+            constraintEnabled: false
+        )
+        var worldView = WorldView()
+        worldView.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [entity]))
+
+        XCTAssertEqual(worldView.entityIndex["scene:50"]?.constraintEnabled, false)
+    }
+
+    func testEntityAuthoredChangedConstraintEnabledPopulatesRecord() {
+        var worldView = WorldView()
+        worldView.apply(event: .entityAdded(ref: "scene:51", name: "Joint", kind: "mesh"))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:51",
+                                                      property: "constraintEnabled",
+                                                      value: .bool(true)))
+        XCTAssertEqual(worldView.entityIndex["scene:51"]?.constraintEnabled, true)
+    }
+
     func testEntityAuthoredChangedAnimationFieldsPopulateRecord() {
         var worldView = WorldView()
         worldView.apply(event: .entityAdded(ref: "scene:42", name: "Dancer", kind: "mesh"))
