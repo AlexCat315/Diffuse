@@ -454,6 +454,7 @@ let package = Package(
                 "ContextMemory",
                 "IntentRuntime",
                 "PerceptionRuntime",
+                "ScriptRuntime",
             ]
         ),
         .testTarget(
