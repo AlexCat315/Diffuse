@@ -558,4 +558,46 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(hasLayer, "expected setColliderLayer mutation")
         XCTAssertTrue(hasMask,  "expected setColliderLayerMask mutation")
     }
+
+    func testSceneSemanticEncoderSurfacesColliderLayerAndMask() {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(
+            Collider(shape: .box(halfExtents: .one, center: .zero),
+                     layerID: 4,
+                     layerMask: 15),
+            for: entity
+        )
+
+        let snapshot = SceneSemanticEncoder().encode(scene,
+                                                     selectedEntityID: nil,
+                                                     workspaceMode: "default",
+                                                     localeIdentifier: nil)
+        guard let entityRecord = snapshot.entities.first else {
+            XCTFail("expected at least one entity in snapshot")
+            return
+        }
+        XCTAssertEqual(entityRecord.colliderLayerID, 4)
+        XCTAssertEqual(entityRecord.colliderLayerMask, 15)
+    }
+
+    func testWorldViewAppliesSnapshotWithColliderLayer() {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(
+            Collider(shape: .sphere(radius: 1, center: .zero), layerID: 7, layerMask: 63),
+            for: entity
+        )
+
+        let snapshot = SceneSemanticEncoder().encode(scene, selectedEntityID: nil,
+                                                     workspaceMode: "default",
+                                                     localeIdentifier: nil)
+        var worldView = WorldView()
+        worldView.apply(snapshot: snapshot)
+
+        let ref = "scene:\(entity.rawValue)"
+        let record = worldView.entityIndex[ref]
+        XCTAssertEqual(record?.colliderLayerID, 7)
+        XCTAssertEqual(record?.colliderLayerMask, 63)
+    }
 }
