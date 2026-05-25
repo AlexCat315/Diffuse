@@ -115,6 +115,7 @@ public actor Session {
             recordTurn(ConversationTurn(kind: .assistantToolCall(toolUseID: toolUseID,
                                                                  name: "execute_edit_plan",
                                                                  inputJSON: inputJSON)))
+            updateIssueMemory(intent: text, plan: plan)
             return Proposal(
                 sessionID: id,
                 semanticIntent: text,
@@ -298,6 +299,41 @@ public actor Session {
     /// Persists the context memory store to disk (if a storageURL was configured).
     public func flushContextMemory() async throws {
         try await contextMemory?.flush()
+    }
+
+    // MARK: - Issue memory
+
+    /// Records or clears an `issueTracked` entry based on whether the plan is empty.
+    ///
+    /// An empty plan means the model couldn't fulfill the intent — we record the
+    /// outstanding request so future sessions know it's unresolved. When a subsequent
+    /// request for the same intent produces a non-empty plan, we remove the stale entry.
+    func updateIssueMemory(intent: String, plan: SceneEditPlan) {
+        guard let mem = contextMemory else { return }
+        let key = Self.issueKey(for: intent)
+        if plan.isEmpty {
+            let reason = plan.summary.isEmpty ? "no steps produced" : plan.summary
+            let entry = ContextEntry(
+                id: key,
+                kind: .issueTracked,
+                subject: "session",
+                payload: ["intent": String(intent.prefix(256)), "reason": reason],
+                importance: 0.6,
+                revision: worldView.sceneRevision ?? 0
+            )
+            Task { await mem.upsert(entry) }
+        } else {
+            Task { await mem.remove(id: key) }
+        }
+    }
+
+    static func issueKey(for intent: String) -> String {
+        let normalized = intent.prefix(48).lowercased()
+            .unicodeScalars
+            .filter { $0.value < 128 }
+            .map { Character($0) }
+            .map { ($0.isLetter || $0.isNumber) ? $0 : Character("_") }
+        return "issue:" + String(normalized)
     }
 
     public func observe(selectionChanged entityRefs: [String]) {
