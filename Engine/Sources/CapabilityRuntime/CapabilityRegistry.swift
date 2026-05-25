@@ -53,7 +53,7 @@ public struct CapabilityRegistry: Sendable {
 
     // MARK: - Built-in registry
 
-    /// Built-in registry matching all verbs handled by `IntentTransactionBuilder`.
+    /// Built-in registry covering all verbs in the AI edit plan pipeline and the UI intent path.
     public static let `default`: CapabilityRegistry = {
         let editable = CapabilityPreconditionSpec(kind: .sceneEditable)
         let entityExists = CapabilityPreconditionSpec(kind: .entityExists)

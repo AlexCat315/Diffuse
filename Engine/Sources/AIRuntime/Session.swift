@@ -530,6 +530,10 @@ public actor Session {
         `script_property_value` (the new value — string, number, or boolean). The entity's \
         `scriptBindings` shows existing scripts and their current `params`. Use `script_index` \
         (default 0) to target a specific binding when an entity has multiple scripts.
+        - For set_collider_layer: use `collider_layer_id` (0–15, which layer the collider \
+        occupies) and/or `collider_layer_mask` (bitmask of layers this collider interacts with, \
+        e.g. 0xFFFF = collide with all layers). An entity's `colliderLayerID` and \
+        `colliderLayerMask` fields show the current values.
         - If the user asks a general question (capabilities, greetings, clarifications) rather \
         than requesting a scene change, call the tool with an empty steps array and put your \
         conversational reply in the summary field.
