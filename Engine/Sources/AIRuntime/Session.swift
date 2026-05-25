@@ -700,23 +700,25 @@ public actor Session {
 
     /// Derives a confidence score for a plan.
     ///
-    /// Starts at 1.0 and applies penalties:
+    /// Starts at 1.0 and applies penalties and bonuses:
     /// - Each step beyond the first reduces confidence slightly (large plans are riskier).
-    /// - Destructive ops (delete, duplicate) apply a larger penalty.
-    /// - Steps that touch many distinct entities are penalised as broad-impact.
-    /// - Spawn (createEntity) without a subsequent transform is penalised slightly.
+    /// - `deleteEntity` applies a large penalty — it is irreversible.
+    /// - Steps that touch many distinct entities are penalised as broad-impact (>5 entities).
+    /// - Spawn without a subsequent setTransform is penalised (orphan entity).
+    /// - `deleteEntity` without any spawn in the same plan is penalised harder.
+    /// - A non-empty `reasoning` field is a weak positive signal (+0.05 cap at 1.0).
     /// - Empty plans (conversational response) are always 1.0.
     static func confidence(for plan: SceneEditPlan) -> Double {
         guard !plan.steps.isEmpty else { return 1.0 }
         var score = 1.0
-        let destructive: Set<SceneEditOp> = [.deleteEntity, .duplicateEntity]
         var affectedEntityIDs = Set<String>()
         var hasSpawn = false
+        var hasDelete = false
 
         for (i, step) in plan.steps.enumerated() {
             if i > 0 { score -= 0.03 }
-            if destructive.contains(step.op) { score -= 0.10 }
-            if step.op == .spawnEntity { hasSpawn = true }
+            if step.op == .deleteEntity { score -= 0.10; hasDelete = true }
+            if step.op == .spawnEntity  { hasSpawn = true }
             if let ref = step.entityRef { affectedEntityIDs.insert(ref) }
         }
 
@@ -727,6 +729,14 @@ public actor Session {
         // Orphan spawn penalty: spawnEntity with no subsequent setTransform.
         let hasTransformStep = plan.steps.contains { $0.op == .setTransform }
         if hasSpawn && !hasTransformStep { score -= 0.05 }
+
+        // Uncompensated delete penalty: deleting without spawning a replacement is riskier.
+        if hasDelete && !hasSpawn { score -= 0.05 }
+
+        // Reasoning bonus: model explained its intent, suggesting higher-quality output.
+        if let r = plan.reasoning, !r.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            score = min(1.0, score + 0.05)
+        }
 
         return max(0.40, score)
     }
