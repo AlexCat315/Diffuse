@@ -3,6 +3,7 @@ import ContextMemory
 import IntentRuntime
 import PerceptionRuntime
 import SceneRuntime
+import ScriptRuntime
 import simd
 import XCTest
 
@@ -695,6 +696,59 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(hasFriction,    "set_collider_material must produce setColliderMaterialFriction mutation")
         XCTAssertTrue(hasRestitution, "set_collider_material must produce setColliderMaterialRestitution mutation")
         XCTAssertTrue(hasDensity,     "set_collider_material must produce setColliderMaterialDensity mutation")
+    }
+
+    func testSetScriptPropertyExecutorMergesIntoExistingBindings() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let existingBinding = ScriptBinding(ScriptHandle(rawValue: 7),
+                                            isEnabled: true,
+                                            parametersJSON: #"{"speed":1.0}"#)
+        _ = scene.setComponent(ScriptComponent(bindings: [existingBinding]), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"set speed","steps":[{"op":"set_script_property","entity_id":"\(ref)",\
+        "script_index":0,"script_property_name":"speed","script_property_value":5.0}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        var foundBindings: [ScriptBinding]? = nil
+        for op in ops {
+            if case let .setScriptBindings(_, bindings) = op { foundBindings = bindings; break }
+        }
+        let bindings = try XCTUnwrap(foundBindings, "expected setScriptBindings mutation")
+        XCTAssertEqual(bindings.count, 1)
+        let params = try XCTUnwrap(bindings[0].parametersJSON.data(using: .utf8))
+        let dict = try XCTUnwrap(JSONSerialization.jsonObject(with: params) as? [String: Any])
+        XCTAssertEqual(dict["speed"] as? Double, 5.0, "merged speed should be 5.0")
+        XCTAssertEqual(bindings[0].script.rawValue, 7, "script handle must be preserved")
+    }
+
+    func testSetScriptPropertyExecutorCreatesBindingWhenComponentAbsent() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"add label","steps":[{"op":"set_script_property","entity_id":"\(ref)",\
+        "script_property_name":"label","script_property_value":"Patrol"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        var foundBindings: [ScriptBinding]? = nil
+        for op in ops {
+            if case let .setScriptBindings(_, bindings) = op { foundBindings = bindings; break }
+        }
+        let bindings = try XCTUnwrap(foundBindings, "expected setScriptBindings mutation")
+        XCTAssertEqual(bindings.count, 1, "executor must create a binding when none exist")
+        let params = try XCTUnwrap(bindings[0].parametersJSON.data(using: .utf8))
+        let dict = try XCTUnwrap(JSONSerialization.jsonObject(with: params) as? [String: Any])
+        XCTAssertEqual(dict["label"] as? String, "Patrol")
     }
 
     func testSceneSemanticEncoderSurfacesColliderLayerAndMask() {
