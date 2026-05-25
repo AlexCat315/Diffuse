@@ -441,4 +441,25 @@ struct ContextMemoryTests {
         #expect(entries.contains { $0.id == "entity_added:scene:30" })
         #expect(entries.contains { $0.id == "edit:e20" })
     }
+
+    @Test("eviction uses timestamp as tiebreaker when importance is equal")
+    func evictionTimestampTiebreakerEvictsOldest() async throws {
+        let store = try ContextMemoryStore(capacity: 2)
+        let t0 = Date(timeIntervalSinceReferenceDate: 1000)
+        let t1 = Date(timeIntervalSinceReferenceDate: 2000)
+        let t2 = Date(timeIntervalSinceReferenceDate: 3000)
+        // All three have identical importance — oldest (t0) should be evicted.
+        await store.upsert(ContextEntry(id: "old",  kind: .userPreference, subject: "s",
+                                        payload: [:], importance: 0.5, timestamp: t0))
+        await store.upsert(ContextEntry(id: "mid",  kind: .userPreference, subject: "s",
+                                        payload: [:], importance: 0.5, timestamp: t1))
+        await store.upsert(ContextEntry(id: "new",  kind: .userPreference, subject: "s",
+                                        payload: [:], importance: 0.5, timestamp: t2))
+
+        let remaining = await store.allEntries()
+        #expect(remaining.count == 2)
+        #expect(await store.entry(id: "old") == nil, "oldest entry must be evicted on tie")
+        #expect(await store.entry(id: "mid") != nil)
+        #expect(await store.entry(id: "new") != nil)
+    }
 }
