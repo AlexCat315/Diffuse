@@ -1,4 +1,5 @@
 ﻿import AIRuntime
+import ContextMemory
 import AssetPipeline
 import AudioRuntime
 import CapabilityRuntime
@@ -51,6 +52,7 @@ public final class EditorApplication: @unchecked Sendable {
     private var pendingAssistantMessageID: String?
     private let mcpBridge = MCPBridge()
     private let editLog: EditLog
+    private let contextMemoryStore: ContextMemoryStore?
     private var physicsPlaySnapshot: SceneRuntime?
     private var frameTimingAccumulator: Double = 0
     private var frameTimingCount: Int = 0
@@ -93,6 +95,10 @@ public final class EditorApplication: @unchecked Sendable {
                                                            initialWorldView: initialWorldView)
 
         let ps = PerceptionService()
+        let contextMemoryURL = URL(fileURLWithPath: projectDirectory, isDirectory: true)
+            .appendingPathComponent(".guava", isDirectory: true)
+            .appendingPathComponent("context_memory.json")
+        let contextMemoryStore = try? ContextMemoryStore(storageURL: contextMemoryURL)
         self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: resolvedBackend)
         self.projectDirectory = projectDirectory
         self.store = store
@@ -103,6 +109,7 @@ public final class EditorApplication: @unchecked Sendable {
         self.aiWorldContext = AIWorldContext(worldView: initialWorldView)
         self.events = events
         self.editLog = EditLog(projectDirectory: projectDirectory)
+        self.contextMemoryStore = contextMemoryStore
         self.session = initialSession
         self.perceptionService = ps
         #if canImport(Vision)
@@ -125,13 +132,15 @@ public final class EditorApplication: @unchecked Sendable {
         let busForProvider = self.observationBus
         Task { busForProvider.registerSnapshotProvider(worldContextForBus, forScope: "scene") }
 
-        // Propagate initial workflow context and observation bus to Session.
+        // Propagate initial workflow context, observation bus, and context memory to Session.
         if let initialSession {
             let ctx = Self.workflowContext(for: store.state.workspaceMode)
             let bus = observationBus
+            let mem = contextMemoryStore
             Task {
                 await initialSession.setWorkflowContext(ctx)
                 await initialSession.setObservationBus(bus)
+                await initialSession.setContextMemory(mem)
             }
         }
 
@@ -1047,10 +1056,12 @@ public final class EditorApplication: @unchecked Sendable {
             let worldContext = self.aiWorldContext
             let ctx = Self.workflowContext(for: store.state.workspaceMode)
             let bus = self.observationBus
+            let mem = self.contextMemoryStore
             Task {
                 await newSession.replaceWorldView(await worldContext.snapshot())
                 await newSession.setWorkflowContext(ctx)
                 await newSession.setObservationBus(bus)
+                await newSession.setContextMemory(mem)
             }
         }
         session = newSession
