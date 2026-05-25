@@ -728,6 +728,33 @@ final class AIRuntimeTests: XCTestCase {
         }
     }
 
+    func testSetAnimationPlayerExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(AnimationPlayer(), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"play walk","steps":[{"op":"set_animation_player","entity_id":"\(ref)",\
+        "animation_clip":"walk","animation_speed":1.5,"animation_loop":true,"animation_is_playing":true}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasAnim = ops.contains {
+            if case let .setAnimationPlayer(id, clip, speed, loop, playing) = $0 {
+                return id == entity.rawValue
+                    && clip == "walk"
+                    && abs(speed - 1.5) < 0.001
+                    && loop == true
+                    && playing == true
+            }
+            return false
+        }
+        XCTAssertTrue(hasAnim, "set_animation_player must produce a setAnimationPlayer mutation")
+    }
+
     func testSceneSemanticEncoderSurfacesPBRMaterialFields() {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
