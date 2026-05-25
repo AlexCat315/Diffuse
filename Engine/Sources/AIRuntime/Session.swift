@@ -669,7 +669,7 @@ public actor Session {
                 "model": config.model,
                 "max_tokens": config.maxTokens,
                 "tools": [EditPlanTool.openAIDefinition(), FindEntitiesTool.openAIDefinition()],
-                "tool_choice": "auto",
+                "tool_choice": "required",
                 "messages": messages,
             ]
         }
