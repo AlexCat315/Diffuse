@@ -752,7 +752,9 @@ public actor Session {
         `material_roughness` (0–1; 0=mirror-smooth, 1=fully rough), and \
         `material_emissive` ([r,g,b] linear 0–1; omit or [0,0,0] for no emission). \
         An entity's `materialBaseColor`, `materialMetallic`, `materialRoughness`, and \
-        `materialEmissive` fields show the current PBR values when non-default.
+        `materialEmissive` fields show the current PBR values when non-default. \
+        Prefer set_material over set_mesh_color for precise or multi-channel appearance control; \
+        use set_mesh_color only for a simple RGB tint when no PBR properties are needed.
         - If the user asks a general question (capabilities, greetings, clarifications) rather \
         than requesting a scene change, call the tool with an empty steps array and put your \
         conversational reply in the summary field.
