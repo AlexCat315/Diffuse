@@ -56,17 +56,21 @@ public enum SceneEditOp: String, Codable, Sendable, CaseIterable {
     case snapToGround      = "snap_to_ground"
 
     // Lighting
-    case setLightType      = "set_light_type"
-    case setLightIntensity = "set_light_intensity"
-    case setLightColor     = "set_light_color"
-    case setLightRange     = "set_light_range"
-    case setLightSpotAngles = "set_light_spot_angles"
+    case setLightType        = "set_light_type"
+    case setLightIntensity   = "set_light_intensity"
+    case setLightColor       = "set_light_color"
+    case setLightRange       = "set_light_range"
+    case setLightSpotAngles  = "set_light_spot_angles"
+    case setLightCastShadows = "set_light_cast_shadows"
 
     // Camera
     case setCameraPose     = "set_camera_pose"
+    case setCameraFOV      = "set_camera_fov"
+    case setCameraActive   = "set_camera_active"
 
     // Visual
     case setMeshColor         = "set_mesh_color"
+    case setMaterial          = "set_material"
 
     // Physics — rigidbody
     case setRigidBodyMotion   = "set_rigidbody_motion"
@@ -85,6 +89,7 @@ public enum SceneEditOp: String, Codable, Sendable, CaseIterable {
 
     // Physics — misc
     case setColliderTrigger   = "set_collider_trigger"
+    case setColliderLayer     = "set_collider_layer"
     case setConstraintEnabled = "set_constraint_enabled"
 
     // Audio
@@ -92,6 +97,12 @@ public enum SceneEditOp: String, Codable, Sendable, CaseIterable {
 
     // Script
     case setScriptProperty    = "set_script_property"
+
+    // Mesh visibility
+    case setMeshVisibility    = "set_mesh_visibility"
+
+    // Animation
+    case setAnimationPlayer   = "set_animation_player"
 }
 
 /// One atomic mutation step in a `SceneEditPlan`.
@@ -168,6 +179,10 @@ public struct SceneEditStep: Codable, Sendable {
     // set_collider_trigger
     public var isTrigger: Bool?
 
+    // set_collider_layer
+    public var colliderLayerID: Int?     // physics layer this collider occupies (0-15)
+    public var colliderLayerMask: Int?   // bitmask of layers this collider interacts with
+
     // set_constraint_enabled
     public var isEnabled: Bool?
 
@@ -187,6 +202,28 @@ public struct SceneEditStep: Codable, Sendable {
     public var scriptPropertyName: String?
     public var scriptPropertyValue: JSONValue?
 
+    // set_material (PBR)
+    public var materialBaseColor: [Float]?   // [r, g, b, a] linear 0-1; nil = unchanged
+    public var materialMetallic: Float?       // 0-1; nil = unchanged
+    public var materialRoughness: Float?      // 0-1; nil = unchanged
+    public var materialEmissive: [Float]?     // [r, g, b] linear 0-1; nil = no emission
+
+    // set_light_cast_shadows
+    public var lightCastShadows: Bool?
+
+    // set_camera_fov / set_camera_active
+    public var cameraFovYDegrees: Float?
+    public var cameraIsActive: Bool?
+
+    // set_mesh_visibility
+    public var isVisible: Bool?
+
+    // set_animation_player
+    public var animationClip: String?   // clip name; empty string or nil = use default
+    public var animationSpeed: Float?   // default 1.0
+    public var animationLoop: Bool?     // default true
+    public var animationIsPlaying: Bool?
+
     enum CodingKeys: String, CodingKey {
         case op
         case entityRef          = "entity_id"
@@ -202,8 +239,15 @@ public struct SceneEditStep: Codable, Sendable {
         case range
         case spotInnerAngleDegrees = "spot_inner_angle"
         case spotOuterAngleDegrees = "spot_outer_angle"
+        case materialBaseColor  = "material_base_color"
+        case materialMetallic   = "material_metallic"
+        case materialRoughness  = "material_roughness"
+        case materialEmissive   = "material_emissive"
+        case lightCastShadows   = "light_cast_shadows"
         case cameraTarget       = "camera_target"
         case cameraUp           = "camera_up"
+        case cameraFovYDegrees  = "camera_fov_y"
+        case cameraIsActive     = "camera_is_active"
         case motionType         = "motion_type"
         case mass
         case gravityScale       = "gravity_scale"
@@ -216,6 +260,8 @@ public struct SceneEditStep: Codable, Sendable {
         case restitution
         case density
         case isTrigger          = "is_trigger"
+        case colliderLayerID    = "collider_layer_id"
+        case colliderLayerMask  = "collider_layer_mask"
         case isEnabled          = "is_enabled"
         case parentRef          = "parent_id"
         case audioClip          = "audio_clip"
@@ -227,6 +273,11 @@ public struct SceneEditStep: Codable, Sendable {
         case scriptIndex        = "script_index"
         case scriptPropertyName = "script_property_name"
         case scriptPropertyValue = "script_property_value"
+        case isVisible          = "is_visible"
+        case animationClip      = "animation_clip"
+        case animationSpeed     = "animation_speed"
+        case animationLoop      = "animation_loop"
+        case animationIsPlaying = "animation_is_playing"
     }
 }
 

@@ -1,5 +1,37 @@
 import Foundation
 
+// MARK: - Perception request
+
+/// Structured input to a PerceptionWorker. Replaces the (url, requestID, maxResults)
+/// tuple so callers can extend the contract without changing all call sites.
+public struct PerceptionRequest: Codable, Sendable, Equatable {
+    public var requestID: String
+    public var task: PerceptionTask
+    /// Local `file://` or `artifacts://` URI for the input image.
+    public var inputURI: String
+    public var maxResults: Int
+    public var confidenceThreshold: Float
+    public var locale: String?
+    /// Freeform hints forwarded to the backend (e.g. `"category_hint": "furniture"`).
+    public var hints: [String: String]
+
+    public init(requestID: String = UUID().uuidString,
+                task: PerceptionTask = .classification,
+                inputURI: String,
+                maxResults: Int = 5,
+                confidenceThreshold: Float = 0.5,
+                locale: String? = nil,
+                hints: [String: String] = [:]) {
+        self.requestID = requestID
+        self.task = task
+        self.inputURI = inputURI
+        self.maxResults = maxResults
+        self.confidenceThreshold = confidenceThreshold
+        self.locale = locale
+        self.hints = hints
+    }
+}
+
 public enum PerceptionTask: String, Codable, Sendable, Equatable {
     case classification
     case objectDetection = "object_detection"
@@ -153,6 +185,8 @@ public struct PerceptionEvidence: Codable, Sendable, Equatable {
 
 public enum PerceptionObservation: Codable, Sendable, Equatable {
     case classification(ClassificationObservation)
+    case objectDetection(DetectedObjectObservation)
+    case imageEmbedding(ImageEmbeddingObservation)
 
     private enum CodingKeys: String, CodingKey {
         case kind
@@ -161,13 +195,17 @@ public enum PerceptionObservation: Codable, Sendable, Equatable {
 
     public var id: String {
         switch self {
-        case let .classification(obs): return obs.id
+        case let .classification(obs):    return obs.id
+        case let .objectDetection(obs):   return obs.id
+        case let .imageEmbedding(obs):    return obs.id
         }
     }
 
     public var primaryCandidate: PerceptionSemanticCandidate? {
         switch self {
-        case let .classification(obs): return obs.semanticCandidates.first
+        case let .classification(obs):    return obs.semanticCandidates.first
+        case let .objectDetection(obs):   return obs.semanticCandidates.first
+        case .imageEmbedding:             return nil
         }
     }
 
@@ -177,6 +215,10 @@ public enum PerceptionObservation: Codable, Sendable, Equatable {
         switch kind {
         case "classification":
             self = .classification(try values.decode(ClassificationObservation.self, forKey: .payload))
+        case "object_detection":
+            self = .objectDetection(try values.decode(DetectedObjectObservation.self, forKey: .payload))
+        case "image_embedding":
+            self = .imageEmbedding(try values.decode(ImageEmbeddingObservation.self, forKey: .payload))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .kind,
@@ -191,7 +233,78 @@ public enum PerceptionObservation: Codable, Sendable, Equatable {
         case let .classification(obs):
             try values.encode("classification", forKey: .kind)
             try values.encode(obs, forKey: .payload)
+        case let .objectDetection(obs):
+            try values.encode("object_detection", forKey: .kind)
+            try values.encode(obs, forKey: .payload)
+        case let .imageEmbedding(obs):
+            try values.encode("image_embedding", forKey: .kind)
+            try values.encode(obs, forKey: .payload)
         }
+    }
+}
+
+public struct BBox2D: Codable, Sendable, Equatable {
+    /// Pixel-space bounding box (origin at top-left).
+    public var x: Float
+    public var y: Float
+    public var width: Float
+    public var height: Float
+
+    public init(x: Float, y: Float, width: Float, height: Float) {
+        self.x = x; self.y = y; self.width = width; self.height = height
+    }
+}
+
+public struct DetectedObjectObservation: Codable, Sendable, Equatable {
+    public var id: String
+    public var label: String
+    public var labelSpace: String
+    public var confidence: Double
+    public var bbox2D: BBox2D?
+    public var semanticCandidates: [PerceptionSemanticCandidate]
+    public var evidence: [PerceptionEvidence]
+
+    public init(id: String,
+                label: String,
+                labelSpace: String,
+                confidence: Double,
+                bbox2D: BBox2D? = nil,
+                semanticCandidates: [PerceptionSemanticCandidate],
+                evidence: [PerceptionEvidence]) {
+        self.id = id
+        self.label = label
+        self.labelSpace = labelSpace
+        self.confidence = confidence
+        self.bbox2D = bbox2D
+        self.semanticCandidates = semanticCandidates
+        self.evidence = evidence
+    }
+}
+
+/// An image embedding produced by a vision-language model.
+/// The raw vector is stored in `embeddingRef` (ArtifactRef, prompt_forbidden).
+/// Session only sees that an embedding exists, not the vector itself.
+public struct ImageEmbeddingObservation: Codable, Sendable, Equatable {
+    public var id: String
+    /// Handle to the embedding vector in the artifact store (prompt_forbidden).
+    public var embeddingRef: ArtifactRef
+    public var modelID: String
+    public var vectorSpaceID: String
+    public var normalization: String
+    public var evidence: [PerceptionEvidence]
+
+    public init(id: String,
+                embeddingRef: ArtifactRef,
+                modelID: String,
+                vectorSpaceID: String,
+                normalization: String = "l2",
+                evidence: [PerceptionEvidence] = []) {
+        self.id = id
+        self.embeddingRef = embeddingRef
+        self.modelID = modelID
+        self.vectorSpaceID = vectorSpaceID
+        self.normalization = normalization
+        self.evidence = evidence
     }
 }
 

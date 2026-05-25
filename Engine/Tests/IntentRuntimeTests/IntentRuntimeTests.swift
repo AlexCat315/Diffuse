@@ -1049,6 +1049,203 @@ struct UndoStackTests {
         #expect(ctx.sceneRuntime?.snapshot.revision == revisionBefore)
     }
 
+    @Test("setLocalTransform emits eulerDegrees authored and worldEulerDegrees evaluated events")
+    func setLocalTransformEmitsRotationWorldEvents() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        // Build a transform matrix with 45° Y rotation
+        let angle: Float = 45 * (.pi / 180)
+        let rotMatrix = simd_float4x4(columns: (
+            SIMD4<Float>(cos(angle), 0, -sin(angle), 0),
+            SIMD4<Float>(0,          1,  0,           0),
+            SIMD4<Float>(sin(angle), 0,  cos(angle),  0),
+            SIMD4<Float>(0,          0,  0,           1)
+        ))
+        let transform = LocalTransform(matrix: rotMatrix)
+        let transaction = TransactionIR(
+            summary: "Rotate entity",
+            operations: [.scene(.setLocalTransform(entityID: entity.rawValue, transform: transform))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let eulerEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "eulerDegrees", _) = $0 { return true }
+            return false
+        }
+        #expect(eulerEvent != nil, "setLocalTransform with rotation must emit eulerDegrees authored event")
+    }
+
+    @Test("setRigidBodyMass and setAnimationPlayer emit authored world events")
+    func physicsAndAnimationOpsEmitWorldEvents() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(RigidBody(motionType: .dynamic, mass: 10,
+                                          gravityScale: 1, allowSleep: true), for: entity)
+        _ = scene.setComponent(AnimationPlayer(), for: entity)
+        let transaction = TransactionIR(
+            summary: "Update mass and animation",
+            operations: [
+                .scene(.setRigidBodyMass(entityID: entity.rawValue, value: 50)),
+                .scene(.setAnimationPlayer(entityID: entity.rawValue, clipName: "walk",
+                                           speed: 1.5, loop: true, isPlaying: true)),
+            ],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let massEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "rigidBodyMass", _) = $0 { return true }
+            return false
+        }
+        let animClipEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "animationClip", _) = $0 { return true }
+            return false
+        }
+        #expect(massEvent != nil, "setRigidBodyMass must emit rigidBodyMass authored event")
+        #expect(animClipEvent != nil, "setAnimationPlayer must emit animationClip authored event")
+    }
+
+    @Test("setLocalTransform with non-uniform scale emits worldScale evaluated event")
+    func setLocalTransformNonUniformScaleEmitsWorldScale() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let scaleMatrix = simd_float4x4(columns: (
+            SIMD4<Float>(2, 0, 0, 0),
+            SIMD4<Float>(0, 3, 0, 0),
+            SIMD4<Float>(0, 0, 1, 0),
+            SIMD4<Float>(0, 0, 0, 1)
+        ))
+        let transaction = TransactionIR(
+            summary: "Scale entity",
+            operations: [.scene(.setLocalTransform(entityID: entity.rawValue,
+                                                    transform: LocalTransform(matrix: scaleMatrix)))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let scaleEvent = result.worldEvents.first {
+            if case .entityEvaluatedChanged(_, "worldScale", _) = $0 { return true }
+            return false
+        }
+        #expect(scaleEvent != nil, "non-uniform scale must emit worldScale evaluated event")
+        if case let .entityEvaluatedChanged(_, _, .vec3(sx, sy, sz)) = scaleEvent {
+            #expect(abs(sx - 2) < 0.01, "worldScale.x must be 2")
+            #expect(abs(sy - 3) < 0.01, "worldScale.y must be 3")
+            #expect(abs(sz - 1) < 0.01, "worldScale.z must be 1")
+        }
+    }
+
+    @Test("setLocalTransform with uniform scale does not emit worldScale evaluated event")
+    func setLocalTransformUniformScaleOmitsWorldScale() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let transaction = TransactionIR(
+            summary: "Identity transform",
+            operations: [.scene(.setLocalTransform(entityID: entity.rawValue,
+                                                    transform: LocalTransform(matrix: simd_float4x4(1))))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let scaleEvent = result.worldEvents.first {
+            if case .entityEvaluatedChanged(_, "worldScale", _) = $0 { return true }
+            return false
+        }
+        #expect(scaleEvent == nil, "identity transform must not emit worldScale")
+    }
+
+    @Test("setLightCastShadows emits lightCastShadows authored world event")
+    func setLightCastShadowsEmitsWorldEvent() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(LightComponent(type: .directional, color: .one, intensity: 1, range: 100), for: entity)
+        let transaction = TransactionIR(
+            summary: "Enable shadow casting",
+            operations: [.scene(.setLightCastShadows(entityID: entity.rawValue, value: true))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let shadowEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "lightCastShadows", .bool(true)) = $0 { return true }
+            return false
+        }
+        #expect(shadowEvent != nil, "setLightCastShadows must emit lightCastShadows authored event")
+    }
+
+    @Test("setColliderLayer and setColliderLayerMask emit colliderLayerID/Mask authored world events")
+    func setColliderLayerEmitsWorldEvents() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .box(halfExtents: .one, center: .zero)), for: entity)
+        let transaction = TransactionIR(
+            summary: "Set layer",
+            operations: [
+                .scene(.setColliderLayer(entityID: entity.rawValue, layerID: 3)),
+                .scene(.setColliderLayerMask(entityID: entity.rawValue, layerMask: 12)),
+            ],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let layerEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderLayerID", .float(3)) = $0 { return true }
+            return false
+        }
+        let maskEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderLayerMask", .float(12)) = $0 { return true }
+            return false
+        }
+        #expect(layerEvent != nil, "setColliderLayer must emit colliderLayerID authored event")
+        #expect(maskEvent != nil, "setColliderLayerMask must emit colliderLayerMask authored event")
+    }
+
+    @Test("setConstraintEnabled emits constraintEnabled authored world event")
+    func setConstraintEnabledEmitsWorldEvent() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(
+            Constraint(entityA: entity, entityB: entity),
+            for: entity
+        )
+        let transaction = TransactionIR(
+            summary: "Disable constraint",
+            operations: [
+                .scene(.setConstraintEnabled(entityID: entity.rawValue, value: false)),
+            ],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let event = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "constraintEnabled", .bool(false)) = $0 { return true }
+            return false
+        }
+        #expect(event != nil, "setConstraintEnabled must emit constraintEnabled authored world event")
+    }
+
     @Test("ring buffer discards oldest entry when capacity is exceeded")
     func ringBufferEvictsOldest() {
         let stack = UndoStack(capacity: 3)

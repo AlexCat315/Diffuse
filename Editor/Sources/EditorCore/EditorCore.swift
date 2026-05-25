@@ -1,4 +1,5 @@
 ﻿import AIRuntime
+import ContextMemory
 import AssetPipeline
 import AudioRuntime
 import CapabilityRuntime
@@ -7,6 +8,7 @@ import EngineKernel
 import IntentRuntime
 import ObservationBus
 import PerceptionRuntime
+import SemanticPipeline
 import RenderBackend
 import RHIWGPU
 import SceneRuntime
@@ -35,9 +37,10 @@ public final class EditorApplication: @unchecked Sendable {
     private let intentCoordinator: IntentRuntimeCoordinator
     private let intentTransactionBuilder = IntentTransactionBuilder()
     private let aiWorldContext: AIWorldContext
-    private let perceptionWorker = AppleVisionPerceptionWorker()
+    private let perceptionService: PerceptionService
     private let events: PlatformEventBridge
     private var eventToken: PlatformEventBridge.SubscriptionToken?
+    private var workspaceModeToken: EditorStore.SubscriptionToken?
     private var pendingViewportEvents: [InputEvent] = []
     private var _viewportDrawableSize: RenderDrawableSize = .init(width: 1280, height: 720)
     private var lastViewportSurfaceState = ViewportSurfaceState()
@@ -49,6 +52,7 @@ public final class EditorApplication: @unchecked Sendable {
     private var pendingAssistantMessageID: String?
     private let mcpBridge = MCPBridge()
     private let editLog: EditLog
+    private let contextMemoryStore: ContextMemoryStore?
     private var physicsPlaySnapshot: SceneRuntime?
     private var frameTimingAccumulator: Double = 0
     private var frameTimingCount: Int = 0
@@ -90,6 +94,11 @@ public final class EditorApplication: @unchecked Sendable {
         let initialSession = EditorApplication.makeSession(for: initialAISettings,
                                                            initialWorldView: initialWorldView)
 
+        let ps = PerceptionService()
+        let contextMemoryURL = URL(fileURLWithPath: projectDirectory, isDirectory: true)
+            .appendingPathComponent(".guava", isDirectory: true)
+            .appendingPathComponent("context_memory.json")
+        let contextMemoryStore = try? ContextMemoryStore(storageURL: contextMemoryURL)
         self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: resolvedBackend)
         self.projectDirectory = projectDirectory
         self.store = store
@@ -100,7 +109,12 @@ public final class EditorApplication: @unchecked Sendable {
         self.aiWorldContext = AIWorldContext(worldView: initialWorldView)
         self.events = events
         self.editLog = EditLog(projectDirectory: projectDirectory)
+        self.contextMemoryStore = contextMemoryStore
         self.session = initialSession
+        self.perceptionService = ps
+        #if canImport(Vision)
+        Task { await ps.register(AppleVisionPerceptionWorker()) }
+        #endif
 
         scene.onRevisionChanged = { revision in
             store.dispatch(.setSceneRevision(revision))
@@ -111,6 +125,35 @@ public final class EditorApplication: @unchecked Sendable {
         }
 
         startMCPBridge()
+
+        // Register AIWorldContext as the snapshot provider for the "scene" scope so
+        // that the §8 resync protocol is connected end-to-end.
+        let worldContextForBus = self.aiWorldContext
+        let busForProvider = self.observationBus
+        Task { busForProvider.registerSnapshotProvider(worldContextForBus, forScope: "scene") }
+
+        // Propagate initial workflow context, observation bus, and context memory to Session.
+        if let initialSession {
+            let ctx = Self.workflowContext(for: store.state.workspaceMode)
+            let bus = observationBus
+            let mem = contextMemoryStore
+            Task {
+                await initialSession.setWorkflowContext(ctx)
+                await initialSession.setObservationBus(bus)
+                await initialSession.setContextMemory(mem)
+            }
+        }
+
+        // Keep Session's WorkflowContext in sync when the user switches workspace mode.
+        var lastObservedMode: EditorWorkspaceMode = store.state.workspaceMode
+        workspaceModeToken = store.subscribe { [weak self] s in
+            guard let self else { return }
+            let newMode = s.state.workspaceMode
+            guard newMode != lastObservedMode, let sess = self.session else { return }
+            lastObservedMode = newMode
+            let ctx = Self.workflowContext(for: newMode)
+            Task { await sess.setWorkflowContext(ctx) }
+        }
     }
 
     public func bootstrap() {
@@ -156,6 +199,10 @@ public final class EditorApplication: @unchecked Sendable {
         if let eventToken {
             events.unsubscribe(eventToken)
             self.eventToken = nil
+        }
+        if let workspaceModeToken {
+            store.unsubscribe(workspaceModeToken)
+            self.workspaceModeToken = nil
         }
         engine.shutdown()
     }
@@ -216,7 +263,164 @@ public final class EditorApplication: @unchecked Sendable {
         }
         store.dispatch(.setSelectedEntity(id))
         logConsole("Spawned \(asset.name)", detail: "entity \(id)")
+        runSemanticAnnotation(entityID: id, asset: asset)
         return id
+    }
+
+    private func runSemanticAnnotation(entityID: UInt64, asset: EditorAsset) {
+        guard let mesh = AssetRegistry.shared.meshAsset(for: asset.meshIndex) else { return }
+        let entityRef = "scene:\(entityID)"
+        let assetURI = asset.relativePath
+        let session = self.session
+
+        let previewImagePath = Self.siblingPreviewImagePath(for: asset.absolutePath)
+        Task.detached(priority: .utility) { [weak self] in
+            guard let self else { return }
+            let raw = Self.buildRawStructure(from: mesh, assetURI: assetURI,
+                                             previewImagePath: previewImagePath)
+            let signals = Self.buildGeometrySignals(from: mesh, assetURI: assetURI)
+            let pipeline = AssetSemanticPipeline.standard()
+            let decision = await pipeline.run(rawStructure: raw, signals: signals)
+
+            let proposals: [SemanticProposal]
+            switch decision {
+            case let .autoCommit(committed): proposals = committed
+            case .needsConfirmation: return
+            }
+
+            guard !proposals.isEmpty else { return }
+            let events = SemanticWorldEventMapper().makeWorldEvents(from: proposals, targetRef: entityRef)
+            guard !events.isEmpty else { return }
+
+            if let session {
+                await session.observe(events: events)
+            }
+            await MainActor.run {
+                self.observeWorldEvents(events)
+                self.logConsole("Semantic annotations applied to \(entityRef)",
+                                detail: "\(proposals.count) proposals")
+            }
+        }
+    }
+
+    private static func siblingPreviewImagePath(for absolutePath: String) -> String? {
+        let base = (absolutePath as NSString).deletingPathExtension
+        for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"] {
+            let candidate = "\(base).\(ext)"
+            if FileManager.default.fileExists(atPath: candidate) { return candidate }
+        }
+        return nil
+    }
+
+    private static func buildRawStructure(from mesh: MeshAsset,
+                                          assetURI: String,
+                                          previewImagePath: String? = nil) -> RawStructure {
+        var nodes: [RawStructure.Node] = []
+        for (i, node) in mesh.nodes.enumerated() {
+            let t = node.localTranslation
+            let s = node.localScale
+            // Column-major 4×4 from TRS (simplified; rotation from quaternion)
+            let transform: [Float] = [
+                s.x, 0, 0, 0,
+                0, s.y, 0, 0,
+                0, 0, s.z, 0,
+                t.x, t.y, t.z, 1,
+            ]
+            nodes.append(RawStructure.Node(id: "node_\(i)",
+                                           name: node.name ?? "node_\(i)",
+                                           parentID: node.parentIndex.map { "node_\($0)" },
+                                           localTransform: transform))
+        }
+
+        let meshRecord = RawStructure.MeshRecord(id: "mesh_0",
+                                                 nodeID: nodes.first?.id ?? "node_0",
+                                                 vertexCount: mesh.vertexCount,
+                                                 faceCount: mesh.triangleCount)
+
+        var submeshRecords: [RawStructure.SubmeshRecord] = []
+        for (i, sub) in mesh.submeshes.enumerated() {
+            submeshRecords.append(RawStructure.SubmeshRecord(id: "sub_\(i)",
+                                                             meshID: "mesh_0",
+                                                             materialSlot: sub.materialIndex,
+                                                             indexStart: Int(sub.indexStart),
+                                                             indexCount: Int(sub.indexCount)))
+        }
+
+        var materialSlots: [RawStructure.MaterialSlot] = []
+        for (i, mat) in mesh.materials.enumerated() {
+            materialSlots.append(RawStructure.MaterialSlot(id: "mat_\(i)",
+                                                           name: mat.name ?? "material_\(i)",
+                                                           sourceIndex: i))
+        }
+
+        var bones: [RawStructure.Bone] = []
+        for skin in mesh.skins {
+            for jointIndex in skin.jointNodeIndices {
+                guard jointIndex < mesh.nodes.count else { continue }
+                let node = mesh.nodes[jointIndex]
+                let boneID = "bone_\(jointIndex)"
+                let parentBoneID: String? = {
+                    guard let parentIdx = node.parentIndex,
+                          skin.jointNodeIndices.contains(parentIdx) else { return nil }
+                    return "bone_\(parentIdx)"
+                }()
+                bones.append(RawStructure.Bone(id: boneID,
+                                               name: node.name ?? boneID,
+                                               parentID: parentBoneID))
+            }
+        }
+        let skeleton: RawStructure.Skeleton? = bones.isEmpty ? nil : RawStructure.Skeleton(bones: bones)
+
+        return RawStructure(assetURI: assetURI,
+                            previewImagePath: previewImagePath,
+                            nodes: nodes,
+                            meshes: [meshRecord],
+                            submeshes: submeshRecords,
+                            materialSlots: materialSlots,
+                            skeleton: skeleton)
+    }
+
+    private static func buildGeometrySignals(from mesh: MeshAsset, assetURI: String) -> GeometrySignals {
+        let bounds = mesh.localBounds
+        let aabb = GeometrySignals.AABB(
+            min: (bounds.min.x, bounds.min.y, bounds.min.z),
+            max: (bounds.max.x, bounds.max.y, bounds.max.z)
+        )
+        let component = GeometrySignals.ConnectedComponent(
+            id: "cc_0",
+            meshID: "mesh_0",
+            faceCount: mesh.triangleCount,
+            bounds: aabb
+        )
+        let dx = bounds.max.x - bounds.min.x
+        let dy = bounds.max.y - bounds.min.y
+        let dz = bounds.max.z - bounds.min.z
+        let surfaceArea = 2 * (dx * dy + dy * dz + dx * dz)
+        let volumeEstimate = dx * dy * dz
+        return GeometrySignals(assetURI: assetURI,
+                               connectedComponents: [component],
+                               surfaceArea: surfaceArea,
+                               volumeEstimate: volumeEstimate)
+    }
+
+    /// Runs visual perception on `imageURL` and injects the resulting inferred properties
+    /// into the World and the active Session for the given entity.
+    /// Call this from the UI or MCP after the user selects a reference image for an entity.
+    public func tagEntity(_ entityRef: String, imageURL: URL) {
+        let ps = perceptionService
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let events = try await ps.tag(entityRef: entityRef, imageURL: imageURL)
+                self.observeWorldEvents(events)
+                self.logConsole("Tagged \(entityRef)",
+                                detail: "\(events.count) inferred properties")
+            } catch {
+                self.logConsole("Perception unavailable for \(entityRef)",
+                                severity: .warning,
+                                detail: error.localizedDescription)
+            }
+        }
     }
 
     /// 澶勭悊 AssetBrowser 鍦ㄨ鍙ｅ唴鏀句笅璧勪骇鐨勪簨浠躲€傚鏋滃綋鍓嶅厜鏍囧潗鏍?
@@ -850,8 +1054,14 @@ public final class EditorApplication: @unchecked Sendable {
         let newSession = Self.makeSession(for: settings)
         if let newSession {
             let worldContext = self.aiWorldContext
+            let ctx = Self.workflowContext(for: store.state.workspaceMode)
+            let bus = self.observationBus
+            let mem = self.contextMemoryStore
             Task {
                 await newSession.replaceWorldView(await worldContext.snapshot())
+                await newSession.setWorkflowContext(ctx)
+                await newSession.setObservationBus(bus)
+                await newSession.setContextMemory(mem)
             }
         }
         session = newSession
@@ -876,6 +1086,24 @@ public final class EditorApplication: @unchecked Sendable {
     /// Returns `true` if a non-empty API key is stored for the current provider.
     public func hasStoredAIKey() -> Bool {
         AIKeychain.hasKey(for: store.state.aiSettings.provider)
+    }
+
+    static func workflowContext(for mode: EditorWorkspaceMode) -> WorkflowContext {
+        let intent = GameplayIntent(genre: "game", winCondition: "not_specified", pacing: "exploration")
+        switch mode {
+        case .level:
+            return .game(GameWorkflowContext(levelPhase: .blockout,
+                                            gameplayIntent: intent,
+                                            targetExperience: "Interactive level editing"))
+        case .modeling:
+            return .game(GameWorkflowContext(levelPhase: .polish,
+                                            gameplayIntent: intent,
+                                            targetExperience: "Asset creation and modeling"))
+        case .animation:
+            return .game(GameWorkflowContext(levelPhase: .polish,
+                                            gameplayIntent: intent,
+                                            targetExperience: "Animation authoring"))
+        }
     }
 
     static func makeSession(for settings: EditorAISettings,
@@ -964,14 +1192,15 @@ public final class EditorApplication: @unchecked Sendable {
                 // Enrich provenance with the proposal that generated this edit.
                 if let proposal = pendingSessionProposal {
                     edit.provenance.proposalID = proposal.id
-                    let stepCount = proposal.plan.steps.count
-                    let accepted = (0..<stepCount).map { "step_\($0)" }
+                    let acceptedStepIDs = (0..<proposal.plan.steps.count).map { "step_\($0)" }
                     if let session {
-                        Task { await session.recordOutcome(
-                            toolUseID: proposal.toolUseID,
-                            content: "Plan applied successfully: \(proposal.plan.summary)",
-                            proposalID: proposal.id
-                        ) }
+                        Task {
+                            _ = try? await session.process(
+                                .userCorrection(proposalID: proposal.id,
+                                               acceptedStepIDs: acceptedStepIDs,
+                                               rejectedStepIDs: [])
+                            )
+                        }
                     }
                     pendingSessionProposal = nil
                 }
@@ -1064,16 +1293,46 @@ public final class EditorApplication: @unchecked Sendable {
             return mcpExecutePlan(params: params)
         case "analyze_image":
             return mcpAnalyzeImage(params: params)
+        case "get_context_memory":
+            return mcpGetContextMemory(params: params)
         case "get_ai_entity":
             return mcpGetAIEntity(params: params)
         case "get_selection":
             let ref = store.state.selectedEntityID.map { "scene:\($0)" }
             return ["ok": true, "selectedRef": ref as Any]
+        case "select_entity":
+            return mcpSelectEntity(params: params)
         case "set_playback_state":
             return mcpSetPlaybackState(params: params)
+        case "undo":
+            return mcpUndo()
+        case "redo":
+            return mcpRedo()
         default:
             return ["ok": false, "error": "unknown action '\(action)'"]
         }
+    }
+
+    private func mcpUndo() -> [String: Any] {
+        var context = makeExecutionContext()
+        let applied = intentCoordinator.undo(executionContext: &context)
+        if applied, let updatedScene = context.sceneRuntime {
+            scene.scene = updatedScene
+            scene.notifyRevisionChanged()
+            store.dispatch(.setAIStatusMessage("Undone"))
+        }
+        return ["ok": true, "applied": applied]
+    }
+
+    private func mcpRedo() -> [String: Any] {
+        var context = makeExecutionContext()
+        let applied = intentCoordinator.redo(executionContext: &context)
+        if applied, let updatedScene = context.sceneRuntime {
+            scene.scene = updatedScene
+            scene.notifyRevisionChanged()
+            store.dispatch(.setAIStatusMessage("Redone"))
+        }
+        return ["ok": true, "applied": applied]
     }
 
     private func mcpSetPlaybackState(params: [String: Any]) -> [String: Any] {
@@ -1085,6 +1344,22 @@ public final class EditorApplication: @unchecked Sendable {
         }
         applyPlaybackState(next)
         return ["ok": true, "state": next.rawValue]
+    }
+
+    private func mcpSelectEntity(params: [String: Any]) -> [String: Any] {
+        if let refStr = params["entity_id"] as? String, !refStr.isEmpty {
+            guard refStr.hasPrefix("scene:"),
+                  let raw = UInt64(refStr.dropFirst("scene:".count)),
+                  let eid = entityID(from: raw),
+                  scene.scene.contains(eid) else {
+                return ["ok": false, "error": "invalid entity ref '\(params["entity_id"] as? String ?? "")'"]
+            }
+            store.dispatch(.setSelectedEntity(raw))
+            return ["ok": true, "selectedRef": refStr]
+        } else {
+            store.dispatch(.setSelectedEntity(nil))
+            return ["ok": true, "selectedRef": NSNull()]
+        }
     }
 
     private func mcpGetScene() -> [String: Any] {
@@ -1107,6 +1382,13 @@ public final class EditorApplication: @unchecked Sendable {
             return ["ok": false, "error": "missing 'image_path' field"]
         }
         let maxResults = max(1, min((params["max_results"] as? Int) ?? 5, 20))
+        let taskStr = (params["task"] as? String) ?? "classification"
+        let task: PerceptionTask
+        switch taskStr {
+        case "object_detection": task = .objectDetection
+        case "image_embedding":  task = .imageEmbedding
+        default:                 task = .classification
+        }
         let targetRef = (params["entity_id"] as? String) ?? store.state.selectedEntityID.map { "scene:\($0)" }
         guard let targetRef, !targetRef.isEmpty else {
             return ["ok": false, "error": "missing target entity; pass entity_id or select an entity"]
@@ -1118,36 +1400,68 @@ public final class EditorApplication: @unchecked Sendable {
             return ["ok": false, "error": "invalid target entity '\(targetRef)'"]
         }
 
-        do {
-            let result = try perceptionWorker.analyzeImage(
-                at: URL(fileURLWithPath: imagePath),
-                requestID: UUID().uuidString,
-                maxResults: maxResults
-            )
-            let mapper = PerceptionWorldEventMapper()
-            let writeSet = mapper.makeWriteSet(from: result, targetRef: targetRef)
-            let events = mapper.makeWorldEvents(from: result, targetRef: targetRef)
-            let resultJSON = jsonObject(result) ?? [:]
-            let writeSetJSON = jsonObject(writeSet) ?? [:]
-            let applicationResult = applyWorldEventsSynchronously(events)
-            store.dispatch(.setAIStatusMessage(
-                applicationResult.localApplied
-                    ? "Perception updated \(targetRef)"
-                    : "Perception ran; no AI world update was applied"
-            ))
-
-            return [
-                "ok": true,
-                "targetRef": targetRef,
-                "worldApplied": applicationResult.localApplied,
-                "sessionApplied": applicationResult.sessionApplied,
-                "model": result.modelID,
-                "result": resultJSON,
-                "writeSet": writeSetJSON,
-            ]
-        } catch {
-            return ["ok": false, "error": error.localizedDescription]
+        let ps = perceptionService
+        let currentSession = session
+        let semaphore = DispatchSemaphore(value: 0)
+        final class MCPState: @unchecked Sendable {
+            var result: [String: Any] = [:]
         }
+        let state = MCPState()
+        Task {
+            do {
+                let imageURL = URL(fileURLWithPath: imagePath)
+                let events: [WorldEvent]
+                if let sess = currentSession {
+                    // tagEntity updates WorldView and records sceneAnnotation in contextMemory
+                    await sess.setPerceptionService(ps)
+                    events = try await sess.tagEntity(ref: targetRef,
+                                                      imageURL: imageURL,
+                                                      task: task,
+                                                      maxResults: maxResults)
+                    // Also push events into AIWorldContext
+                    await self.aiWorldContext.observe(events: events)
+                } else {
+                    events = try await ps.tag(entityRef: targetRef,
+                                              imageURL: imageURL,
+                                              task: task,
+                                              maxResults: maxResults)
+                    let applicationResult = self.applyWorldEventsSynchronously(events)
+                    _ = applicationResult
+                }
+                self.store.dispatch(.setAIStatusMessage("Perception updated \(targetRef)"))
+                state.result = [
+                    "ok": true,
+                    "targetRef": targetRef,
+                    "events": events.count,
+                    "sessionUsed": currentSession != nil,
+                ]
+            } catch {
+                state.result = ["ok": false, "error": error.localizedDescription]
+            }
+            semaphore.signal()
+        }
+        guard semaphore.wait(timeout: .now() + 10) == .success else {
+            return ["ok": false, "error": "perception timed out"]
+        }
+        return state.result
+    }
+
+    private func mcpGetContextMemory(params: [String: Any]) -> [String: Any] {
+        guard let store = contextMemoryStore else {
+            return ["ok": false, "error": "context memory is not configured for this project"]
+        }
+        let budget = params["budget"] as? Int ?? 20
+        let semaphore = DispatchSemaphore(value: 0)
+        final class State: @unchecked Sendable { var view: [[String: String]] = [] }
+        let state = State()
+        Task {
+            state.view = await store.symbolicView(budget: budget)
+            semaphore.signal()
+        }
+        guard semaphore.wait(timeout: .now() + 3) == .success else {
+            return ["ok": false, "error": "context memory read timed out"]
+        }
+        return ["ok": true, "entries": state.view, "count": state.view.count]
     }
 
     private func mcpGetAIEntity(params: [String: Any]) -> [String: Any] {

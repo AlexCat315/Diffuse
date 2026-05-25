@@ -55,6 +55,7 @@ public struct RenderLight: Sendable, Equatable {
     public var range: Float
     public var spotInnerAngleRadians: Float
     public var spotOuterAngleRadians: Float
+    public var castShadows: Bool
     public var entity: EntityID?
 
     public init(type: RenderLightType = .directional,
@@ -65,6 +66,7 @@ public struct RenderLight: Sendable, Equatable {
                 range: Float = 10,
                 spotInnerAngleRadians: Float = .pi / 9,
                 spotOuterAngleRadians: Float = .pi / 6,
+                castShadows: Bool = false,
                 entity: EntityID? = nil) {
         self.type = type
         self.position = position
@@ -74,6 +76,7 @@ public struct RenderLight: Sendable, Equatable {
         self.range = max(0, range)
         self.spotOuterAngleRadians = max(0.001, min(.pi, spotOuterAngleRadians))
         self.spotInnerAngleRadians = max(0, min(self.spotOuterAngleRadians, spotInnerAngleRadians))
+        self.castShadows = castShadows
         self.entity = entity
     }
 }

@@ -33,23 +33,52 @@ public struct PerceptionWorldEventMapper: Sendable {
 
     public func makeWriteSet(from result: PerceptionResult, targetRef: String) -> InferredWriteSet {
         var writes: [InferredWrite] = []
-        if let top = result.observations.compactMap(\.primaryCandidate)
-            .sorted(by: { $0.confidence > $1.confidence })
-            .first {
-            writes.append(InferredWrite(property: top.kind,
-                                        value: .string(top.label),
-                                        confidence: top.confidence,
-                                        source: "perception:\(result.modelID)"))
+        let source = "perception:\(result.modelID)"
+
+        for observation in result.observations {
+            switch observation {
+            case let .classification(obs):
+                if let top = obs.semanticCandidates.first {
+                    writes.append(InferredWrite(property: top.kind,
+                                                value: .string(top.label),
+                                                confidence: top.confidence,
+                                                source: source))
+                }
+
+            case let .objectDetection(obs):
+                if let top = obs.semanticCandidates.first {
+                    writes.append(InferredWrite(property: top.kind,
+                                                value: .string(top.label),
+                                                confidence: top.confidence,
+                                                source: source))
+                }
+                if let bbox = obs.bbox2D {
+                    writes.append(InferredWrite(property: "perception.bbox2d",
+                                                value: .vec4(bbox.x, bbox.y, bbox.width, bbox.height),
+                                                confidence: obs.confidence,
+                                                source: source))
+                }
+
+            case let .imageEmbedding(obs):
+                // Embedding vectors are prompt_forbidden — only record that one exists
+                writes.append(InferredWrite(property: "perception.embedding_available",
+                                            value: .string(obs.vectorSpaceID),
+                                            confidence: 1.0,
+                                            source: source))
+            }
         }
 
-        let labels = result.observations.compactMap { observation -> String? in
-            observation.primaryCandidate?.label
-        }
-        if !labels.isEmpty {
+        let labels = result.observations.compactMap(\.primaryCandidate?.label)
+        if labels.count > 1 {
             writes.append(InferredWrite(property: "perception.summary",
                                         value: .string(labels.joined(separator: ", ")),
-                                        confidence: labels.count == 1 ? (writes.first?.confidence ?? 1.0) : 1.0,
-                                        source: "perception:\(result.modelID)"))
+                                        confidence: 1.0,
+                                        source: source))
+        } else if labels.count == 1, let first = labels.first {
+            writes.append(InferredWrite(property: "perception.summary",
+                                        value: .string(first),
+                                        confidence: writes.first?.confidence ?? 1.0,
+                                        source: source))
         }
 
         return InferredWriteSet(targetRef: targetRef, writes: writes)

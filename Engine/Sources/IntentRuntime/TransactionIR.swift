@@ -94,6 +94,7 @@ public enum SceneMutation: Sendable, Equatable {
     case setLightRange(entityID: UInt64, range: Float)
     case setLightSpotInnerAngle(entityID: UInt64, angleDegrees: Float)
     case setLightSpotOuterAngle(entityID: UInt64, angleDegrees: Float)
+    case setLightCastShadows(entityID: UInt64, value: Bool)
     case setMeshColorTint(entityID: UInt64, color: SIMD3<Float>)
     case setRenderMeshVisibility(entityID: UInt64, isVisible: Bool)
     case setRenderMaterialComponent(entityID: UInt64,
@@ -106,6 +107,8 @@ public enum SceneMutation: Sendable, Equatable {
                        localTransform: LocalTransform,
                        target: SIMD3<Float>,
                        up: SIMD3<Float>?)
+    case setCameraFOV(entityID: UInt64, fovYDegrees: Float)
+    case setCameraActive(entityID: UInt64, isActive: Bool)
     case setAudioSource(entityID: UInt64, source: AudioSource)
     case setAnimationPlayer(entityID: UInt64, clipName: String?, speed: Float, loop: Bool, isPlaying: Bool)
 
@@ -144,11 +147,14 @@ public enum SceneMutation: Sendable, Equatable {
              let .setLightRange(id, _),
              let .setLightSpotInnerAngle(id, _),
              let .setLightSpotOuterAngle(id, _),
+             let .setLightCastShadows(id, _),
              let .setMeshColorTint(id, _),
              let .setRenderMeshVisibility(id, _),
              let .setRenderMaterialComponent(id, _, _, _, _),
              let .setScriptBindings(id, _),
              let .setCameraPose(id, _, _, _),
+             let .setCameraFOV(id, _),
+             let .setCameraActive(id, _),
              let .setAudioSource(id, _),
              let .setAnimationPlayer(id, _, _, _, _):
             return id

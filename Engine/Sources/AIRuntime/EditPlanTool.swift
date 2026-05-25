@@ -114,6 +114,10 @@ public enum EditPlanTool {
                     "type": "number",
                     "description": "Spot cone outer angle in degrees for set_light_spot_angles.",
                 ] as [String: Any],
+                "light_cast_shadows": [
+                    "type": "boolean",
+                    "description": "Whether the light casts shadows for set_light_cast_shadows.",
+                ] as [String: Any],
                 "camera_target": [
                     "type": "array", "items": ["type": "number"] as [String: Any],
                     "description": "[x, y, z] look-at point for set_camera_pose.",
@@ -121,6 +125,14 @@ public enum EditPlanTool {
                 "camera_up": [
                     "type": "array", "items": ["type": "number"] as [String: Any],
                     "description": "[x, y, z] up vector for set_camera_pose. Default [0, 1, 0].",
+                ] as [String: Any],
+                "camera_fov_y": [
+                    "type": "number",
+                    "description": "Vertical field-of-view in degrees (1–179) for set_camera_fov. Typical: 30=telephoto, 50=normal, 75=wide.",
+                ] as [String: Any],
+                "camera_is_active": [
+                    "type": "boolean",
+                    "description": "Whether this camera is the active render camera for set_camera_active.",
                 ] as [String: Any],
                 "motion_type": [
                     "type": "string", "enum": ["static", "dynamic", "kinematic"],
@@ -174,6 +186,14 @@ public enum EditPlanTool {
                     "type": "number",
                     "description": "Collider material density for set_collider_material.",
                 ] as [String: Any],
+                "collider_layer_id": [
+                    "type": "integer",
+                    "description": "Physics layer index (0–15) this collider occupies. For set_collider_layer.",
+                ] as [String: Any],
+                "collider_layer_mask": [
+                    "type": "integer",
+                    "description": "Bitmask of physics layers this collider interacts with. For set_collider_layer.",
+                ] as [String: Any],
                 "audio_clip": [
                     "type": "string",
                     "description": "Audio clip asset name (no extension) for set_audio_source.",
@@ -208,6 +228,44 @@ public enum EditPlanTool {
                 ] as [String: Any],
                 "script_property_value": [
                     "description": "The new value for the script parameter (string, number, or boolean). For set_script_property.",
+                ] as [String: Any],
+                "is_visible": [
+                    "type": "boolean",
+                    "description": "Whether the mesh is visible. For set_mesh_visibility.",
+                ] as [String: Any],
+                "material_base_color": [
+                    "type": "array",
+                    "items": ["type": "number"] as [String: Any],
+                    "description": "[r,g,b,a] linear 0-1 base colour for set_material. Omit to leave unchanged.",
+                ] as [String: Any],
+                "material_metallic": [
+                    "type": "number",
+                    "description": "Metallic factor 0–1 for set_material. 0=dielectric, 1=metal. Omit to leave unchanged.",
+                ] as [String: Any],
+                "material_roughness": [
+                    "type": "number",
+                    "description": "Roughness factor 0–1 for set_material. 0=mirror-smooth, 1=fully rough. Omit to leave unchanged.",
+                ] as [String: Any],
+                "material_emissive": [
+                    "type": "array",
+                    "items": ["type": "number"] as [String: Any],
+                    "description": "[r,g,b] linear 0-1 emission colour for set_material. Omit for no emission.",
+                ] as [String: Any],
+                "animation_clip": [
+                    "type": "string",
+                    "description": "Animation clip name for set_animation_player. Empty string or omit to use the default clip.",
+                ] as [String: Any],
+                "animation_speed": [
+                    "type": "number",
+                    "description": "Playback speed multiplier (1=normal) for set_animation_player.",
+                ] as [String: Any],
+                "animation_loop": [
+                    "type": "boolean",
+                    "description": "Whether the animation loops for set_animation_player.",
+                ] as [String: Any],
+                "animation_is_playing": [
+                    "type": "boolean",
+                    "description": "Whether animation playback is active for set_animation_player.",
                 ] as [String: Any],
             ] as [String: Any],
         ]
