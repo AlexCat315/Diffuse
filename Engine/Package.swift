@@ -248,6 +248,7 @@ let package = Package(
                 "ScriptRuntime",
                 "IntentRuntime",
                 "ObservationBus",
+                "ContextMemory",
             ]
         ),
         .target(
@@ -449,6 +450,7 @@ let package = Package(
             name: "AIRuntimeTests",
             dependencies: [
                 "AIRuntime",
+                "ContextMemory",
                 "IntentRuntime",
             ]
         ),
