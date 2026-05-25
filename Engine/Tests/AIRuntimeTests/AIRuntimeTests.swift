@@ -1876,6 +1876,36 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertNil(dict["materialEmissive"])
     }
 
+    func testSessionCompactDictOmitsMeshIsVisibleWhenTrue() {
+        var record = WorldEntityRecord(ref: "scene:44", name: "Cube")
+        record.meshIsVisible = true
+
+        let dict = Session(id: "d3", config: makeTestConfig()).compactDict(for: record)
+        XCTAssertNil(dict["meshIsVisible"], "meshIsVisible:true should be omitted to reduce prompt noise")
+    }
+
+    func testSessionCompactDictIncludesMeshIsVisibleWhenFalse() {
+        var record = WorldEntityRecord(ref: "scene:45", name: "Hidden")
+        record.meshIsVisible = false
+
+        let dict = Session(id: "d4", config: makeTestConfig()).compactDict(for: record)
+        XCTAssertEqual(dict["meshIsVisible"] as? Bool, false, "meshIsVisible:false must appear in compact dict")
+    }
+
+    func testSessionCompactDictIncludesColliderFields() {
+        var record = WorldEntityRecord(ref: "scene:46", name: "Physics")
+        record.colliderShape = "capsule"
+        record.colliderIsTrigger = true
+        record.colliderFriction = 0.3
+        record.colliderLayerID = 5
+
+        let dict = Session(id: "d5", config: makeTestConfig()).compactDict(for: record)
+        XCTAssertEqual(dict["colliderShape"] as? String, "capsule")
+        XCTAssertEqual(dict["colliderIsTrigger"] as? Bool, true)
+        XCTAssertEqual(dict["colliderFriction"] as? Float, 0.3)
+        XCTAssertEqual(dict["colliderLayerID"] as? Int, 5)
+    }
+
     // MARK: - tagEntity perception integration
 
     func testTagEntityAppliesInferredEventsToWorldView() async throws {
