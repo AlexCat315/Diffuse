@@ -1382,6 +1382,13 @@ public final class EditorApplication: @unchecked Sendable {
             return ["ok": false, "error": "missing 'image_path' field"]
         }
         let maxResults = max(1, min((params["max_results"] as? Int) ?? 5, 20))
+        let taskStr = (params["task"] as? String) ?? "classification"
+        let task: PerceptionTask
+        switch taskStr {
+        case "object_detection": task = .objectDetection
+        case "image_embedding":  task = .imageEmbedding
+        default:                 task = .classification
+        }
         let targetRef = (params["entity_id"] as? String) ?? store.state.selectedEntityID.map { "scene:\($0)" }
         guard let targetRef, !targetRef.isEmpty else {
             return ["ok": false, "error": "missing target entity; pass entity_id or select an entity"]
@@ -1403,6 +1410,7 @@ public final class EditorApplication: @unchecked Sendable {
             do {
                 let events = try await ps.tag(entityRef: targetRef,
                                               imageURL: URL(fileURLWithPath: imagePath),
+                                              task: task,
                                               maxResults: maxResults)
                 let applicationResult = self.applyWorldEventsSynchronously(events)
                 self.store.dispatch(.setAIStatusMessage(
