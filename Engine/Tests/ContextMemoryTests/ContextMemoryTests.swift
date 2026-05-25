@@ -337,6 +337,44 @@ struct ContextMemoryTests {
         #expect(dict["name"] == "Rock")
     }
 
+    @Test("store.upsert inserts or updates an entry directly")
+    func storeManualUpsert() async throws {
+        let store = try ContextMemoryStore()
+        let entry = ContextEntry(id: "pref:test", kind: .userPreference,
+                                 subject: "session", payload: ["key": "val"], importance: 0.7)
+        await store.upsert(entry)
+        let found = await store.entry(id: "pref:test")
+        #expect(found?.kind == .userPreference)
+        #expect(found?.payload["key"] == "val")
+    }
+
+    @Test("store.remove deletes entry by id")
+    func storeManualRemove() async throws {
+        let store = try ContextMemoryStore()
+        await store.apply(event: .entityAdded(ref: "scene:50", name: "X", kind: nil))
+        let before = await store.entry(id: "entity_added:scene:50")
+        #expect(before != nil)
+        await store.remove(id: "entity_added:scene:50")
+        let after = await store.entry(id: "entity_added:scene:50")
+        #expect(after == nil)
+    }
+
+    @Test("store.upsert respects capacity eviction")
+    func storeUpsertRespectsCapacity() async throws {
+        let store = try ContextMemoryStore(capacity: 2)
+        await store.upsert(ContextEntry(id: "a", kind: .userPreference, subject: "s",
+                                        payload: [:], importance: 0.1))
+        await store.upsert(ContextEntry(id: "b", kind: .userPreference, subject: "s",
+                                        payload: [:], importance: 0.2))
+        await store.upsert(ContextEntry(id: "c", kind: .userPreference, subject: "s",
+                                        payload: [:], importance: 0.9))
+        let entries = await store.allEntries()
+        #expect(entries.count == 2)
+        // "a" (lowest importance) should have been evicted
+        #expect(await store.entry(id: "a") == nil)
+        #expect(await store.entry(id: "c") != nil)
+    }
+
     @Test("flush and reload round-trip preserves entries")
     func flushAndReloadRoundTrip() async throws {
         let url = FileManager.default.temporaryDirectory
