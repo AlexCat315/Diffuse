@@ -56,6 +56,21 @@ public actor ContextMemoryStore {
         for event in events { apply(event: event) }
     }
 
+    // MARK: - Manual upsert / delete
+
+    /// Directly upserts an entry without going through the reducer pipeline.
+    /// Use this for entries that originate from user interaction rather than WorldEvents
+    /// (e.g. recording a rejected step pattern as a `userPreference`).
+    public func upsert(_ entry: ContextEntry) {
+        entries[entry.id] = entry
+        evictIfNeeded()
+    }
+
+    /// Removes an entry by id if it exists.
+    public func remove(id: String) {
+        entries.removeValue(forKey: id)
+    }
+
     // MARK: - Lookup
 
     public func lookup(subject: String) -> [ContextEntry] {
