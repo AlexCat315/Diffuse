@@ -755,6 +755,19 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(hasAnim, "set_animation_player must produce a setAnimationPlayer mutation")
     }
 
+    func testSceneSemanticEncoderSurfacesConstraintEnabled() {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        var con = Constraint(entityA: entity, entityB: entity)
+        con.isEnabled = false
+        _ = scene.setComponent(con, for: entity)
+
+        let snapshot = SceneSemanticEncoder().encode(scene, selectedEntityID: nil,
+                                                     workspaceMode: nil, localeIdentifier: nil)
+        let record = snapshot.entities.first { $0.id == "scene:\(entity.rawValue)" }
+        XCTAssertEqual(record?.constraintEnabled, false)
+    }
+
     func testSetAudioSourceExecutorProducesMutation() throws {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
