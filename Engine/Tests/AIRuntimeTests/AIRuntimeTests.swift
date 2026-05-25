@@ -879,6 +879,77 @@ final class AIRuntimeTests: XCTestCase {
         // No crash = pass.
     }
 
+    // MARK: - workflowContext memory
+
+    func testSetWorkflowContextRecordsGameEntry() async throws {
+        let session = Session(id: "wf1", config: makeTestConfig())
+        let store = try ContextMemoryStore()
+        await session.setContextMemory(store)
+
+        let ctx = WorkflowContext.game(GameWorkflowContext(
+            levelPhase: .polish,
+            gameplayIntent: GameplayIntent(genre: "platformer", winCondition: "reach_exit"),
+            targetExperience: "challenging but fair"
+        ))
+        await session.setWorkflowContext(ctx)
+        try await Task.sleep(nanoseconds: 10_000_000)
+
+        let entry = await store.entry(id: "workflow:active")
+        XCTAssertNotNil(entry)
+        XCTAssertEqual(entry?.kind, .workflowContext)
+        XCTAssertEqual(entry?.payload["kind"], "game")
+        XCTAssertEqual(entry?.payload["level_phase"], "Polish")
+        XCTAssertEqual(entry?.payload["genre"], "platformer")
+    }
+
+    func testSetWorkflowContextRecordsFilmEntry() async throws {
+        let session = Session(id: "wf2", config: makeTestConfig())
+        let store = try ContextMemoryStore()
+        await session.setContextMemory(store)
+
+        let ctx = WorkflowContext.film(FilmWorkflowContext(
+            activeSequenceID: "seq_01",
+            activeShotID: "shot_05",
+            narrativePhase: .cameraLanguage,
+            directorIntent: "wide establishing shot"
+        ))
+        await session.setWorkflowContext(ctx)
+        try await Task.sleep(nanoseconds: 10_000_000)
+
+        let entry = await store.entry(id: "workflow:active")
+        XCTAssertEqual(entry?.payload["kind"], "film")
+        XCTAssertEqual(entry?.payload["narrative_phase"], "camera_language")
+        XCTAssertEqual(entry?.payload["active_sequence"], "seq_01")
+        XCTAssertEqual(entry?.payload["active_shot"], "shot_05")
+        XCTAssertEqual(entry?.payload["director_intent"], "wide establishing shot")
+    }
+
+    func testSetWorkflowContextNilRemovesEntry() async throws {
+        let session = Session(id: "wf3", config: makeTestConfig())
+        let store = try ContextMemoryStore()
+        await session.setContextMemory(store)
+
+        let ctx = WorkflowContext.game(GameWorkflowContext(
+            gameplayIntent: GameplayIntent(genre: "rpg", winCondition: "defeat_boss"),
+            targetExperience: "epic"
+        ))
+        await session.setWorkflowContext(ctx)
+        try await Task.sleep(nanoseconds: 10_000_000)
+        let beforeEntry = await store.entry(id: "workflow:active")
+        XCTAssertNotNil(beforeEntry)
+
+        await session.setWorkflowContext(nil)
+        try await Task.sleep(nanoseconds: 10_000_000)
+        let afterEntry = await store.entry(id: "workflow:active")
+        XCTAssertNil(afterEntry)
+    }
+
+    func testSetWorkflowContextWithoutStoreDoesNotCrash() async {
+        let session = Session(id: "wf4", config: makeTestConfig())
+        let ctx = WorkflowContext.film(FilmWorkflowContext(activeSequenceID: "x"))
+        await session.setWorkflowContext(ctx)
+    }
+
     func testIssueMemoryUpsertIsIdempotentForSameIntent() async throws {
         let session = Session(id: "iss4", config: makeTestConfig())
         let store = try ContextMemoryStore()
