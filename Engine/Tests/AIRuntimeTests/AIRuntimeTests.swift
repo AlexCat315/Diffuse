@@ -728,6 +728,36 @@ final class AIRuntimeTests: XCTestCase {
         }
     }
 
+    func testSceneSemanticEncoderSurfacesPBRMaterialFields() {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        var mat = RenderMaterialComponent()
+        mat.baseColorFactor = SIMD4<Float>(0.3, 0.6, 0.9, 1.0)
+        mat.metallicFactor  = 0.8
+        mat.roughnessFactor = 0.25
+        mat.emissiveFactor  = SIMD3<Float>(0.0, 0.2, 0.4)
+        _ = scene.setComponent(mat, for: entity)
+
+        let snapshot = SceneSemanticEncoder().encode(scene, selectedEntityID: nil,
+                                                     workspaceMode: nil, localeIdentifier: nil)
+        guard let record = snapshot.entities.first(where: { $0.id == "scene:\(entity.rawValue)" }) else {
+            XCTFail("entity not found in snapshot")
+            return
+        }
+        XCTAssertEqual(record.materialMetallic ?? 0,  0.8,  accuracy: 0.001)
+        XCTAssertEqual(record.materialRoughness ?? 0, 0.25, accuracy: 0.001)
+        XCTAssertNotNil(record.materialBaseColor)
+        if let bc = record.materialBaseColor {
+            XCTAssertEqual(bc[0], 0.3, accuracy: 0.001)
+            XCTAssertEqual(bc[1], 0.6, accuracy: 0.001)
+            XCTAssertEqual(bc[2], 0.9, accuracy: 0.001)
+        }
+        XCTAssertNotNil(record.materialEmissive)
+        if let em = record.materialEmissive {
+            XCTAssertEqual(em[1], 0.2, accuracy: 0.001)
+        }
+    }
+
     // MARK: - AIWorldContext SnapshotProvider
 
     func testAIWorldContextMaterializesSnapshot() async throws {
