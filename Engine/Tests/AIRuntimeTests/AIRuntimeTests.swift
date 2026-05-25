@@ -953,6 +953,131 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(hasVisibility, "set_mesh_visibility must produce setRenderMeshVisibility mutation")
     }
 
+    func testSetLightTypeExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(LightComponent(type: .point, color: .one, intensity: 100, range: 10), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"spot","steps":[{"op":"set_light_type","entity_id":"\(ref)","light_type":"spot"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasType = ops.contains { if case .setLightType(_, .spot) = $0 { return true }; return false }
+        XCTAssertTrue(hasType, "set_light_type must produce setLightType(.spot) mutation")
+    }
+
+    func testSetLightIntensityExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(LightComponent(type: .directional, color: .one, intensity: 1, range: 100), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"brighter","steps":[{"op":"set_light_intensity","entity_id":"\(ref)","intensity":800}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasIntensity = ops.contains {
+            if case let .setLightIntensity(_, v) = $0 { return abs(v - 800) < 0.01 }
+            return false
+        }
+        XCTAssertTrue(hasIntensity, "set_light_intensity must produce setLightIntensity mutation")
+    }
+
+    func testSetLightColorExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(LightComponent(type: .point, color: .one, intensity: 100, range: 10), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"warm","steps":[{"op":"set_light_color","entity_id":"\(ref)","color":[1.0,0.8,0.4]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasColor = ops.contains {
+            if case let .setLightColor(_, c) = $0 { return abs(c.x - 1.0) < 0.01 && abs(c.y - 0.8) < 0.01 }
+            return false
+        }
+        XCTAssertTrue(hasColor, "set_light_color must produce setLightColor mutation")
+    }
+
+    func testSetLightRangeExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(LightComponent(type: .point, color: .one, intensity: 100, range: 10), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"range","steps":[{"op":"set_light_range","entity_id":"\(ref)","range":35.0}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasRange = ops.contains {
+            if case let .setLightRange(_, r) = $0 { return abs(r - 35) < 0.01 }
+            return false
+        }
+        XCTAssertTrue(hasRange, "set_light_range must produce setLightRange mutation")
+    }
+
+    func testSetLightSpotAnglesExecutorProducesBothMutations() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(LightComponent(type: .spot, color: .one, intensity: 100, range: 20), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"cone","steps":[{"op":"set_light_spot_angles","entity_id":"\(ref)",\
+        "spot_inner_angle":15.0,"spot_outer_angle":40.0}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasInner = ops.contains {
+            if case let .setLightSpotInnerAngle(_, a) = $0 { return abs(a - 15) < 0.01 }
+            return false
+        }
+        let hasOuter = ops.contains {
+            if case let .setLightSpotOuterAngle(_, a) = $0 { return abs(a - 40) < 0.01 }
+            return false
+        }
+        XCTAssertTrue(hasInner, "set_light_spot_angles must produce setLightSpotInnerAngle mutation")
+        XCTAssertTrue(hasOuter, "set_light_spot_angles must produce setLightSpotOuterAngle mutation")
+    }
+
+    func testSetMeshColorExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(RenderMeshComponent(meshIndex: 0), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"tint","steps":[{"op":"set_mesh_color","entity_id":"\(ref)","color":[0.2,0.5,0.9]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasTint = ops.contains {
+            if case let .setMeshColorTint(_, c) = $0 {
+                return abs(c.x - 0.2) < 0.01 && abs(c.y - 0.5) < 0.01 && abs(c.z - 0.9) < 0.01
+            }
+            return false
+        }
+        XCTAssertTrue(hasTint, "set_mesh_color must produce setMeshColorTint mutation")
+    }
+
     func testSceneSemanticEncoderSurfacesColliderLayerAndMask() {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
