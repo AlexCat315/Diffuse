@@ -1385,9 +1385,139 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(hasCategory, "Expected object_category annotation")
     }
 
+    // MARK: - find_entities agentic loop
+
+    func testFindEntitiesResultSearchesByNameSubstring() async {
+        var wv = WorldView()
+        wv.apply(event: .entityAdded(ref: "scene:1", name: "Dragon Boss", kind: "Character"))
+        wv.apply(event: .entityAdded(ref: "scene:2", name: "Stone Wall", kind: "Static Mesh"))
+        wv.apply(event: .entityAdded(ref: "scene:3", name: "Dragon Egg", kind: "Prop"))
+        let session = Session(id: "t", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: ["name": "dragon"])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: String]]
+
+        XCTAssertEqual(result["count"] as? Int, 2)
+        XCTAssertTrue(entities.allSatisfy { $0["name"]!.lowercased().contains("dragon") })
+    }
+
+    func testFindEntitiesResultSearchesByKind() async {
+        var wv = WorldView()
+        wv.apply(event: .entityAdded(ref: "scene:1", name: "Main Cam", kind: "Camera"))
+        wv.apply(event: .entityAdded(ref: "scene:2", name: "Ambient Light", kind: "Point Light"))
+        wv.apply(event: .entityAdded(ref: "scene:3", name: "Player Camera", kind: "Camera"))
+        let session = Session(id: "t", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: ["kind": "Camera"])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: String]]
+
+        XCTAssertEqual(result["count"] as? Int, 2)
+        XCTAssertTrue(entities.allSatisfy { $0["kind"] == "Camera" })
+    }
+
+    func testFindEntitiesResultRespectsLimit() async {
+        var wv = WorldView()
+        for i in 1...10 {
+            wv.apply(event: .entityAdded(ref: "scene:\(i)", name: "Box \(i)", kind: "Static Mesh"))
+        }
+        let session = Session(id: "t", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: ["limit": 3])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: String]]
+
+        XCTAssertEqual(entities.count, 3)
+        XCTAssertEqual(result["count"] as? Int, 3)
+    }
+
+    func testFindEntitiesResultReturnsEmptyForNoMatch() async {
+        var wv = WorldView()
+        wv.apply(event: .entityAdded(ref: "scene:1", name: "Stone Wall", kind: "Static Mesh"))
+        let session = Session(id: "t", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: ["name": "dragon"])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        XCTAssertEqual(result["count"] as? Int, 0)
+        XCTAssertTrue((result["entities"] as! [[String: String]]).isEmpty)
+    }
+
+    func testSessionProcessExecutesPlanAfterFindEntitiesToolCall() async throws {
+        // Simulate the agentic loop: first call returns find_entities, second returns execute_edit_plan
+        let findEntitiesResponse = """
+        {
+          "id": "msg_1",
+          "content": [
+            {"type": "tool_use", "id": "tu_1", "name": "find_entities",
+             "input": {"name": "dragon", "limit": 5}}
+          ],
+          "stop_reason": "tool_use"
+        }
+        """
+        let editPlanResponse = """
+        {
+          "id": "msg_2",
+          "content": [
+            {"type": "tool_use", "id": "tu_2", "name": "execute_edit_plan",
+             "input": {"summary": "Move dragon", "steps": []}}
+          ],
+          "stop_reason": "tool_use"
+        }
+        """
+        var callCount = 0
+        let responses = [findEntitiesResponse, editPlanResponse]
+        MockURLProtocol.requestHandler = { _ in
+            let response = responses[callCount]
+            callCount += 1
+            let httpResponse = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!,
+                                               statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (httpResponse, Data(response.utf8))
+        }
+
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let mockSession = URLSession(configuration: config)
+
+        var wv = WorldView()
+        wv.apply(event: .entityAdded(ref: "scene:42", name: "Dragon Boss", kind: "Character"))
+        let session = Session(id: "t", config: makeTestConfig(), urlSession: mockSession,
+                              initialWorldView: wv)
+
+        let signal = Signal.naturalLanguage(text: "move the dragon forward", locale: "en")
+        let proposal = try await session.process(signal)
+
+        XCTAssertEqual(callCount, 2, "Should make exactly 2 API calls: find_entities then execute_edit_plan")
+        XCTAssertEqual(proposal.plan.summary, "Move dragon")
+    }
+
     private func makeTestConfig() -> SessionConfig {
         .anthropic(apiKey: "test")
     }
+}
+
+private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
+    nonisolated(unsafe) static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        guard let handler = MockURLProtocol.requestHandler else {
+            client?.urlProtocol(self, didFailWithError: URLError(.unknown))
+            return
+        }
+        do {
+            let (response, data) = try handler(request)
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: data)
+            client?.urlProtocolDidFinishLoading(self)
+        } catch {
+            client?.urlProtocol(self, didFailWithError: error)
+        }
+    }
+
+    override func stopLoading() {}
 }
 
 private final class StubPerceptionWorker: PerceptionWorker, @unchecked Sendable {
