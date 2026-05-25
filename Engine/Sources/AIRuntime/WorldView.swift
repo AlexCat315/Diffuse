@@ -328,6 +328,9 @@ public struct WorldView: Sendable {
             if let we = e.worldEulerDegrees {
                 record.evaluated["worldEulerDegrees"] = .vec3(we[0], we[1], we[2])
             }
+            if let ws = e.worldScale {
+                record.evaluated["worldScale"] = .vec3(ws[0], ws[1], ws[2])
+            }
             entityIndex[e.id] = record
         }
         sceneRevision = snapshot.sceneRevision
