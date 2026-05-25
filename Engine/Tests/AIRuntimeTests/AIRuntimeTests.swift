@@ -755,6 +755,25 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(hasAnim, "set_animation_player must produce a setAnimationPlayer mutation")
     }
 
+    func testSceneSemanticEncoderSurfacesSpotLightAngles() {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        var light = LightComponent()
+        light.type = .spot
+        light.intensity = 2000
+        light.spotInnerAngleDegrees = 15.0
+        light.spotOuterAngleDegrees = 30.0
+        _ = scene.setComponent(light, for: entity)
+
+        let snapshot = SceneSemanticEncoder().encode(scene, selectedEntityID: nil,
+                                                     workspaceMode: nil, localeIdentifier: nil)
+        let record = snapshot.entities.first { $0.id == "scene:\(entity.rawValue)" }
+        XCTAssertEqual(record?.lightType, "spot")
+        XCTAssertEqual(record?.lightSpotInner ?? 0, 15.0, accuracy: 0.1)
+        XCTAssertEqual(record?.lightSpotOuter ?? 0, 30.0, accuracy: 0.1)
+        XCTAssertNil(record?.lightCastShadows)
+    }
+
     func testWorldEntityRecordApplyScriptBindingsFromJSONEvent() {
         var record = WorldEntityRecord(ref: "scene:99", name: "Mover")
         let json = #"[{"handle":42,"isEnabled":true,"parametersJSON":"{\"speed\":5}"}]"#
