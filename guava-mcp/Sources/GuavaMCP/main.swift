@@ -284,6 +284,22 @@ let toolGetContextMemory: [String: Any] = [
     ] as [String: Any],
 ]
 
+let toolFindEntities: [String: Any] = [
+    "name": "find_entities",
+    "description": "Searches the scene for entities matching a name substring, kind, or both. Useful when the scene has many entities and you need to locate a specific one. Returns matching entity IDs, names, and kinds.",
+    "inputSchema": [
+        "type": "object",
+        "properties": [
+            "name": ["type": "string",
+                     "description": "Case-insensitive substring to match against entity names. Omit to match all names."] as [String: Any],
+            "kind": ["type": "string",
+                     "description": "Exact kind to match (e.g. 'Static Mesh', 'Point Light', 'Camera', 'Group'). Omit to match all kinds."] as [String: Any],
+            "limit": ["type": "integer",
+                      "description": "Maximum number of results to return. Defaults to 20."] as [String: Any],
+        ] as [String: Any],
+    ] as [String: Any],
+]
+
 // MARK: - MCP stdio protocol
 
 func writeResponse(_ obj: [String: Any]) {
@@ -338,7 +354,7 @@ func handle(_ msg: [String: Any]) {
         writeResponse([
             "jsonrpc": "2.0",
             "id": id as Any,
-            "result": ["tools": [toolGetScene, toolGetSelection, toolSelectEntity, toolGetAIEntity, toolExecuteEditPlan, toolSetPlaybackState, toolAnalyzeImage, toolGetContextMemory, toolUndo, toolRedo]] as [String: Any],
+            "result": ["tools": [toolGetScene, toolGetSelection, toolSelectEntity, toolGetAIEntity, toolExecuteEditPlan, toolSetPlaybackState, toolAnalyzeImage, toolGetContextMemory, toolFindEntities, toolUndo, toolRedo]] as [String: Any],
         ])
 
     case "tools/call":
@@ -430,6 +446,20 @@ func handle(_ msg: [String: Any]) {
         case "get_context_memory":
             var request: [String: Any] = ["action": "get_context_memory"]
             if let budget = args["budget"] as? Int { request["budget"] = budget }
+            let res = editorCall(request)
+            if let ok = res["ok"] as? Bool, ok,
+               let responseData = try? JSONSerialization.data(withJSONObject: res, options: [.sortedKeys]),
+               let responseText = String(data: responseData, encoding: .utf8) {
+                toolResult(id: id as Any, text: responseText)
+            } else {
+                toolResult(id: id as Any, text: res["error"] as? String ?? "unknown error", isError: true)
+            }
+
+        case "find_entities":
+            var request: [String: Any] = ["action": "find_entities"]
+            if let nameQuery = args["name"] as? String { request["name"] = nameQuery }
+            if let kindFilter = args["kind"] as? String { request["kind"] = kindFilter }
+            if let limit = args["limit"] as? Int { request["limit"] = limit }
             let res = editorCall(request)
             if let ok = res["ok"] as? Bool, ok,
                let responseData = try? JSONSerialization.data(withJSONObject: res, options: [.sortedKeys]),
