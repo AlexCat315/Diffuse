@@ -747,6 +747,12 @@ public actor Session {
         occupies) and/or `collider_layer_mask` (bitmask of layers this collider interacts with, \
         e.g. 0xFFFF = collide with all layers). An entity's `colliderLayerID` and \
         `colliderLayerMask` fields show the current values.
+        - For set_material: use `material_base_color` ([r,g,b,a] linear 0–1), \
+        `material_metallic` (0–1; 0=dielectric, 1=full metal), \
+        `material_roughness` (0–1; 0=mirror-smooth, 1=fully rough), and \
+        `material_emissive` ([r,g,b] linear 0–1; omit or [0,0,0] for no emission). \
+        An entity's `materialBaseColor`, `materialMetallic`, `materialRoughness`, and \
+        `materialEmissive` fields show the current PBR values when non-default.
         - If the user asks a general question (capabilities, greetings, clarifications) rather \
         than requesting a scene change, call the tool with an empty steps array and put your \
         conversational reply in the summary field.
@@ -800,7 +806,7 @@ public actor Session {
                "(selected entities and their neighbours are prioritised)."
     }
 
-    private func compactDict(for e: WorldEntityRecord) -> [String: Any] {
+    nonisolated func compactDict(for e: WorldEntityRecord) -> [String: Any] {
         var d: [String: Any] = ["ref": e.ref, "name": e.name]
         if let v = e.kind               { d["kind"] = v }
         if let v = e.parentRef          { d["parentRef"] = v }
@@ -818,6 +824,10 @@ public actor Session {
         if let v = e.cameraFovYDegrees  { d["cameraFovYDegrees"] = v }
         if let v = e.cameraIsActive     { d["cameraIsActive"] = v }
         if let v = e.meshColor          { d["meshColor"] = v }
+        if let v = e.materialBaseColor  { d["materialBaseColor"] = v }
+        if let v = e.materialMetallic   { d["materialMetallic"] = v }
+        if let v = e.materialRoughness  { d["materialRoughness"] = v }
+        if let v = e.materialEmissive   { d["materialEmissive"] = v }
         if let v = e.rigidBodyMotionType  { d["rigidBodyMotionType"] = v }
         if let v = e.rigidBodyMass        { d["rigidBodyMass"] = v }
         if let v = e.rigidBodyGravityScale { d["rigidBodyGravityScale"] = v }
