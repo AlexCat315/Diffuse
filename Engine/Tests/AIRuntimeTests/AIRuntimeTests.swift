@@ -1018,6 +1018,62 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(entries.count, 1)
     }
 
+    // MARK: - set_material roundtrip
+
+    func testSetMaterialOpRoundTripsAllFields() throws {
+        let json = """
+        {
+            "op": "set_material",
+            "entity_id": "scene:7",
+            "material_base_color": [0.2, 0.4, 0.6, 1.0],
+            "material_metallic": 0.8,
+            "material_roughness": 0.3,
+            "material_emissive": [0.1, 0.0, 0.5]
+        }
+        """
+        let step = try JSONDecoder().decode(SceneEditStep.self, from: Data(json.utf8))
+        XCTAssertEqual(step.op, .setMaterial)
+        XCTAssertEqual(step.entityRef, "scene:7")
+        XCTAssertEqual(step.materialBaseColor, [0.2, 0.4, 0.6, 1.0])
+        XCTAssertEqual(step.materialMetallic ?? 0, 0.8, accuracy: 0.001)
+        XCTAssertEqual(step.materialRoughness ?? 0, 0.3, accuracy: 0.001)
+        XCTAssertEqual(step.materialEmissive, [0.1, 0.0, 0.5])
+    }
+
+    func testSetMaterialOpRoundTripsMinimalPayload() throws {
+        let json = """
+        {"op": "set_material", "entity_id": "scene:3", "material_base_color": [1.0, 0.0, 0.0, 1.0]}
+        """
+        let step = try JSONDecoder().decode(SceneEditStep.self, from: Data(json.utf8))
+        XCTAssertEqual(step.op, .setMaterial)
+        XCTAssertNil(step.materialMetallic)
+        XCTAssertNil(step.materialRoughness)
+        XCTAssertNil(step.materialEmissive)
+    }
+
+    func testWorldViewAppliesSnapshotWithMaterialFields() {
+        var entity = SceneSemanticSnapshot.Entity(
+            id: "scene:1",
+            name: "Cube",
+            kind: "mesh",
+            parentRef: nil,
+            childRefs: [],
+            isSelected: false,
+            position: [0, 0, 0],
+            components: ["transform", "mesh"]
+        )
+        entity.materialMetallic = 0.9
+        entity.materialRoughness = 0.1
+        entity.materialEmissive = [1.0, 0.5, 0.0]
+        let snapshot = SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [entity])
+        var view = WorldView()
+        view.apply(snapshot: snapshot)
+        let record = view.entityIndex["scene:1"]
+        XCTAssertEqual(record?.materialMetallic ?? 0, 0.9, accuracy: 0.001)
+        XCTAssertEqual(record?.materialRoughness ?? 0, 0.1, accuracy: 0.001)
+        XCTAssertEqual(record?.materialEmissive, [1.0, 0.5, 0.0])
+    }
+
     private func makeTestConfig() -> SessionConfig {
         .anthropic(apiKey: "test")
     }

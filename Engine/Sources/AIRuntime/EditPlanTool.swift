@@ -233,6 +233,24 @@ public enum EditPlanTool {
                     "type": "boolean",
                     "description": "Whether the mesh is visible. For set_mesh_visibility.",
                 ] as [String: Any],
+                "material_base_color": [
+                    "type": "array",
+                    "items": ["type": "number"] as [String: Any],
+                    "description": "[r,g,b,a] linear 0-1 base colour for set_material. Omit to leave unchanged.",
+                ] as [String: Any],
+                "material_metallic": [
+                    "type": "number",
+                    "description": "Metallic factor 0–1 for set_material. 0=dielectric, 1=metal. Omit to leave unchanged.",
+                ] as [String: Any],
+                "material_roughness": [
+                    "type": "number",
+                    "description": "Roughness factor 0–1 for set_material. 0=mirror-smooth, 1=fully rough. Omit to leave unchanged.",
+                ] as [String: Any],
+                "material_emissive": [
+                    "type": "array",
+                    "items": ["type": "number"] as [String: Any],
+                    "description": "[r,g,b] linear 0-1 emission colour for set_material. Omit for no emission.",
+                ] as [String: Any],
                 "animation_clip": [
                     "type": "string",
                     "description": "Animation clip name for set_animation_player. Empty string or omit to use the default clip.",
