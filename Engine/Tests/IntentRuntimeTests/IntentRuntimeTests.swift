@@ -1219,6 +1219,33 @@ struct UndoStackTests {
         #expect(maskEvent != nil, "setColliderLayerMask must emit colliderLayerMask authored event")
     }
 
+    @Test("setConstraintEnabled emits constraintEnabled authored world event")
+    func setConstraintEnabledEmitsWorldEvent() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(
+            Constraint(entityA: entity, entityB: entity),
+            for: entity
+        )
+        let transaction = TransactionIR(
+            summary: "Disable constraint",
+            operations: [
+                .scene(.setConstraintEnabled(entityID: entity.rawValue, value: false)),
+            ],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let event = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "constraintEnabled", .bool(false)) = $0 { return true }
+            return false
+        }
+        #expect(event != nil, "setConstraintEnabled must emit constraintEnabled authored world event")
+    }
+
     @Test("ring buffer discards oldest entry when capacity is exceeded")
     func ringBufferEvictsOldest() {
         let stack = UndoStack(capacity: 3)

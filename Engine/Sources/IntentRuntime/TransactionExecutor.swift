@@ -1240,6 +1240,11 @@ public struct TransactionExecutor {
                 events.append(.entityAuthoredChanged(ref: ref, property: "animationIsPlaying",
                     value: .bool(isPlaying)))
 
+            case let .setConstraintEnabled(entityID, value):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "constraintEnabled",
+                    value: .bool(value)))
+
             default:
                 break
             }

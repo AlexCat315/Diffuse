@@ -66,7 +66,8 @@ public struct SceneSemanticEncoder: Sendable {
             if scene.hasComponent(Collider.self, for: entity)            { components.append("collider") }
             if scene.hasComponent(AudioSource.self, for: entity)         { components.append("audio_source") }
             if scene.hasComponent(AnimationPlayer.self, for: entity)     { components.append("animation") }
-            if scene.hasComponent(ScriptComponent.self, for: entity)    { components.append("script") }
+            if scene.hasComponent(ScriptComponent.self, for: entity)     { components.append("script") }
+            if scene.hasComponent(Constraint.self, for: entity)          { components.append("constraint") }
 
             var lightType: String?
             var lightIntensity: Float?
@@ -167,6 +168,11 @@ public struct SceneSemanticEncoder: Sendable {
                 }
             }
 
+            var constraintEnabled: Bool?
+            if let con = scene.component(Constraint.self, for: entity) {
+                constraintEnabled = con.isEnabled
+            }
+
             records.append(SceneSemanticSnapshot.Entity(
                 id: ref,
                 name: name,
@@ -211,7 +217,8 @@ public struct SceneSemanticEncoder: Sendable {
                 animationSpeed: animationSpeed,
                 animationLoop: animationLoop,
                 animationIsPlaying: animationIsPlaying,
-                scriptBindings: scriptBindings
+                scriptBindings: scriptBindings,
+                constraintEnabled: constraintEnabled
             ))
         }
 
