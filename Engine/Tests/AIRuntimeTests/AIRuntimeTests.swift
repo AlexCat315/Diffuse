@@ -1275,6 +1275,82 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(hasSpawn, "spawn_entity must produce spawnImportedMeshEntity mutation with correct label and position")
     }
 
+    func testExecutorThrowsUnknownColliderShape() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .box(halfExtents: .one, center: .zero)), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"bad","steps":[{"op":"set_collider_shape","entity_id":"\(ref)","collider_shape":"cylinder"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)) { err in
+            if case SceneEditPlanExecutorError.unknownColliderShape(let s) = err {
+                XCTAssertEqual(s, "cylinder")
+            } else {
+                XCTFail("expected unknownColliderShape, got \(err)")
+            }
+        }
+    }
+
+    func testExecutorThrowsUnknownLightType() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(LightComponent(type: .point, color: .one, intensity: 100, range: 10), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"bad","steps":[{"op":"set_light_type","entity_id":"\(ref)","light_type":"laser"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)) { err in
+            if case SceneEditPlanExecutorError.unknownLightType(let s) = err {
+                XCTAssertEqual(s, "laser")
+            } else {
+                XCTFail("expected unknownLightType, got \(err)")
+            }
+        }
+    }
+
+    func testExecutorThrowsUnknownMotionType() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(RigidBody(motionType: .dynamic, mass: 1, gravityScale: 1, allowSleep: true),
+                                for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"bad","steps":[{"op":"set_rigidbody_motion","entity_id":"\(ref)","motion_type":"fluid"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)) { err in
+            if case SceneEditPlanExecutorError.unknownMotionType(let s) = err {
+                XCTAssertEqual(s, "fluid")
+            } else {
+                XCTFail("expected unknownMotionType, got \(err)")
+            }
+        }
+    }
+
+    func testExecutorThrowsMissingFieldForSetName() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"empty name","steps":[{"op":"set_name","entity_id":"\(ref)","name":""}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)) { err in
+            if case SceneEditPlanExecutorError.missingField(_, let field) = err {
+                XCTAssertEqual(field, "name")
+            } else {
+                XCTFail("expected missingField(name), got \(err)")
+            }
+        }
+    }
+
     func testSceneSemanticEncoderSurfacesColliderLayerAndMask() {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
