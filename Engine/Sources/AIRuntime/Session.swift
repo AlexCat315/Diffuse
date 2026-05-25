@@ -389,7 +389,33 @@ public actor Session {
     // MARK: - History
 
     public func clearHistory() {
+        recordSessionSummary()
         conversationHistory.removeAll()
+    }
+
+    private func recordSessionSummary() {
+        guard let mem = contextMemory, !conversationHistory.isEmpty else { return }
+        let intents: [String] = conversationHistory.compactMap {
+            guard case let .userText(text) = $0.kind else { return nil }
+            return String(text.prefix(120))
+        }
+        guard !intents.isEmpty else { return }
+        let turnCount = conversationHistory.count
+        let revision = worldView.sceneRevision ?? 0
+        let entry = ContextEntry(
+            id: "summary:\(id)",
+            kind: .sessionSummary,
+            subject: "session",
+            payload: [
+                "turn_count": String(turnCount),
+                "intent_count": String(intents.count),
+                "last_intents": intents.suffix(5).joined(separator: " | "),
+                "scene_revision": String(revision),
+            ],
+            importance: 0.5,
+            revision: revision
+        )
+        Task { await mem.upsert(entry) }
     }
 
     public func historySnapshot() -> [ConversationTurn] {
@@ -902,7 +928,7 @@ public actor Session {
 
     // MARK: - History
 
-    private func recordTurn(_ turn: ConversationTurn) {
+    func recordTurn(_ turn: ConversationTurn) {
         conversationHistory.append(turn)
         // Remove complete interaction triples (userText + assistantToolCall + toolResult)
         // from the front so we never leave an orphaned tool call at the start of the message list.
