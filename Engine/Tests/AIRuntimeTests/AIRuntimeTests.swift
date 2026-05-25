@@ -1312,6 +1312,48 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(hasMove, "reparent_entity with no parent_id must produce moveEntity(parentID: nil)")
     }
 
+    func testSetLightCastShadowsExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(LightComponent(type: .directional, color: .one, intensity: 1, range: 100), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"shadow","steps":[{"op":"set_light_cast_shadows","entity_id":"\(ref)","light_cast_shadows":true}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasCast = ops.contains { if case .setLightCastShadows(_, true) = $0 { return true }; return false }
+        XCTAssertTrue(hasCast, "set_light_cast_shadows must produce setLightCastShadows mutation")
+    }
+
+    func testSetCameraPoseExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(CameraComponent(), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"pose","steps":[{"op":"set_camera_pose","entity_id":"\(ref)",\
+        "position":[5,3,10],"camera_target":[0,0,0]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasPose = ops.contains {
+            if case let .setCameraPose(_, t, target, _) = $0 {
+                return abs(t.translation.x - 5) < 0.01
+                    && abs(t.translation.z - 10) < 0.01
+                    && abs(target.x) < 0.01
+            }
+            return false
+        }
+        XCTAssertTrue(hasPose, "set_camera_pose must produce setCameraPose mutation with correct position and target")
+    }
+
     func testExecutorThrowsUnknownColliderShape() throws {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
