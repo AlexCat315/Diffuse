@@ -798,6 +798,9 @@ public actor Session {
         - If the user asks a general question (capabilities, greetings, clarifications) rather \
         than requesting a scene change, call the tool with an empty steps array and put your \
         conversational reply in the summary field.
+        - Use find_entities (name substring or kind filter) to locate entities whose IDs are not \
+        visible in the scene list. After find_entities returns its result, call execute_edit_plan \
+        with the discovered IDs to complete the task.
         """)
 
         return parts.joined(separator: "\n\n")
@@ -1054,7 +1057,9 @@ public actor Session {
         for e in worldView.entityIndex.values.sorted(by: { $0.ref < $1.ref }) {
             if let nq = nameQuery, !e.name.lowercased().contains(nq) { continue }
             if let kf = kindFilter, e.kind != kf { continue }
-            results.append(["id": e.ref, "name": e.name, "kind": e.kind ?? ""])
+            var entry: [String: String] = ["id": e.ref, "name": e.name]
+            if let k = e.kind { entry["kind"] = k }
+            results.append(entry)
             if results.count >= limit { break }
         }
         let response: [String: Any] = ["count": results.count, "entities": results]
