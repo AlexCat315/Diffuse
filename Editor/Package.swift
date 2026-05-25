@@ -25,6 +25,7 @@ let package = Package(
             dependencies: [
                 .product(name: "SIMDCompat", package: "Engine"),
                 .product(name: "AIRuntime", package: "Engine"),
+                .product(name: "ContextMemory", package: "Engine"),
                 .product(name: "AssetPipeline", package: "Engine"),
                 .product(name: "AudioRuntime", package: "Engine"),
                 .product(name: "CapabilityRuntime", package: "Engine"),
