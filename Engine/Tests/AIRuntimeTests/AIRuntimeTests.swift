@@ -1078,6 +1078,103 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(hasTint, "set_mesh_color must produce setMeshColorTint mutation")
     }
 
+    func testSetCameraFOVExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(CameraComponent(), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"fov","steps":[{"op":"set_camera_fov","entity_id":"\(ref)","camera_fov_y":90.0}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasFOV = ops.contains {
+            if case let .setCameraFOV(_, fov) = $0 { return abs(fov - 90) < 0.01 }
+            return false
+        }
+        XCTAssertTrue(hasFOV, "set_camera_fov must produce setCameraFOV mutation")
+    }
+
+    func testSetCameraActiveExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(CameraComponent(), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"activate","steps":[{"op":"set_camera_active","entity_id":"\(ref)","camera_is_active":true}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasActive = ops.contains { if case .setCameraActive(_, true) = $0 { return true }; return false }
+        XCTAssertTrue(hasActive, "set_camera_active must produce setCameraActive mutation")
+    }
+
+    func testSetRigidBodyMotionExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(RigidBody(motionType: .dynamic, mass: 1, gravityScale: 1, allowSleep: true),
+                                for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"kinematic","steps":[{"op":"set_rigidbody_motion","entity_id":"\(ref)","motion_type":"kinematic"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasMotion = ops.contains { if case .setRigidBodyMotionType(_, .kinematic) = $0 { return true }; return false }
+        XCTAssertTrue(hasMotion, "set_rigidbody_motion must produce setRigidBodyMotionType(.kinematic) mutation")
+    }
+
+    func testSetRigidBodyMassExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(RigidBody(motionType: .dynamic, mass: 1, gravityScale: 1, allowSleep: true),
+                                for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"mass","steps":[{"op":"set_rigidbody_mass","entity_id":"\(ref)","mass":25.0}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasMass = ops.contains {
+            if case let .setRigidBodyMass(_, v) = $0 { return abs(v - 25) < 0.01 }
+            return false
+        }
+        XCTAssertTrue(hasMass, "set_rigidbody_mass must produce setRigidBodyMass mutation")
+    }
+
+    func testSetRigidBodyGravityExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(RigidBody(motionType: .dynamic, mass: 1, gravityScale: 1, allowSleep: true),
+                                for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"gravity","steps":[{"op":"set_rigidbody_gravity","entity_id":"\(ref)","gravity_scale":0.2}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasGravity = ops.contains {
+            if case let .setRigidBodyGravityScale(_, v) = $0 { return abs(v - 0.2) < 0.001 }
+            return false
+        }
+        XCTAssertTrue(hasGravity, "set_rigidbody_gravity must produce setRigidBodyGravityScale mutation")
+    }
+
     func testSceneSemanticEncoderSurfacesColliderLayerAndMask() {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
