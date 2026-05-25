@@ -119,6 +119,12 @@ public final class EditorApplication: @unchecked Sendable {
 
         startMCPBridge()
 
+        // Register AIWorldContext as the snapshot provider for the "scene" scope so
+        // that the §8 resync protocol is connected end-to-end.
+        let worldContextForBus = self.aiWorldContext
+        let busForProvider = self.observationBus
+        Task { busForProvider.registerSnapshotProvider(worldContextForBus, forScope: "scene") }
+
         // Propagate initial workflow context and observation bus to Session.
         if let initialSession {
             let ctx = Self.workflowContext(for: store.state.workspaceMode)
