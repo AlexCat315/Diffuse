@@ -1251,6 +1251,23 @@ public struct TransactionExecutor {
                     ref: "scene:\(entityID)", property: "constraintEnabled",
                     value: .bool(value)))
 
+            case let .setCollider(entityID, collider):
+                let ref = "scene:\(entityID)"
+                events.append(.entityAuthoredChanged(ref: ref, property: "colliderShape",
+                    value: .string(collider.shape.kind.rawValue)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "colliderIsTrigger",
+                    value: .bool(collider.isTrigger)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "colliderFriction",
+                    value: .float(collider.material.friction)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "colliderRestitution",
+                    value: .float(collider.material.restitution)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "colliderDensity",
+                    value: .float(collider.material.density)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "colliderLayerID",
+                    value: .float(Float(collider.layerID))))
+                events.append(.entityAuthoredChanged(ref: ref, property: "colliderLayerMask",
+                    value: .float(Float(collider.layerMask))))
+
             case let .setScriptBindings(entityID, bindings):
                 let ref = "scene:\(entityID)"
                 let records = bindings.map { b -> [String: Any] in
