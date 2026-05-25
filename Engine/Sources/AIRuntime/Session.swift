@@ -91,6 +91,48 @@ public actor Session {
 
     public func setWorkflowContext(_ context: WorkflowContext?) {
         workflowContext = context
+        let mem = contextMemory
+        guard let mem else { return }
+        if let ctx = context {
+            let entry = ContextEntry(
+                id: "workflow:active",
+                kind: .workflowContext,
+                subject: "session",
+                payload: Self.workflowPayload(from: ctx),
+                importance: 0.5,
+                revision: worldView.sceneRevision ?? 0
+            )
+            Task { await mem.upsert(entry) }
+        } else {
+            Task { await mem.remove(id: "workflow:active") }
+        }
+    }
+
+    private static func workflowPayload(from ctx: WorkflowContext) -> [String: String] {
+        switch ctx {
+        case let .game(g):
+            var p: [String: String] = [
+                "kind": "game",
+                "level_phase": g.levelPhase.rawValue,
+                "genre": g.gameplayIntent.genre,
+                "win_condition": g.gameplayIntent.winCondition,
+                "target_experience": g.targetExperience,
+            ]
+            if !g.knownConstraints.scriptingRegistry.isEmpty {
+                p["scripting_registry"] = g.knownConstraints.scriptingRegistry.joined(separator: ",")
+            }
+            return p
+        case let .film(f):
+            var p: [String: String] = [
+                "kind": "film",
+                "narrative_phase": f.narrativePhase.rawValue,
+                "active_sequence": f.activeSequenceID,
+            ]
+            if let shot = f.activeShotID { p["active_shot"] = shot }
+            if let intent = f.directorIntent, !intent.isEmpty { p["director_intent"] = String(intent.prefix(256)) }
+            if !f.lockedShotIDs.isEmpty { p["locked_shots"] = f.lockedShotIDs.joined(separator: ",") }
+            return p
+        }
     }
 
     public func setObservationBus(_ bus: ObservationBus?) {
