@@ -497,17 +497,52 @@ public actor Session {
         }
 #if canImport(ObjectiveC)
         if let onProgress {
-            return try await inferStreaming(onProgress: onProgress)
+            return try await inferStreamingLoop(onProgress: onProgress)
         }
 #endif
-        let body = requestBody()
-        let data = try await post(body)
-        return try parseResponse(from: data)
+        return try await inferNonStreamingLoop()
+    }
+
+    private func inferNonStreamingLoop() async throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
+        var extraMessages: [[String: Any]] = []
+        var findCallsRemaining = 3
+        while true {
+            let body = requestBody(extraMessages: extraMessages)
+            let data = try await post(body)
+            let call = try parseRawToolCall(from: data)
+            if call.name == "execute_edit_plan" {
+                return try decodePlan(from: call)
+            } else if call.name == "find_entities", findCallsRemaining > 0 {
+                findCallsRemaining -= 1
+                let resultJSON = findEntitiesResult(input: call.input)
+                extraMessages += toolCallExchangeMessages(call: call, resultJSON: resultJSON)
+            } else {
+                throw SessionError.noPlanInResponse
+            }
+        }
     }
 
 #if canImport(ObjectiveC)
-    private func inferStreaming(onProgress: @escaping @Sendable (String) -> Void) async throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
-        var body = requestBody()
+    private func inferStreamingLoop(onProgress: @escaping @Sendable (String) -> Void) async throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
+        var extraMessages: [[String: Any]] = []
+        var findCallsRemaining = 3
+        while true {
+            let call = try await streamOneTurn(extraMessages: extraMessages, onProgress: onProgress)
+            if call.name == "execute_edit_plan" {
+                return try decodePlan(from: call)
+            } else if call.name == "find_entities", findCallsRemaining > 0 {
+                findCallsRemaining -= 1
+                let resultJSON = findEntitiesResult(input: call.input)
+                extraMessages += toolCallExchangeMessages(call: call, resultJSON: resultJSON)
+            } else {
+                throw SessionError.noPlanInResponse
+            }
+        }
+    }
+
+    private func streamOneTurn(extraMessages: [[String: Any]],
+                               onProgress: @escaping @Sendable (String) -> Void) async throws -> RawToolCall {
+        var body = requestBody(extraMessages: extraMessages)
         body["stream"] = true
 
         var request = URLRequest(url: inferenceEndpoint, timeoutInterval: config.timeoutInterval)
@@ -531,6 +566,7 @@ public actor Session {
         }
 
         var toolUseID = ""
+        var toolName = ""
         var inputJSONAccumulator = ""
         var lastReportedSummary = ""
 
@@ -550,12 +586,14 @@ public actor Session {
                    block["type"] as? String == "tool_use",
                    let id = block["id"] as? String {
                     toolUseID = id
+                    toolName = block["name"] as? String ?? ""
                 } else if type == "content_block_delta",
                           let delta = event["delta"] as? [String: Any],
                           delta["type"] as? String == "input_json_delta",
                           let fragment = delta["partial_json"] as? String {
                     inputJSONAccumulator += fragment
-                    if let partial = extractPartialSummary(from: inputJSONAccumulator),
+                    if toolName == "execute_edit_plan",
+                       let partial = extractPartialSummary(from: inputJSONAccumulator),
                        partial != lastReportedSummary {
                         lastReportedSummary = partial
                         onProgress(partial)
@@ -570,13 +608,18 @@ public actor Session {
                     if let id = call["id"] as? String, !id.isEmpty {
                         toolUseID = id
                     }
-                    if let function = call["function"] as? [String: Any],
-                       let fragment = function["arguments"] as? String {
-                        inputJSONAccumulator += fragment
-                        if let partial = extractPartialSummary(from: inputJSONAccumulator),
-                           partial != lastReportedSummary {
-                            lastReportedSummary = partial
-                            onProgress(partial)
+                    if let function = call["function"] as? [String: Any] {
+                        if let name = function["name"] as? String, !name.isEmpty {
+                            toolName = name
+                        }
+                        if let fragment = function["arguments"] as? String {
+                            inputJSONAccumulator += fragment
+                            if toolName == "execute_edit_plan",
+                               let partial = extractPartialSummary(from: inputJSONAccumulator),
+                               partial != lastReportedSummary {
+                                lastReportedSummary = partial
+                                onProgress(partial)
+                            }
                         }
                     }
                 }
@@ -584,15 +627,12 @@ public actor Session {
         }
 
         guard !toolUseID.isEmpty else { throw SessionError.noPlanInResponse }
-        guard let planData = inputJSONAccumulator.data(using: .utf8) else {
-            throw SessionError.planDecodingFailed(detail: "could not encode accumulated input as UTF-8")
+        guard let inputData = inputJSONAccumulator.data(using: .utf8),
+              let inputObject = (try? JSONSerialization.jsonObject(with: inputData)) as? [String: Any]
+        else {
+            return RawToolCall(name: toolName, id: toolUseID, inputJSON: inputJSONAccumulator, input: [:])
         }
-        do {
-            let plan = try JSONDecoder().decode(SceneEditPlan.self, from: planData)
-            return (plan, toolUseID, inputJSONAccumulator)
-        } catch {
-            throw SessionError.planDecodingFailed(detail: String(describing: error))
-        }
+        return RawToolCall(name: toolName, id: toolUseID, inputJSON: inputJSONAccumulator, input: inputObject)
     }
 #endif
 
@@ -610,26 +650,26 @@ public actor Session {
         return result.isEmpty ? nil : result
     }
 
-    private func requestBody() -> [String: Any] {
+    private func requestBody(extraMessages: [[String: Any]] = []) -> [String: Any] {
+        let allMessages = buildMessages() + extraMessages
         switch config.apiFormat {
         case .anthropic:
             return [
                 "model": config.model,
                 "max_tokens": config.maxTokens,
                 "system": systemPrompt(),
-                "tools": [EditPlanTool.definition()],
+                "tools": [EditPlanTool.definition(), FindEntitiesTool.definition()],
                 "tool_choice": ["type": "any"],
-                "messages": buildMessages(),
+                "messages": allMessages,
             ]
         case .openAICompatible:
             var messages: [[String: Any]] = [["role": "system", "content": systemPrompt()]]
-            messages += buildMessages()
+            messages += allMessages
             return [
                 "model": config.model,
                 "max_tokens": config.maxTokens,
-                "tools": [EditPlanTool.openAIDefinition()],
-                "tool_choice": ["type": "function",
-                                "function": ["name": "execute_edit_plan"]],
+                "tools": [EditPlanTool.openAIDefinition(), FindEntitiesTool.openAIDefinition()],
+                "tool_choice": "required",
                 "messages": messages,
             ]
         }
@@ -747,9 +787,20 @@ public actor Session {
         occupies) and/or `collider_layer_mask` (bitmask of layers this collider interacts with, \
         e.g. 0xFFFF = collide with all layers). An entity's `colliderLayerID` and \
         `colliderLayerMask` fields show the current values.
+        - For set_material: use `material_base_color` ([r,g,b,a] linear 0–1), \
+        `material_metallic` (0–1; 0=dielectric, 1=full metal), \
+        `material_roughness` (0–1; 0=mirror-smooth, 1=fully rough), and \
+        `material_emissive` ([r,g,b] linear 0–1; omit or [0,0,0] for no emission). \
+        An entity's `materialBaseColor`, `materialMetallic`, `materialRoughness`, and \
+        `materialEmissive` fields show the current PBR values when non-default. \
+        Prefer set_material over set_mesh_color for precise or multi-channel appearance control; \
+        use set_mesh_color only for a simple RGB tint when no PBR properties are needed.
         - If the user asks a general question (capabilities, greetings, clarifications) rather \
         than requesting a scene change, call the tool with an empty steps array and put your \
         conversational reply in the summary field.
+        - Use find_entities (name substring or kind filter) to locate entities whose IDs are not \
+        visible in the scene list. After find_entities returns its result, call execute_edit_plan \
+        with the discovered IDs to complete the task.
         """)
 
         return parts.joined(separator: "\n\n")
@@ -797,10 +848,11 @@ public actor Session {
         let total = worldView.entityIndex.count
         guard total > Self.maxEntityPromptCount else { return nil }
         return "Note: scene has \(total) entities; only \(Self.maxEntityPromptCount) are shown above " +
-               "(selected entities and their neighbours are prioritised)."
+               "(selected entities and their neighbours are prioritised). " +
+               "Use the find_entities tool to search for entities by name or kind before calling execute_edit_plan."
     }
 
-    private func compactDict(for e: WorldEntityRecord) -> [String: Any] {
+    nonisolated func compactDict(for e: WorldEntityRecord) -> [String: Any] {
         var d: [String: Any] = ["ref": e.ref, "name": e.name]
         if let v = e.kind               { d["kind"] = v }
         if let v = e.parentRef          { d["parentRef"] = v }
@@ -818,6 +870,10 @@ public actor Session {
         if let v = e.cameraFovYDegrees  { d["cameraFovYDegrees"] = v }
         if let v = e.cameraIsActive     { d["cameraIsActive"] = v }
         if let v = e.meshColor          { d["meshColor"] = v }
+        if let v = e.materialBaseColor  { d["materialBaseColor"] = v }
+        if let v = e.materialMetallic   { d["materialMetallic"] = v }
+        if let v = e.materialRoughness  { d["materialRoughness"] = v }
+        if let v = e.materialEmissive   { d["materialEmissive"] = v }
         if let v = e.rigidBodyMotionType  { d["rigidBodyMotionType"] = v }
         if let v = e.rigidBodyMass        { d["rigidBodyMass"] = v }
         if let v = e.rigidBodyGravityScale { d["rigidBodyGravityScale"] = v }
@@ -935,61 +991,115 @@ public actor Session {
         return data
     }
 
-    // MARK: - Response parsing
+    // MARK: - Agentic loop helpers
 
-    private func parseResponse(from data: Data) throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
+    /// Intermediate result of one API round-trip: tool name, ID, and raw input.
+    private struct RawToolCall {
+        var name: String
+        var id: String
+        var inputJSON: String
+        var input: [String: Any]
+    }
+
+    /// Parses a raw tool call from a non-streaming API response (either format).
+    private func parseRawToolCall(from data: Data) throws -> RawToolCall {
         switch config.apiFormat {
         case .anthropic:
-            return try parseAnthropicResponse(from: data)
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                throw SessionError.malformedResponse(detail: "top-level JSON is not an object")
+            }
+            guard let content = json["content"] as? [[String: Any]],
+                  let toolUse = content.first(where: { $0["type"] as? String == "tool_use" }),
+                  let id = toolUse["id"] as? String,
+                  let name = toolUse["name"] as? String,
+                  let input = toolUse["input"] as? [String: Any]
+            else { throw SessionError.noPlanInResponse }
+            let inputJSON: String
+            if let d = try? JSONSerialization.data(withJSONObject: input),
+               let s = String(data: d, encoding: .utf8) { inputJSON = s } else { inputJSON = "{}" }
+            return RawToolCall(name: name, id: id, inputJSON: inputJSON, input: input)
+
         case .openAICompatible:
-            return try parseOpenAIResponse(from: data)
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let choices = json["choices"] as? [[String: Any]],
+                  let message = choices.first?["message"] as? [String: Any],
+                  let toolCalls = message["tool_calls"] as? [[String: Any]],
+                  let firstCall = toolCalls.first(where: { $0["type"] as? String == "function" }),
+                  let id = firstCall["id"] as? String,
+                  let function = firstCall["function"] as? [String: Any],
+                  let name = function["name"] as? String,
+                  let argsString = function["arguments"] as? String
+            else { throw SessionError.noPlanInResponse }
+            let input = (try? JSONSerialization.jsonObject(with: Data(argsString.utf8))) as? [String: Any] ?? [:]
+            return RawToolCall(name: name, id: id, inputJSON: argsString, input: input)
         }
     }
 
-    private func parseAnthropicResponse(from data: Data) throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw SessionError.malformedResponse(detail: "top-level JSON is not an object")
-        }
-        guard let content = json["content"] as? [[String: Any]],
-              let toolUse = content.first(where: { $0["type"] as? String == "tool_use" }),
-              let toolUseID = toolUse["id"] as? String,
-              let toolInput = toolUse["input"] as? [String: Any]
-        else {
-            throw SessionError.noPlanInResponse
-        }
-        guard let planData = try? JSONSerialization.data(withJSONObject: toolInput),
-              let inputJSON = String(data: planData, encoding: .utf8)
-        else {
-            throw SessionError.planDecodingFailed(detail: "could not re-serialize tool input")
+    /// Decodes a SceneEditPlan from a RawToolCall that should be `execute_edit_plan`.
+    private func decodePlan(from call: RawToolCall) throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
+        guard let planData = call.inputJSON.data(using: .utf8) else {
+            throw SessionError.planDecodingFailed(detail: "could not encode input as UTF-8")
         }
         do {
             let plan = try JSONDecoder().decode(SceneEditPlan.self, from: planData)
-            return (plan, toolUseID, inputJSON)
+            return (plan, call.id, call.inputJSON)
         } catch {
             throw SessionError.planDecodingFailed(detail: String(describing: error))
         }
     }
 
-    private func parseOpenAIResponse(from data: Data) throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = json["choices"] as? [[String: Any]],
-              let message = choices.first?["message"] as? [String: Any],
-              let toolCalls = message["tool_calls"] as? [[String: Any]],
-              let firstCall = toolCalls.first(where: { $0["type"] as? String == "function" }),
-              let toolUseID = firstCall["id"] as? String,
-              let function = firstCall["function"] as? [String: Any],
-              let argumentsString = function["arguments"] as? String
-        else {
-            throw SessionError.noPlanInResponse
+    /// Searches worldView.entityIndex for the given name/kind query and returns a JSON result string.
+    func findEntitiesResult(input: [String: Any]) -> String {
+        let nameQuery = (input["name"] as? String)?.lowercased()
+        let kindFilter = input["kind"] as? String
+        let limit = max(1, min((input["limit"] as? Int) ?? 20, 200))
+        var results: [[String: String]] = []
+        for e in worldView.entityIndex.values.sorted(by: { $0.ref < $1.ref }) {
+            if let nq = nameQuery, !e.name.lowercased().contains(nq) { continue }
+            if let kf = kindFilter, e.kind != kf { continue }
+            var entry: [String: String] = ["id": e.ref, "name": e.name]
+            if let k = e.kind { entry["kind"] = k }
+            results.append(entry)
+            if results.count >= limit { break }
         }
-        guard let planData = argumentsString.data(using: .utf8) else {
-            throw SessionError.planDecodingFailed(detail: "could not encode arguments as UTF-8")
-        }
-        do {
-            let plan = try JSONDecoder().decode(SceneEditPlan.self, from: planData)
-            return (plan, toolUseID, argumentsString)
-        } catch {
-            throw SessionError.planDecodingFailed(detail: String(describing: error))
+        let response: [String: Any] = ["count": results.count, "entities": results]
+        guard let data = try? JSONSerialization.data(withJSONObject: response),
+              let str = String(data: data, encoding: .utf8) else { return "{}" }
+        return str
+    }
+
+    /// Builds the assistant tool-call message and tool-result message pair for appending to extraMessages.
+    private func toolCallExchangeMessages(call: RawToolCall, resultJSON: String) -> [[String: Any]] {
+        switch config.apiFormat {
+        case .anthropic:
+            let assistantMsg: [String: Any] = [
+                "role": "assistant",
+                "content": [
+                    ["type": "tool_use", "id": call.id, "name": call.name,
+                     "input": call.input],
+                ],
+            ]
+            let resultMsg: [String: Any] = [
+                "role": "user",
+                "content": [
+                    ["type": "tool_result", "tool_use_id": call.id, "content": resultJSON],
+                ],
+            ]
+            return [assistantMsg, resultMsg]
+
+        case .openAICompatible:
+            let assistantMsg: [String: Any] = [
+                "role": "assistant",
+                "content": NSNull(),
+                "tool_calls": [
+                    ["id": call.id, "type": "function",
+                     "function": ["name": call.name, "arguments": call.inputJSON]],
+                ],
+            ]
+            let resultMsg: [String: Any] = [
+                "role": "tool", "tool_call_id": call.id, "content": resultJSON,
+            ]
+            return [assistantMsg, resultMsg]
         }
     }
 
