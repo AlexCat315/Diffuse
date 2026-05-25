@@ -1285,9 +1285,35 @@ public final class EditorApplication: @unchecked Sendable {
             return mcpSelectEntity(params: params)
         case "set_playback_state":
             return mcpSetPlaybackState(params: params)
+        case "undo":
+            return mcpUndo()
+        case "redo":
+            return mcpRedo()
         default:
             return ["ok": false, "error": "unknown action '\(action)'"]
         }
+    }
+
+    private func mcpUndo() -> [String: Any] {
+        var context = makeExecutionContext()
+        let applied = intentCoordinator.undo(executionContext: &context)
+        if applied, let updatedScene = context.sceneRuntime {
+            scene.scene = updatedScene
+            scene.notifyRevisionChanged()
+            store.dispatch(.setAIStatusMessage("Undone"))
+        }
+        return ["ok": true, "applied": applied]
+    }
+
+    private func mcpRedo() -> [String: Any] {
+        var context = makeExecutionContext()
+        let applied = intentCoordinator.redo(executionContext: &context)
+        if applied, let updatedScene = context.sceneRuntime {
+            scene.scene = updatedScene
+            scene.notifyRevisionChanged()
+            store.dispatch(.setAIStatusMessage("Redone"))
+        }
+        return ["ok": true, "applied": applied]
     }
 
     private func mcpSetPlaybackState(params: [String: Any]) -> [String: Any] {

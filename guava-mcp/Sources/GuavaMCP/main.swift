@@ -226,6 +226,24 @@ let toolSetPlaybackState: [String: Any] = [
     ] as [String: Any],
 ]
 
+let toolUndo: [String: Any] = [
+    "name": "undo",
+    "description": "Reverts the most recent scene edit in the Guava editor. Returns ok=true and applied=true when an undo was available, applied=false when the history is empty.",
+    "inputSchema": [
+        "type": "object",
+        "properties": [:] as [String: Any],
+    ] as [String: Any],
+]
+
+let toolRedo: [String: Any] = [
+    "name": "redo",
+    "description": "Re-applies the most recently undone scene edit in the Guava editor. Returns ok=true and applied=true when a redo was available, applied=false when the redo stack is empty.",
+    "inputSchema": [
+        "type": "object",
+        "properties": [:] as [String: Any],
+    ] as [String: Any],
+]
+
 let toolAnalyzeImage: [String: Any] = [
     "name": "analyze_image",
     "description": "Runs Guava Perception Runtime on a local image file and writes inferred semantic observations to the selected or specified scene entity. Uses the editor's local system perception worker.",
@@ -297,7 +315,7 @@ func handle(_ msg: [String: Any]) {
         writeResponse([
             "jsonrpc": "2.0",
             "id": id as Any,
-            "result": ["tools": [toolGetScene, toolGetSelection, toolSelectEntity, toolGetAIEntity, toolExecuteEditPlan, toolSetPlaybackState, toolAnalyzeImage]] as [String: Any],
+            "result": ["tools": [toolGetScene, toolGetSelection, toolSelectEntity, toolGetAIEntity, toolExecuteEditPlan, toolSetPlaybackState, toolAnalyzeImage, toolUndo, toolRedo]] as [String: Any],
         ])
 
     case "tools/call":
@@ -388,6 +406,16 @@ func handle(_ msg: [String: Any]) {
             } else {
                 toolResult(id: id as Any, text: res["error"] as? String ?? "unknown error", isError: true)
             }
+
+        case "undo":
+            let res = editorCall(["action": "undo"])
+            let applied = res["applied"] as? Bool ?? false
+            toolResult(id: id as Any, text: applied ? "Undo applied." : "Nothing to undo.")
+
+        case "redo":
+            let res = editorCall(["action": "redo"])
+            let applied = res["applied"] as? Bool ?? false
+            toolResult(id: id as Any, text: applied ? "Redo applied." : "Nothing to redo.")
 
         default:
             errorResponse(id: id as Any, code: -32601, message: "unknown tool '\(name)'")
