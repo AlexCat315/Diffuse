@@ -655,6 +655,48 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(hasMask,  "expected setColliderLayerMask mutation")
     }
 
+    func testSetColliderShapeExecutorProducesShapeTypeMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .box(halfExtents: .one, center: .zero)), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"spherify","steps":[{"op":"set_collider_shape","entity_id":"\(ref)","collider_shape":"sphere"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasShape = ops.contains {
+            if case .setColliderShapeType(_, .sphere) = $0 { return true }
+            return false
+        }
+        XCTAssertTrue(hasShape, "set_collider_shape sphere must produce setColliderShapeType(.sphere) mutation")
+    }
+
+    func testSetColliderMaterialExecutorProducesThreeMutations() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .box(halfExtents: .one, center: .zero)), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"icy","steps":[{"op":"set_collider_material","entity_id":"\(ref)",\
+        "friction":0.05,"restitution":0.9,"density":0.8}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasFriction    = ops.contains { if case .setColliderMaterialFriction(_, _) = $0 { return true }; return false }
+        let hasRestitution = ops.contains { if case .setColliderMaterialRestitution(_, _) = $0 { return true }; return false }
+        let hasDensity     = ops.contains { if case .setColliderMaterialDensity(_, _) = $0 { return true }; return false }
+        XCTAssertTrue(hasFriction,    "set_collider_material must produce setColliderMaterialFriction mutation")
+        XCTAssertTrue(hasRestitution, "set_collider_material must produce setColliderMaterialRestitution mutation")
+        XCTAssertTrue(hasDensity,     "set_collider_material must produce setColliderMaterialDensity mutation")
+    }
+
     func testSceneSemanticEncoderSurfacesColliderLayerAndMask() {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
