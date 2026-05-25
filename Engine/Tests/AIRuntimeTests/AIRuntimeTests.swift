@@ -755,6 +755,33 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(hasAnim, "set_animation_player must produce a setAnimationPlayer mutation")
     }
 
+    func testSetAudioSourceExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(AudioSource(), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"add music","steps":[{"op":"set_audio_source","entity_id":"\(ref)",\
+        "audio_clip":"theme","audio_volume":0.8,"audio_loop":true,"audio_play_on_awake":true}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasAudio = ops.contains {
+            if case let .setAudioSource(id, src) = $0 {
+                return id == entity.rawValue
+                    && src.clipName == "theme"
+                    && abs(src.volume - 0.8) < 0.001
+                    && src.loop == true
+                    && src.playOnAwake == true
+            }
+            return false
+        }
+        XCTAssertTrue(hasAudio, "set_audio_source must produce a setAudioSource mutation")
+    }
+
     func testSceneSemanticEncoderSurfacesPBRMaterialFields() {
         var scene = SceneRuntime()
         let entity = scene.createEntity()

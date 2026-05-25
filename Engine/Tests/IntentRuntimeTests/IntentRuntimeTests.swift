@@ -1291,6 +1291,48 @@ struct UndoStackTests {
         #expect(emissiveEvent != nil, "setRenderMaterialComponent must emit materialEmissive authored event")
     }
 
+    @Test("setAudioSource emits audioClip, audioVolume, audioLoop, audioPlayOnAwake world events")
+    func setAudioSourceEmitsWorldEvents() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(AudioSource(), for: entity)
+        var src = AudioSource()
+        src.clipName = "ambient"
+        src.volume = 0.75
+        src.loop = true
+        src.playOnAwake = false
+        let transaction = TransactionIR(
+            summary: "Set audio",
+            operations: [.scene(.setAudioSource(entityID: entity.rawValue, source: src))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let clipEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "audioClip", .string("ambient")) = $0 { return true }
+            return false
+        }
+        let volEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "audioVolume", .float(0.75)) = $0 { return true }
+            return false
+        }
+        let loopEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "audioLoop", .bool(true)) = $0 { return true }
+            return false
+        }
+        let awakEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "audioPlayOnAwake", .bool(false)) = $0 { return true }
+            return false
+        }
+        #expect(clipEvent != nil, "setAudioSource must emit audioClip authored event")
+        #expect(volEvent  != nil, "setAudioSource must emit audioVolume authored event")
+        #expect(loopEvent != nil, "setAudioSource must emit audioLoop authored event")
+        #expect(awakEvent != nil, "setAudioSource must emit audioPlayOnAwake authored event")
+    }
+
     @Test("ring buffer discards oldest entry when capacity is exceeded")
     func ringBufferEvictsOldest() {
         let stack = UndoStack(capacity: 3)
