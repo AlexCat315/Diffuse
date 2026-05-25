@@ -950,6 +950,60 @@ final class AIRuntimeTests: XCTestCase {
         await session.setWorkflowContext(ctx)
     }
 
+    // MARK: - sessionSummary memory
+
+    func testClearHistoryRecordsSessionSummary() async throws {
+        let session = Session(id: "sess1", config: makeTestConfig())
+        let store = try ContextMemoryStore()
+        await session.setContextMemory(store)
+
+        await session.recordTurn(ConversationTurn(kind: .userText("place a spotlight above the stage")))
+        await session.recordTurn(ConversationTurn(kind: .userText("set its color to warm white")))
+        await session.clearHistory()
+        try await Task.sleep(nanoseconds: 10_000_000)
+
+        let entries = await store.lookup(kind: .sessionSummary)
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries[0].id, "summary:sess1")
+        XCTAssertEqual(entries[0].payload["intent_count"], "2")
+        XCTAssertTrue(entries[0].payload["last_intents"]?.contains("spotlight") ?? false)
+    }
+
+    func testClearHistoryWithNoUserTurnsRecordsNoSummary() async throws {
+        let session = Session(id: "sess2", config: makeTestConfig())
+        let store = try ContextMemoryStore()
+        await session.setContextMemory(store)
+
+        // Only a tool result turn — no user intents.
+        await session.recordOutcome(toolUseID: "t1", content: "ok")
+        await session.clearHistory()
+        try await Task.sleep(nanoseconds: 10_000_000)
+        let entries = await store.lookup(kind: .sessionSummary)
+        XCTAssertTrue(entries.isEmpty)
+    }
+
+    func testClearHistoryDoesNotCrashWithoutStore() async {
+        let session = Session(id: "sess3", config: makeTestConfig())
+        await session.clearHistory()
+    }
+
+    func testClearHistorySummaryIsIdempotent() async throws {
+        let session = Session(id: "sess4", config: makeTestConfig())
+        let store = try ContextMemoryStore()
+        await session.setContextMemory(store)
+
+        // Two clear-history cycles with the same session ID must produce only one entry.
+        await session.recordTurn(ConversationTurn(kind: .userText("first intent")))
+        await session.clearHistory()
+
+        await session.recordTurn(ConversationTurn(kind: .userText("second intent")))
+        await session.clearHistory()
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        let entries = await store.lookup(kind: .sessionSummary)
+        XCTAssertEqual(entries.count, 1, "same session ID produces exactly one summary entry")
+    }
+
     func testIssueMemoryUpsertIsIdempotentForSameIntent() async throws {
         let session = Session(id: "iss4", config: makeTestConfig())
         let store = try ContextMemoryStore()
