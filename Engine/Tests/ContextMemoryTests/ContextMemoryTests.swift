@@ -127,6 +127,26 @@ struct ContextMemoryTests {
         #expect(!ids.contains("entity_added:scene:7"))
     }
 
+    @Test("entityRemovedReducer deletes percept entries written by session.tagEntity")
+    func entityRemovedReducerDeletesPerceptEntries() {
+        let existing: [String: ContextEntry] = [
+            "percept:scene:7:object_category": ContextEntry(
+                id: "percept:scene:7:object_category", kind: .sceneAnnotation,
+                subject: "scene:7", payload: ["property": "object_category", "value": "chair"]),
+            "percept:scene:7:perception.summary": ContextEntry(
+                id: "percept:scene:7:perception.summary", kind: .sceneAnnotation,
+                subject: "scene:7", payload: ["property": "perception.summary", "value": "chair"]),
+            "percept:scene:8:object_category": ContextEntry(
+                id: "percept:scene:8:object_category", kind: .sceneAnnotation,
+                subject: "scene:8", payload: ["property": "object_category", "value": "table"]),
+        ]
+        let mutations = entityRemovedReducer(existing, .entityRemoved(ref: "scene:7"))
+        let deletedIDs = Set(mutations.compactMap { if case let .delete(id) = $0 { id } else { nil } })
+        #expect(deletedIDs == ["percept:scene:7:object_category", "percept:scene:7:perception.summary"])
+        // scene:8 should be untouched
+        #expect(!deletedIDs.contains("percept:scene:8:object_category"))
+    }
+
     @Test("entityRemovedReducer returns empty when entity has no memory entries")
     func entityRemovedReducerReturnsEmptyForUnknownEntity() {
         let result = entityRemovedReducer([:], .entityRemoved(ref: "scene:99"))

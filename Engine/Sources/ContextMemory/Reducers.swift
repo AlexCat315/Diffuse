@@ -65,7 +65,9 @@ public let entityAddedReducer: ContextMemoryReducer = { _, event in
     )]
 }
 
-/// Deletes the `entity_added` entry and all `inferred` entries for the removed entity.
+/// Deletes all ContextMemory entries associated with the removed entity:
+/// the `entity_added` entry, all `inferred:ref:` entries (from the reducer pipeline),
+/// and all `percept:ref:` entries (written by Session.tagEntity).
 ///
 /// Returns `.delete` mutations for every matching entry in `existing`, so the
 /// store stays clean without leaving tombstones.
@@ -73,9 +75,10 @@ public let entityRemovedReducer: ContextMemoryReducer = { existing, event in
     guard case let .entityRemoved(ref) = event else { return [] }
     let addedID = "entity_added:\(ref)"
     let inferredPrefix = "inferred:\(ref):"
+    let perceptPrefix  = "percept:\(ref):"
     var mutations: [ContextMemoryMutation] = []
     if existing[addedID] != nil { mutations.append(.delete(id: addedID)) }
-    for key in existing.keys where key.hasPrefix(inferredPrefix) {
+    for key in existing.keys where key.hasPrefix(inferredPrefix) || key.hasPrefix(perceptPrefix) {
         mutations.append(.delete(id: key))
     }
     return mutations
