@@ -263,6 +263,18 @@ let toolAnalyzeImage: [String: Any] = [
     ] as [String: Any],
 ]
 
+let toolGetContextMemory: [String: Any] = [
+    "name": "get_context_memory",
+    "description": "Returns the top entries from Guava's long-term AI context memory for the current project. Entries include past edit summaries, scene annotations, user preferences, outstanding issues, and session summaries.",
+    "inputSchema": [
+        "type": "object",
+        "properties": [
+            "budget": ["type": "integer",
+                       "description": "Maximum number of entries to return, ranked by importance. Defaults to 20."] as [String: Any],
+        ] as [String: Any],
+    ] as [String: Any],
+]
+
 // MARK: - MCP stdio protocol
 
 func writeResponse(_ obj: [String: Any]) {
@@ -317,7 +329,7 @@ func handle(_ msg: [String: Any]) {
         writeResponse([
             "jsonrpc": "2.0",
             "id": id as Any,
-            "result": ["tools": [toolGetScene, toolGetSelection, toolSelectEntity, toolGetAIEntity, toolExecuteEditPlan, toolSetPlaybackState, toolAnalyzeImage, toolUndo, toolRedo]] as [String: Any],
+            "result": ["tools": [toolGetScene, toolGetSelection, toolSelectEntity, toolGetAIEntity, toolExecuteEditPlan, toolSetPlaybackState, toolAnalyzeImage, toolGetContextMemory, toolUndo, toolRedo]] as [String: Any],
         ])
 
     case "tools/call":
@@ -400,6 +412,18 @@ func handle(_ msg: [String: Any]) {
             if let maxResults = args["max_results"] as? Int {
                 request["max_results"] = maxResults
             }
+            let res = editorCall(request)
+            if let ok = res["ok"] as? Bool, ok,
+               let responseData = try? JSONSerialization.data(withJSONObject: res, options: [.sortedKeys]),
+               let responseText = String(data: responseData, encoding: .utf8) {
+                toolResult(id: id as Any, text: responseText)
+            } else {
+                toolResult(id: id as Any, text: res["error"] as? String ?? "unknown error", isError: true)
+            }
+
+        case "get_context_memory":
+            var request: [String: Any] = ["action": "get_context_memory"]
+            if let budget = args["budget"] as? Int { request["budget"] = budget }
             let res = editorCall(request)
             if let ok = res["ok"] as? Bool, ok,
                let responseData = try? JSONSerialization.data(withJSONObject: res, options: [.sortedKeys]),
