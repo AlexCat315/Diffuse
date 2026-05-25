@@ -68,6 +68,7 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     // Mesh (authored)
     public var meshColor: [Float]?           // [r, g, b] linear 0–1; nil = default white
     // PBR material (authored) — nil = engine default
+    public var materialBaseColor: [Float]?   // [r, g, b, a] linear 0–1
     public var materialMetallic: Float?
     public var materialRoughness: Float?
     public var materialEmissive: [Float]?    // [r, g, b] linear 0–1
@@ -154,6 +155,8 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
             if case let .bool(b) = value { cameraIsActive = b }
         case "meshColor":
             if case let .vec3(r, g, b) = value { meshColor = [r, g, b] }
+        case "materialBaseColor":
+            if case let .vec4(r, g, b, a) = value { materialBaseColor = [r, g, b, a] }
         case "materialMetallic":
             if case let .float(f) = value { materialMetallic = f }
         case "materialRoughness":
@@ -202,6 +205,23 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
             if case let .bool(b) = value { animationIsPlaying = b }
         case "constraintEnabled":
             if case let .bool(b) = value { constraintEnabled = b }
+        case "scriptBindings":
+            if case let .string(json) = value,
+               let data = json.data(using: .utf8),
+               let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+                scriptBindings = arr.compactMap { d -> SceneSemanticSnapshot.ScriptBindingRecord? in
+                    let rawHandle: UInt64?
+                    if let v = d["handle"] as? UInt64 { rawHandle = v }
+                    else if let v = d["handle"] as? Int { rawHandle = UInt64(bitPattern: Int64(v)) }
+                    else { rawHandle = nil }
+                    guard let handle = rawHandle,
+                          let enabled = d["isEnabled"] as? Bool,
+                          let params = d["parametersJSON"] as? String else { return nil }
+                    return SceneSemanticSnapshot.ScriptBindingRecord(handle: handle,
+                                                                     isEnabled: enabled,
+                                                                     parametersJSON: params)
+                }
+            }
         default:
             break
         }
@@ -314,10 +334,11 @@ public struct WorldView: Sendable {
             record.lightCastShadows = e.lightCastShadows
             record.cameraFovYDegrees = e.cameraFovYDegrees
             record.cameraIsActive = e.cameraIsActive
-            record.meshColor = e.meshColor
-            record.materialMetallic = e.materialMetallic
+            record.meshColor        = e.meshColor
+            record.materialBaseColor = e.materialBaseColor
+            record.materialMetallic  = e.materialMetallic
             record.materialRoughness = e.materialRoughness
-            record.materialEmissive = e.materialEmissive
+            record.materialEmissive  = e.materialEmissive
             record.rigidBodyMotionType = e.rigidBodyMotionType
             record.rigidBodyMass = e.rigidBodyMass
             record.rigidBodyGravityScale = e.rigidBodyGravityScale

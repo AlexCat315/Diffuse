@@ -1246,6 +1246,446 @@ struct UndoStackTests {
         #expect(event != nil, "setConstraintEnabled must emit constraintEnabled authored world event")
     }
 
+    @Test("setRenderMaterialComponent emits four PBR material authored world events")
+    func setRenderMaterialComponentEmitsWorldEvents() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(RenderMaterialComponent(), for: entity)
+        let transaction = TransactionIR(
+            summary: "Set PBR material",
+            operations: [
+                .scene(.setRenderMaterialComponent(
+                    entityID: entity.rawValue,
+                    baseColorFactor: SIMD4<Float>(0.8, 0.2, 0.1, 1.0),
+                    metallicFactor: 0.9,
+                    roughnessFactor: 0.3,
+                    emissiveFactor: SIMD3<Float>(0.0, 0.5, 0.0)
+                )),
+            ],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let baseColorEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "materialBaseColor", .vec4(0.8, 0.2, 0.1, 1.0)) = $0 { return true }
+            return false
+        }
+        let metallicEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "materialMetallic", .float(0.9)) = $0 { return true }
+            return false
+        }
+        let roughnessEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "materialRoughness", .float(0.3)) = $0 { return true }
+            return false
+        }
+        let emissiveEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "materialEmissive", .vec3(0.0, 0.5, 0.0)) = $0 { return true }
+            return false
+        }
+        #expect(baseColorEvent != nil, "setRenderMaterialComponent must emit materialBaseColor authored event")
+        #expect(metallicEvent != nil, "setRenderMaterialComponent must emit materialMetallic authored event")
+        #expect(roughnessEvent != nil, "setRenderMaterialComponent must emit materialRoughness authored event")
+        #expect(emissiveEvent != nil, "setRenderMaterialComponent must emit materialEmissive authored event")
+    }
+
+    @Test("setScriptBindings emits scriptBindings authored world event as JSON string")
+    func setScriptBindingsEmitsWorldEvent() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(ScriptComponent(bindings: []), for: entity)
+        let binding = ScriptBinding(ScriptHandle(rawValue: 42), isEnabled: true,
+                                    parametersJSON: #"{"speed":5}"#)
+        let transaction = TransactionIR(
+            summary: "Attach script",
+            operations: [.scene(.setScriptBindings(entityID: entity.rawValue, bindings: [binding]))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let scriptEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "scriptBindings", .string(_)) = $0 { return true }
+            return false
+        }
+        #expect(scriptEvent != nil, "setScriptBindings must emit a scriptBindings authored world event")
+        if case let .entityAuthoredChanged(_, _, .string(json)) = scriptEvent {
+            #expect(json.contains("42"))
+            #expect(json.contains("speed"))
+        }
+    }
+
+    @Test("setAudioSource emits audioClip, audioVolume, audioLoop, audioPlayOnAwake world events")
+    func setAudioSourceEmitsWorldEvents() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(AudioSource(), for: entity)
+        var src = AudioSource()
+        src.clipName = "ambient"
+        src.volume = 0.75
+        src.loop = true
+        src.playOnAwake = false
+        let transaction = TransactionIR(
+            summary: "Set audio",
+            operations: [.scene(.setAudioSource(entityID: entity.rawValue, source: src))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let clipEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "audioClip", .string("ambient")) = $0 { return true }
+            return false
+        }
+        let volEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "audioVolume", .float(0.75)) = $0 { return true }
+            return false
+        }
+        let loopEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "audioLoop", .bool(true)) = $0 { return true }
+            return false
+        }
+        let awakEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "audioPlayOnAwake", .bool(false)) = $0 { return true }
+            return false
+        }
+        #expect(clipEvent != nil, "setAudioSource must emit audioClip authored event")
+        #expect(volEvent  != nil, "setAudioSource must emit audioVolume authored event")
+        #expect(loopEvent != nil, "setAudioSource must emit audioLoop authored event")
+        #expect(awakEvent != nil, "setAudioSource must emit audioPlayOnAwake authored event")
+    }
+
+    @Test("setCollider emits all seven collider authored world events")
+    func setColliderEmitsWorldEvents() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let collider = Collider(
+            shape: .sphere(radius: 1.5, center: .zero),
+            isTrigger: true,
+            layerID: 3,
+            layerMask: 15,
+            material: PhysicsMaterial(friction: 0.4, restitution: 0.2, density: 2.0)
+        )
+        let transaction = TransactionIR(
+            summary: "Set collider",
+            operations: [.scene(.setCollider(entityID: entity.rawValue, collider: collider))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let shapeEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderShape", .string("sphere")) = $0 { return true }
+            return false
+        }
+        let triggerEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderIsTrigger", .bool(true)) = $0 { return true }
+            return false
+        }
+        let frictionEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderFriction", .float(0.4)) = $0 { return true }
+            return false
+        }
+        let restitutionEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderRestitution", .float(0.2)) = $0 { return true }
+            return false
+        }
+        let densityEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderDensity", .float(2.0)) = $0 { return true }
+            return false
+        }
+        let layerIDEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderLayerID", .float(3)) = $0 { return true }
+            return false
+        }
+        let layerMaskEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderLayerMask", .float(15)) = $0 { return true }
+            return false
+        }
+        #expect(shapeEvent      != nil, "setCollider must emit colliderShape authored event")
+        #expect(triggerEvent    != nil, "setCollider must emit colliderIsTrigger authored event")
+        #expect(frictionEvent   != nil, "setCollider must emit colliderFriction authored event")
+        #expect(restitutionEvent != nil, "setCollider must emit colliderRestitution authored event")
+        #expect(densityEvent    != nil, "setCollider must emit colliderDensity authored event")
+        #expect(layerIDEvent    != nil, "setCollider must emit colliderLayerID authored event")
+        #expect(layerMaskEvent  != nil, "setCollider must emit colliderLayerMask authored event")
+    }
+
+    @Test("setRigidBodyMotionType, setRigidBodyGravityScale, setRigidBodyAllowSleep emit authored world events")
+    func rigidBodyOpsEmitWorldEvents() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(RigidBody(motionType: .dynamic, mass: 10,
+                                          gravityScale: 1, allowSleep: true), for: entity)
+        let transaction = TransactionIR(
+            summary: "rb ops",
+            operations: [
+                .scene(.setRigidBodyMotionType(entityID: entity.rawValue, value: .kinematic)),
+                .scene(.setRigidBodyGravityScale(entityID: entity.rawValue, value: 2.5)),
+                .scene(.setRigidBodyAllowSleep(entityID: entity.rawValue, value: false)),
+            ],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let motionEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "rigidBodyMotionType", .string("kinematic")) = $0 { return true }
+            return false
+        }
+        let gravityEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "rigidBodyGravityScale", .float(2.5)) = $0 { return true }
+            return false
+        }
+        let sleepEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "rigidBodyAllowSleep", .bool(false)) = $0 { return true }
+            return false
+        }
+        #expect(motionEvent  != nil, "setRigidBodyMotionType must emit rigidBodyMotionType authored event")
+        #expect(gravityEvent != nil, "setRigidBodyGravityScale must emit rigidBodyGravityScale authored event")
+        #expect(sleepEvent   != nil, "setRigidBodyAllowSleep must emit rigidBodyAllowSleep authored event")
+    }
+
+    @Test("setMeshColorTint and setRenderMeshVisibility emit authored world events")
+    func meshColorAndVisibilityEmitWorldEvents() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(RenderMeshComponent(meshIndex: 0), for: entity)
+        let transaction = TransactionIR(
+            summary: "mesh events",
+            operations: [
+                .scene(.setMeshColorTint(entityID: entity.rawValue,
+                                          color: SIMD3<Float>(1, 0.5, 0))),
+                .scene(.setRenderMeshVisibility(entityID: entity.rawValue, isVisible: false)),
+            ],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let colorEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "meshColor", .vec3(1, 0.5, 0)) = $0 { return true }
+            return false
+        }
+        let visibilityEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "meshIsVisible", .bool(false)) = $0 { return true }
+            return false
+        }
+        #expect(colorEvent      != nil, "setMeshColorTint must emit meshColor authored event")
+        #expect(visibilityEvent != nil, "setRenderMeshVisibility must emit meshIsVisible authored event")
+    }
+
+    @Test("light type, color, intensity, and range emit authored world events")
+    func lightPropertyOpsEmitWorldEvents() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(LightComponent(type: .point, color: .one, intensity: 1, range: 10), for: entity)
+        let transaction = TransactionIR(
+            summary: "light ops",
+            operations: [
+                .scene(.setLightType(entityID: entity.rawValue, type: .spot)),
+                .scene(.setLightColor(entityID: entity.rawValue,
+                                       color: SIMD3<Float>(0.9, 0.8, 0.7))),
+                .scene(.setLightIntensity(entityID: entity.rawValue, intensity: 500)),
+                .scene(.setLightRange(entityID: entity.rawValue, range: 25)),
+            ],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let typeEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "lightType", .string("spot")) = $0 { return true }
+            return false
+        }
+        let colorEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "lightColor", .vec3(0.9, 0.8, 0.7)) = $0 { return true }
+            return false
+        }
+        let intensityEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "lightIntensity", .float(500)) = $0 { return true }
+            return false
+        }
+        let rangeEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "lightRange", .float(25)) = $0 { return true }
+            return false
+        }
+        #expect(typeEvent      != nil, "setLightType must emit lightType authored event")
+        #expect(colorEvent     != nil, "setLightColor must emit lightColor authored event")
+        #expect(intensityEvent != nil, "setLightIntensity must emit lightIntensity authored event")
+        #expect(rangeEvent     != nil, "setLightRange must emit lightRange authored event")
+    }
+
+    @Test("setLightSpotInnerAngle and setLightSpotOuterAngle emit authored world events")
+    func lightSpotAnglesEmitWorldEvents() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(LightComponent(type: .spot, color: .one, intensity: 100, range: 20), for: entity)
+        let transaction = TransactionIR(
+            summary: "spot angles",
+            operations: [
+                .scene(.setLightSpotInnerAngle(entityID: entity.rawValue, angleDegrees: 20)),
+                .scene(.setLightSpotOuterAngle(entityID: entity.rawValue, angleDegrees: 45)),
+            ],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let innerEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "lightSpotInner", .float(20)) = $0 { return true }
+            return false
+        }
+        let outerEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "lightSpotOuter", .float(45)) = $0 { return true }
+            return false
+        }
+        #expect(innerEvent != nil, "setLightSpotInnerAngle must emit lightSpotInner authored event")
+        #expect(outerEvent != nil, "setLightSpotOuterAngle must emit lightSpotOuter authored event")
+    }
+
+    @Test("setCameraFOV and setCameraActive emit authored world events")
+    func cameraOpsEmitWorldEvents() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(CameraComponent(), for: entity)
+        let transaction = TransactionIR(
+            summary: "camera ops",
+            operations: [
+                .scene(.setCameraFOV(entityID: entity.rawValue, fovYDegrees: 75)),
+                .scene(.setCameraActive(entityID: entity.rawValue, isActive: true)),
+            ],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let fovEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "cameraFovYDegrees", .float(75)) = $0 { return true }
+            return false
+        }
+        let activeEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "cameraIsActive", .bool(true)) = $0 { return true }
+            return false
+        }
+        #expect(fovEvent    != nil, "setCameraFOV must emit cameraFovYDegrees authored event")
+        #expect(activeEvent != nil, "setCameraActive must emit cameraIsActive authored event")
+    }
+
+    @Test("granular collider mutations emit individual authored world events")
+    func granularColliderOpsEmitWorldEvents() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .box(halfExtents: .one, center: .zero)), for: entity)
+        let transaction = TransactionIR(
+            summary: "collider ops",
+            operations: [
+                .scene(.setColliderShapeType(entityID: entity.rawValue, kind: .sphere)),
+                .scene(.setColliderTrigger(entityID: entity.rawValue, value: true)),
+                .scene(.setColliderMaterialFriction(entityID: entity.rawValue, value: 0.3)),
+                .scene(.setColliderMaterialRestitution(entityID: entity.rawValue, value: 0.6)),
+                .scene(.setColliderMaterialDensity(entityID: entity.rawValue, value: 1.5)),
+            ],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let shapeEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderShape", .string("sphere")) = $0 { return true }
+            return false
+        }
+        let triggerEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderIsTrigger", .bool(true)) = $0 { return true }
+            return false
+        }
+        let frictionEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderFriction", .float(0.3)) = $0 { return true }
+            return false
+        }
+        let restitutionEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderRestitution", .float(0.6)) = $0 { return true }
+            return false
+        }
+        let densityEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderDensity", .float(1.5)) = $0 { return true }
+            return false
+        }
+        #expect(shapeEvent      != nil, "setColliderShapeType must emit colliderShape authored event")
+        #expect(triggerEvent    != nil, "setColliderTrigger must emit colliderIsTrigger authored event")
+        #expect(frictionEvent   != nil, "setColliderMaterialFriction must emit colliderFriction authored event")
+        #expect(restitutionEvent != nil, "setColliderMaterialRestitution must emit colliderRestitution authored event")
+        #expect(densityEvent    != nil, "setColliderMaterialDensity must emit colliderDensity authored event")
+    }
+
+    @Test("setColliderShapeType transaction updates the Collider component in scene")
+    func setColliderShapeTypeUpdatesComponent() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .box(halfExtents: .one, center: .zero),
+                                         isTrigger: true, layerID: 2, layerMask: 7,
+                                         material: PhysicsMaterial(friction: 0.3, restitution: 0.7, density: 2.0)),
+                                for: entity)
+        let transaction = TransactionIR(
+            summary: "to sphere",
+            operations: [.scene(.setColliderShapeType(entityID: entity.rawValue, kind: .sphere))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        _ = try executor.apply(transaction, to: &context)
+
+        let collider = try #require(context.sceneRuntime?.component(Collider.self, for: entity))
+        if case .sphere = collider.shape { } else {
+            Issue.record("collider shape must be .sphere after setColliderShapeType(.sphere)")
+        }
+        #expect(collider.isTrigger == true, "isTrigger must be preserved")
+        #expect(collider.layerID == 2, "layerID must be preserved")
+        #expect(abs(collider.material.friction - 0.3) < 0.001, "friction must be preserved")
+    }
+
+    @Test("setSceneName emits name authored world event")
+    func setSceneNameEmitsWorldEvent() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let transaction = TransactionIR(
+            summary: "rename",
+            operations: [.scene(.setSceneName(entityID: entity.rawValue, value: "Hero"))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let nameEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "name", .string("Hero")) = $0 { return true }
+            return false
+        }
+        #expect(nameEvent != nil, "setSceneName must emit name authored event")
+    }
+
     @Test("ring buffer discards oldest entry when capacity is exceeded")
     func ringBufferEvictsOldest() {
         let stack = UndoStack(capacity: 3)

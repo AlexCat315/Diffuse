@@ -102,10 +102,15 @@ public struct SceneSemanticEncoder: Sendable {
                 if !isWhite { meshColor = [c.x, c.y, c.z] }
             }
 
+            var materialBaseColor: [Float]?
             var materialMetallic: Float?
             var materialRoughness: Float?
             var materialEmissive: [Float]?
             if let mat = scene.component(RenderMaterialComponent.self, for: entity) {
+                let bc = mat.baseColorFactor
+                let isWhiteOpaque = abs(bc.x - 1) < 0.001 && abs(bc.y - 1) < 0.001
+                    && abs(bc.z - 1) < 0.001 && abs(bc.w - 1) < 0.001
+                if !isWhiteOpaque { materialBaseColor = [bc.x, bc.y, bc.z, bc.w] }
                 if mat.metallicFactor > 0.001 { materialMetallic = mat.metallicFactor }
                 if abs(mat.roughnessFactor - 1.0) > 0.001 { materialRoughness = mat.roughnessFactor }
                 let em = mat.emissiveFactor
@@ -209,6 +214,7 @@ public struct SceneSemanticEncoder: Sendable {
                 cameraFovYDegrees: cameraFovYDegrees,
                 cameraIsActive: cameraIsActive,
                 meshColor: meshColor,
+                materialBaseColor: materialBaseColor,
                 materialMetallic: materialMetallic,
                 materialRoughness: materialRoughness,
                 materialEmissive: materialEmissive,
