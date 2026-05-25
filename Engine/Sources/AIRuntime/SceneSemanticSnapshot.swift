@@ -69,8 +69,9 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         // Mesh extras — non-nil only when `"mesh"` ∈ components and color is non-default
         public var meshColor: [Float]?         // [r, g, b] linear 0–1; nil = default white
         // PBR material extras — nil = engine default
+        public var materialBaseColor: [Float]? = nil // [r, g, b, a] linear 0–1; nil = white opaque
         public var materialMetallic: Float? = nil    // 0–1; nil = 0 (dielectric)
-        public var materialRoughness: Float? = nil   // 0–1; nil = 0.5
+        public var materialRoughness: Float? = nil   // 0–1; nil = 0.5 (semi-rough)
         public var materialEmissive: [Float]? = nil  // [r, g, b] linear 0–1; nil = no emission
 
         // Physics extras — non-nil only when `"rigidbody"` ∈ components
