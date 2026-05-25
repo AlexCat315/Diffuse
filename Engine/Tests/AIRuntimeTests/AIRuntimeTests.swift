@@ -600,4 +600,54 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(record?.colliderLayerID, 7)
         XCTAssertEqual(record?.colliderLayerMask, 63)
     }
+
+    // MARK: - AIWorldContext SnapshotProvider
+
+    func testAIWorldContextMaterializesSnapshot() async throws {
+        let context = AIWorldContext()
+        await context.observe(event: .entityAdded(ref: "scene:1", name: "Box", kind: "mesh"))
+
+        let (snapshotID, cursor) = try await context.materializeSnapshot(scope: "scene")
+        XCTAssertFalse(snapshotID.isEmpty)
+        XCTAssertEqual(cursor.streamID, "world")
+        XCTAssertGreaterThan(cursor.seq, 0)
+    }
+
+    func testAIWorldContextSnapshotCapturesStateAtCallTime() async throws {
+        let context = AIWorldContext()
+        await context.observe(event: .entityAdded(ref: "scene:1", name: "Pre", kind: "mesh"))
+
+        let (snapshotID, _) = try await context.materializeSnapshot(scope: "scene")
+
+        // Events after the snapshot should NOT appear in the captured WorldView.
+        await context.observe(event: .entityAdded(ref: "scene:2", name: "Post", kind: "mesh"))
+
+        let captured = await context.worldViewForSnapshot(snapshotID: snapshotID)
+        XCTAssertNotNil(captured?.entityIndex["scene:1"])
+        XCTAssertNil(captured?.entityIndex["scene:2"])
+    }
+
+    func testAIWorldContextSnapshotCursorAdvancesWithRevisions() async throws {
+        let context = AIWorldContext()
+        let (_, cursor1) = try await context.materializeSnapshot(scope: "scene")
+        await context.observe(event: .entityAdded(ref: "scene:1", name: "A", kind: "mesh"))
+        let (_, cursor2) = try await context.materializeSnapshot(scope: "scene")
+        XCTAssertLessThan(cursor1.seq, cursor2.seq)
+    }
+
+    func testAIWorldContextEvictsOldestSnapshotAtLimit() async throws {
+        let context = AIWorldContext()
+        var ids: [String] = []
+        for i in 0..<9 {
+            await context.observe(event: .entityAdded(ref: "scene:\(i)", name: "E\(i)", kind: "mesh"))
+            let (id, _) = try await context.materializeSnapshot(scope: "scene")
+            ids.append(id)
+        }
+        // The first snapshot should have been evicted (limit is 8).
+        let first = await context.worldViewForSnapshot(snapshotID: ids[0])
+        XCTAssertNil(first)
+        // The most recent ones should still be present.
+        let last = await context.worldViewForSnapshot(snapshotID: ids[8])
+        XCTAssertNotNil(last)
+    }
 }
