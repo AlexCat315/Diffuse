@@ -331,8 +331,35 @@ final class AIRuntimeTests: XCTestCase {
     func testConfidenceDestructiveOpAppliesPenalty() {
         let step = SceneEditStep(op: .deleteEntity, entityRef: "scene:1")
         let plan = SceneEditPlan(summary: "delete", steps: [step])
-        // 1.0 - 0.10 = 0.90
-        XCTAssertEqual(Session.confidence(for: plan), 0.90, accuracy: 0.001)
+        // 1.0 - 0.10 (delete) - 0.05 (uncompensated delete, no spawn) = 0.85
+        XCTAssertEqual(Session.confidence(for: plan), 0.85, accuracy: 0.001)
+    }
+
+    func testConfidenceDeleteWithSpawnIsNotUncompensated() {
+        let steps = [
+            SceneEditStep(op: .deleteEntity, entityRef: "scene:1"),
+            SceneEditStep(op: .spawnEntity, name: "NewProp"),
+        ]
+        let plan = SceneEditPlan(summary: "replace", steps: steps)
+        // 1.0 - 0.10 (delete) - 0.03 (extra step) - 0.05 (orphan spawn, no transform) = 0.82
+        // No uncompensated delete penalty since hasSpawn = true
+        XCTAssertEqual(Session.confidence(for: plan), 0.82, accuracy: 0.001)
+    }
+
+    func testConfidenceReasoningBonusApplied() {
+        let step = SceneEditStep(op: .setName, entityRef: "scene:1", name: "Hero")
+        var plan = SceneEditPlan(summary: "rename", steps: [step])
+        plan.reasoning = "The user named this entity after the main character."
+        // 1.0 + 0.05 (reasoning bonus) = 1.0 (capped at 1.0)
+        XCTAssertEqual(Session.confidence(for: plan), 1.0, accuracy: 0.001)
+    }
+
+    func testConfidenceReasoningBonusAppliedWhenBelowOne() {
+        let steps = (0..<4).map { _ in SceneEditStep(op: .setName, entityRef: "scene:1", name: "X") }
+        var plan = SceneEditPlan(summary: "multi", steps: steps)
+        plan.reasoning = "Renaming for clarity."
+        // 1.0 - 3*0.03 + 0.05 = 0.91 - 0.09 + 0.05 = 0.96
+        XCTAssertEqual(Session.confidence(for: plan), 0.96, accuracy: 0.001)
     }
 
     func testConfidenceFloorAt040() {
