@@ -165,7 +165,7 @@ let toolExecuteEditPlan: [String: Any] = [
                         "audio_spatial_blend": ["type": "number", "description": "0=2D, 1=3D positional for set_audio_source."] as [String: Any],
                         "script_index": ["type": "integer", "description": "Zero-based index of the script component on the entity for set_script_property."] as [String: Any],
                         "script_property_name": ["type": "string", "description": "Exported property name to set for set_script_property."] as [String: Any],
-                        "script_property_value": ["type": "string", "description": "JSON-encoded value string for set_script_property."] as [String: Any],
+                        "script_property_value": ["description": "Value to set (string, number, or boolean) for set_script_property."] as [String: Any],
                         "is_visible": ["type": "boolean", "description": "Mesh visibility toggle for set_mesh_visibility."] as [String: Any],
                         "animation_clip": ["type": "string", "description": "Animation clip asset name for set_animation_player."] as [String: Any],
                         "animation_speed": ["type": "number", "description": "Playback speed multiplier (1=normal) for set_animation_player."] as [String: Any],
