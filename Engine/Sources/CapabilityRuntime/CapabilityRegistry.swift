@@ -385,6 +385,14 @@ public struct CapabilityRegistry: Sendable {
                 preconditions: [editable, entityExists, renderMesh]
             ),
             CapabilityDescriptor(
+                verb: "scene.set_material",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, renderMesh]
+            ),
+            CapabilityDescriptor(
                 verb: "scene.set_script_bindings",
                 aliases: ["scene.set_script_enabled", "scene.set_script_parameters"],
                 releasePhase: .stable,
