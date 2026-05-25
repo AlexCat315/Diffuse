@@ -751,6 +751,140 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(dict["label"] as? String, "Patrol")
     }
 
+    func testSetColliderTriggerExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .box(halfExtents: .one, center: .zero)), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"trigger","steps":[{"op":"set_collider_trigger","entity_id":"\(ref)","is_trigger":true}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasTrigger = ops.contains { if case .setColliderTrigger(_, true) = $0 { return true }; return false }
+        XCTAssertTrue(hasTrigger, "set_collider_trigger must produce setColliderTrigger mutation")
+    }
+
+    func testSetColliderBoxExtentsExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .box(halfExtents: .one, center: .zero)), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"extents","steps":[{"op":"set_collider_box_extents","entity_id":"\(ref)",\
+        "half_extents":[0.5,1.0,2.0]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasExtents = ops.contains {
+            if case let .setColliderShapeBoxHalfExtents(_, ext) = $0 {
+                return abs(ext.x - 0.5) < 0.001 && abs(ext.y - 1.0) < 0.001 && abs(ext.z - 2.0) < 0.001
+            }
+            return false
+        }
+        XCTAssertTrue(hasExtents, "set_collider_box_extents must produce setColliderShapeBoxHalfExtents mutation")
+    }
+
+    func testSetColliderSphereRadiusExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .sphere(radius: 1, center: .zero)), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"sphere","steps":[{"op":"set_collider_sphere_radius","entity_id":"\(ref)","radius":3.5}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasRadius = ops.contains {
+            if case let .setColliderShapeSphereRadius(_, r) = $0 { return abs(r - 3.5) < 0.001 }
+            return false
+        }
+        XCTAssertTrue(hasRadius, "set_collider_sphere_radius must produce setColliderShapeSphereRadius mutation")
+    }
+
+    func testSetColliderCapsuleExecutorProducesBothMutations() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .box(halfExtents: .one, center: .zero)), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"capsule","steps":[{"op":"set_collider_capsule","entity_id":"\(ref)",\
+        "radius":0.4,"half_height":1.2}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasRadius = ops.contains {
+            if case let .setColliderShapeCapsuleRadius(_, r) = $0 { return abs(r - 0.4) < 0.001 }
+            return false
+        }
+        let hasHH = ops.contains {
+            if case let .setColliderShapeCapsuleHalfHeight(_, hh) = $0 { return abs(hh - 1.2) < 0.001 }
+            return false
+        }
+        XCTAssertTrue(hasRadius, "set_collider_capsule must produce setColliderShapeCapsuleRadius mutation")
+        XCTAssertTrue(hasHH,     "set_collider_capsule must produce setColliderShapeCapsuleHalfHeight mutation")
+    }
+
+    func testSetConstraintEnabledExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"constraint","steps":[{"op":"set_constraint_enabled","entity_id":"\(ref)","is_enabled":false}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasConstraint = ops.contains { if case .setConstraintEnabled(_, false) = $0 { return true }; return false }
+        XCTAssertTrue(hasConstraint, "set_constraint_enabled must produce setConstraintEnabled mutation")
+    }
+
+    func testSetRigidBodyAllowSleepExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"sleep","steps":[{"op":"set_rigidbody_allow_sleep","entity_id":"\(ref)","allow_sleep":true}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasSleep = ops.contains { if case .setRigidBodyAllowSleep(_, true) = $0 { return true }; return false }
+        XCTAssertTrue(hasSleep, "set_rigid_body_allow_sleep must produce setRigidBodyAllowSleep mutation")
+    }
+
+    func testSetMeshVisibilityExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"hide","steps":[{"op":"set_mesh_visibility","entity_id":"\(ref)","is_visible":false}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasVisibility = ops.contains { if case .setRenderMeshVisibility(_, false) = $0 { return true }; return false }
+        XCTAssertTrue(hasVisibility, "set_mesh_visibility must produce setRenderMeshVisibility mutation")
+    }
+
     func testSceneSemanticEncoderSurfacesColliderLayerAndMask() {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
