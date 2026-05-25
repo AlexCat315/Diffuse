@@ -1593,6 +1593,40 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(proposal.plan.summary, "Activate camera")
     }
 
+    func testSessionProcessThrowsAfterExceedingFindEntitiesCallLimit() async throws {
+        // After 3 find_entities calls, the loop must throw noPlanInResponse rather than looping forever
+        var callCount = 0
+        MockURLProtocol.requestHandler = { _ in
+            callCount += 1
+            let body = """
+            {
+              "id": "msg_\(callCount)",
+              "content": [
+                {"type": "tool_use", "id": "tu_\(callCount)", "name": "find_entities",
+                 "input": {"name": "missing"}}
+              ],
+              "stop_reason": "tool_use"
+            }
+            """
+            let httpResponse = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!,
+                                               statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (httpResponse, Data(body.utf8))
+        }
+
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let mockSession = URLSession(configuration: config)
+        let session = Session(id: "t", config: makeTestConfig(), urlSession: mockSession)
+
+        do {
+            _ = try await session.process(Signal.naturalLanguage(text: "find the missing entity", locale: "en"))
+            XCTFail("Expected noPlanInResponse error")
+        } catch SessionError.noPlanInResponse {
+            // Expected: 1 initial call + 3 find_entities = 4 total API calls
+            XCTAssertEqual(callCount, 4, "Should make 4 calls (1 base + 3 find_entities) before giving up")
+        }
+    }
+
     func testFindEntitiesResultReturnsKindWhenPresent() async {
         var wv = WorldView()
         wv.apply(event: .entityAdded(ref: "scene:1", name: "Point Light", kind: "Light"))
