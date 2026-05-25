@@ -1533,6 +1533,82 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(proposal.plan.summary, "Move dragon")
     }
 
+    func testSessionProcessOpenAIFormatFindEntitiesLoop() async throws {
+        // OpenAI format agentic loop: find_entities followed by execute_edit_plan
+        let findEntitiesResponse = """
+        {
+          "choices": [{
+            "message": {
+              "role": "assistant",
+              "tool_calls": [{
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "find_entities", "arguments": "{\\"name\\":\\"camera\\"}"}
+              }]
+            },
+            "finish_reason": "tool_calls"
+          }]
+        }
+        """
+        let editPlanResponse = """
+        {
+          "choices": [{
+            "message": {
+              "role": "assistant",
+              "tool_calls": [{
+                "id": "call_2",
+                "type": "function",
+                "function": {"name": "execute_edit_plan",
+                  "arguments": "{\\"summary\\":\\"Activate camera\\",\\"steps\\":[]}"}
+              }]
+            },
+            "finish_reason": "tool_calls"
+          }]
+        }
+        """
+        var callCount = 0
+        let responses = [findEntitiesResponse, editPlanResponse]
+        MockURLProtocol.requestHandler = { _ in
+            let response = responses[callCount]
+            callCount += 1
+            let httpResponse = HTTPURLResponse(url: URL(string: "https://api.openai.com")!,
+                                               statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (httpResponse, Data(response.utf8))
+        }
+
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let mockSession = URLSession(configuration: config)
+
+        var wv = WorldView()
+        wv.apply(event: .entityAdded(ref: "scene:7", name: "Main Camera", kind: "Camera"))
+        let openAIConfig = SessionConfig.openAI(apiKey: "test")
+        let session = Session(id: "t", config: openAIConfig, urlSession: mockSession,
+                              initialWorldView: wv)
+
+        let signal = Signal.naturalLanguage(text: "activate the camera", locale: "en")
+        let proposal = try await session.process(signal)
+
+        XCTAssertEqual(callCount, 2, "Should make 2 API calls: find_entities then execute_edit_plan")
+        XCTAssertEqual(proposal.plan.summary, "Activate camera")
+    }
+
+    func testFindEntitiesResultReturnsKindWhenPresent() async {
+        var wv = WorldView()
+        wv.apply(event: .entityAdded(ref: "scene:1", name: "Point Light", kind: "Light"))
+        wv.apply(event: .entityAdded(ref: "scene:2", name: "Unnamed", kind: nil))
+        let session = Session(id: "t", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: String]]
+
+        let lightEntry = entities.first { $0["id"] == "scene:1" }!
+        let unnamedEntry = entities.first { $0["id"] == "scene:2" }!
+        XCTAssertEqual(lightEntry["kind"], "Light", "kind should be present when set")
+        XCTAssertNil(unnamedEntry["kind"], "kind should be absent when nil")
+    }
+
     private func makeTestConfig() -> SessionConfig {
         .anthropic(apiKey: "test")
     }
