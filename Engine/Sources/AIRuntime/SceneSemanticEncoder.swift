@@ -102,6 +102,18 @@ public struct SceneSemanticEncoder: Sendable {
                 if !isWhite { meshColor = [c.x, c.y, c.z] }
             }
 
+            var materialMetallic: Float?
+            var materialRoughness: Float?
+            var materialEmissive: [Float]?
+            if let mat = scene.component(RenderMaterialComponent.self, for: entity) {
+                if mat.metallicFactor > 0.001 { materialMetallic = mat.metallicFactor }
+                if abs(mat.roughnessFactor - 1.0) > 0.001 { materialRoughness = mat.roughnessFactor }
+                let em = mat.emissiveFactor
+                if em.x > 0.001 || em.y > 0.001 || em.z > 0.001 {
+                    materialEmissive = [em.x, em.y, em.z]
+                }
+            }
+
             var rigidBodyMotionType: String?
             var rigidBodyMass: Float?
             var rigidBodyGravityScale: Float?
@@ -197,6 +209,9 @@ public struct SceneSemanticEncoder: Sendable {
                 cameraFovYDegrees: cameraFovYDegrees,
                 cameraIsActive: cameraIsActive,
                 meshColor: meshColor,
+                materialMetallic: materialMetallic,
+                materialRoughness: materialRoughness,
+                materialEmissive: materialEmissive,
                 rigidBodyMotionType: rigidBodyMotionType,
                 rigidBodyMass: rigidBodyMass,
                 rigidBodyGravityScale: rigidBodyGravityScale,
