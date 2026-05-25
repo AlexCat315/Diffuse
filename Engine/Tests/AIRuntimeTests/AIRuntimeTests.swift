@@ -1075,6 +1075,30 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(record?.materialEmissive, [1.0, 0.5, 0.0])
     }
 
+    func testWorldViewAppliesSnapshotWithMaterialBaseColor() {
+        var entity = SceneSemanticSnapshot.Entity(
+            id: "scene:2",
+            name: "RedCube",
+            kind: "mesh",
+            parentRef: nil,
+            childRefs: [],
+            isSelected: false,
+            position: [0, 0, 0],
+            components: ["transform", "mesh"]
+        )
+        entity.materialBaseColor = [1.0, 0.0, 0.0, 1.0]
+        let snapshot = SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [entity])
+        var view = WorldView()
+        view.apply(snapshot: snapshot)
+        XCTAssertEqual(view.entityIndex["scene:2"]?.materialBaseColor, [1.0, 0.0, 0.0, 1.0])
+    }
+
+    func testWorldEntityRecordApplyMaterialBaseColorFromEvent() {
+        var record = WorldEntityRecord(ref: "scene:3", name: "Cube")
+        record.apply(property: "materialBaseColor", value: .vec4(0.2, 0.4, 0.6, 1.0))
+        XCTAssertEqual(record.materialBaseColor, [0.2, 0.4, 0.6, 1.0])
+    }
+
     // MARK: - tagEntity perception integration
 
     func testTagEntityAppliesInferredEventsToWorldView() async throws {

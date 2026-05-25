@@ -1112,10 +1112,16 @@ public struct TransactionExecutor {
                     ref: "scene:\(entityID)", property: "meshIsVisible",
                     value: .bool(isVisible)))
 
-            case let .setRenderMaterialComponent(entityID, baseColorFactor, _, _, _):
-                events.append(.entityAuthoredChanged(
-                    ref: "scene:\(entityID)", property: "renderMaterial",
-                    value: .vec3(baseColorFactor.x, baseColorFactor.y, baseColorFactor.z)))
+            case let .setRenderMaterialComponent(entityID, baseColorFactor, metallicFactor, roughnessFactor, emissiveFactor):
+                let ref = "scene:\(entityID)"
+                events.append(.entityAuthoredChanged(ref: ref, property: "materialBaseColor",
+                    value: .vec4(baseColorFactor.x, baseColorFactor.y, baseColorFactor.z, baseColorFactor.w)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "materialMetallic",
+                    value: .float(metallicFactor)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "materialRoughness",
+                    value: .float(roughnessFactor)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "materialEmissive",
+                    value: .vec3(emissiveFactor.x, emissiveFactor.y, emissiveFactor.z)))
 
             case let .setLightType(entityID, type):
                 events.append(.entityAuthoredChanged(
