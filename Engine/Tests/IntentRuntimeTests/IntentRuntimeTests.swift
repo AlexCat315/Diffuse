@@ -1246,6 +1246,51 @@ struct UndoStackTests {
         #expect(event != nil, "setConstraintEnabled must emit constraintEnabled authored world event")
     }
 
+    @Test("setRenderMaterialComponent emits four PBR material authored world events")
+    func setRenderMaterialComponentEmitsWorldEvents() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(RenderMaterialComponent(), for: entity)
+        let transaction = TransactionIR(
+            summary: "Set PBR material",
+            operations: [
+                .scene(.setRenderMaterialComponent(
+                    entityID: entity.rawValue,
+                    baseColorFactor: SIMD4<Float>(0.8, 0.2, 0.1, 1.0),
+                    metallicFactor: 0.9,
+                    roughnessFactor: 0.3,
+                    emissiveFactor: SIMD3<Float>(0.0, 0.5, 0.0)
+                )),
+            ],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let baseColorEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "materialBaseColor", .vec4(0.8, 0.2, 0.1, 1.0)) = $0 { return true }
+            return false
+        }
+        let metallicEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "materialMetallic", .float(0.9)) = $0 { return true }
+            return false
+        }
+        let roughnessEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "materialRoughness", .float(0.3)) = $0 { return true }
+            return false
+        }
+        let emissiveEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "materialEmissive", .vec3(0.0, 0.5, 0.0)) = $0 { return true }
+            return false
+        }
+        #expect(baseColorEvent != nil, "setRenderMaterialComponent must emit materialBaseColor authored event")
+        #expect(metallicEvent != nil, "setRenderMaterialComponent must emit materialMetallic authored event")
+        #expect(roughnessEvent != nil, "setRenderMaterialComponent must emit materialRoughness authored event")
+        #expect(emissiveEvent != nil, "setRenderMaterialComponent must emit materialEmissive authored event")
+    }
+
     @Test("ring buffer discards oldest entry when capacity is exceeded")
     func ringBufferEvictsOldest() {
         let stack = UndoStack(capacity: 3)
