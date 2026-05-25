@@ -113,12 +113,16 @@ public struct SceneSemanticEncoder: Sendable {
             var colliderFriction: Float?
             var colliderRestitution: Float?
             var colliderDensity: Float?
+            var colliderLayerID: Int?
+            var colliderLayerMask: Int?
             if let col = scene.component(Collider.self, for: entity) {
                 colliderShape = col.shape.kind.rawValue
                 colliderIsTrigger = col.isTrigger
                 colliderFriction = col.material.friction
                 colliderRestitution = col.material.restitution
                 colliderDensity = col.material.density
+                colliderLayerID = Int(col.layerID)
+                colliderLayerMask = Int(col.layerMask)
             }
 
             var audioClip: String?
@@ -191,6 +195,8 @@ public struct SceneSemanticEncoder: Sendable {
                 colliderFriction: colliderFriction,
                 colliderRestitution: colliderRestitution,
                 colliderDensity: colliderDensity,
+                colliderLayerID: colliderLayerID,
+                colliderLayerMask: colliderLayerMask,
                 audioClip: audioClip,
                 audioVolume: audioVolume,
                 audioLoop: audioLoop,
