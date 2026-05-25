@@ -1275,6 +1275,43 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(hasSpawn, "spawn_entity must produce spawnImportedMeshEntity mutation with correct label and position")
     }
 
+    func testDuplicateEntityExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"dup","steps":[{"op":"duplicate_entity","entity_id":"\(ref)"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasDup = ops.contains { if case .duplicateEntity(entity.rawValue) = $0 { return true }; return false }
+        XCTAssertTrue(hasDup, "duplicate_entity must produce duplicateEntity mutation")
+    }
+
+    func testReparentEntityToRootExecutorProducesMoveEntityMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"reparent","steps":[{"op":"reparent_entity","entity_id":"\(ref)"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasMove = ops.contains {
+            if case let .moveEntity(eid, parentID, _) = $0 {
+                return eid == entity.rawValue && parentID == nil
+            }
+            return false
+        }
+        XCTAssertTrue(hasMove, "reparent_entity with no parent_id must produce moveEntity(parentID: nil)")
+    }
+
     func testExecutorThrowsUnknownColliderShape() throws {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
