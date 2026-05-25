@@ -10,13 +10,41 @@ struct CapabilityRuntimeTests {
     func defaultRegistryCoversBuiltinVerbs() {
         let registry = CapabilityRegistry.default
         let requiredVerbs = [
+            // Core scene
             "scene.spawn_entity",
             "scene.set_name",
             "scene.duplicate_entity",
+            "scene.reparent_entity",
             "scene.delete_entity",
             "scene.set_transform",
             "scene.snap_to_ground",
+            // Camera
             "scene.set_camera_pose",
+            "scene.set_camera_fov",
+            "scene.set_camera_active",
+            // Light
+            "scene.set_light_type",
+            "scene.set_light_color",
+            "scene.set_light_intensity",
+            "scene.set_light_cast_shadows",
+            // Mesh / animation
+            "scene.set_mesh_color",
+            "scene.set_mesh_visibility",
+            "scene.set_animation_player",
+            // Audio / script
+            "scene.set_audio_source",
+            "scene.set_script_bindings",
+            "scene.set_script_property",
+            // Collider
+            "scene.set_collider",
+            "scene.set_collider_layer",
+            "scene.set_constraint_enabled",
+            // Rigid body
+            "scene.set_rigid_body_motion_type",
+            "scene.set_rigid_body_mass",
+            // Asset / sequence
+            "asset.scan_project",
+            "sequence.replace_document",
         ]
         for verb in requiredVerbs {
             #expect(registry.descriptor(for: verb) != nil, "missing verb: \(verb)")
