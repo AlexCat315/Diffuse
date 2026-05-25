@@ -1293,6 +1293,8 @@ public final class EditorApplication: @unchecked Sendable {
             return mcpExecutePlan(params: params)
         case "analyze_image":
             return mcpAnalyzeImage(params: params)
+        case "get_context_memory":
+            return mcpGetContextMemory(params: params)
         case "get_ai_entity":
             return mcpGetAIEntity(params: params)
         case "get_selection":
@@ -1424,6 +1426,24 @@ public final class EditorApplication: @unchecked Sendable {
             return ["ok": false, "error": "perception timed out"]
         }
         return state.result
+    }
+
+    private func mcpGetContextMemory(params: [String: Any]) -> [String: Any] {
+        guard let store = contextMemoryStore else {
+            return ["ok": false, "error": "context memory is not configured for this project"]
+        }
+        let budget = params["budget"] as? Int ?? 20
+        let semaphore = DispatchSemaphore(value: 0)
+        final class State: @unchecked Sendable { var view: [[String: String]] = [] }
+        let state = State()
+        Task {
+            state.view = await store.symbolicView(budget: budget)
+            semaphore.signal()
+        }
+        guard semaphore.wait(timeout: .now() + 3) == .success else {
+            return ["ok": false, "error": "context memory read timed out"]
+        }
+        return ["ok": true, "entries": state.view, "count": state.view.count]
     }
 
     private func mcpGetAIEntity(params: [String: Any]) -> [String: Any] {
