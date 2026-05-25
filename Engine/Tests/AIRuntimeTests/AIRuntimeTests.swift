@@ -1,6 +1,7 @@
 @testable import AIRuntime
 import IntentRuntime
 import SceneRuntime
+import simd
 import XCTest
 
 final class AIRuntimeTests: XCTestCase {
@@ -222,6 +223,45 @@ final class AIRuntimeTests: XCTestCase {
         worldView.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [entity]))
 
         XCTAssertNil(worldView.entityIndex["scene:31"]?.evaluated["worldEulerDegrees"])
+    }
+
+    func testSnapshotWorldScaleCopiedToEvaluatedDict() {
+        let entity = SceneSemanticSnapshot.Entity(
+            id: "scene:32",
+            name: "BigBox",
+            kind: "mesh",
+            parentRef: nil,
+            childRefs: [],
+            isSelected: false,
+            position: [0, 0, 0],
+            worldScale: [2, 3, 4],
+            components: ["transform", "mesh"]
+        )
+        var worldView = WorldView()
+        worldView.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [entity]))
+
+        XCTAssertEqual(
+            worldView.entityIndex["scene:32"]?.evaluated["worldScale"],
+            .vec3(2, 3, 4)
+        )
+    }
+
+    func testSnapshotWithoutWorldScaleLeavesEvaluatedEmpty() {
+        let entity = SceneSemanticSnapshot.Entity(
+            id: "scene:33",
+            name: "Unit",
+            kind: "mesh",
+            parentRef: nil,
+            childRefs: [],
+            isSelected: false,
+            position: [0, 0, 0],
+            worldScale: nil,
+            components: ["transform", "mesh"]
+        )
+        var worldView = WorldView()
+        worldView.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [entity]))
+
+        XCTAssertNil(worldView.entityIndex["scene:33"]?.evaluated["worldScale"])
     }
 
     func testSnapshotScriptBindingsCopiedToEntityRecord() {
@@ -601,6 +641,37 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(record?.colliderLayerMask, 63)
     }
 
+    // MARK: - worldScale encoder
+
+    func testSceneSemanticEncoderSurfacesWorldScaleForScaledEntity() {
+        var scene = SceneRuntime()
+        let parent = scene.createEntity()
+        _ = scene.setComponent(LocalTransform(matrix: scaledMatrix(2, 3, 4)), for: parent)
+
+        let child = scene.createEntity()
+        scene.setParent(parent, for: child)
+        _ = scene.setComponent(LocalTransform(translation: .zero), for: child)
+
+        let snapshot = SceneSemanticEncoder().encode(scene, selectedEntityID: nil,
+                                                     workspaceMode: "default",
+                                                     localeIdentifier: nil)
+        let parentRecord = snapshot.entities.first { $0.id == "scene:\(parent.rawValue)" }
+        XCTAssertNotNil(parentRecord?.worldScale)
+        if let ws = parentRecord?.worldScale {
+            XCTAssertEqual(ws[0], 2, accuracy: 0.001)
+            XCTAssertEqual(ws[1], 3, accuracy: 0.001)
+            XCTAssertEqual(ws[2], 4, accuracy: 0.001)
+        }
+        // Child inherits parent scale; worldScale should also be [2,3,4].
+        let childRecord = snapshot.entities.first { $0.id == "scene:\(child.rawValue)" }
+        XCTAssertNotNil(childRecord?.worldScale)
+        if let ws = childRecord?.worldScale {
+            XCTAssertEqual(ws[0], 2, accuracy: 0.001)
+            XCTAssertEqual(ws[1], 3, accuracy: 0.001)
+            XCTAssertEqual(ws[2], 4, accuracy: 0.001)
+        }
+    }
+
     // MARK: - AIWorldContext SnapshotProvider
 
     func testAIWorldContextMaterializesSnapshot() async throws {
@@ -633,6 +704,16 @@ final class AIRuntimeTests: XCTestCase {
         await context.observe(event: .entityAdded(ref: "scene:1", name: "A", kind: "mesh"))
         let (_, cursor2) = try await context.materializeSnapshot(scope: "scene")
         XCTAssertLessThan(cursor1.seq, cursor2.seq)
+    }
+
+    // MARK: - Helpers
+
+    private func scaledMatrix(_ sx: Float, _ sy: Float, _ sz: Float) -> simd_float4x4 {
+        var m = matrix_identity_float4x4
+        m.columns.0.x = sx
+        m.columns.1.y = sy
+        m.columns.2.z = sz
+        return m
     }
 
     func testAIWorldContextEvictsOldestSnapshotAtLimit() async throws {

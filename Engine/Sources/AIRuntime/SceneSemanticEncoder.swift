@@ -37,6 +37,7 @@ public struct SceneSemanticEncoder: Sendable {
             var eulerDegrees: [Float]?
             var worldPosition: [Float]?
             var worldEulerDegrees: [Float]?
+            var worldScale: [Float]?
             if let lt = scene.localTransform(for: entity) {
                 let t = lt.translation
                 position = [t.x, t.y, t.z]
@@ -51,6 +52,9 @@ public struct SceneSemanticEncoder: Sendable {
                 let we = extractEulerXYZDegrees(wm)
                 let isZeroWorldRot = abs(we.x) < 0.01 && abs(we.y) < 0.01 && abs(we.z) < 0.01
                 if !isZeroWorldRot { worldEulerDegrees = [we.x, we.y, we.z] }
+                let ws = extractScale(wm)
+                let isWorldUniformOne = abs(ws.x - 1) < 0.0001 && abs(ws.y - 1) < 0.0001 && abs(ws.z - 1) < 0.0001
+                if !isWorldUniformOne { worldScale = [ws.x, ws.y, ws.z] }
             }
 
             var components: [String] = []
@@ -175,6 +179,7 @@ public struct SceneSemanticEncoder: Sendable {
                 eulerDegrees: eulerDegrees,
                 worldPosition: worldPosition,
                 worldEulerDegrees: worldEulerDegrees,
+                worldScale: worldScale,
                 components: components,
                 lightType: lightType,
                 lightIntensity: lightIntensity,
