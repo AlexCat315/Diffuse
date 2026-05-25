@@ -26,6 +26,7 @@ let package = Package(
         .library(name: "IntentRuntime", targets: ["IntentRuntime"]),
         .library(name: "PerceptionRuntime", targets: ["PerceptionRuntime"]),
         .library(name: "AIRuntime", targets: ["AIRuntime"]),
+        .library(name: "ContextMemory", targets: ["ContextMemory"]),
         .library(name: "ScriptRuntime", targets: ["ScriptRuntime"]),
         .library(name: "SemanticPipeline", targets: ["SemanticPipeline"]),
         .library(name: "EngineCore", targets: ["EngineCore"]),
@@ -265,6 +266,10 @@ let package = Package(
             ]
         ),
         .target(
+            name: "ContextMemory",
+            dependencies: ["IntentRuntime"]
+        ),
+        .target(
             name: "PerceptionRuntime",
             dependencies: [
                 "IntentRuntime",
@@ -444,6 +449,13 @@ let package = Package(
             name: "AIRuntimeTests",
             dependencies: [
                 "AIRuntime",
+                "IntentRuntime",
+            ]
+        ),
+        .testTarget(
+            name: "ContextMemoryTests",
+            dependencies: [
+                "ContextMemory",
                 "IntentRuntime",
             ]
         ),
