@@ -294,6 +294,74 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(r?.scriptBindings?.first?.parametersJSON, "{\"speed\":5}")
     }
 
+    func testWorldEntityRecordApplyLightPropertiesFromEvents() {
+        var worldView = WorldView()
+        worldView.apply(event: .entityAdded(ref: "scene:L", name: "Sun", kind: "light"))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:L", property: "lightType", value: .string("directional")))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:L", property: "lightIntensity", value: .float(1200)))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:L", property: "lightColor", value: .vec3(1, 0.95, 0.8)))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:L", property: "lightRange", value: .float(50)))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:L", property: "lightSpotInner", value: .float(15)))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:L", property: "lightSpotOuter", value: .float(30)))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:L", property: "lightCastShadows", value: .bool(true)))
+
+        let r = worldView.entityIndex["scene:L"]
+        XCTAssertEqual(r?.lightType, "directional")
+        XCTAssertEqual(r?.lightIntensity, 1200)
+        XCTAssertEqual(r?.lightColor, [1, 0.95, 0.8])
+        XCTAssertEqual(r?.lightRange, 50)
+        XCTAssertEqual(r?.lightSpotInner, 15)
+        XCTAssertEqual(r?.lightSpotOuter, 30)
+        XCTAssertEqual(r?.lightCastShadows, true)
+    }
+
+    func testWorldEntityRecordApplyColliderGranularFieldsFromEvents() {
+        var worldView = WorldView()
+        worldView.apply(event: .entityAdded(ref: "scene:C", name: "Box", kind: "mesh"))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:C", property: "colliderIsTrigger", value: .bool(true)))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:C", property: "colliderRestitution", value: .float(0.7)))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:C", property: "colliderDensity", value: .float(2.5)))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:C", property: "colliderLayerID", value: .float(4)))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:C", property: "colliderLayerMask", value: .float(255)))
+
+        let r = worldView.entityIndex["scene:C"]
+        XCTAssertEqual(r?.colliderIsTrigger, true)
+        XCTAssertEqual(r?.colliderRestitution, 0.7)
+        XCTAssertEqual(r?.colliderDensity, 2.5)
+        XCTAssertEqual(r?.colliderLayerID, 4)
+        XCTAssertEqual(r?.colliderLayerMask, 255)
+    }
+
+    func testWorldEntityRecordApplyMeshAndAudioFromEvents() {
+        var worldView = WorldView()
+        worldView.apply(event: .entityAdded(ref: "scene:M", name: "Prop", kind: "mesh"))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:M", property: "meshIsVisible", value: .bool(false)))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:M", property: "meshColor", value: .vec3(0.2, 0.5, 1.0)))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:M", property: "audioVolume", value: .float(0.8)))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:M", property: "audioPlayOnAwake", value: .bool(false)))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:M", property: "rigidBodyMotionType", value: .string("kinematic")))
+
+        let r = worldView.entityIndex["scene:M"]
+        XCTAssertEqual(r?.meshIsVisible, false)
+        XCTAssertEqual(r?.meshColor, [0.2, 0.5, 1.0])
+        XCTAssertEqual(r?.audioVolume, 0.8)
+        XCTAssertEqual(r?.audioPlayOnAwake, false)
+        XCTAssertEqual(r?.rigidBodyMotionType, "kinematic")
+    }
+
+    func testWorldEntityRecordApplyRemainingMaterialFieldsFromEvents() {
+        var worldView = WorldView()
+        worldView.apply(event: .entityAdded(ref: "scene:X", name: "Metal", kind: "mesh"))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:X", property: "materialMetallic", value: .float(0.9)))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:X", property: "materialRoughness", value: .float(0.1)))
+        worldView.apply(event: .entityAuthoredChanged(ref: "scene:X", property: "materialEmissive", value: .vec3(0, 0.5, 1)))
+
+        let r = worldView.entityIndex["scene:X"]
+        XCTAssertEqual(r?.materialMetallic, 0.9)
+        XCTAssertEqual(r?.materialRoughness, 0.1)
+        XCTAssertEqual(r?.materialEmissive, [0, 0.5, 1])
+    }
+
     func testJSONValueDecoding() throws {
         struct Wrapper: Decodable { var value: JSONValue }
         let stringData = #"{"value":"hello"}"#.data(using: .utf8)!
