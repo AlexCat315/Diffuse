@@ -139,6 +139,55 @@ struct ContextMemoryTests {
         #expect(result.isEmpty)
     }
 
+    // MARK: - entityRenamedReducer
+
+    @Test("entityRenamedReducer updates name in entity_added entry")
+    func entityRenamedReducerUpdatesName() {
+        let existing: [String: ContextEntry] = [
+            "entity_added:scene:9": ContextEntry(
+                id: "entity_added:scene:9", kind: .sceneAnnotation,
+                subject: "scene:9", payload: ["name": "OldName", "ref": "scene:9"]),
+        ]
+        let mutations = entityRenamedReducer(
+            existing,
+            .entityAuthoredChanged(ref: "scene:9", property: "name", value: .string("NewName")))
+        let entries = upserts(from: mutations)
+        #expect(entries.count == 1)
+        #expect(entries[0].id == "entity_added:scene:9")
+        #expect(entries[0].payload["name"] == "NewName")
+    }
+
+    @Test("entityRenamedReducer does nothing when entity has no memory entry")
+    func entityRenamedReducerIgnoresMissingEntity() {
+        let result = entityRenamedReducer(
+            [:],
+            .entityAuthoredChanged(ref: "scene:99", property: "name", value: .string("X")))
+        #expect(result.isEmpty)
+    }
+
+    @Test("entityRenamedReducer ignores non-name property changes")
+    func entityRenamedReducerIgnoresOtherProperties() {
+        let existing: [String: ContextEntry] = [
+            "entity_added:scene:10": ContextEntry(
+                id: "entity_added:scene:10", kind: .sceneAnnotation,
+                subject: "scene:10", payload: [:]),
+        ]
+        let result = entityRenamedReducer(
+            existing,
+            .entityAuthoredChanged(ref: "scene:10", property: "position", value: .vec3(1, 2, 3)))
+        #expect(result.isEmpty)
+    }
+
+    @Test("store updates entity name in memory after rename event")
+    func storeUpdatesNameOnRenameEvent() async throws {
+        let store = try ContextMemoryStore()
+        await store.apply(event: .entityAdded(ref: "scene:15", name: "Initial", kind: nil))
+        await store.apply(event: .entityAuthoredChanged(ref: "scene:15", property: "name",
+                                                         value: .string("Renamed")))
+        let entry = await store.entry(id: "entity_added:scene:15")
+        #expect(entry?.payload["name"] == "Renamed")
+    }
+
     // MARK: - highConfidenceInferredReducer
 
     @Test("highConfidenceInferredReducer fires at exactly 0.8 confidence")
