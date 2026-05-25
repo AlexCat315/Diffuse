@@ -161,6 +161,30 @@ public struct SceneEditPlanExecutor: Sendable {
             }
             return [.setMeshColorTint(entityID: id, color: SIMD3(c[0], c[1], c[2]))]
 
+        case .setMaterial:
+            let id = try resolveEntityID(step, scene: scene)
+            let base: SIMD4<Float>
+            if let bc = step.materialBaseColor, bc.count == 4 {
+                base = SIMD4(bc[0], bc[1], bc[2], bc[3])
+            } else if let bc = step.materialBaseColor, bc.count == 3 {
+                base = SIMD4(bc[0], bc[1], bc[2], 1.0)
+            } else {
+                base = SIMD4(1, 1, 1, 1)
+            }
+            let metallic   = step.materialMetallic  ?? 0.0
+            let roughness  = step.materialRoughness ?? 0.5
+            let em: SIMD3<Float>
+            if let e = step.materialEmissive, e.count >= 3 {
+                em = SIMD3(e[0], e[1], e[2])
+            } else {
+                em = .zero
+            }
+            return [.setRenderMaterialComponent(entityID: id,
+                                                baseColorFactor: base,
+                                                metallicFactor: metallic,
+                                                roughnessFactor: roughness,
+                                                emissiveFactor: em)]
+
         case .setLightColor:
             let id = try resolveEntityID(step, scene: scene)
             guard let c = step.color, c.count == 3 else {
@@ -190,6 +214,11 @@ public struct SceneEditPlanExecutor: Sendable {
             }
             return result
 
+        case .setLightCastShadows:
+            let id = try resolveEntityID(step, scene: scene)
+            let cast = step.lightCastShadows ?? false
+            return [.setLightCastShadows(entityID: id, value: cast)]
+
         case .setCameraPose:
             let id = try resolveEntityID(step, scene: scene)
             let pos = simd3(step.position) ?? .zero
@@ -197,6 +226,18 @@ public struct SceneEditPlanExecutor: Sendable {
             let up = simd3(step.cameraUp) ?? SIMD3<Float>(0, 1, 0)
             let transform = LocalTransform(translation: pos)
             return [.setCameraPose(entityID: id, localTransform: transform, target: target, up: up)]
+
+        case .setCameraFOV:
+            let id = try resolveEntityID(step, scene: scene)
+            guard let fov = step.cameraFovYDegrees else {
+                throw SceneEditPlanExecutorError.missingField(op: step.op, field: "camera_fov_y")
+            }
+            return [.setCameraFOV(entityID: id, fovYDegrees: fov)]
+
+        case .setCameraActive:
+            let id = try resolveEntityID(step, scene: scene)
+            let active = step.cameraIsActive ?? true
+            return [.setCameraActive(entityID: id, isActive: active)]
 
         case .setRigidBodyMotion:
             let id = try resolveEntityID(step, scene: scene)
@@ -228,6 +269,21 @@ public struct SceneEditPlanExecutor: Sendable {
                 throw SceneEditPlanExecutorError.missingField(op: step.op, field: "is_trigger")
             }
             return [.setColliderTrigger(entityID: id, value: v)]
+
+        case .setColliderLayer:
+            let id = try resolveEntityID(step, scene: scene)
+            var result: [SceneMutation] = []
+            if let layerID = step.colliderLayerID {
+                result.append(.setColliderLayer(entityID: id, layerID: UInt16(clamping: layerID)))
+            }
+            if let mask = step.colliderLayerMask {
+                result.append(.setColliderLayerMask(entityID: id, layerMask: UInt16(clamping: mask)))
+            }
+            if result.isEmpty {
+                throw SceneEditPlanExecutorError.missingField(op: step.op,
+                                                               field: "collider_layer_id or collider_layer_mask")
+            }
+            return result
 
         case .setConstraintEnabled:
             let id = try resolveEntityID(step, scene: scene)
@@ -305,6 +361,25 @@ public struct SceneEditPlanExecutor: Sendable {
             if let poa   = step.audioPlayOnAwake  { source.playOnAwake = poa }
             if let blend = step.audioSpatialBlend { source.spatialBlend = blend }
             return [.setAudioSource(entityID: id, source: source)]
+
+        case .setMeshVisibility:
+            let id = try resolveEntityID(step, scene: scene)
+            guard let v = step.isVisible else {
+                throw SceneEditPlanExecutorError.missingField(op: step.op, field: "is_visible")
+            }
+            return [.setRenderMeshVisibility(entityID: id, isVisible: v)]
+
+        case .setAnimationPlayer:
+            let id = try resolveEntityID(step, scene: scene)
+            let eid = entityID(fromRaw: id)
+            var player = scene.component(AnimationPlayer.self, for: eid) ?? AnimationPlayer()
+            if let clip    = step.animationClip     { player.clipName = clip.isEmpty ? nil : clip }
+            if let speed   = step.animationSpeed    { player.speed = speed }
+            if let loop    = step.animationLoop     { player.loop = loop }
+            if let playing = step.animationIsPlaying { player.isPlaying = playing }
+            return [.setAnimationPlayer(entityID: id, clipName: player.clipName,
+                                        speed: player.speed, loop: player.loop,
+                                        isPlaying: player.isPlaying)]
 
         case .setScriptProperty:
             let id = try resolveEntityID(step, scene: scene)

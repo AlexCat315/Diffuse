@@ -107,17 +107,21 @@ let toolExecuteEditPlan: [String: Any] = [
                         "op": ["type": "string",
                                "enum": ["spawn_entity","delete_entity","duplicate_entity","set_name",
                                         "reparent_entity","set_transform","snap_to_ground",
-                                        "set_mesh_color",
+                                        "set_mesh_color","set_material",
                                         "set_light_type","set_light_intensity","set_light_color",
                                         "set_light_range","set_light_spot_angles",
-                                        "set_camera_pose",
+                                        "set_light_cast_shadows",
+                                        "set_camera_pose","set_camera_fov","set_camera_active",
                                         "set_rigidbody_motion","set_rigidbody_mass","set_rigidbody_gravity",
                                         "set_rigidbody_allow_sleep",
-                                        "set_collider_trigger","set_constraint_enabled",
+                                        "set_collider_trigger","set_collider_layer","set_constraint_enabled",
                                         "set_collider_shape",
                                         "set_collider_box_extents","set_collider_sphere_radius","set_collider_capsule",
                                         "set_collider_material",
-                                        "set_audio_source"],
+                                        "set_audio_source",
+                                        "set_script_property",
+                                        "set_mesh_visibility",
+                                        "set_animation_player"],
                                "description": "The mutation op to perform."] as [String: Any],
                         "entity_id": ["type": "string", "description": "Target entity 'scene:<number>'. Required for all ops except spawn_entity."] as [String: Any],
                         "parent_id": ["type": "string", "description": "New parent 'scene:<number>' for reparent_entity. Omit for root."] as [String: Any],
@@ -133,6 +137,9 @@ let toolExecuteEditPlan: [String: Any] = [
                         "range": ["type": "number"] as [String: Any],
                         "spot_inner_angle": ["type": "number"] as [String: Any],
                         "spot_outer_angle": ["type": "number"] as [String: Any],
+                        "light_cast_shadows": ["type": "boolean", "description": "Whether the light casts shadows for set_light_cast_shadows."] as [String: Any],
+                        "camera_fov_y": ["type": "number", "description": "Vertical FOV in degrees (1–179) for set_camera_fov. 30=telephoto 50=normal 75=wide."] as [String: Any],
+                        "camera_is_active": ["type": "boolean", "description": "Whether this camera is the active render camera for set_camera_active."] as [String: Any],
                         "motion_type": ["type": "string", "enum": ["static","dynamic","kinematic"]] as [String: Any],
                         "mass": ["type": "number"] as [String: Any],
                         "gravity_scale": ["type": "number"] as [String: Any],
@@ -148,12 +155,28 @@ let toolExecuteEditPlan: [String: Any] = [
                         "density": ["type": "number", "description": "Collider material density for set_collider_material."] as [String: Any],
                         "is_trigger": ["type": "boolean"] as [String: Any],
                         "is_enabled": ["type": "boolean"] as [String: Any],
+                        "collider_layer_id": ["type": "integer", "description": "Physics layer the collider occupies (0–15) for set_collider_layer."] as [String: Any],
+                        "collider_layer_mask": ["type": "integer", "description": "Bitmask of layers this collider interacts with (e.g. 65535=all) for set_collider_layer."] as [String: Any],
                         "audio_clip": ["type": "string", "description": "Audio clip asset name (no extension) for set_audio_source."] as [String: Any],
                         "audio_volume": ["type": "number", "description": "Playback volume 0–1 for set_audio_source."] as [String: Any],
                         "audio_pitch": ["type": "number", "description": "Pitch multiplier (1=normal) for set_audio_source."] as [String: Any],
                         "audio_loop": ["type": "boolean", "description": "Whether the clip loops for set_audio_source."] as [String: Any],
                         "audio_play_on_awake": ["type": "boolean", "description": "Auto-play when simulation starts for set_audio_source."] as [String: Any],
                         "audio_spatial_blend": ["type": "number", "description": "0=2D, 1=3D positional for set_audio_source."] as [String: Any],
+                        "script_index": ["type": "integer", "description": "Zero-based index of the script component on the entity for set_script_property."] as [String: Any],
+                        "script_property_name": ["type": "string", "description": "Exported property name to set for set_script_property."] as [String: Any],
+                        "script_property_value": ["description": "Value to set (string, number, or boolean) for set_script_property."] as [String: Any],
+                        "is_visible": ["type": "boolean", "description": "Mesh visibility toggle for set_mesh_visibility."] as [String: Any],
+                        "material_base_color": ["type": "array", "items": ["type": "number"] as [String: Any],
+                                                "description": "[r,g,b,a] linear 0-1 base colour for set_material. Omit to leave unchanged."] as [String: Any],
+                        "material_metallic": ["type": "number", "description": "Metallic factor 0–1 for set_material. Omit to leave unchanged."] as [String: Any],
+                        "material_roughness": ["type": "number", "description": "Roughness factor 0–1 for set_material. Omit to leave unchanged."] as [String: Any],
+                        "material_emissive": ["type": "array", "items": ["type": "number"] as [String: Any],
+                                              "description": "[r,g,b] linear 0-1 emission colour for set_material. Omit for no emission."] as [String: Any],
+                        "animation_clip": ["type": "string", "description": "Animation clip asset name for set_animation_player."] as [String: Any],
+                        "animation_speed": ["type": "number", "description": "Playback speed multiplier (1=normal) for set_animation_player."] as [String: Any],
+                        "animation_loop": ["type": "boolean", "description": "Whether the animation loops for set_animation_player."] as [String: Any],
+                        "animation_is_playing": ["type": "boolean", "description": "Whether to start/stop playback for set_animation_player."] as [String: Any],
                     ] as [String: Any],
                 ] as [String: Any],
             ] as [String: Any],
@@ -185,6 +208,18 @@ let toolGetAIEntity: [String: Any] = [
     ] as [String: Any],
 ]
 
+let toolSelectEntity: [String: Any] = [
+    "name": "select_entity",
+    "description": "Sets the active selection in the Guava editor to the specified entity. Pass null entity_id to clear the selection.",
+    "inputSchema": [
+        "type": "object",
+        "properties": [
+            "entity_id": ["type": "string",
+                          "description": "Entity ref to select, e.g. 'scene:123'. Omit or pass null to clear selection."] as [String: Any],
+        ] as [String: Any],
+    ] as [String: Any],
+]
+
 let toolSetPlaybackState: [String: Any] = [
     "name": "set_playback_state",
     "description": "Controls the physics simulation playback state in the Guava editor. 'playing' starts the simulation (snapshots the scene first), 'paused' freezes it without losing state, 'stopped' stops and restores the original scene.",
@@ -199,6 +234,24 @@ let toolSetPlaybackState: [String: Any] = [
     ] as [String: Any],
 ]
 
+let toolUndo: [String: Any] = [
+    "name": "undo",
+    "description": "Reverts the most recent scene edit in the Guava editor. Returns ok=true and applied=true when an undo was available, applied=false when the history is empty.",
+    "inputSchema": [
+        "type": "object",
+        "properties": [:] as [String: Any],
+    ] as [String: Any],
+]
+
+let toolRedo: [String: Any] = [
+    "name": "redo",
+    "description": "Re-applies the most recently undone scene edit in the Guava editor. Returns ok=true and applied=true when a redo was available, applied=false when the redo stack is empty.",
+    "inputSchema": [
+        "type": "object",
+        "properties": [:] as [String: Any],
+    ] as [String: Any],
+]
+
 let toolAnalyzeImage: [String: Any] = [
     "name": "analyze_image",
     "description": "Runs Guava Perception Runtime on a local image file and writes inferred semantic observations to the selected or specified scene entity. Uses the editor's local system perception worker.",
@@ -210,8 +263,23 @@ let toolAnalyzeImage: [String: Any] = [
                            "description": "Absolute path to a local image file readable by the editor."] as [String: Any],
             "entity_id": ["type": "string",
                           "description": "Optional target entity ref such as 'scene:123'. Defaults to the current selection."] as [String: Any],
+            "task": ["type": "string",
+                     "enum": ["classification", "object_detection", "image_embedding"],
+                     "description": "Perception task to run. 'classification' labels what is in the image; 'object_detection' finds bounding boxes; 'image_embedding' stores a vector for similarity search. Defaults to 'classification'."] as [String: Any],
             "max_results": ["type": "integer",
-                            "description": "Maximum classification observations to return. Defaults to 5."] as [String: Any],
+                            "description": "Maximum observations to return. Defaults to 5."] as [String: Any],
+        ] as [String: Any],
+    ] as [String: Any],
+]
+
+let toolGetContextMemory: [String: Any] = [
+    "name": "get_context_memory",
+    "description": "Returns the top entries from Guava's long-term AI context memory for the current project. Entries include past edit summaries, scene annotations, user preferences, outstanding issues, and session summaries.",
+    "inputSchema": [
+        "type": "object",
+        "properties": [
+            "budget": ["type": "integer",
+                       "description": "Maximum number of entries to return, ranked by importance. Defaults to 20."] as [String: Any],
         ] as [String: Any],
     ] as [String: Any],
 ]
@@ -270,7 +338,7 @@ func handle(_ msg: [String: Any]) {
         writeResponse([
             "jsonrpc": "2.0",
             "id": id as Any,
-            "result": ["tools": [toolGetScene, toolGetSelection, toolGetAIEntity, toolExecuteEditPlan, toolSetPlaybackState, toolAnalyzeImage]] as [String: Any],
+            "result": ["tools": [toolGetScene, toolGetSelection, toolSelectEntity, toolGetAIEntity, toolExecuteEditPlan, toolSetPlaybackState, toolAnalyzeImage, toolGetContextMemory, toolUndo, toolRedo]] as [String: Any],
         ])
 
     case "tools/call":
@@ -294,6 +362,19 @@ func handle(_ msg: [String: Any]) {
                 toolResult(id: id as Any, text: ref)
             } else {
                 toolResult(id: id as Any, text: res["error"] as? String ?? "unknown error", isError: true)
+            }
+
+        case "select_entity":
+            var request: [String: Any] = ["action": "select_entity"]
+            if let entityID = args["entity_id"] as? String {
+                request["entity_id"] = entityID
+            }
+            let selRes = editorCall(request)
+            if let ok = selRes["ok"] as? Bool, ok {
+                let ref = selRes["selectedRef"] as? String ?? "null"
+                toolResult(id: id as Any, text: "Selected: \(ref)")
+            } else {
+                toolResult(id: id as Any, text: selRes["error"] as? String ?? "unknown error", isError: true)
             }
 
         case "get_ai_entity":
@@ -334,12 +415,9 @@ func handle(_ msg: [String: Any]) {
                 break
             }
             var request: [String: Any] = ["action": "analyze_image", "image_path": imagePath]
-            if let entityID = args["entity_id"] as? String {
-                request["entity_id"] = entityID
-            }
-            if let maxResults = args["max_results"] as? Int {
-                request["max_results"] = maxResults
-            }
+            if let entityID = args["entity_id"] as? String { request["entity_id"] = entityID }
+            if let task = args["task"] as? String { request["task"] = task }
+            if let maxResults = args["max_results"] as? Int { request["max_results"] = maxResults }
             let res = editorCall(request)
             if let ok = res["ok"] as? Bool, ok,
                let responseData = try? JSONSerialization.data(withJSONObject: res, options: [.sortedKeys]),
@@ -348,6 +426,28 @@ func handle(_ msg: [String: Any]) {
             } else {
                 toolResult(id: id as Any, text: res["error"] as? String ?? "unknown error", isError: true)
             }
+
+        case "get_context_memory":
+            var request: [String: Any] = ["action": "get_context_memory"]
+            if let budget = args["budget"] as? Int { request["budget"] = budget }
+            let res = editorCall(request)
+            if let ok = res["ok"] as? Bool, ok,
+               let responseData = try? JSONSerialization.data(withJSONObject: res, options: [.sortedKeys]),
+               let responseText = String(data: responseData, encoding: .utf8) {
+                toolResult(id: id as Any, text: responseText)
+            } else {
+                toolResult(id: id as Any, text: res["error"] as? String ?? "unknown error", isError: true)
+            }
+
+        case "undo":
+            let res = editorCall(["action": "undo"])
+            let applied = res["applied"] as? Bool ?? false
+            toolResult(id: id as Any, text: applied ? "Undo applied." : "Nothing to undo.")
+
+        case "redo":
+            let res = editorCall(["action": "redo"])
+            let applied = res["applied"] as? Bool ?? false
+            toolResult(id: id as Any, text: applied ? "Redo applied." : "Nothing to redo.")
 
         default:
             errorResponse(id: id as Any, code: -32601, message: "unknown tool '\(name)'")

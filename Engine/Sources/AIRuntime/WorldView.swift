@@ -7,10 +7,11 @@ extension WorldPropertyValue {
     /// Human-readable string used when storing a WorldPropertyValue as an InferredProperty.
     var inferredDisplayValue: String {
         switch self {
-        case let .string(s): return s
-        case let .float(f):  return String(format: "%.4g", f)
-        case let .bool(b):   return b ? "true" : "false"
-        case let .vec3(x, y, z): return "(\(x), \(y), \(z))"
+        case let .string(s):          return s
+        case let .float(f):           return String(format: "%.4g", f)
+        case let .bool(b):            return b ? "true" : "false"
+        case let .vec3(x, y, z):      return "(\(x), \(y), \(z))"
+        case let .vec4(x, y, z, w):   return "(\(x), \(y), \(z), \(w))"
         }
     }
 }
@@ -60,11 +61,16 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     public var lightRange: Float?
     public var lightSpotInner: Float?
     public var lightSpotOuter: Float?
+    public var lightCastShadows: Bool?
     // Camera (authored)
     public var cameraFovYDegrees: Float?
     public var cameraIsActive: Bool?
     // Mesh (authored)
     public var meshColor: [Float]?           // [r, g, b] linear 0–1; nil = default white
+    // PBR material (authored) — nil = engine default
+    public var materialMetallic: Float?
+    public var materialRoughness: Float?
+    public var materialEmissive: [Float]?    // [r, g, b] linear 0–1
     // Physics — rigidbody (authored)
     public var rigidBodyMotionType: String?
     public var rigidBodyMass: Float?
@@ -76,11 +82,22 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     public var colliderFriction: Float?
     public var colliderRestitution: Float?
     public var colliderDensity: Float?
+    public var colliderLayerID: Int?
+    public var colliderLayerMask: Int?
     // Audio (authored)
     public var audioClip: String?
     public var audioVolume: Float?
     public var audioLoop: Bool?
     public var audioPlayOnAwake: Bool?
+    // Mesh visibility (authored) — nil means default true (visible)
+    public var meshIsVisible: Bool?
+    // Animation (authored)
+    public var animationClip: String?
+    public var animationSpeed: Float?
+    public var animationLoop: Bool?
+    public var animationIsPlaying: Bool?
+    // Constraint (authored)
+    public var constraintEnabled: Bool?
     // Script bindings (authored)
     public var scriptBindings: [SceneSemanticSnapshot.ScriptBindingRecord]?
     // Selection state (not authored — updated by selectionChanged events)
@@ -129,12 +146,20 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
             if case let .float(f) = value { lightSpotInner = f }
         case "lightSpotOuter":
             if case let .float(f) = value { lightSpotOuter = f }
+        case "lightCastShadows":
+            if case let .bool(b) = value { lightCastShadows = b }
         case "cameraFovYDegrees":
             if case let .float(f) = value { cameraFovYDegrees = f }
         case "cameraIsActive":
             if case let .bool(b) = value { cameraIsActive = b }
         case "meshColor":
             if case let .vec3(r, g, b) = value { meshColor = [r, g, b] }
+        case "materialMetallic":
+            if case let .float(f) = value { materialMetallic = f }
+        case "materialRoughness":
+            if case let .float(f) = value { materialRoughness = f }
+        case "materialEmissive":
+            if case let .vec3(r, g, b) = value { materialEmissive = [r, g, b] }
         case "rigidBodyMotionType":
             if case let .string(s) = value { rigidBodyMotionType = s }
         case "rigidBodyMass":
@@ -153,6 +178,10 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
             if case let .float(f) = value { colliderRestitution = f }
         case "colliderDensity":
             if case let .float(f) = value { colliderDensity = f }
+        case "colliderLayerID":
+            if case let .float(f) = value { colliderLayerID = Int(f) }
+        case "colliderLayerMask":
+            if case let .float(f) = value { colliderLayerMask = Int(f) }
         case "audioClip":
             if case let .string(s) = value { audioClip = s }
         case "audioVolume":
@@ -161,6 +190,18 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
             if case let .bool(b) = value { audioLoop = b }
         case "audioPlayOnAwake":
             if case let .bool(b) = value { audioPlayOnAwake = b }
+        case "meshIsVisible":
+            if case let .bool(b) = value { meshIsVisible = b }
+        case "animationClip":
+            if case let .string(s) = value { animationClip = s.isEmpty ? nil : s }
+        case "animationSpeed":
+            if case let .float(f) = value { animationSpeed = f }
+        case "animationLoop":
+            if case let .bool(b) = value { animationLoop = b }
+        case "animationIsPlaying":
+            if case let .bool(b) = value { animationIsPlaying = b }
+        case "constraintEnabled":
+            if case let .bool(b) = value { constraintEnabled = b }
         default:
             break
         }
@@ -270,9 +311,13 @@ public struct WorldView: Sendable {
             record.lightRange = e.lightRange
             record.lightSpotInner = e.lightSpotInner
             record.lightSpotOuter = e.lightSpotOuter
+            record.lightCastShadows = e.lightCastShadows
             record.cameraFovYDegrees = e.cameraFovYDegrees
             record.cameraIsActive = e.cameraIsActive
             record.meshColor = e.meshColor
+            record.materialMetallic = e.materialMetallic
+            record.materialRoughness = e.materialRoughness
+            record.materialEmissive = e.materialEmissive
             record.rigidBodyMotionType = e.rigidBodyMotionType
             record.rigidBodyMass = e.rigidBodyMass
             record.rigidBodyGravityScale = e.rigidBodyGravityScale
@@ -282,16 +327,27 @@ public struct WorldView: Sendable {
             record.colliderFriction = e.colliderFriction
             record.colliderRestitution = e.colliderRestitution
             record.colliderDensity = e.colliderDensity
+            record.colliderLayerID = e.colliderLayerID
+            record.colliderLayerMask = e.colliderLayerMask
             record.audioClip = e.audioClip
             record.audioVolume = e.audioVolume
             record.audioLoop = e.audioLoop
             record.audioPlayOnAwake = e.audioPlayOnAwake
+            record.meshIsVisible = e.meshIsVisible
+            record.animationClip = e.animationClip
+            record.animationSpeed = e.animationSpeed
+            record.animationLoop = e.animationLoop
+            record.animationIsPlaying = e.animationIsPlaying
             record.scriptBindings = e.scriptBindings
+            record.constraintEnabled = e.constraintEnabled
             if let wp = e.worldPosition {
                 record.evaluated["worldPosition"] = .vec3(wp[0], wp[1], wp[2])
             }
             if let we = e.worldEulerDegrees {
                 record.evaluated["worldEulerDegrees"] = .vec3(we[0], we[1], we[2])
+            }
+            if let ws = e.worldScale {
+                record.evaluated["worldScale"] = .vec3(ws[0], ws[1], ws[2])
             }
             entityIndex[e.id] = record
         }

@@ -25,6 +25,7 @@ let package = Package(
             dependencies: [
                 .product(name: "SIMDCompat", package: "Engine"),
                 .product(name: "AIRuntime", package: "Engine"),
+                .product(name: "ContextMemory", package: "Engine"),
                 .product(name: "AssetPipeline", package: "Engine"),
                 .product(name: "AudioRuntime", package: "Engine"),
                 .product(name: "CapabilityRuntime", package: "Engine"),
@@ -34,6 +35,7 @@ let package = Package(
                 .product(name: "IntentRuntime", package: "Engine"),
                 .product(name: "ObservationBus", package: "Engine"),
                 .product(name: "PerceptionRuntime", package: "Engine"),
+                .product(name: "SemanticPipeline", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
                 .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "SceneRuntime", package: "Engine"),

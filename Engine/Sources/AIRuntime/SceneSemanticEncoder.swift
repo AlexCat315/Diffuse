@@ -37,6 +37,7 @@ public struct SceneSemanticEncoder: Sendable {
             var eulerDegrees: [Float]?
             var worldPosition: [Float]?
             var worldEulerDegrees: [Float]?
+            var worldScale: [Float]?
             if let lt = scene.localTransform(for: entity) {
                 let t = lt.translation
                 position = [t.x, t.y, t.z]
@@ -51,6 +52,9 @@ public struct SceneSemanticEncoder: Sendable {
                 let we = extractEulerXYZDegrees(wm)
                 let isZeroWorldRot = abs(we.x) < 0.01 && abs(we.y) < 0.01 && abs(we.z) < 0.01
                 if !isZeroWorldRot { worldEulerDegrees = [we.x, we.y, we.z] }
+                let ws = extractScale(wm)
+                let isWorldUniformOne = abs(ws.x - 1) < 0.0001 && abs(ws.y - 1) < 0.0001 && abs(ws.z - 1) < 0.0001
+                if !isWorldUniformOne { worldScale = [ws.x, ws.y, ws.z] }
             }
 
             var components: [String] = []
@@ -61,7 +65,9 @@ public struct SceneSemanticEncoder: Sendable {
             if scene.hasComponent(RigidBody.self, for: entity)           { components.append("rigidbody") }
             if scene.hasComponent(Collider.self, for: entity)            { components.append("collider") }
             if scene.hasComponent(AudioSource.self, for: entity)         { components.append("audio_source") }
-            if scene.hasComponent(ScriptComponent.self, for: entity)    { components.append("script") }
+            if scene.hasComponent(AnimationPlayer.self, for: entity)     { components.append("animation") }
+            if scene.hasComponent(ScriptComponent.self, for: entity)     { components.append("script") }
+            if scene.hasComponent(Constraint.self, for: entity)          { components.append("constraint") }
 
             var lightType: String?
             var lightIntensity: Float?
@@ -69,6 +75,7 @@ public struct SceneSemanticEncoder: Sendable {
             var lightRange: Float?
             var lightSpotInner: Float?
             var lightSpotOuter: Float?
+            var lightCastShadows: Bool?
             if let lc = scene.component(LightComponent.self, for: entity) {
                 lightType = lc.type.rawValue
                 lightIntensity = lc.intensity
@@ -78,6 +85,7 @@ public struct SceneSemanticEncoder: Sendable {
                     lightSpotInner = lc.spotInnerAngleDegrees
                     lightSpotOuter = lc.spotOuterAngleDegrees
                 }
+                if lc.castShadows { lightCastShadows = true }
             }
 
             var cameraFovYDegrees: Float?
@@ -92,6 +100,18 @@ public struct SceneSemanticEncoder: Sendable {
                 let c = mesh.colorTint
                 let isWhite = abs(c.x - 1) < 0.001 && abs(c.y - 1) < 0.001 && abs(c.z - 1) < 0.001
                 if !isWhite { meshColor = [c.x, c.y, c.z] }
+            }
+
+            var materialMetallic: Float?
+            var materialRoughness: Float?
+            var materialEmissive: [Float]?
+            if let mat = scene.component(RenderMaterialComponent.self, for: entity) {
+                if mat.metallicFactor > 0.001 { materialMetallic = mat.metallicFactor }
+                if abs(mat.roughnessFactor - 1.0) > 0.001 { materialRoughness = mat.roughnessFactor }
+                let em = mat.emissiveFactor
+                if em.x > 0.001 || em.y > 0.001 || em.z > 0.001 {
+                    materialEmissive = [em.x, em.y, em.z]
+                }
             }
 
             var rigidBodyMotionType: String?
@@ -110,12 +130,16 @@ public struct SceneSemanticEncoder: Sendable {
             var colliderFriction: Float?
             var colliderRestitution: Float?
             var colliderDensity: Float?
+            var colliderLayerID: Int?
+            var colliderLayerMask: Int?
             if let col = scene.component(Collider.self, for: entity) {
                 colliderShape = col.shape.kind.rawValue
                 colliderIsTrigger = col.isTrigger
                 colliderFriction = col.material.friction
                 colliderRestitution = col.material.restitution
                 colliderDensity = col.material.density
+                colliderLayerID = Int(col.layerID)
+                colliderLayerMask = Int(col.layerMask)
             }
 
             var audioClip: String?
@@ -129,6 +153,22 @@ public struct SceneSemanticEncoder: Sendable {
                 audioPlayOnAwake = src.playOnAwake
             }
 
+            var meshIsVisible: Bool?
+            if let mesh = scene.component(RenderMeshComponent.self, for: entity), !mesh.isVisible {
+                meshIsVisible = false
+            }
+
+            var animationClip: String?
+            var animationSpeed: Float?
+            var animationLoop: Bool?
+            var animationIsPlaying: Bool?
+            if let anim = scene.component(AnimationPlayer.self, for: entity) {
+                animationClip = anim.clipName
+                if abs(anim.speed - 1.0) > 0.0001 { animationSpeed = anim.speed }
+                animationLoop = anim.loop
+                animationIsPlaying = anim.isPlaying
+            }
+
             var scriptBindings: [SceneSemanticSnapshot.ScriptBindingRecord]?
             if let sc = scene.component(ScriptComponent.self, for: entity), !sc.bindings.isEmpty {
                 scriptBindings = sc.bindings.map {
@@ -138,6 +178,11 @@ public struct SceneSemanticEncoder: Sendable {
                         parametersJSON: $0.parametersJSON
                     )
                 }
+            }
+
+            var constraintEnabled: Bool?
+            if let con = scene.component(Constraint.self, for: entity) {
+                constraintEnabled = con.isEnabled
             }
 
             records.append(SceneSemanticSnapshot.Entity(
@@ -152,6 +197,7 @@ public struct SceneSemanticEncoder: Sendable {
                 eulerDegrees: eulerDegrees,
                 worldPosition: worldPosition,
                 worldEulerDegrees: worldEulerDegrees,
+                worldScale: worldScale,
                 components: components,
                 lightType: lightType,
                 lightIntensity: lightIntensity,
@@ -159,9 +205,13 @@ public struct SceneSemanticEncoder: Sendable {
                 lightRange: lightRange,
                 lightSpotInner: lightSpotInner,
                 lightSpotOuter: lightSpotOuter,
+                lightCastShadows: lightCastShadows,
                 cameraFovYDegrees: cameraFovYDegrees,
                 cameraIsActive: cameraIsActive,
                 meshColor: meshColor,
+                materialMetallic: materialMetallic,
+                materialRoughness: materialRoughness,
+                materialEmissive: materialEmissive,
                 rigidBodyMotionType: rigidBodyMotionType,
                 rigidBodyMass: rigidBodyMass,
                 rigidBodyGravityScale: rigidBodyGravityScale,
@@ -171,11 +221,19 @@ public struct SceneSemanticEncoder: Sendable {
                 colliderFriction: colliderFriction,
                 colliderRestitution: colliderRestitution,
                 colliderDensity: colliderDensity,
+                colliderLayerID: colliderLayerID,
+                colliderLayerMask: colliderLayerMask,
                 audioClip: audioClip,
                 audioVolume: audioVolume,
                 audioLoop: audioLoop,
                 audioPlayOnAwake: audioPlayOnAwake,
-                scriptBindings: scriptBindings
+                meshIsVisible: meshIsVisible,
+                animationClip: animationClip,
+                animationSpeed: animationSpeed,
+                animationLoop: animationLoop,
+                animationIsPlaying: animationIsPlaying,
+                scriptBindings: scriptBindings,
+                constraintEnabled: constraintEnabled
             ))
         }
 

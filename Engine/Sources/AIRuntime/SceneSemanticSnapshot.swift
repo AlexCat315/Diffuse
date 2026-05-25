@@ -45,6 +45,10 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         /// `nil` if the entity has no `LocalTransform` or the world rotation is all-zero.
         public var worldEulerDegrees: [Float]? = nil  // [x, y, z]
 
+        /// Cumulative world-space scale, computed from the full parent hierarchy.
+        /// `nil` if the entity has no `LocalTransform` or the world scale is uniform [1, 1, 1].
+        public var worldScale: [Float]? = nil  // [x, y, z]
+
         /// Component type names present on this entity.
         /// Possible values: `"transform"`, `"mesh"`, `"light"`, `"camera"`, `"rigidbody"`, `"collider"`, `"script"`
         public var components: [String]
@@ -54,8 +58,9 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         public var lightIntensity: Float?
         public var lightColor: [Float]?        // [r, g, b] linear 0–1
         public var lightRange: Float?
-        public var lightSpotInner: Float? = nil  // degrees; non-nil only for spot lights
-        public var lightSpotOuter: Float? = nil  // degrees; non-nil only for spot lights
+        public var lightSpotInner: Float? = nil    // degrees; non-nil only for spot lights
+        public var lightSpotOuter: Float? = nil    // degrees; non-nil only for spot lights
+        public var lightCastShadows: Bool? = nil   // nil when false (omit to keep JSON compact)
 
         // Camera extras — non-nil only when `"camera"` ∈ components
         public var cameraFovYDegrees: Float?
@@ -63,6 +68,10 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
 
         // Mesh extras — non-nil only when `"mesh"` ∈ components and color is non-default
         public var meshColor: [Float]?         // [r, g, b] linear 0–1; nil = default white
+        // PBR material extras — nil = engine default
+        public var materialMetallic: Float? = nil    // 0–1; nil = 0 (dielectric)
+        public var materialRoughness: Float? = nil   // 0–1; nil = 0.5
+        public var materialEmissive: [Float]? = nil  // [r, g, b] linear 0–1; nil = no emission
 
         // Physics extras — non-nil only when `"rigidbody"` ∈ components
         public var rigidBodyMotionType: String? // "static" | "dynamic" | "kinematic"
@@ -76,6 +85,8 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         public var colliderFriction: Float?
         public var colliderRestitution: Float?
         public var colliderDensity: Float?
+        public var colliderLayerID: Int?        // physics layer (0–15)
+        public var colliderLayerMask: Int?      // bitmask of interacting layers
 
         // Audio extras — non-nil only when `"audio_source"` ∈ components
         public var audioClip: String?
@@ -83,8 +94,20 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         public var audioLoop: Bool?
         public var audioPlayOnAwake: Bool?
 
+        // Mesh visibility (authored) — nil means default true
+        public var meshIsVisible: Bool? = nil
+
+        // Animation extras — non-nil only when `"animation"` ∈ components
+        public var animationClip: String? = nil
+        public var animationSpeed: Float? = nil
+        public var animationLoop: Bool? = nil
+        public var animationIsPlaying: Bool? = nil
+
         // Script extras — non-nil only when `"script"` ∈ components
         public var scriptBindings: [ScriptBindingRecord]? = nil
+
+        // Constraint extras — non-nil only when `"constraint"` ∈ components
+        public var constraintEnabled: Bool? = nil   // nil means component absent
     }
 
     /// Compact snapshot of a single ScriptBinding for AI context.

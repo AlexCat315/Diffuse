@@ -1,6 +1,27 @@
 import Dispatch
 import Foundation
 
+// MARK: - Snapshot resync
+
+/// Cursor marking the position in a stream at which a snapshot was taken.
+public struct StreamCursor: Sendable, Equatable {
+    public var streamID: String
+    public var seq: UInt64
+
+    public init(streamID: String, seq: UInt64) {
+        self.streamID = streamID
+        self.seq = seq
+    }
+}
+
+/// A domain store implements this protocol to support §8 resync subscribers.
+/// `materializeSnapshot` must be idempotent and safe to call concurrently.
+public protocol SnapshotProvider: Sendable {
+    /// Capture the current domain state. Returns an opaque `snapshotID` (e.g. a UUID
+    /// or file path) and the event cursor that was current when the snapshot was taken.
+    func materializeSnapshot(scope: String) async throws -> (snapshotID: String, cursor: StreamCursor)
+}
+
 public enum SubscriptionDeliveryGuarantee: String, Sendable, Equatable {
     case atLeastOnce = "at_least_once"
     case bestEffort = "best_effort"
@@ -160,6 +181,8 @@ public final class ObservationBus: @unchecked Sendable {
     private var nextSeqByStream: [String: UInt64] = [:]
     private var eventsByStream: [String: [EventEnvelope]] = [:]
     private var subscriptions: [String: ObservationSubscription] = [:]
+    private var snapshotProviders: [String: any SnapshotProvider] = [:]
+    private var snapshotCursors: [String: StreamCursor] = [:]
 
     private let coldLog: ColdLog?
 
@@ -188,6 +211,42 @@ public final class ObservationBus: @unchecked Sendable {
         lock.lock()
         subscriptions.removeValue(forKey: subscriptionID)
         lock.unlock()
+    }
+
+    // MARK: - Snapshot resync (§8)
+
+    /// Register a snapshot provider for a given scope (e.g. "scene", "sequence").
+    public func registerSnapshotProvider(_ provider: some SnapshotProvider, forScope scope: String) {
+        lock.lock()
+        snapshotProviders[scope] = provider
+        lock.unlock()
+    }
+
+    /// Materialize a snapshot for `scope` and record its cursor so that subscribers
+    /// can use `.fromSnapshot(snapshotID)` to receive events after the snapshot point.
+    ///
+    /// Typical resync pattern:
+    /// ```swift
+    /// let (id, cursor) = try await bus.requestSnapshot(scope: "scene")
+    /// // … consume the snapshot via the provider …
+    /// let sub = bus.subscribe(spec: SubscriptionSpec(startFrom: .fromSnapshot(snapshotID: id)))
+    /// ```
+    public func requestSnapshot(scope: String) async throws -> (snapshotID: String, cursor: StreamCursor) {
+        // Read provider under lock — NSLock is not async-safe so we hold it only briefly.
+        let provider = withLock { snapshotProviders[scope] }
+        guard let provider else {
+            throw ObservationBusError.noSnapshotProvider(scope: scope)
+        }
+        let (snapshotID, cursor) = try await provider.materializeSnapshot(scope: scope)
+        withLock { snapshotCursors[snapshotID] = cursor }
+        return (snapshotID, cursor)
+    }
+
+    @discardableResult
+    private func withLock<T>(_ body: () -> T) -> T {
+        lock.lock()
+        defer { lock.unlock() }
+        return body()
     }
 
     public func publish(kind: EventKindID,
@@ -286,8 +345,10 @@ public final class ObservationBus: @unchecked Sendable {
             return []
         case let .fromSeq(streamID, seq):
             return (eventsByStream[streamID] ?? []).filter { $0.seq > seq && spec.filter.matches($0) }
-        case .fromSnapshot:
-            return []
+        case let .fromSnapshot(snapshotID):
+            guard let cursor = snapshotCursors[snapshotID] else { return [] }
+            return (eventsByStream[cursor.streamID] ?? [])
+                .filter { $0.seq > cursor.seq && spec.filter.matches($0) }
         }
     }
 }
