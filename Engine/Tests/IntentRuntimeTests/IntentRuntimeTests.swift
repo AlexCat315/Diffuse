@@ -1189,6 +1189,36 @@ struct UndoStackTests {
         #expect(shadowEvent != nil, "setLightCastShadows must emit lightCastShadows authored event")
     }
 
+    @Test("setColliderLayer and setColliderLayerMask emit colliderLayerID/Mask authored world events")
+    func setColliderLayerEmitsWorldEvents() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .box(halfExtents: .one, center: .zero)), for: entity)
+        let transaction = TransactionIR(
+            summary: "Set layer",
+            operations: [
+                .scene(.setColliderLayer(entityID: entity.rawValue, layerID: 3)),
+                .scene(.setColliderLayerMask(entityID: entity.rawValue, layerMask: 12)),
+            ],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let layerEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderLayerID", .float(3)) = $0 { return true }
+            return false
+        }
+        let maskEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderLayerMask", .float(12)) = $0 { return true }
+            return false
+        }
+        #expect(layerEvent != nil, "setColliderLayer must emit colliderLayerID authored event")
+        #expect(maskEvent != nil, "setColliderLayerMask must emit colliderLayerMask authored event")
+    }
+
     @Test("ring buffer discards oldest entry when capacity is exceeded")
     func ringBufferEvictsOldest() {
         let stack = UndoStack(capacity: 3)

@@ -610,6 +610,8 @@ public actor Session {
         if let v = e.colliderFriction     { d["colliderFriction"] = v }
         if let v = e.colliderRestitution  { d["colliderRestitution"] = v }
         if let v = e.colliderDensity      { d["colliderDensity"] = v }
+        if let v = e.colliderLayerID     { d["colliderLayerID"] = v }
+        if let v = e.colliderLayerMask   { d["colliderLayerMask"] = v }
         if let v = e.audioClip            { d["audioClip"] = v }
         if let v = e.audioVolume          { d["audioVolume"] = v }
         if let v = e.audioLoop            { d["audioLoop"] = v }

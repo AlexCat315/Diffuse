@@ -1206,6 +1206,14 @@ public struct TransactionExecutor {
                 events.append(.entityAuthoredChanged(ref: "scene:\(entityID)",
                     property: "colliderDensity", value: .float(max(0, density))))
 
+            case let .setColliderLayer(entityID, layerID):
+                events.append(.entityAuthoredChanged(ref: "scene:\(entityID)",
+                    property: "colliderLayerID", value: .float(Float(layerID))))
+
+            case let .setColliderLayerMask(entityID, layerMask):
+                events.append(.entityAuthoredChanged(ref: "scene:\(entityID)",
+                    property: "colliderLayerMask", value: .float(Float(layerMask))))
+
             case let .setAudioSource(entityID, source):
                 let ref = "scene:\(entityID)"
                 if !source.clipName.isEmpty {

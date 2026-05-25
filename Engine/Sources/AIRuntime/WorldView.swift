@@ -78,6 +78,8 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     public var colliderFriction: Float?
     public var colliderRestitution: Float?
     public var colliderDensity: Float?
+    public var colliderLayerID: Int?
+    public var colliderLayerMask: Int?
     // Audio (authored)
     public var audioClip: String?
     public var audioVolume: Float?
@@ -164,6 +166,10 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
             if case let .float(f) = value { colliderRestitution = f }
         case "colliderDensity":
             if case let .float(f) = value { colliderDensity = f }
+        case "colliderLayerID":
+            if case let .float(f) = value { colliderLayerID = Int(f) }
+        case "colliderLayerMask":
+            if case let .float(f) = value { colliderLayerMask = Int(f) }
         case "audioClip":
             if case let .string(s) = value { audioClip = s }
         case "audioVolume":
@@ -304,6 +310,8 @@ public struct WorldView: Sendable {
             record.colliderFriction = e.colliderFriction
             record.colliderRestitution = e.colliderRestitution
             record.colliderDensity = e.colliderDensity
+            record.colliderLayerID = e.colliderLayerID
+            record.colliderLayerMask = e.colliderLayerMask
             record.audioClip = e.audioClip
             record.audioVolume = e.audioVolume
             record.audioLoop = e.audioLoop
