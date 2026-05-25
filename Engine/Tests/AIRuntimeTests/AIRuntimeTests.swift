@@ -1052,6 +1052,33 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertNil(step.materialEmissive)
     }
 
+    func testSetMaterialExecutorProducesRenderMaterialMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(RenderMaterialComponent(), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"gold","steps":[{"op":"set_material","entity_id":"\(ref)",\
+        "material_base_color":[1.0,0.8,0.0,1.0],"material_metallic":0.9,"material_roughness":0.2}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasMaterial = ops.contains {
+            if case let .setRenderMaterialComponent(id, base, metallic, roughness, _) = $0 {
+                return id == entity.rawValue
+                    && abs(base.x - 1.0) < 0.001
+                    && abs(base.y - 0.8) < 0.001
+                    && abs(metallic - 0.9) < 0.001
+                    && abs(roughness - 0.2) < 0.001
+            }
+            return false
+        }
+        XCTAssertTrue(hasMaterial, "set_material must produce a setRenderMaterialComponent mutation")
+    }
+
     func testWorldViewAppliesSnapshotWithMaterialFields() {
         var entity = SceneSemanticSnapshot.Entity(
             id: "scene:1",
