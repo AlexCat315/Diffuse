@@ -5,6 +5,7 @@ import FoundationNetworking
 import ContextMemory
 import IntentRuntime
 import ObservationBus
+import PerceptionRuntime
 
 private extension WorldPropertyValue {
     /// JSON-serialisable form used only in the system prompt — human-readable, not tagged.
@@ -17,7 +18,19 @@ private extension WorldPropertyValue {
         case let .bool(b):              return b
         }
     }
+
+    /// Compact string representation for ContextMemory payloads.
+    var promptString: String {
+        switch self {
+        case let .vec3(x, y, z):        return "[\(x),\(y),\(z)]"
+        case let .vec4(x, y, z, w):     return "[\(x),\(y),\(z),\(w)]"
+        case let .float(v):             return String(v)
+        case let .string(s):            return s
+        case let .bool(b):              return b ? "true" : "false"
+        }
+    }
 }
+
 
 public enum SessionError: Error, CustomStringConvertible, LocalizedError, Sendable {
     case unsupportedSignal(String)
@@ -61,6 +74,7 @@ public actor Session {
     private var observationBus: ObservationBus?
     private var contextMemory: ContextMemoryStore?
     private var cachedMemoryView: [[String: String]] = []
+    private var perceptionService: PerceptionService?
 
     private static let anthropicAPIVersion = "2023-06-01"
     private static let maxEntityPromptCount = 100
@@ -141,6 +155,59 @@ public actor Session {
 
     public func setContextMemory(_ store: ContextMemoryStore?) {
         contextMemory = store
+    }
+
+    public func setPerceptionService(_ service: PerceptionService?) {
+        perceptionService = service
+    }
+
+    // MARK: - Perception
+
+    /// Runs perception on `imageURL`, applies the resulting inferred WorldEvents to the
+    /// WorldView, and (if a ContextMemoryStore is configured) records a `sceneAnnotation`
+    /// entry for each observation.
+    ///
+    /// - Parameters:
+    ///   - ref: Entity reference, e.g. `"scene:42"`.
+    ///   - imageURL: Local file URL of the image to analyse.
+    ///   - task: Which perception task to run. Defaults to `.classification`.
+    ///   - maxResults: Maximum number of observations. Defaults to 5.
+    /// - Returns: The WorldEvents that were applied (useful for callers that also drive the bus).
+    @discardableResult
+    public func tagEntity(ref: String,
+                          imageURL: URL,
+                          task: PerceptionTask = .classification,
+                          maxResults: Int = 5) async throws -> [WorldEvent] {
+        guard let svc = perceptionService else {
+            throw PerceptionRuntimeError.workerUnavailable("no PerceptionService configured on this Session")
+        }
+        let events = try await svc.tag(entityRef: ref,
+                                       imageURL: imageURL,
+                                       task: task,
+                                       maxResults: maxResults)
+        for event in events { worldView.apply(event: event) }
+        if let mem = contextMemory {
+            for event in events {
+                if case let .entityInferredUpdated(entityRef, property, value, confidence, source) = event {
+                    let entryID = "percept:\(entityRef):\(property)"
+                    let entry = ContextEntry(
+                        id: entryID,
+                        kind: .sceneAnnotation,
+                        subject: entityRef,
+                        payload: [
+                            "property": property,
+                            "value": value.promptString,
+                            "confidence": String(format: "%.3f", confidence),
+                            "source": source ?? "perception",
+                        ],
+                        importance: min(0.9, max(0.3, confidence)),
+                        revision: worldView.sceneRevision ?? 0
+                    )
+                    Task { await mem.upsert(entry) }
+                }
+            }
+        }
+        return events
     }
 
     // MARK: - Signal processing
