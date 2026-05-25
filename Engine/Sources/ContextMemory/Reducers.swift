@@ -1,15 +1,22 @@
 import Foundation
 import IntentRuntime
 
+// MARK: - Mutation type
+
+/// A mutation that a reducer can produce: either upsert an entry or delete one by id.
+public enum ContextMemoryMutation: Sendable {
+    case upsert(ContextEntry)
+    case delete(id: String)
+}
+
 // MARK: - Reducer type
 
-/// A pure function that derives zero or more `ContextEntry` mutations from a `WorldEvent`.
+/// A pure function that derives zero or more `ContextMemoryMutation`s from a `WorldEvent`.
 ///
 /// - Parameters:
 ///   - existing: The current entry list (keyed by id). Read-only.
 ///   - event: The incoming WorldEvent.
-/// - Returns: Entries to upsert. An entry whose `id` matches an existing one is an update;
-///   a new `id` is an insert. Returning `[]` means the event produces no memory change.
+/// - Returns: Mutations to apply. Returning `[]` means the event produces no memory change.
 ///
 /// Reducers **must** be deterministic pure functions with no side effects. The identity of
 /// entries they create must be derived solely from the event and `existing` — so that
@@ -17,7 +24,7 @@ import IntentRuntime
 public typealias ContextMemoryReducer = @Sendable (
     _ existing: [String: ContextEntry],
     _ event: WorldEvent
-) -> [ContextEntry]
+) -> [ContextMemoryMutation]
 
 // MARK: - Built-in reducers
 
@@ -28,7 +35,7 @@ public typealias ContextMemoryReducer = @Sendable (
 public let editAppliedReducer: ContextMemoryReducer = { _, event in
     guard case let .editApplied(editID, summary, revision) = event,
           !editID.isEmpty, !summary.isEmpty else { return [] }
-    return [
+    return [.upsert(
         ContextEntry(
             id: "edit:\(editID)",
             kind: .entityEdit,
@@ -36,8 +43,8 @@ public let editAppliedReducer: ContextMemoryReducer = { _, event in
             payload: ["summary": summary, "edit_id": editID],
             importance: 0.4,
             revision: revision
-        ),
-    ]
+        )
+    )]
 }
 
 /// Produces a `sceneAnnotation` entry whenever a new entity is added.
@@ -47,15 +54,31 @@ public let entityAddedReducer: ContextMemoryReducer = { _, event in
     guard case let .entityAdded(ref, name, kind) = event else { return [] }
     var payload: [String: String] = ["name": name, "ref": ref]
     if let k = kind { payload["kind"] = k }
-    return [
+    return [.upsert(
         ContextEntry(
             id: "entity_added:\(ref)",
             kind: .sceneAnnotation,
             subject: ref,
             payload: payload,
             importance: 0.3
-        ),
-    ]
+        )
+    )]
+}
+
+/// Deletes the `entity_added` entry and all `inferred` entries for the removed entity.
+///
+/// Returns `.delete` mutations for every matching entry in `existing`, so the
+/// store stays clean without leaving tombstones.
+public let entityRemovedReducer: ContextMemoryReducer = { existing, event in
+    guard case let .entityRemoved(ref) = event else { return [] }
+    let addedID = "entity_added:\(ref)"
+    let inferredPrefix = "inferred:\(ref):"
+    var mutations: [ContextMemoryMutation] = []
+    if existing[addedID] != nil { mutations.append(.delete(id: addedID)) }
+    for key in existing.keys where key.hasPrefix(inferredPrefix) {
+        mutations.append(.delete(id: key))
+    }
+    return mutations
 }
 
 /// Produces a `sceneAnnotation` update whenever an AI-inferred property arrives
@@ -78,7 +101,7 @@ public let highConfidenceInferredReducer: ContextMemoryReducer = { existing, eve
     case let .vec4(x, y, z, w): payload["value"] = "(\(x), \(y), \(z), \(w))"
     }
     let prev = existing[entryID]
-    return [
+    return [.upsert(
         ContextEntry(
             id: entryID,
             kind: .sceneAnnotation,
@@ -86,8 +109,8 @@ public let highConfidenceInferredReducer: ContextMemoryReducer = { existing, eve
             payload: payload,
             importance: min(1.0, 0.5 + confidence * 0.5),
             revision: prev?.revision ?? 0
-        ),
-    ]
+        )
+    )]
 }
 
 // MARK: - Reducer registry
@@ -107,15 +130,16 @@ public struct ReducerRegistry: Sendable {
         ReducerRegistry(reducers: reducers + [reducer])
     }
 
-    /// Runs all reducers against `existing` for `event` and returns the combined upsert list.
-    public func apply(existing: [String: ContextEntry], event: WorldEvent) -> [ContextEntry] {
+    /// Runs all reducers against `existing` for `event` and returns the combined mutations.
+    public func apply(existing: [String: ContextEntry], event: WorldEvent) -> [ContextMemoryMutation] {
         reducers.flatMap { $0(existing, event) }
     }
 
-    /// Default registry with the three built-in reducers.
+    /// Default registry with the four built-in reducers.
     public static let `default` = ReducerRegistry(reducers: [
         editAppliedReducer,
         entityAddedReducer,
+        entityRemovedReducer,
         highConfidenceInferredReducer,
     ])
 }

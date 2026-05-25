@@ -3,6 +3,16 @@ import IntentRuntime
 import Testing
 import Foundation
 
+// MARK: - Helpers
+
+private func upserts(from mutations: [ContextMemoryMutation]) -> [ContextEntry] {
+    mutations.compactMap { if case let .upsert(e) = $0 { return e } else { return nil } }
+}
+
+private func deletedIDs(from mutations: [ContextMemoryMutation]) -> [String] {
+    mutations.compactMap { if case let .delete(id) = $0 { return id } else { return nil } }
+}
+
 @Suite("ContextMemory")
 struct ContextMemoryTests {
 
@@ -10,9 +20,10 @@ struct ContextMemoryTests {
 
     @Test("editAppliedReducer produces entityEdit entry from editApplied event")
     func editAppliedReducerProducesEntry() {
-        let result = editAppliedReducer([:], .editApplied(editID: "e1", summary: "moved cube", revision: 1))
-        #expect(result.count == 1)
-        let entry = result[0]
+        let mutations = editAppliedReducer([:], .editApplied(editID: "e1", summary: "moved cube", revision: 1))
+        let entries = upserts(from: mutations)
+        #expect(entries.count == 1)
+        let entry = entries[0]
         #expect(entry.id == "edit:e1")
         #expect(entry.kind == .entityEdit)
         #expect(entry.subject == "session")
@@ -36,12 +47,12 @@ struct ContextMemoryTests {
     @Test("editAppliedReducer is idempotent on replay (stable fields)")
     func editAppliedReducerIsIdempotent() {
         let event = WorldEvent.editApplied(editID: "e3", summary: "rename", revision: 5)
-        let first = editAppliedReducer([:], event)
+        let firstEntries = upserts(from: editAppliedReducer([:], event))
         var existing: [String: ContextEntry] = [:]
-        for e in first { existing[e.id] = e }
-        let second = editAppliedReducer(existing, event)
-        #expect(first.count == second.count)
-        for (a, b) in zip(first, second) {
+        for e in firstEntries { existing[e.id] = e }
+        let secondEntries = upserts(from: editAppliedReducer(existing, event))
+        #expect(firstEntries.count == secondEntries.count)
+        for (a, b) in zip(firstEntries, secondEntries) {
             #expect(a.id == b.id)
             #expect(a.kind == b.kind)
             #expect(a.subject == b.subject)
@@ -55,9 +66,9 @@ struct ContextMemoryTests {
 
     @Test("entityAddedReducer produces sceneAnnotation from entityAdded")
     func entityAddedReducerProducesEntry() {
-        let result = entityAddedReducer([:], .entityAdded(ref: "scene:7", name: "Cube", kind: "mesh"))
-        #expect(result.count == 1)
-        let entry = result[0]
+        let entries = upserts(from: entityAddedReducer([:], .entityAdded(ref: "scene:7", name: "Cube", kind: "mesh")))
+        #expect(entries.count == 1)
+        let entry = entries[0]
         #expect(entry.id == "entity_added:scene:7")
         #expect(entry.kind == .sceneAnnotation)
         #expect(entry.subject == "scene:7")
@@ -68,13 +79,63 @@ struct ContextMemoryTests {
 
     @Test("entityAddedReducer omits kind when nil")
     func entityAddedReducerOmitsNilKind() {
-        let result = entityAddedReducer([:], .entityAdded(ref: "scene:8", name: "Empty", kind: nil))
-        #expect(result[0].payload["kind"] == nil)
+        let entries = upserts(from: entityAddedReducer([:], .entityAdded(ref: "scene:8", name: "Empty", kind: nil)))
+        #expect(entries[0].payload["kind"] == nil)
     }
 
     @Test("entityAddedReducer returns empty for non-entityAdded events")
     func entityAddedReducerIgnoresOtherEvents() {
         let result = entityAddedReducer([:], .editApplied(editID: "x", summary: "y", revision: 0))
+        #expect(result.isEmpty)
+    }
+
+    // MARK: - entityRemovedReducer
+
+    @Test("entityRemovedReducer deletes entity_added entry")
+    func entityRemovedReducerDeletesAddedEntry() {
+        let existing: [String: ContextEntry] = [
+            "entity_added:scene:5": ContextEntry(
+                id: "entity_added:scene:5", kind: .sceneAnnotation,
+                subject: "scene:5", payload: [:]),
+        ]
+        let mutations = entityRemovedReducer(existing, .entityRemoved(ref: "scene:5"))
+        let ids = deletedIDs(from: mutations)
+        #expect(ids.contains("entity_added:scene:5"))
+    }
+
+    @Test("entityRemovedReducer deletes all inferred entries for removed entity")
+    func entityRemovedReducerDeletesInferredEntries() {
+        let existing: [String: ContextEntry] = [
+            "entity_added:scene:6": ContextEntry(
+                id: "entity_added:scene:6", kind: .sceneAnnotation,
+                subject: "scene:6", payload: [:]),
+            "inferred:scene:6:material": ContextEntry(
+                id: "inferred:scene:6:material", kind: .sceneAnnotation,
+                subject: "scene:6", payload: [:]),
+            "inferred:scene:6:roughness": ContextEntry(
+                id: "inferred:scene:6:roughness", kind: .sceneAnnotation,
+                subject: "scene:6", payload: [:]),
+            "entity_added:scene:7": ContextEntry(
+                id: "entity_added:scene:7", kind: .sceneAnnotation,
+                subject: "scene:7", payload: [:]),
+        ]
+        let mutations = entityRemovedReducer(existing, .entityRemoved(ref: "scene:6"))
+        let ids = Set(deletedIDs(from: mutations))
+        #expect(ids.contains("entity_added:scene:6"))
+        #expect(ids.contains("inferred:scene:6:material"))
+        #expect(ids.contains("inferred:scene:6:roughness"))
+        #expect(!ids.contains("entity_added:scene:7"))
+    }
+
+    @Test("entityRemovedReducer returns empty when entity has no memory entries")
+    func entityRemovedReducerReturnsEmptyForUnknownEntity() {
+        let result = entityRemovedReducer([:], .entityRemoved(ref: "scene:99"))
+        #expect(result.isEmpty)
+    }
+
+    @Test("entityRemovedReducer ignores non-entityRemoved events")
+    func entityRemovedReducerIgnoresOtherEvents() {
+        let result = entityRemovedReducer([:], .entityAdded(ref: "scene:1", name: "X", kind: nil))
         #expect(result.isEmpty)
     }
 
@@ -85,10 +146,10 @@ struct ContextMemoryTests {
         let event = WorldEvent.entityInferredUpdated(
             ref: "scene:10", property: "material", value: .string("wood"),
             confidence: 0.8, source: nil)
-        let result = highConfidenceInferredReducer([:], event)
-        #expect(result.count == 1)
-        #expect(result[0].id == "inferred:scene:10:material")
-        #expect(result[0].payload["value"] == "wood")
+        let entries = upserts(from: highConfidenceInferredReducer([:], event))
+        #expect(entries.count == 1)
+        #expect(entries[0].id == "inferred:scene:10:material")
+        #expect(entries[0].payload["value"] == "wood")
     }
 
     @Test("highConfidenceInferredReducer rejects confidence below 0.8")
@@ -110,9 +171,9 @@ struct ContextMemoryTests {
         let event = WorldEvent.entityInferredUpdated(
             ref: "scene:11", property: "roughness", value: .float(0.5),
             confidence: 0.95, source: "VisionAdapter")
-        let result = highConfidenceInferredReducer(existing, event)
-        #expect(result[0].revision == 42)
-        #expect(result[0].payload["source"] == "VisionAdapter")
+        let entries = upserts(from: highConfidenceInferredReducer(existing, event))
+        #expect(entries[0].revision == 42)
+        #expect(entries[0].payload["source"] == "VisionAdapter")
     }
 
     @Test("highConfidenceInferredReducer encodes all value variants")
@@ -120,46 +181,43 @@ struct ContextMemoryTests {
         func makeEvent(_ val: WorldPropertyValue) -> WorldEvent {
             .entityInferredUpdated(ref: "scene:1", property: "p", value: val, confidence: 1.0, source: nil)
         }
-        let floatResult  = highConfidenceInferredReducer([:], makeEvent(.float(3.14)))
-        let boolResult   = highConfidenceInferredReducer([:], makeEvent(.bool(true)))
-        let vec3Result   = highConfidenceInferredReducer([:], makeEvent(.vec3(1, 2, 3)))
-        let vec4Result   = highConfidenceInferredReducer([:], makeEvent(.vec4(1, 2, 3, 4)))
-        #expect(floatResult[0].payload["value"] == "3.14")
-        #expect(boolResult[0].payload["value"] == "true")
-        #expect(vec3Result[0].payload["value"] == "(1.0, 2.0, 3.0)")
-        #expect(vec4Result[0].payload["value"] == "(1.0, 2.0, 3.0, 4.0)")
+        let floatEntries = upserts(from: highConfidenceInferredReducer([:], makeEvent(.float(3.14))))
+        let boolEntries  = upserts(from: highConfidenceInferredReducer([:], makeEvent(.bool(true))))
+        let vec3Entries  = upserts(from: highConfidenceInferredReducer([:], makeEvent(.vec3(1, 2, 3))))
+        let vec4Entries  = upserts(from: highConfidenceInferredReducer([:], makeEvent(.vec4(1, 2, 3, 4))))
+        #expect(floatEntries[0].payload["value"] == "3.14")
+        #expect(boolEntries[0].payload["value"] == "true")
+        #expect(vec3Entries[0].payload["value"] == "(1.0, 2.0, 3.0)")
+        #expect(vec4Entries[0].payload["value"] == "(1.0, 2.0, 3.0, 4.0)")
     }
 
     // MARK: - ReducerRegistry
 
-    @Test("ReducerRegistry.default applies all three built-in reducers")
+    @Test("ReducerRegistry.default applies all four built-in reducers")
     func defaultRegistryAppliesAllReducers() {
         let registry = ReducerRegistry.default
-        let editEvent = WorldEvent.editApplied(editID: "e99", summary: "test", revision: 0)
-        let addEvent  = WorldEvent.entityAdded(ref: "scene:99", name: "Sphere", kind: nil)
-        let inferEvent = WorldEvent.entityInferredUpdated(
-            ref: "scene:99", property: "color", value: .string("red"), confidence: 0.9, source: nil)
-        let editResults  = registry.apply(existing: [:], event: editEvent)
-        let addResults   = registry.apply(existing: [:], event: addEvent)
-        let inferResults = registry.apply(existing: [:], event: inferEvent)
-        #expect(!editResults.isEmpty)
-        #expect(!addResults.isEmpty)
-        #expect(!inferResults.isEmpty)
+        let editMutations   = registry.apply(existing: [:], event: .editApplied(editID: "e99", summary: "test", revision: 0))
+        let addMutations    = registry.apply(existing: [:], event: .entityAdded(ref: "scene:99", name: "S", kind: nil))
+        let inferMutations  = registry.apply(existing: [:], event: .entityInferredUpdated(
+            ref: "scene:99", property: "color", value: .string("red"), confidence: 0.9, source: nil))
+        #expect(!upserts(from: editMutations).isEmpty)
+        #expect(!upserts(from: addMutations).isEmpty)
+        #expect(!upserts(from: inferMutations).isEmpty)
     }
 
-    @Test("ReducerRegistry.adding accumulates results from both reducers")
+    @Test("ReducerRegistry.adding accumulates mutations from both reducers")
     func registryAddingAccumulatesResults() {
         let r1: ContextMemoryReducer = { _, _ in
-            [ContextEntry(id: "r1", kind: .entityEdit, subject: "s", payload: [:])]
+            [.upsert(ContextEntry(id: "r1", kind: .entityEdit, subject: "s", payload: [:]))]
         }
         let r2: ContextMemoryReducer = { _, _ in
-            [ContextEntry(id: "r2", kind: .sceneAnnotation, subject: "s", payload: [:])]
+            [.upsert(ContextEntry(id: "r2", kind: .sceneAnnotation, subject: "s", payload: [:]))]
         }
         let registry = ReducerRegistry(reducers: [r1]).adding(r2)
-        let results = registry.apply(existing: [:], event: .editApplied(editID: "x", summary: "y", revision: 0))
-        #expect(results.count == 2)
-        #expect(results.map(\.id).contains("r1"))
-        #expect(results.map(\.id).contains("r2"))
+        let mutations = registry.apply(existing: [:], event: .editApplied(editID: "x", summary: "y", revision: 0))
+        let ids = upserts(from: mutations).map(\.id)
+        #expect(ids.contains("r1"))
+        #expect(ids.contains("r2"))
     }
 
     // MARK: - ContextMemoryStore
@@ -171,6 +229,15 @@ struct ContextMemoryTests {
         let entries = await store.allEntries()
         #expect(entries.count == 1)
         #expect(entries[0].subject == "scene:1")
+    }
+
+    @Test("store.apply deletes entries on entityRemoved")
+    func storeApplyDeletesOnRemoval() async throws {
+        let store = try ContextMemoryStore()
+        await store.apply(event: .entityAdded(ref: "scene:1", name: "A", kind: nil))
+        await store.apply(event: .entityRemoved(ref: "scene:1"))
+        let entries = await store.allEntries()
+        #expect(entries.isEmpty)
     }
 
     @Test("store.apply batch is equivalent to sequential apply")
@@ -212,8 +279,6 @@ struct ContextMemoryTests {
         await store.apply(event: .editApplied(editID: "e10", summary: "edit", revision: 1))
         let entries = await store.allEntries()
         #expect(entries.count == 2)
-        // The two entity_added entries have equal importance 0.3 — one should be evicted
-        // and the edit entry (0.4) should survive
         let hasEdit = entries.contains { $0.kind == .entityEdit }
         #expect(hasEdit)
     }
