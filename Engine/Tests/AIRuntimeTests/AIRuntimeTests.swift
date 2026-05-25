@@ -2485,6 +2485,272 @@ final class AIRuntimeTests: XCTestCase {
     private func makeTestConfig() -> SessionConfig {
         .anthropic(apiKey: "test")
     }
+
+    // MARK: - WorldView recentEdits ring
+
+    func testWorldViewRecentEditsAccumulatesAndCapsAtTwenty() {
+        var view = WorldView()
+        for i in 1...25 {
+            view.apply(event: .editApplied(editID: "e\(i)", summary: "edit \(i)", revision: UInt64(i)))
+        }
+        XCTAssertEqual(view.recentEdits.count, 20, "recentEdits must cap at 20")
+        // Most recent edit should be last.
+        XCTAssertEqual(view.recentEdits.last?.summary, "edit 25")
+        XCTAssertEqual(view.recentEdits.first?.summary, "edit 6", "oldest 5 edits must have been dropped")
+    }
+
+    func testWorldViewApplyEditSummaryConvenienceUpdatesRevisionAndRing() {
+        var view = WorldView()
+        view.apply(editSummary: "renamed hero", revision: 42)
+        XCTAssertEqual(view.sceneRevision, 42)
+        XCTAssertEqual(view.recentEdits.count, 1)
+        XCTAssertEqual(view.recentEdits[0].summary, "renamed hero")
+        XCTAssertEqual(view.recentEdits[0].revision, 42)
+    }
+
+    func testWorldViewSelectionChangedMarksIsSelectedOnRecords() {
+        var view = WorldView()
+        view.apply(event: .entityAdded(ref: "scene:1", name: "A", kind: nil))
+        view.apply(event: .entityAdded(ref: "scene:2", name: "B", kind: nil))
+        view.apply(event: .selectionChanged(refs: ["scene:1"]))
+        XCTAssertEqual(view.entityIndex["scene:1"]?.isSelected, true)
+        XCTAssertEqual(view.entityIndex["scene:2"]?.isSelected, false)
+        XCTAssertEqual(view.selectedEntityRefs, ["scene:1"])
+    }
+
+    func testWorldViewApplySelectionChangedConvenienceWrapper() {
+        var view = WorldView()
+        view.apply(event: .entityAdded(ref: "scene:5", name: "X", kind: nil))
+        view.apply(selectionChanged: ["scene:5"])
+        XCTAssertTrue(view.entityIndex["scene:5"]?.isSelected ?? false)
+        XCTAssertEqual(view.selectedEntityRefs, ["scene:5"])
+    }
+
+    func testWorldViewEntityRemovedClearsFromSelection() {
+        var view = WorldView()
+        view.apply(event: .entityAdded(ref: "scene:3", name: "C", kind: nil))
+        view.apply(event: .selectionChanged(refs: ["scene:3"]))
+        view.apply(event: .entityRemoved(ref: "scene:3"))
+        XCTAssertNil(view.entityIndex["scene:3"])
+        XCTAssertFalse(view.selectedEntityRefs.contains("scene:3"))
+    }
+
+    func testWorldViewWorkflowModeSetFromSnapshot() {
+        let entity = SceneSemanticSnapshot.Entity(
+            id: "scene:1", name: "E", kind: "Entity",
+            parentRef: nil, childRefs: [], isSelected: false,
+            position: nil, components: []
+        )
+        let snapshot = SceneSemanticSnapshot(
+            sceneRevision: 7, entityCount: 1, entities: [entity],
+            workspaceMode: "animation"
+        )
+        var view = WorldView()
+        view.apply(snapshot: snapshot)
+        XCTAssertEqual(view.workflowMode, "animation")
+        XCTAssertEqual(view.sceneRevision, 7)
+    }
+
+    // MARK: - Session observation wrappers
+
+    func testSessionObserveSnapshotUpdatesWorldView() async {
+        let session = Session(id: "obs1", config: makeTestConfig())
+        let entity = SceneSemanticSnapshot.Entity(
+            id: "scene:77", name: "Boulder", kind: "mesh",
+            parentRef: nil, childRefs: [], isSelected: false,
+            position: [1, 2, 3], components: ["transform", "mesh"]
+        )
+        await session.observe(snapshot: SceneSemanticSnapshot(sceneRevision: 5, entityCount: 1, entities: [entity]))
+        let record = await session.entityRecord(ref: "scene:77")
+        XCTAssertEqual(record?.name, "Boulder")
+        XCTAssertEqual(record?.position, [1, 2, 3])
+    }
+
+    func testSessionObserveSelectionChangedUpdatesWorldView() async {
+        let session = Session(id: "obs2", config: makeTestConfig())
+        await session.observe(event: .entityAdded(ref: "scene:10", name: "Player", kind: "mesh"))
+        await session.observe(selectionChanged: ["scene:10"])
+        let record = await session.entityRecord(ref: "scene:10")
+        XCTAssertEqual(record?.isSelected, true)
+        let view = await session.worldViewSnapshot()
+        XCTAssertEqual(view.selectedEntityRefs, ["scene:10"])
+    }
+
+    func testSessionObserveEditSummaryUpdatesRevisionAndTriggersFlush() async throws {
+        let session = Session(id: "obs3", config: makeTestConfig())
+        let store = try ContextMemoryStore()
+        await session.setContextMemory(store)
+        await session.observe(editSummary: "rotated cube", revision: 99)
+        let view = await session.worldViewSnapshot()
+        XCTAssertEqual(view.sceneRevision, 99)
+        XCTAssertEqual(view.recentEdits.first?.summary, "rotated cube")
+    }
+
+    func testSessionHistorySnapshotReflectsRecordedTurns() async {
+        let session = Session(id: "hist1", config: makeTestConfig())
+        await session.recordTurn(ConversationTurn(kind: .userText("hello")))
+        let history = await session.historySnapshot()
+        XCTAssertEqual(history.count, 1)
+        if case let .userText(t) = history[0].kind {
+            XCTAssertEqual(t, "hello")
+        } else {
+            XCTFail("Expected userText turn")
+        }
+    }
+
+    func testSessionWorldViewSnapshotReturnsCurrentState() async {
+        let session = Session(id: "snap1", config: makeTestConfig())
+        await session.observe(event: .entityAdded(ref: "scene:20", name: "Camera", kind: "camera"))
+        let view = await session.worldViewSnapshot()
+        XCTAssertNotNil(view.entityIndex["scene:20"])
+    }
+
+    // MARK: - findEntitiesResult combined filter
+
+    func testFindEntitiesResultCombinesNameAndKindFilter() async {
+        var wv = WorldView()
+        wv.apply(event: .entityAdded(ref: "scene:1", name: "Dragon Boss", kind: "Character"))
+        wv.apply(event: .entityAdded(ref: "scene:2", name: "Dragon Scale", kind: "Prop"))
+        wv.apply(event: .entityAdded(ref: "scene:3", name: "Small Dragon", kind: "Character"))
+        wv.apply(event: .entityAdded(ref: "scene:4", name: "Stone Wall",   kind: "Static Mesh"))
+        let session = Session(id: "cmb", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: ["name": "dragon", "kind": "Character"])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: String]]
+
+        XCTAssertEqual(result["count"] as? Int, 2, "only 'Dragon Boss' and 'Small Dragon' match both filters")
+        XCTAssertTrue(entities.allSatisfy { $0["kind"] == "Character" })
+        XCTAssertTrue(entities.allSatisfy { $0["name"]!.lowercased().contains("dragon") })
+    }
+
+    // MARK: - AIWorldContext.discardSnapshot / replaceWorldView
+
+    func testAIWorldContextDiscardSnapshotRemovesEntry() async throws {
+        let context = AIWorldContext()
+        await context.observe(event: .entityAdded(ref: "scene:1", name: "A", kind: nil))
+        let (id, _) = try await context.materializeSnapshot(scope: "scene")
+        let before = await context.worldViewForSnapshot(snapshotID: id)
+        XCTAssertNotNil(before)
+        await context.discardSnapshot(snapshotID: id)
+        let after = await context.worldViewForSnapshot(snapshotID: id)
+        XCTAssertNil(after, "discarded snapshot must not be retrievable")
+    }
+
+    func testAIWorldContextReplaceWorldViewReplacesState() async throws {
+        let context = AIWorldContext()
+        await context.observe(event: .entityAdded(ref: "scene:1", name: "Old", kind: nil))
+
+        var freshView = WorldView()
+        freshView.apply(event: .entityAdded(ref: "scene:99", name: "New", kind: nil))
+        await context.replaceWorldView(freshView)
+
+        let record = await context.entityRecord(ref: "scene:99")
+        XCTAssertNotNil(record, "replaced WorldView entity should be accessible")
+        let oldRecord = await context.entityRecord(ref: "scene:1")
+        XCTAssertNil(oldRecord, "old entity must no longer be accessible after replaceWorldView")
+    }
+
+    func testAIWorldContextReplaceWorldViewAdvancesRevision() async throws {
+        let context = AIWorldContext()
+        let (_, cur1) = try await context.materializeSnapshot(scope: "scene")
+        var view = WorldView()
+        view.apply(event: .entityAdded(ref: "scene:1", name: "X", kind: nil))
+        await context.replaceWorldView(view)
+        let (_, cur2) = try await context.materializeSnapshot(scope: "scene")
+        XCTAssertLessThan(cur1.seq, cur2.seq, "revision must advance after replaceWorldView")
+    }
+
+    // MARK: - WorkflowContext prompt extras
+
+    func testGameWorkflowContextIncludesScriptingRegistryInPrompt() {
+        let constraints = GameKnownConstraints(
+            navMeshBaked: false,
+            performanceBudget: "console_high",
+            scriptingRegistry: ["patrol", "attack", "flee"]
+        )
+        let ctx = GameWorkflowContext(
+            levelPhase: .blockout,
+            gameplayIntent: GameplayIntent(genre: "rpg", winCondition: "defeat_boss"),
+            targetExperience: "tense combat",
+            knownConstraints: constraints
+        )
+        let section = ctx.systemPromptSection
+        XCTAssertTrue(section.contains("patrol"))
+        XCTAssertTrue(section.contains("attack"))
+        XCTAssertTrue(section.contains("flee"))
+    }
+
+    func testGameWorkflowContextIncludesNavMeshNoteWhenBaked() {
+        let constraints = GameKnownConstraints(navMeshBaked: true, performanceBudget: "pc_ultra")
+        let ctx = GameWorkflowContext(
+            levelPhase: .encounterDesign,
+            gameplayIntent: GameplayIntent(genre: "stealth", winCondition: "escape"),
+            targetExperience: "tense sneaking",
+            knownConstraints: constraints
+        )
+        let section = ctx.systemPromptSection
+        XCTAssertTrue(section.contains("NavMesh") || section.contains("traversability"))
+    }
+
+    func testGameWorkflowContextOmitsNavMeshNoteWhenNotBaked() {
+        let ctx = GameWorkflowContext(
+            levelPhase: .polish,
+            gameplayIntent: GameplayIntent(genre: "puzzle", winCondition: "solve_all"),
+            targetExperience: "calm",
+            knownConstraints: GameKnownConstraints(navMeshBaked: false)
+        )
+        XCTAssertFalse(ctx.systemPromptSection.contains("NavMesh"))
+    }
+
+    // MARK: - Session.process(.userCorrection) all-accepted path
+
+    func testSessionProcessUserCorrectionAllAcceptedReturnsNoopProposal() async throws {
+        // Given a session with a prior tool call turn in history
+        let session = Session(id: "corr1", config: makeTestConfig())
+        await session.recordTurn(ConversationTurn(kind: .userText("add a cube")))
+        await session.recordTurn(ConversationTurn(kind: .assistantToolCall(
+            toolUseID: "tu_1",
+            name: "execute_edit_plan",
+            inputJSON: "{\"summary\":\"Added cube\",\"steps\":[]}"
+        )))
+
+        // When: correction with no rejections (all accepted)
+        let signal = Signal.userCorrection(
+            proposalID: "prop_1",
+            acceptedStepIDs: ["step_1"],
+            rejectedStepIDs: []
+        )
+        let proposal = try await session.process(signal)
+
+        // Then: returns empty plan with automatic approval and no additional API call
+        XCTAssertTrue(proposal.plan.steps.isEmpty, "all-accepted correction produces empty plan")
+        XCTAssertEqual(proposal.approvalPolicy, .automatic)
+    }
+
+    func testSessionProcessUserCorrectionRecordsToolResultInHistory() async throws {
+        let session = Session(id: "corr2", config: makeTestConfig())
+        await session.recordTurn(ConversationTurn(kind: .userText("move the cube")))
+        await session.recordTurn(ConversationTurn(kind: .assistantToolCall(
+            toolUseID: "tu_2",
+            name: "execute_edit_plan",
+            inputJSON: "{\"summary\":\"Moved cube\",\"steps\":[]}"
+        )))
+
+        let signal = Signal.userCorrection(
+            proposalID: "prop_2",
+            acceptedStepIDs: ["step_1"],
+            rejectedStepIDs: []
+        )
+        _ = try await session.process(signal)
+
+        let history = await session.historySnapshot()
+        let hasToolResult = history.contains {
+            if case let .toolResult(id, _) = $0.kind { return id == "tu_2" }
+            return false
+        }
+        XCTAssertTrue(hasToolResult, "processing a correction must record a toolResult for the prior call's toolUseID")
+    }
 }
 
 private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
