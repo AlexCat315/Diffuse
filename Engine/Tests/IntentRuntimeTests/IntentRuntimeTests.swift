@@ -1638,6 +1638,33 @@ struct UndoStackTests {
         #expect(densityEvent    != nil, "setColliderMaterialDensity must emit colliderDensity authored event")
     }
 
+    @Test("setColliderShapeType transaction updates the Collider component in scene")
+    func setColliderShapeTypeUpdatesComponent() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .box(halfExtents: .one, center: .zero),
+                                         isTrigger: true, layerID: 2, layerMask: 7,
+                                         material: PhysicsMaterial(friction: 0.3, restitution: 0.7, density: 2.0)),
+                                for: entity)
+        let transaction = TransactionIR(
+            summary: "to sphere",
+            operations: [.scene(.setColliderShapeType(entityID: entity.rawValue, kind: .sphere))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        _ = try executor.apply(transaction, to: &context)
+
+        let collider = try #require(context.sceneRuntime?.component(Collider.self, for: entity))
+        if case .sphere = collider.shape { } else {
+            Issue.record("collider shape must be .sphere after setColliderShapeType(.sphere)")
+        }
+        #expect(collider.isTrigger == true, "isTrigger must be preserved")
+        #expect(collider.layerID == 2, "layerID must be preserved")
+        #expect(abs(collider.material.friction - 0.3) < 0.001, "friction must be preserved")
+    }
+
     @Test("setSceneName emits name authored world event")
     func setSceneNameEmitsWorldEvent() throws {
         let executor = TransactionExecutor()
