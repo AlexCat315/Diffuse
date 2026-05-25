@@ -263,8 +263,11 @@ let toolAnalyzeImage: [String: Any] = [
                            "description": "Absolute path to a local image file readable by the editor."] as [String: Any],
             "entity_id": ["type": "string",
                           "description": "Optional target entity ref such as 'scene:123'. Defaults to the current selection."] as [String: Any],
+            "task": ["type": "string",
+                     "enum": ["classification", "object_detection", "image_embedding"],
+                     "description": "Perception task to run. 'classification' labels what is in the image; 'object_detection' finds bounding boxes; 'image_embedding' stores a vector for similarity search. Defaults to 'classification'."] as [String: Any],
             "max_results": ["type": "integer",
-                            "description": "Maximum classification observations to return. Defaults to 5."] as [String: Any],
+                            "description": "Maximum observations to return. Defaults to 5."] as [String: Any],
         ] as [String: Any],
     ] as [String: Any],
 ]
@@ -412,12 +415,9 @@ func handle(_ msg: [String: Any]) {
                 break
             }
             var request: [String: Any] = ["action": "analyze_image", "image_path": imagePath]
-            if let entityID = args["entity_id"] as? String {
-                request["entity_id"] = entityID
-            }
-            if let maxResults = args["max_results"] as? Int {
-                request["max_results"] = maxResults
-            }
+            if let entityID = args["entity_id"] as? String { request["entity_id"] = entityID }
+            if let task = args["task"] as? String { request["task"] = task }
+            if let maxResults = args["max_results"] as? Int { request["max_results"] = maxResults }
             let res = editorCall(request)
             if let ok = res["ok"] as? Bool, ok,
                let responseData = try? JSONSerialization.data(withJSONObject: res, options: [.sortedKeys]),
