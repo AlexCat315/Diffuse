@@ -123,7 +123,11 @@ public actor ContextMemoryStore {
 
     private func evictIfNeeded() {
         guard entries.count > capacity else { return }
-        let sorted = entries.values.sorted { $0.importance < $1.importance }
+        // Evict by ascending importance; break ties by ascending timestamp (oldest first).
+        let sorted = entries.values.sorted {
+            if $0.importance != $1.importance { return $0.importance < $1.importance }
+            return $0.timestamp < $1.timestamp
+        }
         let toRemove = sorted.prefix(entries.count - capacity)
         for entry in toRemove { entries.removeValue(forKey: entry.id) }
     }
