@@ -394,6 +394,14 @@ public struct CapabilityRegistry: Sendable {
                 preconditions: [editable, entityExists]
             ),
             CapabilityDescriptor(
+                verb: "scene.set_script_property",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists]
+            ),
+            CapabilityDescriptor(
                 verb: "scene.set_audio_source",
                 releasePhase: .stable,
                 requiresConfirmation: false,

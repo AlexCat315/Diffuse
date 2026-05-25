@@ -92,6 +92,8 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     public var animationSpeed: Float?
     public var animationLoop: Bool?
     public var animationIsPlaying: Bool?
+    // Constraint (authored)
+    public var constraintEnabled: Bool?
     // Script bindings (authored)
     public var scriptBindings: [SceneSemanticSnapshot.ScriptBindingRecord]?
     // Selection state (not authored — updated by selectionChanged events)
@@ -188,6 +190,8 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
             if case let .bool(b) = value { animationLoop = b }
         case "animationIsPlaying":
             if case let .bool(b) = value { animationIsPlaying = b }
+        case "constraintEnabled":
+            if case let .bool(b) = value { constraintEnabled = b }
         default:
             break
         }
@@ -322,6 +326,7 @@ public struct WorldView: Sendable {
             record.animationLoop = e.animationLoop
             record.animationIsPlaying = e.animationIsPlaying
             record.scriptBindings = e.scriptBindings
+            record.constraintEnabled = e.constraintEnabled
             if let wp = e.worldPosition {
                 record.evaluated["worldPosition"] = .vec3(wp[0], wp[1], wp[2])
             }
