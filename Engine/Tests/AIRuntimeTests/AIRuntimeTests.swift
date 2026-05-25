@@ -1099,6 +1099,34 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(record.materialBaseColor, [0.2, 0.4, 0.6, 1.0])
     }
 
+    func testSessionCompactDictIncludesPBRMaterialFields() {
+        var record = WorldEntityRecord(ref: "scene:42", name: "MetalBox")
+        record.materialBaseColor = [0.8, 0.1, 0.1, 1.0]
+        record.materialMetallic = 0.9
+        record.materialRoughness = 0.2
+        record.materialEmissive = [0.0, 0.5, 0.0]
+
+        let session = Session(id: "dict-test", config: makeTestConfig())
+        let dict = session.compactDict(for: record)
+
+        XCTAssertEqual(dict["materialBaseColor"] as? [Float], [0.8, 0.1, 0.1, 1.0])
+        XCTAssertEqual(dict["materialMetallic"] as? Float, 0.9)
+        XCTAssertEqual(dict["materialRoughness"] as? Float, 0.2)
+        XCTAssertEqual(dict["materialEmissive"] as? [Float], [0.0, 0.5, 0.0])
+    }
+
+    func testSessionCompactDictOmitsDefaultPBRMaterialFields() {
+        let record = WorldEntityRecord(ref: "scene:43", name: "DefaultCube")
+
+        let session = Session(id: "dict-test2", config: makeTestConfig())
+        let dict = session.compactDict(for: record)
+
+        XCTAssertNil(dict["materialBaseColor"])
+        XCTAssertNil(dict["materialMetallic"])
+        XCTAssertNil(dict["materialRoughness"])
+        XCTAssertNil(dict["materialEmissive"])
+    }
+
     // MARK: - tagEntity perception integration
 
     func testTagEntityAppliesInferredEventsToWorldView() async throws {
