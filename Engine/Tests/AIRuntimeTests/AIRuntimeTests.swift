@@ -821,6 +821,78 @@ final class AIRuntimeTests: XCTestCase {
         // No crash = pass.
     }
 
+    // MARK: - issueTracked memory
+
+    func testIssueMemoryRecordsEntryForEmptyPlan() async throws {
+        let session = Session(id: "iss1", config: makeTestConfig())
+        let store = try ContextMemoryStore()
+        await session.setContextMemory(store)
+
+        let emptyPlan = SceneEditPlan(summary: "Nothing to do.", steps: [])
+        await session.updateIssueMemory(intent: "make it fly", plan: emptyPlan)
+        try await Task.sleep(nanoseconds: 10_000_000)
+
+        let entries = await store.lookup(kind: .issueTracked)
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries[0].payload["intent"], "make it fly")
+        XCTAssertEqual(entries[0].payload["reason"], "Nothing to do.")
+        XCTAssertEqual(entries[0].importance, 0.6, accuracy: 0.001)
+    }
+
+    func testIssueMemoryRemovesEntryWhenPlanIsNonEmpty() async throws {
+        let session = Session(id: "iss2", config: makeTestConfig())
+        let store = try ContextMemoryStore()
+        await session.setContextMemory(store)
+
+        let emptyPlan = SceneEditPlan(summary: "Cannot do that.", steps: [])
+        await session.updateIssueMemory(intent: "rotate 45 degrees", plan: emptyPlan)
+        try await Task.sleep(nanoseconds: 10_000_000)
+        let beforeEntries = await store.lookup(kind: .issueTracked)
+        XCTAssertFalse(beforeEntries.isEmpty)
+
+        let step = SceneEditStep(op: .setTransform, entityRef: "scene:1")
+        let resolvedPlan = SceneEditPlan(summary: "Done.", steps: [step])
+        await session.updateIssueMemory(intent: "rotate 45 degrees", plan: resolvedPlan)
+        try await Task.sleep(nanoseconds: 10_000_000)
+        let afterEntries = await store.lookup(kind: .issueTracked)
+        XCTAssertTrue(afterEntries.isEmpty)
+    }
+
+    func testIssueMemoryKeyIsStableAcrossIdenticalIntents() {
+        let key1 = Session.issueKey(for: "add a point light")
+        let key2 = Session.issueKey(for: "add a point light")
+        XCTAssertEqual(key1, key2)
+    }
+
+    func testIssueMemoryKeyNormalizesSpecialChars() {
+        let key = Session.issueKey(for: "what's going on?!")
+        XCTAssertTrue(key.hasPrefix("issue:"))
+        XCTAssertFalse(key.contains("'"))
+        XCTAssertFalse(key.contains("?"))
+        XCTAssertFalse(key.contains("!"))
+    }
+
+    func testIssueMemoryDoesNothingWithoutStore() async {
+        let session = Session(id: "iss3", config: makeTestConfig())
+        let emptyPlan = SceneEditPlan(summary: "empty", steps: [])
+        await session.updateIssueMemory(intent: "test", plan: emptyPlan)
+        // No crash = pass.
+    }
+
+    func testIssueMemoryUpsertIsIdempotentForSameIntent() async throws {
+        let session = Session(id: "iss4", config: makeTestConfig())
+        let store = try ContextMemoryStore()
+        await session.setContextMemory(store)
+
+        let emptyPlan = SceneEditPlan(summary: "Can't do it.", steps: [])
+        await session.updateIssueMemory(intent: "delete all", plan: emptyPlan)
+        await session.updateIssueMemory(intent: "delete all", plan: emptyPlan)
+        try await Task.sleep(nanoseconds: 10_000_000)
+
+        let entries = await store.lookup(kind: .issueTracked)
+        XCTAssertEqual(entries.count, 1)
+    }
+
     private func makeTestConfig() -> SessionConfig {
         .anthropic(apiKey: "test")
     }
