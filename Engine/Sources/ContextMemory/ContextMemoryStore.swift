@@ -39,11 +39,14 @@ public actor ContextMemoryStore {
 
     // MARK: - Event ingestion
 
-    /// Applies `event` through all registered reducers and upserts the resulting entries.
+    /// Applies `event` through all registered reducers and applies the resulting mutations.
     public func apply(event: WorldEvent) {
-        let upserts = reducers.apply(existing: entries, event: event)
-        for entry in upserts {
-            entries[entry.id] = entry
+        let mutations = reducers.apply(existing: entries, event: event)
+        for mutation in mutations {
+            switch mutation {
+            case let .upsert(entry): entries[entry.id] = entry
+            case let .delete(id):   entries.removeValue(forKey: id)
+            }
         }
         evictIfNeeded()
     }
