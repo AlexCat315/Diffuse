@@ -77,6 +77,8 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         public var colliderFriction: Float?
         public var colliderRestitution: Float?
         public var colliderDensity: Float?
+        public var colliderLayerID: Int?        // physics layer (0–15)
+        public var colliderLayerMask: Int?      // bitmask of interacting layers
 
         // Audio extras — non-nil only when `"audio_source"` ∈ components
         public var audioClip: String?
