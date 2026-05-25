@@ -1361,6 +1361,64 @@ struct UndoStackTests {
         #expect(awakEvent != nil, "setAudioSource must emit audioPlayOnAwake authored event")
     }
 
+    @Test("setCollider emits all seven collider authored world events")
+    func setColliderEmitsWorldEvents() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let collider = Collider(
+            shape: .sphere(radius: 1.5, center: .zero),
+            isTrigger: true,
+            layerID: 3,
+            layerMask: 15,
+            material: PhysicsMaterial(friction: 0.4, restitution: 0.2, density: 2.0)
+        )
+        let transaction = TransactionIR(
+            summary: "Set collider",
+            operations: [.scene(.setCollider(entityID: entity.rawValue, collider: collider))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let shapeEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderShape", .string("sphere")) = $0 { return true }
+            return false
+        }
+        let triggerEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderIsTrigger", .bool(true)) = $0 { return true }
+            return false
+        }
+        let frictionEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderFriction", .float(0.4)) = $0 { return true }
+            return false
+        }
+        let restitutionEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderRestitution", .float(0.2)) = $0 { return true }
+            return false
+        }
+        let densityEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderDensity", .float(2.0)) = $0 { return true }
+            return false
+        }
+        let layerIDEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderLayerID", .float(3)) = $0 { return true }
+            return false
+        }
+        let layerMaskEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "colliderLayerMask", .float(15)) = $0 { return true }
+            return false
+        }
+        #expect(shapeEvent      != nil, "setCollider must emit colliderShape authored event")
+        #expect(triggerEvent    != nil, "setCollider must emit colliderIsTrigger authored event")
+        #expect(frictionEvent   != nil, "setCollider must emit colliderFriction authored event")
+        #expect(restitutionEvent != nil, "setCollider must emit colliderRestitution authored event")
+        #expect(densityEvent    != nil, "setCollider must emit colliderDensity authored event")
+        #expect(layerIDEvent    != nil, "setCollider must emit colliderLayerID authored event")
+        #expect(layerMaskEvent  != nil, "setCollider must emit colliderLayerMask authored event")
+    }
+
     @Test("ring buffer discards oldest entry when capacity is exceeded")
     func ringBufferEvictsOldest() {
         let stack = UndoStack(capacity: 3)
