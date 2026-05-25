@@ -161,6 +161,30 @@ public struct SceneEditPlanExecutor: Sendable {
             }
             return [.setMeshColorTint(entityID: id, color: SIMD3(c[0], c[1], c[2]))]
 
+        case .setMaterial:
+            let id = try resolveEntityID(step, scene: scene)
+            let base: SIMD4<Float>
+            if let bc = step.materialBaseColor, bc.count == 4 {
+                base = SIMD4(bc[0], bc[1], bc[2], bc[3])
+            } else if let bc = step.materialBaseColor, bc.count == 3 {
+                base = SIMD4(bc[0], bc[1], bc[2], 1.0)
+            } else {
+                base = SIMD4(1, 1, 1, 1)
+            }
+            let metallic   = step.materialMetallic  ?? 0.0
+            let roughness  = step.materialRoughness ?? 0.5
+            let em: SIMD3<Float>
+            if let e = step.materialEmissive, e.count >= 3 {
+                em = SIMD3(e[0], e[1], e[2])
+            } else {
+                em = .zero
+            }
+            return [.setRenderMaterialComponent(entityID: id,
+                                                baseColorFactor: base,
+                                                metallicFactor: metallic,
+                                                roughnessFactor: roughness,
+                                                emissiveFactor: em)]
+
         case .setLightColor:
             let id = try resolveEntityID(step, scene: scene)
             guard let c = step.color, c.count == 3 else {

@@ -70,6 +70,7 @@ public enum SceneEditOp: String, Codable, Sendable, CaseIterable {
 
     // Visual
     case setMeshColor         = "set_mesh_color"
+    case setMaterial          = "set_material"
 
     // Physics — rigidbody
     case setRigidBodyMotion   = "set_rigidbody_motion"
@@ -201,6 +202,12 @@ public struct SceneEditStep: Codable, Sendable {
     public var scriptPropertyName: String?
     public var scriptPropertyValue: JSONValue?
 
+    // set_material (PBR)
+    public var materialBaseColor: [Float]?   // [r, g, b, a] linear 0-1; nil = unchanged
+    public var materialMetallic: Float?       // 0-1; nil = unchanged
+    public var materialRoughness: Float?      // 0-1; nil = unchanged
+    public var materialEmissive: [Float]?     // [r, g, b] linear 0-1; nil = no emission
+
     // set_light_cast_shadows
     public var lightCastShadows: Bool?
 
@@ -232,6 +239,10 @@ public struct SceneEditStep: Codable, Sendable {
         case range
         case spotInnerAngleDegrees = "spot_inner_angle"
         case spotOuterAngleDegrees = "spot_outer_angle"
+        case materialBaseColor  = "material_base_color"
+        case materialMetallic   = "material_metallic"
+        case materialRoughness  = "material_roughness"
+        case materialEmissive   = "material_emissive"
         case lightCastShadows   = "light_cast_shadows"
         case cameraTarget       = "camera_target"
         case cameraUp           = "camera_up"

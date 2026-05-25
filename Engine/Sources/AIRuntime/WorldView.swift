@@ -67,6 +67,10 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     public var cameraIsActive: Bool?
     // Mesh (authored)
     public var meshColor: [Float]?           // [r, g, b] linear 0–1; nil = default white
+    // PBR material (authored) — nil = engine default
+    public var materialMetallic: Float?
+    public var materialRoughness: Float?
+    public var materialEmissive: [Float]?    // [r, g, b] linear 0–1
     // Physics — rigidbody (authored)
     public var rigidBodyMotionType: String?
     public var rigidBodyMass: Float?
@@ -150,6 +154,12 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
             if case let .bool(b) = value { cameraIsActive = b }
         case "meshColor":
             if case let .vec3(r, g, b) = value { meshColor = [r, g, b] }
+        case "materialMetallic":
+            if case let .float(f) = value { materialMetallic = f }
+        case "materialRoughness":
+            if case let .float(f) = value { materialRoughness = f }
+        case "materialEmissive":
+            if case let .vec3(r, g, b) = value { materialEmissive = [r, g, b] }
         case "rigidBodyMotionType":
             if case let .string(s) = value { rigidBodyMotionType = s }
         case "rigidBodyMass":
@@ -305,6 +315,9 @@ public struct WorldView: Sendable {
             record.cameraFovYDegrees = e.cameraFovYDegrees
             record.cameraIsActive = e.cameraIsActive
             record.meshColor = e.meshColor
+            record.materialMetallic = e.materialMetallic
+            record.materialRoughness = e.materialRoughness
+            record.materialEmissive = e.materialEmissive
             record.rigidBodyMotionType = e.rigidBodyMotionType
             record.rigidBodyMass = e.rigidBodyMass
             record.rigidBodyGravityScale = e.rigidBodyGravityScale
