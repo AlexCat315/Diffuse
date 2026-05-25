@@ -1122,6 +1122,82 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(hasAudio, "set_audio_source must produce a setAudioSource mutation")
     }
 
+    func testSceneSemanticEncoderSurfacesRigidBodyAndColliderFields() {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(
+            RigidBody(motionType: .kinematic, mass: 7.5, gravityScale: 0.5, allowSleep: false),
+            for: entity
+        )
+        _ = scene.setComponent(
+            Collider(shape: .sphere(radius: 2.0, center: .zero),
+                     isTrigger: true,
+                     layerID: 2,
+                     layerMask: 7,
+                     material: PhysicsMaterial(friction: 0.2, restitution: 0.8, density: 1.5)),
+            for: entity
+        )
+
+        let snapshot = SceneSemanticEncoder().encode(scene, selectedEntityID: nil,
+                                                     workspaceMode: nil, localeIdentifier: nil)
+        guard let record = snapshot.entities.first(where: { $0.id == "scene:\(entity.rawValue)" }) else {
+            XCTFail("entity not found in snapshot"); return
+        }
+        XCTAssertEqual(record.rigidBodyMotionType, "kinematic")
+        XCTAssertEqual(record.rigidBodyMass ?? 0,         7.5, accuracy: 0.001)
+        XCTAssertEqual(record.rigidBodyGravityScale ?? 1, 0.5, accuracy: 0.001)
+        XCTAssertEqual(record.rigidBodyAllowSleep, false)
+        XCTAssertEqual(record.colliderShape, "sphere")
+        XCTAssertEqual(record.colliderIsTrigger, true)
+        XCTAssertEqual(record.colliderFriction ?? 0,     0.2, accuracy: 0.001)
+        XCTAssertEqual(record.colliderRestitution ?? 0,  0.8, accuracy: 0.001)
+        XCTAssertEqual(record.colliderDensity ?? 0,      1.5, accuracy: 0.001)
+    }
+
+    func testSceneSemanticEncoderSurfacesAudioAndAnimationFields() {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        var audio = AudioSource()
+        audio.clipName = "ambient_loop"
+        audio.volume = 0.6
+        audio.loop = true
+        audio.playOnAwake = false
+        _ = scene.setComponent(audio, for: entity)
+        var anim = AnimationPlayer()
+        anim.clipName = "idle"
+        anim.speed = 1.5
+        anim.loop = true
+        anim.isPlaying = true
+        _ = scene.setComponent(anim, for: entity)
+
+        let snapshot = SceneSemanticEncoder().encode(scene, selectedEntityID: nil,
+                                                     workspaceMode: nil, localeIdentifier: nil)
+        guard let record = snapshot.entities.first(where: { $0.id == "scene:\(entity.rawValue)" }) else {
+            XCTFail("entity not found in snapshot"); return
+        }
+        XCTAssertEqual(record.audioClip,        "ambient_loop")
+        XCTAssertEqual(record.audioVolume ?? 0, 0.6, accuracy: 0.001)
+        XCTAssertEqual(record.audioLoop,        true)
+        XCTAssertEqual(record.audioPlayOnAwake, false)
+        XCTAssertEqual(record.animationClip,         "idle")
+        XCTAssertEqual(record.animationSpeed ?? 0,   1.5, accuracy: 0.001)
+        XCTAssertEqual(record.animationLoop,         true)
+        XCTAssertEqual(record.animationIsPlaying,    true)
+    }
+
+    func testSceneSemanticEncoderSurfacesMeshVisibility() {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(RenderMeshComponent(meshIndex: 0, isVisible: false), for: entity)
+
+        let snapshot = SceneSemanticEncoder().encode(scene, selectedEntityID: nil,
+                                                     workspaceMode: nil, localeIdentifier: nil)
+        guard let record = snapshot.entities.first(where: { $0.id == "scene:\(entity.rawValue)" }) else {
+            XCTFail("entity not found in snapshot"); return
+        }
+        XCTAssertEqual(record.meshIsVisible, false)
+    }
+
     func testSceneSemanticEncoderSurfacesPBRMaterialFields() {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
