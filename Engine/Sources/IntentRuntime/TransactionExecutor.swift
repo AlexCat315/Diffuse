@@ -1251,6 +1251,19 @@ public struct TransactionExecutor {
                     ref: "scene:\(entityID)", property: "constraintEnabled",
                     value: .bool(value)))
 
+            case let .setScriptBindings(entityID, bindings):
+                let ref = "scene:\(entityID)"
+                let records = bindings.map { b -> [String: Any] in
+                    ["handle": b.script.rawValue,
+                     "isEnabled": b.isEnabled,
+                     "parametersJSON": b.parametersJSON]
+                }
+                if let data = try? JSONSerialization.data(withJSONObject: records),
+                   let json = String(data: data, encoding: .utf8) {
+                    events.append(.entityAuthoredChanged(ref: ref, property: "scriptBindings",
+                        value: .string(json)))
+                }
+
             default:
                 break
             }
