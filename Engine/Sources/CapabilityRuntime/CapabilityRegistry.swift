@@ -53,7 +53,7 @@ public struct CapabilityRegistry: Sendable {
 
     // MARK: - Built-in registry
 
-    /// Built-in registry matching all verbs handled by `IntentTransactionBuilder`.
+    /// Built-in registry covering all verbs in the AI edit plan pipeline and the UI intent path.
     public static let `default`: CapabilityRegistry = {
         let editable = CapabilityPreconditionSpec(kind: .sceneEditable)
         let entityExists = CapabilityPreconditionSpec(kind: .entityExists)
@@ -148,6 +148,30 @@ public struct CapabilityRegistry: Sendable {
             // MARK: Camera
             CapabilityDescriptor(
                 verb: "scene.set_camera_pose",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [
+                    editable,
+                    entityExists,
+                    camera,
+                ]
+            ),
+            CapabilityDescriptor(
+                verb: "scene.set_camera_fov",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [
+                    editable,
+                    entityExists,
+                    camera,
+                ]
+            ),
+            CapabilityDescriptor(
+                verb: "scene.set_camera_active",
                 releasePhase: .stable,
                 requiresConfirmation: false,
                 isDestructive: false,
@@ -342,10 +366,26 @@ public struct CapabilityRegistry: Sendable {
                 domain: "scene",
                 preconditions: [editable, entityExists, light]
             ),
+            CapabilityDescriptor(
+                verb: "scene.set_light_cast_shadows",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, light]
+            ),
 
             // MARK: Render/script/audio
             CapabilityDescriptor(
                 verb: "scene.set_mesh_color",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, renderMesh]
+            ),
+            CapabilityDescriptor(
+                verb: "scene.set_material",
                 releasePhase: .stable,
                 requiresConfirmation: false,
                 isDestructive: false,
@@ -362,7 +402,35 @@ public struct CapabilityRegistry: Sendable {
                 preconditions: [editable, entityExists]
             ),
             CapabilityDescriptor(
+                verb: "scene.set_script_property",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists]
+            ),
+            CapabilityDescriptor(
                 verb: "scene.set_audio_source",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists]
+            ),
+
+            // MARK: Mesh visibility
+            CapabilityDescriptor(
+                verb: "scene.set_mesh_visibility",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, renderMesh]
+            ),
+
+            // MARK: Animation
+            CapabilityDescriptor(
+                verb: "scene.set_animation_player",
                 releasePhase: .stable,
                 requiresConfirmation: false,
                 isDestructive: false,

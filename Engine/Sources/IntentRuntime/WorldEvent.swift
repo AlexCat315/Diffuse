@@ -3,11 +3,13 @@ import Foundation
 /// Scalar property value carried by a WorldEvent state change.
 public enum WorldPropertyValue: Sendable, Equatable, Codable {
     case vec3(Float, Float, Float)
+    /// Four-component value: bounding rect (x, y, w, h), RGBA color, or quaternion.
+    case vec4(Float, Float, Float, Float)
     case float(Float)
     case string(String)
     case bool(Bool)
 
-    private enum CodingKeys: String, CodingKey { case type, x, y, z, value }
+    private enum CodingKeys: String, CodingKey { case type, x, y, z, w, value }
 
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -15,6 +17,10 @@ public enum WorldPropertyValue: Sendable, Equatable, Codable {
         case let .vec3(x, y, z):
             try c.encode("vec3", forKey: .type)
             try c.encode(x, forKey: .x); try c.encode(y, forKey: .y); try c.encode(z, forKey: .z)
+        case let .vec4(x, y, z, w):
+            try c.encode("vec4", forKey: .type)
+            try c.encode(x, forKey: .x); try c.encode(y, forKey: .y)
+            try c.encode(z, forKey: .z); try c.encode(w, forKey: .w)
         case let .float(v):
             try c.encode("float", forKey: .type); try c.encode(v, forKey: .value)
         case let .string(s):
@@ -31,6 +37,11 @@ public enum WorldPropertyValue: Sendable, Equatable, Codable {
             self = .vec3(try c.decode(Float.self, forKey: .x),
                          try c.decode(Float.self, forKey: .y),
                          try c.decode(Float.self, forKey: .z))
+        case "vec4":
+            self = .vec4(try c.decode(Float.self, forKey: .x),
+                         try c.decode(Float.self, forKey: .y),
+                         try c.decode(Float.self, forKey: .z),
+                         try c.decode(Float.self, forKey: .w))
         case "float":  self = .float(try c.decode(Float.self, forKey: .value))
         case "string": self = .string(try c.decode(String.self, forKey: .value))
         case "bool":   self = .bool(try c.decode(Bool.self, forKey: .value))

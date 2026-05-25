@@ -2,19 +2,35 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
+import ContextMemory
 import IntentRuntime
+import ObservationBus
+import PerceptionRuntime
 
 private extension WorldPropertyValue {
     /// JSON-serialisable form used only in the system prompt — human-readable, not tagged.
     var jsonValue: Any {
         switch self {
-        case let .vec3(x, y, z): return [x, y, z]
-        case let .float(v):      return v
-        case let .string(s):     return s
-        case let .bool(b):       return b
+        case let .vec3(x, y, z):       return [x, y, z]
+        case let .vec4(x, y, z, w):    return [x, y, z, w]
+        case let .float(v):             return v
+        case let .string(s):            return s
+        case let .bool(b):              return b
+        }
+    }
+
+    /// Compact string representation for ContextMemory payloads.
+    var promptString: String {
+        switch self {
+        case let .vec3(x, y, z):        return "[\(x),\(y),\(z)]"
+        case let .vec4(x, y, z, w):     return "[\(x),\(y),\(z),\(w)]"
+        case let .float(v):             return String(v)
+        case let .string(s):            return s
+        case let .bool(b):              return b ? "true" : "false"
         }
     }
 }
+
 
 public enum SessionError: Error, CustomStringConvertible, LocalizedError, Sendable {
     case unsupportedSignal(String)
@@ -54,6 +70,11 @@ public actor Session {
     private let config: SessionConfig
     private let urlSession: URLSession
     private let maxHistoryTurns: Int
+    public private(set) var workflowContext: WorkflowContext?
+    private var observationBus: ObservationBus?
+    private var contextMemory: ContextMemoryStore?
+    private var cachedMemoryView: [[String: String]] = []
+    private var perceptionService: PerceptionService?
 
     private static let anthropicAPIVersion = "2023-06-01"
     private static let maxEntityPromptCount = 100
@@ -69,15 +90,124 @@ public actor Session {
 
     public init(id: String = UUID().uuidString,
                 config: SessionConfig,
+                workflowContext: WorkflowContext? = nil,
                 urlSession: URLSession = .shared,
                 maxHistoryTurns: Int = 40,
                 initialWorldView: WorldView = WorldView()) {
         self.id = id
         self.config = config
+        self.workflowContext = workflowContext
         self.urlSession = urlSession
         self.worldView = initialWorldView
         self.conversationHistory = []
         self.maxHistoryTurns = maxHistoryTurns
+    }
+
+    public func setWorkflowContext(_ context: WorkflowContext?) {
+        workflowContext = context
+        let mem = contextMemory
+        guard let mem else { return }
+        if let ctx = context {
+            let entry = ContextEntry(
+                id: "workflow:active",
+                kind: .workflowContext,
+                subject: "session",
+                payload: Self.workflowPayload(from: ctx),
+                importance: 0.5,
+                revision: worldView.sceneRevision ?? 0
+            )
+            Task { await mem.upsert(entry) }
+        } else {
+            Task { await mem.remove(id: "workflow:active") }
+        }
+    }
+
+    private static func workflowPayload(from ctx: WorkflowContext) -> [String: String] {
+        switch ctx {
+        case let .game(g):
+            var p: [String: String] = [
+                "kind": "game",
+                "level_phase": g.levelPhase.rawValue,
+                "genre": g.gameplayIntent.genre,
+                "win_condition": g.gameplayIntent.winCondition,
+                "target_experience": g.targetExperience,
+            ]
+            if !g.knownConstraints.scriptingRegistry.isEmpty {
+                p["scripting_registry"] = g.knownConstraints.scriptingRegistry.joined(separator: ",")
+            }
+            return p
+        case let .film(f):
+            var p: [String: String] = [
+                "kind": "film",
+                "narrative_phase": f.narrativePhase.rawValue,
+                "active_sequence": f.activeSequenceID,
+            ]
+            if let shot = f.activeShotID { p["active_shot"] = shot }
+            if let intent = f.directorIntent, !intent.isEmpty { p["director_intent"] = String(intent.prefix(256)) }
+            if !f.lockedShotIDs.isEmpty { p["locked_shots"] = f.lockedShotIDs.joined(separator: ",") }
+            return p
+        }
+    }
+
+    public func setObservationBus(_ bus: ObservationBus?) {
+        observationBus = bus
+    }
+
+    public func setContextMemory(_ store: ContextMemoryStore?) {
+        contextMemory = store
+    }
+
+    public func setPerceptionService(_ service: PerceptionService?) {
+        perceptionService = service
+    }
+
+    // MARK: - Perception
+
+    /// Runs perception on `imageURL`, applies the resulting inferred WorldEvents to the
+    /// WorldView, and (if a ContextMemoryStore is configured) records a `sceneAnnotation`
+    /// entry for each observation.
+    ///
+    /// - Parameters:
+    ///   - ref: Entity reference, e.g. `"scene:42"`.
+    ///   - imageURL: Local file URL of the image to analyse.
+    ///   - task: Which perception task to run. Defaults to `.classification`.
+    ///   - maxResults: Maximum number of observations. Defaults to 5.
+    /// - Returns: The WorldEvents that were applied (useful for callers that also drive the bus).
+    @discardableResult
+    public func tagEntity(ref: String,
+                          imageURL: URL,
+                          task: PerceptionTask = .classification,
+                          maxResults: Int = 5) async throws -> [WorldEvent] {
+        guard let svc = perceptionService else {
+            throw PerceptionRuntimeError.workerUnavailable("no PerceptionService configured on this Session")
+        }
+        let events = try await svc.tag(entityRef: ref,
+                                       imageURL: imageURL,
+                                       task: task,
+                                       maxResults: maxResults)
+        for event in events { worldView.apply(event: event) }
+        if let mem = contextMemory {
+            for event in events {
+                if case let .entityInferredUpdated(entityRef, property, value, confidence, source) = event {
+                    let entryID = "percept:\(entityRef):\(property)"
+                    let entry = ContextEntry(
+                        id: entryID,
+                        kind: .sceneAnnotation,
+                        subject: entityRef,
+                        payload: [
+                            "property": property,
+                            "value": value.promptString,
+                            "confidence": String(format: "%.3f", confidence),
+                            "source": source ?? "perception",
+                        ],
+                        importance: min(0.9, max(0.3, confidence)),
+                        revision: worldView.sceneRevision ?? 0
+                    )
+                    Task { await mem.upsert(entry) }
+                }
+            }
+        }
+        return events
     }
 
     // MARK: - Signal processing
@@ -94,6 +224,7 @@ public actor Session {
             recordTurn(ConversationTurn(kind: .assistantToolCall(toolUseID: toolUseID,
                                                                  name: "execute_edit_plan",
                                                                  inputJSON: inputJSON)))
+            updateIssueMemory(intent: text, plan: plan)
             return Proposal(
                 sessionID: id,
                 semanticIntent: text,
@@ -110,6 +241,10 @@ public actor Session {
                                                acceptedStepIDs: acceptedStepIDs,
                                                rejectedStepIDs: rejectedStepIDs,
                                                onProgress: onProgress)
+
+        case let .referenceImage(url, entityRef):
+            return try await processReferenceImage(url: url, entityRef: entityRef,
+                                                   onProgress: onProgress)
 
         default:
             throw SessionError.unsupportedSignal(signal.kind)
@@ -153,6 +288,20 @@ public actor Session {
                             toolUseID: toolUseID)
         }
 
+        // Record rejected steps as a userPreference entry so future sessions avoid the pattern.
+        if let mem = contextMemory, !rejectedStepIDs.isEmpty {
+            let rejectedList = rejectedStepIDs.joined(separator: ",")
+            let entry = ContextEntry(
+                id: "pref:rejected:\(proposalID)",
+                kind: .userPreference,
+                subject: "session",
+                payload: ["rejected_steps": rejectedList,
+                          "proposal_id": proposalID],
+                importance: 0.7
+            )
+            Task { await mem.upsert(entry) }
+        }
+
         // Re-infer a revised plan for the rejected steps.
         let (plan, newToolUseID, inputJSON) = try await infer(onProgress: onProgress)
         recordTurn(ConversationTurn(kind: .assistantToolCall(toolUseID: newToolUseID,
@@ -167,6 +316,47 @@ public actor Session {
             confidence: planConfidence(for: plan),
             approvalPolicy: config.autoApprove ? .automatic : .requiresApproval,
             toolUseID: newToolUseID
+        )
+    }
+
+    private func processReferenceImage(url: URL,
+                                        entityRef: String?,
+                                        onProgress: (@Sendable (String) -> Void)?) async throws -> Proposal {
+        let userMessage: String
+        if let ref = entityRef {
+            let filename = url.lastPathComponent
+            userMessage = """
+            I have attached a reference image ("\(filename)") for entity \(ref). \
+            Perception has already run and inferred properties are visible in the scene entity list. \
+            Based on those inferred observations and the surrounding scene, produce a scene edit plan \
+            that names, organizes, or extends the entity appropriately. \
+            If the inferred properties do not suggest any useful edits, reply with an empty steps array \
+            and explain in the summary.
+            """
+        } else {
+            let filename = url.lastPathComponent
+            userMessage = """
+            I have provided a reference image ("\(filename)") for scene creation. \
+            Perception has run and any inferred entity properties appear in the scene entity list. \
+            Based on those observations and the current scene context, produce a scene edit plan \
+            that populates or refines the scene to match the reference. \
+            If no actionable changes can be derived, reply with an empty steps array.
+            """
+        }
+        recordTurn(ConversationTurn(kind: .userText(userMessage)))
+        let (plan, toolUseID, inputJSON) = try await infer(onProgress: onProgress)
+        recordTurn(ConversationTurn(kind: .assistantToolCall(toolUseID: toolUseID,
+                                                             name: "execute_edit_plan",
+                                                             inputJSON: inputJSON)))
+        return Proposal(
+            sessionID: id,
+            semanticIntent: userMessage,
+            plan: plan,
+            baseSceneRevision: worldView.sceneRevision,
+            reasoning: plan.reasoning,
+            confidence: planConfidence(for: plan),
+            approvalPolicy: config.autoApprove ? .automatic : .requiresApproval,
+            toolUseID: toolUseID
         )
     }
 
@@ -190,11 +380,15 @@ public actor Session {
     /// Applies a fine-grained WorldEvent to the entity index (Phase 5 delta path).
     public func observe(event: WorldEvent) {
         worldView.apply(event: event)
+        let mem = contextMemory
+        if let mem { Task { await mem.apply(event: event) } }
     }
 
     /// Applies a batch of WorldEvents in order.
     public func observe(events: [WorldEvent]) {
         for event in events { worldView.apply(event: event) }
+        let mem = contextMemory
+        if let mem { Task { await mem.apply(events: events) } }
     }
 
     public func replaceWorldView(_ worldView: WorldView) {
@@ -207,6 +401,48 @@ public actor Session {
 
     public func observe(editSummary: String, revision: UInt64) {
         worldView.apply(editSummary: editSummary, revision: revision)
+        let mem = contextMemory
+        if let mem { Task { try? await mem.flush() } }
+    }
+
+    /// Persists the context memory store to disk (if a storageURL was configured).
+    public func flushContextMemory() async throws {
+        try await contextMemory?.flush()
+    }
+
+    // MARK: - Issue memory
+
+    /// Records or clears an `issueTracked` entry based on whether the plan is empty.
+    ///
+    /// An empty plan means the model couldn't fulfill the intent — we record the
+    /// outstanding request so future sessions know it's unresolved. When a subsequent
+    /// request for the same intent produces a non-empty plan, we remove the stale entry.
+    func updateIssueMemory(intent: String, plan: SceneEditPlan) {
+        guard let mem = contextMemory else { return }
+        let key = Self.issueKey(for: intent)
+        if plan.isEmpty {
+            let reason = plan.summary.isEmpty ? "no steps produced" : plan.summary
+            let entry = ContextEntry(
+                id: key,
+                kind: .issueTracked,
+                subject: "session",
+                payload: ["intent": String(intent.prefix(256)), "reason": reason],
+                importance: 0.6,
+                revision: worldView.sceneRevision ?? 0
+            )
+            Task { await mem.upsert(entry) }
+        } else {
+            Task { await mem.remove(id: key) }
+        }
+    }
+
+    static func issueKey(for intent: String) -> String {
+        let normalized = intent.prefix(48).lowercased()
+            .unicodeScalars
+            .filter { $0.value < 128 }
+            .map { Character($0) }
+            .map { ($0.isLetter || $0.isNumber) ? $0 : Character("_") }
+        return "issue:" + String(normalized)
     }
 
     public func observe(selectionChanged entityRefs: [String]) {
@@ -220,7 +456,33 @@ public actor Session {
     // MARK: - History
 
     public func clearHistory() {
+        recordSessionSummary()
         conversationHistory.removeAll()
+    }
+
+    private func recordSessionSummary() {
+        guard let mem = contextMemory, !conversationHistory.isEmpty else { return }
+        let intents: [String] = conversationHistory.compactMap {
+            guard case let .userText(text) = $0.kind else { return nil }
+            return String(text.prefix(120))
+        }
+        guard !intents.isEmpty else { return }
+        let turnCount = conversationHistory.count
+        let revision = worldView.sceneRevision ?? 0
+        let entry = ContextEntry(
+            id: "summary:\(id)",
+            kind: .sessionSummary,
+            subject: "session",
+            payload: [
+                "turn_count": String(turnCount),
+                "intent_count": String(intents.count),
+                "last_intents": intents.suffix(5).joined(separator: " | "),
+                "scene_revision": String(revision),
+            ],
+            importance: 0.5,
+            revision: revision
+        )
+        Task { await mem.upsert(entry) }
     }
 
     public func historySnapshot() -> [ConversationTurn] {
@@ -230,6 +492,9 @@ public actor Session {
     // MARK: - Inference
 
     private func infer(onProgress: (@Sendable (String) -> Void)? = nil) async throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
+        if let mem = contextMemory {
+            cachedMemoryView = await mem.symbolicView(budget: 20)
+        }
 #if canImport(ObjectiveC)
         if let onProgress {
             return try await inferStreaming(onProgress: onProgress)
@@ -429,7 +694,23 @@ public actor Session {
             parts.append("Recent edits (most recent last):\n\(lines)")
         }
 
-        if let mode = worldView.workflowMode {
+        if !cachedMemoryView.isEmpty,
+           let data = try? JSONSerialization.data(withJSONObject: cachedMemoryView,
+                                                  options: [.prettyPrinted, .sortedKeys]),
+           let str = String(data: data, encoding: .utf8) {
+            parts.append("Long-term context memory (most important first):\n\(str)")
+        }
+
+        if let bus = observationBus {
+            let txView = bus.symbolicView(streamID: "transaction", fromSeq: 0, maxCount: 10)
+            if !txView.events.isEmpty {
+                parts.append(txView.promptText())
+            }
+        }
+
+        if let ctx = workflowContext {
+            parts.append(ctx.systemPromptSection)
+        } else if let mode = worldView.workflowMode {
             parts.append("Active workflow mode: \(mode)")
         }
 
@@ -444,12 +725,16 @@ public actor Session {
         - Prefer minimal plans — only include steps necessary to satisfy the request.
         - For set_transform, use the `position`, `scale`, and `eulerDegrees` fields (all local \
         space) as the base and only change what the user asked for. When an entity is in a \
-        hierarchy, `evaluated.worldPosition` shows its actual world-space position — use it \
-        for spatial reasoning but set_transform always writes local space.
+        hierarchy, `evaluated.worldPosition` shows its actual world-space position, \
+        `evaluated.worldEulerDegrees` shows world-space rotation, and `evaluated.worldScale` \
+        shows the cumulative world-space scale — use these for spatial reasoning, but \
+        set_transform always writes local space.
         - The `scale` field is omitted when uniform [1, 1, 1]; treat missing `scale` as [1, 1, 1].
         - The `eulerDegrees` field is omitted when the rotation is [0, 0, 0]; treat missing \
         `eulerDegrees` as [0, 0, 0]. Angles are XYZ intrinsic Euler in degrees.
         - For snap_to_ground, set Y position to 0.
+        - For set_camera_fov: use `camera_fov_y` (degrees, 1–179). 30≈telephoto, 50≈normal, 75≈wide.
+        - For set_camera_active: use `camera_is_active` (boolean). Only one camera should be active at a time.
         - Each entity may have an `inferred` dict with AI perception observations (e.g. object \
         category, semantic role). Use high-confidence (≥0.8) inferred properties to understand \
         what the entity represents in the real world when naming, grouping, or describing it.
@@ -458,6 +743,10 @@ public actor Session {
         `script_property_value` (the new value — string, number, or boolean). The entity's \
         `scriptBindings` shows existing scripts and their current `params`. Use `script_index` \
         (default 0) to target a specific binding when an entity has multiple scripts.
+        - For set_collider_layer: use `collider_layer_id` (0–15, which layer the collider \
+        occupies) and/or `collider_layer_mask` (bitmask of layers this collider interacts with, \
+        e.g. 0xFFFF = collide with all layers). An entity's `colliderLayerID` and \
+        `colliderLayerMask` fields show the current values.
         - If the user asks a general question (capabilities, greetings, clarifications) rather \
         than requesting a scene change, call the tool with an empty steps array and put your \
         conversational reply in the summary field.
@@ -525,6 +814,7 @@ public actor Session {
         if let v = e.lightRange         { d["lightRange"] = v }
         if let v = e.lightSpotInner     { d["lightSpotInner"] = v }
         if let v = e.lightSpotOuter     { d["lightSpotOuter"] = v }
+        if let v = e.lightCastShadows   { d["lightCastShadows"] = v }
         if let v = e.cameraFovYDegrees  { d["cameraFovYDegrees"] = v }
         if let v = e.cameraIsActive     { d["cameraIsActive"] = v }
         if let v = e.meshColor          { d["meshColor"] = v }
@@ -537,10 +827,18 @@ public actor Session {
         if let v = e.colliderFriction     { d["colliderFriction"] = v }
         if let v = e.colliderRestitution  { d["colliderRestitution"] = v }
         if let v = e.colliderDensity      { d["colliderDensity"] = v }
+        if let v = e.colliderLayerID     { d["colliderLayerID"] = v }
+        if let v = e.colliderLayerMask   { d["colliderLayerMask"] = v }
         if let v = e.audioClip            { d["audioClip"] = v }
         if let v = e.audioVolume          { d["audioVolume"] = v }
         if let v = e.audioLoop            { d["audioLoop"] = v }
         if let v = e.audioPlayOnAwake     { d["audioPlayOnAwake"] = v }
+        if let v = e.meshIsVisible, !v  { d["meshIsVisible"] = false }
+        if let v = e.animationClip      { d["animationClip"] = v }
+        if let v = e.animationSpeed     { d["animationSpeed"] = v }
+        if let v = e.animationLoop      { d["animationLoop"] = v }
+        if let v = e.animationIsPlaying { d["animationIsPlaying"] = v }
+        if let v = e.constraintEnabled  { d["constraintEnabled"] = v }
         if let bindings = e.scriptBindings, !bindings.isEmpty {
             d["scriptBindings"] = bindings.map { b -> [String: Any] in
                 var entry: [String: Any] = ["handle": b.handle, "enabled": b.isEnabled]
@@ -573,19 +871,45 @@ public actor Session {
 
     /// Derives a confidence score for a plan.
     ///
-    /// Starts at 1.0 and applies penalties:
+    /// Starts at 1.0 and applies penalties and bonuses:
     /// - Each step beyond the first reduces confidence slightly (large plans are riskier).
-    /// - Destructive ops (delete, duplicate) apply a larger penalty.
+    /// - `deleteEntity` applies a large penalty — it is irreversible.
+    /// - Steps that touch many distinct entities are penalised as broad-impact (>5 entities).
+    /// - Spawn without a subsequent setTransform is penalised (orphan entity).
+    /// - `deleteEntity` without any spawn in the same plan is penalised harder.
+    /// - A non-empty `reasoning` field is a weak positive signal (+0.05 cap at 1.0).
     /// - Empty plans (conversational response) are always 1.0.
     static func confidence(for plan: SceneEditPlan) -> Double {
         guard !plan.steps.isEmpty else { return 1.0 }
         var score = 1.0
-        let destructive: Set<SceneEditOp> = [.deleteEntity, .duplicateEntity]
+        var affectedEntityIDs = Set<String>()
+        var hasSpawn = false
+        var hasDelete = false
+
         for (i, step) in plan.steps.enumerated() {
             if i > 0 { score -= 0.03 }
-            if destructive.contains(step.op) { score -= 0.10 }
+            if step.op == .deleteEntity { score -= 0.10; hasDelete = true }
+            if step.op == .spawnEntity  { hasSpawn = true }
+            if let ref = step.entityRef { affectedEntityIDs.insert(ref) }
         }
-        return max(0.50, score)
+
+        // Broad-impact penalty: more than 5 distinct entities touched.
+        let broadPenalty = max(0, affectedEntityIDs.count - 5)
+        score -= Double(broadPenalty) * 0.02
+
+        // Orphan spawn penalty: spawnEntity with no subsequent setTransform.
+        let hasTransformStep = plan.steps.contains { $0.op == .setTransform }
+        if hasSpawn && !hasTransformStep { score -= 0.05 }
+
+        // Uncompensated delete penalty: deleting without spawning a replacement is riskier.
+        if hasDelete && !hasSpawn { score -= 0.05 }
+
+        // Reasoning bonus: model explained its intent, suggesting higher-quality output.
+        if let r = plan.reasoning, !r.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            score = min(1.0, score + 0.05)
+        }
+
+        return max(0.40, score)
     }
 
     // MARK: - HTTP
@@ -671,7 +995,7 @@ public actor Session {
 
     // MARK: - History
 
-    private func recordTurn(_ turn: ConversationTurn) {
+    func recordTurn(_ turn: ConversationTurn) {
         conversationHistory.append(turn)
         // Remove complete interaction triples (userText + assistantToolCall + toolResult)
         // from the front so we never leave an orphaned tool call at the start of the message list.

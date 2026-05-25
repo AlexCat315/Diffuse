@@ -26,7 +26,9 @@ let package = Package(
         .library(name: "IntentRuntime", targets: ["IntentRuntime"]),
         .library(name: "PerceptionRuntime", targets: ["PerceptionRuntime"]),
         .library(name: "AIRuntime", targets: ["AIRuntime"]),
+        .library(name: "ContextMemory", targets: ["ContextMemory"]),
         .library(name: "ScriptRuntime", targets: ["ScriptRuntime"]),
+        .library(name: "SemanticPipeline", targets: ["SemanticPipeline"]),
         .library(name: "EngineCore", targets: ["EngineCore"]),
         .executable(name: "SceneRuntimeBenchmarks", targets: ["SceneRuntimeBenchmarks"]),
         .executable(name: "RenderBackendBenchmarks", targets: ["RenderBackendBenchmarks"]),
@@ -245,6 +247,9 @@ let package = Package(
                 "SceneRuntime",
                 "ScriptRuntime",
                 "IntentRuntime",
+                "ObservationBus",
+                "ContextMemory",
+                "PerceptionRuntime",
             ]
         ),
         .target(
@@ -261,6 +266,10 @@ let package = Package(
                 "SequenceRuntime",
                 "ScriptRuntime",
             ]
+        ),
+        .target(
+            name: "ContextMemory",
+            dependencies: ["IntentRuntime"]
         ),
         .target(
             name: "PerceptionRuntime",
@@ -281,6 +290,11 @@ let package = Package(
                 "SceneRuntime",
             ]
         ),
+        .target(name: "SemanticPipeline", dependencies: ["IntentRuntime", "PerceptionRuntime"],
+                linkerSettings: [
+                    .linkedFramework("Vision", .when(platforms: [.macOS])),
+                    .linkedFramework("CoreImage", .when(platforms: [.macOS])),
+                ]),
         .target(
             name: "RenderBackend",
             dependencies: [
@@ -420,6 +434,13 @@ let package = Package(
             ]
         ),
         .testTarget(
+            name: "SemanticPipelineTests",
+            dependencies: [
+                "IntentRuntime",
+                "SemanticPipeline",
+            ]
+        ),
+        .testTarget(
             name: "PerceptionRuntimeTests",
             dependencies: [
                 "IntentRuntime",
@@ -430,6 +451,15 @@ let package = Package(
             name: "AIRuntimeTests",
             dependencies: [
                 "AIRuntime",
+                "ContextMemory",
+                "IntentRuntime",
+                "PerceptionRuntime",
+            ]
+        ),
+        .testTarget(
+            name: "ContextMemoryTests",
+            dependencies: [
+                "ContextMemory",
                 "IntentRuntime",
             ]
         ),

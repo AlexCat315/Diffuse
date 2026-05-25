@@ -93,6 +93,32 @@ struct RenderExtractionTests {
         #expect(isClose(extracted.scene.lights[0].spotOuterAngleRadians, 45 * .pi / 180))
     }
 
+    @Test("renderExtract propagates castShadows from LightComponent to RenderLight")
+    func renderExtractPropagatesCastShadows() {
+        var runtime = SceneRuntime()
+
+        let light = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 5, 0)), for: light)
+        _ = runtime.setComponent(
+            LightComponent(type: .directional,
+                           color: SIMD3<Float>(1, 1, 1),
+                           intensity: 1,
+                           range: 50,
+                           castShadows: true),
+            for: light
+        )
+
+        _ = runtime.tick()
+
+        guard let extracted = runtime.extractedRenderScene else {
+            Issue.record("expected extracted render scene resource")
+            return
+        }
+
+        #expect(extracted.scene.lights.count == 1)
+        #expect(extracted.scene.lights[0].castShadows == true)
+    }
+
     @Test("renderExtract falls back to the default camera when the world has no camera entity")
     func renderExtractFallsBackToDefaultCamera() {
         var runtime = SceneRuntime()
