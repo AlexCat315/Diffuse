@@ -205,6 +205,23 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
             if case let .bool(b) = value { animationIsPlaying = b }
         case "constraintEnabled":
             if case let .bool(b) = value { constraintEnabled = b }
+        case "scriptBindings":
+            if case let .string(json) = value,
+               let data = json.data(using: .utf8),
+               let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+                scriptBindings = arr.compactMap { d -> SceneSemanticSnapshot.ScriptBindingRecord? in
+                    let rawHandle: UInt64?
+                    if let v = d["handle"] as? UInt64 { rawHandle = v }
+                    else if let v = d["handle"] as? Int { rawHandle = UInt64(bitPattern: Int64(v)) }
+                    else { rawHandle = nil }
+                    guard let handle = rawHandle,
+                          let enabled = d["isEnabled"] as? Bool,
+                          let params = d["parametersJSON"] as? String else { return nil }
+                    return SceneSemanticSnapshot.ScriptBindingRecord(handle: handle,
+                                                                     isEnabled: enabled,
+                                                                     parametersJSON: params)
+                }
+            }
         default:
             break
         }

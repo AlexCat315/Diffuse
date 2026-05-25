@@ -1291,6 +1291,34 @@ struct UndoStackTests {
         #expect(emissiveEvent != nil, "setRenderMaterialComponent must emit materialEmissive authored event")
     }
 
+    @Test("setScriptBindings emits scriptBindings authored world event as JSON string")
+    func setScriptBindingsEmitsWorldEvent() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(ScriptComponent(bindings: []), for: entity)
+        let binding = ScriptBinding(ScriptHandle(rawValue: 42), isEnabled: true,
+                                    parametersJSON: #"{"speed":5}"#)
+        let transaction = TransactionIR(
+            summary: "Attach script",
+            operations: [.scene(.setScriptBindings(entityID: entity.rawValue, bindings: [binding]))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let scriptEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "scriptBindings", .string(_)) = $0 { return true }
+            return false
+        }
+        #expect(scriptEvent != nil, "setScriptBindings must emit a scriptBindings authored world event")
+        if case let .entityAuthoredChanged(_, _, .string(json)) = scriptEvent {
+            #expect(json.contains("42"))
+            #expect(json.contains("speed"))
+        }
+    }
+
     @Test("setAudioSource emits audioClip, audioVolume, audioLoop, audioPlayOnAwake world events")
     func setAudioSourceEmitsWorldEvents() throws {
         let executor = TransactionExecutor()

@@ -755,6 +755,16 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(hasAnim, "set_animation_player must produce a setAnimationPlayer mutation")
     }
 
+    func testWorldEntityRecordApplyScriptBindingsFromJSONEvent() {
+        var record = WorldEntityRecord(ref: "scene:99", name: "Mover")
+        let json = #"[{"handle":42,"isEnabled":true,"parametersJSON":"{\"speed\":5}"}]"#
+        record.apply(property: "scriptBindings", value: .string(json))
+        XCTAssertEqual(record.scriptBindings?.count, 1)
+        XCTAssertEqual(record.scriptBindings?.first?.handle, 42)
+        XCTAssertEqual(record.scriptBindings?.first?.isEnabled, true)
+        XCTAssertEqual(record.scriptBindings?.first?.parametersJSON, #"{"speed":5}"#)
+    }
+
     func testSceneSemanticEncoderSurfacesConstraintEnabled() {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
