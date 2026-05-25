@@ -1175,6 +1175,106 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(hasGravity, "set_rigidbody_gravity must produce setRigidBodyGravityScale mutation")
     }
 
+    func testSetTransformPositionOnlyPreservesExistingTransform() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        // Give entity a non-identity transform with y=5
+        var initial = LocalTransform()
+        initial.matrix.columns.3 = SIMD4<Float>(0, 5, 0, 1)
+        _ = scene.setLocalTransform(initial, for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"move","steps":[{"op":"set_transform","entity_id":"\(ref)","position":[10,20,30]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        var foundTransform: LocalTransform? = nil
+        for op in ops {
+            if case let .setLocalTransform(_, t) = op { foundTransform = t; break }
+        }
+        let t = try XCTUnwrap(foundTransform)
+        XCTAssertEqual(t.translation.x, 10, accuracy: 0.01)
+        XCTAssertEqual(t.translation.y, 20, accuracy: 0.01)
+        XCTAssertEqual(t.translation.z, 30, accuracy: 0.01)
+    }
+
+    func testSnapToGroundExecutorZerosYTranslation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        var elevated = LocalTransform()
+        elevated.matrix.columns.3 = SIMD4<Float>(3, 8, 1, 1)
+        _ = scene.setLocalTransform(elevated, for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"ground","steps":[{"op":"snap_to_ground","entity_id":"\(ref)"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        var foundTransform: LocalTransform? = nil
+        for op in ops { if case let .setLocalTransform(_, t) = op { foundTransform = t; break } }
+        let t = try XCTUnwrap(foundTransform)
+        XCTAssertEqual(t.translation.y, 0, accuracy: 0.001, "snap_to_ground must zero Y translation")
+        XCTAssertEqual(t.translation.x, 3, accuracy: 0.01,  "snap_to_ground must preserve X translation")
+        XCTAssertEqual(t.translation.z, 1, accuracy: 0.01,  "snap_to_ground must preserve Z translation")
+    }
+
+    func testSetNameExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"rename","steps":[{"op":"set_name","entity_id":"\(ref)","name":"HeroChar"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasName = ops.contains { if case .setSceneName(_, "HeroChar") = $0 { return true }; return false }
+        XCTAssertTrue(hasName, "set_name must produce setSceneName mutation")
+    }
+
+    func testDeleteEntityExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"delete","steps":[{"op":"delete_entity","entity_id":"\(ref)"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasDelete = ops.contains { if case .deleteEntity(entity.rawValue) = $0 { return true }; return false }
+        XCTAssertTrue(hasDelete, "delete_entity must produce deleteEntity mutation")
+    }
+
+    func testSpawnEntityExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+
+        let json = """
+        {"summary":"spawn","steps":[{"op":"spawn_entity","label":"Barrel","spawn_position":[0,0,5]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasSpawn = ops.contains {
+            if case let .spawnImportedMeshEntity(label, _, _, pos) = $0 {
+                return label == "Barrel" && abs(pos.z - 5) < 0.01
+            }
+            return false
+        }
+        XCTAssertTrue(hasSpawn, "spawn_entity must produce spawnImportedMeshEntity mutation with correct label and position")
+    }
+
     func testSceneSemanticEncoderSurfacesColliderLayerAndMask() {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
