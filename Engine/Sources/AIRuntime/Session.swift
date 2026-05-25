@@ -178,6 +178,20 @@ public actor Session {
                             toolUseID: toolUseID)
         }
 
+        // Record rejected steps as a userPreference entry so future sessions avoid the pattern.
+        if let mem = contextMemory, !rejectedStepIDs.isEmpty {
+            let rejectedList = rejectedStepIDs.joined(separator: ",")
+            let entry = ContextEntry(
+                id: "pref:rejected:\(proposalID)",
+                kind: .userPreference,
+                subject: "session",
+                payload: ["rejected_steps": rejectedList,
+                          "proposal_id": proposalID],
+                importance: 0.7
+            )
+            Task { await mem.upsert(entry) }
+        }
+
         // Re-infer a revised plan for the rejected steps.
         let (plan, newToolUseID, inputJSON) = try await infer(onProgress: onProgress)
         recordTurn(ConversationTurn(kind: .assistantToolCall(toolUseID: newToolUseID,
