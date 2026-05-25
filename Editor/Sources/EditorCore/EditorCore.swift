@@ -1304,6 +1304,8 @@ public final class EditorApplication: @unchecked Sendable {
             return mcpSelectEntity(params: params)
         case "set_playback_state":
             return mcpSetPlaybackState(params: params)
+        case "find_entities":
+            return mcpFindEntities(params: params)
         case "undo":
             return mcpUndo()
         case "redo":
@@ -1375,6 +1377,27 @@ public final class EditorApplication: @unchecked Sendable {
               let json = try? JSONSerialization.jsonObject(with: data)
         else { return ["ok": false, "error": "scene encoding failed"] }
         return ["ok": true, "scene": json]
+    }
+
+    private func mcpFindEntities(params: [String: Any]) -> [String: Any] {
+        let nameQuery = (params["name"] as? String)?.lowercased()
+        let kindFilter = params["kind"] as? String
+        let limit = max(1, min((params["limit"] as? Int) ?? 20, 200))
+
+        let snapshot = SceneSemanticEncoder().encode(
+            scene.scene,
+            selectedEntityID: store.state.selectedEntityID,
+            workspaceMode: store.state.workspaceMode.rawValue,
+            localeIdentifier: nil
+        )
+        var results: [[String: String]] = []
+        for entity in snapshot.entities {
+            if let nq = nameQuery, !entity.name.lowercased().contains(nq) { continue }
+            if let kf = kindFilter, entity.kind != kf { continue }
+            results.append(["id": entity.id, "name": entity.name, "kind": entity.kind])
+            if results.count >= limit { break }
+        }
+        return ["ok": true, "count": results.count, "entities": results]
     }
 
     private func mcpAnalyzeImage(params: [String: Any]) -> [String: Any] {
