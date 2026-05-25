@@ -81,6 +81,20 @@ public let entityRemovedReducer: ContextMemoryReducer = { existing, event in
     return mutations
 }
 
+/// Updates the `entity_added:ref` entry when an entity's name is changed via
+/// an `entityAuthoredChanged` event for the "name" property.
+///
+/// This keeps the entity name in memory current without requiring a full re-add.
+public let entityRenamedReducer: ContextMemoryReducer = { existing, event in
+    guard case let .entityAuthoredChanged(ref, property, value) = event,
+          property == "name",
+          case let .string(newName) = value else { return [] }
+    let addedID = "entity_added:\(ref)"
+    guard var entry = existing[addedID] else { return [] }
+    entry.payload["name"] = newName
+    return [.upsert(entry)]
+}
+
 /// Produces a `sceneAnnotation` update whenever an AI-inferred property arrives
 /// with high confidence (≥ 0.8).
 public let highConfidenceInferredReducer: ContextMemoryReducer = { existing, event in
@@ -135,11 +149,12 @@ public struct ReducerRegistry: Sendable {
         reducers.flatMap { $0(existing, event) }
     }
 
-    /// Default registry with the four built-in reducers.
+    /// Default registry with the five built-in reducers.
     public static let `default` = ReducerRegistry(reducers: [
         editAppliedReducer,
         entityAddedReducer,
         entityRemovedReducer,
+        entityRenamedReducer,
         highConfidenceInferredReducer,
     ])
 }
