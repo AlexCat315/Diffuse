@@ -1,4 +1,5 @@
 @testable import AIRuntime
+import ContextMemory
 import IntentRuntime
 import SceneRuntime
 import simd
@@ -757,5 +758,43 @@ final class AIRuntimeTests: XCTestCase {
         // The most recent ones should still be present.
         let last = await context.worldViewForSnapshot(snapshotID: ids[8])
         XCTAssertNotNil(last)
+    }
+
+    // MARK: - Session + ContextMemoryStore integration
+
+    func testSessionForwardsEventsToContextMemory() async throws {
+        let session = Session(id: "s1", config: makeTestConfig())
+        let store = try ContextMemoryStore()
+        await session.setContextMemory(store)
+        await session.observe(event: .entityAdded(ref: "scene:1", name: "Rock", kind: "mesh"))
+        // Give the fire-and-forget Task a tick to complete.
+        try await Task.sleep(nanoseconds: 10_000_000)
+        let entries = await store.allEntries()
+        XCTAssertFalse(entries.isEmpty)
+        XCTAssertEqual(entries.first?.subject, "scene:1")
+    }
+
+    func testSessionForwardsBatchEventsToContextMemory() async throws {
+        let session = Session(id: "s2", config: makeTestConfig())
+        let store = try ContextMemoryStore()
+        await session.setContextMemory(store)
+        await session.observe(events: [
+            .entityAdded(ref: "scene:2", name: "A", kind: nil),
+            .entityAdded(ref: "scene:3", name: "B", kind: nil),
+        ])
+        try await Task.sleep(nanoseconds: 10_000_000)
+        let count = await store.allEntries().count
+        XCTAssertEqual(count, 2)
+    }
+
+    func testSessionContextMemoryNilByDefault() async throws {
+        // Without setContextMemory, observe must not crash.
+        let session = Session(id: "s3", config: makeTestConfig())
+        await session.observe(event: .entityAdded(ref: "scene:4", name: "C", kind: nil))
+        // No crash = pass.
+    }
+
+    private func makeTestConfig() -> SessionConfig {
+        .anthropic(apiKey: "test")
     }
 }

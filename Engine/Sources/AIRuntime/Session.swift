@@ -2,6 +2,7 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
+import ContextMemory
 import IntentRuntime
 import ObservationBus
 
@@ -58,6 +59,8 @@ public actor Session {
     private let maxHistoryTurns: Int
     public private(set) var workflowContext: WorkflowContext?
     private var observationBus: ObservationBus?
+    private var contextMemory: ContextMemoryStore?
+    private var cachedMemoryView: [[String: String]] = []
 
     private static let anthropicAPIVersion = "2023-06-01"
     private static let maxEntityPromptCount = 100
@@ -92,6 +95,10 @@ public actor Session {
 
     public func setObservationBus(_ bus: ObservationBus?) {
         observationBus = bus
+    }
+
+    public func setContextMemory(_ store: ContextMemoryStore?) {
+        contextMemory = store
     }
 
     // MARK: - Signal processing
@@ -249,11 +256,15 @@ public actor Session {
     /// Applies a fine-grained WorldEvent to the entity index (Phase 5 delta path).
     public func observe(event: WorldEvent) {
         worldView.apply(event: event)
+        let mem = contextMemory
+        if let mem { Task { await mem.apply(event: event) } }
     }
 
     /// Applies a batch of WorldEvents in order.
     public func observe(events: [WorldEvent]) {
         for event in events { worldView.apply(event: event) }
+        let mem = contextMemory
+        if let mem { Task { await mem.apply(events: events) } }
     }
 
     public func replaceWorldView(_ worldView: WorldView) {
@@ -266,6 +277,13 @@ public actor Session {
 
     public func observe(editSummary: String, revision: UInt64) {
         worldView.apply(editSummary: editSummary, revision: revision)
+        let mem = contextMemory
+        if let mem { Task { try? await mem.flush() } }
+    }
+
+    /// Persists the context memory store to disk (if a storageURL was configured).
+    public func flushContextMemory() async throws {
+        try await contextMemory?.flush()
     }
 
     public func observe(selectionChanged entityRefs: [String]) {
@@ -289,6 +307,9 @@ public actor Session {
     // MARK: - Inference
 
     private func infer(onProgress: (@Sendable (String) -> Void)? = nil) async throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
+        if let mem = contextMemory {
+            cachedMemoryView = await mem.symbolicView(budget: 20)
+        }
 #if canImport(ObjectiveC)
         if let onProgress {
             return try await inferStreaming(onProgress: onProgress)
@@ -486,6 +507,13 @@ public actor Session {
                 .map { "- \($0.summary) (rev \($0.revision))" }
                 .joined(separator: "\n")
             parts.append("Recent edits (most recent last):\n\(lines)")
+        }
+
+        if !cachedMemoryView.isEmpty,
+           let data = try? JSONSerialization.data(withJSONObject: cachedMemoryView,
+                                                  options: [.prettyPrinted, .sortedKeys]),
+           let str = String(data: data, encoding: .utf8) {
+            parts.append("Long-term context memory (most important first):\n\(str)")
         }
 
         if let bus = observationBus {
