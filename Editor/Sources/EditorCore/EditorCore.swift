@@ -1401,6 +1401,7 @@ public final class EditorApplication: @unchecked Sendable {
         }
 
         let ps = perceptionService
+        let currentSession = session
         let semaphore = DispatchSemaphore(value: 0)
         final class MCPState: @unchecked Sendable {
             var result: [String: Any] = [:]
@@ -1408,22 +1409,31 @@ public final class EditorApplication: @unchecked Sendable {
         let state = MCPState()
         Task {
             do {
-                let events = try await ps.tag(entityRef: targetRef,
-                                              imageURL: URL(fileURLWithPath: imagePath),
+                let imageURL = URL(fileURLWithPath: imagePath)
+                let events: [WorldEvent]
+                if let sess = currentSession {
+                    // tagEntity updates WorldView and records sceneAnnotation in contextMemory
+                    await sess.setPerceptionService(ps)
+                    events = try await sess.tagEntity(ref: targetRef,
+                                                      imageURL: imageURL,
+                                                      task: task,
+                                                      maxResults: maxResults)
+                    // Also push events into AIWorldContext
+                    await self.aiWorldContext.observe(events: events)
+                } else {
+                    events = try await ps.tag(entityRef: targetRef,
+                                              imageURL: imageURL,
                                               task: task,
                                               maxResults: maxResults)
-                let applicationResult = self.applyWorldEventsSynchronously(events)
-                self.store.dispatch(.setAIStatusMessage(
-                    applicationResult.localApplied
-                        ? "Perception updated \(targetRef)"
-                        : "Perception ran; no AI world update was applied"
-                ))
+                    let applicationResult = self.applyWorldEventsSynchronously(events)
+                    _ = applicationResult
+                }
+                self.store.dispatch(.setAIStatusMessage("Perception updated \(targetRef)"))
                 state.result = [
                     "ok": true,
                     "targetRef": targetRef,
-                    "worldApplied": applicationResult.localApplied,
-                    "sessionApplied": applicationResult.sessionApplied,
                     "events": events.count,
+                    "sessionUsed": currentSession != nil,
                 ]
             } catch {
                 state.result = ["ok": false, "error": error.localizedDescription]
