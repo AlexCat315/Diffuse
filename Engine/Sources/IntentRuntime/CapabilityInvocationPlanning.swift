@@ -303,6 +303,9 @@ private struct CapabilityOperationProjection {
                 "label": .string(label),
                 "position": .vec3(IntentVector3(position)),
             ]
+        case let .setRigidBody(_, body):
+            self.verb = "scene.set_rigidbody"
+            self.arguments["motion_type"] = .string(body.motionType.rawValue)
         case .deleteEntity:
             self.verb = "scene.delete_entity"
         case .duplicateEntity:

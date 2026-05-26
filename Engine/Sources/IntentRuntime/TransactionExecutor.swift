@@ -468,6 +468,10 @@ public struct TransactionExecutor {
                                                                    type: "RigidBody")
                 }
 
+            case let .setRigidBody(entityID, body):
+                let entity = try requireEntity(entityID, in: scene)
+                _ = scene.setComponent(body, for: entity)
+
             case let .setCollider(entityID, collider):
                 let entity = try requireEntity(entityID, in: scene)
                 guard scene.setComponent(collider, for: entity) else {
@@ -1032,6 +1036,8 @@ public struct TransactionExecutor {
             return "scene:rigidbody_gravity:\(id)"
         case let .setRigidBodyAllowSleep(id, _):
             return "scene:rigidbody_sleep:\(id)"
+        case let .setRigidBody(id, _):
+            return "scene:rigidbody_full:\(id)"
         case let .setCollider(id, _):
             return "scene:collider_set:\(id)"
         case let .setColliderTrigger(id, _):
@@ -1297,6 +1303,17 @@ public struct TransactionExecutor {
                 events.append(.entityAuthoredChanged(
                     ref: "scene:\(entityID)", property: "rigidBodyAllowSleep",
                     value: .bool(allow)))
+
+            case let .setRigidBody(entityID, body):
+                let ref = "scene:\(entityID)"
+                events.append(.entityAuthoredChanged(ref: ref, property: "rigidBodyMotionType",
+                    value: .string(body.motionType.rawValue)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "rigidBodyMass",
+                    value: .float(body.mass)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "rigidBodyGravityScale",
+                    value: .float(body.gravityScale)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "rigidBodyAllowSleep",
+                    value: .bool(body.allowSleep)))
 
             case let .setColliderShapeType(entityID, kind):
                 events.append(.entityAuthoredChanged(

@@ -253,27 +253,36 @@ public struct SceneEditPlanExecutor: Sendable {
 
         case .setRigidBodyMotion:
             let id = try resolveEntityID(step, scene: scene)
+            let eid = entityID(fromRaw: id)
             guard let typeStr = step.motionType else {
                 throw SceneEditPlanExecutorError.missingField(op: step.op, field: "motion_type")
             }
             guard let mt = RigidBodyMotionType(rawValue: typeStr) else {
                 throw SceneEditPlanExecutorError.unknownMotionType(typeStr)
             }
-            return [.setRigidBodyMotionType(entityID: id, value: mt)]
+            var body = scene.component(RigidBody.self, for: eid) ?? RigidBody()
+            body.motionType = mt
+            return [.setRigidBody(entityID: id, body: body)]
 
         case .setRigidBodyMass:
             let id = try resolveEntityID(step, scene: scene)
+            let eid = entityID(fromRaw: id)
             guard let v = step.mass else {
                 throw SceneEditPlanExecutorError.missingField(op: step.op, field: "mass")
             }
-            return [.setRigidBodyMass(entityID: id, value: v)]
+            var body = scene.component(RigidBody.self, for: eid) ?? RigidBody()
+            body.mass = v
+            return [.setRigidBody(entityID: id, body: body)]
 
         case .setRigidBodyGravity:
             let id = try resolveEntityID(step, scene: scene)
+            let eid = entityID(fromRaw: id)
             guard let v = step.gravityScale else {
                 throw SceneEditPlanExecutorError.missingField(op: step.op, field: "gravity_scale")
             }
-            return [.setRigidBodyGravityScale(entityID: id, value: v)]
+            var body = scene.component(RigidBody.self, for: eid) ?? RigidBody()
+            body.gravityScale = v
+            return [.setRigidBody(entityID: id, body: body)]
 
         case .setColliderTrigger:
             let id = try resolveEntityID(step, scene: scene)
@@ -306,10 +315,13 @@ public struct SceneEditPlanExecutor: Sendable {
 
         case .setRigidBodyAllowSleep:
             let id = try resolveEntityID(step, scene: scene)
+            let eid = entityID(fromRaw: id)
             guard let v = step.allowSleep else {
                 throw SceneEditPlanExecutorError.missingField(op: step.op, field: "allow_sleep")
             }
-            return [.setRigidBodyAllowSleep(entityID: id, value: v)]
+            var body = scene.component(RigidBody.self, for: eid) ?? RigidBody()
+            body.allowSleep = v
+            return [.setRigidBody(entityID: id, body: body)]
 
         case .setColliderShape:
             let id = try resolveEntityID(step, scene: scene)
