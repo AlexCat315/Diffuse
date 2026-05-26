@@ -36,6 +36,10 @@ public enum FindEntitiesTool {
                     "type": "string",
                     "description": "Exact entity kind to filter by (e.g. 'Static Mesh', 'Camera', 'Point Light'). Omit to match all kinds.",
                 ] as [String: Any],
+                "component": [
+                    "type": "string",
+                    "description": "Component tag to filter by (e.g. 'light', 'camera', 'rigidbody', 'collider', 'audio_source', 'animation', 'script', 'constraint'). Only entities that have this component are returned.",
+                ] as [String: Any],
                 "limit": [
                     "type": "integer",
                     "description": "Maximum number of results to return (1–200, default 20).",

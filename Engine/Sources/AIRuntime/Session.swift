@@ -763,6 +763,12 @@ public actor Session {
         - Only operate on entities that exist in the scene entities list above.
         - Use the exact entity IDs from the list (format: "scene:<number>").
         - Prefer minimal plans — only include steps necessary to satisfy the request.
+        - When "Currently selected" is non-empty, treat those entities as the user's primary \
+        target for any ambiguous request (e.g. "make it bigger", "delete it", "change the colour"). \
+        Only operate on non-selected entities when the request clearly names or describes them.
+        - For reparent_entity: moving an entity to a new parent changes its local transform \
+        relative to that parent. After reparenting, follow up with set_transform if the entity's \
+        world position should be preserved.
         - For set_transform, use the `position`, `scale`, and `eulerDegrees` fields (all local \
         space) as the base and only change what the user asked for. When an entity is in a \
         hierarchy, `evaluated.worldPosition` shows its actual world-space position, \
@@ -803,9 +809,10 @@ public actor Session {
         and `audio_spatial_blend` (0=fully 2D, 1=fully 3D positional) are shown in `audioPitch` \
         and `audioSpatialBlend` only when non-default (pitch≠1.0 or blend>0). Omitting any \
         field preserves the current value.
-        - Use find_entities (name substring or kind filter) to locate entities whose IDs are not \
-        visible in the scene list. After find_entities returns its result, call execute_edit_plan \
-        with the discovered IDs to complete the task.
+        - Use find_entities (name substring, kind, or component filter) to locate entities whose \
+        IDs are not visible in the scene list. The `component` parameter accepts tags like "light", \
+        "camera", "rigidbody", "collider", "audio_source", "animation", "script", "constraint". \
+        After find_entities returns its result, call execute_edit_plan with the discovered IDs.
         """)
 
         return parts.joined(separator: "\n\n")
@@ -860,6 +867,7 @@ public actor Session {
     nonisolated func compactDict(for e: WorldEntityRecord) -> [String: Any] {
         var d: [String: Any] = ["ref": e.ref, "name": e.name]
         if let v = e.kind               { d["kind"] = v }
+        if !e.components.isEmpty        { d["components"] = e.components }
         if let v = e.parentRef          { d["parentRef"] = v }
         if !e.childRefs.isEmpty         { d["childRefs"] = e.childRefs }
         if let v = e.position           { d["position"] = v }
@@ -1059,13 +1067,17 @@ public actor Session {
     func findEntitiesResult(input: [String: Any]) -> String {
         let nameQuery = (input["name"] as? String)?.lowercased()
         let kindFilter = input["kind"] as? String
+        let componentFilter = (input["component"] as? String)?.lowercased()
         let limit = max(1, min((input["limit"] as? Int) ?? 20, 200))
-        var results: [[String: String]] = []
+        var results: [[String: Any]] = []
         for e in worldView.entityIndex.values.sorted(by: { $0.ref < $1.ref }) {
             if let nq = nameQuery, !e.name.lowercased().contains(nq) { continue }
             if let kf = kindFilter, e.kind != kf { continue }
-            var entry: [String: String] = ["id": e.ref, "name": e.name]
+            if let cf = componentFilter,
+               !e.components.contains(where: { $0.lowercased() == cf }) { continue }
+            var entry: [String: Any] = ["id": e.ref, "name": e.name]
             if let k = e.kind { entry["kind"] = k }
+            if !e.components.isEmpty { entry["components"] = e.components }
             results.append(entry)
             if results.count >= limit { break }
         }
