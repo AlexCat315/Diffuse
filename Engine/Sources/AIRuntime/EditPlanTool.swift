@@ -236,7 +236,7 @@ public enum EditPlanTool {
                     "description": "The parameter key to set in the script's parametersJSON. For set_script_property.",
                 ] as [String: Any],
                 "script_property_value": [
-                    "description": "The new value for the script parameter (string, number, or boolean). For set_script_property.",
+                    "description": "The new value for the script parameter (string, number, boolean, or array). For set_script_property.",
                 ] as [String: Any],
                 "is_visible": [
                     "type": "boolean",
