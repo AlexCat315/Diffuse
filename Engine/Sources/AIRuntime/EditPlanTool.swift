@@ -74,6 +74,11 @@ public enum EditPlanTool {
                     "type": "array", "items": ["type": "number"] as [String: Any],
                     "description": "[x, y, z] world position for spawn_entity. Default [0, 0, 0].",
                 ] as [String: Any],
+                "spawn_kind": [
+                    "type": "string",
+                    "enum": ["mesh", "empty", "light", "camera"],
+                    "description": "Entity type for spawn_entity: 'mesh' (default Static Mesh), 'empty' (group/parent node), 'light' (combine with light_type), 'camera'. Default 'mesh'.",
+                ] as [String: Any],
                 "position": [
                     "type": "array", "items": ["type": "number"] as [String: Any],
                     "description": "[x, y, z] world position in metres for set_transform.",
