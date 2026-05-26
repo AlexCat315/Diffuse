@@ -1380,6 +1380,21 @@ public struct TransactionExecutor {
                 let ref = "scene:\(entityID)"
                 events.append(.entityAuthoredChanged(ref: ref, property: "colliderShape",
                     value: .string(collider.shape.kind.rawValue)))
+                switch collider.shape {
+                case let .box(he, _):
+                    events.append(.entityAuthoredChanged(ref: ref, property: "colliderBoxHalfExtents",
+                        value: .vec3(he.x, he.y, he.z)))
+                case let .sphere(r, _):
+                    events.append(.entityAuthoredChanged(ref: ref, property: "colliderSphereRadius",
+                        value: .float(r)))
+                case let .capsule(r, hh, _):
+                    events.append(.entityAuthoredChanged(ref: ref, property: "colliderCapsuleRadius",
+                        value: .float(r)))
+                    events.append(.entityAuthoredChanged(ref: ref, property: "colliderCapsuleHalfHeight",
+                        value: .float(hh)))
+                default:
+                    break
+                }
                 events.append(.entityAuthoredChanged(ref: ref, property: "colliderIsTrigger",
                     value: .bool(collider.isTrigger)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "colliderFriction",

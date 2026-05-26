@@ -82,6 +82,10 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
 
         // Collider extras — non-nil only when `"collider"` ∈ components
         public var colliderShape: String?       // "box" | "sphere" | "capsule" | "mesh" | "convex"
+        public var colliderBoxHalfExtents: [Float]? = nil   // [x,y,z] metres; non-nil only for box
+        public var colliderSphereRadius: Float? = nil        // metres; non-nil only for sphere
+        public var colliderCapsuleRadius: Float? = nil       // metres; non-nil only for capsule
+        public var colliderCapsuleHalfHeight: Float? = nil   // metres; non-nil only for capsule
         public var colliderIsTrigger: Bool?
         public var colliderFriction: Float?
         public var colliderRestitution: Float?

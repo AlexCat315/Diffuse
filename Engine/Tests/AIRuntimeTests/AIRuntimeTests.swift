@@ -3605,6 +3605,71 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(hasCollider, "set_collider_shape to sphere must preserve isTrigger=true and switch to sphere shape")
     }
 
+    // MARK: - Collider dimension tracking in WorldView
+
+    func testWorldViewTracksBoxColliderHalfExtentsFromSnapshot() {
+        var view = WorldView()
+        let entity = SceneSemanticSnapshot.Entity(
+            id: "scene:1", name: "Box", kind: "Entity",
+            parentRef: nil, childRefs: [], isSelected: false,
+            position: nil, components: ["collider"],
+            colliderShape: "box", colliderBoxHalfExtents: [1.5, 2.0, 0.5]
+        )
+        let snap = SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1,
+                                         entities: [entity], selectedRef: nil)
+        view.apply(snapshot: snap)
+        let record = view.entityIndex["scene:1"]
+        XCTAssertEqual(record?.colliderShape, "box")
+        XCTAssertEqual(record?.colliderBoxHalfExtents?.count, 3)
+        XCTAssertEqual(record?.colliderBoxHalfExtents?[0] ?? 0, 1.5, accuracy: 0.001)
+        XCTAssertEqual(record?.colliderBoxHalfExtents?[1] ?? 0, 2.0, accuracy: 0.001)
+        XCTAssertEqual(record?.colliderBoxHalfExtents?[2] ?? 0, 0.5, accuracy: 0.001)
+    }
+
+    func testWorldViewTracksSphereColliderRadiusFromEvent() {
+        var view = WorldView()
+        view.apply(event: .entityAdded(ref: "scene:5", name: "Sphere", kind: "Entity"))
+        view.apply(event: .entityAuthoredChanged(ref: "scene:5", property: "colliderShape", value: .string("sphere")))
+        view.apply(event: .entityAuthoredChanged(ref: "scene:5", property: "colliderSphereRadius", value: .float(3.7)))
+        let record = view.entityIndex["scene:5"]
+        XCTAssertEqual(record?.colliderShape, "sphere")
+        XCTAssertEqual(record?.colliderSphereRadius ?? 0, 3.7, accuracy: 0.001)
+        XCTAssertNil(record?.colliderBoxHalfExtents, "box extents should be nil for sphere collider")
+    }
+
+    func testWorldViewClearsStaleColliderDimensionsOnShapeChange() {
+        var view = WorldView()
+        view.apply(event: .entityAdded(ref: "scene:6", name: "Entity", kind: "Entity"))
+        view.apply(event: .entityAuthoredChanged(ref: "scene:6", property: "colliderShape", value: .string("box")))
+        view.apply(event: .entityAuthoredChanged(ref: "scene:6", property: "colliderBoxHalfExtents", value: .vec3(1, 1, 1)))
+        // Now switch to capsule — box extents should be cleared
+        view.apply(event: .entityAuthoredChanged(ref: "scene:6", property: "colliderShape", value: .string("capsule")))
+        let record = view.entityIndex["scene:6"]
+        XCTAssertNil(record?.colliderBoxHalfExtents, "box half-extents must be cleared when shape switches to capsule")
+    }
+
+    func testSetColliderBoxExtentsWorldEventUpdatesHalfExtents() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"big","steps":[{"op":"set_collider_box_extents","entity_id":"\(ref)","half_extents":[2,3,4]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasExtents = ops.contains {
+            if case let .setCollider(_, c) = $0 {
+                if case let .box(he, _) = c.shape {
+                    return abs(he.x - 2) < 0.01 && abs(he.y - 3) < 0.01 && abs(he.z - 4) < 0.01
+                }
+            }
+            return false
+        }
+        XCTAssertTrue(hasExtents, "set_collider_box_extents must produce setCollider with half_extents [2,3,4]")
+    }
+
     // MARK: - JSONValue array support for set_script_property
 
     func testJSONValueArrayRoundTripsViaCodable() throws {
