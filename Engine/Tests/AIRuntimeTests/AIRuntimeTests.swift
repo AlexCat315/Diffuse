@@ -3093,6 +3093,22 @@ final class AIRuntimeTests: XCTestCase {
         record.apply(property: "audioSpatialBlend", value: .float(0.9))
         XCTAssertEqual(record.audioSpatialBlend, 0.9)
     }
+
+    func testCompactDictIncludesAudioPitchAndSpatialBlend() {
+        var record = WorldEntityRecord(ref: "scene:50", name: "BGM")
+        record.audioPitch = 1.25
+        record.audioSpatialBlend = 0.6
+        let dict = Session(id: "audio-dict", config: makeTestConfig()).compactDict(for: record)
+        XCTAssertEqual(dict["audioPitch"] as? Float, 1.25)
+        XCTAssertEqual(dict["audioSpatialBlend"] as? Float, 0.6)
+    }
+
+    func testCompactDictOmitsAudioPitchAndSpatialBlendWhenNil() {
+        let record = WorldEntityRecord(ref: "scene:51", name: "Silent")
+        let dict = Session(id: "audio-dict2", config: makeTestConfig()).compactDict(for: record)
+        XCTAssertNil(dict["audioPitch"])
+        XCTAssertNil(dict["audioSpatialBlend"])
+    }
 }
 
 private final class MockURLProtocol: URLProtocol, @unchecked Sendable {

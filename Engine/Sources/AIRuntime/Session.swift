@@ -790,14 +790,19 @@ public actor Session {
         - For set_material: use `material_base_color` ([r,g,b,a] linear 0–1), \
         `material_metallic` (0–1; 0=dielectric, 1=full metal), \
         `material_roughness` (0–1; 0=mirror-smooth, 1=fully rough), and \
-        `material_emissive` ([r,g,b] linear 0–1; omit or [0,0,0] for no emission). \
-        An entity's `materialBaseColor`, `materialMetallic`, `materialRoughness`, and \
+        `material_emissive` ([r,g,b] linear 0–1; omit for no change). \
+        Omitting any field preserves the entity's current value — only include fields you want \
+        to change. An entity's `materialBaseColor`, `materialMetallic`, `materialRoughness`, and \
         `materialEmissive` fields show the current PBR values when non-default. \
         Prefer set_material over set_mesh_color for precise or multi-channel appearance control; \
         use set_mesh_color only for a simple RGB tint when no PBR properties are needed.
         - If the user asks a general question (capabilities, greetings, clarifications) rather \
         than requesting a scene change, call the tool with an empty steps array and put your \
         conversational reply in the summary field.
+        - For set_audio_source: `audio_pitch` (1.0=normal, 2.0=one octave up, 0.5=one octave down) \
+        and `audio_spatial_blend` (0=fully 2D, 1=fully 3D positional) are shown in `audioPitch` \
+        and `audioSpatialBlend` only when non-default (pitch≠1.0 or blend>0). Omitting any \
+        field preserves the current value.
         - Use find_entities (name substring or kind filter) to locate entities whose IDs are not \
         visible in the scene list. After find_entities returns its result, call execute_edit_plan \
         with the discovered IDs to complete the task.
@@ -889,6 +894,8 @@ public actor Session {
         if let v = e.audioVolume          { d["audioVolume"] = v }
         if let v = e.audioLoop            { d["audioLoop"] = v }
         if let v = e.audioPlayOnAwake     { d["audioPlayOnAwake"] = v }
+        if let v = e.audioPitch           { d["audioPitch"] = v }
+        if let v = e.audioSpatialBlend    { d["audioSpatialBlend"] = v }
         if let v = e.meshIsVisible, !v  { d["meshIsVisible"] = false }
         if let v = e.animationClip      { d["animationClip"] = v }
         if let v = e.animationSpeed     { d["animationSpeed"] = v }
