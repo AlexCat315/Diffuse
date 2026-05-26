@@ -303,6 +303,29 @@ public struct TransactionExecutor {
                 _ = scene.setComponent(RenderMeshComponent(meshIndex: meshIndex), for: entity)
                 createdEntityIDs.append(entity.rawValue)
 
+            case let .spawnEmptyEntity(label, position):
+                let entity = scene.createEntity()
+                _ = scene.setComponent(SceneNameComponent(value: label), for: entity)
+                _ = scene.setComponent(SceneKindComponent(value: "Empty"), for: entity)
+                _ = scene.setLocalTransform(LocalTransform(translation: position), for: entity)
+                createdEntityIDs.append(entity.rawValue)
+
+            case let .spawnLightEntity(label, lightType, position):
+                let entity = scene.createEntity()
+                _ = scene.setComponent(SceneNameComponent(value: label), for: entity)
+                _ = scene.setComponent(SceneKindComponent(value: "Light"), for: entity)
+                _ = scene.setLocalTransform(LocalTransform(translation: position), for: entity)
+                _ = scene.setComponent(LightComponent(type: lightType), for: entity)
+                createdEntityIDs.append(entity.rawValue)
+
+            case let .spawnCameraEntity(label, position):
+                let entity = scene.createEntity()
+                _ = scene.setComponent(SceneNameComponent(value: label), for: entity)
+                _ = scene.setComponent(SceneKindComponent(value: "Camera"), for: entity)
+                _ = scene.setLocalTransform(LocalTransform(translation: position), for: entity)
+                _ = scene.setComponent(CameraComponent(isActive: false), for: entity)
+                createdEntityIDs.append(entity.rawValue)
+
             case let .deleteEntity(entityID):
                 let entity = try requireEntity(entityID, in: scene)
                 guard scene.destroyEntity(entity) else {
@@ -941,6 +964,12 @@ public struct TransactionExecutor {
         switch mutation {
         case let .spawnImportedMeshEntity(label, _, _, _):
             return "scene:spawn:\(label)"
+        case let .spawnEmptyEntity(label, _):
+            return "scene:spawn_empty:\(label)"
+        case let .spawnLightEntity(label, _, _):
+            return "scene:spawn_light:\(label)"
+        case let .spawnCameraEntity(label, _):
+            return "scene:spawn_camera:\(label)"
         case let .deleteEntity(id):
             return "scene:delete:\(id)"
         case let .duplicateEntity(id):
@@ -1039,6 +1068,41 @@ public struct TransactionExecutor {
                     let rawID = createdEntityIDs[createdIndex]
                     let ref = "scene:\(rawID)"
                     events.append(.entityAdded(ref: ref, name: label, kind: kindLabel))
+                    events.append(.entityAuthoredChanged(ref: ref, property: "position",
+                        value: .vec3(position.x, position.y, position.z)))
+                    events.append(contentsOf: worldTransformEvents(for: rawID, in: scene))
+                    createdIndex += 1
+                }
+
+            case let .spawnEmptyEntity(label, position):
+                if createdIndex < createdEntityIDs.count {
+                    let rawID = createdEntityIDs[createdIndex]
+                    let ref = "scene:\(rawID)"
+                    events.append(.entityAdded(ref: ref, name: label, kind: "Empty"))
+                    events.append(.entityAuthoredChanged(ref: ref, property: "position",
+                        value: .vec3(position.x, position.y, position.z)))
+                    events.append(contentsOf: worldTransformEvents(for: rawID, in: scene))
+                    createdIndex += 1
+                }
+
+            case let .spawnLightEntity(label, lightType, position):
+                if createdIndex < createdEntityIDs.count {
+                    let rawID = createdEntityIDs[createdIndex]
+                    let ref = "scene:\(rawID)"
+                    events.append(.entityAdded(ref: ref, name: label, kind: "Light"))
+                    events.append(.entityAuthoredChanged(ref: ref, property: "position",
+                        value: .vec3(position.x, position.y, position.z)))
+                    events.append(.entityAuthoredChanged(ref: ref, property: "lightType",
+                        value: .string(lightType.rawValue)))
+                    events.append(contentsOf: worldTransformEvents(for: rawID, in: scene))
+                    createdIndex += 1
+                }
+
+            case let .spawnCameraEntity(label, position):
+                if createdIndex < createdEntityIDs.count {
+                    let rawID = createdEntityIDs[createdIndex]
+                    let ref = "scene:\(rawID)"
+                    events.append(.entityAdded(ref: ref, name: label, kind: "Camera"))
                     events.append(.entityAuthoredChanged(ref: ref, property: "position",
                         value: .vec3(position.x, position.y, position.z)))
                     events.append(contentsOf: worldTransformEvents(for: rawID, in: scene))

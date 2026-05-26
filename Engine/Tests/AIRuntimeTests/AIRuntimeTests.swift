@@ -3378,6 +3378,101 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(entities.first?["parentRef"] as? String, "scene:1",
                        "parentRef must appear in findEntities output when the entity has a parent")
     }
+
+    // MARK: - spawn_kind support
+
+    func testSpawnKindEmptyProducesSpawnEmptyEntityMutation() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"group","steps":[{"op":"spawn_entity","label":"Group","spawn_kind":"empty","spawn_position":[1,0,0]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasEmpty = ops.contains {
+            if case let .spawnEmptyEntity(label, pos) = $0 {
+                return label == "Group" && abs(pos.x - 1) < 0.01
+            }
+            return false
+        }
+        XCTAssertTrue(hasEmpty, "spawn_kind 'empty' must produce spawnEmptyEntity mutation")
+    }
+
+    func testSpawnKindLightProducesSpawnLightEntityMutation() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"light","steps":[{"op":"spawn_entity","label":"Fill Light","spawn_kind":"light","light_type":"point","spawn_position":[0,3,0]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasLight = ops.contains {
+            if case let .spawnLightEntity(label, lt, pos) = $0 {
+                return label == "Fill Light" && lt == .point && abs(pos.y - 3) < 0.01
+            }
+            return false
+        }
+        XCTAssertTrue(hasLight, "spawn_kind 'light' must produce spawnLightEntity mutation with correct type and position")
+    }
+
+    func testSpawnKindLightDefaultsToPointWhenLightTypeOmitted() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"light","steps":[{"op":"spawn_entity","label":"Key","spawn_kind":"light"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasPointLight = ops.contains {
+            if case let .spawnLightEntity(_, lt, _) = $0 { return lt == .point }
+            return false
+        }
+        XCTAssertTrue(hasPointLight, "spawn_kind 'light' with no light_type should default to point light")
+    }
+
+    func testSpawnKindCameraProducesSpawnCameraEntityMutation() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"cam","steps":[{"op":"spawn_entity","label":"Security Cam","spawn_kind":"camera","spawn_position":[5,2,-3]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasCam = ops.contains {
+            if case let .spawnCameraEntity(label, pos) = $0 {
+                return label == "Security Cam" && abs(pos.x - 5) < 0.01
+            }
+            return false
+        }
+        XCTAssertTrue(hasCam, "spawn_kind 'camera' must produce spawnCameraEntity mutation")
+    }
+
+    func testSpawnKindMeshIsDefaultWhenOmitted() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"mesh","steps":[{"op":"spawn_entity","label":"Box"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasMesh = ops.contains { if case .spawnImportedMeshEntity = $0 { return true }; return false }
+        XCTAssertTrue(hasMesh, "spawn_entity with no spawn_kind must default to spawnImportedMeshEntity")
+    }
+
+    func testSpawnKindDirectionalLightCreatesCorrectLightType() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"sun","steps":[{"op":"spawn_entity","label":"Sun","spawn_kind":"light","light_type":"directional"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasDirectional = ops.contains {
+            if case let .spawnLightEntity(_, lt, _) = $0 { return lt == .directional }
+            return false
+        }
+        XCTAssertTrue(hasDirectional, "spawn_kind 'light' with light_type 'directional' must produce directional light")
+    }
 }
 
 private final class MockURLProtocol: URLProtocol, @unchecked Sendable {

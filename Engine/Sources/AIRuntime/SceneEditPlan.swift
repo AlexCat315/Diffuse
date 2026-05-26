@@ -118,6 +118,7 @@ public struct SceneEditStep: Codable, Sendable {
     // spawn_entity
     public var label: String?          // entity name for spawned entity
     public var spawnPosition: [Float]? // [x, y, z] default [0,0,0]
+    public var spawnKind: String?      // "mesh" | "empty" | "light" | "camera"; default "mesh"
 
     // set_transform / snap_to_ground
     public var position: [Float]?      // [x, y, z] metres
@@ -229,6 +230,7 @@ public struct SceneEditStep: Codable, Sendable {
         case entityRef          = "entity_id"
         case label
         case spawnPosition      = "spawn_position"
+        case spawnKind          = "spawn_kind"
         case position
         case eulerDegrees       = "euler_degrees"
         case scale

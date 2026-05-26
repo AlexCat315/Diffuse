@@ -82,10 +82,20 @@ public struct SceneEditPlanExecutor: Sendable {
         case .spawnEntity:
             let label = step.label ?? "AI Entity"
             let pos = simd3(step.spawnPosition) ?? .zero
-            return [.spawnImportedMeshEntity(label: label,
-                                             kindLabel: "Static Mesh",
-                                             meshIndex: 0,
-                                             position: pos)]
+            switch step.spawnKind ?? "mesh" {
+            case "empty":
+                return [.spawnEmptyEntity(label: label, position: pos)]
+            case "light":
+                let lt = step.lightType.flatMap(LightType.init(rawValue:)) ?? .point
+                return [.spawnLightEntity(label: label, lightType: lt, position: pos)]
+            case "camera":
+                return [.spawnCameraEntity(label: label, position: pos)]
+            default:
+                return [.spawnImportedMeshEntity(label: label,
+                                                 kindLabel: "Static Mesh",
+                                                 meshIndex: 0,
+                                                 position: pos)]
+            }
 
         case .deleteEntity:
             let id = try resolveEntityID(step, scene: scene)

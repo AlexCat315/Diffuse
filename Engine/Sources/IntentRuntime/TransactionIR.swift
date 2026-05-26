@@ -66,6 +66,9 @@ public enum SceneMutation: Sendable, Equatable {
                                  kindLabel: String,
                                  meshIndex: Int,
                                  position: SIMD3<Float>)
+    case spawnEmptyEntity(label: String, position: SIMD3<Float>)
+    case spawnLightEntity(label: String, lightType: LightType, position: SIMD3<Float>)
+    case spawnCameraEntity(label: String, position: SIMD3<Float>)
     case deleteEntity(entityID: UInt64)
     case duplicateEntity(entityID: UInt64)
     case moveEntity(entityID: UInt64, parentID: UInt64?, index: Int)
@@ -117,7 +120,7 @@ public enum SceneMutation: Sendable, Equatable {
     /// rather than referencing an existing one.
     public var entityID: UInt64? {
         switch self {
-        case .spawnImportedMeshEntity:
+        case .spawnImportedMeshEntity, .spawnEmptyEntity, .spawnLightEntity, .spawnCameraEntity:
             return nil
         case let .deleteEntity(id),
              let .duplicateEntity(id),
