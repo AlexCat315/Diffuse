@@ -310,20 +310,27 @@ public struct TransactionExecutor {
                 _ = scene.setLocalTransform(LocalTransform(translation: position), for: entity)
                 createdEntityIDs.append(entity.rawValue)
 
-            case let .spawnLightEntity(label, lightType, position):
+            case let .spawnLightEntity(label, lightType, position, initialIntensity, initialColor, initialRange, initialCastShadows):
                 let entity = scene.createEntity()
                 _ = scene.setComponent(SceneNameComponent(value: label), for: entity)
                 _ = scene.setComponent(SceneKindComponent(value: "Light"), for: entity)
                 _ = scene.setLocalTransform(LocalTransform(translation: position), for: entity)
-                _ = scene.setComponent(LightComponent(type: lightType), for: entity)
+                var light = LightComponent(type: lightType)
+                if let v = initialIntensity    { light.intensity    = v }
+                if let v = initialColor        { light.color        = v }
+                if let v = initialRange        { light.range        = v }
+                if let v = initialCastShadows  { light.castShadows  = v }
+                _ = scene.setComponent(light, for: entity)
                 createdEntityIDs.append(entity.rawValue)
 
-            case let .spawnCameraEntity(label, position):
+            case let .spawnCameraEntity(label, position, initialFovYDegrees):
                 let entity = scene.createEntity()
                 _ = scene.setComponent(SceneNameComponent(value: label), for: entity)
                 _ = scene.setComponent(SceneKindComponent(value: "Camera"), for: entity)
                 _ = scene.setLocalTransform(LocalTransform(translation: position), for: entity)
-                _ = scene.setComponent(CameraComponent(isActive: false), for: entity)
+                var cam = CameraComponent(isActive: false)
+                if let fov = initialFovYDegrees { cam.fovYRadians = fov * .pi / 180 }
+                _ = scene.setComponent(cam, for: entity)
                 createdEntityIDs.append(entity.rawValue)
 
             case let .deleteEntity(entityID):
@@ -1012,9 +1019,9 @@ public struct TransactionExecutor {
             return "scene:spawn:\(label)"
         case let .spawnEmptyEntity(label, _):
             return "scene:spawn_empty:\(label)"
-        case let .spawnLightEntity(label, _, _):
+        case let .spawnLightEntity(label, _, _, _, _, _, _):
             return "scene:spawn_light:\(label)"
-        case let .spawnCameraEntity(label, _):
+        case let .spawnCameraEntity(label, _, _):
             return "scene:spawn_camera:\(label)"
         case let .deleteEntity(id):
             return "scene:delete:\(id)"
@@ -1135,7 +1142,7 @@ public struct TransactionExecutor {
                     createdIndex += 1
                 }
 
-            case let .spawnLightEntity(label, lightType, position):
+            case let .spawnLightEntity(label, lightType, position, initialIntensity, initialColor, initialRange, initialCastShadows):
                 if createdIndex < createdEntityIDs.count {
                     let rawID = createdEntityIDs[createdIndex]
                     let ref = "scene:\(rawID)"
@@ -1144,17 +1151,33 @@ public struct TransactionExecutor {
                         value: .vec3(position.x, position.y, position.z)))
                     events.append(.entityAuthoredChanged(ref: ref, property: "lightType",
                         value: .string(lightType.rawValue)))
+                    if let v = initialIntensity {
+                        events.append(.entityAuthoredChanged(ref: ref, property: "lightIntensity", value: .float(v)))
+                    }
+                    if let v = initialColor {
+                        events.append(.entityAuthoredChanged(ref: ref, property: "lightColor",
+                            value: .vec3(v.x, v.y, v.z)))
+                    }
+                    if let v = initialRange {
+                        events.append(.entityAuthoredChanged(ref: ref, property: "lightRange", value: .float(v)))
+                    }
+                    if let v = initialCastShadows {
+                        events.append(.entityAuthoredChanged(ref: ref, property: "lightCastShadows", value: .bool(v)))
+                    }
                     events.append(contentsOf: worldTransformEvents(for: rawID, in: scene))
                     createdIndex += 1
                 }
 
-            case let .spawnCameraEntity(label, position):
+            case let .spawnCameraEntity(label, position, initialFovYDegrees):
                 if createdIndex < createdEntityIDs.count {
                     let rawID = createdEntityIDs[createdIndex]
                     let ref = "scene:\(rawID)"
                     events.append(.entityAdded(ref: ref, name: label, kind: "Camera"))
                     events.append(.entityAuthoredChanged(ref: ref, property: "position",
                         value: .vec3(position.x, position.y, position.z)))
+                    if let fov = initialFovYDegrees {
+                        events.append(.entityAuthoredChanged(ref: ref, property: "cameraFovYDegrees", value: .float(fov)))
+                    }
                     events.append(contentsOf: worldTransformEvents(for: rawID, in: scene))
                     createdIndex += 1
                 }

@@ -87,9 +87,17 @@ public struct SceneEditPlanExecutor: Sendable {
                 return [.spawnEmptyEntity(label: label, position: pos)]
             case "light":
                 let lt = step.lightType.flatMap(LightType.init(rawValue:)) ?? .point
-                return [.spawnLightEntity(label: label, lightType: lt, position: pos)]
+                let color: SIMD3<Float>? = step.color.flatMap { c in
+                    c.count >= 3 ? SIMD3(c[0], c[1], c[2]) : nil
+                }
+                return [.spawnLightEntity(label: label, lightType: lt, position: pos,
+                                          initialIntensity: step.intensity,
+                                          initialColor: color,
+                                          initialRange: step.range,
+                                          initialCastShadows: step.lightCastShadows)]
             case "camera":
-                return [.spawnCameraEntity(label: label, position: pos)]
+                return [.spawnCameraEntity(label: label, position: pos,
+                                           initialFovYDegrees: step.cameraFovYDegrees)]
             default:
                 return [.spawnImportedMeshEntity(label: label,
                                                  kindLabel: "Static Mesh",

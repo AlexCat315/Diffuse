@@ -803,10 +803,11 @@ public actor Session {
         `eulerDegrees` as [0, 0, 0]. Angles are XYZ intrinsic Euler in degrees.
         - For spawn_entity: use `spawn_kind` to choose the entity type — "mesh" (default, creates a \
         Static Mesh), "empty" (bare group/parent node with no components), "light" (creates a light; \
-        combine with `light_type` to set directional/point/spot; follow up with set_light_intensity, \
-        set_light_color, etc.), "camera" (creates an inactive camera). When spawning a light, always \
-        follow up with set_light_intensity to set an appropriate brightness. When creating a group, \
-        use spawn_kind "empty" and then reparent child entities under it.
+        combine with `light_type` for directional/point/spot; use `intensity`, `color`, `range`, and \
+        `cast_shadows` in the SAME step to set initial values — these are applied atomically at creation \
+        and you do NOT need follow-up set_light_* steps for them), "camera" (creates an inactive camera; \
+        use `camera_fov_y` in the same step to set initial field of view). When creating a group, use \
+        spawn_kind "empty" and then reparent child entities under it.
         - For snap_to_ground, set Y position to 0.
         - For set_camera_fov: use `camera_fov_y` (degrees, 1–179). 30≈telephoto, 50≈normal, 75≈wide.
         - For set_camera_active: use `camera_is_active` (boolean). Only one camera should be active at a time.
