@@ -3109,6 +3109,126 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertNil(dict["audioPitch"])
         XCTAssertNil(dict["audioSpatialBlend"])
     }
+
+    // MARK: - WorldEntityRecord.components snapshot pipeline
+
+    func testWorldViewApplySnapshotPreservesComponentsList() {
+        let snap = SceneSemanticSnapshot.Entity(
+            id: "scene:1", name: "Lamp", kind: "Point Light",
+            parentRef: nil, childRefs: [],
+            isSelected: false,
+            position: nil, scale: nil, eulerDegrees: nil,
+            worldPosition: nil, worldEulerDegrees: nil, worldScale: nil,
+            components: ["transform", "light"]
+        )
+        var wv = WorldView()
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 1, entities: [snap],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        XCTAssertEqual(wv.entityIndex["scene:1"]?.components, ["transform", "light"])
+    }
+
+    func testCompactDictIncludesComponentsWhenNonEmpty() {
+        var record = WorldEntityRecord(ref: "scene:60", name: "Camera")
+        record.components = ["transform", "camera"]
+        let dict = Session(id: "comp-dict", config: makeTestConfig()).compactDict(for: record)
+        XCTAssertEqual(dict["components"] as? [String], ["transform", "camera"])
+    }
+
+    func testCompactDictOmitsComponentsWhenEmpty() {
+        let record = WorldEntityRecord(ref: "scene:61", name: "Empty")
+        let dict = Session(id: "comp-dict2", config: makeTestConfig()).compactDict(for: record)
+        XCTAssertNil(dict["components"])
+    }
+
+    // MARK: - find_entities component filter
+
+    func testFindEntitiesComponentFilterMatchesCorrectEntities() async {
+        var wv = WorldView()
+        let lightSnap = SceneSemanticSnapshot.Entity(
+            id: "scene:1", name: "Sun Light", kind: "Directional Light",
+            parentRef: nil, childRefs: [],
+            isSelected: false,
+            position: nil, scale: nil, eulerDegrees: nil,
+            worldPosition: nil, worldEulerDegrees: nil, worldScale: nil,
+            components: ["transform", "light"]
+        )
+        let meshSnap = SceneSemanticSnapshot.Entity(
+            id: "scene:2", name: "Rock", kind: "Static Mesh",
+            parentRef: nil, childRefs: [],
+            isSelected: false,
+            position: nil, scale: nil, eulerDegrees: nil,
+            worldPosition: nil, worldEulerDegrees: nil, worldScale: nil,
+            components: ["transform", "mesh"]
+        )
+        let camSnap = SceneSemanticSnapshot.Entity(
+            id: "scene:3", name: "Main Camera", kind: "Camera",
+            parentRef: nil, childRefs: [],
+            isSelected: false,
+            position: nil, scale: nil, eulerDegrees: nil,
+            worldPosition: nil, worldEulerDegrees: nil, worldScale: nil,
+            components: ["transform", "camera"]
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 3, entities: [lightSnap, meshSnap, camSnap],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        let session = Session(id: "comp-filter", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: ["component": "light"])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+
+        XCTAssertEqual(result["count"] as? Int, 1)
+        let entities = result["entities"] as! [[String: Any]]
+        XCTAssertEqual(entities.first?["id"] as? String, "scene:1")
+    }
+
+    func testFindEntitiesComponentFilterCaseInsensitive() async {
+        var wv = WorldView()
+        let snap = SceneSemanticSnapshot.Entity(
+            id: "scene:1", name: "Walker", kind: "Character",
+            parentRef: nil, childRefs: [],
+            isSelected: false,
+            position: nil, scale: nil, eulerDegrees: nil,
+            worldPosition: nil, worldEulerDegrees: nil, worldScale: nil,
+            components: ["transform", "animation", "script"]
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 1, entities: [snap],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        let session = Session(id: "comp-ci", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: ["component": "Animation"])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        XCTAssertEqual(result["count"] as? Int, 1, "component filter must be case-insensitive")
+    }
+
+    func testFindEntitiesResultIncludesComponentsArrayInOutput() async {
+        var wv = WorldView()
+        let snap = SceneSemanticSnapshot.Entity(
+            id: "scene:1", name: "Player", kind: "Character",
+            parentRef: nil, childRefs: [],
+            isSelected: false,
+            position: nil, scale: nil, eulerDegrees: nil,
+            worldPosition: nil, worldEulerDegrees: nil, worldScale: nil,
+            components: ["transform", "rigidbody", "script"]
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 1, entities: [snap],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        let session = Session(id: "comp-out", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+
+        let comps = entities.first?["components"] as? [String]
+        XCTAssertEqual(comps, ["transform", "rigidbody", "script"],
+                       "components array must appear in findEntities output")
+    }
 }
 
 private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
