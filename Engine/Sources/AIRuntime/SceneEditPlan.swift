@@ -1,16 +1,18 @@
 import Foundation
 
-/// A JSON-typed value that can be a string, number, or boolean.
+/// A JSON-typed value that can be a string, number, boolean, or array.
 /// Used for `set_script_property` where the AI sets a typed script parameter.
 public enum JSONValue: Codable, Sendable, Equatable {
     case string(String)
     case number(Double)
     case bool(Bool)
+    case array([JSONValue])
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.singleValueContainer()
         if let b = try? c.decode(Bool.self) { self = .bool(b); return }
         if let n = try? c.decode(Double.self) { self = .number(n); return }
+        if let a = try? c.decode([JSONValue].self) { self = .array(a); return }
         let s = try c.decode(String.self)
         self = .string(s)
     }
@@ -21,6 +23,7 @@ public enum JSONValue: Codable, Sendable, Equatable {
         case .string(let s): try c.encode(s)
         case .number(let n): try c.encode(n)
         case .bool(let b):   try c.encode(b)
+        case .array(let a):  try c.encode(a)
         }
     }
 
@@ -37,6 +40,7 @@ public enum JSONValue: Codable, Sendable, Equatable {
                 ? String(format: "%.0f", n)
                 : String(n)
         case .bool(let b): return b ? "true" : "false"
+        case .array(let a): return "[" + a.map(\.jsonFragment).joined(separator: ",") + "]"
         }
     }
 }

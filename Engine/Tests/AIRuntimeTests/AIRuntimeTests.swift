@@ -3461,6 +3461,55 @@ final class AIRuntimeTests: XCTestCase {
                           "spawn without position and no set_transform must incur the orphan penalty")
     }
 
+    // MARK: - JSONValue array support for set_script_property
+
+    func testJSONValueArrayRoundTripsViaCodable() throws {
+        let json = """
+        {"summary":"s","steps":[{"op":"set_script_property","entity_id":"scene:1",
+        "script_property_name":"waypoints","script_property_value":[1,2,3]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let step = plan.steps[0]
+        if case let .array(elements) = step.scriptPropertyValue {
+            XCTAssertEqual(elements.count, 3)
+            if case let .number(n) = elements[0] { XCTAssertEqual(n, 1) }
+            else { XCTFail("first element should be .number(1)") }
+        } else {
+            XCTFail("scriptPropertyValue should be .array")
+        }
+    }
+
+    func testJSONValueArrayJsonFragment() {
+        let arr = JSONValue.array([.number(1), .string("a"), .bool(true)])
+        XCTAssertEqual(arr.jsonFragment, #"[1,"a",true]"#)
+    }
+
+    func testSetScriptPropertyWithArrayMergesIntoParametersJSON() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(ScriptComponent(), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"s","steps":[{"op":"set_script_property","entity_id":"\(ref)",
+        "script_property_name":"tags","script_property_value":["enemy","boss"]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasScript = ops.contains {
+            if case let .setScriptBindings(eid, bindings) = $0 {
+                guard eid == entity.rawValue, let first = bindings.first else { return false }
+                let data = first.parametersJSON.data(using: .utf8)!
+                let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                let tags = dict?["tags"] as? [String]
+                return tags == ["enemy", "boss"]
+            }
+            return false
+        }
+        XCTAssertTrue(hasScript, "set_script_property with array value must produce correct setScriptBindings mutation")
+    }
+
     // MARK: - duplicate_entity with offset
 
     func testDuplicateEntityWithOffsetProducesDuplicateEntityWithOffsetMutation() throws {

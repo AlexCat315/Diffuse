@@ -428,6 +428,13 @@ public struct SceneEditPlanExecutor: Sendable {
         case .string(let s): dict[key] = s
         case .number(let n): dict[key] = n
         case .bool(let b):   dict[key] = b
+        case .array:
+            // Arrays must round-trip through JSON; use jsonFragment as the canonical form.
+            if let fragData = "{\"\(key)\":\(value.jsonFragment)}".data(using: .utf8),
+               let fragDict = (try? JSONSerialization.jsonObject(with: fragData)) as? [String: Any],
+               let arrValue = fragDict[key] {
+                dict[key] = arrValue
+            }
         }
         guard let out = try? JSONSerialization.data(withJSONObject: dict),
               let str = String(data: out, encoding: .utf8) else {

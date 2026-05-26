@@ -815,7 +815,7 @@ public actor Session {
         what the entity represents in the real world when naming, grouping, or describing it.
         - If the previous tool_result shows the user rejected your plan, adjust your approach.
         - For set_script_property: use `script_property_name` (the parameter key) and \
-        `script_property_value` (the new value — string, number, or boolean). The entity's \
+        `script_property_value` (the new value — string, number, boolean, or array). The entity's \
         `scriptBindings` shows existing scripts and their current `params`. Use `script_index` \
         (default 0) to target a specific binding when an entity has multiple scripts.
         - For set_collider_layer: use `collider_layer_id` (0–15, which layer the collider \
