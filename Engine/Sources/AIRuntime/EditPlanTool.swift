@@ -77,7 +77,7 @@ public enum EditPlanTool {
                 "spawn_kind": [
                     "type": "string",
                     "enum": ["mesh", "empty", "light", "camera"],
-                    "description": "Entity type for spawn_entity: 'mesh' (default Static Mesh), 'empty' (group/parent node), 'light' (combine with light_type), 'camera'. Default 'mesh'.",
+                    "description": "Entity type for spawn_entity: 'mesh' (default Static Mesh), 'empty' (group/parent node), 'light' (combine with light_type; intensity, color, range, cast_shadows are applied at creation), 'camera' (camera_fov_y applied at creation). Default 'mesh'.",
                 ] as [String: Any],
                 "duplicate_offset": [
                     "type": "array", "items": ["type": "number"] as [String: Any],

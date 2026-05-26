@@ -291,13 +291,13 @@ private struct CapabilityOperationProjection {
                 "label": .string(label),
                 "position": .vec3(IntentVector3(position)),
             ]
-        case let .spawnLightEntity(label, _, position):
+        case let .spawnLightEntity(label, _, position, _, _, _, _):
             self.verb = "scene.spawn_light"
             self.arguments = [
                 "label": .string(label),
                 "position": .vec3(IntentVector3(position)),
             ]
-        case let .spawnCameraEntity(label, position):
+        case let .spawnCameraEntity(label, position, _):
             self.verb = "scene.spawn_camera"
             self.arguments = [
                 "label": .string(label),
