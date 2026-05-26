@@ -284,20 +284,20 @@ private struct CapabilityOperationProjection {
         self.arguments = [:]
 
         switch sceneMutation {
-        case let .spawnImportedMeshEntity(label, _, _, position),
-             let .spawnEmptyEntity(label, position):
+        case let .spawnImportedMeshEntity(label, _, _, position, _),
+             let .spawnEmptyEntity(label, position, _):
             self.verb = "scene.spawn_entity"
             self.arguments = [
                 "label": .string(label),
                 "position": .vec3(IntentVector3(position)),
             ]
-        case let .spawnLightEntity(label, _, position, _, _, _, _):
+        case let .spawnLightEntity(label, _, position, _, _, _, _, _):
             self.verb = "scene.spawn_light"
             self.arguments = [
                 "label": .string(label),
                 "position": .vec3(IntentVector3(position)),
             ]
-        case let .spawnCameraEntity(label, position, _):
+        case let .spawnCameraEntity(label, position, _, _):
             self.verb = "scene.spawn_camera"
             self.arguments = [
                 "label": .string(label),

@@ -108,9 +108,10 @@ public struct SceneEditPlanExecutor: Sendable {
         case .spawnEntity:
             let label = step.label ?? "AI Entity"
             let pos = simd3(step.spawnPosition) ?? .zero
+            let parentID = try resolveOptionalRef(step.spawnParentRef, op: step.op, scene: scene)
             switch step.spawnKind ?? "mesh" {
             case "empty":
-                return [.spawnEmptyEntity(label: label, position: pos)]
+                return [.spawnEmptyEntity(label: label, position: pos, parentID: parentID)]
             case "light":
                 let lt = step.lightType.flatMap(LightType.init(rawValue:)) ?? .point
                 let color: SIMD3<Float>? = step.color.flatMap { c in
@@ -120,15 +121,18 @@ public struct SceneEditPlanExecutor: Sendable {
                                           initialIntensity: step.intensity,
                                           initialColor: color,
                                           initialRange: step.range,
-                                          initialCastShadows: step.lightCastShadows)]
+                                          initialCastShadows: step.lightCastShadows,
+                                          parentID: parentID)]
             case "camera":
                 return [.spawnCameraEntity(label: label, position: pos,
-                                           initialFovYDegrees: step.cameraFovYDegrees)]
+                                           initialFovYDegrees: step.cameraFovYDegrees,
+                                           parentID: parentID)]
             default:
                 return [.spawnImportedMeshEntity(label: label,
                                                  kindLabel: "Static Mesh",
                                                  meshIndex: 0,
-                                                 position: pos)]
+                                                 position: pos,
+                                                 parentID: parentID)]
             }
 
         case .deleteEntity:

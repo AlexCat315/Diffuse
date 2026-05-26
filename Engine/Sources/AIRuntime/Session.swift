@@ -806,8 +806,10 @@ public actor Session {
         combine with `light_type` for directional/point/spot; use `intensity`, `color`, `range`, and \
         `cast_shadows` in the SAME step to set initial values — these are applied atomically at creation \
         and you do NOT need follow-up set_light_* steps for them), "camera" (creates an inactive camera; \
-        use `camera_fov_y` in the same step to set initial field of view). When creating a group, use \
-        spawn_kind "empty" and then reparent child entities under it.
+        use `camera_fov_y` in the same step to set initial field of view). Use `spawn_parent_id` \
+        ("scene:<number>") in the same step to make the new entity a child of an existing entity — \
+        this avoids a separate reparent_entity step. When creating a group, use spawn_kind "empty" \
+        with the desired parent in spawn_parent_id.
         - For snap_to_ground, set Y position to 0.
         - For set_camera_fov: use `camera_fov_y` (degrees, 1–179). 30≈telephoto, 50≈normal, 75≈wide.
         - For set_camera_active: use `camera_is_active` (boolean). Only one camera should be active at a time.
