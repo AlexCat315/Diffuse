@@ -999,9 +999,10 @@ public actor Session {
         let broadPenalty = max(0, affectedEntityIDs.count - 5)
         score -= Double(broadPenalty) * 0.02
 
-        // Orphan spawn penalty: spawnEntity with no subsequent setTransform.
+        // Orphan spawn penalty: spawnEntity with no position provided and no subsequent setTransform.
+        let spawnNeedsTransform = plan.steps.contains { $0.op == .spawnEntity && $0.spawnPosition == nil }
         let hasTransformStep = plan.steps.contains { $0.op == .setTransform }
-        if hasSpawn && !hasTransformStep { score -= 0.05 }
+        if spawnNeedsTransform && !hasTransformStep { score -= 0.05 }
 
         // Uncompensated delete penalty: deleting without spawning a replacement is riskier.
         if hasDelete && !hasSpawn { score -= 0.05 }
@@ -1109,12 +1110,15 @@ public actor Session {
         }
         let nearRadius = (input["near_radius"] as? Double).map(Float.init)
 
-        var results: [[String: Any]] = []
+        // Collect candidates with optional distance annotation.
+        typealias Candidate = (record: WorldEntityRecord, distance: Float?)
+        var candidates: [Candidate] = []
         for e in worldView.entityIndex.values.sorted(by: { $0.ref < $1.ref }) {
             if let nq = nameQuery, !e.name.lowercased().contains(nq) { continue }
             if let kf = kindFilter, e.kind != kf { continue }
             if let cf = componentFilter,
                !e.components.contains(where: { $0.lowercased() == cf }) { continue }
+            var distance: Float? = nil
             if let center = nearPos, let radius = nearRadius {
                 // Prefer worldPosition; fall back to local position for root entities.
                 let entityPos: SIMD3<Float>?
@@ -1125,20 +1129,27 @@ public actor Session {
                 } else {
                     entityPos = nil
                 }
-                if let ep = entityPos {
-                    let d = ep - center
-                    let dist = (d.x * d.x + d.y * d.y + d.z * d.z).squareRoot()
-                    if dist > radius { continue }
-                } else {
-                    continue
-                }
+                guard let ep = entityPos else { continue }
+                let d = ep - center
+                let dist = (d.x * d.x + d.y * d.y + d.z * d.z).squareRoot()
+                guard dist <= radius else { continue }
+                distance = dist
             }
+            candidates.append((e, distance))
+        }
+        // Sort proximity results nearest-first; otherwise keep stable ID order.
+        if nearPos != nil {
+            candidates.sort { ($0.distance ?? .infinity) < ($1.distance ?? .infinity) }
+        }
+        var results: [[String: Any]] = []
+        for (e, dist) in candidates {
             var entry: [String: Any] = ["id": e.ref, "name": e.name]
             if let k = e.kind { entry["kind"] = k }
             if !e.components.isEmpty { entry["components"] = e.components }
             if let p = e.position { entry["position"] = p }
             if let p = e.evaluated["worldPosition"] { entry["worldPosition"] = p.jsonValue }
             if let p = e.parentRef { entry["parentRef"] = p }
+            if let d = dist { entry["distance"] = d }
             results.append(entry)
             if results.count >= limit { break }
         }
