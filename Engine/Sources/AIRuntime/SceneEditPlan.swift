@@ -124,6 +124,7 @@ public struct SceneEditStep: Codable, Sendable {
     public var label: String?          // entity name for spawned entity
     public var spawnPosition: [Float]? // [x, y, z] default [0,0,0]
     public var spawnKind: String?      // "mesh" | "empty" | "light" | "camera"; default "mesh"
+    public var spawnParentRef: String? // "scene:<id>" to make spawned entity a child of an existing one
 
     // duplicate_entity
     public var duplicateOffset: [Float]? // [dx, dy, dz] local-space offset applied to the copy
@@ -239,6 +240,7 @@ public struct SceneEditStep: Codable, Sendable {
         case label
         case spawnPosition      = "spawn_position"
         case spawnKind          = "spawn_kind"
+        case spawnParentRef     = "spawn_parent_id"
         case duplicateOffset    = "duplicate_offset"
         case position
         case eulerDegrees       = "euler_degrees"
