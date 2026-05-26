@@ -4098,6 +4098,56 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(extents?.count, 3)
     }
 
+    func testFindEntitiesResultIncludesCapsuleHalfHeight() async {
+        var wv = WorldView()
+        let e = SceneSemanticSnapshot.Entity(
+            id: "scene:88", name: "Capsule", kind: "Static Mesh",
+            parentRef: nil, childRefs: [], isSelected: false, position: nil,
+            components: ["collider"],
+            colliderShape: "capsule",
+            colliderCapsuleRadius: 0.3,
+            colliderCapsuleHalfHeight: 0.8
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1,
+                                                  entities: [e], selectedRef: nil))
+        let session = Session(id: "capsule-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+        XCTAssertEqual(entities.count, 1)
+        XCTAssertEqual(try XCTUnwrap(entities[0]["colliderCapsuleRadius"] as? Double), 0.3, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(entities[0]["colliderCapsuleHalfHeight"] as? Double), 0.8, accuracy: 0.001,
+                       "colliderCapsuleHalfHeight must appear in findEntities result")
+    }
+
+    func testFindEntitiesResultIncludesScriptBindingParams() async {
+        var wv = WorldView()
+        let e = SceneSemanticSnapshot.Entity(
+            id: "scene:99", name: "Enemy", kind: "Character",
+            parentRef: nil, childRefs: [], isSelected: false, position: nil,
+            components: ["script"],
+            scriptBindings: [
+                SceneSemanticSnapshot.ScriptBindingRecord(handle: 5, isEnabled: true,
+                                                          parametersJSON: "{\"speed\":3.5,\"patrol\":true}")
+            ]
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1,
+                                                  entities: [e], selectedRef: nil))
+        let session = Session(id: "script-params-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: ["component": "script"])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+        XCTAssertEqual(entities.count, 1)
+        let scriptBindings = entities[0]["scriptBindings"] as? [[String: Any]]
+        XCTAssertNotNil(scriptBindings)
+        let params = scriptBindings?.first?["params"] as? [String: Any]
+        XCTAssertEqual(params?["speed"] as? Double, 3.5,
+                       "findEntities must include script binding params when parametersJSON is not empty")
+        XCTAssertEqual(params?["patrol"] as? Bool, true)
+    }
+
     func testSpawnKindDirectionalLightCreatesCorrectLightType() throws {
         let scene = SceneRuntime()
         let json = """
