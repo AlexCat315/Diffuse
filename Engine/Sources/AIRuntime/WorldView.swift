@@ -50,6 +50,9 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     public var kind: String?
     public var parentRef: String?
     public var childRefs: [String]
+    /// Component tags present on the entity (e.g. "light", "camera", "rigidbody").
+    /// Populated from SceneSemanticSnapshot; not updated incrementally by WorldEvents.
+    public var components: [String]
     // Transform (authored)
     public var position: [Float]?       // [x, y, z] metres
     public var scale: [Float]?          // [x, y, z]; nil when uniform 1,1,1
@@ -117,6 +120,7 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
         self.name = name
         self.kind = kind
         self.childRefs = []
+        self.components = []
         self.isSelected = false
         self.evaluated = [:]
         self.inferred = [:]
@@ -327,6 +331,7 @@ public struct WorldView: Sendable {
             var record = WorldEntityRecord(ref: e.id, name: e.name, kind: e.kind)
             record.parentRef = e.parentRef
             record.childRefs = e.childRefs
+            record.components = e.components
             record.isSelected = e.isSelected
             if let pos = e.position { record.position = pos }
             if let s = e.scale { record.scale = s }
