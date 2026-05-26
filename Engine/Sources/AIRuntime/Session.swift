@@ -1169,6 +1169,7 @@ public actor Session {
             if let v = e.colliderBoxHalfExtents  { entry["colliderBoxHalfExtents"] = v }
             if let v = e.colliderSphereRadius    { entry["colliderSphereRadius"] = v }
             if let v = e.colliderCapsuleRadius   { entry["colliderCapsuleRadius"] = v }
+            if let v = e.colliderCapsuleHalfHeight { entry["colliderCapsuleHalfHeight"] = v }
             // Light
             if let v = e.lightType            { entry["lightType"] = v }
             if let v = e.lightIntensity       { entry["lightIntensity"] = v }
@@ -1178,7 +1179,15 @@ public actor Session {
             if let v = e.cameraFovYDegrees    { entry["cameraFovYDegrees"] = v }
             // Script
             if let bindings = e.scriptBindings, !bindings.isEmpty {
-                entry["scriptBindings"] = bindings.map { ["handle": $0.handle, "enabled": $0.isEnabled] }
+                entry["scriptBindings"] = bindings.map { b -> [String: Any] in
+                    var rec: [String: Any] = ["handle": b.handle, "enabled": b.isEnabled]
+                    if b.parametersJSON != "{}" && !b.parametersJSON.isEmpty,
+                       let data = b.parametersJSON.data(using: .utf8),
+                       let parsed = try? JSONSerialization.jsonObject(with: data) {
+                        rec["params"] = parsed
+                    }
+                    return rec
+                }
             }
             results.append(entry)
             if results.count >= limit { break }
