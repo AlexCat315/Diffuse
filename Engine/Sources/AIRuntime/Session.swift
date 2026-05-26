@@ -1164,25 +1164,59 @@ public actor Session {
             if let k = e.kind { entry["kind"] = k }
             if !e.components.isEmpty { entry["components"] = e.components }
             if let p = e.position { entry["position"] = p }
+            if let p = e.eulerDegrees { entry["eulerDegrees"] = p }
+            if let p = e.scale { entry["scale"] = p }
             if let p = e.evaluated["worldPosition"] { entry["worldPosition"] = p.jsonValue }
             if let p = e.parentRef { entry["parentRef"] = p }
             if let d = dist { entry["distance"] = d }
             // Physics
-            if let v = e.rigidBodyMotionType  { entry["rigidBodyMotionType"] = v }
-            if let v = e.rigidBodyMass        { entry["rigidBodyMass"] = v }
+            if let v = e.rigidBodyMotionType   { entry["rigidBodyMotionType"] = v }
+            if let v = e.rigidBodyMass         { entry["rigidBodyMass"] = v }
+            if let v = e.rigidBodyGravityScale { entry["rigidBodyGravityScale"] = v }
+            if let v = e.rigidBodyAllowSleep   { entry["rigidBodyAllowSleep"] = v }
             // Collider
-            if let v = e.colliderShape        { entry["colliderShape"] = v }
+            if let v = e.colliderShape           { entry["colliderShape"] = v }
             if let v = e.colliderBoxHalfExtents  { entry["colliderBoxHalfExtents"] = v }
             if let v = e.colliderSphereRadius    { entry["colliderSphereRadius"] = v }
             if let v = e.colliderCapsuleRadius   { entry["colliderCapsuleRadius"] = v }
             if let v = e.colliderCapsuleHalfHeight { entry["colliderCapsuleHalfHeight"] = v }
+            if let v = e.colliderIsTrigger       { entry["colliderIsTrigger"] = v }
+            if let v = e.colliderFriction        { entry["colliderFriction"] = v }
+            if let v = e.colliderRestitution     { entry["colliderRestitution"] = v }
+            if let v = e.colliderLayerID         { entry["colliderLayerID"] = v }
+            if let v = e.colliderLayerMask       { entry["colliderLayerMask"] = v }
             // Light
             if let v = e.lightType            { entry["lightType"] = v }
             if let v = e.lightIntensity       { entry["lightIntensity"] = v }
+            if let v = e.lightColor           { entry["lightColor"] = v }
+            if let v = e.lightRange           { entry["lightRange"] = v }
+            if let v = e.lightSpotInner       { entry["lightSpotInner"] = v }
+            if let v = e.lightSpotOuter       { entry["lightSpotOuter"] = v }
             if let v = e.lightCastShadows     { entry["lightCastShadows"] = v }
             // Camera
             if let v = e.cameraIsActive       { entry["cameraIsActive"] = v }
             if let v = e.cameraFovYDegrees    { entry["cameraFovYDegrees"] = v }
+            // Mesh / Material
+            if let v = e.meshIsVisible        { entry["meshIsVisible"] = v }
+            if let v = e.meshColor            { entry["meshColor"] = v }
+            if let v = e.materialBaseColor    { entry["materialBaseColor"] = v }
+            if let v = e.materialMetallic     { entry["materialMetallic"] = v }
+            if let v = e.materialRoughness    { entry["materialRoughness"] = v }
+            if let v = e.materialEmissive     { entry["materialEmissive"] = v }
+            // Audio
+            if let v = e.audioClip           { entry["audioClip"] = v }
+            if let v = e.audioVolume         { entry["audioVolume"] = v }
+            if let v = e.audioPitch          { entry["audioPitch"] = v }
+            if let v = e.audioLoop           { entry["audioLoop"] = v }
+            if let v = e.audioPlayOnAwake    { entry["audioPlayOnAwake"] = v }
+            if let v = e.audioSpatialBlend   { entry["audioSpatialBlend"] = v }
+            // Animation
+            if let v = e.animationClip       { entry["animationClip"] = v }
+            if let v = e.animationSpeed      { entry["animationSpeed"] = v }
+            if let v = e.animationLoop       { entry["animationLoop"] = v }
+            if let v = e.animationIsPlaying  { entry["animationIsPlaying"] = v }
+            // Constraint
+            if let v = e.constraintEnabled   { entry["constraintEnabled"] = v }
             // Script
             if let bindings = e.scriptBindings, !bindings.isEmpty {
                 entry["scriptBindings"] = bindings.map { b -> [String: Any] in
