@@ -3379,6 +3379,88 @@ final class AIRuntimeTests: XCTestCase {
                        "parentRef must appear in findEntities output when the entity has a parent")
     }
 
+    // MARK: - WorldView snapshot merge preserves inferred annotations
+
+    func testApplySnapshotPreservesInferredAnnotationsForExistingEntities() {
+        var wv = WorldView()
+        // First snapshot: one entity
+        let s1 = SceneSemanticSnapshot.Entity(
+            id: "scene:100", name: "Chair", kind: "Static Mesh", parentRef: nil, childRefs: [],
+            isSelected: false, position: [0, 0, 0], scale: nil, eulerDegrees: nil,
+            worldPosition: [0, 0, 0], worldEulerDegrees: nil, worldScale: nil, components: []
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 1, entities: [s1],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        // Annotate with inferred data (simulating perception)
+        wv.apply(event: .entityInferredUpdated(
+            ref: "scene:100", property: "object_category",
+            value: .string("dining_chair"), confidence: 0.92, source: "perception"
+        ))
+
+        // Second snapshot for the same entity (e.g. position changed)
+        let s1updated = SceneSemanticSnapshot.Entity(
+            id: "scene:100", name: "Chair", kind: "Static Mesh", parentRef: nil, childRefs: [],
+            isSelected: false, position: [1, 0, 0], scale: nil, eulerDegrees: nil,
+            worldPosition: [1, 0, 0], worldEulerDegrees: nil, worldScale: nil, components: []
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 2, entityCount: 1, entities: [s1updated],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+
+        let record = wv.entityIndex["scene:100"]
+        XCTAssertEqual(record?.position, [1, 0, 0], "authored position must be updated from new snapshot")
+        XCTAssertEqual(record?.inferred["object_category"]?.displayValue, "dining_chair",
+                       "inferred annotation must be preserved across snapshot merges")
+        XCTAssertEqual(record?.inferred["object_category"]?.confidence, 0.92)
+    }
+
+    func testApplySnapshotRemovesEntitiesAbsentFromNewSnapshot() {
+        var wv = WorldView()
+        let s1 = SceneSemanticSnapshot.Entity(
+            id: "scene:200", name: "Temp", kind: "Static Mesh", parentRef: nil, childRefs: [],
+            isSelected: false, position: nil, scale: nil, eulerDegrees: nil,
+            worldPosition: nil, worldEulerDegrees: nil, worldScale: nil, components: []
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 1, entities: [s1],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        XCTAssertNotNil(wv.entityIndex["scene:200"])
+
+        // New snapshot with no entities — entity should be removed
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 2, entityCount: 0, entities: [],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        XCTAssertNil(wv.entityIndex["scene:200"], "entity removed from scene must not appear after snapshot merge")
+    }
+
+    // MARK: - planConfidence spawn with explicit position
+
+    func testPlanConfidenceNoOrphanPenaltyWhenSpawnHasExplicitPosition() throws {
+        let json = """
+        {"summary":"spawn","steps":[{"op":"spawn_entity","label":"Rock","spawn_position":[0,0,5]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let score = Session.confidence(for: plan)
+        XCTAssertGreaterThan(score, 0.90,
+                             "spawn with explicit spawn_position must not incur the orphan penalty")
+    }
+
+    func testPlanConfidenceAppliesOrphanPenaltyWhenSpawnLacksPosition() throws {
+        let json = """
+        {"summary":"spawn","steps":[{"op":"spawn_entity","label":"Rock"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let score = Session.confidence(for: plan)
+        // Orphan penalty (-0.05) should reduce below the no-penalty score of 1.0
+        XCTAssertLessThan(score, 0.99,
+                          "spawn without position and no set_transform must incur the orphan penalty")
+    }
+
     // MARK: - duplicate_entity with offset
 
     func testDuplicateEntityWithOffsetProducesDuplicateEntityWithOffsetMutation() throws {
@@ -3576,6 +3658,37 @@ final class AIRuntimeTests: XCTestCase {
 
         XCTAssertEqual(entities.count, 1,
                        "entity with only local position at [2,0,0] should match radius 5 query at origin")
+    }
+
+    func testFindEntitiesNearPositionSortsByDistanceNearestFirst() async {
+        var wv = WorldView()
+        let s1 = SceneSemanticSnapshot.Entity(
+            id: "scene:50", name: "Far", kind: "Static Mesh", parentRef: nil, childRefs: [],
+            isSelected: false, position: [8, 0, 0], scale: nil, eulerDegrees: nil,
+            worldPosition: [8, 0, 0], worldEulerDegrees: nil, worldScale: nil, components: []
+        )
+        let s2 = SceneSemanticSnapshot.Entity(
+            id: "scene:51", name: "Near", kind: "Static Mesh", parentRef: nil, childRefs: [],
+            isSelected: false, position: [2, 0, 0], scale: nil, eulerDegrees: nil,
+            worldPosition: [2, 0, 0], worldEulerDegrees: nil, worldScale: nil, components: []
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 2, entities: [s1, s2],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        let session = Session(id: "sort-near", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [
+            "near_position": [0.0, 0.0, 0.0],
+            "near_radius": 10.0,
+        ])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+
+        XCTAssertEqual(entities.count, 2)
+        XCTAssertEqual(entities[0]["name"] as? String, "Near",
+                       "entity at distance 2 should appear before entity at distance 8")
+        XCTAssertNotNil(entities[0]["distance"], "distance should be included in proximity results")
     }
 
     func testFindEntitiesNearPositionRequiresBothParams() async {
