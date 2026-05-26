@@ -2805,6 +2805,50 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(hasToolResult, "processing a correction must record a toolResult for the prior call's toolUseID")
     }
 
+    func testSessionProcessUserCorrectionRejectedRecordsPlanOpsInContextMemory() async throws {
+        let planJSON = "{\"summary\":\"Renamed cube\",\"steps\":[{\"op\":\"set_name\",\"entity_id\":\"scene:1\",\"name\":\"New\"}]}"
+        let planResponse = """
+        {
+          "id": "msg_r1",
+          "content": [
+            {"type": "tool_use", "id": "tu_r1", "name": "execute_edit_plan",
+             "input": {"summary": "Revised.", "steps": []}}
+          ],
+          "stop_reason": "tool_use"
+        }
+        """
+        MockURLProtocol.requestHandler = { _ in
+            let http = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!,
+                                       statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (http, Data(planResponse.utf8))
+        }
+        let urlConfig = URLSessionConfiguration.ephemeral
+        urlConfig.protocolClasses = [MockURLProtocol.self]
+        let mem = try ContextMemoryStore()
+        let session = Session(id: "mem-corr", config: makeTestConfig(), urlSession: URLSession(configuration: urlConfig))
+        await session.setContextMemory(mem)
+        await session.recordTurn(ConversationTurn(kind: .userText("rename the cube")))
+        await session.recordTurn(ConversationTurn(kind: .assistantToolCall(
+            toolUseID: "tu_r0", name: "execute_edit_plan", inputJSON: planJSON
+        )))
+
+        _ = try await session.process(Signal.userCorrection(
+            proposalID: "prop_r1",
+            acceptedStepIDs: [],
+            rejectedStepIDs: ["step_0"]
+        ))
+
+        // Allow the async Task { await mem.upsert } to complete
+        try await Task.sleep(nanoseconds: 10_000_000)
+
+        let entry = await mem.entry(id: "pref:rejected:prop_r1")
+        XCTAssertNotNil(entry, "rejected correction must produce a userPreference entry")
+        XCTAssertEqual(entry?.payload["plan_ops"], "set_name",
+                       "plan_ops must contain the operation type from the rejected plan")
+        XCTAssertEqual(entry?.payload["plan_summary"], "Renamed cube",
+                       "plan_summary must capture the plan summary")
+    }
+
     // MARK: - Executor error paths (missingEntityRef, entityNotFound, invalidEntityRef, invalidColor)
 
     func testExecutorThrowsMissingEntityRefForDeleteEntity() throws {
