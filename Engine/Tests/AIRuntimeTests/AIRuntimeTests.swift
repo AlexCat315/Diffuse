@@ -4031,6 +4031,37 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(hasDirectional, "spawn_kind 'light' with light_type 'directional' must produce directional light")
     }
 
+    // MARK: - Multi-step local scene shadow
+
+    func testMultiStepPlanDoesNotOverwritePreviousColliderChanges() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .box(halfExtents: SIMD3(1, 1, 1), center: .zero)), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        // Step 1: set trigger=true. Step 2: set sphere radius.
+        // Without local shadow, step 2 reads original box+isTrigger=false and overwrites trigger.
+        let json = """
+        {"summary":"multi","steps":[
+          {"op":"set_collider_trigger","entity_id":"\(ref)","is_trigger":true},
+          {"op":"set_collider_sphere_radius","entity_id":"\(ref)","radius":2.0}
+        ]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        // The final setCollider (from step 2) should preserve isTrigger=true from step 1
+        let lastCollider = ops.compactMap { if case let .setCollider(_, c) = $0 { return c } else { return nil } }.last
+        XCTAssertNotNil(lastCollider)
+        XCTAssertTrue(lastCollider?.isTrigger == true,
+                      "step 2's setCollider must preserve isTrigger=true set by step 1")
+        if let shape = lastCollider?.shape, case let .sphere(r, _) = shape {
+            XCTAssertEqual(r, 2.0, accuracy: 0.001)
+        } else {
+            XCTFail("final collider shape must be sphere with radius 2.0")
+        }
+    }
+
     // MARK: - Spawn light with initial properties
 
     func testSpawnLightWithIntensityAppliesInitialIntensityInMutation() throws {
