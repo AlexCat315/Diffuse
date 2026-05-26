@@ -3326,6 +3326,58 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(comps, ["transform", "rigidbody", "script"],
                        "components array must appear in findEntities output")
     }
+
+    func testFindEntitiesResultIncludesPositionWhenAvailable() async {
+        var wv = WorldView()
+        let snap = SceneSemanticSnapshot.Entity(
+            id: "scene:1", name: "Chest", kind: "Prop",
+            parentRef: nil, childRefs: [],
+            isSelected: false,
+            position: [3.0, 0.0, -5.0],
+            scale: nil, eulerDegrees: nil,
+            worldPosition: [3.0, 0.0, -5.0],
+            worldEulerDegrees: nil, worldScale: nil,
+            components: ["transform"]
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 1, entities: [snap],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        let session = Session(id: "pos-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+
+        let pos = entities.first?["position"] as? [Float]
+        XCTAssertEqual(pos, [3.0, 0.0, -5.0], "position must appear in findEntities output")
+        let worldPos = entities.first?["worldPosition"] as? [Float]
+        XCTAssertNotNil(worldPos, "worldPosition must appear in findEntities output when available")
+    }
+
+    func testFindEntitiesResultIncludesParentRefWhenPresent() async {
+        var wv = WorldView()
+        let childSnap = SceneSemanticSnapshot.Entity(
+            id: "scene:2", name: "Child", kind: "Entity",
+            parentRef: "scene:1", childRefs: [],
+            isSelected: false,
+            position: nil, scale: nil, eulerDegrees: nil,
+            worldPosition: nil, worldEulerDegrees: nil, worldScale: nil,
+            components: []
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 1, entities: [childSnap],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        let session = Session(id: "parent-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+
+        XCTAssertEqual(entities.first?["parentRef"] as? String, "scene:1",
+                       "parentRef must appear in findEntities output when the entity has a parent")
+    }
 }
 
 private final class MockURLProtocol: URLProtocol, @unchecked Sendable {

@@ -1097,6 +1097,9 @@ public actor Session {
             var entry: [String: Any] = ["id": e.ref, "name": e.name]
             if let k = e.kind { entry["kind"] = k }
             if !e.components.isEmpty { entry["components"] = e.components }
+            if let p = e.position { entry["position"] = p }
+            if let p = e.evaluated["worldPosition"] { entry["worldPosition"] = p.jsonValue }
+            if let p = e.parentRef { entry["parentRef"] = p }
             results.append(entry)
             if results.count >= limit { break }
         }
