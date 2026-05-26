@@ -137,8 +137,23 @@ public struct SceneSemanticEncoder: Sendable {
             var colliderDensity: Float?
             var colliderLayerID: Int?
             var colliderLayerMask: Int?
+            var colliderBoxHalfExtents: [Float]?
+            var colliderSphereRadius: Float?
+            var colliderCapsuleRadius: Float?
+            var colliderCapsuleHalfHeight: Float?
             if let col = scene.component(Collider.self, for: entity) {
                 colliderShape = col.shape.kind.rawValue
+                switch col.shape {
+                case let .box(he, _):
+                    colliderBoxHalfExtents = [he.x, he.y, he.z]
+                case let .sphere(r, _):
+                    colliderSphereRadius = r
+                case let .capsule(r, hh, _):
+                    colliderCapsuleRadius = r
+                    colliderCapsuleHalfHeight = hh
+                default:
+                    break
+                }
                 colliderIsTrigger = col.isTrigger
                 colliderFriction = col.material.friction
                 colliderRestitution = col.material.restitution
@@ -227,6 +242,10 @@ public struct SceneSemanticEncoder: Sendable {
                 rigidBodyGravityScale: rigidBodyGravityScale,
                 rigidBodyAllowSleep: rigidBodyAllowSleep,
                 colliderShape: colliderShape,
+                colliderBoxHalfExtents: colliderBoxHalfExtents,
+                colliderSphereRadius: colliderSphereRadius,
+                colliderCapsuleRadius: colliderCapsuleRadius,
+                colliderCapsuleHalfHeight: colliderCapsuleHalfHeight,
                 colliderIsTrigger: colliderIsTrigger,
                 colliderFriction: colliderFriction,
                 colliderRestitution: colliderRestitution,

@@ -822,6 +822,10 @@ public actor Session {
         occupies) and/or `collider_layer_mask` (bitmask of layers this collider interacts with, \
         e.g. 0xFFFF = collide with all layers). An entity's `colliderLayerID` and \
         `colliderLayerMask` fields show the current values.
+        - Collider dimensions are shown in `colliderBoxHalfExtents` ([x,y,z] half-sizes in metres \
+        for box colliders), `colliderSphereRadius` (sphere radius in metres), \
+        `colliderCapsuleRadius` and `colliderCapsuleHalfHeight` (capsule dimensions in metres). \
+        Use these when resizing or comparing physical bounds.
         - For set_material: use `material_base_color` ([r,g,b,a] linear 0–1), \
         `material_metallic` (0–1; 0=dielectric, 1=full metal), \
         `material_roughness` (0–1; 0=mirror-smooth, 1=fully rough), and \
@@ -923,6 +927,10 @@ public actor Session {
         if let v = e.rigidBodyGravityScale { d["rigidBodyGravityScale"] = v }
         if let v = e.rigidBodyAllowSleep  { d["rigidBodyAllowSleep"] = v }
         if let v = e.colliderShape        { d["colliderShape"] = v }
+        if let v = e.colliderBoxHalfExtents  { d["colliderBoxHalfExtents"] = v }
+        if let v = e.colliderSphereRadius    { d["colliderSphereRadius"] = v }
+        if let v = e.colliderCapsuleRadius   { d["colliderCapsuleRadius"] = v }
+        if let v = e.colliderCapsuleHalfHeight { d["colliderCapsuleHalfHeight"] = v }
         if let v = e.colliderIsTrigger    { d["colliderIsTrigger"] = v }
         if let v = e.colliderFriction     { d["colliderFriction"] = v }
         if let v = e.colliderRestitution  { d["colliderRestitution"] = v }

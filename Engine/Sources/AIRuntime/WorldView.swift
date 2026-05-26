@@ -82,6 +82,10 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     public var rigidBodyAllowSleep: Bool?
     // Physics — collider (authored)
     public var colliderShape: String?        // "box" | "sphere" | "capsule" | "mesh" | "convex"
+    public var colliderBoxHalfExtents: [Float]?   // non-nil for box
+    public var colliderSphereRadius: Float?        // non-nil for sphere
+    public var colliderCapsuleRadius: Float?       // non-nil for capsule
+    public var colliderCapsuleHalfHeight: Float?   // non-nil for capsule
     public var colliderIsTrigger: Bool?
     public var colliderFriction: Float?
     public var colliderRestitution: Float?
@@ -178,7 +182,22 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
         case "rigidBodyAllowSleep":
             if case let .bool(b) = value { rigidBodyAllowSleep = b }
         case "colliderShape":
-            if case let .string(s) = value { colliderShape = s }
+            if case let .string(s) = value {
+                colliderShape = s
+                // Clear stale dimension fields when shape kind changes
+                colliderBoxHalfExtents = nil
+                colliderSphereRadius = nil
+                colliderCapsuleRadius = nil
+                colliderCapsuleHalfHeight = nil
+            }
+        case "colliderBoxHalfExtents":
+            if case let .vec3(x, y, z) = value { colliderBoxHalfExtents = [x, y, z] }
+        case "colliderSphereRadius":
+            if case let .float(f) = value { colliderSphereRadius = f }
+        case "colliderCapsuleRadius":
+            if case let .float(f) = value { colliderCapsuleRadius = f }
+        case "colliderCapsuleHalfHeight":
+            if case let .float(f) = value { colliderCapsuleHalfHeight = f }
         case "colliderIsTrigger":
             if case let .bool(b) = value { colliderIsTrigger = b }
         case "colliderFriction":
@@ -367,6 +386,10 @@ public struct WorldView: Sendable {
             record.rigidBodyGravityScale = e.rigidBodyGravityScale
             record.rigidBodyAllowSleep = e.rigidBodyAllowSleep
             record.colliderShape = e.colliderShape
+            record.colliderBoxHalfExtents = e.colliderBoxHalfExtents
+            record.colliderSphereRadius = e.colliderSphereRadius
+            record.colliderCapsuleRadius = e.colliderCapsuleRadius
+            record.colliderCapsuleHalfHeight = e.colliderCapsuleHalfHeight
             record.colliderIsTrigger = e.colliderIsTrigger
             record.colliderFriction = e.colliderFriction
             record.colliderRestitution = e.colliderRestitution
