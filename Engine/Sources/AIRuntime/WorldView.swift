@@ -323,12 +323,24 @@ public struct WorldView: Sendable {
 
     // MARK: - Bootstrap (from full snapshot)
 
-    /// Seeds the entity index from a SceneSemanticSnapshot. Used once at session
-    /// creation or when a new project is opened — ongoing updates use apply(event:).
+    /// Merges a SceneSemanticSnapshot into the entity index.
+    ///
+    /// Authoritative authored fields (position, material, components, etc.) are overwritten
+    /// from the snapshot. AI-inferred annotations (`inferred` dict) and engine-computed
+    /// evaluated values (`evaluated` dict) are **preserved** for entities that continue to
+    /// exist, so that perception tags and world-transform data survive incremental re-snapshots.
+    /// Entities absent from the new snapshot are removed.
     public mutating func apply(snapshot: SceneSemanticSnapshot) {
+        // Keep inferred/evaluated for existing entities so perception annotations survive.
+        let previous = entityIndex
         entityIndex.removeAll(keepingCapacity: true)
         for e in snapshot.entities {
             var record = WorldEntityRecord(ref: e.id, name: e.name, kind: e.kind)
+            // Preserve AI-inferred annotations and evaluated values from the previous index.
+            if let prev = previous[e.id] {
+                record.inferred = prev.inferred
+                record.evaluated = prev.evaluated
+            }
             record.parentRef = e.parentRef
             record.childRefs = e.childRefs
             record.components = e.components
