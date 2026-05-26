@@ -834,9 +834,11 @@ public actor Session {
         and `audio_spatial_blend` (0=fully 2D, 1=fully 3D positional) are shown in `audioPitch` \
         and `audioSpatialBlend` only when non-default (pitch≠1.0 or blend>0). Omitting any \
         field preserves the current value.
-        - Use find_entities (name substring, kind, or component filter) to locate entities whose \
-        IDs are not visible in the scene list. The `component` parameter accepts tags like "light", \
-        "camera", "rigidbody", "collider", "audio_source", "animation", "script", "constraint". \
+        - Use find_entities (name substring, kind, component, or spatial proximity) to locate \
+        entities whose IDs are not visible in the scene list. The `component` parameter accepts \
+        tags like "light", "camera", "rigidbody", "collider", "audio_source", "animation", "script", \
+        "constraint". Use `near_position` + `near_radius` (metres) to find entities near a given \
+        world-space point (e.g. to select all lights near the player spawn). \
         After find_entities returns its result, call execute_edit_plan with the discovered IDs.
         """)
 
@@ -1088,18 +1090,45 @@ public actor Session {
         }
     }
 
-    /// Searches worldView.entityIndex for the given name/kind query and returns a JSON result string.
+    /// Searches worldView.entityIndex for the given name/kind/component/proximity query and returns a JSON result string.
     func findEntitiesResult(input: [String: Any]) -> String {
         let nameQuery = (input["name"] as? String)?.lowercased()
         let kindFilter = input["kind"] as? String
         let componentFilter = (input["component"] as? String)?.lowercased()
         let limit = max(1, min((input["limit"] as? Int) ?? 20, 200))
+        // Spatial proximity filter
+        let nearArr = input["near_position"] as? [Any]
+        let nearPos: SIMD3<Float>? = nearArr.flatMap { arr -> SIMD3<Float>? in
+            let floats = arr.compactMap { $0 as? Double }
+            guard floats.count >= 3 else { return nil }
+            return SIMD3(Float(floats[0]), Float(floats[1]), Float(floats[2]))
+        }
+        let nearRadius = (input["near_radius"] as? Double).map(Float.init)
+
         var results: [[String: Any]] = []
         for e in worldView.entityIndex.values.sorted(by: { $0.ref < $1.ref }) {
             if let nq = nameQuery, !e.name.lowercased().contains(nq) { continue }
             if let kf = kindFilter, e.kind != kf { continue }
             if let cf = componentFilter,
                !e.components.contains(where: { $0.lowercased() == cf }) { continue }
+            if let center = nearPos, let radius = nearRadius {
+                // Prefer worldPosition; fall back to local position for root entities.
+                let entityPos: SIMD3<Float>?
+                if case let .vec3(wx, wy, wz) = e.evaluated["worldPosition"] {
+                    entityPos = SIMD3(wx, wy, wz)
+                } else if let p = e.position, p.count >= 3 {
+                    entityPos = SIMD3(p[0], p[1], p[2])
+                } else {
+                    entityPos = nil
+                }
+                if let ep = entityPos {
+                    let d = ep - center
+                    let dist = (d.x * d.x + d.y * d.y + d.z * d.z).squareRoot()
+                    if dist > radius { continue }
+                } else {
+                    continue
+                }
+            }
             var entry: [String: Any] = ["id": e.ref, "name": e.name]
             if let k = e.kind { entry["kind"] = k }
             if !e.components.isEmpty { entry["components"] = e.components }
