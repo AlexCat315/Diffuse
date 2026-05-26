@@ -3784,7 +3784,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasLight = ops.contains {
-            if case let .spawnLightEntity(label, lt, pos) = $0 {
+            if case let .spawnLightEntity(label, lt, pos, _, _, _, _) = $0 {
                 return label == "Fill Light" && lt == .point && abs(pos.y - 3) < 0.01
             }
             return false
@@ -3801,7 +3801,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasPointLight = ops.contains {
-            if case let .spawnLightEntity(_, lt, _) = $0 { return lt == .point }
+            if case let .spawnLightEntity(_, lt, _, _, _, _, _) = $0 { return lt == .point }
             return false
         }
         XCTAssertTrue(hasPointLight, "spawn_kind 'light' with no light_type should default to point light")
@@ -3816,7 +3816,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasCam = ops.contains {
-            if case let .spawnCameraEntity(label, pos) = $0 {
+            if case let .spawnCameraEntity(label, pos, _) = $0 {
                 return label == "Security Cam" && abs(pos.x - 5) < 0.01
             }
             return false
@@ -4025,10 +4025,64 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasDirectional = ops.contains {
-            if case let .spawnLightEntity(_, lt, _) = $0 { return lt == .directional }
+            if case let .spawnLightEntity(_, lt, _, _, _, _, _) = $0 { return lt == .directional }
             return false
         }
         XCTAssertTrue(hasDirectional, "spawn_kind 'light' with light_type 'directional' must produce directional light")
+    }
+
+    // MARK: - Spawn light with initial properties
+
+    func testSpawnLightWithIntensityAppliesInitialIntensityInMutation() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"sun","steps":[{"op":"spawn_entity","label":"Sun","spawn_kind":"light",\
+        "light_type":"directional","intensity":12000}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasLight = ops.contains {
+            if case let .spawnLightEntity(_, _, _, intensity, _, _, _) = $0 {
+                return abs((intensity ?? 0) - 12000) < 1
+            }
+            return false
+        }
+        XCTAssertTrue(hasLight, "spawn_entity with intensity must embed initialIntensity in spawnLightEntity mutation")
+    }
+
+    func testSpawnLightWithColorAppliesInitialColorInMutation() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"red","steps":[{"op":"spawn_entity","label":"Red","spawn_kind":"light",\
+        "color":[1.0,0.2,0.2]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasColor = ops.contains {
+            if case let .spawnLightEntity(_, _, _, _, color, _, _) = $0 {
+                if let c = color { return abs(c.x - 1.0) < 0.01 && abs(c.y - 0.2) < 0.01 }
+            }
+            return false
+        }
+        XCTAssertTrue(hasColor, "spawn_entity with color must embed initialColor in spawnLightEntity mutation")
+    }
+
+    func testSpawnCameraWithFovAppliesInitialFovInMutation() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"cam","steps":[{"op":"spawn_entity","label":"Cinematic Cam","spawn_kind":"camera",\
+        "camera_fov_y":30}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasFov = ops.contains {
+            if case let .spawnCameraEntity(_, _, fov) = $0 { return abs((fov ?? 0) - 30) < 0.01 }
+            return false
+        }
+        XCTAssertTrue(hasFov, "spawn_entity camera with camera_fov_y must embed initialFovYDegrees in spawnCameraEntity mutation")
     }
 }
 

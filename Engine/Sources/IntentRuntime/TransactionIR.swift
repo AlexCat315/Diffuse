@@ -67,8 +67,12 @@ public enum SceneMutation: Sendable, Equatable {
                                  meshIndex: Int,
                                  position: SIMD3<Float>)
     case spawnEmptyEntity(label: String, position: SIMD3<Float>)
-    case spawnLightEntity(label: String, lightType: LightType, position: SIMD3<Float>)
-    case spawnCameraEntity(label: String, position: SIMD3<Float>)
+    case spawnLightEntity(label: String, lightType: LightType, position: SIMD3<Float>,
+                          initialIntensity: Float? = nil,
+                          initialColor: SIMD3<Float>? = nil,
+                          initialRange: Float? = nil,
+                          initialCastShadows: Bool? = nil)
+    case spawnCameraEntity(label: String, position: SIMD3<Float>, initialFovYDegrees: Float? = nil)
     case deleteEntity(entityID: UInt64)
     case duplicateEntity(entityID: UInt64)
     /// Duplicate an entity and immediately apply a world-space position offset to the copy.
