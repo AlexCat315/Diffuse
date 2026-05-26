@@ -933,8 +933,8 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let hasSleep = ops.contains { if case .setRigidBodyAllowSleep(_, true) = $0 { return true }; return false }
-        XCTAssertTrue(hasSleep, "set_rigid_body_allow_sleep must produce setRigidBodyAllowSleep mutation")
+        let hasSleep = ops.contains { if case let .setRigidBody(_, body) = $0 { return body.allowSleep == true }; return false }
+        XCTAssertTrue(hasSleep, "set_rigid_body_allow_sleep must produce setRigidBody mutation with allowSleep=true")
     }
 
     func testSetMeshVisibilityExecutorProducesMutation() throws {
@@ -1129,8 +1129,8 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let hasMotion = ops.contains { if case .setRigidBodyMotionType(_, .kinematic) = $0 { return true }; return false }
-        XCTAssertTrue(hasMotion, "set_rigidbody_motion must produce setRigidBodyMotionType(.kinematic) mutation")
+        let hasMotion = ops.contains { if case let .setRigidBody(_, body) = $0 { return body.motionType == .kinematic }; return false }
+        XCTAssertTrue(hasMotion, "set_rigidbody_motion must produce setRigidBody mutation with motionType=.kinematic")
     }
 
     func testSetRigidBodyMassExecutorProducesMutation() throws {
@@ -1148,10 +1148,10 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasMass = ops.contains {
-            if case let .setRigidBodyMass(_, v) = $0 { return abs(v - 25) < 0.01 }
+            if case let .setRigidBody(_, body) = $0 { return abs(body.mass - 25) < 0.01 }
             return false
         }
-        XCTAssertTrue(hasMass, "set_rigidbody_mass must produce setRigidBodyMass mutation")
+        XCTAssertTrue(hasMass, "set_rigidbody_mass must produce setRigidBody mutation with mass=25")
     }
 
     func testSetRigidBodyGravityExecutorProducesMutation() throws {
@@ -1169,10 +1169,10 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasGravity = ops.contains {
-            if case let .setRigidBodyGravityScale(_, v) = $0 { return abs(v - 0.2) < 0.001 }
+            if case let .setRigidBody(_, body) = $0 { return abs(body.gravityScale - 0.2) < 0.001 }
             return false
         }
-        XCTAssertTrue(hasGravity, "set_rigidbody_gravity must produce setRigidBodyGravityScale mutation")
+        XCTAssertTrue(hasGravity, "set_rigidbody_gravity must produce setRigidBody mutation with gravityScale=0.2")
     }
 
     func testSetTransformPositionOnlyPreservesExistingTransform() throws {
@@ -3459,6 +3459,51 @@ final class AIRuntimeTests: XCTestCase {
         // Orphan penalty (-0.05) should reduce below the no-penalty score of 1.0
         XCTAssertLessThan(score, 0.99,
                           "spawn without position and no set_transform must incur the orphan penalty")
+    }
+
+    // MARK: - RigidBody read-modify-write (creates component when absent)
+
+    func testSetRigidBodyMotionCreatesRigidBodyWhenEntityHasNone() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"phys","steps":[{"op":"set_rigidbody_motion","entity_id":"\(ref)","motion_type":"dynamic"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasRigidBody = ops.contains {
+            if case let .setRigidBody(eid, body) = $0 {
+                return eid == entity.rawValue && body.motionType == .dynamic
+            }
+            return false
+        }
+        XCTAssertTrue(hasRigidBody, "set_rigidbody_motion on entity without RigidBody must create it with setRigidBody mutation")
+    }
+
+    func testSetRigidBodyMotionPreservesExistingMassWhenChangingMotionType() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        var rb = RigidBody()
+        rb.mass = 42
+        _ = scene.setComponent(rb, for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"phys","steps":[{"op":"set_rigidbody_motion","entity_id":"\(ref)","motion_type":"kinematic"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasCorrect = ops.contains {
+            if case let .setRigidBody(eid, body) = $0 {
+                return eid == entity.rawValue && body.motionType == .kinematic && abs(body.mass - 42) < 0.01
+            }
+            return false
+        }
+        XCTAssertTrue(hasCorrect, "set_rigidbody_motion must preserve existing mass when only changing motion type")
     }
 
     // MARK: - JSONValue array support for set_script_property

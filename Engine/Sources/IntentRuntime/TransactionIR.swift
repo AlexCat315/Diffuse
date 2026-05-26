@@ -81,6 +81,8 @@ public enum SceneMutation: Sendable, Equatable {
     case setRigidBodyMass(entityID: UInt64, value: Float)
     case setRigidBodyGravityScale(entityID: UInt64, value: Float)
     case setRigidBodyAllowSleep(entityID: UInt64, value: Bool)
+    /// Full rigidbody replacement — creates the component if it doesn't exist yet.
+    case setRigidBody(entityID: UInt64, body: RigidBody)
     case setCollider(entityID: UInt64, collider: Collider)
     case setColliderTrigger(entityID: UInt64, value: Bool)
     case setColliderShapeType(entityID: UInt64, kind: ColliderShapeKind)
@@ -128,6 +130,7 @@ public enum SceneMutation: Sendable, Equatable {
             return nil
         case let .deleteEntity(id),
              let .duplicateEntity(id),
+             let .setRigidBody(id, _),
              let .moveEntity(id, _, _),
              let .setLocalTransform(id, _),
              let .setSceneName(id, _),
