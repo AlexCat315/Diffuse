@@ -293,14 +293,24 @@ public actor Session {
         }
 
         // Record rejected steps as a userPreference entry so future sessions avoid the pattern.
+        // Include operation types from the plan for richer context.
         if let mem = contextMemory, !rejectedStepIDs.isEmpty {
-            let rejectedList = rejectedStepIDs.joined(separator: ",")
+            var payload: [String: String] = [
+                "rejected_count": String(rejectedStepIDs.count),
+                "proposal_id": proposalID,
+            ]
+            if case let .assistantToolCall(_, _, inputJSON) = callTurn.kind,
+               let data = inputJSON.data(using: .utf8),
+               let plan = try? JSONDecoder().decode(SceneEditPlan.self, from: data) {
+                let ops = plan.steps.map(\.op.rawValue).joined(separator: ",")
+                payload["plan_ops"] = ops
+                if !plan.summary.isEmpty { payload["plan_summary"] = String(plan.summary.prefix(120)) }
+            }
             let entry = ContextEntry(
                 id: "pref:rejected:\(proposalID)",
                 kind: .userPreference,
                 subject: "session",
-                payload: ["rejected_steps": rejectedList,
-                          "proposal_id": proposalID],
+                payload: payload,
                 importance: 0.7
             )
             Task { await mem.upsert(entry) }
@@ -782,7 +792,8 @@ public actor Session {
         hierarchy, `evaluated.worldPosition` shows its actual world-space position, \
         `evaluated.worldEulerDegrees` shows world-space rotation, and `evaluated.worldScale` \
         shows the cumulative world-space scale — use these for spatial reasoning, but \
-        set_transform always writes local space.
+        set_transform always writes local space. For root-level entities (parentRef absent), \
+        local space equals world space so you can use worldPosition values directly.
         - The `scale` field is omitted when uniform [1, 1, 1]; treat missing `scale` as [1, 1, 1].
         - The `eulerDegrees` field is omitted when the rotation is [0, 0, 0]; treat missing \
         `eulerDegrees` as [0, 0, 0]. Angles are XYZ intrinsic Euler in degrees.
