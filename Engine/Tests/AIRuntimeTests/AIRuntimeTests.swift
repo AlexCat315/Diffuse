@@ -1356,7 +1356,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasSpawn = ops.contains {
-            if case let .spawnImportedMeshEntity(label, _, _, pos) = $0 {
+            if case let .spawnImportedMeshEntity(label, _, _, pos, _) = $0 {
                 return label == "Barrel" && abs(pos.z - 5) < 0.01
             }
             return false
@@ -3908,7 +3908,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasEmpty = ops.contains {
-            if case let .spawnEmptyEntity(label, pos) = $0 {
+            if case let .spawnEmptyEntity(label, pos, _) = $0 {
                 return label == "Group" && abs(pos.x - 1) < 0.01
             }
             return false
@@ -3925,7 +3925,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasLight = ops.contains {
-            if case let .spawnLightEntity(label, lt, pos, _, _, _, _) = $0 {
+            if case let .spawnLightEntity(label, lt, pos, _, _, _, _, _) = $0 {
                 return label == "Fill Light" && lt == .point && abs(pos.y - 3) < 0.01
             }
             return false
@@ -3942,7 +3942,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasPointLight = ops.contains {
-            if case let .spawnLightEntity(_, lt, _, _, _, _, _) = $0 { return lt == .point }
+            if case let .spawnLightEntity(_, lt, _, _, _, _, _, _) = $0 { return lt == .point }
             return false
         }
         XCTAssertTrue(hasPointLight, "spawn_kind 'light' with no light_type should default to point light")
@@ -3957,7 +3957,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasCam = ops.contains {
-            if case let .spawnCameraEntity(label, pos, _) = $0 {
+            if case let .spawnCameraEntity(label, pos, _, _) = $0 {
                 return label == "Security Cam" && abs(pos.x - 5) < 0.01
             }
             return false
@@ -4216,7 +4216,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasDirectional = ops.contains {
-            if case let .spawnLightEntity(_, lt, _, _, _, _, _) = $0 { return lt == .directional }
+            if case let .spawnLightEntity(_, lt, _, _, _, _, _, _) = $0 { return lt == .directional }
             return false
         }
         XCTAssertTrue(hasDirectional, "spawn_kind 'light' with light_type 'directional' must produce directional light")
@@ -4265,7 +4265,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasLight = ops.contains {
-            if case let .spawnLightEntity(_, _, _, intensity, _, _, _) = $0 {
+            if case let .spawnLightEntity(_, _, _, intensity, _, _, _, _) = $0 {
                 return abs((intensity ?? 0) - 12000) < 1
             }
             return false
@@ -4283,7 +4283,7 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasColor = ops.contains {
-            if case let .spawnLightEntity(_, _, _, _, color, _, _) = $0 {
+            if case let .spawnLightEntity(_, _, _, _, color, _, _, _) = $0 {
                 if let c = color { return abs(c.x - 1.0) < 0.01 && abs(c.y - 0.2) < 0.01 }
             }
             return false
@@ -4301,10 +4301,79 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasFov = ops.contains {
-            if case let .spawnCameraEntity(_, _, fov) = $0 { return abs((fov ?? 0) - 30) < 0.01 }
+            if case let .spawnCameraEntity(_, _, fov, _) = $0 { return abs((fov ?? 0) - 30) < 0.01 }
             return false
         }
         XCTAssertTrue(hasFov, "spawn_entity camera with camera_fov_y must embed initialFovYDegrees in spawnCameraEntity mutation")
+    }
+
+    // MARK: - spawn_entity with spawn_parent_id
+
+    func testSpawnEntityWithParentIDPassesParentToMutation() throws {
+        var scene = SceneRuntime()
+        let parent = scene.createEntity()
+        let parentRef = "scene:\(parent.rawValue)"
+
+        let json = """
+        {"summary":"child","steps":[{"op":"spawn_entity","label":"Child","spawn_kind":"empty",\
+        "spawn_parent_id":"\(parentRef)"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasParent = ops.contains {
+            if case let .spawnEmptyEntity(label, _, pid) = $0 {
+                return label == "Child" && pid == parent.rawValue
+            }
+            return false
+        }
+        XCTAssertTrue(hasParent, "spawn_entity with spawn_parent_id must embed parentID in spawnEmptyEntity mutation")
+    }
+
+    func testSpawnLightWithParentIDPassesParentToMutation() throws {
+        var scene = SceneRuntime()
+        let parent = scene.createEntity()
+        let parentRef = "scene:\(parent.rawValue)"
+
+        let json = """
+        {"summary":"child light","steps":[{"op":"spawn_entity","label":"Child Light","spawn_kind":"light",\
+        "spawn_parent_id":"\(parentRef)"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasParent = ops.contains {
+            if case let .spawnLightEntity(_, _, _, _, _, _, _, pid) = $0 {
+                return pid == parent.rawValue
+            }
+            return false
+        }
+        XCTAssertTrue(hasParent, "spawn_entity light with spawn_parent_id must embed parentID in spawnLightEntity mutation")
+    }
+
+    func testSpawnEntityWithoutParentIDHasNilParent() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"root","steps":[{"op":"spawn_entity","label":"Root","spawn_kind":"empty"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasNilParent = ops.contains {
+            if case let .spawnEmptyEntity(_, _, pid) = $0 { return pid == nil }
+            return false
+        }
+        XCTAssertTrue(hasNilParent, "spawn_entity without spawn_parent_id must have nil parentID")
+    }
+
+    func testSpawnEntityWithInvalidParentRefThrows() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"bad","steps":[{"op":"spawn_entity","label":"X","spawn_parent_id":"scene:99999"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene),
+                             "spawn_entity with non-existent spawn_parent_id must throw entityNotFound")
     }
 }
 

@@ -79,6 +79,10 @@ public enum EditPlanTool {
                     "enum": ["mesh", "empty", "light", "camera"],
                     "description": "Entity type for spawn_entity: 'mesh' (default Static Mesh), 'empty' (group/parent node), 'light' (combine with light_type; intensity, color, range, cast_shadows are applied at creation), 'camera' (camera_fov_y applied at creation). Default 'mesh'.",
                 ] as [String: Any],
+                "spawn_parent_id": [
+                    "type": "string",
+                    "description": "Parent entity in 'scene:<number>' format for spawn_entity. When provided, the new entity is created as a child of this entity. Omit for a root-level entity.",
+                ] as [String: Any],
                 "duplicate_offset": [
                     "type": "array", "items": ["type": "number"] as [String: Any],
                     "description": "[dx, dy, dz] local-space offset applied to the copy in duplicate_entity. When omitted the copy is placed at the same position as the source.",
