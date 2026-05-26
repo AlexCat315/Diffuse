@@ -163,27 +163,25 @@ public struct SceneEditPlanExecutor: Sendable {
 
         case .setMaterial:
             let id = try resolveEntityID(step, scene: scene)
-            let base: SIMD4<Float>
-            if let bc = step.materialBaseColor, bc.count == 4 {
-                base = SIMD4(bc[0], bc[1], bc[2], bc[3])
-            } else if let bc = step.materialBaseColor, bc.count == 3 {
-                base = SIMD4(bc[0], bc[1], bc[2], 1.0)
-            } else {
-                base = SIMD4(1, 1, 1, 1)
+            let eid = entityID(fromRaw: id)
+            var mat = scene.component(RenderMaterialComponent.self, for: eid) ?? RenderMaterialComponent()
+            if let bc = step.materialBaseColor {
+                if bc.count >= 4 {
+                    mat.baseColorFactor = SIMD4(bc[0], bc[1], bc[2], bc[3])
+                } else if bc.count >= 3 {
+                    mat.baseColorFactor = SIMD4(bc[0], bc[1], bc[2], mat.baseColorFactor.w)
+                }
             }
-            let metallic   = step.materialMetallic  ?? 0.0
-            let roughness  = step.materialRoughness ?? 0.5
-            let em: SIMD3<Float>
+            if let m = step.materialMetallic  { mat.metallicFactor  = m }
+            if let r = step.materialRoughness { mat.roughnessFactor  = r }
             if let e = step.materialEmissive, e.count >= 3 {
-                em = SIMD3(e[0], e[1], e[2])
-            } else {
-                em = .zero
+                mat.emissiveFactor = SIMD3(e[0], e[1], e[2])
             }
             return [.setRenderMaterialComponent(entityID: id,
-                                                baseColorFactor: base,
-                                                metallicFactor: metallic,
-                                                roughnessFactor: roughness,
-                                                emissiveFactor: em)]
+                                                baseColorFactor: mat.baseColorFactor,
+                                                metallicFactor: mat.metallicFactor,
+                                                roughnessFactor: mat.roughnessFactor,
+                                                emissiveFactor: mat.emissiveFactor)]
 
         case .setLightColor:
             let id = try resolveEntityID(step, scene: scene)

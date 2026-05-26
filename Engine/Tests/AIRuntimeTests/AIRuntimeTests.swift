@@ -2975,6 +2975,124 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(userMessage.contains("chair.jpg"), "filename must appear in recorded user message")
         XCTAssertTrue(userMessage.contains("scene:5"),   "entity ref must appear in recorded user message")
     }
+
+    // MARK: - setMaterial read-modify-write
+
+    func testSetMaterialPreservesExistingFieldsWhenOnlyRoughnessSpecified() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        var mat = RenderMaterialComponent()
+        mat.baseColorFactor = SIMD4<Float>(0.2, 0.4, 0.6, 1.0)
+        mat.metallicFactor = 0.8
+        mat.roughnessFactor = 0.9
+        _ = scene.setComponent(mat, for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"rough","steps":[{"op":"set_material","entity_id":"\(ref)","material_roughness":0.1}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let ok = ops.contains {
+            if case let .setRenderMaterialComponent(id, base, metallic, roughness, _) = $0 {
+                return id == entity.rawValue
+                    && abs(base.x - 0.2) < 0.001   // preserved
+                    && abs(base.y - 0.4) < 0.001   // preserved
+                    && abs(base.z - 0.6) < 0.001   // preserved
+                    && abs(metallic - 0.8) < 0.001 // preserved
+                    && abs(roughness - 0.1) < 0.001 // updated
+            }
+            return false
+        }
+        XCTAssertTrue(ok, "set_material must preserve existing base color and metallic when only roughness is specified")
+    }
+
+    func testSetMaterialPreservesExistingFieldsWhenOnlyMetallicSpecified() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        var mat = RenderMaterialComponent()
+        mat.baseColorFactor = SIMD4<Float>(1.0, 0.0, 0.0, 1.0)
+        mat.roughnessFactor = 0.3
+        _ = scene.setComponent(mat, for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"metal","steps":[{"op":"set_material","entity_id":"\(ref)","material_metallic":1.0}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let ok = ops.contains {
+            if case let .setRenderMaterialComponent(id, base, metallic, roughness, _) = $0 {
+                return id == entity.rawValue
+                    && abs(base.x - 1.0) < 0.001   // preserved
+                    && abs(base.z - 0.0) < 0.001   // preserved
+                    && abs(metallic - 1.0) < 0.001  // updated
+                    && abs(roughness - 0.3) < 0.001 // preserved
+            }
+            return false
+        }
+        XCTAssertTrue(ok, "set_material must preserve existing roughness when only metallic is specified")
+    }
+
+    // MARK: - audioPitch / audioSpatialBlend snapshot pipeline
+
+    func testSnapshotEntityIncludesAudioPitchWhenNonDefault() {
+        var snap = SceneSemanticSnapshot.Entity(
+            id: "scene:1", name: "SFX", kind: "Entity",
+            parentRef: nil, childRefs: [],
+            isSelected: false,
+            position: nil, scale: nil, eulerDegrees: nil,
+            worldPosition: nil, worldEulerDegrees: nil, worldScale: nil,
+            components: ["audio_source"],
+            audioVolume: 0.8,
+            audioPitch: 1.5
+        )
+        _ = snap  // already verified by construction; test the field round-trips through WorldView
+
+        var wv = WorldView()
+        let full = SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 1, entities: [snap],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        )
+        wv.apply(snapshot: full)
+        XCTAssertEqual(wv.entityIndex["scene:1"]?.audioPitch, 1.5)
+    }
+
+    func testSnapshotEntityIncludesAudioSpatialBlend() {
+        let snap = SceneSemanticSnapshot.Entity(
+            id: "scene:2", name: "Speaker", kind: "Entity",
+            parentRef: nil, childRefs: [],
+            isSelected: false,
+            position: nil, scale: nil, eulerDegrees: nil,
+            worldPosition: nil, worldEulerDegrees: nil, worldScale: nil,
+            components: ["audio_source"],
+            audioVolume: 1.0,
+            audioSpatialBlend: 0.75
+        )
+        var wv = WorldView()
+        let full = SceneSemanticSnapshot(
+            sceneRevision: 2, entityCount: 1, entities: [snap],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        )
+        wv.apply(snapshot: full)
+        XCTAssertEqual(wv.entityIndex["scene:2"]?.audioSpatialBlend, 0.75)
+    }
+
+    func testWorldEntityRecordApplyAudioPitchEvent() {
+        var record = WorldEntityRecord(ref: "scene:3")
+        record.apply(property: "audioPitch", value: .float(0.5))
+        XCTAssertEqual(record.audioPitch, 0.5)
+    }
+
+    func testWorldEntityRecordApplyAudioSpatialBlendEvent() {
+        var record = WorldEntityRecord(ref: "scene:4")
+        record.apply(property: "audioSpatialBlend", value: .float(0.9))
+        XCTAssertEqual(record.audioSpatialBlend, 0.9)
+    }
 }
 
 private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
