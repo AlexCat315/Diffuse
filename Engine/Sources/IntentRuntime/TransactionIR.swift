@@ -71,6 +71,9 @@ public enum SceneMutation: Sendable, Equatable {
     case spawnCameraEntity(label: String, position: SIMD3<Float>)
     case deleteEntity(entityID: UInt64)
     case duplicateEntity(entityID: UInt64)
+    /// Duplicate an entity and immediately apply a world-space position offset to the copy.
+    /// The offset is applied in the same local space as the source (parent-relative).
+    case duplicateEntityWithOffset(entityID: UInt64, positionOffset: SIMD3<Float>)
     case moveEntity(entityID: UInt64, parentID: UInt64?, index: Int)
     case setLocalTransform(entityID: UInt64, transform: LocalTransform)
     case setSceneName(entityID: UInt64, value: String)
@@ -120,7 +123,8 @@ public enum SceneMutation: Sendable, Equatable {
     /// rather than referencing an existing one.
     public var entityID: UInt64? {
         switch self {
-        case .spawnImportedMeshEntity, .spawnEmptyEntity, .spawnLightEntity, .spawnCameraEntity:
+        case .spawnImportedMeshEntity, .spawnEmptyEntity, .spawnLightEntity, .spawnCameraEntity,
+             .duplicateEntityWithOffset:
             return nil
         case let .deleteEntity(id),
              let .duplicateEntity(id),

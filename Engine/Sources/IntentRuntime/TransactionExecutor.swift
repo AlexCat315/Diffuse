@@ -377,6 +377,48 @@ public struct TransactionExecutor {
                 }
                 createdEntityIDs.append(entity.rawValue)
 
+            case let .duplicateEntityWithOffset(entityID, offset):
+                let source = try requireEntity(entityID, in: scene)
+                let entity = scene.createEntity()
+                if let name = scene.component(SceneNameComponent.self, for: source) {
+                    _ = scene.setComponent(SceneNameComponent(value: name.value + " Copy"), for: entity)
+                }
+                if let kind = scene.component(SceneKindComponent.self, for: source) {
+                    _ = scene.setComponent(kind, for: entity)
+                }
+                var transform = scene.localTransform(for: source) ?? LocalTransform()
+                transform.matrix.columns.3 += SIMD4<Float>(offset, 0)
+                _ = scene.setLocalTransform(transform, for: entity)
+                if let parent = scene.parent(of: source) {
+                    _ = scene.setParent(parent, for: entity)
+                }
+                if let mesh = scene.component(RenderMeshComponent.self, for: source) {
+                    _ = scene.setComponent(mesh, for: entity)
+                }
+                if let asset = scene.component(AssetReferenceComponent.self, for: source) {
+                    _ = scene.setComponent(asset, for: entity)
+                }
+                if let body = scene.component(RigidBody.self, for: source) {
+                    _ = scene.setComponent(body, for: entity)
+                }
+                if let collider = scene.component(Collider.self, for: source) {
+                    _ = scene.setComponent(collider, for: entity)
+                }
+                if let camera = scene.component(CameraComponent.self, for: source) {
+                    var copy = camera; copy.isActive = false
+                    _ = scene.setComponent(copy, for: entity)
+                }
+                if let light = scene.component(LightComponent.self, for: source) {
+                    _ = scene.setComponent(light, for: entity)
+                }
+                if let scripts = scene.component(ScriptComponent.self, for: source) {
+                    _ = scene.setComponent(scripts, for: entity)
+                }
+                if let player = scene.component(AnimationPlayer.self, for: source) {
+                    _ = scene.setComponent(player, for: entity)
+                }
+                createdEntityIDs.append(entity.rawValue)
+
             case let .moveEntity(entityID, parentID, index):
                 let entity = try requireEntity(entityID, in: scene)
                 let parent = try requireOptionalEntity(parentID, in: scene)
@@ -974,6 +1016,8 @@ public struct TransactionExecutor {
             return "scene:delete:\(id)"
         case let .duplicateEntity(id):
             return "scene:duplicate:\(id)"
+        case let .duplicateEntityWithOffset(id, _):
+            return "scene:duplicate_offset:\(id)"
         case let .moveEntity(id, _, _):
             return "scene:move:\(id)"
         case let .setLocalTransform(id, _):
@@ -1112,7 +1156,7 @@ public struct TransactionExecutor {
             case let .deleteEntity(entityID):
                 events.append(.entityRemoved(ref: "scene:\(entityID)"))
 
-            case .duplicateEntity:
+            case .duplicateEntity, .duplicateEntityWithOffset:
                 if createdIndex < createdEntityIDs.count, let scene {
                     let rawID = createdEntityIDs[createdIndex]
                     let ref = "scene:\(rawID)"

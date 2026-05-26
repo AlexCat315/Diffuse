@@ -103,6 +103,10 @@ public struct SceneEditPlanExecutor: Sendable {
 
         case .duplicateEntity:
             let id = try resolveEntityID(step, scene: scene)
+            if let off = step.duplicateOffset, off.count >= 3 {
+                return [.duplicateEntityWithOffset(entityID: id,
+                                                   positionOffset: SIMD3(off[0], off[1], off[2]))]
+            }
             return [.duplicateEntity(entityID: id)]
 
         case .reparentEntity:

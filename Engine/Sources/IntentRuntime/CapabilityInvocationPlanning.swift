@@ -307,6 +307,9 @@ private struct CapabilityOperationProjection {
             self.verb = "scene.delete_entity"
         case .duplicateEntity:
             self.verb = "scene.duplicate_entity"
+        case let .duplicateEntityWithOffset(_, offset):
+            self.verb = "scene.duplicate_entity_offset"
+            self.arguments["offset"] = .vec3(IntentVector3(offset))
         case let .moveEntity(_, parentID, index):
             self.verb = "scene.reparent_entity"
             if let parentID {
