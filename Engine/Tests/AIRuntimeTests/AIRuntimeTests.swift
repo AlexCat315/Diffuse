@@ -3459,6 +3459,109 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(hasMesh, "spawn_entity with no spawn_kind must default to spawnImportedMeshEntity")
     }
 
+    // MARK: - find_entities spatial proximity filter
+
+    func testFindEntitiesNearPositionReturnsCloseEntities() async {
+        var wv = WorldView()
+        // Entity at [0, 0, 0]
+        let s1 = SceneSemanticSnapshot.Entity(
+            id: "scene:10", name: "Near", kind: "Static Mesh", parentRef: nil, childRefs: [],
+            isSelected: false, position: [0, 0, 0], scale: nil, eulerDegrees: nil,
+            worldPosition: [0, 0, 0], worldEulerDegrees: nil, worldScale: nil, components: []
+        )
+        // Entity at [100, 0, 0]
+        let s2 = SceneSemanticSnapshot.Entity(
+            id: "scene:11", name: "Far", kind: "Static Mesh", parentRef: nil, childRefs: [],
+            isSelected: false, position: [100, 0, 0], scale: nil, eulerDegrees: nil,
+            worldPosition: [100, 0, 0], worldEulerDegrees: nil, worldScale: nil, components: []
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 2, entities: [s1, s2],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        let session = Session(id: "near-filter", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [
+            "near_position": [0.0, 0.0, 0.0],
+            "near_radius": 5.0,
+        ])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+
+        XCTAssertEqual(entities.count, 1, "only the nearby entity should be returned")
+        XCTAssertEqual(entities.first?["name"] as? String, "Near")
+    }
+
+    func testFindEntitiesNearPositionExcludesEntitiesOutsideRadius() async {
+        var wv = WorldView()
+        let s1 = SceneSemanticSnapshot.Entity(
+            id: "scene:20", name: "E1", kind: "Static Mesh", parentRef: nil, childRefs: [],
+            isSelected: false, position: [3, 0, 0], scale: nil, eulerDegrees: nil,
+            worldPosition: [3, 0, 0], worldEulerDegrees: nil, worldScale: nil, components: []
+        )
+        let s2 = SceneSemanticSnapshot.Entity(
+            id: "scene:21", name: "E2", kind: "Static Mesh", parentRef: nil, childRefs: [],
+            isSelected: false, position: [6, 0, 0], scale: nil, eulerDegrees: nil,
+            worldPosition: [6, 0, 0], worldEulerDegrees: nil, worldScale: nil, components: []
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 2, entities: [s1, s2],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        let session = Session(id: "radius-exclude", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [
+            "near_position": [0.0, 0.0, 0.0],
+            "near_radius": 4.0,
+        ])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+
+        XCTAssertEqual(entities.count, 1)
+        XCTAssertEqual(entities.first?["name"] as? String, "E1",
+                       "entity at distance 3 is within radius 4; entity at distance 6 must be excluded")
+    }
+
+    func testFindEntitiesNearPositionFallsBackToLocalPosition() async {
+        var wv = WorldView()
+        // Entity with local position only (root entity, no worldPosition in evaluated)
+        wv.apply(event: .entityAdded(ref: "scene:30", name: "RootEntity", kind: "Static Mesh"))
+        wv.apply(event: .entityAuthoredChanged(ref: "scene:30", property: "position",
+                                               value: .vec3(2, 0, 0)))
+        let session = Session(id: "local-pos-fallback", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [
+            "near_position": [0.0, 0.0, 0.0],
+            "near_radius": 5.0,
+        ])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+
+        XCTAssertEqual(entities.count, 1,
+                       "entity with only local position at [2,0,0] should match radius 5 query at origin")
+    }
+
+    func testFindEntitiesNearPositionRequiresBothParams() async {
+        var wv = WorldView()
+        let s = SceneSemanticSnapshot.Entity(
+            id: "scene:40", name: "Any", kind: "Static Mesh", parentRef: nil, childRefs: [],
+            isSelected: false, position: [0, 0, 0], scale: nil, eulerDegrees: nil,
+            worldPosition: [0, 0, 0], worldEulerDegrees: nil, worldScale: nil, components: []
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 1, entities: [s],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        let session = Session(id: "no-radius", config: makeTestConfig(), initialWorldView: wv)
+
+        // near_position without near_radius — should return all entities (filter not applied)
+        let json = await session.findEntitiesResult(input: ["near_position": [0.0, 0.0, 0.0]])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+
+        XCTAssertEqual(entities.count, 1, "without near_radius the spatial filter should not be applied")
+    }
+
     func testSpawnKindDirectionalLightCreatesCorrectLightType() throws {
         let scene = SceneRuntime()
         let json = """
