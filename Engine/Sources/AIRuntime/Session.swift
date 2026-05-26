@@ -1158,6 +1158,25 @@ public actor Session {
             if let p = e.evaluated["worldPosition"] { entry["worldPosition"] = p.jsonValue }
             if let p = e.parentRef { entry["parentRef"] = p }
             if let d = dist { entry["distance"] = d }
+            // Physics
+            if let v = e.rigidBodyMotionType  { entry["rigidBodyMotionType"] = v }
+            if let v = e.rigidBodyMass        { entry["rigidBodyMass"] = v }
+            // Collider
+            if let v = e.colliderShape        { entry["colliderShape"] = v }
+            if let v = e.colliderBoxHalfExtents  { entry["colliderBoxHalfExtents"] = v }
+            if let v = e.colliderSphereRadius    { entry["colliderSphereRadius"] = v }
+            if let v = e.colliderCapsuleRadius   { entry["colliderCapsuleRadius"] = v }
+            // Light
+            if let v = e.lightType            { entry["lightType"] = v }
+            if let v = e.lightIntensity       { entry["lightIntensity"] = v }
+            if let v = e.lightCastShadows     { entry["lightCastShadows"] = v }
+            // Camera
+            if let v = e.cameraIsActive       { entry["cameraIsActive"] = v }
+            if let v = e.cameraFovYDegrees    { entry["cameraFovYDegrees"] = v }
+            // Script
+            if let bindings = e.scriptBindings, !bindings.isEmpty {
+                entry["scriptBindings"] = bindings.map { ["handle": $0.handle, "enabled": $0.isEnabled] }
+            }
             results.append(entry)
             if results.count >= limit { break }
         }

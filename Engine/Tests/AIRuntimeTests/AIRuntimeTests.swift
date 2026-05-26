@@ -3970,6 +3970,52 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(entities.count, 1, "without near_radius the spatial filter should not be applied")
     }
 
+    // MARK: - find_entities enriched result
+
+    func testFindEntitiesResultIncludesLightFields() async {
+        var wv = WorldView()
+        let e = SceneSemanticSnapshot.Entity(
+            id: "scene:99", name: "Sun", kind: "Directional Light",
+            parentRef: nil, childRefs: [], isSelected: false, position: nil,
+            components: ["light"],
+            lightType: "directional", lightIntensity: 8000, lightCastShadows: true
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1,
+                                                  entities: [e], selectedRef: nil))
+        let session = Session(id: "enrich-test", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: ["name": "sun"])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+        XCTAssertEqual(entities.count, 1)
+        XCTAssertEqual(entities[0]["lightType"] as? String, "directional")
+        XCTAssertEqual(entities[0]["lightIntensity"] as? Float, 8000)
+        XCTAssertEqual(entities[0]["lightCastShadows"] as? Bool, true)
+    }
+
+    func testFindEntitiesResultIncludesPhysicsFields() async {
+        var wv = WorldView()
+        let e = SceneSemanticSnapshot.Entity(
+            id: "scene:77", name: "Box", kind: "Static Mesh",
+            parentRef: nil, childRefs: [], isSelected: false, position: nil,
+            components: ["rigidbody", "collider"],
+            rigidBodyMotionType: "dynamic", rigidBodyMass: 5.0,
+            colliderShape: "box", colliderBoxHalfExtents: [0.5, 0.5, 0.5]
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1,
+                                                  entities: [e], selectedRef: nil))
+        let session = Session(id: "enrich-phys", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: ["component": "rigidbody"])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+        XCTAssertEqual(entities.count, 1)
+        XCTAssertEqual(entities[0]["rigidBodyMotionType"] as? String, "dynamic")
+        XCTAssertEqual(entities[0]["colliderShape"] as? String, "box")
+        let extents = entities[0]["colliderBoxHalfExtents"] as? [Float]
+        XCTAssertEqual(extents?.count, 3)
+    }
+
     func testSpawnKindDirectionalLightCreatesCorrectLightType() throws {
         let scene = SceneRuntime()
         let json = """
