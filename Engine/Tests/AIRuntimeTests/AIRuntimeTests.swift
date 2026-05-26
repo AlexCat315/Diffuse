@@ -823,6 +823,88 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(dict["label"] as? String, "Patrol")
     }
 
+    func testSetScriptEnabledDisablesBinding() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let binding = ScriptBinding(ScriptHandle(rawValue: 1), isEnabled: true)
+        _ = scene.setComponent(ScriptComponent(bindings: [binding]), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"disable script","steps":[{"op":"set_script_enabled","entity_id":"\(ref)",\
+        "is_enabled":false,"script_index":0}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        var foundBindings: [ScriptBinding]? = nil
+        for op in ops {
+            if case let .setScriptBindings(_, bindings) = op { foundBindings = bindings; break }
+        }
+        let bindings = try XCTUnwrap(foundBindings, "expected setScriptBindings mutation")
+        XCTAssertFalse(bindings[0].isEnabled, "set_script_enabled false must disable the binding")
+    }
+
+    func testSetScriptEnabledCreatesBindingWhenComponentAbsent() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"enable script","steps":[{"op":"set_script_enabled","entity_id":"\(ref)",\
+        "is_enabled":true}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        var foundBindings: [ScriptBinding]? = nil
+        for op in ops {
+            if case let .setScriptBindings(_, bindings) = op { foundBindings = bindings; break }
+        }
+        let bindings = try XCTUnwrap(foundBindings, "expected setScriptBindings mutation")
+        XCTAssertEqual(bindings.count, 1)
+        XCTAssertTrue(bindings[0].isEnabled)
+    }
+
+    func testSetScriptEnabledMissingFieldThrows() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"bad","steps":[{"op":"set_script_enabled","entity_id":"\(ref)"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene))
+    }
+
+    func testSetScriptEnabledTargetsCorrectBindingIndex() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let b0 = ScriptBinding(ScriptHandle(rawValue: 1), isEnabled: true)
+        let b1 = ScriptBinding(ScriptHandle(rawValue: 2), isEnabled: true)
+        _ = scene.setComponent(ScriptComponent(bindings: [b0, b1]), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"disable second","steps":[{"op":"set_script_enabled","entity_id":"\(ref)",\
+        "is_enabled":false,"script_index":1}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        var foundBindings: [ScriptBinding]? = nil
+        for op in ops {
+            if case let .setScriptBindings(_, bindings) = op { foundBindings = bindings; break }
+        }
+        let bindings = try XCTUnwrap(foundBindings)
+        XCTAssertTrue(bindings[0].isEnabled, "binding 0 must remain enabled")
+        XCTAssertFalse(bindings[1].isEnabled, "binding 1 must be disabled")
+    }
+
     func testSetColliderTriggerExecutorProducesMutation() throws {
         var scene = SceneRuntime()
         let entity = scene.createEntity()

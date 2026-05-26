@@ -161,7 +161,7 @@ public enum EditPlanTool {
                 ] as [String: Any],
                 "is_enabled": [
                     "type": "boolean",
-                    "description": "Constraint enabled flag for set_constraint_enabled.",
+                    "description": "Enabled flag. For set_constraint_enabled: toggles physics constraint. For set_script_enabled: enables/disables a script binding at script_index.",
                 ] as [String: Any],
                 "allow_sleep": [
                     "type": "boolean",
@@ -229,7 +229,7 @@ public enum EditPlanTool {
                 ] as [String: Any],
                 "script_index": [
                     "type": "integer",
-                    "description": "Which script binding to modify (0-based). Defaults to 0 when omitted. For set_script_property.",
+                    "description": "Which script binding to modify (0-based). Defaults to 0 when omitted. For set_script_property and set_script_enabled.",
                 ] as [String: Any],
                 "script_property_name": [
                     "type": "string",
