@@ -7,7 +7,7 @@ public enum FindEntitiesTool {
     public static func definition() -> [String: Any] {
         [
             "name": "find_entities",
-            "description": "Search scene entities by name substring, kind, or both. Use when you need to find an entity that may not be visible in the truncated entity list.",
+            "description": "Search scene entities by name substring, kind, or component. Returns id, name, kind, components, position, worldPosition, and parentRef for each match. Use when you need to find an entity that may not be visible in the truncated entity list.",
             "input_schema": schema(),
         ]
     }
@@ -18,7 +18,7 @@ public enum FindEntitiesTool {
             "type": "function",
             "function": [
                 "name": "find_entities",
-                "description": "Search scene entities by name substring, kind, or both. Use when you need to find an entity that may not be visible in the truncated entity list.",
+                "description": "Search scene entities by name substring, kind, or component. Returns id, name, kind, components, position, worldPosition, and parentRef for each match. Use when you need to find an entity that may not be visible in the truncated entity list.",
                 "parameters": schema(),
             ] as [String: Any],
         ]
