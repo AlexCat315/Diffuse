@@ -2815,6 +2815,65 @@ final class AIRuntimeTests: XCTestCase {
                       "player count should appear in system prompt section")
     }
 
+    func testGameWorkflowContextScriptSchemasAppearInPrompt() {
+        let schema = ScriptSchema(name: "PatrolScript", parameters: [
+            ScriptParameterDescriptor(name: "speed", type: "Float", description: "movement speed in m/s"),
+            ScriptParameterDescriptor(name: "radius", type: "Float"),
+        ])
+        let constraints = GameKnownConstraints(scriptSchemas: [schema])
+        let ctx = GameWorkflowContext(
+            levelPhase: .blockout,
+            gameplayIntent: GameplayIntent(genre: "action", winCondition: "survive"),
+            targetExperience: "combat",
+            knownConstraints: constraints
+        )
+        let section = ctx.systemPromptSection
+        XCTAssertTrue(section.contains("PatrolScript"), "script name must appear")
+        XCTAssertTrue(section.contains("speed"), "parameter name must appear")
+        XCTAssertTrue(section.contains("Float"), "parameter type must appear")
+        XCTAssertTrue(section.contains("movement speed in m/s"), "parameter description must appear")
+        XCTAssertTrue(section.contains("radius"), "second parameter must appear")
+    }
+
+    func testGameWorkflowContextScriptSchemasTakePrecedenceOverRegistry() {
+        let schema = ScriptSchema(name: "EnemyAI", parameters: [
+            ScriptParameterDescriptor(name: "health", type: "Int"),
+        ])
+        let constraints = GameKnownConstraints(
+            scriptingRegistry: ["legacyScript"],
+            scriptSchemas: [schema]
+        )
+        let ctx = GameWorkflowContext(
+            levelPhase: .blockout,
+            gameplayIntent: GameplayIntent(genre: "action", winCondition: "defeat_boss"),
+            targetExperience: "intense",
+            knownConstraints: constraints
+        )
+        let section = ctx.systemPromptSection
+        XCTAssertTrue(section.contains("EnemyAI"), "schema name must appear when schemas present")
+        XCTAssertFalse(section.contains("legacyScript"),
+                       "registry names must be suppressed when schemas are provided")
+    }
+
+    func testGameWorkflowContextScriptSchemasRoundTripCodable() throws {
+        let schema = ScriptSchema(name: "FlockBoid", parameters: [
+            ScriptParameterDescriptor(name: "cohesionWeight", type: "Float"),
+            ScriptParameterDescriptor(name: "separationDist", type: "Float", description: "min distance"),
+        ])
+        let constraints = GameKnownConstraints(scriptSchemas: [schema])
+        let ctx = GameWorkflowContext(
+            levelPhase: .polish,
+            gameplayIntent: GameplayIntent(genre: "simulation", winCondition: "observe"),
+            targetExperience: "meditative",
+            knownConstraints: constraints
+        )
+        let data = try JSONEncoder().encode(ctx)
+        let decoded = try JSONDecoder().decode(GameWorkflowContext.self, from: data)
+        XCTAssertEqual(decoded.knownConstraints.scriptSchemas.count, 1)
+        XCTAssertEqual(decoded.knownConstraints.scriptSchemas[0].name, "FlockBoid")
+        XCTAssertEqual(decoded.knownConstraints.scriptSchemas[0].parameters[1].description, "min distance")
+    }
+
     // MARK: - Locale propagation
 
     func testSessionNaturalLanguageWithNonEnglishLocaleProducesProposal() async throws {
