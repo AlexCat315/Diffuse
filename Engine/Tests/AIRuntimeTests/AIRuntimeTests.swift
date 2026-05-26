@@ -718,10 +718,11 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try executor.buildTransaction(from: plan, scene: scene)
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let hasLayer = ops.contains { if case .setColliderLayer(_, 3) = $0 { return true }; return false }
-        let hasMask  = ops.contains { if case .setColliderLayerMask(_, 12) = $0 { return true }; return false }
-        XCTAssertTrue(hasLayer, "expected setColliderLayer mutation")
-        XCTAssertTrue(hasMask,  "expected setColliderLayerMask mutation")
+        let hasCollider = ops.contains {
+            if case let .setCollider(_, c) = $0 { return c.layerID == 3 && c.layerMask == 12 }
+            return false
+        }
+        XCTAssertTrue(hasCollider, "set_collider_layer must produce setCollider mutation with layerID=3 and layerMask=12")
     }
 
     func testSetColliderShapeExecutorProducesShapeTypeMutation() throws {
@@ -738,10 +739,10 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasShape = ops.contains {
-            if case .setColliderShapeType(_, .sphere) = $0 { return true }
+            if case let .setCollider(_, c) = $0 { if case .sphere = c.shape { return true } }
             return false
         }
-        XCTAssertTrue(hasShape, "set_collider_shape sphere must produce setColliderShapeType(.sphere) mutation")
+        XCTAssertTrue(hasShape, "set_collider_shape sphere must produce setCollider mutation with sphere shape")
     }
 
     func testSetColliderMaterialExecutorProducesThreeMutations() throws {
@@ -758,12 +759,15 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let hasFriction    = ops.contains { if case .setColliderMaterialFriction(_, _) = $0 { return true }; return false }
-        let hasRestitution = ops.contains { if case .setColliderMaterialRestitution(_, _) = $0 { return true }; return false }
-        let hasDensity     = ops.contains { if case .setColliderMaterialDensity(_, _) = $0 { return true }; return false }
-        XCTAssertTrue(hasFriction,    "set_collider_material must produce setColliderMaterialFriction mutation")
-        XCTAssertTrue(hasRestitution, "set_collider_material must produce setColliderMaterialRestitution mutation")
-        XCTAssertTrue(hasDensity,     "set_collider_material must produce setColliderMaterialDensity mutation")
+        let hasCollider = ops.contains {
+            if case let .setCollider(_, c) = $0 {
+                return abs(c.material.friction - 0.05) < 0.001
+                    && abs(c.material.restitution - 0.9) < 0.001
+                    && abs(c.material.density - 0.8) < 0.001
+            }
+            return false
+        }
+        XCTAssertTrue(hasCollider, "set_collider_material must produce setCollider mutation with all three material values")
     }
 
     func testSetScriptPropertyExecutorMergesIntoExistingBindings() throws {
@@ -832,8 +836,8 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let hasTrigger = ops.contains { if case .setColliderTrigger(_, true) = $0 { return true }; return false }
-        XCTAssertTrue(hasTrigger, "set_collider_trigger must produce setColliderTrigger mutation")
+        let hasTrigger = ops.contains { if case let .setCollider(_, c) = $0 { return c.isTrigger == true }; return false }
+        XCTAssertTrue(hasTrigger, "set_collider_trigger must produce setCollider mutation with isTrigger=true")
     }
 
     func testSetColliderBoxExtentsExecutorProducesMutation() throws {
@@ -851,12 +855,14 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasExtents = ops.contains {
-            if case let .setColliderShapeBoxHalfExtents(_, ext) = $0 {
-                return abs(ext.x - 0.5) < 0.001 && abs(ext.y - 1.0) < 0.001 && abs(ext.z - 2.0) < 0.001
+            if case let .setCollider(_, c) = $0 {
+                if case let .box(ext, _) = c.shape {
+                    return abs(ext.x - 0.5) < 0.001 && abs(ext.y - 1.0) < 0.001 && abs(ext.z - 2.0) < 0.001
+                }
             }
             return false
         }
-        XCTAssertTrue(hasExtents, "set_collider_box_extents must produce setColliderShapeBoxHalfExtents mutation")
+        XCTAssertTrue(hasExtents, "set_collider_box_extents must produce setCollider mutation with correct half-extents")
     }
 
     func testSetColliderSphereRadiusExecutorProducesMutation() throws {
@@ -873,10 +879,12 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasRadius = ops.contains {
-            if case let .setColliderShapeSphereRadius(_, r) = $0 { return abs(r - 3.5) < 0.001 }
+            if case let .setCollider(_, c) = $0 {
+                if case let .sphere(r, _) = c.shape { return abs(r - 3.5) < 0.001 }
+            }
             return false
         }
-        XCTAssertTrue(hasRadius, "set_collider_sphere_radius must produce setColliderShapeSphereRadius mutation")
+        XCTAssertTrue(hasRadius, "set_collider_sphere_radius must produce setCollider mutation with sphere radius=3.5")
     }
 
     func testSetColliderCapsuleExecutorProducesBothMutations() throws {
@@ -893,16 +901,15 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let hasRadius = ops.contains {
-            if case let .setColliderShapeCapsuleRadius(_, r) = $0 { return abs(r - 0.4) < 0.001 }
+        let hasCollider = ops.contains {
+            if case let .setCollider(_, c) = $0 {
+                if case let .capsule(r, hh, _) = c.shape {
+                    return abs(r - 0.4) < 0.001 && abs(hh - 1.2) < 0.001
+                }
+            }
             return false
         }
-        let hasHH = ops.contains {
-            if case let .setColliderShapeCapsuleHalfHeight(_, hh) = $0 { return abs(hh - 1.2) < 0.001 }
-            return false
-        }
-        XCTAssertTrue(hasRadius, "set_collider_capsule must produce setColliderShapeCapsuleRadius mutation")
-        XCTAssertTrue(hasHH,     "set_collider_capsule must produce setColliderShapeCapsuleHalfHeight mutation")
+        XCTAssertTrue(hasCollider, "set_collider_capsule must produce setCollider mutation with radius=0.4 halfHeight=1.2")
     }
 
     func testSetConstraintEnabledExecutorProducesMutation() throws {
@@ -2990,8 +2997,11 @@ final class AIRuntimeTests: XCTestCase {
         let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let has = ops.contains { if case .setColliderShapeType(_, .mesh) = $0 { return true }; return false }
-        XCTAssertTrue(has, "set_collider_shape 'mesh' must produce setColliderShapeType(.mesh)")
+        let has = ops.contains {
+            if case let .setCollider(_, c) = $0 { if case .mesh = c.shape { return true } }
+            return false
+        }
+        XCTAssertTrue(has, "set_collider_shape 'mesh' must produce setCollider mutation with mesh shape")
     }
 
     func testSetColliderShapeConvexKindProducesMutation() throws {
@@ -3006,8 +3016,11 @@ final class AIRuntimeTests: XCTestCase {
         let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let has = ops.contains { if case .setColliderShapeType(_, .convex) = $0 { return true }; return false }
-        XCTAssertTrue(has, "set_collider_shape 'convex' must produce setColliderShapeType(.convex)")
+        let has = ops.contains {
+            if case let .setCollider(_, c) = $0 { if case .convex = c.shape { return true } }
+            return false
+        }
+        XCTAssertTrue(has, "set_collider_shape 'convex' must produce setCollider mutation with convex shape")
     }
 
     // MARK: - Session.process(.referenceImage)
@@ -3504,6 +3517,92 @@ final class AIRuntimeTests: XCTestCase {
             return false
         }
         XCTAssertTrue(hasCorrect, "set_rigidbody_motion must preserve existing mass when only changing motion type")
+    }
+
+    // MARK: - Collider read-modify-write
+
+    func testSetColliderTriggerCreatesColliderWhenEntityHasNone() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"trigger","steps":[{"op":"set_collider_trigger","entity_id":"\(ref)","is_trigger":true}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasCollider = ops.contains {
+            if case let .setCollider(eid, col) = $0 { return eid == entity.rawValue && col.isTrigger == true }
+            return false
+        }
+        XCTAssertTrue(hasCollider, "set_collider_trigger on entity without Collider must create it via setCollider")
+    }
+
+    func testSetColliderMaterialPreservesShapeWhenEntityHasCollider() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .sphere(radius: 1.5, center: .zero)), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"mat","steps":[{"op":"set_collider_material","entity_id":"\(ref)","friction":0.3}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasCollider = ops.contains {
+            if case let .setCollider(eid, col) = $0 {
+                if case .sphere(1.5, _) = col.shape { return eid == entity.rawValue && abs(col.material.friction - 0.3) < 0.001 }
+            }
+            return false
+        }
+        XCTAssertTrue(hasCollider, "set_collider_material must preserve existing sphere shape while updating friction")
+    }
+
+    func testSetColliderBoxExtentsCreatesBoxColliderWhenEntityHasNone() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"box","steps":[{"op":"set_collider_box_extents","entity_id":"\(ref)","half_extents":[1,2,3]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasCollider = ops.contains {
+            if case let .setCollider(eid, col) = $0 {
+                if case let .box(he, _) = col.shape {
+                    return eid == entity.rawValue && abs(he.x - 1) < 0.01 && abs(he.y - 2) < 0.01 && abs(he.z - 3) < 0.01
+                }
+            }
+            return false
+        }
+        XCTAssertTrue(hasCollider, "set_collider_box_extents on entity without Collider must create box collider")
+    }
+
+    func testSetColliderShapeTypeSwitchesToSpherePreservingTrigger() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        var col = Collider(shape: .box(halfExtents: SIMD3(1, 1, 1), center: .zero))
+        col.isTrigger = true
+        _ = scene.setComponent(col, for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"shape","steps":[{"op":"set_collider_shape","entity_id":"\(ref)","collider_shape":"sphere"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasCollider = ops.contains {
+            if case let .setCollider(eid, c) = $0 {
+                if case .sphere = c.shape { return eid == entity.rawValue && c.isTrigger == true }
+            }
+            return false
+        }
+        XCTAssertTrue(hasCollider, "set_collider_shape to sphere must preserve isTrigger=true and switch to sphere shape")
     }
 
     // MARK: - JSONValue array support for set_script_property
