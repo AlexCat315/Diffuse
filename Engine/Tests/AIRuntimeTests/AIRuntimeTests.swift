@@ -4375,6 +4375,90 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene),
                              "spawn_entity with non-existent spawn_parent_id must throw entityNotFound")
     }
+
+    // MARK: - AssetCatalog
+
+    func testAssetCatalogAudioClipsAppearInSystemPromptSection() {
+        let catalog = AssetCatalog(audioClips: ["explosion", "footstep"], animationClips: [], meshNames: [])
+        let section = catalog.systemPromptSection
+        XCTAssertTrue(section.contains("explosion"), "audio clip name must appear")
+        XCTAssertTrue(section.contains("footstep"), "second audio clip name must appear")
+        XCTAssertTrue(section.contains("set_audio_source"), "usage hint must reference set_audio_source")
+    }
+
+    func testAssetCatalogAnimationClipsAppearInSystemPromptSection() {
+        let catalog = AssetCatalog(audioClips: [], animationClips: ["run", "idle"], meshNames: [])
+        let section = catalog.systemPromptSection
+        XCTAssertTrue(section.contains("run"), "animation clip name must appear")
+        XCTAssertTrue(section.contains("idle"), "second animation clip name must appear")
+        XCTAssertTrue(section.contains("set_animation_player"), "usage hint must reference set_animation_player")
+    }
+
+    func testAssetCatalogMeshNamesAppearInSystemPromptSection() {
+        let catalog = AssetCatalog(audioClips: [], animationClips: [], meshNames: ["DragonMesh", "RockProp"])
+        let section = catalog.systemPromptSection
+        XCTAssertTrue(section.contains("DragonMesh"), "mesh name must appear")
+        XCTAssertTrue(section.contains("RockProp"), "second mesh name must appear")
+    }
+
+    func testAssetCatalogEmptyProducesNoSection() {
+        let catalog = AssetCatalog()
+        XCTAssertTrue(catalog.isEmpty, "default catalog must be empty")
+        XCTAssertTrue(catalog.systemPromptSection.isEmpty, "empty catalog must produce empty section string")
+    }
+
+    func testAssetCatalogIsEmptyFalseWhenAnyFieldPopulated() {
+        XCTAssertFalse(AssetCatalog(audioClips: ["sfx"]).isEmpty)
+        XCTAssertFalse(AssetCatalog(animationClips: ["walk"]).isEmpty)
+        XCTAssertFalse(AssetCatalog(meshNames: ["cube"]).isEmpty)
+    }
+
+    func testSessionConfigAssetCatalogAppearsInSystemPromptRequest() async throws {
+        let planResponse = """
+        {
+          "id": "msg_ac1",
+          "content": [
+            {"type": "tool_use", "id": "tu_ac1", "name": "execute_edit_plan",
+             "input": {"summary": "done", "steps": []}}
+          ],
+          "stop_reason": "tool_use"
+        }
+        """
+        nonisolated(unsafe) var capturedBody: Data?
+        MockURLProtocol.requestHandler = { request in
+            // URLSession may convert httpBody to httpBodyStream before handing to URLProtocol
+            if let stream = request.httpBodyStream {
+                stream.open()
+                var data = Data()
+                let buf = UnsafeMutablePointer<UInt8>.allocate(capacity: 4096)
+                while stream.hasBytesAvailable {
+                    let n = stream.read(buf, maxLength: 4096)
+                    if n > 0 { data.append(buf, count: n) }
+                }
+                buf.deallocate()
+                stream.close()
+                capturedBody = data
+            } else {
+                capturedBody = request.httpBody
+            }
+            let http = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!,
+                                       statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (http, Data(planResponse.utf8))
+        }
+        let urlConfig = URLSessionConfiguration.ephemeral
+        urlConfig.protocolClasses = [MockURLProtocol.self]
+        let catalog = AssetCatalog(audioClips: ["gun_shot"], animationClips: ["sprint"], meshNames: [])
+        let sessionConfig = SessionConfig.anthropic(apiKey: "test", assetCatalog: catalog)
+        let session = Session(id: "ac1", config: sessionConfig, urlSession: URLSession(configuration: urlConfig))
+
+        _ = try await session.process(Signal.naturalLanguage(text: "play a sound", locale: "en"))
+
+        let body = try XCTUnwrap(capturedBody)
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let systemText = json["system"] as? String ?? ""
+        XCTAssertTrue(systemText.contains("gun_shot"), "audio clip name must appear in system prompt sent to API")
+        XCTAssertTrue(systemText.contains("sprint"), "animation clip name must appear in system prompt sent to API")
+    }
 }
 
 private final class MockURLProtocol: URLProtocol, @unchecked Sendable {

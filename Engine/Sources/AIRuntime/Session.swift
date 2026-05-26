@@ -768,6 +768,10 @@ public actor Session {
             parts.append("Active workflow mode: \(mode)")
         }
 
+        if !config.assetCatalog.isEmpty {
+            parts.append(config.assetCatalog.systemPromptSection)
+        }
+
         if !worldView.selectedEntityRefs.isEmpty {
             parts.append("Currently selected: \(worldView.selectedEntityRefs.joined(separator: ", "))")
         }
