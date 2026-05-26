@@ -101,6 +101,7 @@ public enum SceneEditOp: String, Codable, Sendable, CaseIterable {
 
     // Script
     case setScriptProperty    = "set_script_property"
+    case setScriptEnabled     = "set_script_enabled"
 
     // Mesh visibility
     case setMeshVisibility    = "set_mesh_visibility"

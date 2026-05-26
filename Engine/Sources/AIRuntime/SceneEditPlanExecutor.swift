@@ -91,6 +91,9 @@ public struct SceneEditPlanExecutor: Sendable {
                 _ = scene.setComponent(body, for: entityID(fromRaw: rawID))
             case let .setLocalTransform(rawID, transform):
                 _ = scene.setLocalTransform(transform, for: entityID(fromRaw: rawID))
+            case let .setScriptBindings(rawID, bindings):
+                let comp = ScriptComponent(bindings: bindings)
+                _ = scene.setComponent(comp, for: entityID(fromRaw: rawID))
             default:
                 break
             }
@@ -495,6 +498,20 @@ public struct SceneEditPlanExecutor: Sendable {
                 value: propValue
             )
             component.bindings[bindingIdx].parametersJSON = updatedJSON
+            return [.setScriptBindings(entityID: id, bindings: component.bindings)]
+
+        case .setScriptEnabled:
+            let id = try resolveEntityID(step, scene: scene)
+            let eid = entityID(fromRaw: id)
+            guard let enabled = step.isEnabled else {
+                throw SceneEditPlanExecutorError.missingField(op: step.op, field: "is_enabled")
+            }
+            let bindingIdx = step.scriptIndex ?? 0
+            var component = scene.component(ScriptComponent.self, for: eid) ?? ScriptComponent()
+            while component.bindings.count <= bindingIdx {
+                component.bindings.append(ScriptBinding(ScriptHandle(rawValue: 0)))
+            }
+            component.bindings[bindingIdx].isEnabled = enabled
             return [.setScriptBindings(entityID: id, bindings: component.bindings)]
         }
     }
