@@ -60,9 +60,14 @@ public struct SceneEditPlanExecutor: Sendable {
         approvalPolicy: TransactionApprovalPolicy = .automatic
     ) throws -> TransactionIR {
         var mutations: [SceneMutation] = []
+        // Shadow copy — each step reads the post-previous-step state so multi-step
+        // plans that touch the same component (e.g. set_collider_trigger then
+        // set_collider_sphere_radius) don't silently overwrite each other's changes.
+        var localScene = scene
         for step in plan.steps {
-            let stepMutations = try buildMutations(step, scene: scene)
+            let stepMutations = try buildMutations(step, scene: localScene)
             mutations.append(contentsOf: stepMutations)
+            applyToLocalScene(&localScene, mutations: stepMutations)
         }
         return TransactionIR(
             intent: nil,
@@ -72,6 +77,24 @@ public struct SceneEditPlanExecutor: Sendable {
             approvalPolicy: approvalPolicy,
             provenance: .proposal
         )
+    }
+
+    /// Applies the component-level side-effects of `mutations` to `scene` so that subsequent
+    /// steps in the same plan see the accumulated state. Only updates the fields that
+    /// read-modify-write operations care about (Collider, RigidBody, transform).
+    private func applyToLocalScene(_ scene: inout SceneRuntime, mutations: [SceneMutation]) {
+        for m in mutations {
+            switch m {
+            case let .setCollider(rawID, collider):
+                _ = scene.setComponent(collider, for: entityID(fromRaw: rawID))
+            case let .setRigidBody(rawID, body):
+                _ = scene.setComponent(body, for: entityID(fromRaw: rawID))
+            case let .setLocalTransform(rawID, transform):
+                _ = scene.setLocalTransform(transform, for: entityID(fromRaw: rawID))
+            default:
+                break
+            }
+        }
     }
 
     // MARK: - Per-step dispatch
