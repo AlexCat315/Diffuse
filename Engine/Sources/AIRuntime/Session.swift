@@ -784,6 +784,10 @@ public actor Session {
         - When "Currently selected" is non-empty, treat those entities as the user's primary \
         target for any ambiguous request (e.g. "make it bigger", "delete it", "change the colour"). \
         Only operate on non-selected entities when the request clearly names or describes them.
+        - For duplicate_entity: use `duplicate_offset` ([dx, dy, dz]) to place the copy offset \
+        from the source in local space (e.g. [2,0,0] to place it 2 m to the right). Without \
+        duplicate_offset, the copy lands on top of the source. Always provide an offset when the \
+        user's request implies a different location ("add another one next to it").
         - For reparent_entity: moving an entity to a new parent changes its local transform \
         relative to that parent. After reparenting, follow up with set_transform if the entity's \
         world position should be preserved.

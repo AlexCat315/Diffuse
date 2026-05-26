@@ -3379,6 +3379,43 @@ final class AIRuntimeTests: XCTestCase {
                        "parentRef must appear in findEntities output when the entity has a parent")
     }
 
+    // MARK: - duplicate_entity with offset
+
+    func testDuplicateEntityWithOffsetProducesDuplicateEntityWithOffsetMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"dup","steps":[{"op":"duplicate_entity","entity_id":"\(ref)","duplicate_offset":[3,0,0]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasOffset = ops.contains {
+            if case let .duplicateEntityWithOffset(eid, off) = $0 {
+                return eid == entity.rawValue && abs(off.x - 3) < 0.01 && abs(off.y) < 0.01 && abs(off.z) < 0.01
+            }
+            return false
+        }
+        XCTAssertTrue(hasOffset, "duplicate_entity with duplicate_offset must produce duplicateEntityWithOffset mutation")
+    }
+
+    func testDuplicateEntityWithoutOffsetProducesPlainDuplicateMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"dup","steps":[{"op":"duplicate_entity","entity_id":"\(ref)"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasPlain = ops.contains { if case .duplicateEntity(entity.rawValue) = $0 { return true }; return false }
+        XCTAssertTrue(hasPlain, "duplicate_entity without offset must produce plain duplicateEntity mutation")
+    }
+
     // MARK: - spawn_kind support
 
     func testSpawnKindEmptyProducesSpawnEmptyEntityMutation() throws {

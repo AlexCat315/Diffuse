@@ -120,6 +120,9 @@ public struct SceneEditStep: Codable, Sendable {
     public var spawnPosition: [Float]? // [x, y, z] default [0,0,0]
     public var spawnKind: String?      // "mesh" | "empty" | "light" | "camera"; default "mesh"
 
+    // duplicate_entity
+    public var duplicateOffset: [Float]? // [dx, dy, dz] local-space offset applied to the copy
+
     // set_transform / snap_to_ground
     public var position: [Float]?      // [x, y, z] metres
     public var eulerDegrees: [Float]?  // [x, y, z] XYZ intrinsic rotation in degrees
@@ -231,6 +234,7 @@ public struct SceneEditStep: Codable, Sendable {
         case label
         case spawnPosition      = "spawn_position"
         case spawnKind          = "spawn_kind"
+        case duplicateOffset    = "duplicate_offset"
         case position
         case eulerDegrees       = "euler_degrees"
         case scale
