@@ -2703,6 +2703,29 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertFalse(ctx.systemPromptSection.contains("NavMesh"))
     }
 
+    func testGameWorkflowContextIncludesPerformanceBudgetInPrompt() {
+        let constraints = GameKnownConstraints(navMeshBaked: false, performanceBudget: "mobile_low")
+        let ctx = GameWorkflowContext(
+            levelPhase: .blockout,
+            gameplayIntent: GameplayIntent(genre: "platformer", winCondition: "reach_end"),
+            targetExperience: "casual",
+            knownConstraints: constraints
+        )
+        XCTAssertTrue(ctx.systemPromptSection.contains("mobile_low"),
+                      "performance budget should appear in system prompt section")
+    }
+
+    func testGameWorkflowContextIncludesPlayerCountInPrompt() {
+        let ctx = GameWorkflowContext(
+            levelPhase: .blockout,
+            gameplayIntent: GameplayIntent(genre: "co-op", winCondition: "survive",
+                                           playerCount: 4, pacing: "action"),
+            targetExperience: "chaotic fun"
+        )
+        XCTAssertTrue(ctx.systemPromptSection.contains("4"),
+                      "player count should appear in system prompt section")
+    }
+
     // MARK: - Session.process(.userCorrection) all-accepted path
 
     func testSessionProcessUserCorrectionAllAcceptedReturnsNoopProposal() async throws {

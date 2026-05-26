@@ -80,8 +80,9 @@ public struct GameWorkflowContext: Sendable, Equatable, Codable {
         var lines: [String] = [
             "Workflow: game/interactive project",
             "Level phase: \(levelPhase)",
-            "Genre: \(gameplayIntent.genre) | Win condition: \(gameplayIntent.winCondition) | Pacing: \(gameplayIntent.pacing)",
+            "Genre: \(gameplayIntent.genre) | Win condition: \(gameplayIntent.winCondition) | Pacing: \(gameplayIntent.pacing) | Players: \(gameplayIntent.playerCount)",
             "Target experience: \(targetExperience)",
+            "Performance budget: \(knownConstraints.performanceBudget)",
         ]
         if knownConstraints.navMeshBaked {
             lines.append("NavMesh is baked — you can reason about traversability.")
