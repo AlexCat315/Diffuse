@@ -2751,6 +2751,230 @@ final class AIRuntimeTests: XCTestCase {
         }
         XCTAssertTrue(hasToolResult, "processing a correction must record a toolResult for the prior call's toolUseID")
     }
+
+    // MARK: - Executor error paths (missingEntityRef, entityNotFound, invalidEntityRef, invalidColor)
+
+    func testExecutorThrowsMissingEntityRefForDeleteEntity() throws {
+        var scene = SceneRuntime()
+        _ = scene.createEntity()
+
+        let json = """
+        {"summary":"del","steps":[{"op":"delete_entity"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)) { err in
+            if case SceneEditPlanExecutorError.missingEntityRef(let op) = err {
+                XCTAssertEqual(op, .deleteEntity)
+            } else {
+                XCTFail("expected missingEntityRef, got \(err)")
+            }
+        }
+    }
+
+    func testExecutorThrowsEntityNotFoundForNonexistentRef() throws {
+        var scene = SceneRuntime()
+        _ = scene.createEntity()
+
+        let json = """
+        {"summary":"del","steps":[{"op":"delete_entity","entity_id":"scene:99999"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)) { err in
+            if case SceneEditPlanExecutorError.entityNotFound(let ref) = err {
+                XCTAssertEqual(ref, "scene:99999")
+            } else {
+                XCTFail("expected entityNotFound, got \(err)")
+            }
+        }
+    }
+
+    func testExecutorThrowsInvalidEntityRefForMalformedRef() throws {
+        var scene = SceneRuntime()
+        _ = scene.createEntity()
+
+        let json = """
+        {"summary":"bad","steps":[{"op":"delete_entity","entity_id":"invalid-format"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)) { err in
+            if case SceneEditPlanExecutorError.invalidEntityRef(let ref) = err {
+                XCTAssertEqual(ref, "invalid-format")
+            } else {
+                XCTFail("expected invalidEntityRef, got \(err)")
+            }
+        }
+    }
+
+    func testExecutorThrowsInvalidColorForShortColorArray() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(RenderMeshComponent(meshIndex: 0), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"bad color","steps":[{"op":"set_mesh_color","entity_id":"\(ref)","color":[1.0,0.5]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)) { err in
+            if case SceneEditPlanExecutorError.invalidColor(let op) = err {
+                XCTAssertEqual(op, .setMeshColor)
+            } else {
+                XCTFail("expected invalidColor, got \(err)")
+            }
+        }
+    }
+
+    func testExecutorThrowsMissingFieldForSetLightRangeWithoutRange() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(LightComponent(type: .point, color: .one, intensity: 100, range: 10), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"range","steps":[{"op":"set_light_range","entity_id":"\(ref)"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)) { err in
+            if case SceneEditPlanExecutorError.missingField(_, let field) = err {
+                XCTAssertEqual(field, "range")
+            } else {
+                XCTFail("expected missingField(range), got \(err)")
+            }
+        }
+    }
+
+    func testExecutorThrowsMissingFieldForSetColliderLayerWithNoFields() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .box(halfExtents: .one, center: .zero)), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"layer","steps":[{"op":"set_collider_layer","entity_id":"\(ref)"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)) { err in
+            if case SceneEditPlanExecutorError.missingField = err { } else {
+                XCTFail("expected missingField, got \(err)")
+            }
+        }
+    }
+
+    // MARK: - entityEvaluatedChanged event
+
+    func testEntityEvaluatedChangedPopulatesEvaluatedDict() {
+        var view = WorldView()
+        view.apply(event: .entityAdded(ref: "scene:1", name: "A", kind: nil))
+        view.apply(event: .entityEvaluatedChanged(ref: "scene:1",
+                                                   property: "worldPosition",
+                                                   value: .vec3(10, 20, 30)))
+        XCTAssertEqual(view.entityIndex["scene:1"]?.evaluated["worldPosition"], .vec3(10, 20, 30))
+    }
+
+    func testEntityEvaluatedChangedCreatesRecordWhenEntityAbsent() {
+        var view = WorldView()
+        view.apply(event: .entityEvaluatedChanged(ref: "scene:9",
+                                                   property: "worldScale",
+                                                   value: .vec3(2, 2, 2)))
+        XCTAssertEqual(view.entityIndex["scene:9"]?.evaluated["worldScale"], .vec3(2, 2, 2))
+    }
+
+    // MARK: - setColliderShape with mesh / convex kinds
+
+    func testSetColliderShapeMeshKindProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .box(halfExtents: .one, center: .zero)), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"mesh collider","steps":[{"op":"set_collider_shape","entity_id":"\(ref)","collider_shape":"mesh"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let has = ops.contains { if case .setColliderShapeType(_, .mesh) = $0 { return true }; return false }
+        XCTAssertTrue(has, "set_collider_shape 'mesh' must produce setColliderShapeType(.mesh)")
+    }
+
+    func testSetColliderShapeConvexKindProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .box(halfExtents: .one, center: .zero)), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"convex","steps":[{"op":"set_collider_shape","entity_id":"\(ref)","collider_shape":"convex"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let has = ops.contains { if case .setColliderShapeType(_, .convex) = $0 { return true }; return false }
+        XCTAssertTrue(has, "set_collider_shape 'convex' must produce setColliderShapeType(.convex)")
+    }
+
+    // MARK: - Session.process(.referenceImage)
+
+    func testSessionProcessReferenceImageReturnsProposal() async throws {
+        let planResponse = """
+        {
+          "id": "msg_1",
+          "content": [
+            {"type": "tool_use", "id": "tu_1", "name": "execute_edit_plan",
+             "input": {"summary": "Created entity from reference.", "steps": []}}
+          ],
+          "stop_reason": "tool_use"
+        }
+        """
+        MockURLProtocol.requestHandler = { _ in
+            let http = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!,
+                                       statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (http, Data(planResponse.utf8))
+        }
+
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = Session(id: "img1", config: makeTestConfig(), urlSession: URLSession(configuration: config))
+        let signal = Signal.referenceImage(url: URL(fileURLWithPath: "/tmp/ref.png"), entityRef: "scene:1")
+        let proposal = try await session.process(signal)
+
+        XCTAssertEqual(proposal.plan.summary, "Created entity from reference.")
+    }
+
+    func testSessionProcessReferenceImageRecordsUserTurnWithFilenameAndEntityRef() async throws {
+        let planResponse = """
+        {
+          "id": "msg_1",
+          "content": [
+            {"type": "tool_use", "id": "tu_1", "name": "execute_edit_plan",
+             "input": {"summary": "Named entity.", "steps": []}}
+          ],
+          "stop_reason": "tool_use"
+        }
+        """
+        MockURLProtocol.requestHandler = { _ in
+            let http = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!,
+                                       statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (http, Data(planResponse.utf8))
+        }
+
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = Session(id: "img2", config: makeTestConfig(), urlSession: URLSession(configuration: config))
+        _ = try await session.process(Signal.referenceImage(
+            url: URL(fileURLWithPath: "/tmp/chair.jpg"),
+            entityRef: "scene:5"
+        ))
+
+        // The user message is recorded in conversationHistory — check it via historySnapshot.
+        let history = await session.historySnapshot()
+        let userTexts = history.compactMap { turn -> String? in
+            if case let .userText(t) = turn.kind { return t }; return nil
+        }
+        let userMessage = try XCTUnwrap(userTexts.first)
+        XCTAssertTrue(userMessage.contains("chair.jpg"), "filename must appear in recorded user message")
+        XCTAssertTrue(userMessage.contains("scene:5"),   "entity ref must appear in recorded user message")
+    }
 }
 
 private final class MockURLProtocol: URLProtocol, @unchecked Sendable {
