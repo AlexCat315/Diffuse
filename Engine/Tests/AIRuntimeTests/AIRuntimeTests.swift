@@ -4207,6 +4207,174 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(params?["patrol"] as? Bool, true)
     }
 
+    func testFindEntitiesResultIncludesTransformRotationAndScale() async {
+        let e = SceneSemanticSnapshot.Entity(
+            id: "scene:55", name: "Tilted Cube", kind: "mesh",
+            parentRef: nil, childRefs: [], isSelected: false,
+            position: [1, 2, 3],
+            scale: [2, 2, 2],
+            eulerDegrees: [45, 0, 30],
+            components: ["transform", "mesh"]
+        )
+        var wv = WorldView()
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [e]))
+        let session = Session(id: "rot-scale-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+        XCTAssertEqual(entities[0]["eulerDegrees"] as? [Float], [45, 0, 30])
+        XCTAssertEqual(entities[0]["scale"] as? [Float], [2, 2, 2])
+    }
+
+    func testFindEntitiesResultIncludesLightColorAndRange() async {
+        let e = SceneSemanticSnapshot.Entity(
+            id: "scene:31", name: "Sun", kind: "Directional Light",
+            parentRef: nil, childRefs: [], isSelected: false, position: nil,
+            components: ["light"],
+            lightType: "directional",
+            lightIntensity: 5.0,
+            lightColor: [1.0, 0.9, 0.8],
+            lightRange: 100,
+            lightSpotInner: 15,
+            lightSpotOuter: 30,
+            lightCastShadows: true
+        )
+        var wv = WorldView()
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [e]))
+        let session = Session(id: "light-full-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entity = (result["entities"] as! [[String: Any]])[0]
+        XCTAssertEqual(entity["lightColor"] as? [Float], [1.0, 0.9, 0.8])
+        XCTAssertEqual(entity["lightRange"] as? Float, 100)
+        XCTAssertEqual(entity["lightSpotInner"] as? Float, 15)
+        XCTAssertEqual(entity["lightSpotOuter"] as? Float, 30)
+    }
+
+    func testFindEntitiesResultIncludesMeshVisibilityAndMaterial() async {
+        var e = SceneSemanticSnapshot.Entity(
+            id: "scene:40", name: "Ghost", kind: "mesh",
+            parentRef: nil, childRefs: [], isSelected: false, position: nil,
+            components: ["mesh"]
+        )
+        e.meshIsVisible = false
+        e.meshColor = [0.5, 0.5, 0.5]
+        e.materialBaseColor = [0.8, 0.8, 0.8, 1.0]
+        e.materialMetallic = 0.2
+        e.materialRoughness = 0.6
+        e.materialEmissive = [0.1, 0.0, 0.0]
+        var wv = WorldView()
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [e]))
+        let session = Session(id: "mesh-mat-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entity = (result["entities"] as! [[String: Any]])[0]
+        XCTAssertEqual(entity["meshIsVisible"] as? Bool, false)
+        XCTAssertEqual(entity["meshColor"] as? [Float], [0.5, 0.5, 0.5])
+        XCTAssertEqual(entity["materialMetallic"] as? Float, 0.2)
+        XCTAssertEqual(entity["materialRoughness"] as? Float, 0.6)
+        XCTAssertNotNil(entity["materialEmissive"], "materialEmissive must appear")
+    }
+
+    func testFindEntitiesResultIncludesAudioFields() async {
+        let e = SceneSemanticSnapshot.Entity(
+            id: "scene:61", name: "Speaker", kind: "mesh",
+            parentRef: nil, childRefs: [], isSelected: false, position: nil,
+            components: ["audio_source"],
+            audioClip: "ambient_music",
+            audioVolume: 0.8,
+            audioLoop: true,
+            audioPlayOnAwake: true,
+            audioPitch: 1.1,
+            audioSpatialBlend: 0.5
+        )
+        var wv = WorldView()
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [e]))
+        let session = Session(id: "audio-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entity = (result["entities"] as! [[String: Any]])[0]
+        XCTAssertEqual(entity["audioClip"] as? String, "ambient_music")
+        XCTAssertEqual(entity["audioVolume"] as? Float, 0.8)
+        XCTAssertEqual(entity["audioLoop"] as? Bool, true)
+        XCTAssertEqual(entity["audioPitch"] as? Float, 1.1)
+        XCTAssertEqual(entity["audioSpatialBlend"] as? Float, 0.5)
+    }
+
+    func testFindEntitiesResultIncludesAnimationFields() async {
+        var e = SceneSemanticSnapshot.Entity(
+            id: "scene:70", name: "Dancer", kind: "Character",
+            parentRef: nil, childRefs: [], isSelected: false, position: nil,
+            components: ["animation"]
+        )
+        e.animationClip = "dance_loop"
+        e.animationSpeed = 1.5
+        e.animationLoop = true
+        e.animationIsPlaying = true
+        var wv = WorldView()
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [e]))
+        let session = Session(id: "anim-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entity = (result["entities"] as! [[String: Any]])[0]
+        XCTAssertEqual(entity["animationClip"] as? String, "dance_loop")
+        XCTAssertEqual(entity["animationSpeed"] as? Float, 1.5)
+        XCTAssertEqual(entity["animationLoop"] as? Bool, true)
+        XCTAssertEqual(entity["animationIsPlaying"] as? Bool, true)
+    }
+
+    func testFindEntitiesResultIncludesColliderMaterialAndLayerFields() async {
+        let e = SceneSemanticSnapshot.Entity(
+            id: "scene:80", name: "Wall", kind: "mesh",
+            parentRef: nil, childRefs: [], isSelected: false, position: nil,
+            components: ["collider"],
+            colliderShape: "box",
+            colliderIsTrigger: false,
+            colliderFriction: 0.7,
+            colliderRestitution: 0.1,
+            colliderLayerID: 3,
+            colliderLayerMask: 15
+        )
+        var wv = WorldView()
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [e]))
+        let session = Session(id: "collider-mat-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entity = (result["entities"] as! [[String: Any]])[0]
+        XCTAssertEqual(entity["colliderIsTrigger"] as? Bool, false)
+        XCTAssertEqual(entity["colliderFriction"] as? Float, 0.7)
+        XCTAssertEqual(entity["colliderRestitution"] as? Float, 0.1)
+        XCTAssertEqual(entity["colliderLayerID"] as? Int, 3)
+        XCTAssertEqual(entity["colliderLayerMask"] as? Int, 15)
+    }
+
+    func testFindEntitiesResultIncludesRigidBodyExtendedFields() async {
+        let e = SceneSemanticSnapshot.Entity(
+            id: "scene:81", name: "Ball", kind: "mesh",
+            parentRef: nil, childRefs: [], isSelected: false, position: nil,
+            components: ["rigidbody"],
+            rigidBodyMotionType: "dynamic",
+            rigidBodyMass: 2.5,
+            rigidBodyGravityScale: 0.5,
+            rigidBodyAllowSleep: false
+        )
+        var wv = WorldView()
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [e]))
+        let session = Session(id: "rb-ext-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entity = (result["entities"] as! [[String: Any]])[0]
+        XCTAssertEqual(entity["rigidBodyGravityScale"] as? Float, 0.5)
+        XCTAssertEqual(entity["rigidBodyAllowSleep"] as? Bool, false)
+    }
+
     func testSpawnKindDirectionalLightCreatesCorrectLightType() throws {
         let scene = SceneRuntime()
         let json = """
