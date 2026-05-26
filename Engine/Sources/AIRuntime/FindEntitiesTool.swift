@@ -7,7 +7,7 @@ public enum FindEntitiesTool {
     public static func definition() -> [String: Any] {
         [
             "name": "find_entities",
-            "description": "Search scene entities by name substring, kind, component, or spatial proximity. Returns id, name, kind, components, position, worldPosition, parentRef, and key property values (light, camera, physics, script) for each match. Use when you need to find entities that may not be visible in the truncated entity list.",
+            "description": "Search scene entities by name substring, kind, component, or spatial proximity. Returns id, name, kind, components, position, eulerDegrees, scale, worldPosition, parentRef, and all authored property values (light color/range/angles, mesh visibility/material, audio, animation, physics, collider material/layers, script bindings) for each match. Use when you need to find entities that may not be visible in the truncated entity list.",
             "input_schema": schema(),
         ]
     }
@@ -18,7 +18,7 @@ public enum FindEntitiesTool {
             "type": "function",
             "function": [
                 "name": "find_entities",
-                "description": "Search scene entities by name substring, kind, component, or spatial proximity. Returns id, name, kind, components, position, worldPosition, parentRef, and key property values (light, camera, physics, script) for each match. Use when you need to find entities that may not be visible in the truncated entity list.",
+                "description": "Search scene entities by name substring, kind, component, or spatial proximity. Returns id, name, kind, components, position, eulerDegrees, scale, worldPosition, parentRef, and all authored property values (light color/range/angles, mesh visibility/material, audio, animation, physics, collider material/layers, script bindings) for each match. Use when you need to find entities that may not be visible in the truncated entity list.",
                 "parameters": schema(),
             ] as [String: Any],
         ]
