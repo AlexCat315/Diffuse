@@ -90,6 +90,8 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     public var audioVolume: Float?
     public var audioLoop: Bool?
     public var audioPlayOnAwake: Bool?
+    public var audioPitch: Float?
+    public var audioSpatialBlend: Float?
     // Mesh visibility (authored) — nil means default true (visible)
     public var meshIsVisible: Bool?
     // Animation (authored)
@@ -193,6 +195,10 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
             if case let .bool(b) = value { audioLoop = b }
         case "audioPlayOnAwake":
             if case let .bool(b) = value { audioPlayOnAwake = b }
+        case "audioPitch":
+            if case let .float(f) = value { audioPitch = f }
+        case "audioSpatialBlend":
+            if case let .float(f) = value { audioSpatialBlend = f }
         case "meshIsVisible":
             if case let .bool(b) = value { meshIsVisible = b }
         case "animationClip":
@@ -354,6 +360,8 @@ public struct WorldView: Sendable {
             record.audioVolume = e.audioVolume
             record.audioLoop = e.audioLoop
             record.audioPlayOnAwake = e.audioPlayOnAwake
+            record.audioPitch = e.audioPitch
+            record.audioSpatialBlend = e.audioSpatialBlend
             record.meshIsVisible = e.meshIsVisible
             record.animationClip = e.animationClip
             record.animationSpeed = e.animationSpeed

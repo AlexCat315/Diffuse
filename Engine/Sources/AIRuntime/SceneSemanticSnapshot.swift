@@ -94,6 +94,8 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         public var audioVolume: Float?
         public var audioLoop: Bool?
         public var audioPlayOnAwake: Bool?
+        public var audioPitch: Float? = nil
+        public var audioSpatialBlend: Float? = nil
 
         // Mesh visibility (authored) — nil means default true
         public var meshIsVisible: Bool? = nil
