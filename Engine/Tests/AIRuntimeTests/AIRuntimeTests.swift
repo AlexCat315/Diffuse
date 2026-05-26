@@ -2726,6 +2726,36 @@ final class AIRuntimeTests: XCTestCase {
                       "player count should appear in system prompt section")
     }
 
+    // MARK: - Locale propagation
+
+    func testSessionNaturalLanguageWithNonEnglishLocaleProducesProposal() async throws {
+        let planResponse = """
+        {
+          "id": "msg_l1",
+          "content": [
+            {"type": "tool_use", "id": "tu_l1", "name": "execute_edit_plan",
+             "input": {"summary": "场景编辑完成", "steps": []}}
+          ],
+          "stop_reason": "tool_use"
+        }
+        """
+        MockURLProtocol.requestHandler = { _ in
+            let http = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!,
+                                       statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (http, Data(planResponse.utf8))
+        }
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = Session(id: "locale1", config: makeTestConfig(), urlSession: URLSession(configuration: config))
+
+        let proposal = try await session.process(Signal.naturalLanguage(
+            text: "将所有灯光颜色改为暖白色",
+            locale: "zh-Hans"
+        ))
+        XCTAssertNotNil(proposal.id, "non-English locale signal must still produce a Proposal")
+        XCTAssertEqual(proposal.plan.summary, "场景编辑完成")
+    }
+
     // MARK: - Session.process(.userCorrection) all-accepted path
 
     func testSessionProcessUserCorrectionAllAcceptedReturnsNoopProposal() async throws {

@@ -75,6 +75,9 @@ public actor Session {
     private var contextMemory: ContextMemoryStore?
     private var cachedMemoryView: [[String: String]] = []
     private var perceptionService: PerceptionService?
+    /// BCP-47 locale of the most recent naturalLanguage signal (e.g. "zh-Hans", "ja", "fr").
+    /// Used to instruct the model to match the user's language in summaries and entity names.
+    private var currentLocale: String? = nil
 
     private static let anthropicAPIVersion = "2023-06-01"
     private static let maxEntityPromptCount = 100
@@ -218,7 +221,8 @@ public actor Session {
     public func process(_ signal: Signal,
                         onProgress: (@Sendable (String) -> Void)? = nil) async throws -> Proposal {
         switch signal {
-        case let .naturalLanguage(text, _):
+        case let .naturalLanguage(text, locale):
+            if !locale.isEmpty { currentLocale = locale }
             recordTurn(ConversationTurn(kind: .userText(text)))
             let (plan, toolUseID, inputJSON) = try await infer(onProgress: onProgress)
             recordTurn(ConversationTurn(kind: .assistantToolCall(toolUseID: toolUseID,
@@ -756,6 +760,10 @@ public actor Session {
 
         if !worldView.selectedEntityRefs.isEmpty {
             parts.append("Currently selected: \(worldView.selectedEntityRefs.joined(separator: ", "))")
+        }
+
+        if let locale = currentLocale, !locale.hasPrefix("en") {
+            parts.append("User locale: \(locale) — write entity names, labels, and the plan summary in the user's language where appropriate.")
         }
 
         parts.append("""
