@@ -286,25 +286,27 @@ public struct SceneEditPlanExecutor: Sendable {
 
         case .setColliderTrigger:
             let id = try resolveEntityID(step, scene: scene)
+            let eid = entityID(fromRaw: id)
             guard let v = step.isTrigger else {
                 throw SceneEditPlanExecutorError.missingField(op: step.op, field: "is_trigger")
             }
-            return [.setColliderTrigger(entityID: id, value: v)]
+            var collider = scene.component(Collider.self, for: eid)
+                ?? Collider(shape: .box(halfExtents: SIMD3(0.5, 0.5, 0.5), center: .zero))
+            collider.isTrigger = v
+            return [.setCollider(entityID: id, collider: collider)]
 
         case .setColliderLayer:
             let id = try resolveEntityID(step, scene: scene)
-            var result: [SceneMutation] = []
-            if let layerID = step.colliderLayerID {
-                result.append(.setColliderLayer(entityID: id, layerID: UInt16(clamping: layerID)))
-            }
-            if let mask = step.colliderLayerMask {
-                result.append(.setColliderLayerMask(entityID: id, layerMask: UInt16(clamping: mask)))
-            }
-            if result.isEmpty {
+            let eid = entityID(fromRaw: id)
+            guard step.colliderLayerID != nil || step.colliderLayerMask != nil else {
                 throw SceneEditPlanExecutorError.missingField(op: step.op,
                                                                field: "collider_layer_id or collider_layer_mask")
             }
-            return result
+            var collider = scene.component(Collider.self, for: eid)
+                ?? Collider(shape: .box(halfExtents: SIMD3(0.5, 0.5, 0.5), center: .zero))
+            if let layerID = step.colliderLayerID  { collider.layerID  = UInt16(clamping: layerID) }
+            if let mask    = step.colliderLayerMask { collider.layerMask = UInt16(clamping: mask) }
+            return [.setCollider(entityID: id, collider: collider)]
 
         case .setConstraintEnabled:
             let id = try resolveEntityID(step, scene: scene)
@@ -325,54 +327,91 @@ public struct SceneEditPlanExecutor: Sendable {
 
         case .setColliderShape:
             let id = try resolveEntityID(step, scene: scene)
+            let eid = entityID(fromRaw: id)
             guard let shapeStr = step.colliderShape else {
                 throw SceneEditPlanExecutorError.missingField(op: step.op, field: "collider_shape")
             }
             guard let kind = ColliderShapeKind(rawValue: shapeStr) else {
                 throw SceneEditPlanExecutorError.unknownColliderShape(shapeStr)
             }
-            return [.setColliderShapeType(entityID: id, kind: kind)]
+            var collider = scene.component(Collider.self, for: eid)
+                ?? Collider(shape: .box(halfExtents: SIMD3(0.5, 0.5, 0.5), center: .zero))
+            switch kind {
+            case .box:
+                if case let .box(he, c) = collider.shape { collider.shape = .box(halfExtents: he, center: c) }
+                else { collider.shape = .box(halfExtents: SIMD3(0.5, 0.5, 0.5), center: .zero) }
+            case .sphere:
+                if case let .sphere(r, c) = collider.shape { collider.shape = .sphere(radius: r, center: c) }
+                else { collider.shape = .sphere(radius: 0.5, center: .zero) }
+            case .capsule:
+                if case let .capsule(r, hh, c) = collider.shape { collider.shape = .capsule(radius: r, halfHeight: hh, center: c) }
+                else { collider.shape = .capsule(radius: 0.25, halfHeight: 0.5, center: .zero) }
+            case .mesh:
+                if case let .mesh(rid, c) = collider.shape { collider.shape = .mesh(resourceID: rid, center: c) }
+                else { collider.shape = .mesh(resourceID: nil, center: .zero) }
+            case .convex:
+                if case let .convex(rid, c) = collider.shape { collider.shape = .convex(resourceID: rid, center: c) }
+                else { collider.shape = .convex(resourceID: nil, center: .zero) }
+            }
+            return [.setCollider(entityID: id, collider: collider)]
 
         case .setColliderBoxExtents:
             let id = try resolveEntityID(step, scene: scene)
+            let eid = entityID(fromRaw: id)
             guard let ext = simd3(step.halfExtents) else {
                 throw SceneEditPlanExecutorError.missingField(op: step.op, field: "half_extents")
             }
-            return [.setColliderShapeBoxHalfExtents(entityID: id, halfExtents: ext)]
+            var collider = scene.component(Collider.self, for: eid)
+                ?? Collider(shape: .box(halfExtents: ext, center: .zero))
+            let boxCenter: SIMD3<Float>
+            if case let .box(_, c) = collider.shape { boxCenter = c } else { boxCenter = .zero }
+            collider.shape = .box(halfExtents: ext, center: boxCenter)
+            return [.setCollider(entityID: id, collider: collider)]
 
         case .setColliderSphereRadius:
             let id = try resolveEntityID(step, scene: scene)
+            let eid = entityID(fromRaw: id)
             guard let r = step.radius else {
                 throw SceneEditPlanExecutorError.missingField(op: step.op, field: "radius")
             }
-            return [.setColliderShapeSphereRadius(entityID: id, radius: r)]
+            var collider = scene.component(Collider.self, for: eid)
+                ?? Collider(shape: .sphere(radius: r, center: .zero))
+            let sphereCenter: SIMD3<Float>
+            if case let .sphere(_, c) = collider.shape { sphereCenter = c } else { sphereCenter = .zero }
+            collider.shape = .sphere(radius: r, center: sphereCenter)
+            return [.setCollider(entityID: id, collider: collider)]
 
         case .setColliderCapsule:
             let id = try resolveEntityID(step, scene: scene)
-            var result: [SceneMutation] = []
-            if let r = step.radius {
-                result.append(.setColliderShapeCapsuleRadius(entityID: id, radius: r))
-            }
-            if let hh = step.halfHeight {
-                result.append(.setColliderShapeCapsuleHalfHeight(entityID: id, halfHeight: hh))
-            }
-            if result.isEmpty {
+            let eid = entityID(fromRaw: id)
+            guard step.radius != nil || step.halfHeight != nil else {
                 throw SceneEditPlanExecutorError.missingField(op: step.op,
                                                                field: "radius or half_height")
             }
-            return result
+            var collider = scene.component(Collider.self, for: eid)
+                ?? Collider(shape: .capsule(radius: 0.25, halfHeight: 0.5, center: .zero))
+            var capRadius: Float = 0.25
+            var capHalfHeight: Float = 0.5
+            var capCenter: SIMD3<Float> = .zero
+            if case let .capsule(r, hh, c) = collider.shape { capRadius = r; capHalfHeight = hh; capCenter = c }
+            if let r  = step.radius     { capRadius     = r }
+            if let hh = step.halfHeight { capHalfHeight = hh }
+            collider.shape = .capsule(radius: capRadius, halfHeight: capHalfHeight, center: capCenter)
+            return [.setCollider(entityID: id, collider: collider)]
 
         case .setColliderMaterial:
             let id = try resolveEntityID(step, scene: scene)
-            var result: [SceneMutation] = []
-            if let f = step.friction    { result.append(.setColliderMaterialFriction(entityID: id, value: f)) }
-            if let r = step.restitution { result.append(.setColliderMaterialRestitution(entityID: id, value: r)) }
-            if let d = step.density     { result.append(.setColliderMaterialDensity(entityID: id, value: d)) }
-            if result.isEmpty {
+            let eid = entityID(fromRaw: id)
+            guard step.friction != nil || step.restitution != nil || step.density != nil else {
                 throw SceneEditPlanExecutorError.missingField(op: step.op,
                                                                field: "friction, restitution, or density")
             }
-            return result
+            var collider = scene.component(Collider.self, for: eid)
+                ?? Collider(shape: .box(halfExtents: SIMD3(0.5, 0.5, 0.5), center: .zero))
+            if let f = step.friction    { collider.material.friction    = f }
+            if let r = step.restitution { collider.material.restitution = r }
+            if let d = step.density     { collider.material.density     = d }
+            return [.setCollider(entityID: id, collider: collider)]
 
         case .setAudioSource:
             let id = try resolveEntityID(step, scene: scene)
