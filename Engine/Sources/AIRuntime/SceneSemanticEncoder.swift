@@ -151,11 +151,15 @@ public struct SceneSemanticEncoder: Sendable {
             var audioVolume: Float?
             var audioLoop: Bool?
             var audioPlayOnAwake: Bool?
+            var audioPitch: Float?
+            var audioSpatialBlend: Float?
             if let src = scene.component(AudioSource.self, for: entity) {
                 audioClip = src.clipName.isEmpty ? nil : src.clipName
                 audioVolume = src.volume
                 audioLoop = src.loop
                 audioPlayOnAwake = src.playOnAwake
+                if abs(src.pitch - 1.0) > 0.0001 { audioPitch = src.pitch }
+                if src.spatialBlend > 0.0001 { audioSpatialBlend = src.spatialBlend }
             }
 
             var meshIsVisible: Bool?
@@ -233,6 +237,8 @@ public struct SceneSemanticEncoder: Sendable {
                 audioVolume: audioVolume,
                 audioLoop: audioLoop,
                 audioPlayOnAwake: audioPlayOnAwake,
+                audioPitch: audioPitch,
+                audioSpatialBlend: audioSpatialBlend,
                 meshIsVisible: meshIsVisible,
                 animationClip: animationClip,
                 animationSpeed: animationSpeed,
