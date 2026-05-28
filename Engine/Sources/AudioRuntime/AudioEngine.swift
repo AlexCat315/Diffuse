@@ -77,6 +77,16 @@ public final class AudioEngine: @unchecked Sendable {
     public func stopBGM() { bgmNode.stop() }
 
     public func tick(scene: SceneRuntime, listenerPosition: SIMD3<Float> = .zero) {
+        // Resolve listener position from scene: find the first entity with AudioListener.
+        let resolvedListener: SIMD3<Float> = {
+            for id in scene.entities(with: AudioListener.self) {
+                if let wt = scene.component(WorldTransform.self, for: id) {
+                    return wt.translation
+                }
+            }
+            return listenerPosition
+        }()
+
         let entities = scene.entities(with: AudioSource.self)
         var activeIDs: Set<EntityID> = []
         for id in entities {
@@ -85,7 +95,7 @@ public final class AudioEngine: @unchecked Sendable {
             activeIDs.insert(id)
             if source.playOnAwake && !awakened.contains(id) {
                 awakened.insert(id)
-                playEntity(id: id, source: source, scene: scene, listenerPosition: listenerPosition)
+                playEntity(id: id, source: source, scene: scene, listenerPosition: resolvedListener)
             }
         }
         let stale = playing.keys.filter { !activeIDs.contains($0) }
