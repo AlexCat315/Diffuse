@@ -1,4 +1,5 @@
 ﻿import EngineKernel
+import Foundation
 import SceneRuntime
 import SIMDCompat
 
@@ -8,10 +9,29 @@ public final class ScriptContext {
     public let entity: EntityID
     public let deltaTime: Double
 
-    init(phaseContext: RuntimeScriptPhaseContext, entity: EntityID, deltaTime: Double) {
+    /// JSON string from the `ScriptBinding` that triggered this script invocation.
+    public let parametersJSON: String
+
+    /// Decoded JSON dictionary from `parametersJSON`, cached on first access.
+    public var parameters: [String: Any] {
+        if let cached = _cachedParameters { return cached }
+        guard let data = parametersJSON.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return [:] }
+        _cachedParameters = obj
+        return obj
+    }
+
+    private var _cachedParameters: [String: Any]?
+
+    init(phaseContext: RuntimeScriptPhaseContext,
+         entity: EntityID,
+         deltaTime: Double,
+         parametersJSON: String = "{}") {
         self.phaseContext = phaseContext
         self.entity = entity
         self.deltaTime = deltaTime
+        self.parametersJSON = parametersJSON
     }
 
     public var isAlive: Bool {
