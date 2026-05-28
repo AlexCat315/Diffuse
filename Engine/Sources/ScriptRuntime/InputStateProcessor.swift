@@ -1,14 +1,11 @@
 import EngineKernel
 import SceneRuntime
 
-/// Processes `InputFrameResource` events against the scene's `InputActionMap`
-/// and writes a fresh `InputFrameState` resource before scripts run each frame.
-///
-/// Call `process(context:)` at the start of `ScriptRuntime.run(context:)`.
 final class InputStateProcessor: @unchecked Sendable {
-    // Scancodes / mouse buttons currently held across frames.
     private var heldKeys: Set<UInt32> = []
     private var heldMouseButtons: Set<MouseButton> = []
+    private var heldGamepadButtons: Set<GamepadButton> = []
+    private var gamepadAxes: [GamepadAxis: Float] = [:]
 
     func process(context: inout RuntimeScriptPhaseContext) {
         let frame = context.resource(InputFrameResource.self) ?? InputFrameResource()
@@ -18,6 +15,8 @@ final class InputStateProcessor: @unchecked Sendable {
         var keysJustReleased:  Set<UInt32>      = []
         var buttonsJustPressed: Set<MouseButton> = []
         var buttonsJustReleased: Set<MouseButton> = []
+        var gpadButtonsJustPressed: Set<GamepadButton> = []
+        var gpadButtonsJustReleased: Set<GamepadButton> = []
 
         for event in frame.events {
             switch event {
@@ -33,6 +32,14 @@ final class InputStateProcessor: @unchecked Sendable {
             case let .mouseButtonUp(e):
                 buttonsJustReleased.insert(e.button)
                 heldMouseButtons.remove(e.button)
+            case let .gamepadButtonDown(e):
+                gpadButtonsJustPressed.insert(e.button)
+                heldGamepadButtons.insert(e.button)
+            case let .gamepadButtonUp(e):
+                gpadButtonsJustReleased.insert(e.button)
+                heldGamepadButtons.remove(e.button)
+            case let .gamepadAxisMotion(e):
+                gamepadAxes[e.axis] = e.value
             default:
                 break
             }
@@ -65,6 +72,15 @@ final class InputStateProcessor: @unchecked Sendable {
                     let p: Float = heldKeys.contains(pos) ?  1 : 0
                     let v = (p + n).clamped(to: -1...1)
                     axes[action] = (axes[action] ?? 0) + v
+
+                case let .gamepadButton(btn):
+                    if heldGamepadButtons.contains(btn)        { isHeld = true }
+                    if gpadButtonsJustPressed.contains(btn)    { wasJustPressed = true }
+                    if gpadButtonsJustReleased.contains(btn)   { wasJustReleased = true }
+
+                case let .gamepadAxis(axis):
+                    let v = gamepadAxes[axis] ?? 0
+                    axes[action] = (axes[action] ?? 0) + v
                 }
             }
 
@@ -84,6 +100,8 @@ final class InputStateProcessor: @unchecked Sendable {
     func reset() {
         heldKeys.removeAll()
         heldMouseButtons.removeAll()
+        heldGamepadButtons.removeAll()
+        gamepadAxes.removeAll()
     }
 }
 

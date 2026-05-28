@@ -67,6 +67,12 @@ public enum InputBinding: Sendable, Equatable {
 
     /// A 1-D axis from two keys: negative key → -1.0, positive key → +1.0.
     case keyAxis(negative: UInt32, positive: UInt32)
+
+    /// A gamepad button.
+    case gamepadButton(GamepadButton)
+
+    /// A gamepad axis (stick or trigger).
+    case gamepadAxis(GamepadAxis)
 }
 
 // MARK: - InputActionMap resource
