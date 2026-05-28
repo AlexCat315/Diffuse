@@ -65,9 +65,22 @@ public enum SceneMutation: Sendable, Equatable {
     case spawnImportedMeshEntity(label: String,
                                  kindLabel: String,
                                  meshIndex: Int,
-                                 position: SIMD3<Float>)
+                                 position: SIMD3<Float>,
+                                 parentID: UInt64? = nil)
+    case spawnEmptyEntity(label: String, position: SIMD3<Float>, parentID: UInt64? = nil)
+    case spawnLightEntity(label: String, lightType: LightType, position: SIMD3<Float>,
+                          initialIntensity: Float? = nil,
+                          initialColor: SIMD3<Float>? = nil,
+                          initialRange: Float? = nil,
+                          initialCastShadows: Bool? = nil,
+                          parentID: UInt64? = nil)
+    case spawnCameraEntity(label: String, position: SIMD3<Float>, initialFovYDegrees: Float? = nil,
+                           parentID: UInt64? = nil)
     case deleteEntity(entityID: UInt64)
     case duplicateEntity(entityID: UInt64)
+    /// Duplicate an entity and immediately apply a world-space position offset to the copy.
+    /// The offset is applied in the same local space as the source (parent-relative).
+    case duplicateEntityWithOffset(entityID: UInt64, positionOffset: SIMD3<Float>)
     case moveEntity(entityID: UInt64, parentID: UInt64?, index: Int)
     case setLocalTransform(entityID: UInt64, transform: LocalTransform)
     case setSceneName(entityID: UInt64, value: String)
@@ -75,6 +88,8 @@ public enum SceneMutation: Sendable, Equatable {
     case setRigidBodyMass(entityID: UInt64, value: Float)
     case setRigidBodyGravityScale(entityID: UInt64, value: Float)
     case setRigidBodyAllowSleep(entityID: UInt64, value: Bool)
+    /// Full rigidbody replacement — creates the component if it doesn't exist yet.
+    case setRigidBody(entityID: UInt64, body: RigidBody)
     case setCollider(entityID: UInt64, collider: Collider)
     case setColliderTrigger(entityID: UInt64, value: Bool)
     case setColliderShapeType(entityID: UInt64, kind: ColliderShapeKind)
@@ -117,10 +132,12 @@ public enum SceneMutation: Sendable, Equatable {
     /// rather than referencing an existing one.
     public var entityID: UInt64? {
         switch self {
-        case .spawnImportedMeshEntity:
+        case .spawnImportedMeshEntity, .spawnEmptyEntity, .spawnLightEntity, .spawnCameraEntity,
+             .duplicateEntityWithOffset:
             return nil
         case let .deleteEntity(id),
              let .duplicateEntity(id),
+             let .setRigidBody(id, _),
              let .moveEntity(id, _, _),
              let .setLocalTransform(id, _),
              let .setSceneName(id, _),

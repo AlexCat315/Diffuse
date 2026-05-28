@@ -37,6 +37,38 @@ public struct LocalTransform: RuntimeComponent, Sendable, Equatable {
     public var translation: SIMD3<Float> {
         SIMD3<Float>(matrix.columns.3.x, matrix.columns.3.y, matrix.columns.3.z)
     }
+
+    public var rotation: simd_quatf {
+        let c0 = SIMD3<Float>(matrix.columns.0.x, matrix.columns.0.y, matrix.columns.0.z)
+        let c1 = SIMD3<Float>(matrix.columns.1.x, matrix.columns.1.y, matrix.columns.1.z)
+        let c2 = SIMD3<Float>(matrix.columns.2.x, matrix.columns.2.y, matrix.columns.2.z)
+        let sx = simd_length(c0)
+        let sy = simd_length(c1)
+        let sz = simd_length(c2)
+        let r = simd_float3x3(
+            columns: (c0 / (sx > 1e-6 ? sx : 1),
+                      c1 / (sy > 1e-6 ? sy : 1),
+                      c2 / (sz > 1e-6 ? sz : 1))
+        )
+        return simd_quatf(r)
+    }
+
+    public func withTranslation(_ t: SIMD3<Float>) -> LocalTransform {
+        var m = matrix
+        m.columns.3 = SIMD4<Float>(t.x, t.y, t.z, 1)
+        return LocalTransform(matrix: m)
+    }
+
+    public func withRotation(_ q: simd_quatf) -> LocalTransform {
+        var m = matrix
+        let t = translation
+        let r = simd_float4x4(q)
+        m.columns.0 = r.columns.0
+        m.columns.1 = r.columns.1
+        m.columns.2 = r.columns.2
+        m.columns.3 = SIMD4<Float>(t.x, t.y, t.z, 1)
+        return LocalTransform(matrix: m)
+    }
 }
 
 public struct WorldTransform: RuntimeComponent, Sendable, Equatable {

@@ -137,8 +137,23 @@ public struct SceneSemanticEncoder: Sendable {
             var colliderDensity: Float?
             var colliderLayerID: Int?
             var colliderLayerMask: Int?
+            var colliderBoxHalfExtents: [Float]?
+            var colliderSphereRadius: Float?
+            var colliderCapsuleRadius: Float?
+            var colliderCapsuleHalfHeight: Float?
             if let col = scene.component(Collider.self, for: entity) {
                 colliderShape = col.shape.kind.rawValue
+                switch col.shape {
+                case let .box(he, _):
+                    colliderBoxHalfExtents = [he.x, he.y, he.z]
+                case let .sphere(r, _):
+                    colliderSphereRadius = r
+                case let .capsule(r, hh, _):
+                    colliderCapsuleRadius = r
+                    colliderCapsuleHalfHeight = hh
+                default:
+                    break
+                }
                 colliderIsTrigger = col.isTrigger
                 colliderFriction = col.material.friction
                 colliderRestitution = col.material.restitution
@@ -151,11 +166,15 @@ public struct SceneSemanticEncoder: Sendable {
             var audioVolume: Float?
             var audioLoop: Bool?
             var audioPlayOnAwake: Bool?
+            var audioPitch: Float?
+            var audioSpatialBlend: Float?
             if let src = scene.component(AudioSource.self, for: entity) {
                 audioClip = src.clipName.isEmpty ? nil : src.clipName
                 audioVolume = src.volume
                 audioLoop = src.loop
                 audioPlayOnAwake = src.playOnAwake
+                if abs(src.pitch - 1.0) > 0.0001 { audioPitch = src.pitch }
+                if src.spatialBlend > 0.0001 { audioSpatialBlend = src.spatialBlend }
             }
 
             var meshIsVisible: Bool?
@@ -223,6 +242,10 @@ public struct SceneSemanticEncoder: Sendable {
                 rigidBodyGravityScale: rigidBodyGravityScale,
                 rigidBodyAllowSleep: rigidBodyAllowSleep,
                 colliderShape: colliderShape,
+                colliderBoxHalfExtents: colliderBoxHalfExtents,
+                colliderSphereRadius: colliderSphereRadius,
+                colliderCapsuleRadius: colliderCapsuleRadius,
+                colliderCapsuleHalfHeight: colliderCapsuleHalfHeight,
                 colliderIsTrigger: colliderIsTrigger,
                 colliderFriction: colliderFriction,
                 colliderRestitution: colliderRestitution,
@@ -233,6 +256,8 @@ public struct SceneSemanticEncoder: Sendable {
                 audioVolume: audioVolume,
                 audioLoop: audioLoop,
                 audioPlayOnAwake: audioPlayOnAwake,
+                audioPitch: audioPitch,
+                audioSpatialBlend: audioSpatialBlend,
                 meshIsVisible: meshIsVisible,
                 animationClip: animationClip,
                 animationSpeed: animationSpeed,

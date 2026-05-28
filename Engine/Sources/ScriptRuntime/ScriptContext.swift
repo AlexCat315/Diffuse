@@ -1,4 +1,5 @@
 ﻿import EngineKernel
+import Foundation
 import SceneRuntime
 import SIMDCompat
 
@@ -8,10 +9,29 @@ public final class ScriptContext {
     public let entity: EntityID
     public let deltaTime: Double
 
-    init(phaseContext: RuntimeScriptPhaseContext, entity: EntityID, deltaTime: Double) {
+    /// JSON string from the `ScriptBinding` that triggered this script invocation.
+    public let parametersJSON: String
+
+    /// Decoded JSON dictionary from `parametersJSON`, cached on first access.
+    public var parameters: [String: Any] {
+        if let cached = _cachedParameters { return cached }
+        guard let data = parametersJSON.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return [:] }
+        _cachedParameters = obj
+        return obj
+    }
+
+    private var _cachedParameters: [String: Any]?
+
+    init(phaseContext: RuntimeScriptPhaseContext,
+         entity: EntityID,
+         deltaTime: Double,
+         parametersJSON: String = "{}") {
         self.phaseContext = phaseContext
         self.entity = entity
         self.deltaTime = deltaTime
+        self.parametersJSON = parametersJSON
     }
 
     public var isAlive: Bool {
@@ -216,6 +236,33 @@ public final class ScriptContext {
     /// Always returns a valid (possibly empty) state even if no map is set.
     public var input: InputFrameState {
         phaseContext.resource(InputFrameState.self) ?? InputFrameState()
+    }
+
+    /// Trigger enter/exit events for the current frame.
+    /// The resource is written by the trigger detection phase, so the first
+    /// frame will always be empty.
+    public var triggerEvents: TriggerFrameResource {
+        phaseContext.resource(TriggerFrameResource.self) ?? TriggerFrameResource()
+    }
+
+    /// Events where `otherEntity` entered a trigger attached to `self.entity`.
+    public func triggersEntered() -> [TriggerEvent] {
+        triggerEvents.enters.filter { $0.triggerEntity == entity }
+    }
+
+    /// Events where `otherEntity` exited a trigger attached to `self.entity`.
+    public func triggersExited() -> [TriggerEvent] {
+        triggerEvents.exits.filter { $0.triggerEntity == entity }
+    }
+
+    /// Check whether `otherEntity` entered a trigger attached to `self.entity` this frame.
+    public func didTriggerEnter(_ other: EntityID) -> Bool {
+        triggerEvents.enters.contains { $0.triggerEntity == entity && $0.otherEntity == other }
+    }
+
+    /// Check whether `otherEntity` exited a trigger attached to `self.entity` this frame.
+    public func didTriggerExit(_ other: EntityID) -> Bool {
+        triggerEvents.exits.contains { $0.triggerEntity == entity && $0.otherEntity == other }
     }
 
     /// Appends 2D overlay UI commands to this frame's in-game canvas.
