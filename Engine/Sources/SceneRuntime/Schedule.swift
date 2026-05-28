@@ -9,6 +9,7 @@ public enum RuntimeSystemPhase: String, CaseIterable, Sendable {
     case physicsWriteback
     case animationAndScripts
     case spatialIndexUpdate
+    case triggerDetection
     case renderExtract
 }
 
@@ -159,6 +160,7 @@ public struct RuntimeWorldSchedule {
     private var physicsSyncCache = PhysicsSyncCache()
     private var resolvedPhysicsBackendKind: PhysicsBackendKind = .none
     private var jobSystem = JobSystem.shared
+    private var triggerDetector = TriggerDetector()
 
     public init() {}
 
@@ -366,7 +368,13 @@ public struct RuntimeWorldSchedule {
                 let spatialIndexBuild = buildSpatialIndexResource(in: world, using: jobSystem)
                 world.setDerivedResource(spatialIndexBuild.resource)
                 recordJobReport(spatialIndexBuild.report, for: .spatialIndexUpdate)
-                break
+            case .triggerDetection:
+                if let index = world.resource(SpatialIndexResource.self) {
+                    let triggerFrame = triggerDetector.detect(in: index)
+                    world.setDerivedResource(triggerFrame)
+                } else {
+                    world.setDerivedResource(TriggerFrameResource())
+                }
             case .renderExtract:
                 let renderExtraction = extractRenderScene(in: world)
                 world.setDerivedResource(renderExtraction.resource)
