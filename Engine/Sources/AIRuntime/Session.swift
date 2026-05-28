@@ -1166,7 +1166,9 @@ public actor Session {
             if let p = e.position { entry["position"] = p }
             if let p = e.eulerDegrees { entry["eulerDegrees"] = p }
             if let p = e.scale { entry["scale"] = p }
-            if let p = e.evaluated["worldPosition"] { entry["worldPosition"] = p.jsonValue }
+            if let p = e.evaluated["worldPosition"]    { entry["worldPosition"] = p.jsonValue }
+            if let p = e.evaluated["worldEulerDegrees"] { entry["worldEulerDegrees"] = p.jsonValue }
+            if let p = e.evaluated["worldScale"]        { entry["worldScale"] = p.jsonValue }
             if let p = e.parentRef { entry["parentRef"] = p }
             if let d = dist { entry["distance"] = d }
             // Physics
