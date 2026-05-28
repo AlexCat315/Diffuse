@@ -238,6 +238,33 @@ public final class ScriptContext {
         phaseContext.resource(InputFrameState.self) ?? InputFrameState()
     }
 
+    /// Trigger enter/exit events for the current frame.
+    /// The resource is written by the trigger detection phase, so the first
+    /// frame will always be empty.
+    public var triggerEvents: TriggerFrameResource {
+        phaseContext.resource(TriggerFrameResource.self) ?? TriggerFrameResource()
+    }
+
+    /// Events where `otherEntity` entered a trigger attached to `self.entity`.
+    public func triggersEntered() -> [TriggerEvent] {
+        triggerEvents.enters.filter { $0.triggerEntity == entity }
+    }
+
+    /// Events where `otherEntity` exited a trigger attached to `self.entity`.
+    public func triggersExited() -> [TriggerEvent] {
+        triggerEvents.exits.filter { $0.triggerEntity == entity }
+    }
+
+    /// Check whether `otherEntity` entered a trigger attached to `self.entity` this frame.
+    public func didTriggerEnter(_ other: EntityID) -> Bool {
+        triggerEvents.enters.contains { $0.triggerEntity == entity && $0.otherEntity == other }
+    }
+
+    /// Check whether `otherEntity` exited a trigger attached to `self.entity` this frame.
+    public func didTriggerExit(_ other: EntityID) -> Bool {
+        triggerEvents.exits.contains { $0.triggerEntity == entity && $0.otherEntity == other }
+    }
+
     /// Appends 2D overlay UI commands to this frame's in-game canvas.
     ///
     /// Usage:
