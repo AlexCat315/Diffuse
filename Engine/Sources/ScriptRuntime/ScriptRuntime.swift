@@ -73,7 +73,8 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
                 let scriptContext = ScriptContext(
                     phaseContext: context,
                     entity: entity,
-                    deltaTime: context.deltaTimeSeconds
+                    deltaTime: context.deltaTimeSeconds,
+                    parametersJSON: binding.parametersJSON
                 )
 
                 liveInstances.insert(key)
