@@ -154,6 +154,12 @@ public enum InputEvent: Sendable {
     case mouseButtonUp(MouseButtonEvent)
     case mouseWheel(MouseWheelEvent)
 
+    case gamepadButtonDown(GamepadButtonEvent)
+    case gamepadButtonUp(GamepadButtonEvent)
+    case gamepadAxisMotion(GamepadAxisEvent)
+    case gamepadAdded(UInt32)
+    case gamepadRemoved(UInt32)
+
     case windowFocusGained
     case windowFocusLost
     case windowMinimized
@@ -162,6 +168,58 @@ public enum InputEvent: Sendable {
     case windowExposed
     case windowResized(width: Int32, height: Int32)
     case windowPixelSizeChanged(width: Int32, height: Int32)
+}
+
+// MARK: - Gamepad
+
+public enum GamepadButton: UInt8, Sendable, Hashable, CaseIterable {
+    case south       = 0  // A / Cross
+    case east        = 1  // B / Circle
+    case west        = 2  // X / Square
+    case north       = 3  // Y / Triangle
+    case back        = 4
+    case guide       = 5
+    case start       = 6
+    case leftStick   = 7
+    case rightStick  = 8
+    case leftShoulder  = 9
+    case rightShoulder = 10
+    case dpadUp      = 11
+    case dpadDown    = 12
+    case dpadLeft    = 13
+    case dpadRight   = 14
+}
+
+public enum GamepadAxis: UInt8, Sendable, Hashable, CaseIterable {
+    case leftX        = 0
+    case leftY        = 1
+    case rightX       = 2
+    case rightY       = 3
+    case leftTrigger  = 4
+    case rightTrigger = 5
+}
+
+public struct GamepadButtonEvent: Sendable, Hashable {
+    public var gamepadID: UInt32
+    public var button: GamepadButton
+
+    public init(gamepadID: UInt32, button: GamepadButton) {
+        self.gamepadID = gamepadID
+        self.button = button
+    }
+}
+
+public struct GamepadAxisEvent: Sendable, Hashable {
+    public var gamepadID: UInt32
+    public var axis: GamepadAxis
+    /// Normalized to [-1, 1] for sticks, [0, 1] for triggers.
+    public var value: Float
+
+    public init(gamepadID: UInt32, axis: GamepadAxis, value: Float) {
+        self.gamepadID = gamepadID
+        self.axis = axis
+        self.value = value
+    }
 }
 
 /// Input event tagged with the native window it belongs to.
