@@ -224,6 +224,23 @@ public struct SceneRuntime {
         world.roots()
     }
 
+    /// Returns the first entity whose `SceneNameComponent.value` matches `name`.
+    public func findEntity(named name: String) -> EntityID? {
+        for id in entities(with: SceneNameComponent.self) {
+            if component(SceneNameComponent.self, for: id)?.value == name {
+                return id
+            }
+        }
+        return nil
+    }
+
+    /// Returns all entities whose `SceneKindComponent.value` matches `kind`.
+    public func entities(kind: String) -> [EntityID] {
+        entities(with: SceneKindComponent.self).filter { id in
+            component(SceneKindComponent.self, for: id)?.value == kind
+        }
+    }
+
     @discardableResult
     public mutating func setParent(_ parent: EntityID?, for child: EntityID) -> Bool {
         world.setParent(parent, for: child)

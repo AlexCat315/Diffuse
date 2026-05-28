@@ -82,6 +82,10 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
 
         // Collider extras — non-nil only when `"collider"` ∈ components
         public var colliderShape: String?       // "box" | "sphere" | "capsule" | "mesh" | "convex"
+        public var colliderBoxHalfExtents: [Float]? = nil   // [x,y,z] metres; non-nil only for box
+        public var colliderSphereRadius: Float? = nil        // metres; non-nil only for sphere
+        public var colliderCapsuleRadius: Float? = nil       // metres; non-nil only for capsule
+        public var colliderCapsuleHalfHeight: Float? = nil   // metres; non-nil only for capsule
         public var colliderIsTrigger: Bool?
         public var colliderFriction: Float?
         public var colliderRestitution: Float?
@@ -94,6 +98,8 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         public var audioVolume: Float?
         public var audioLoop: Bool?
         public var audioPlayOnAwake: Bool?
+        public var audioPitch: Float? = nil
+        public var audioSpatialBlend: Float? = nil
 
         // Mesh visibility (authored) — nil means default true
         public var meshIsVisible: Bool? = nil

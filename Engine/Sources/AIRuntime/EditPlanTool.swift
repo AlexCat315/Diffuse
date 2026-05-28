@@ -74,6 +74,19 @@ public enum EditPlanTool {
                     "type": "array", "items": ["type": "number"] as [String: Any],
                     "description": "[x, y, z] world position for spawn_entity. Default [0, 0, 0].",
                 ] as [String: Any],
+                "spawn_kind": [
+                    "type": "string",
+                    "enum": ["mesh", "empty", "light", "camera"],
+                    "description": "Entity type for spawn_entity: 'mesh' (default Static Mesh), 'empty' (group/parent node), 'light' (combine with light_type; intensity, color, range, cast_shadows are applied at creation), 'camera' (camera_fov_y applied at creation). Default 'mesh'.",
+                ] as [String: Any],
+                "spawn_parent_id": [
+                    "type": "string",
+                    "description": "Parent entity in 'scene:<number>' format for spawn_entity. When provided, the new entity is created as a child of this entity. Omit for a root-level entity.",
+                ] as [String: Any],
+                "duplicate_offset": [
+                    "type": "array", "items": ["type": "number"] as [String: Any],
+                    "description": "[dx, dy, dz] local-space offset applied to the copy in duplicate_entity. When omitted the copy is placed at the same position as the source.",
+                ] as [String: Any],
                 "position": [
                     "type": "array", "items": ["type": "number"] as [String: Any],
                     "description": "[x, y, z] world position in metres for set_transform.",
@@ -152,7 +165,7 @@ public enum EditPlanTool {
                 ] as [String: Any],
                 "is_enabled": [
                     "type": "boolean",
-                    "description": "Constraint enabled flag for set_constraint_enabled.",
+                    "description": "Enabled flag. For set_constraint_enabled: toggles physics constraint. For set_script_enabled: enables/disables a script binding at script_index.",
                 ] as [String: Any],
                 "allow_sleep": [
                     "type": "boolean",
@@ -220,14 +233,14 @@ public enum EditPlanTool {
                 ] as [String: Any],
                 "script_index": [
                     "type": "integer",
-                    "description": "Which script binding to modify (0-based). Defaults to 0 when omitted. For set_script_property.",
+                    "description": "Which script binding to modify (0-based). Defaults to 0 when omitted. For set_script_property and set_script_enabled.",
                 ] as [String: Any],
                 "script_property_name": [
                     "type": "string",
                     "description": "The parameter key to set in the script's parametersJSON. For set_script_property.",
                 ] as [String: Any],
                 "script_property_value": [
-                    "description": "The new value for the script parameter (string, number, or boolean). For set_script_property.",
+                    "description": "The new value for the script parameter (string, number, boolean, or array). For set_script_property.",
                 ] as [String: Any],
                 "is_visible": [
                     "type": "boolean",

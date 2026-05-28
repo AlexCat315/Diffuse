@@ -295,12 +295,46 @@ public struct TransactionExecutor {
                             deletedEntityIDs: inout [UInt64]) throws {
         for mutation in operations {
             switch mutation {
-            case let .spawnImportedMeshEntity(label, kindLabel, meshIndex, position):
+            case let .spawnImportedMeshEntity(label, kindLabel, meshIndex, position, parentID):
                 let entity = scene.createEntity()
                 _ = scene.setComponent(SceneNameComponent(value: label), for: entity)
                 _ = scene.setComponent(SceneKindComponent(value: kindLabel), for: entity)
                 _ = scene.setLocalTransform(LocalTransform(translation: position), for: entity)
                 _ = scene.setComponent(RenderMeshComponent(meshIndex: meshIndex), for: entity)
+                if let pid = parentID { _ = scene.setParent(EntityID(index: UInt32(pid & 0xFFFF_FFFF), generation: UInt32(pid >> 32)), for: entity) }
+                createdEntityIDs.append(entity.rawValue)
+
+            case let .spawnEmptyEntity(label, position, parentID):
+                let entity = scene.createEntity()
+                _ = scene.setComponent(SceneNameComponent(value: label), for: entity)
+                _ = scene.setComponent(SceneKindComponent(value: "Empty"), for: entity)
+                _ = scene.setLocalTransform(LocalTransform(translation: position), for: entity)
+                if let pid = parentID { _ = scene.setParent(EntityID(index: UInt32(pid & 0xFFFF_FFFF), generation: UInt32(pid >> 32)), for: entity) }
+                createdEntityIDs.append(entity.rawValue)
+
+            case let .spawnLightEntity(label, lightType, position, initialIntensity, initialColor, initialRange, initialCastShadows, parentID):
+                let entity = scene.createEntity()
+                _ = scene.setComponent(SceneNameComponent(value: label), for: entity)
+                _ = scene.setComponent(SceneKindComponent(value: "Light"), for: entity)
+                _ = scene.setLocalTransform(LocalTransform(translation: position), for: entity)
+                var light = LightComponent(type: lightType)
+                if let v = initialIntensity    { light.intensity    = v }
+                if let v = initialColor        { light.color        = v }
+                if let v = initialRange        { light.range        = v }
+                if let v = initialCastShadows  { light.castShadows  = v }
+                _ = scene.setComponent(light, for: entity)
+                if let pid = parentID { _ = scene.setParent(EntityID(index: UInt32(pid & 0xFFFF_FFFF), generation: UInt32(pid >> 32)), for: entity) }
+                createdEntityIDs.append(entity.rawValue)
+
+            case let .spawnCameraEntity(label, position, initialFovYDegrees, parentID):
+                let entity = scene.createEntity()
+                _ = scene.setComponent(SceneNameComponent(value: label), for: entity)
+                _ = scene.setComponent(SceneKindComponent(value: "Camera"), for: entity)
+                _ = scene.setLocalTransform(LocalTransform(translation: position), for: entity)
+                var cam = CameraComponent(isActive: false)
+                if let fov = initialFovYDegrees { cam.fovYRadians = fov * .pi / 180 }
+                _ = scene.setComponent(cam, for: entity)
+                if let pid = parentID { _ = scene.setParent(EntityID(index: UInt32(pid & 0xFFFF_FFFF), generation: UInt32(pid >> 32)), for: entity) }
                 createdEntityIDs.append(entity.rawValue)
 
             case let .deleteEntity(entityID):
@@ -341,6 +375,48 @@ public struct TransactionExecutor {
                 if let camera = scene.component(CameraComponent.self, for: source) {
                     var copy = camera
                     copy.isActive = false
+                    _ = scene.setComponent(copy, for: entity)
+                }
+                if let light = scene.component(LightComponent.self, for: source) {
+                    _ = scene.setComponent(light, for: entity)
+                }
+                if let scripts = scene.component(ScriptComponent.self, for: source) {
+                    _ = scene.setComponent(scripts, for: entity)
+                }
+                if let player = scene.component(AnimationPlayer.self, for: source) {
+                    _ = scene.setComponent(player, for: entity)
+                }
+                createdEntityIDs.append(entity.rawValue)
+
+            case let .duplicateEntityWithOffset(entityID, offset):
+                let source = try requireEntity(entityID, in: scene)
+                let entity = scene.createEntity()
+                if let name = scene.component(SceneNameComponent.self, for: source) {
+                    _ = scene.setComponent(SceneNameComponent(value: name.value + " Copy"), for: entity)
+                }
+                if let kind = scene.component(SceneKindComponent.self, for: source) {
+                    _ = scene.setComponent(kind, for: entity)
+                }
+                var transform = scene.localTransform(for: source) ?? LocalTransform()
+                transform.matrix.columns.3 += SIMD4<Float>(offset, 0)
+                _ = scene.setLocalTransform(transform, for: entity)
+                if let parent = scene.parent(of: source) {
+                    _ = scene.setParent(parent, for: entity)
+                }
+                if let mesh = scene.component(RenderMeshComponent.self, for: source) {
+                    _ = scene.setComponent(mesh, for: entity)
+                }
+                if let asset = scene.component(AssetReferenceComponent.self, for: source) {
+                    _ = scene.setComponent(asset, for: entity)
+                }
+                if let body = scene.component(RigidBody.self, for: source) {
+                    _ = scene.setComponent(body, for: entity)
+                }
+                if let collider = scene.component(Collider.self, for: source) {
+                    _ = scene.setComponent(collider, for: entity)
+                }
+                if let camera = scene.component(CameraComponent.self, for: source) {
+                    var copy = camera; copy.isActive = false
                     _ = scene.setComponent(copy, for: entity)
                 }
                 if let light = scene.component(LightComponent.self, for: source) {
@@ -402,6 +478,10 @@ public struct TransactionExecutor {
                     throw TransactionExecutorError.missingComponent(entityID: entityID,
                                                                    type: "RigidBody")
                 }
+
+            case let .setRigidBody(entityID, body):
+                let entity = try requireEntity(entityID, in: scene)
+                _ = scene.setComponent(body, for: entity)
 
             case let .setCollider(entityID, collider):
                 let entity = try requireEntity(entityID, in: scene)
@@ -939,12 +1019,20 @@ public struct TransactionExecutor {
 
     private func sceneMutationSummary(_ mutation: SceneMutation) -> String {
         switch mutation {
-        case let .spawnImportedMeshEntity(label, _, _, _):
+        case let .spawnImportedMeshEntity(label, _, _, _, _):
             return "scene:spawn:\(label)"
+        case let .spawnEmptyEntity(label, _, _):
+            return "scene:spawn_empty:\(label)"
+        case let .spawnLightEntity(label, _, _, _, _, _, _, _):
+            return "scene:spawn_light:\(label)"
+        case let .spawnCameraEntity(label, _, _, _):
+            return "scene:spawn_camera:\(label)"
         case let .deleteEntity(id):
             return "scene:delete:\(id)"
         case let .duplicateEntity(id):
             return "scene:duplicate:\(id)"
+        case let .duplicateEntityWithOffset(id, _):
+            return "scene:duplicate_offset:\(id)"
         case let .moveEntity(id, _, _):
             return "scene:move:\(id)"
         case let .setLocalTransform(id, _):
@@ -959,6 +1047,8 @@ public struct TransactionExecutor {
             return "scene:rigidbody_gravity:\(id)"
         case let .setRigidBodyAllowSleep(id, _):
             return "scene:rigidbody_sleep:\(id)"
+        case let .setRigidBody(id, _):
+            return "scene:rigidbody_full:\(id)"
         case let .setCollider(id, _):
             return "scene:collider_set:\(id)"
         case let .setColliderTrigger(id, _):
@@ -1034,13 +1124,80 @@ public struct TransactionExecutor {
 
         for op in sceneOps {
             switch op {
-            case let .spawnImportedMeshEntity(label, kindLabel, _, position):
+            case let .spawnImportedMeshEntity(label, kindLabel, _, position, parentID):
                 if createdIndex < createdEntityIDs.count {
                     let rawID = createdEntityIDs[createdIndex]
                     let ref = "scene:\(rawID)"
                     events.append(.entityAdded(ref: ref, name: label, kind: kindLabel))
                     events.append(.entityAuthoredChanged(ref: ref, property: "position",
                         value: .vec3(position.x, position.y, position.z)))
+                    if let pid = parentID {
+                        events.append(.entityAuthoredChanged(ref: ref, property: "parentRef",
+                            value: .string("scene:\(pid)")))
+                    }
+                    events.append(contentsOf: worldTransformEvents(for: rawID, in: scene))
+                    createdIndex += 1
+                }
+
+            case let .spawnEmptyEntity(label, position, parentID):
+                if createdIndex < createdEntityIDs.count {
+                    let rawID = createdEntityIDs[createdIndex]
+                    let ref = "scene:\(rawID)"
+                    events.append(.entityAdded(ref: ref, name: label, kind: "Empty"))
+                    events.append(.entityAuthoredChanged(ref: ref, property: "position",
+                        value: .vec3(position.x, position.y, position.z)))
+                    if let pid = parentID {
+                        events.append(.entityAuthoredChanged(ref: ref, property: "parentRef",
+                            value: .string("scene:\(pid)")))
+                    }
+                    events.append(contentsOf: worldTransformEvents(for: rawID, in: scene))
+                    createdIndex += 1
+                }
+
+            case let .spawnLightEntity(label, lightType, position, initialIntensity, initialColor, initialRange, initialCastShadows, parentID):
+                if createdIndex < createdEntityIDs.count {
+                    let rawID = createdEntityIDs[createdIndex]
+                    let ref = "scene:\(rawID)"
+                    events.append(.entityAdded(ref: ref, name: label, kind: "Light"))
+                    events.append(.entityAuthoredChanged(ref: ref, property: "position",
+                        value: .vec3(position.x, position.y, position.z)))
+                    events.append(.entityAuthoredChanged(ref: ref, property: "lightType",
+                        value: .string(lightType.rawValue)))
+                    if let v = initialIntensity {
+                        events.append(.entityAuthoredChanged(ref: ref, property: "lightIntensity", value: .float(v)))
+                    }
+                    if let v = initialColor {
+                        events.append(.entityAuthoredChanged(ref: ref, property: "lightColor",
+                            value: .vec3(v.x, v.y, v.z)))
+                    }
+                    if let v = initialRange {
+                        events.append(.entityAuthoredChanged(ref: ref, property: "lightRange", value: .float(v)))
+                    }
+                    if let v = initialCastShadows {
+                        events.append(.entityAuthoredChanged(ref: ref, property: "lightCastShadows", value: .bool(v)))
+                    }
+                    if let pid = parentID {
+                        events.append(.entityAuthoredChanged(ref: ref, property: "parentRef",
+                            value: .string("scene:\(pid)")))
+                    }
+                    events.append(contentsOf: worldTransformEvents(for: rawID, in: scene))
+                    createdIndex += 1
+                }
+
+            case let .spawnCameraEntity(label, position, initialFovYDegrees, parentID):
+                if createdIndex < createdEntityIDs.count {
+                    let rawID = createdEntityIDs[createdIndex]
+                    let ref = "scene:\(rawID)"
+                    events.append(.entityAdded(ref: ref, name: label, kind: "Camera"))
+                    events.append(.entityAuthoredChanged(ref: ref, property: "position",
+                        value: .vec3(position.x, position.y, position.z)))
+                    if let fov = initialFovYDegrees {
+                        events.append(.entityAuthoredChanged(ref: ref, property: "cameraFovYDegrees", value: .float(fov)))
+                    }
+                    if let pid = parentID {
+                        events.append(.entityAuthoredChanged(ref: ref, property: "parentRef",
+                            value: .string("scene:\(pid)")))
+                    }
                     events.append(contentsOf: worldTransformEvents(for: rawID, in: scene))
                     createdIndex += 1
                 }
@@ -1048,7 +1205,7 @@ public struct TransactionExecutor {
             case let .deleteEntity(entityID):
                 events.append(.entityRemoved(ref: "scene:\(entityID)"))
 
-            case .duplicateEntity:
+            case .duplicateEntity, .duplicateEntityWithOffset:
                 if createdIndex < createdEntityIDs.count, let scene {
                     let rawID = createdEntityIDs[createdIndex]
                     let ref = "scene:\(rawID)"
@@ -1190,6 +1347,17 @@ public struct TransactionExecutor {
                     ref: "scene:\(entityID)", property: "rigidBodyAllowSleep",
                     value: .bool(allow)))
 
+            case let .setRigidBody(entityID, body):
+                let ref = "scene:\(entityID)"
+                events.append(.entityAuthoredChanged(ref: ref, property: "rigidBodyMotionType",
+                    value: .string(body.motionType.rawValue)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "rigidBodyMass",
+                    value: .float(body.mass)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "rigidBodyGravityScale",
+                    value: .float(body.gravityScale)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "rigidBodyAllowSleep",
+                    value: .bool(body.allowSleep)))
+
             case let .setColliderShapeType(entityID, kind):
                 events.append(.entityAuthoredChanged(
                     ref: "scene:\(entityID)", property: "colliderShape",
@@ -1255,6 +1423,21 @@ public struct TransactionExecutor {
                 let ref = "scene:\(entityID)"
                 events.append(.entityAuthoredChanged(ref: ref, property: "colliderShape",
                     value: .string(collider.shape.kind.rawValue)))
+                switch collider.shape {
+                case let .box(he, _):
+                    events.append(.entityAuthoredChanged(ref: ref, property: "colliderBoxHalfExtents",
+                        value: .vec3(he.x, he.y, he.z)))
+                case let .sphere(r, _):
+                    events.append(.entityAuthoredChanged(ref: ref, property: "colliderSphereRadius",
+                        value: .float(r)))
+                case let .capsule(r, hh, _):
+                    events.append(.entityAuthoredChanged(ref: ref, property: "colliderCapsuleRadius",
+                        value: .float(r)))
+                    events.append(.entityAuthoredChanged(ref: ref, property: "colliderCapsuleHalfHeight",
+                        value: .float(hh)))
+                default:
+                    break
+                }
                 events.append(.entityAuthoredChanged(ref: ref, property: "colliderIsTrigger",
                     value: .bool(collider.isTrigger)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "colliderFriction",

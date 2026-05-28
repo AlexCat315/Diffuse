@@ -47,6 +47,7 @@ public enum ComponentCatalog {
 
         // Audio
         ComponentTypeID(AudioSource.self),
+        ComponentTypeID(AudioListener.self),
 
         // Animation
         ComponentTypeID(AnimationPlayer.self),

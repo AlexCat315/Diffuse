@@ -718,10 +718,11 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try executor.buildTransaction(from: plan, scene: scene)
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let hasLayer = ops.contains { if case .setColliderLayer(_, 3) = $0 { return true }; return false }
-        let hasMask  = ops.contains { if case .setColliderLayerMask(_, 12) = $0 { return true }; return false }
-        XCTAssertTrue(hasLayer, "expected setColliderLayer mutation")
-        XCTAssertTrue(hasMask,  "expected setColliderLayerMask mutation")
+        let hasCollider = ops.contains {
+            if case let .setCollider(_, c) = $0 { return c.layerID == 3 && c.layerMask == 12 }
+            return false
+        }
+        XCTAssertTrue(hasCollider, "set_collider_layer must produce setCollider mutation with layerID=3 and layerMask=12")
     }
 
     func testSetColliderShapeExecutorProducesShapeTypeMutation() throws {
@@ -738,10 +739,10 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasShape = ops.contains {
-            if case .setColliderShapeType(_, .sphere) = $0 { return true }
+            if case let .setCollider(_, c) = $0 { if case .sphere = c.shape { return true } }
             return false
         }
-        XCTAssertTrue(hasShape, "set_collider_shape sphere must produce setColliderShapeType(.sphere) mutation")
+        XCTAssertTrue(hasShape, "set_collider_shape sphere must produce setCollider mutation with sphere shape")
     }
 
     func testSetColliderMaterialExecutorProducesThreeMutations() throws {
@@ -758,12 +759,15 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let hasFriction    = ops.contains { if case .setColliderMaterialFriction(_, _) = $0 { return true }; return false }
-        let hasRestitution = ops.contains { if case .setColliderMaterialRestitution(_, _) = $0 { return true }; return false }
-        let hasDensity     = ops.contains { if case .setColliderMaterialDensity(_, _) = $0 { return true }; return false }
-        XCTAssertTrue(hasFriction,    "set_collider_material must produce setColliderMaterialFriction mutation")
-        XCTAssertTrue(hasRestitution, "set_collider_material must produce setColliderMaterialRestitution mutation")
-        XCTAssertTrue(hasDensity,     "set_collider_material must produce setColliderMaterialDensity mutation")
+        let hasCollider = ops.contains {
+            if case let .setCollider(_, c) = $0 {
+                return abs(c.material.friction - 0.05) < 0.001
+                    && abs(c.material.restitution - 0.9) < 0.001
+                    && abs(c.material.density - 0.8) < 0.001
+            }
+            return false
+        }
+        XCTAssertTrue(hasCollider, "set_collider_material must produce setCollider mutation with all three material values")
     }
 
     func testSetScriptPropertyExecutorMergesIntoExistingBindings() throws {
@@ -819,6 +823,88 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(dict["label"] as? String, "Patrol")
     }
 
+    func testSetScriptEnabledDisablesBinding() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let binding = ScriptBinding(ScriptHandle(rawValue: 1), isEnabled: true)
+        _ = scene.setComponent(ScriptComponent(bindings: [binding]), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"disable script","steps":[{"op":"set_script_enabled","entity_id":"\(ref)",\
+        "is_enabled":false,"script_index":0}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        var foundBindings: [ScriptBinding]? = nil
+        for op in ops {
+            if case let .setScriptBindings(_, bindings) = op { foundBindings = bindings; break }
+        }
+        let bindings = try XCTUnwrap(foundBindings, "expected setScriptBindings mutation")
+        XCTAssertFalse(bindings[0].isEnabled, "set_script_enabled false must disable the binding")
+    }
+
+    func testSetScriptEnabledCreatesBindingWhenComponentAbsent() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"enable script","steps":[{"op":"set_script_enabled","entity_id":"\(ref)",\
+        "is_enabled":true}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        var foundBindings: [ScriptBinding]? = nil
+        for op in ops {
+            if case let .setScriptBindings(_, bindings) = op { foundBindings = bindings; break }
+        }
+        let bindings = try XCTUnwrap(foundBindings, "expected setScriptBindings mutation")
+        XCTAssertEqual(bindings.count, 1)
+        XCTAssertTrue(bindings[0].isEnabled)
+    }
+
+    func testSetScriptEnabledMissingFieldThrows() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"bad","steps":[{"op":"set_script_enabled","entity_id":"\(ref)"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene))
+    }
+
+    func testSetScriptEnabledTargetsCorrectBindingIndex() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let b0 = ScriptBinding(ScriptHandle(rawValue: 1), isEnabled: true)
+        let b1 = ScriptBinding(ScriptHandle(rawValue: 2), isEnabled: true)
+        _ = scene.setComponent(ScriptComponent(bindings: [b0, b1]), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"disable second","steps":[{"op":"set_script_enabled","entity_id":"\(ref)",\
+        "is_enabled":false,"script_index":1}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        var foundBindings: [ScriptBinding]? = nil
+        for op in ops {
+            if case let .setScriptBindings(_, bindings) = op { foundBindings = bindings; break }
+        }
+        let bindings = try XCTUnwrap(foundBindings)
+        XCTAssertTrue(bindings[0].isEnabled, "binding 0 must remain enabled")
+        XCTAssertFalse(bindings[1].isEnabled, "binding 1 must be disabled")
+    }
+
     func testSetColliderTriggerExecutorProducesMutation() throws {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
@@ -832,8 +918,8 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let hasTrigger = ops.contains { if case .setColliderTrigger(_, true) = $0 { return true }; return false }
-        XCTAssertTrue(hasTrigger, "set_collider_trigger must produce setColliderTrigger mutation")
+        let hasTrigger = ops.contains { if case let .setCollider(_, c) = $0 { return c.isTrigger == true }; return false }
+        XCTAssertTrue(hasTrigger, "set_collider_trigger must produce setCollider mutation with isTrigger=true")
     }
 
     func testSetColliderBoxExtentsExecutorProducesMutation() throws {
@@ -851,12 +937,14 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasExtents = ops.contains {
-            if case let .setColliderShapeBoxHalfExtents(_, ext) = $0 {
-                return abs(ext.x - 0.5) < 0.001 && abs(ext.y - 1.0) < 0.001 && abs(ext.z - 2.0) < 0.001
+            if case let .setCollider(_, c) = $0 {
+                if case let .box(ext, _) = c.shape {
+                    return abs(ext.x - 0.5) < 0.001 && abs(ext.y - 1.0) < 0.001 && abs(ext.z - 2.0) < 0.001
+                }
             }
             return false
         }
-        XCTAssertTrue(hasExtents, "set_collider_box_extents must produce setColliderShapeBoxHalfExtents mutation")
+        XCTAssertTrue(hasExtents, "set_collider_box_extents must produce setCollider mutation with correct half-extents")
     }
 
     func testSetColliderSphereRadiusExecutorProducesMutation() throws {
@@ -873,10 +961,12 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasRadius = ops.contains {
-            if case let .setColliderShapeSphereRadius(_, r) = $0 { return abs(r - 3.5) < 0.001 }
+            if case let .setCollider(_, c) = $0 {
+                if case let .sphere(r, _) = c.shape { return abs(r - 3.5) < 0.001 }
+            }
             return false
         }
-        XCTAssertTrue(hasRadius, "set_collider_sphere_radius must produce setColliderShapeSphereRadius mutation")
+        XCTAssertTrue(hasRadius, "set_collider_sphere_radius must produce setCollider mutation with sphere radius=3.5")
     }
 
     func testSetColliderCapsuleExecutorProducesBothMutations() throws {
@@ -893,16 +983,15 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let hasRadius = ops.contains {
-            if case let .setColliderShapeCapsuleRadius(_, r) = $0 { return abs(r - 0.4) < 0.001 }
+        let hasCollider = ops.contains {
+            if case let .setCollider(_, c) = $0 {
+                if case let .capsule(r, hh, _) = c.shape {
+                    return abs(r - 0.4) < 0.001 && abs(hh - 1.2) < 0.001
+                }
+            }
             return false
         }
-        let hasHH = ops.contains {
-            if case let .setColliderShapeCapsuleHalfHeight(_, hh) = $0 { return abs(hh - 1.2) < 0.001 }
-            return false
-        }
-        XCTAssertTrue(hasRadius, "set_collider_capsule must produce setColliderShapeCapsuleRadius mutation")
-        XCTAssertTrue(hasHH,     "set_collider_capsule must produce setColliderShapeCapsuleHalfHeight mutation")
+        XCTAssertTrue(hasCollider, "set_collider_capsule must produce setCollider mutation with radius=0.4 halfHeight=1.2")
     }
 
     func testSetConstraintEnabledExecutorProducesMutation() throws {
@@ -933,8 +1022,8 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let hasSleep = ops.contains { if case .setRigidBodyAllowSleep(_, true) = $0 { return true }; return false }
-        XCTAssertTrue(hasSleep, "set_rigid_body_allow_sleep must produce setRigidBodyAllowSleep mutation")
+        let hasSleep = ops.contains { if case let .setRigidBody(_, body) = $0 { return body.allowSleep == true }; return false }
+        XCTAssertTrue(hasSleep, "set_rigid_body_allow_sleep must produce setRigidBody mutation with allowSleep=true")
     }
 
     func testSetMeshVisibilityExecutorProducesMutation() throws {
@@ -1129,8 +1218,8 @@ final class AIRuntimeTests: XCTestCase {
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
-        let hasMotion = ops.contains { if case .setRigidBodyMotionType(_, .kinematic) = $0 { return true }; return false }
-        XCTAssertTrue(hasMotion, "set_rigidbody_motion must produce setRigidBodyMotionType(.kinematic) mutation")
+        let hasMotion = ops.contains { if case let .setRigidBody(_, body) = $0 { return body.motionType == .kinematic }; return false }
+        XCTAssertTrue(hasMotion, "set_rigidbody_motion must produce setRigidBody mutation with motionType=.kinematic")
     }
 
     func testSetRigidBodyMassExecutorProducesMutation() throws {
@@ -1148,10 +1237,10 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasMass = ops.contains {
-            if case let .setRigidBodyMass(_, v) = $0 { return abs(v - 25) < 0.01 }
+            if case let .setRigidBody(_, body) = $0 { return abs(body.mass - 25) < 0.01 }
             return false
         }
-        XCTAssertTrue(hasMass, "set_rigidbody_mass must produce setRigidBodyMass mutation")
+        XCTAssertTrue(hasMass, "set_rigidbody_mass must produce setRigidBody mutation with mass=25")
     }
 
     func testSetRigidBodyGravityExecutorProducesMutation() throws {
@@ -1169,10 +1258,10 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasGravity = ops.contains {
-            if case let .setRigidBodyGravityScale(_, v) = $0 { return abs(v - 0.2) < 0.001 }
+            if case let .setRigidBody(_, body) = $0 { return abs(body.gravityScale - 0.2) < 0.001 }
             return false
         }
-        XCTAssertTrue(hasGravity, "set_rigidbody_gravity must produce setRigidBodyGravityScale mutation")
+        XCTAssertTrue(hasGravity, "set_rigidbody_gravity must produce setRigidBody mutation with gravityScale=0.2")
     }
 
     func testSetTransformPositionOnlyPreservesExistingTransform() throws {
@@ -1267,7 +1356,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasSpawn = ops.contains {
-            if case let .spawnImportedMeshEntity(label, _, _, pos) = $0 {
+            if case let .spawnImportedMeshEntity(label, _, _, pos, _) = $0 {
                 return label == "Barrel" && abs(pos.z - 5) < 0.01
             }
             return false
@@ -2703,6 +2792,118 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertFalse(ctx.systemPromptSection.contains("NavMesh"))
     }
 
+    func testGameWorkflowContextIncludesPerformanceBudgetInPrompt() {
+        let constraints = GameKnownConstraints(navMeshBaked: false, performanceBudget: "mobile_low")
+        let ctx = GameWorkflowContext(
+            levelPhase: .blockout,
+            gameplayIntent: GameplayIntent(genre: "platformer", winCondition: "reach_end"),
+            targetExperience: "casual",
+            knownConstraints: constraints
+        )
+        XCTAssertTrue(ctx.systemPromptSection.contains("mobile_low"),
+                      "performance budget should appear in system prompt section")
+    }
+
+    func testGameWorkflowContextIncludesPlayerCountInPrompt() {
+        let ctx = GameWorkflowContext(
+            levelPhase: .blockout,
+            gameplayIntent: GameplayIntent(genre: "co-op", winCondition: "survive",
+                                           playerCount: 4, pacing: "action"),
+            targetExperience: "chaotic fun"
+        )
+        XCTAssertTrue(ctx.systemPromptSection.contains("4"),
+                      "player count should appear in system prompt section")
+    }
+
+    func testGameWorkflowContextScriptSchemasAppearInPrompt() {
+        let schema = ScriptSchema(name: "PatrolScript", parameters: [
+            ScriptParameterDescriptor(name: "speed", type: "Float", description: "movement speed in m/s"),
+            ScriptParameterDescriptor(name: "radius", type: "Float"),
+        ])
+        let constraints = GameKnownConstraints(scriptSchemas: [schema])
+        let ctx = GameWorkflowContext(
+            levelPhase: .blockout,
+            gameplayIntent: GameplayIntent(genre: "action", winCondition: "survive"),
+            targetExperience: "combat",
+            knownConstraints: constraints
+        )
+        let section = ctx.systemPromptSection
+        XCTAssertTrue(section.contains("PatrolScript"), "script name must appear")
+        XCTAssertTrue(section.contains("speed"), "parameter name must appear")
+        XCTAssertTrue(section.contains("Float"), "parameter type must appear")
+        XCTAssertTrue(section.contains("movement speed in m/s"), "parameter description must appear")
+        XCTAssertTrue(section.contains("radius"), "second parameter must appear")
+    }
+
+    func testGameWorkflowContextScriptSchemasTakePrecedenceOverRegistry() {
+        let schema = ScriptSchema(name: "EnemyAI", parameters: [
+            ScriptParameterDescriptor(name: "health", type: "Int"),
+        ])
+        let constraints = GameKnownConstraints(
+            scriptingRegistry: ["legacyScript"],
+            scriptSchemas: [schema]
+        )
+        let ctx = GameWorkflowContext(
+            levelPhase: .blockout,
+            gameplayIntent: GameplayIntent(genre: "action", winCondition: "defeat_boss"),
+            targetExperience: "intense",
+            knownConstraints: constraints
+        )
+        let section = ctx.systemPromptSection
+        XCTAssertTrue(section.contains("EnemyAI"), "schema name must appear when schemas present")
+        XCTAssertFalse(section.contains("legacyScript"),
+                       "registry names must be suppressed when schemas are provided")
+    }
+
+    func testGameWorkflowContextScriptSchemasRoundTripCodable() throws {
+        let schema = ScriptSchema(name: "FlockBoid", parameters: [
+            ScriptParameterDescriptor(name: "cohesionWeight", type: "Float"),
+            ScriptParameterDescriptor(name: "separationDist", type: "Float", description: "min distance"),
+        ])
+        let constraints = GameKnownConstraints(scriptSchemas: [schema])
+        let ctx = GameWorkflowContext(
+            levelPhase: .polish,
+            gameplayIntent: GameplayIntent(genre: "simulation", winCondition: "observe"),
+            targetExperience: "meditative",
+            knownConstraints: constraints
+        )
+        let data = try JSONEncoder().encode(ctx)
+        let decoded = try JSONDecoder().decode(GameWorkflowContext.self, from: data)
+        XCTAssertEqual(decoded.knownConstraints.scriptSchemas.count, 1)
+        XCTAssertEqual(decoded.knownConstraints.scriptSchemas[0].name, "FlockBoid")
+        XCTAssertEqual(decoded.knownConstraints.scriptSchemas[0].parameters[1].description, "min distance")
+    }
+
+    // MARK: - Locale propagation
+
+    func testSessionNaturalLanguageWithNonEnglishLocaleProducesProposal() async throws {
+        let planResponse = """
+        {
+          "id": "msg_l1",
+          "content": [
+            {"type": "tool_use", "id": "tu_l1", "name": "execute_edit_plan",
+             "input": {"summary": "场景编辑完成", "steps": []}}
+          ],
+          "stop_reason": "tool_use"
+        }
+        """
+        MockURLProtocol.requestHandler = { _ in
+            let http = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!,
+                                       statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (http, Data(planResponse.utf8))
+        }
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = Session(id: "locale1", config: makeTestConfig(), urlSession: URLSession(configuration: config))
+
+        let proposal = try await session.process(Signal.naturalLanguage(
+            text: "将所有灯光颜色改为暖白色",
+            locale: "zh-Hans"
+        ))
+        XCTAssertNotNil(proposal.id, "non-English locale signal must still produce a Proposal")
+        XCTAssertEqual(proposal.plan.summary, "场景编辑完成")
+    }
+
     // MARK: - Session.process(.userCorrection) all-accepted path
 
     func testSessionProcessUserCorrectionAllAcceptedReturnsNoopProposal() async throws {
@@ -2750,6 +2951,1681 @@ final class AIRuntimeTests: XCTestCase {
             return false
         }
         XCTAssertTrue(hasToolResult, "processing a correction must record a toolResult for the prior call's toolUseID")
+    }
+
+    func testSessionProcessUserCorrectionRejectedRecordsPlanOpsInContextMemory() async throws {
+        let planJSON = "{\"summary\":\"Renamed cube\",\"steps\":[{\"op\":\"set_name\",\"entity_id\":\"scene:1\",\"name\":\"New\"}]}"
+        let planResponse = """
+        {
+          "id": "msg_r1",
+          "content": [
+            {"type": "tool_use", "id": "tu_r1", "name": "execute_edit_plan",
+             "input": {"summary": "Revised.", "steps": []}}
+          ],
+          "stop_reason": "tool_use"
+        }
+        """
+        MockURLProtocol.requestHandler = { _ in
+            let http = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!,
+                                       statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (http, Data(planResponse.utf8))
+        }
+        let urlConfig = URLSessionConfiguration.ephemeral
+        urlConfig.protocolClasses = [MockURLProtocol.self]
+        let mem = try ContextMemoryStore()
+        let session = Session(id: "mem-corr", config: makeTestConfig(), urlSession: URLSession(configuration: urlConfig))
+        await session.setContextMemory(mem)
+        await session.recordTurn(ConversationTurn(kind: .userText("rename the cube")))
+        await session.recordTurn(ConversationTurn(kind: .assistantToolCall(
+            toolUseID: "tu_r0", name: "execute_edit_plan", inputJSON: planJSON
+        )))
+
+        _ = try await session.process(Signal.userCorrection(
+            proposalID: "prop_r1",
+            acceptedStepIDs: [],
+            rejectedStepIDs: ["step_0"]
+        ))
+
+        // Allow the async Task { await mem.upsert } to complete
+        try await Task.sleep(nanoseconds: 10_000_000)
+
+        let entry = await mem.entry(id: "pref:rejected:prop_r1")
+        XCTAssertNotNil(entry, "rejected correction must produce a userPreference entry")
+        XCTAssertEqual(entry?.payload["plan_ops"], "set_name",
+                       "plan_ops must contain the operation type from the rejected plan")
+        XCTAssertEqual(entry?.payload["plan_summary"], "Renamed cube",
+                       "plan_summary must capture the plan summary")
+    }
+
+    // MARK: - Executor error paths (missingEntityRef, entityNotFound, invalidEntityRef, invalidColor)
+
+    func testExecutorThrowsMissingEntityRefForDeleteEntity() throws {
+        var scene = SceneRuntime()
+        _ = scene.createEntity()
+
+        let json = """
+        {"summary":"del","steps":[{"op":"delete_entity"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)) { err in
+            if case SceneEditPlanExecutorError.missingEntityRef(let op) = err {
+                XCTAssertEqual(op, .deleteEntity)
+            } else {
+                XCTFail("expected missingEntityRef, got \(err)")
+            }
+        }
+    }
+
+    func testExecutorThrowsEntityNotFoundForNonexistentRef() throws {
+        var scene = SceneRuntime()
+        _ = scene.createEntity()
+
+        let json = """
+        {"summary":"del","steps":[{"op":"delete_entity","entity_id":"scene:99999"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)) { err in
+            if case SceneEditPlanExecutorError.entityNotFound(let ref) = err {
+                XCTAssertEqual(ref, "scene:99999")
+            } else {
+                XCTFail("expected entityNotFound, got \(err)")
+            }
+        }
+    }
+
+    func testExecutorThrowsInvalidEntityRefForMalformedRef() throws {
+        var scene = SceneRuntime()
+        _ = scene.createEntity()
+
+        let json = """
+        {"summary":"bad","steps":[{"op":"delete_entity","entity_id":"invalid-format"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)) { err in
+            if case SceneEditPlanExecutorError.invalidEntityRef(let ref) = err {
+                XCTAssertEqual(ref, "invalid-format")
+            } else {
+                XCTFail("expected invalidEntityRef, got \(err)")
+            }
+        }
+    }
+
+    func testExecutorThrowsInvalidColorForShortColorArray() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(RenderMeshComponent(meshIndex: 0), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"bad color","steps":[{"op":"set_mesh_color","entity_id":"\(ref)","color":[1.0,0.5]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)) { err in
+            if case SceneEditPlanExecutorError.invalidColor(let op) = err {
+                XCTAssertEqual(op, .setMeshColor)
+            } else {
+                XCTFail("expected invalidColor, got \(err)")
+            }
+        }
+    }
+
+    func testExecutorThrowsMissingFieldForSetLightRangeWithoutRange() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(LightComponent(type: .point, color: .one, intensity: 100, range: 10), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"range","steps":[{"op":"set_light_range","entity_id":"\(ref)"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)) { err in
+            if case SceneEditPlanExecutorError.missingField(_, let field) = err {
+                XCTAssertEqual(field, "range")
+            } else {
+                XCTFail("expected missingField(range), got \(err)")
+            }
+        }
+    }
+
+    func testExecutorThrowsMissingFieldForSetColliderLayerWithNoFields() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .box(halfExtents: .one, center: .zero)), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"layer","steps":[{"op":"set_collider_layer","entity_id":"\(ref)"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)) { err in
+            if case SceneEditPlanExecutorError.missingField = err { } else {
+                XCTFail("expected missingField, got \(err)")
+            }
+        }
+    }
+
+    // MARK: - entityEvaluatedChanged event
+
+    func testEntityEvaluatedChangedPopulatesEvaluatedDict() {
+        var view = WorldView()
+        view.apply(event: .entityAdded(ref: "scene:1", name: "A", kind: nil))
+        view.apply(event: .entityEvaluatedChanged(ref: "scene:1",
+                                                   property: "worldPosition",
+                                                   value: .vec3(10, 20, 30)))
+        XCTAssertEqual(view.entityIndex["scene:1"]?.evaluated["worldPosition"], .vec3(10, 20, 30))
+    }
+
+    func testEntityEvaluatedChangedCreatesRecordWhenEntityAbsent() {
+        var view = WorldView()
+        view.apply(event: .entityEvaluatedChanged(ref: "scene:9",
+                                                   property: "worldScale",
+                                                   value: .vec3(2, 2, 2)))
+        XCTAssertEqual(view.entityIndex["scene:9"]?.evaluated["worldScale"], .vec3(2, 2, 2))
+    }
+
+    // MARK: - setColliderShape with mesh / convex kinds
+
+    func testSetColliderShapeMeshKindProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .box(halfExtents: .one, center: .zero)), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"mesh collider","steps":[{"op":"set_collider_shape","entity_id":"\(ref)","collider_shape":"mesh"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let has = ops.contains {
+            if case let .setCollider(_, c) = $0 { if case .mesh = c.shape { return true } }
+            return false
+        }
+        XCTAssertTrue(has, "set_collider_shape 'mesh' must produce setCollider mutation with mesh shape")
+    }
+
+    func testSetColliderShapeConvexKindProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .box(halfExtents: .one, center: .zero)), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"convex","steps":[{"op":"set_collider_shape","entity_id":"\(ref)","collider_shape":"convex"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let has = ops.contains {
+            if case let .setCollider(_, c) = $0 { if case .convex = c.shape { return true } }
+            return false
+        }
+        XCTAssertTrue(has, "set_collider_shape 'convex' must produce setCollider mutation with convex shape")
+    }
+
+    // MARK: - Session.process(.referenceImage)
+
+    func testSessionProcessReferenceImageReturnsProposal() async throws {
+        let planResponse = """
+        {
+          "id": "msg_1",
+          "content": [
+            {"type": "tool_use", "id": "tu_1", "name": "execute_edit_plan",
+             "input": {"summary": "Created entity from reference.", "steps": []}}
+          ],
+          "stop_reason": "tool_use"
+        }
+        """
+        MockURLProtocol.requestHandler = { _ in
+            let http = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!,
+                                       statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (http, Data(planResponse.utf8))
+        }
+
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = Session(id: "img1", config: makeTestConfig(), urlSession: URLSession(configuration: config))
+        let signal = Signal.referenceImage(url: URL(fileURLWithPath: "/tmp/ref.png"), entityRef: "scene:1")
+        let proposal = try await session.process(signal)
+
+        XCTAssertEqual(proposal.plan.summary, "Created entity from reference.")
+    }
+
+    func testSessionProcessReferenceImageRecordsUserTurnWithFilenameAndEntityRef() async throws {
+        let planResponse = """
+        {
+          "id": "msg_1",
+          "content": [
+            {"type": "tool_use", "id": "tu_1", "name": "execute_edit_plan",
+             "input": {"summary": "Named entity.", "steps": []}}
+          ],
+          "stop_reason": "tool_use"
+        }
+        """
+        MockURLProtocol.requestHandler = { _ in
+            let http = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!,
+                                       statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (http, Data(planResponse.utf8))
+        }
+
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockURLProtocol.self]
+        let session = Session(id: "img2", config: makeTestConfig(), urlSession: URLSession(configuration: config))
+        _ = try await session.process(Signal.referenceImage(
+            url: URL(fileURLWithPath: "/tmp/chair.jpg"),
+            entityRef: "scene:5"
+        ))
+
+        // The user message is recorded in conversationHistory — check it via historySnapshot.
+        let history = await session.historySnapshot()
+        let userTexts = history.compactMap { turn -> String? in
+            if case let .userText(t) = turn.kind { return t }; return nil
+        }
+        let userMessage = try XCTUnwrap(userTexts.first)
+        XCTAssertTrue(userMessage.contains("chair.jpg"), "filename must appear in recorded user message")
+        XCTAssertTrue(userMessage.contains("scene:5"),   "entity ref must appear in recorded user message")
+    }
+
+    // MARK: - setMaterial read-modify-write
+
+    func testSetMaterialPreservesExistingFieldsWhenOnlyRoughnessSpecified() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        var mat = RenderMaterialComponent()
+        mat.baseColorFactor = SIMD4<Float>(0.2, 0.4, 0.6, 1.0)
+        mat.metallicFactor = 0.8
+        mat.roughnessFactor = 0.9
+        _ = scene.setComponent(mat, for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"rough","steps":[{"op":"set_material","entity_id":"\(ref)","material_roughness":0.1}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let ok = ops.contains {
+            if case let .setRenderMaterialComponent(id, base, metallic, roughness, _) = $0 {
+                return id == entity.rawValue
+                    && abs(base.x - 0.2) < 0.001   // preserved
+                    && abs(base.y - 0.4) < 0.001   // preserved
+                    && abs(base.z - 0.6) < 0.001   // preserved
+                    && abs(metallic - 0.8) < 0.001 // preserved
+                    && abs(roughness - 0.1) < 0.001 // updated
+            }
+            return false
+        }
+        XCTAssertTrue(ok, "set_material must preserve existing base color and metallic when only roughness is specified")
+    }
+
+    func testSetMaterialPreservesExistingFieldsWhenOnlyMetallicSpecified() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        var mat = RenderMaterialComponent()
+        mat.baseColorFactor = SIMD4<Float>(1.0, 0.0, 0.0, 1.0)
+        mat.roughnessFactor = 0.3
+        _ = scene.setComponent(mat, for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"metal","steps":[{"op":"set_material","entity_id":"\(ref)","material_metallic":1.0}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let ok = ops.contains {
+            if case let .setRenderMaterialComponent(id, base, metallic, roughness, _) = $0 {
+                return id == entity.rawValue
+                    && abs(base.x - 1.0) < 0.001   // preserved
+                    && abs(base.z - 0.0) < 0.001   // preserved
+                    && abs(metallic - 1.0) < 0.001  // updated
+                    && abs(roughness - 0.3) < 0.001 // preserved
+            }
+            return false
+        }
+        XCTAssertTrue(ok, "set_material must preserve existing roughness when only metallic is specified")
+    }
+
+    // MARK: - audioPitch / audioSpatialBlend snapshot pipeline
+
+    func testSnapshotEntityIncludesAudioPitchWhenNonDefault() {
+        var snap = SceneSemanticSnapshot.Entity(
+            id: "scene:1", name: "SFX", kind: "Entity",
+            parentRef: nil, childRefs: [],
+            isSelected: false,
+            position: nil, scale: nil, eulerDegrees: nil,
+            worldPosition: nil, worldEulerDegrees: nil, worldScale: nil,
+            components: ["audio_source"],
+            audioVolume: 0.8,
+            audioPitch: 1.5
+        )
+        _ = snap  // already verified by construction; test the field round-trips through WorldView
+
+        var wv = WorldView()
+        let full = SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 1, entities: [snap],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        )
+        wv.apply(snapshot: full)
+        XCTAssertEqual(wv.entityIndex["scene:1"]?.audioPitch, 1.5)
+    }
+
+    func testSnapshotEntityIncludesAudioSpatialBlend() {
+        let snap = SceneSemanticSnapshot.Entity(
+            id: "scene:2", name: "Speaker", kind: "Entity",
+            parentRef: nil, childRefs: [],
+            isSelected: false,
+            position: nil, scale: nil, eulerDegrees: nil,
+            worldPosition: nil, worldEulerDegrees: nil, worldScale: nil,
+            components: ["audio_source"],
+            audioVolume: 1.0,
+            audioSpatialBlend: 0.75
+        )
+        var wv = WorldView()
+        let full = SceneSemanticSnapshot(
+            sceneRevision: 2, entityCount: 1, entities: [snap],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        )
+        wv.apply(snapshot: full)
+        XCTAssertEqual(wv.entityIndex["scene:2"]?.audioSpatialBlend, 0.75)
+    }
+
+    func testWorldEntityRecordApplyAudioPitchEvent() {
+        var record = WorldEntityRecord(ref: "scene:3")
+        record.apply(property: "audioPitch", value: .float(0.5))
+        XCTAssertEqual(record.audioPitch, 0.5)
+    }
+
+    func testWorldEntityRecordApplyAudioSpatialBlendEvent() {
+        var record = WorldEntityRecord(ref: "scene:4")
+        record.apply(property: "audioSpatialBlend", value: .float(0.9))
+        XCTAssertEqual(record.audioSpatialBlend, 0.9)
+    }
+
+    func testCompactDictIncludesAudioPitchAndSpatialBlend() {
+        var record = WorldEntityRecord(ref: "scene:50", name: "BGM")
+        record.audioPitch = 1.25
+        record.audioSpatialBlend = 0.6
+        let dict = Session(id: "audio-dict", config: makeTestConfig()).compactDict(for: record)
+        XCTAssertEqual(dict["audioPitch"] as? Float, 1.25)
+        XCTAssertEqual(dict["audioSpatialBlend"] as? Float, 0.6)
+    }
+
+    func testCompactDictOmitsAudioPitchAndSpatialBlendWhenNil() {
+        let record = WorldEntityRecord(ref: "scene:51", name: "Silent")
+        let dict = Session(id: "audio-dict2", config: makeTestConfig()).compactDict(for: record)
+        XCTAssertNil(dict["audioPitch"])
+        XCTAssertNil(dict["audioSpatialBlend"])
+    }
+
+    // MARK: - WorldEntityRecord.components snapshot pipeline
+
+    func testWorldViewApplySnapshotPreservesComponentsList() {
+        let snap = SceneSemanticSnapshot.Entity(
+            id: "scene:1", name: "Lamp", kind: "Point Light",
+            parentRef: nil, childRefs: [],
+            isSelected: false,
+            position: nil, scale: nil, eulerDegrees: nil,
+            worldPosition: nil, worldEulerDegrees: nil, worldScale: nil,
+            components: ["transform", "light"]
+        )
+        var wv = WorldView()
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 1, entities: [snap],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        XCTAssertEqual(wv.entityIndex["scene:1"]?.components, ["transform", "light"])
+    }
+
+    func testCompactDictIncludesComponentsWhenNonEmpty() {
+        var record = WorldEntityRecord(ref: "scene:60", name: "Camera")
+        record.components = ["transform", "camera"]
+        let dict = Session(id: "comp-dict", config: makeTestConfig()).compactDict(for: record)
+        XCTAssertEqual(dict["components"] as? [String], ["transform", "camera"])
+    }
+
+    func testCompactDictOmitsComponentsWhenEmpty() {
+        let record = WorldEntityRecord(ref: "scene:61", name: "Empty")
+        let dict = Session(id: "comp-dict2", config: makeTestConfig()).compactDict(for: record)
+        XCTAssertNil(dict["components"])
+    }
+
+    // MARK: - find_entities component filter
+
+    func testFindEntitiesComponentFilterMatchesCorrectEntities() async {
+        var wv = WorldView()
+        let lightSnap = SceneSemanticSnapshot.Entity(
+            id: "scene:1", name: "Sun Light", kind: "Directional Light",
+            parentRef: nil, childRefs: [],
+            isSelected: false,
+            position: nil, scale: nil, eulerDegrees: nil,
+            worldPosition: nil, worldEulerDegrees: nil, worldScale: nil,
+            components: ["transform", "light"]
+        )
+        let meshSnap = SceneSemanticSnapshot.Entity(
+            id: "scene:2", name: "Rock", kind: "Static Mesh",
+            parentRef: nil, childRefs: [],
+            isSelected: false,
+            position: nil, scale: nil, eulerDegrees: nil,
+            worldPosition: nil, worldEulerDegrees: nil, worldScale: nil,
+            components: ["transform", "mesh"]
+        )
+        let camSnap = SceneSemanticSnapshot.Entity(
+            id: "scene:3", name: "Main Camera", kind: "Camera",
+            parentRef: nil, childRefs: [],
+            isSelected: false,
+            position: nil, scale: nil, eulerDegrees: nil,
+            worldPosition: nil, worldEulerDegrees: nil, worldScale: nil,
+            components: ["transform", "camera"]
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 3, entities: [lightSnap, meshSnap, camSnap],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        let session = Session(id: "comp-filter", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: ["component": "light"])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+
+        XCTAssertEqual(result["count"] as? Int, 1)
+        let entities = result["entities"] as! [[String: Any]]
+        XCTAssertEqual(entities.first?["id"] as? String, "scene:1")
+    }
+
+    func testFindEntitiesComponentFilterCaseInsensitive() async {
+        var wv = WorldView()
+        let snap = SceneSemanticSnapshot.Entity(
+            id: "scene:1", name: "Walker", kind: "Character",
+            parentRef: nil, childRefs: [],
+            isSelected: false,
+            position: nil, scale: nil, eulerDegrees: nil,
+            worldPosition: nil, worldEulerDegrees: nil, worldScale: nil,
+            components: ["transform", "animation", "script"]
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 1, entities: [snap],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        let session = Session(id: "comp-ci", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: ["component": "Animation"])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        XCTAssertEqual(result["count"] as? Int, 1, "component filter must be case-insensitive")
+    }
+
+    func testFindEntitiesResultIncludesComponentsArrayInOutput() async {
+        var wv = WorldView()
+        let snap = SceneSemanticSnapshot.Entity(
+            id: "scene:1", name: "Player", kind: "Character",
+            parentRef: nil, childRefs: [],
+            isSelected: false,
+            position: nil, scale: nil, eulerDegrees: nil,
+            worldPosition: nil, worldEulerDegrees: nil, worldScale: nil,
+            components: ["transform", "rigidbody", "script"]
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 1, entities: [snap],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        let session = Session(id: "comp-out", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+
+        let comps = entities.first?["components"] as? [String]
+        XCTAssertEqual(comps, ["transform", "rigidbody", "script"],
+                       "components array must appear in findEntities output")
+    }
+
+    func testFindEntitiesResultIncludesPositionWhenAvailable() async {
+        var wv = WorldView()
+        let snap = SceneSemanticSnapshot.Entity(
+            id: "scene:1", name: "Chest", kind: "Prop",
+            parentRef: nil, childRefs: [],
+            isSelected: false,
+            position: [3.0, 0.0, -5.0],
+            scale: nil, eulerDegrees: nil,
+            worldPosition: [3.0, 0.0, -5.0],
+            worldEulerDegrees: nil, worldScale: nil,
+            components: ["transform"]
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 1, entities: [snap],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        let session = Session(id: "pos-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+
+        let pos = entities.first?["position"] as? [Float]
+        XCTAssertEqual(pos, [3.0, 0.0, -5.0], "position must appear in findEntities output")
+        let worldPos = entities.first?["worldPosition"] as? [Float]
+        XCTAssertNotNil(worldPos, "worldPosition must appear in findEntities output when available")
+    }
+
+    func testFindEntitiesResultIncludesParentRefWhenPresent() async {
+        var wv = WorldView()
+        let childSnap = SceneSemanticSnapshot.Entity(
+            id: "scene:2", name: "Child", kind: "Entity",
+            parentRef: "scene:1", childRefs: [],
+            isSelected: false,
+            position: nil, scale: nil, eulerDegrees: nil,
+            worldPosition: nil, worldEulerDegrees: nil, worldScale: nil,
+            components: []
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 1, entities: [childSnap],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        let session = Session(id: "parent-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+
+        XCTAssertEqual(entities.first?["parentRef"] as? String, "scene:1",
+                       "parentRef must appear in findEntities output when the entity has a parent")
+    }
+
+    // MARK: - WorldView snapshot merge preserves inferred annotations
+
+    func testApplySnapshotPreservesInferredAnnotationsForExistingEntities() {
+        var wv = WorldView()
+        // First snapshot: one entity
+        let s1 = SceneSemanticSnapshot.Entity(
+            id: "scene:100", name: "Chair", kind: "Static Mesh", parentRef: nil, childRefs: [],
+            isSelected: false, position: [0, 0, 0], scale: nil, eulerDegrees: nil,
+            worldPosition: [0, 0, 0], worldEulerDegrees: nil, worldScale: nil, components: []
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 1, entities: [s1],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        // Annotate with inferred data (simulating perception)
+        wv.apply(event: .entityInferredUpdated(
+            ref: "scene:100", property: "object_category",
+            value: .string("dining_chair"), confidence: 0.92, source: "perception"
+        ))
+
+        // Second snapshot for the same entity (e.g. position changed)
+        let s1updated = SceneSemanticSnapshot.Entity(
+            id: "scene:100", name: "Chair", kind: "Static Mesh", parentRef: nil, childRefs: [],
+            isSelected: false, position: [1, 0, 0], scale: nil, eulerDegrees: nil,
+            worldPosition: [1, 0, 0], worldEulerDegrees: nil, worldScale: nil, components: []
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 2, entityCount: 1, entities: [s1updated],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+
+        let record = wv.entityIndex["scene:100"]
+        XCTAssertEqual(record?.position, [1, 0, 0], "authored position must be updated from new snapshot")
+        XCTAssertEqual(record?.inferred["object_category"]?.displayValue, "dining_chair",
+                       "inferred annotation must be preserved across snapshot merges")
+        XCTAssertEqual(record?.inferred["object_category"]?.confidence, 0.92)
+    }
+
+    func testApplySnapshotRemovesEntitiesAbsentFromNewSnapshot() {
+        var wv = WorldView()
+        let s1 = SceneSemanticSnapshot.Entity(
+            id: "scene:200", name: "Temp", kind: "Static Mesh", parentRef: nil, childRefs: [],
+            isSelected: false, position: nil, scale: nil, eulerDegrees: nil,
+            worldPosition: nil, worldEulerDegrees: nil, worldScale: nil, components: []
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 1, entities: [s1],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        XCTAssertNotNil(wv.entityIndex["scene:200"])
+
+        // New snapshot with no entities — entity should be removed
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 2, entityCount: 0, entities: [],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        XCTAssertNil(wv.entityIndex["scene:200"], "entity removed from scene must not appear after snapshot merge")
+    }
+
+    // MARK: - planConfidence spawn with explicit position
+
+    func testPlanConfidenceNoOrphanPenaltyWhenSpawnHasExplicitPosition() throws {
+        let json = """
+        {"summary":"spawn","steps":[{"op":"spawn_entity","label":"Rock","spawn_position":[0,0,5]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let score = Session.confidence(for: plan)
+        XCTAssertGreaterThan(score, 0.90,
+                             "spawn with explicit spawn_position must not incur the orphan penalty")
+    }
+
+    func testPlanConfidenceAppliesOrphanPenaltyWhenSpawnLacksPosition() throws {
+        let json = """
+        {"summary":"spawn","steps":[{"op":"spawn_entity","label":"Rock"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let score = Session.confidence(for: plan)
+        // Orphan penalty (-0.05) should reduce below the no-penalty score of 1.0
+        XCTAssertLessThan(score, 0.99,
+                          "spawn without position and no set_transform must incur the orphan penalty")
+    }
+
+    // MARK: - RigidBody read-modify-write (creates component when absent)
+
+    func testSetRigidBodyMotionCreatesRigidBodyWhenEntityHasNone() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"phys","steps":[{"op":"set_rigidbody_motion","entity_id":"\(ref)","motion_type":"dynamic"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasRigidBody = ops.contains {
+            if case let .setRigidBody(eid, body) = $0 {
+                return eid == entity.rawValue && body.motionType == .dynamic
+            }
+            return false
+        }
+        XCTAssertTrue(hasRigidBody, "set_rigidbody_motion on entity without RigidBody must create it with setRigidBody mutation")
+    }
+
+    func testSetRigidBodyMotionPreservesExistingMassWhenChangingMotionType() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        var rb = RigidBody()
+        rb.mass = 42
+        _ = scene.setComponent(rb, for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"phys","steps":[{"op":"set_rigidbody_motion","entity_id":"\(ref)","motion_type":"kinematic"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasCorrect = ops.contains {
+            if case let .setRigidBody(eid, body) = $0 {
+                return eid == entity.rawValue && body.motionType == .kinematic && abs(body.mass - 42) < 0.01
+            }
+            return false
+        }
+        XCTAssertTrue(hasCorrect, "set_rigidbody_motion must preserve existing mass when only changing motion type")
+    }
+
+    // MARK: - Collider read-modify-write
+
+    func testSetColliderTriggerCreatesColliderWhenEntityHasNone() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"trigger","steps":[{"op":"set_collider_trigger","entity_id":"\(ref)","is_trigger":true}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasCollider = ops.contains {
+            if case let .setCollider(eid, col) = $0 { return eid == entity.rawValue && col.isTrigger == true }
+            return false
+        }
+        XCTAssertTrue(hasCollider, "set_collider_trigger on entity without Collider must create it via setCollider")
+    }
+
+    func testSetColliderMaterialPreservesShapeWhenEntityHasCollider() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .sphere(radius: 1.5, center: .zero)), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"mat","steps":[{"op":"set_collider_material","entity_id":"\(ref)","friction":0.3}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasCollider = ops.contains {
+            if case let .setCollider(eid, col) = $0 {
+                if case .sphere(1.5, _) = col.shape { return eid == entity.rawValue && abs(col.material.friction - 0.3) < 0.001 }
+            }
+            return false
+        }
+        XCTAssertTrue(hasCollider, "set_collider_material must preserve existing sphere shape while updating friction")
+    }
+
+    func testSetColliderBoxExtentsCreatesBoxColliderWhenEntityHasNone() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"box","steps":[{"op":"set_collider_box_extents","entity_id":"\(ref)","half_extents":[1,2,3]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasCollider = ops.contains {
+            if case let .setCollider(eid, col) = $0 {
+                if case let .box(he, _) = col.shape {
+                    return eid == entity.rawValue && abs(he.x - 1) < 0.01 && abs(he.y - 2) < 0.01 && abs(he.z - 3) < 0.01
+                }
+            }
+            return false
+        }
+        XCTAssertTrue(hasCollider, "set_collider_box_extents on entity without Collider must create box collider")
+    }
+
+    func testSetColliderShapeTypeSwitchesToSpherePreservingTrigger() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        var col = Collider(shape: .box(halfExtents: SIMD3(1, 1, 1), center: .zero))
+        col.isTrigger = true
+        _ = scene.setComponent(col, for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"shape","steps":[{"op":"set_collider_shape","entity_id":"\(ref)","collider_shape":"sphere"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasCollider = ops.contains {
+            if case let .setCollider(eid, c) = $0 {
+                if case .sphere = c.shape { return eid == entity.rawValue && c.isTrigger == true }
+            }
+            return false
+        }
+        XCTAssertTrue(hasCollider, "set_collider_shape to sphere must preserve isTrigger=true and switch to sphere shape")
+    }
+
+    // MARK: - Collider dimension tracking in WorldView
+
+    func testWorldViewTracksBoxColliderHalfExtentsFromSnapshot() {
+        var view = WorldView()
+        let entity = SceneSemanticSnapshot.Entity(
+            id: "scene:1", name: "Box", kind: "Entity",
+            parentRef: nil, childRefs: [], isSelected: false,
+            position: nil, components: ["collider"],
+            colliderShape: "box", colliderBoxHalfExtents: [1.5, 2.0, 0.5]
+        )
+        let snap = SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1,
+                                         entities: [entity], selectedRef: nil)
+        view.apply(snapshot: snap)
+        let record = view.entityIndex["scene:1"]
+        XCTAssertEqual(record?.colliderShape, "box")
+        XCTAssertEqual(record?.colliderBoxHalfExtents?.count, 3)
+        XCTAssertEqual(record?.colliderBoxHalfExtents?[0] ?? 0, 1.5, accuracy: 0.001)
+        XCTAssertEqual(record?.colliderBoxHalfExtents?[1] ?? 0, 2.0, accuracy: 0.001)
+        XCTAssertEqual(record?.colliderBoxHalfExtents?[2] ?? 0, 0.5, accuracy: 0.001)
+    }
+
+    func testWorldViewTracksSphereColliderRadiusFromEvent() {
+        var view = WorldView()
+        view.apply(event: .entityAdded(ref: "scene:5", name: "Sphere", kind: "Entity"))
+        view.apply(event: .entityAuthoredChanged(ref: "scene:5", property: "colliderShape", value: .string("sphere")))
+        view.apply(event: .entityAuthoredChanged(ref: "scene:5", property: "colliderSphereRadius", value: .float(3.7)))
+        let record = view.entityIndex["scene:5"]
+        XCTAssertEqual(record?.colliderShape, "sphere")
+        XCTAssertEqual(record?.colliderSphereRadius ?? 0, 3.7, accuracy: 0.001)
+        XCTAssertNil(record?.colliderBoxHalfExtents, "box extents should be nil for sphere collider")
+    }
+
+    func testWorldViewClearsStaleColliderDimensionsOnShapeChange() {
+        var view = WorldView()
+        view.apply(event: .entityAdded(ref: "scene:6", name: "Entity", kind: "Entity"))
+        view.apply(event: .entityAuthoredChanged(ref: "scene:6", property: "colliderShape", value: .string("box")))
+        view.apply(event: .entityAuthoredChanged(ref: "scene:6", property: "colliderBoxHalfExtents", value: .vec3(1, 1, 1)))
+        // Now switch to capsule — box extents should be cleared
+        view.apply(event: .entityAuthoredChanged(ref: "scene:6", property: "colliderShape", value: .string("capsule")))
+        let record = view.entityIndex["scene:6"]
+        XCTAssertNil(record?.colliderBoxHalfExtents, "box half-extents must be cleared when shape switches to capsule")
+    }
+
+    func testSetColliderBoxExtentsWorldEventUpdatesHalfExtents() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"big","steps":[{"op":"set_collider_box_extents","entity_id":"\(ref)","half_extents":[2,3,4]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasExtents = ops.contains {
+            if case let .setCollider(_, c) = $0 {
+                if case let .box(he, _) = c.shape {
+                    return abs(he.x - 2) < 0.01 && abs(he.y - 3) < 0.01 && abs(he.z - 4) < 0.01
+                }
+            }
+            return false
+        }
+        XCTAssertTrue(hasExtents, "set_collider_box_extents must produce setCollider with half_extents [2,3,4]")
+    }
+
+    // MARK: - JSONValue array support for set_script_property
+
+    func testJSONValueArrayRoundTripsViaCodable() throws {
+        let json = """
+        {"summary":"s","steps":[{"op":"set_script_property","entity_id":"scene:1",
+        "script_property_name":"waypoints","script_property_value":[1,2,3]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let step = plan.steps[0]
+        if case let .array(elements) = step.scriptPropertyValue {
+            XCTAssertEqual(elements.count, 3)
+            if case let .number(n) = elements[0] { XCTAssertEqual(n, 1) }
+            else { XCTFail("first element should be .number(1)") }
+        } else {
+            XCTFail("scriptPropertyValue should be .array")
+        }
+    }
+
+    func testJSONValueArrayJsonFragment() {
+        let arr = JSONValue.array([.number(1), .string("a"), .bool(true)])
+        XCTAssertEqual(arr.jsonFragment, #"[1,"a",true]"#)
+    }
+
+    func testSetScriptPropertyWithArrayMergesIntoParametersJSON() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(ScriptComponent(), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"s","steps":[{"op":"set_script_property","entity_id":"\(ref)",
+        "script_property_name":"tags","script_property_value":["enemy","boss"]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasScript = ops.contains {
+            if case let .setScriptBindings(eid, bindings) = $0 {
+                guard eid == entity.rawValue, let first = bindings.first else { return false }
+                let data = first.parametersJSON.data(using: .utf8)!
+                let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                let tags = dict?["tags"] as? [String]
+                return tags == ["enemy", "boss"]
+            }
+            return false
+        }
+        XCTAssertTrue(hasScript, "set_script_property with array value must produce correct setScriptBindings mutation")
+    }
+
+    // MARK: - duplicate_entity with offset
+
+    func testDuplicateEntityWithOffsetProducesDuplicateEntityWithOffsetMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"dup","steps":[{"op":"duplicate_entity","entity_id":"\(ref)","duplicate_offset":[3,0,0]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasOffset = ops.contains {
+            if case let .duplicateEntityWithOffset(eid, off) = $0 {
+                return eid == entity.rawValue && abs(off.x - 3) < 0.01 && abs(off.y) < 0.01 && abs(off.z) < 0.01
+            }
+            return false
+        }
+        XCTAssertTrue(hasOffset, "duplicate_entity with duplicate_offset must produce duplicateEntityWithOffset mutation")
+    }
+
+    func testDuplicateEntityWithoutOffsetProducesPlainDuplicateMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"dup","steps":[{"op":"duplicate_entity","entity_id":"\(ref)"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasPlain = ops.contains { if case .duplicateEntity(entity.rawValue) = $0 { return true }; return false }
+        XCTAssertTrue(hasPlain, "duplicate_entity without offset must produce plain duplicateEntity mutation")
+    }
+
+    // MARK: - spawn_kind support
+
+    func testSpawnKindEmptyProducesSpawnEmptyEntityMutation() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"group","steps":[{"op":"spawn_entity","label":"Group","spawn_kind":"empty","spawn_position":[1,0,0]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasEmpty = ops.contains {
+            if case let .spawnEmptyEntity(label, pos, _) = $0 {
+                return label == "Group" && abs(pos.x - 1) < 0.01
+            }
+            return false
+        }
+        XCTAssertTrue(hasEmpty, "spawn_kind 'empty' must produce spawnEmptyEntity mutation")
+    }
+
+    func testSpawnKindLightProducesSpawnLightEntityMutation() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"light","steps":[{"op":"spawn_entity","label":"Fill Light","spawn_kind":"light","light_type":"point","spawn_position":[0,3,0]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasLight = ops.contains {
+            if case let .spawnLightEntity(label, lt, pos, _, _, _, _, _) = $0 {
+                return label == "Fill Light" && lt == .point && abs(pos.y - 3) < 0.01
+            }
+            return false
+        }
+        XCTAssertTrue(hasLight, "spawn_kind 'light' must produce spawnLightEntity mutation with correct type and position")
+    }
+
+    func testSpawnKindLightDefaultsToPointWhenLightTypeOmitted() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"light","steps":[{"op":"spawn_entity","label":"Key","spawn_kind":"light"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasPointLight = ops.contains {
+            if case let .spawnLightEntity(_, lt, _, _, _, _, _, _) = $0 { return lt == .point }
+            return false
+        }
+        XCTAssertTrue(hasPointLight, "spawn_kind 'light' with no light_type should default to point light")
+    }
+
+    func testSpawnKindCameraProducesSpawnCameraEntityMutation() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"cam","steps":[{"op":"spawn_entity","label":"Security Cam","spawn_kind":"camera","spawn_position":[5,2,-3]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasCam = ops.contains {
+            if case let .spawnCameraEntity(label, pos, _, _) = $0 {
+                return label == "Security Cam" && abs(pos.x - 5) < 0.01
+            }
+            return false
+        }
+        XCTAssertTrue(hasCam, "spawn_kind 'camera' must produce spawnCameraEntity mutation")
+    }
+
+    func testSpawnKindMeshIsDefaultWhenOmitted() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"mesh","steps":[{"op":"spawn_entity","label":"Box"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasMesh = ops.contains { if case .spawnImportedMeshEntity = $0 { return true }; return false }
+        XCTAssertTrue(hasMesh, "spawn_entity with no spawn_kind must default to spawnImportedMeshEntity")
+    }
+
+    // MARK: - find_entities spatial proximity filter
+
+    func testFindEntitiesNearPositionReturnsCloseEntities() async {
+        var wv = WorldView()
+        // Entity at [0, 0, 0]
+        let s1 = SceneSemanticSnapshot.Entity(
+            id: "scene:10", name: "Near", kind: "Static Mesh", parentRef: nil, childRefs: [],
+            isSelected: false, position: [0, 0, 0], scale: nil, eulerDegrees: nil,
+            worldPosition: [0, 0, 0], worldEulerDegrees: nil, worldScale: nil, components: []
+        )
+        // Entity at [100, 0, 0]
+        let s2 = SceneSemanticSnapshot.Entity(
+            id: "scene:11", name: "Far", kind: "Static Mesh", parentRef: nil, childRefs: [],
+            isSelected: false, position: [100, 0, 0], scale: nil, eulerDegrees: nil,
+            worldPosition: [100, 0, 0], worldEulerDegrees: nil, worldScale: nil, components: []
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 2, entities: [s1, s2],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        let session = Session(id: "near-filter", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [
+            "near_position": [0.0, 0.0, 0.0],
+            "near_radius": 5.0,
+        ])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+
+        XCTAssertEqual(entities.count, 1, "only the nearby entity should be returned")
+        XCTAssertEqual(entities.first?["name"] as? String, "Near")
+    }
+
+    func testFindEntitiesNearPositionExcludesEntitiesOutsideRadius() async {
+        var wv = WorldView()
+        let s1 = SceneSemanticSnapshot.Entity(
+            id: "scene:20", name: "E1", kind: "Static Mesh", parentRef: nil, childRefs: [],
+            isSelected: false, position: [3, 0, 0], scale: nil, eulerDegrees: nil,
+            worldPosition: [3, 0, 0], worldEulerDegrees: nil, worldScale: nil, components: []
+        )
+        let s2 = SceneSemanticSnapshot.Entity(
+            id: "scene:21", name: "E2", kind: "Static Mesh", parentRef: nil, childRefs: [],
+            isSelected: false, position: [6, 0, 0], scale: nil, eulerDegrees: nil,
+            worldPosition: [6, 0, 0], worldEulerDegrees: nil, worldScale: nil, components: []
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 2, entities: [s1, s2],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        let session = Session(id: "radius-exclude", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [
+            "near_position": [0.0, 0.0, 0.0],
+            "near_radius": 4.0,
+        ])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+
+        XCTAssertEqual(entities.count, 1)
+        XCTAssertEqual(entities.first?["name"] as? String, "E1",
+                       "entity at distance 3 is within radius 4; entity at distance 6 must be excluded")
+    }
+
+    func testFindEntitiesNearPositionFallsBackToLocalPosition() async {
+        var wv = WorldView()
+        // Entity with local position only (root entity, no worldPosition in evaluated)
+        wv.apply(event: .entityAdded(ref: "scene:30", name: "RootEntity", kind: "Static Mesh"))
+        wv.apply(event: .entityAuthoredChanged(ref: "scene:30", property: "position",
+                                               value: .vec3(2, 0, 0)))
+        let session = Session(id: "local-pos-fallback", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [
+            "near_position": [0.0, 0.0, 0.0],
+            "near_radius": 5.0,
+        ])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+
+        XCTAssertEqual(entities.count, 1,
+                       "entity with only local position at [2,0,0] should match radius 5 query at origin")
+    }
+
+    func testFindEntitiesNearPositionSortsByDistanceNearestFirst() async {
+        var wv = WorldView()
+        let s1 = SceneSemanticSnapshot.Entity(
+            id: "scene:50", name: "Far", kind: "Static Mesh", parentRef: nil, childRefs: [],
+            isSelected: false, position: [8, 0, 0], scale: nil, eulerDegrees: nil,
+            worldPosition: [8, 0, 0], worldEulerDegrees: nil, worldScale: nil, components: []
+        )
+        let s2 = SceneSemanticSnapshot.Entity(
+            id: "scene:51", name: "Near", kind: "Static Mesh", parentRef: nil, childRefs: [],
+            isSelected: false, position: [2, 0, 0], scale: nil, eulerDegrees: nil,
+            worldPosition: [2, 0, 0], worldEulerDegrees: nil, worldScale: nil, components: []
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 2, entities: [s1, s2],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        let session = Session(id: "sort-near", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [
+            "near_position": [0.0, 0.0, 0.0],
+            "near_radius": 10.0,
+        ])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+
+        XCTAssertEqual(entities.count, 2)
+        XCTAssertEqual(entities[0]["name"] as? String, "Near",
+                       "entity at distance 2 should appear before entity at distance 8")
+        XCTAssertNotNil(entities[0]["distance"], "distance should be included in proximity results")
+    }
+
+    func testFindEntitiesNearPositionRequiresBothParams() async {
+        var wv = WorldView()
+        let s = SceneSemanticSnapshot.Entity(
+            id: "scene:40", name: "Any", kind: "Static Mesh", parentRef: nil, childRefs: [],
+            isSelected: false, position: [0, 0, 0], scale: nil, eulerDegrees: nil,
+            worldPosition: [0, 0, 0], worldEulerDegrees: nil, worldScale: nil, components: []
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(
+            sceneRevision: 1, entityCount: 1, entities: [s],
+            selectedRef: nil, workspaceMode: nil, localeIdentifier: nil
+        ))
+        let session = Session(id: "no-radius", config: makeTestConfig(), initialWorldView: wv)
+
+        // near_position without near_radius — should return all entities (filter not applied)
+        let json = await session.findEntitiesResult(input: ["near_position": [0.0, 0.0, 0.0]])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+
+        XCTAssertEqual(entities.count, 1, "without near_radius the spatial filter should not be applied")
+    }
+
+    // MARK: - find_entities enriched result
+
+    func testFindEntitiesResultIncludesLightFields() async {
+        var wv = WorldView()
+        let e = SceneSemanticSnapshot.Entity(
+            id: "scene:99", name: "Sun", kind: "Directional Light",
+            parentRef: nil, childRefs: [], isSelected: false, position: nil,
+            components: ["light"],
+            lightType: "directional", lightIntensity: 8000, lightCastShadows: true
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1,
+                                                  entities: [e], selectedRef: nil))
+        let session = Session(id: "enrich-test", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: ["name": "sun"])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+        XCTAssertEqual(entities.count, 1)
+        XCTAssertEqual(entities[0]["lightType"] as? String, "directional")
+        XCTAssertEqual(entities[0]["lightIntensity"] as? Float, 8000)
+        XCTAssertEqual(entities[0]["lightCastShadows"] as? Bool, true)
+    }
+
+    func testFindEntitiesResultIncludesPhysicsFields() async {
+        var wv = WorldView()
+        let e = SceneSemanticSnapshot.Entity(
+            id: "scene:77", name: "Box", kind: "Static Mesh",
+            parentRef: nil, childRefs: [], isSelected: false, position: nil,
+            components: ["rigidbody", "collider"],
+            rigidBodyMotionType: "dynamic", rigidBodyMass: 5.0,
+            colliderShape: "box", colliderBoxHalfExtents: [0.5, 0.5, 0.5]
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1,
+                                                  entities: [e], selectedRef: nil))
+        let session = Session(id: "enrich-phys", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: ["component": "rigidbody"])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+        XCTAssertEqual(entities.count, 1)
+        XCTAssertEqual(entities[0]["rigidBodyMotionType"] as? String, "dynamic")
+        XCTAssertEqual(entities[0]["colliderShape"] as? String, "box")
+        let extents = entities[0]["colliderBoxHalfExtents"] as? [Float]
+        XCTAssertEqual(extents?.count, 3)
+    }
+
+    func testFindEntitiesResultIncludesCapsuleHalfHeight() async {
+        var wv = WorldView()
+        let e = SceneSemanticSnapshot.Entity(
+            id: "scene:88", name: "Capsule", kind: "Static Mesh",
+            parentRef: nil, childRefs: [], isSelected: false, position: nil,
+            components: ["collider"],
+            colliderShape: "capsule",
+            colliderCapsuleRadius: 0.3,
+            colliderCapsuleHalfHeight: 0.8
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1,
+                                                  entities: [e], selectedRef: nil))
+        let session = Session(id: "capsule-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+        XCTAssertEqual(entities.count, 1)
+        XCTAssertEqual(try XCTUnwrap(entities[0]["colliderCapsuleRadius"] as? Double), 0.3, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(entities[0]["colliderCapsuleHalfHeight"] as? Double), 0.8, accuracy: 0.001,
+                       "colliderCapsuleHalfHeight must appear in findEntities result")
+    }
+
+    func testFindEntitiesResultIncludesScriptBindingParams() async {
+        var wv = WorldView()
+        let e = SceneSemanticSnapshot.Entity(
+            id: "scene:99", name: "Enemy", kind: "Character",
+            parentRef: nil, childRefs: [], isSelected: false, position: nil,
+            components: ["script"],
+            scriptBindings: [
+                SceneSemanticSnapshot.ScriptBindingRecord(handle: 5, isEnabled: true,
+                                                          parametersJSON: "{\"speed\":3.5,\"patrol\":true}")
+            ]
+        )
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1,
+                                                  entities: [e], selectedRef: nil))
+        let session = Session(id: "script-params-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: ["component": "script"])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+        XCTAssertEqual(entities.count, 1)
+        let scriptBindings = entities[0]["scriptBindings"] as? [[String: Any]]
+        XCTAssertNotNil(scriptBindings)
+        let params = scriptBindings?.first?["params"] as? [String: Any]
+        XCTAssertEqual(params?["speed"] as? Double, 3.5,
+                       "findEntities must include script binding params when parametersJSON is not empty")
+        XCTAssertEqual(params?["patrol"] as? Bool, true)
+    }
+
+    func testFindEntitiesResultIncludesTransformRotationAndScale() async {
+        let e = SceneSemanticSnapshot.Entity(
+            id: "scene:55", name: "Tilted Cube", kind: "mesh",
+            parentRef: nil, childRefs: [], isSelected: false,
+            position: [1, 2, 3],
+            scale: [2, 2, 2],
+            eulerDegrees: [45, 0, 30],
+            components: ["transform", "mesh"]
+        )
+        var wv = WorldView()
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [e]))
+        let session = Session(id: "rot-scale-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entities = result["entities"] as! [[String: Any]]
+        XCTAssertEqual(entities[0]["eulerDegrees"] as? [Float], [45, 0, 30])
+        XCTAssertEqual(entities[0]["scale"] as? [Float], [2, 2, 2])
+    }
+
+    func testFindEntitiesResultIncludesLightColorAndRange() async {
+        let e = SceneSemanticSnapshot.Entity(
+            id: "scene:31", name: "Sun", kind: "Directional Light",
+            parentRef: nil, childRefs: [], isSelected: false, position: nil,
+            components: ["light"],
+            lightType: "directional",
+            lightIntensity: 5.0,
+            lightColor: [1.0, 0.9, 0.8],
+            lightRange: 100,
+            lightSpotInner: 15,
+            lightSpotOuter: 30,
+            lightCastShadows: true
+        )
+        var wv = WorldView()
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [e]))
+        let session = Session(id: "light-full-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entity = (result["entities"] as! [[String: Any]])[0]
+        XCTAssertEqual(entity["lightColor"] as? [Float], [1.0, 0.9, 0.8])
+        XCTAssertEqual(entity["lightRange"] as? Float, 100)
+        XCTAssertEqual(entity["lightSpotInner"] as? Float, 15)
+        XCTAssertEqual(entity["lightSpotOuter"] as? Float, 30)
+    }
+
+    func testFindEntitiesResultIncludesMeshVisibilityAndMaterial() async {
+        var e = SceneSemanticSnapshot.Entity(
+            id: "scene:40", name: "Ghost", kind: "mesh",
+            parentRef: nil, childRefs: [], isSelected: false, position: nil,
+            components: ["mesh"]
+        )
+        e.meshIsVisible = false
+        e.meshColor = [0.5, 0.5, 0.5]
+        e.materialBaseColor = [0.8, 0.8, 0.8, 1.0]
+        e.materialMetallic = 0.2
+        e.materialRoughness = 0.6
+        e.materialEmissive = [0.1, 0.0, 0.0]
+        var wv = WorldView()
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [e]))
+        let session = Session(id: "mesh-mat-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entity = (result["entities"] as! [[String: Any]])[0]
+        XCTAssertEqual(entity["meshIsVisible"] as? Bool, false)
+        XCTAssertEqual(entity["meshColor"] as? [Float], [0.5, 0.5, 0.5])
+        XCTAssertEqual(entity["materialMetallic"] as? Float, 0.2)
+        XCTAssertEqual(entity["materialRoughness"] as? Float, 0.6)
+        XCTAssertNotNil(entity["materialEmissive"], "materialEmissive must appear")
+    }
+
+    func testFindEntitiesResultIncludesAudioFields() async {
+        let e = SceneSemanticSnapshot.Entity(
+            id: "scene:61", name: "Speaker", kind: "mesh",
+            parentRef: nil, childRefs: [], isSelected: false, position: nil,
+            components: ["audio_source"],
+            audioClip: "ambient_music",
+            audioVolume: 0.8,
+            audioLoop: true,
+            audioPlayOnAwake: true,
+            audioPitch: 1.1,
+            audioSpatialBlend: 0.5
+        )
+        var wv = WorldView()
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [e]))
+        let session = Session(id: "audio-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entity = (result["entities"] as! [[String: Any]])[0]
+        XCTAssertEqual(entity["audioClip"] as? String, "ambient_music")
+        XCTAssertEqual(entity["audioVolume"] as? Float, 0.8)
+        XCTAssertEqual(entity["audioLoop"] as? Bool, true)
+        XCTAssertEqual(entity["audioPitch"] as? Float, 1.1)
+        XCTAssertEqual(entity["audioSpatialBlend"] as? Float, 0.5)
+    }
+
+    func testFindEntitiesResultIncludesAnimationFields() async {
+        var e = SceneSemanticSnapshot.Entity(
+            id: "scene:70", name: "Dancer", kind: "Character",
+            parentRef: nil, childRefs: [], isSelected: false, position: nil,
+            components: ["animation"]
+        )
+        e.animationClip = "dance_loop"
+        e.animationSpeed = 1.5
+        e.animationLoop = true
+        e.animationIsPlaying = true
+        var wv = WorldView()
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [e]))
+        let session = Session(id: "anim-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entity = (result["entities"] as! [[String: Any]])[0]
+        XCTAssertEqual(entity["animationClip"] as? String, "dance_loop")
+        XCTAssertEqual(entity["animationSpeed"] as? Float, 1.5)
+        XCTAssertEqual(entity["animationLoop"] as? Bool, true)
+        XCTAssertEqual(entity["animationIsPlaying"] as? Bool, true)
+    }
+
+    func testFindEntitiesResultIncludesColliderMaterialAndLayerFields() async {
+        let e = SceneSemanticSnapshot.Entity(
+            id: "scene:80", name: "Wall", kind: "mesh",
+            parentRef: nil, childRefs: [], isSelected: false, position: nil,
+            components: ["collider"],
+            colliderShape: "box",
+            colliderIsTrigger: false,
+            colliderFriction: 0.7,
+            colliderRestitution: 0.1,
+            colliderLayerID: 3,
+            colliderLayerMask: 15
+        )
+        var wv = WorldView()
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [e]))
+        let session = Session(id: "collider-mat-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entity = (result["entities"] as! [[String: Any]])[0]
+        XCTAssertEqual(entity["colliderIsTrigger"] as? Bool, false)
+        XCTAssertEqual(entity["colliderFriction"] as? Float, 0.7)
+        XCTAssertEqual(entity["colliderRestitution"] as? Float, 0.1)
+        XCTAssertEqual(entity["colliderLayerID"] as? Int, 3)
+        XCTAssertEqual(entity["colliderLayerMask"] as? Int, 15)
+    }
+
+    func testFindEntitiesResultIncludesRigidBodyExtendedFields() async {
+        let e = SceneSemanticSnapshot.Entity(
+            id: "scene:81", name: "Ball", kind: "mesh",
+            parentRef: nil, childRefs: [], isSelected: false, position: nil,
+            components: ["rigidbody"],
+            rigidBodyMotionType: "dynamic",
+            rigidBodyMass: 2.5,
+            rigidBodyGravityScale: 0.5,
+            rigidBodyAllowSleep: false
+        )
+        var wv = WorldView()
+        wv.apply(snapshot: SceneSemanticSnapshot(sceneRevision: 1, entityCount: 1, entities: [e]))
+        let session = Session(id: "rb-ext-find", config: makeTestConfig(), initialWorldView: wv)
+
+        let json = await session.findEntitiesResult(input: [:])
+        let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let entity = (result["entities"] as! [[String: Any]])[0]
+        XCTAssertEqual(entity["rigidBodyGravityScale"] as? Float, 0.5)
+        XCTAssertEqual(entity["rigidBodyAllowSleep"] as? Bool, false)
+    }
+
+    func testSpawnKindDirectionalLightCreatesCorrectLightType() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"sun","steps":[{"op":"spawn_entity","label":"Sun","spawn_kind":"light","light_type":"directional"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasDirectional = ops.contains {
+            if case let .spawnLightEntity(_, lt, _, _, _, _, _, _) = $0 { return lt == .directional }
+            return false
+        }
+        XCTAssertTrue(hasDirectional, "spawn_kind 'light' with light_type 'directional' must produce directional light")
+    }
+
+    // MARK: - Multi-step local scene shadow
+
+    func testMultiStepPlanDoesNotOverwritePreviousColliderChanges() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(Collider(shape: .box(halfExtents: SIMD3(1, 1, 1), center: .zero)), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        // Step 1: set trigger=true. Step 2: set sphere radius.
+        // Without local shadow, step 2 reads original box+isTrigger=false and overwrites trigger.
+        let json = """
+        {"summary":"multi","steps":[
+          {"op":"set_collider_trigger","entity_id":"\(ref)","is_trigger":true},
+          {"op":"set_collider_sphere_radius","entity_id":"\(ref)","radius":2.0}
+        ]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        // The final setCollider (from step 2) should preserve isTrigger=true from step 1
+        let lastCollider = ops.compactMap { if case let .setCollider(_, c) = $0 { return c } else { return nil } }.last
+        XCTAssertNotNil(lastCollider)
+        XCTAssertTrue(lastCollider?.isTrigger == true,
+                      "step 2's setCollider must preserve isTrigger=true set by step 1")
+        if let shape = lastCollider?.shape, case let .sphere(r, _) = shape {
+            XCTAssertEqual(r, 2.0, accuracy: 0.001)
+        } else {
+            XCTFail("final collider shape must be sphere with radius 2.0")
+        }
+    }
+
+    // MARK: - Spawn light with initial properties
+
+    func testSpawnLightWithIntensityAppliesInitialIntensityInMutation() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"sun","steps":[{"op":"spawn_entity","label":"Sun","spawn_kind":"light",\
+        "light_type":"directional","intensity":12000}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasLight = ops.contains {
+            if case let .spawnLightEntity(_, _, _, intensity, _, _, _, _) = $0 {
+                return abs((intensity ?? 0) - 12000) < 1
+            }
+            return false
+        }
+        XCTAssertTrue(hasLight, "spawn_entity with intensity must embed initialIntensity in spawnLightEntity mutation")
+    }
+
+    func testSpawnLightWithColorAppliesInitialColorInMutation() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"red","steps":[{"op":"spawn_entity","label":"Red","spawn_kind":"light",\
+        "color":[1.0,0.2,0.2]}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasColor = ops.contains {
+            if case let .spawnLightEntity(_, _, _, _, color, _, _, _) = $0 {
+                if let c = color { return abs(c.x - 1.0) < 0.01 && abs(c.y - 0.2) < 0.01 }
+            }
+            return false
+        }
+        XCTAssertTrue(hasColor, "spawn_entity with color must embed initialColor in spawnLightEntity mutation")
+    }
+
+    func testSpawnCameraWithFovAppliesInitialFovInMutation() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"cam","steps":[{"op":"spawn_entity","label":"Cinematic Cam","spawn_kind":"camera",\
+        "camera_fov_y":30}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasFov = ops.contains {
+            if case let .spawnCameraEntity(_, _, fov, _) = $0 { return abs((fov ?? 0) - 30) < 0.01 }
+            return false
+        }
+        XCTAssertTrue(hasFov, "spawn_entity camera with camera_fov_y must embed initialFovYDegrees in spawnCameraEntity mutation")
+    }
+
+    // MARK: - spawn_entity with spawn_parent_id
+
+    func testSpawnEntityWithParentIDPassesParentToMutation() throws {
+        var scene = SceneRuntime()
+        let parent = scene.createEntity()
+        let parentRef = "scene:\(parent.rawValue)"
+
+        let json = """
+        {"summary":"child","steps":[{"op":"spawn_entity","label":"Child","spawn_kind":"empty",\
+        "spawn_parent_id":"\(parentRef)"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasParent = ops.contains {
+            if case let .spawnEmptyEntity(label, _, pid) = $0 {
+                return label == "Child" && pid == parent.rawValue
+            }
+            return false
+        }
+        XCTAssertTrue(hasParent, "spawn_entity with spawn_parent_id must embed parentID in spawnEmptyEntity mutation")
+    }
+
+    func testSpawnLightWithParentIDPassesParentToMutation() throws {
+        var scene = SceneRuntime()
+        let parent = scene.createEntity()
+        let parentRef = "scene:\(parent.rawValue)"
+
+        let json = """
+        {"summary":"child light","steps":[{"op":"spawn_entity","label":"Child Light","spawn_kind":"light",\
+        "spawn_parent_id":"\(parentRef)"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasParent = ops.contains {
+            if case let .spawnLightEntity(_, _, _, _, _, _, _, pid) = $0 {
+                return pid == parent.rawValue
+            }
+            return false
+        }
+        XCTAssertTrue(hasParent, "spawn_entity light with spawn_parent_id must embed parentID in spawnLightEntity mutation")
+    }
+
+    func testSpawnEntityWithoutParentIDHasNilParent() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"root","steps":[{"op":"spawn_entity","label":"Root","spawn_kind":"empty"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasNilParent = ops.contains {
+            if case let .spawnEmptyEntity(_, _, pid) = $0 { return pid == nil }
+            return false
+        }
+        XCTAssertTrue(hasNilParent, "spawn_entity without spawn_parent_id must have nil parentID")
+    }
+
+    func testSpawnEntityWithInvalidParentRefThrows() throws {
+        let scene = SceneRuntime()
+        let json = """
+        {"summary":"bad","steps":[{"op":"spawn_entity","label":"X","spawn_parent_id":"scene:99999"}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene),
+                             "spawn_entity with non-existent spawn_parent_id must throw entityNotFound")
+    }
+
+    // MARK: - AssetCatalog
+
+    func testAssetCatalogAudioClipsAppearInSystemPromptSection() {
+        let catalog = AssetCatalog(audioClips: ["explosion", "footstep"], animationClips: [], meshNames: [])
+        let section = catalog.systemPromptSection
+        XCTAssertTrue(section.contains("explosion"), "audio clip name must appear")
+        XCTAssertTrue(section.contains("footstep"), "second audio clip name must appear")
+        XCTAssertTrue(section.contains("set_audio_source"), "usage hint must reference set_audio_source")
+    }
+
+    func testAssetCatalogAnimationClipsAppearInSystemPromptSection() {
+        let catalog = AssetCatalog(audioClips: [], animationClips: ["run", "idle"], meshNames: [])
+        let section = catalog.systemPromptSection
+        XCTAssertTrue(section.contains("run"), "animation clip name must appear")
+        XCTAssertTrue(section.contains("idle"), "second animation clip name must appear")
+        XCTAssertTrue(section.contains("set_animation_player"), "usage hint must reference set_animation_player")
+    }
+
+    func testAssetCatalogMeshNamesAppearInSystemPromptSection() {
+        let catalog = AssetCatalog(audioClips: [], animationClips: [], meshNames: ["DragonMesh", "RockProp"])
+        let section = catalog.systemPromptSection
+        XCTAssertTrue(section.contains("DragonMesh"), "mesh name must appear")
+        XCTAssertTrue(section.contains("RockProp"), "second mesh name must appear")
+    }
+
+    func testAssetCatalogEmptyProducesNoSection() {
+        let catalog = AssetCatalog()
+        XCTAssertTrue(catalog.isEmpty, "default catalog must be empty")
+        XCTAssertTrue(catalog.systemPromptSection.isEmpty, "empty catalog must produce empty section string")
+    }
+
+    func testAssetCatalogIsEmptyFalseWhenAnyFieldPopulated() {
+        XCTAssertFalse(AssetCatalog(audioClips: ["sfx"]).isEmpty)
+        XCTAssertFalse(AssetCatalog(animationClips: ["walk"]).isEmpty)
+        XCTAssertFalse(AssetCatalog(meshNames: ["cube"]).isEmpty)
+    }
+
+    func testSessionConfigAssetCatalogAppearsInSystemPromptRequest() async throws {
+        let planResponse = """
+        {
+          "id": "msg_ac1",
+          "content": [
+            {"type": "tool_use", "id": "tu_ac1", "name": "execute_edit_plan",
+             "input": {"summary": "done", "steps": []}}
+          ],
+          "stop_reason": "tool_use"
+        }
+        """
+        nonisolated(unsafe) var capturedBody: Data?
+        MockURLProtocol.requestHandler = { request in
+            // URLSession may convert httpBody to httpBodyStream before handing to URLProtocol
+            if let stream = request.httpBodyStream {
+                stream.open()
+                var data = Data()
+                let buf = UnsafeMutablePointer<UInt8>.allocate(capacity: 4096)
+                while stream.hasBytesAvailable {
+                    let n = stream.read(buf, maxLength: 4096)
+                    if n > 0 { data.append(buf, count: n) }
+                }
+                buf.deallocate()
+                stream.close()
+                capturedBody = data
+            } else {
+                capturedBody = request.httpBody
+            }
+            let http = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!,
+                                       statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (http, Data(planResponse.utf8))
+        }
+        let urlConfig = URLSessionConfiguration.ephemeral
+        urlConfig.protocolClasses = [MockURLProtocol.self]
+        let catalog = AssetCatalog(audioClips: ["gun_shot"], animationClips: ["sprint"], meshNames: [])
+        let sessionConfig = SessionConfig.anthropic(apiKey: "test", assetCatalog: catalog)
+        let session = Session(id: "ac1", config: sessionConfig, urlSession: URLSession(configuration: urlConfig))
+
+        _ = try await session.process(Signal.naturalLanguage(text: "play a sound", locale: "en"))
+
+        let body = try XCTUnwrap(capturedBody)
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let systemText = json["system"] as? String ?? ""
+        XCTAssertTrue(systemText.contains("gun_shot"), "audio clip name must appear in system prompt sent to API")
+        XCTAssertTrue(systemText.contains("sprint"), "animation clip name must appear in system prompt sent to API")
     }
 }
 
