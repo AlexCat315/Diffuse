@@ -680,6 +680,33 @@ public final class SDL3Shell: Shell {
                                                                                      mouseX: mouseX / scale,
                                                                                      mouseY: mouseY / scale))))
 
+            case UInt32(GUAVA_SDL_EVENT_GAMEPAD_BUTTON_DOWN),
+                 UInt32(GUAVA_SDL_EVENT_GAMEPAD_BUTTON_UP):
+                let btn = GamepadButton(rawValue: event.gbutton.button) ?? .south
+                let ev = GamepadButtonEvent(gamepadID: UInt32(event.gbutton.which), button: btn)
+                collected.append(WindowInputEvent(
+                    windowID: mainWindowID ?? .main,
+                    event: event.type == GUAVA_SDL_EVENT_GAMEPAD_BUTTON_DOWN
+                        ? .gamepadButtonDown(ev) : .gamepadButtonUp(ev)
+                ))
+
+            case UInt32(GUAVA_SDL_EVENT_GAMEPAD_AXIS_MOTION):
+                let axis = GamepadAxis(rawValue: event.gaxis.axis) ?? .leftX
+                let raw = Float(event.gaxis.value)
+                let normalized: Float
+                switch axis {
+                case .leftTrigger, .rightTrigger:
+                    normalized = max(0, raw / 32767.0)
+                default:
+                    normalized = max(-1, min(1, raw / 32767.0))
+                }
+                collected.append(WindowInputEvent(
+                    windowID: mainWindowID ?? .main,
+                    event: .gamepadAxisMotion(GamepadAxisEvent(
+                        gamepadID: UInt32(event.gaxis.which), axis: axis, value: normalized
+                    ))
+                ))
+
             default:
                 break
             }
