@@ -41,17 +41,47 @@ public struct GameplayIntent: Sendable, Equatable, Codable {
     }
 }
 
+/// Parameter descriptor for one script property.
+/// `type` is a short human-readable description e.g. "Float (m/s)" or "Bool".
+public struct ScriptParameterDescriptor: Sendable, Equatable, Codable {
+    public var name: String
+    public var type: String
+    public var description: String?
+
+    public init(name: String, type: String, description: String? = nil) {
+        self.name = name
+        self.type = type
+        self.description = description
+    }
+}
+
+/// Schema for one registered script, describing its public parameters.
+public struct ScriptSchema: Sendable, Equatable, Codable {
+    public var name: String
+    public var parameters: [ScriptParameterDescriptor]
+
+    public init(name: String, parameters: [ScriptParameterDescriptor] = []) {
+        self.name = name
+        self.parameters = parameters
+    }
+}
+
 public struct GameKnownConstraints: Sendable, Equatable, Codable {
     public var navMeshBaked: Bool
     public var performanceBudget: String
+    /// Legacy name-only registry. Prefer `scriptSchemas` when parameter info is available.
     public var scriptingRegistry: [String]
+    /// Full parameter schemas for registered scripts. When non-empty, used instead of scriptingRegistry.
+    public var scriptSchemas: [ScriptSchema]
 
     public init(navMeshBaked: Bool = false,
                 performanceBudget: String = "console_high",
-                scriptingRegistry: [String] = []) {
+                scriptingRegistry: [String] = [],
+                scriptSchemas: [ScriptSchema] = []) {
         self.navMeshBaked = navMeshBaked
         self.performanceBudget = performanceBudget
         self.scriptingRegistry = scriptingRegistry
+        self.scriptSchemas = scriptSchemas
     }
 }
 
@@ -80,13 +110,27 @@ public struct GameWorkflowContext: Sendable, Equatable, Codable {
         var lines: [String] = [
             "Workflow: game/interactive project",
             "Level phase: \(levelPhase)",
-            "Genre: \(gameplayIntent.genre) | Win condition: \(gameplayIntent.winCondition) | Pacing: \(gameplayIntent.pacing)",
+            "Genre: \(gameplayIntent.genre) | Win condition: \(gameplayIntent.winCondition) | Pacing: \(gameplayIntent.pacing) | Players: \(gameplayIntent.playerCount)",
             "Target experience: \(targetExperience)",
+            "Performance budget: \(knownConstraints.performanceBudget)",
         ]
         if knownConstraints.navMeshBaked {
             lines.append("NavMesh is baked — you can reason about traversability.")
         }
-        if !knownConstraints.scriptingRegistry.isEmpty {
+        if !knownConstraints.scriptSchemas.isEmpty {
+            let schemaLines = knownConstraints.scriptSchemas.map { schema -> String in
+                if schema.parameters.isEmpty {
+                    return "  \(schema.name): (no parameters)"
+                }
+                let params = schema.parameters.map { p -> String in
+                    var s = "\(p.name): \(p.type)"
+                    if let desc = p.description { s += " — \(desc)" }
+                    return s
+                }.joined(separator: ", ")
+                return "  \(schema.name): \(params)"
+            }
+            lines.append("Script schemas (use set_script_property to configure):\n" + schemaLines.joined(separator: "\n"))
+        } else if !knownConstraints.scriptingRegistry.isEmpty {
             lines.append("Registered gameplay actions: \(knownConstraints.scriptingRegistry.joined(separator: ", "))")
         }
         if !playtestObservations.isEmpty {

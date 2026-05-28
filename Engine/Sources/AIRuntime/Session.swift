@@ -75,6 +75,9 @@ public actor Session {
     private var contextMemory: ContextMemoryStore?
     private var cachedMemoryView: [[String: String]] = []
     private var perceptionService: PerceptionService?
+    /// BCP-47 locale of the most recent naturalLanguage signal (e.g. "zh-Hans", "ja", "fr").
+    /// Used to instruct the model to match the user's language in summaries and entity names.
+    private var currentLocale: String? = nil
 
     private static let anthropicAPIVersion = "2023-06-01"
     private static let maxEntityPromptCount = 100
@@ -218,7 +221,8 @@ public actor Session {
     public func process(_ signal: Signal,
                         onProgress: (@Sendable (String) -> Void)? = nil) async throws -> Proposal {
         switch signal {
-        case let .naturalLanguage(text, _):
+        case let .naturalLanguage(text, locale):
+            if !locale.isEmpty { currentLocale = locale }
             recordTurn(ConversationTurn(kind: .userText(text)))
             let (plan, toolUseID, inputJSON) = try await infer(onProgress: onProgress)
             recordTurn(ConversationTurn(kind: .assistantToolCall(toolUseID: toolUseID,
@@ -289,14 +293,24 @@ public actor Session {
         }
 
         // Record rejected steps as a userPreference entry so future sessions avoid the pattern.
+        // Include operation types from the plan for richer context.
         if let mem = contextMemory, !rejectedStepIDs.isEmpty {
-            let rejectedList = rejectedStepIDs.joined(separator: ",")
+            var payload: [String: String] = [
+                "rejected_count": String(rejectedStepIDs.count),
+                "proposal_id": proposalID,
+            ]
+            if case let .assistantToolCall(_, _, inputJSON) = callTurn.kind,
+               let data = inputJSON.data(using: .utf8),
+               let plan = try? JSONDecoder().decode(SceneEditPlan.self, from: data) {
+                let ops = plan.steps.map(\.op.rawValue).joined(separator: ",")
+                payload["plan_ops"] = ops
+                if !plan.summary.isEmpty { payload["plan_summary"] = String(plan.summary.prefix(120)) }
+            }
             let entry = ContextEntry(
                 id: "pref:rejected:\(proposalID)",
                 kind: .userPreference,
                 subject: "session",
-                payload: ["rejected_steps": rejectedList,
-                          "proposal_id": proposalID],
+                payload: payload,
                 importance: 0.7
             )
             Task { await mem.upsert(entry) }
@@ -754,8 +768,16 @@ public actor Session {
             parts.append("Active workflow mode: \(mode)")
         }
 
+        if !config.assetCatalog.isEmpty {
+            parts.append(config.assetCatalog.systemPromptSection)
+        }
+
         if !worldView.selectedEntityRefs.isEmpty {
             parts.append("Currently selected: \(worldView.selectedEntityRefs.joined(separator: ", "))")
+        }
+
+        if let locale = currentLocale, !locale.hasPrefix("en") {
+            parts.append("User locale: \(locale) — write entity names, labels, and the plan summary in the user's language where appropriate.")
         }
 
         parts.append("""
@@ -763,15 +785,35 @@ public actor Session {
         - Only operate on entities that exist in the scene entities list above.
         - Use the exact entity IDs from the list (format: "scene:<number>").
         - Prefer minimal plans — only include steps necessary to satisfy the request.
+        - When "Currently selected" is non-empty, treat those entities as the user's primary \
+        target for any ambiguous request (e.g. "make it bigger", "delete it", "change the colour"). \
+        Only operate on non-selected entities when the request clearly names or describes them.
+        - For duplicate_entity: use `duplicate_offset` ([dx, dy, dz]) to place the copy offset \
+        from the source in local space (e.g. [2,0,0] to place it 2 m to the right). Without \
+        duplicate_offset, the copy lands on top of the source. Always provide an offset when the \
+        user's request implies a different location ("add another one next to it").
+        - For reparent_entity: moving an entity to a new parent changes its local transform \
+        relative to that parent. After reparenting, follow up with set_transform if the entity's \
+        world position should be preserved.
         - For set_transform, use the `position`, `scale`, and `eulerDegrees` fields (all local \
         space) as the base and only change what the user asked for. When an entity is in a \
         hierarchy, `evaluated.worldPosition` shows its actual world-space position, \
         `evaluated.worldEulerDegrees` shows world-space rotation, and `evaluated.worldScale` \
         shows the cumulative world-space scale — use these for spatial reasoning, but \
-        set_transform always writes local space.
+        set_transform always writes local space. For root-level entities (parentRef absent), \
+        local space equals world space so you can use worldPosition values directly.
         - The `scale` field is omitted when uniform [1, 1, 1]; treat missing `scale` as [1, 1, 1].
         - The `eulerDegrees` field is omitted when the rotation is [0, 0, 0]; treat missing \
         `eulerDegrees` as [0, 0, 0]. Angles are XYZ intrinsic Euler in degrees.
+        - For spawn_entity: use `spawn_kind` to choose the entity type — "mesh" (default, creates a \
+        Static Mesh), "empty" (bare group/parent node with no components), "light" (creates a light; \
+        combine with `light_type` for directional/point/spot; use `intensity`, `color`, `range`, and \
+        `cast_shadows` in the SAME step to set initial values — these are applied atomically at creation \
+        and you do NOT need follow-up set_light_* steps for them), "camera" (creates an inactive camera; \
+        use `camera_fov_y` in the same step to set initial field of view). Use `spawn_parent_id` \
+        ("scene:<number>") in the same step to make the new entity a child of an existing entity — \
+        this avoids a separate reparent_entity step. When creating a group, use spawn_kind "empty" \
+        with the desired parent in spawn_parent_id.
         - For snap_to_ground, set Y position to 0.
         - For set_camera_fov: use `camera_fov_y` (degrees, 1–179). 30≈telephoto, 50≈normal, 75≈wide.
         - For set_camera_active: use `camera_is_active` (boolean). Only one camera should be active at a time.
@@ -780,27 +822,41 @@ public actor Session {
         what the entity represents in the real world when naming, grouping, or describing it.
         - If the previous tool_result shows the user rejected your plan, adjust your approach.
         - For set_script_property: use `script_property_name` (the parameter key) and \
-        `script_property_value` (the new value — string, number, or boolean). The entity's \
+        `script_property_value` (the new value — string, number, boolean, or array). The entity's \
         `scriptBindings` shows existing scripts and their current `params`. Use `script_index` \
         (default 0) to target a specific binding when an entity has multiple scripts.
+        - For set_script_enabled: use `is_enabled` (true/false) and `script_index` (default 0) to \
+        enable or disable a specific script binding on the entity.
         - For set_collider_layer: use `collider_layer_id` (0–15, which layer the collider \
         occupies) and/or `collider_layer_mask` (bitmask of layers this collider interacts with, \
         e.g. 0xFFFF = collide with all layers). An entity's `colliderLayerID` and \
         `colliderLayerMask` fields show the current values.
+        - Collider dimensions are shown in `colliderBoxHalfExtents` ([x,y,z] half-sizes in metres \
+        for box colliders), `colliderSphereRadius` (sphere radius in metres), \
+        `colliderCapsuleRadius` and `colliderCapsuleHalfHeight` (capsule dimensions in metres). \
+        Use these when resizing or comparing physical bounds.
         - For set_material: use `material_base_color` ([r,g,b,a] linear 0–1), \
         `material_metallic` (0–1; 0=dielectric, 1=full metal), \
         `material_roughness` (0–1; 0=mirror-smooth, 1=fully rough), and \
-        `material_emissive` ([r,g,b] linear 0–1; omit or [0,0,0] for no emission). \
-        An entity's `materialBaseColor`, `materialMetallic`, `materialRoughness`, and \
+        `material_emissive` ([r,g,b] linear 0–1; omit for no change). \
+        Omitting any field preserves the entity's current value — only include fields you want \
+        to change. An entity's `materialBaseColor`, `materialMetallic`, `materialRoughness`, and \
         `materialEmissive` fields show the current PBR values when non-default. \
         Prefer set_material over set_mesh_color for precise or multi-channel appearance control; \
         use set_mesh_color only for a simple RGB tint when no PBR properties are needed.
         - If the user asks a general question (capabilities, greetings, clarifications) rather \
         than requesting a scene change, call the tool with an empty steps array and put your \
         conversational reply in the summary field.
-        - Use find_entities (name substring or kind filter) to locate entities whose IDs are not \
-        visible in the scene list. After find_entities returns its result, call execute_edit_plan \
-        with the discovered IDs to complete the task.
+        - For set_audio_source: `audio_pitch` (1.0=normal, 2.0=one octave up, 0.5=one octave down) \
+        and `audio_spatial_blend` (0=fully 2D, 1=fully 3D positional) are shown in `audioPitch` \
+        and `audioSpatialBlend` only when non-default (pitch≠1.0 or blend>0). Omitting any \
+        field preserves the current value.
+        - Use find_entities (name substring, kind, component, or spatial proximity) to locate \
+        entities whose IDs are not visible in the scene list. The `component` parameter accepts \
+        tags like "light", "camera", "rigidbody", "collider", "audio_source", "animation", "script", \
+        "constraint". Use `near_position` + `near_radius` (metres) to find entities near a given \
+        world-space point (e.g. to select all lights near the player spawn). \
+        After find_entities returns its result, call execute_edit_plan with the discovered IDs.
         """)
 
         return parts.joined(separator: "\n\n")
@@ -855,6 +911,7 @@ public actor Session {
     nonisolated func compactDict(for e: WorldEntityRecord) -> [String: Any] {
         var d: [String: Any] = ["ref": e.ref, "name": e.name]
         if let v = e.kind               { d["kind"] = v }
+        if !e.components.isEmpty        { d["components"] = e.components }
         if let v = e.parentRef          { d["parentRef"] = v }
         if !e.childRefs.isEmpty         { d["childRefs"] = e.childRefs }
         if let v = e.position           { d["position"] = v }
@@ -879,6 +936,10 @@ public actor Session {
         if let v = e.rigidBodyGravityScale { d["rigidBodyGravityScale"] = v }
         if let v = e.rigidBodyAllowSleep  { d["rigidBodyAllowSleep"] = v }
         if let v = e.colliderShape        { d["colliderShape"] = v }
+        if let v = e.colliderBoxHalfExtents  { d["colliderBoxHalfExtents"] = v }
+        if let v = e.colliderSphereRadius    { d["colliderSphereRadius"] = v }
+        if let v = e.colliderCapsuleRadius   { d["colliderCapsuleRadius"] = v }
+        if let v = e.colliderCapsuleHalfHeight { d["colliderCapsuleHalfHeight"] = v }
         if let v = e.colliderIsTrigger    { d["colliderIsTrigger"] = v }
         if let v = e.colliderFriction     { d["colliderFriction"] = v }
         if let v = e.colliderRestitution  { d["colliderRestitution"] = v }
@@ -889,6 +950,8 @@ public actor Session {
         if let v = e.audioVolume          { d["audioVolume"] = v }
         if let v = e.audioLoop            { d["audioLoop"] = v }
         if let v = e.audioPlayOnAwake     { d["audioPlayOnAwake"] = v }
+        if let v = e.audioPitch           { d["audioPitch"] = v }
+        if let v = e.audioSpatialBlend    { d["audioSpatialBlend"] = v }
         if let v = e.meshIsVisible, !v  { d["meshIsVisible"] = false }
         if let v = e.animationClip      { d["animationClip"] = v }
         if let v = e.animationSpeed     { d["animationSpeed"] = v }
@@ -953,9 +1016,10 @@ public actor Session {
         let broadPenalty = max(0, affectedEntityIDs.count - 5)
         score -= Double(broadPenalty) * 0.02
 
-        // Orphan spawn penalty: spawnEntity with no subsequent setTransform.
+        // Orphan spawn penalty: spawnEntity with no position provided and no subsequent setTransform.
+        let spawnNeedsTransform = plan.steps.contains { $0.op == .spawnEntity && $0.spawnPosition == nil }
         let hasTransformStep = plan.steps.contains { $0.op == .setTransform }
-        if hasSpawn && !hasTransformStep { score -= 0.05 }
+        if spawnNeedsTransform && !hasTransformStep { score -= 0.05 }
 
         // Uncompensated delete penalty: deleting without spawning a replacement is riskier.
         if hasDelete && !hasSpawn { score -= 0.05 }
@@ -1048,17 +1112,125 @@ public actor Session {
         }
     }
 
-    /// Searches worldView.entityIndex for the given name/kind query and returns a JSON result string.
+    /// Searches worldView.entityIndex for the given name/kind/component/proximity query and returns a JSON result string.
     func findEntitiesResult(input: [String: Any]) -> String {
         let nameQuery = (input["name"] as? String)?.lowercased()
         let kindFilter = input["kind"] as? String
+        let componentFilter = (input["component"] as? String)?.lowercased()
         let limit = max(1, min((input["limit"] as? Int) ?? 20, 200))
-        var results: [[String: String]] = []
+        // Spatial proximity filter
+        let nearArr = input["near_position"] as? [Any]
+        let nearPos: SIMD3<Float>? = nearArr.flatMap { arr -> SIMD3<Float>? in
+            let floats = arr.compactMap { $0 as? Double }
+            guard floats.count >= 3 else { return nil }
+            return SIMD3(Float(floats[0]), Float(floats[1]), Float(floats[2]))
+        }
+        let nearRadius = (input["near_radius"] as? Double).map(Float.init)
+
+        // Collect candidates with optional distance annotation.
+        typealias Candidate = (record: WorldEntityRecord, distance: Float?)
+        var candidates: [Candidate] = []
         for e in worldView.entityIndex.values.sorted(by: { $0.ref < $1.ref }) {
             if let nq = nameQuery, !e.name.lowercased().contains(nq) { continue }
             if let kf = kindFilter, e.kind != kf { continue }
-            var entry: [String: String] = ["id": e.ref, "name": e.name]
+            if let cf = componentFilter,
+               !e.components.contains(where: { $0.lowercased() == cf }) { continue }
+            var distance: Float? = nil
+            if let center = nearPos, let radius = nearRadius {
+                // Prefer worldPosition; fall back to local position for root entities.
+                let entityPos: SIMD3<Float>?
+                if case let .vec3(wx, wy, wz) = e.evaluated["worldPosition"] {
+                    entityPos = SIMD3(wx, wy, wz)
+                } else if let p = e.position, p.count >= 3 {
+                    entityPos = SIMD3(p[0], p[1], p[2])
+                } else {
+                    entityPos = nil
+                }
+                guard let ep = entityPos else { continue }
+                let d = ep - center
+                let dist = (d.x * d.x + d.y * d.y + d.z * d.z).squareRoot()
+                guard dist <= radius else { continue }
+                distance = dist
+            }
+            candidates.append((e, distance))
+        }
+        // Sort proximity results nearest-first; otherwise keep stable ID order.
+        if nearPos != nil {
+            candidates.sort { ($0.distance ?? .infinity) < ($1.distance ?? .infinity) }
+        }
+        var results: [[String: Any]] = []
+        for (e, dist) in candidates {
+            var entry: [String: Any] = ["id": e.ref, "name": e.name]
             if let k = e.kind { entry["kind"] = k }
+            if !e.components.isEmpty { entry["components"] = e.components }
+            if let p = e.position { entry["position"] = p }
+            if let p = e.eulerDegrees { entry["eulerDegrees"] = p }
+            if let p = e.scale { entry["scale"] = p }
+            if let p = e.evaluated["worldPosition"]    { entry["worldPosition"] = p.jsonValue }
+            if let p = e.evaluated["worldEulerDegrees"] { entry["worldEulerDegrees"] = p.jsonValue }
+            if let p = e.evaluated["worldScale"]        { entry["worldScale"] = p.jsonValue }
+            if let p = e.parentRef { entry["parentRef"] = p }
+            if let d = dist { entry["distance"] = d }
+            // Physics
+            if let v = e.rigidBodyMotionType   { entry["rigidBodyMotionType"] = v }
+            if let v = e.rigidBodyMass         { entry["rigidBodyMass"] = v }
+            if let v = e.rigidBodyGravityScale { entry["rigidBodyGravityScale"] = v }
+            if let v = e.rigidBodyAllowSleep   { entry["rigidBodyAllowSleep"] = v }
+            // Collider
+            if let v = e.colliderShape           { entry["colliderShape"] = v }
+            if let v = e.colliderBoxHalfExtents  { entry["colliderBoxHalfExtents"] = v }
+            if let v = e.colliderSphereRadius    { entry["colliderSphereRadius"] = v }
+            if let v = e.colliderCapsuleRadius   { entry["colliderCapsuleRadius"] = v }
+            if let v = e.colliderCapsuleHalfHeight { entry["colliderCapsuleHalfHeight"] = v }
+            if let v = e.colliderIsTrigger       { entry["colliderIsTrigger"] = v }
+            if let v = e.colliderFriction        { entry["colliderFriction"] = v }
+            if let v = e.colliderRestitution     { entry["colliderRestitution"] = v }
+            if let v = e.colliderLayerID         { entry["colliderLayerID"] = v }
+            if let v = e.colliderLayerMask       { entry["colliderLayerMask"] = v }
+            // Light
+            if let v = e.lightType            { entry["lightType"] = v }
+            if let v = e.lightIntensity       { entry["lightIntensity"] = v }
+            if let v = e.lightColor           { entry["lightColor"] = v }
+            if let v = e.lightRange           { entry["lightRange"] = v }
+            if let v = e.lightSpotInner       { entry["lightSpotInner"] = v }
+            if let v = e.lightSpotOuter       { entry["lightSpotOuter"] = v }
+            if let v = e.lightCastShadows     { entry["lightCastShadows"] = v }
+            // Camera
+            if let v = e.cameraIsActive       { entry["cameraIsActive"] = v }
+            if let v = e.cameraFovYDegrees    { entry["cameraFovYDegrees"] = v }
+            // Mesh / Material
+            if let v = e.meshIsVisible        { entry["meshIsVisible"] = v }
+            if let v = e.meshColor            { entry["meshColor"] = v }
+            if let v = e.materialBaseColor    { entry["materialBaseColor"] = v }
+            if let v = e.materialMetallic     { entry["materialMetallic"] = v }
+            if let v = e.materialRoughness    { entry["materialRoughness"] = v }
+            if let v = e.materialEmissive     { entry["materialEmissive"] = v }
+            // Audio
+            if let v = e.audioClip           { entry["audioClip"] = v }
+            if let v = e.audioVolume         { entry["audioVolume"] = v }
+            if let v = e.audioPitch          { entry["audioPitch"] = v }
+            if let v = e.audioLoop           { entry["audioLoop"] = v }
+            if let v = e.audioPlayOnAwake    { entry["audioPlayOnAwake"] = v }
+            if let v = e.audioSpatialBlend   { entry["audioSpatialBlend"] = v }
+            // Animation
+            if let v = e.animationClip       { entry["animationClip"] = v }
+            if let v = e.animationSpeed      { entry["animationSpeed"] = v }
+            if let v = e.animationLoop       { entry["animationLoop"] = v }
+            if let v = e.animationIsPlaying  { entry["animationIsPlaying"] = v }
+            // Constraint
+            if let v = e.constraintEnabled   { entry["constraintEnabled"] = v }
+            // Script
+            if let bindings = e.scriptBindings, !bindings.isEmpty {
+                entry["scriptBindings"] = bindings.map { b -> [String: Any] in
+                    var rec: [String: Any] = ["handle": b.handle, "enabled": b.isEnabled]
+                    if b.parametersJSON != "{}" && !b.parametersJSON.isEmpty,
+                       let data = b.parametersJSON.data(using: .utf8),
+                       let parsed = try? JSONSerialization.jsonObject(with: data) {
+                        rec["params"] = parsed
+                    }
+                    return rec
+                }
+            }
             results.append(entry)
             if results.count >= limit { break }
         }

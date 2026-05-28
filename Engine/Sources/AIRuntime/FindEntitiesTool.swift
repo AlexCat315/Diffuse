@@ -7,7 +7,7 @@ public enum FindEntitiesTool {
     public static func definition() -> [String: Any] {
         [
             "name": "find_entities",
-            "description": "Search scene entities by name substring, kind, or both. Use when you need to find an entity that may not be visible in the truncated entity list.",
+            "description": "Search scene entities by name substring, kind, component, or spatial proximity. Returns id, name, kind, components, position, eulerDegrees, scale, worldPosition, parentRef, and all authored property values (light color/range/angles, mesh visibility/material, audio, animation, physics, collider material/layers, script bindings) for each match. Use when you need to find entities that may not be visible in the truncated entity list.",
             "input_schema": schema(),
         ]
     }
@@ -18,7 +18,7 @@ public enum FindEntitiesTool {
             "type": "function",
             "function": [
                 "name": "find_entities",
-                "description": "Search scene entities by name substring, kind, or both. Use when you need to find an entity that may not be visible in the truncated entity list.",
+                "description": "Search scene entities by name substring, kind, component, or spatial proximity. Returns id, name, kind, components, position, eulerDegrees, scale, worldPosition, parentRef, and all authored property values (light color/range/angles, mesh visibility/material, audio, animation, physics, collider material/layers, script bindings) for each match. Use when you need to find entities that may not be visible in the truncated entity list.",
                 "parameters": schema(),
             ] as [String: Any],
         ]
@@ -35,6 +35,19 @@ public enum FindEntitiesTool {
                 "kind": [
                     "type": "string",
                     "description": "Exact entity kind to filter by (e.g. 'Static Mesh', 'Camera', 'Point Light'). Omit to match all kinds.",
+                ] as [String: Any],
+                "component": [
+                    "type": "string",
+                    "description": "Component tag to filter by (e.g. 'light', 'camera', 'rigidbody', 'collider', 'audio_source', 'animation', 'script', 'constraint'). Only entities that have this component are returned.",
+                ] as [String: Any],
+                "near_position": [
+                    "type": "array",
+                    "items": ["type": "number"] as [String: Any],
+                    "description": "[x, y, z] world-space centre point. When provided together with near_radius, only entities within that radius are returned.",
+                ] as [String: Any],
+                "near_radius": [
+                    "type": "number",
+                    "description": "Search radius in metres around near_position. Requires near_position. Entities beyond this distance are excluded.",
                 ] as [String: Any],
                 "limit": [
                     "type": "integer",

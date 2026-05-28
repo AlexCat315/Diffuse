@@ -1,16 +1,18 @@
 import Foundation
 
-/// A JSON-typed value that can be a string, number, or boolean.
+/// A JSON-typed value that can be a string, number, boolean, or array.
 /// Used for `set_script_property` where the AI sets a typed script parameter.
 public enum JSONValue: Codable, Sendable, Equatable {
     case string(String)
     case number(Double)
     case bool(Bool)
+    case array([JSONValue])
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.singleValueContainer()
         if let b = try? c.decode(Bool.self) { self = .bool(b); return }
         if let n = try? c.decode(Double.self) { self = .number(n); return }
+        if let a = try? c.decode([JSONValue].self) { self = .array(a); return }
         let s = try c.decode(String.self)
         self = .string(s)
     }
@@ -21,6 +23,7 @@ public enum JSONValue: Codable, Sendable, Equatable {
         case .string(let s): try c.encode(s)
         case .number(let n): try c.encode(n)
         case .bool(let b):   try c.encode(b)
+        case .array(let a):  try c.encode(a)
         }
     }
 
@@ -37,6 +40,7 @@ public enum JSONValue: Codable, Sendable, Equatable {
                 ? String(format: "%.0f", n)
                 : String(n)
         case .bool(let b): return b ? "true" : "false"
+        case .array(let a): return "[" + a.map(\.jsonFragment).joined(separator: ",") + "]"
         }
     }
 }
@@ -97,6 +101,7 @@ public enum SceneEditOp: String, Codable, Sendable, CaseIterable {
 
     // Script
     case setScriptProperty    = "set_script_property"
+    case setScriptEnabled     = "set_script_enabled"
 
     // Mesh visibility
     case setMeshVisibility    = "set_mesh_visibility"
@@ -118,6 +123,11 @@ public struct SceneEditStep: Codable, Sendable {
     // spawn_entity
     public var label: String?          // entity name for spawned entity
     public var spawnPosition: [Float]? // [x, y, z] default [0,0,0]
+    public var spawnKind: String?      // "mesh" | "empty" | "light" | "camera"; default "mesh"
+    public var spawnParentRef: String? // "scene:<id>" to make spawned entity a child of an existing one
+
+    // duplicate_entity
+    public var duplicateOffset: [Float]? // [dx, dy, dz] local-space offset applied to the copy
 
     // set_transform / snap_to_ground
     public var position: [Float]?      // [x, y, z] metres
@@ -229,6 +239,9 @@ public struct SceneEditStep: Codable, Sendable {
         case entityRef          = "entity_id"
         case label
         case spawnPosition      = "spawn_position"
+        case spawnKind          = "spawn_kind"
+        case spawnParentRef     = "spawn_parent_id"
+        case duplicateOffset    = "duplicate_offset"
         case position
         case eulerDegrees       = "euler_degrees"
         case scale

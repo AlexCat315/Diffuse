@@ -1,4 +1,5 @@
 import EngineKernel
+import SIMDCompat
 
 /// Component that drives audio playback on an entity.
 public struct AudioSource: RuntimeComponent, Sendable, Equatable {
@@ -26,5 +27,19 @@ public struct AudioSource: RuntimeComponent, Sendable, Equatable {
         self.loop = loop
         self.playOnAwake = playOnAwake
         self.spatialBlend = spatialBlend
+    }
+}
+
+/// Marks an entity as the audio listener for spatial audio.
+/// Typically placed on the main camera entity. The audio system uses the
+/// listener's world position for distance-based attenuation.
+///
+/// If no entity has this component, the listener defaults to world origin.
+public struct AudioListener: RuntimeComponent, Sendable, Equatable {
+    /// Optional per-listener volume multiplier (0…1).
+    public var masterVolume: Float
+
+    public init(masterVolume: Float = 1) {
+        self.masterVolume = simd_clamp(masterVolume, 0, 1)
     }
 }

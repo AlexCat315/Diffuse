@@ -50,6 +50,9 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     public var kind: String?
     public var parentRef: String?
     public var childRefs: [String]
+    /// Component tags present on the entity (e.g. "light", "camera", "rigidbody").
+    /// Populated from SceneSemanticSnapshot; not updated incrementally by WorldEvents.
+    public var components: [String]
     // Transform (authored)
     public var position: [Float]?       // [x, y, z] metres
     public var scale: [Float]?          // [x, y, z]; nil when uniform 1,1,1
@@ -79,6 +82,10 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     public var rigidBodyAllowSleep: Bool?
     // Physics — collider (authored)
     public var colliderShape: String?        // "box" | "sphere" | "capsule" | "mesh" | "convex"
+    public var colliderBoxHalfExtents: [Float]?   // non-nil for box
+    public var colliderSphereRadius: Float?        // non-nil for sphere
+    public var colliderCapsuleRadius: Float?       // non-nil for capsule
+    public var colliderCapsuleHalfHeight: Float?   // non-nil for capsule
     public var colliderIsTrigger: Bool?
     public var colliderFriction: Float?
     public var colliderRestitution: Float?
@@ -90,6 +97,8 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     public var audioVolume: Float?
     public var audioLoop: Bool?
     public var audioPlayOnAwake: Bool?
+    public var audioPitch: Float?
+    public var audioSpatialBlend: Float?
     // Mesh visibility (authored) — nil means default true (visible)
     public var meshIsVisible: Bool?
     // Animation (authored)
@@ -115,6 +124,7 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
         self.name = name
         self.kind = kind
         self.childRefs = []
+        self.components = []
         self.isSelected = false
         self.evaluated = [:]
         self.inferred = [:]
@@ -172,7 +182,22 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
         case "rigidBodyAllowSleep":
             if case let .bool(b) = value { rigidBodyAllowSleep = b }
         case "colliderShape":
-            if case let .string(s) = value { colliderShape = s }
+            if case let .string(s) = value {
+                colliderShape = s
+                // Clear stale dimension fields when shape kind changes
+                colliderBoxHalfExtents = nil
+                colliderSphereRadius = nil
+                colliderCapsuleRadius = nil
+                colliderCapsuleHalfHeight = nil
+            }
+        case "colliderBoxHalfExtents":
+            if case let .vec3(x, y, z) = value { colliderBoxHalfExtents = [x, y, z] }
+        case "colliderSphereRadius":
+            if case let .float(f) = value { colliderSphereRadius = f }
+        case "colliderCapsuleRadius":
+            if case let .float(f) = value { colliderCapsuleRadius = f }
+        case "colliderCapsuleHalfHeight":
+            if case let .float(f) = value { colliderCapsuleHalfHeight = f }
         case "colliderIsTrigger":
             if case let .bool(b) = value { colliderIsTrigger = b }
         case "colliderFriction":
@@ -193,6 +218,10 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
             if case let .bool(b) = value { audioLoop = b }
         case "audioPlayOnAwake":
             if case let .bool(b) = value { audioPlayOnAwake = b }
+        case "audioPitch":
+            if case let .float(f) = value { audioPitch = f }
+        case "audioSpatialBlend":
+            if case let .float(f) = value { audioSpatialBlend = f }
         case "meshIsVisible":
             if case let .bool(b) = value { meshIsVisible = b }
         case "animationClip":
@@ -313,14 +342,27 @@ public struct WorldView: Sendable {
 
     // MARK: - Bootstrap (from full snapshot)
 
-    /// Seeds the entity index from a SceneSemanticSnapshot. Used once at session
-    /// creation or when a new project is opened — ongoing updates use apply(event:).
+    /// Merges a SceneSemanticSnapshot into the entity index.
+    ///
+    /// Authoritative authored fields (position, material, components, etc.) are overwritten
+    /// from the snapshot. AI-inferred annotations (`inferred` dict) and engine-computed
+    /// evaluated values (`evaluated` dict) are **preserved** for entities that continue to
+    /// exist, so that perception tags and world-transform data survive incremental re-snapshots.
+    /// Entities absent from the new snapshot are removed.
     public mutating func apply(snapshot: SceneSemanticSnapshot) {
+        // Keep inferred/evaluated for existing entities so perception annotations survive.
+        let previous = entityIndex
         entityIndex.removeAll(keepingCapacity: true)
         for e in snapshot.entities {
             var record = WorldEntityRecord(ref: e.id, name: e.name, kind: e.kind)
+            // Preserve AI-inferred annotations and evaluated values from the previous index.
+            if let prev = previous[e.id] {
+                record.inferred = prev.inferred
+                record.evaluated = prev.evaluated
+            }
             record.parentRef = e.parentRef
             record.childRefs = e.childRefs
+            record.components = e.components
             record.isSelected = e.isSelected
             if let pos = e.position { record.position = pos }
             if let s = e.scale { record.scale = s }
@@ -344,6 +386,10 @@ public struct WorldView: Sendable {
             record.rigidBodyGravityScale = e.rigidBodyGravityScale
             record.rigidBodyAllowSleep = e.rigidBodyAllowSleep
             record.colliderShape = e.colliderShape
+            record.colliderBoxHalfExtents = e.colliderBoxHalfExtents
+            record.colliderSphereRadius = e.colliderSphereRadius
+            record.colliderCapsuleRadius = e.colliderCapsuleRadius
+            record.colliderCapsuleHalfHeight = e.colliderCapsuleHalfHeight
             record.colliderIsTrigger = e.colliderIsTrigger
             record.colliderFriction = e.colliderFriction
             record.colliderRestitution = e.colliderRestitution
@@ -354,6 +400,8 @@ public struct WorldView: Sendable {
             record.audioVolume = e.audioVolume
             record.audioLoop = e.audioLoop
             record.audioPlayOnAwake = e.audioPlayOnAwake
+            record.audioPitch = e.audioPitch
+            record.audioSpatialBlend = e.audioSpatialBlend
             record.meshIsVisible = e.meshIsVisible
             record.animationClip = e.animationClip
             record.animationSpeed = e.animationSpeed

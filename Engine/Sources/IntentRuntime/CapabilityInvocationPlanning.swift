@@ -284,16 +284,35 @@ private struct CapabilityOperationProjection {
         self.arguments = [:]
 
         switch sceneMutation {
-        case let .spawnImportedMeshEntity(label, _, _, position):
+        case let .spawnImportedMeshEntity(label, _, _, position, _),
+             let .spawnEmptyEntity(label, position, _):
             self.verb = "scene.spawn_entity"
             self.arguments = [
                 "label": .string(label),
                 "position": .vec3(IntentVector3(position)),
             ]
+        case let .spawnLightEntity(label, _, position, _, _, _, _, _):
+            self.verb = "scene.spawn_light"
+            self.arguments = [
+                "label": .string(label),
+                "position": .vec3(IntentVector3(position)),
+            ]
+        case let .spawnCameraEntity(label, position, _, _):
+            self.verb = "scene.spawn_camera"
+            self.arguments = [
+                "label": .string(label),
+                "position": .vec3(IntentVector3(position)),
+            ]
+        case let .setRigidBody(_, body):
+            self.verb = "scene.set_rigidbody"
+            self.arguments["motion_type"] = .string(body.motionType.rawValue)
         case .deleteEntity:
             self.verb = "scene.delete_entity"
         case .duplicateEntity:
             self.verb = "scene.duplicate_entity"
+        case let .duplicateEntityWithOffset(_, offset):
+            self.verb = "scene.duplicate_entity_offset"
+            self.arguments["offset"] = .vec3(IntentVector3(offset))
         case let .moveEntity(_, parentID, index):
             self.verb = "scene.reparent_entity"
             if let parentID {
