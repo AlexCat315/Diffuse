@@ -336,7 +336,7 @@ public enum SceneSerializer {
     }
 
     private static func serializeAnimationPlayer(_ c: AnimationPlayer) -> [String: Any] {
-        var d: [String: Any] = ["isPlaying": c.isPlaying, "loop": c.loop, "speed": c.speed]
+        var d: [String: Any] = ["isPlaying": c.isPlaying, "loop": c.loop, "speed": c.speed, "time": c.time]
         if let name = c.clipName { d["clipName"] = name }
         return d
     }
@@ -346,7 +346,8 @@ public enum SceneSerializer {
             clipName: jsonToString(d["clipName"]),
             speed: jsonToFloat(d["speed"]) ?? 1,
             loop: jsonToBool(d["loop"]) ?? true,
-            isPlaying: jsonToBool(d["isPlaying"]) ?? true
+            isPlaying: jsonToBool(d["isPlaying"]) ?? true,
+            time: (d["time"] as? NSNumber)?.doubleValue ?? 0
         )
     }
 
