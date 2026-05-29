@@ -39,18 +39,16 @@ public enum SceneSerializer {
         for (i, entity) in entities.enumerated() {
             entityIndexMap[entity] = i
         }
-        let entityList = entities.map { entity -> [String: Any] in
-            let parentIdx = scene.component(Parent.self, for: entity).flatMap { entityIndexMap[$0.entity] }
-            return encodeEntity(entity, in: scene, parentIndex: parentIdx)
-        }
+        let entityList = entities.map { encodeEntity($0, in: scene, entityIndexMap: entityIndexMap) }
         let json: [String: Any] = ["version": currentVersion, "entities": entityList]
         return try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
     }
 
-    /// Encodes one entity to a JSON dictionary. `parentIndex`, when non-nil, is the
-    /// position of the parent within the encoded entity list (cross-references are by
-    /// index, never `EntityID`, so the document is relocatable).
-    static func encodeEntity(_ entity: EntityID, in scene: SceneRuntime, parentIndex: Int?) -> [String: Any] {
+    /// Encodes one entity to a JSON dictionary. All entity cross-references (parent,
+    /// constraint endpoints) are stored as positions within `entityIndexMap` rather than
+    /// `EntityID`s, so the document is relocatable. References to entities outside the map
+    /// (e.g. a constraint endpoint outside a captured prefab subtree) are dropped.
+    static func encodeEntity(_ entity: EntityID, in scene: SceneRuntime, entityIndexMap: [EntityID: Int]) -> [String: Any] {
         var obj: [String: Any] = [:]
 
         // Name / kind
@@ -62,7 +60,9 @@ public enum SceneSerializer {
         }
 
         // Parent (store index, not EntityID)
-        if let parentIndex { obj["parent"] = parentIndex }
+        if let parentIndex = scene.component(Parent.self, for: entity).flatMap({ entityIndexMap[$0.entity] }) {
+            obj["parent"] = parentIndex
+        }
 
         // Transform — decompose into translation + rotation + scale
         if let t = scene.component(LocalTransform.self, for: entity) {
@@ -84,6 +84,10 @@ public enum SceneSerializer {
         var comps: [String: Any] = [:]
         if let c = scene.component(RigidBody.self, for: entity) { comps["rigidbody"] = serializeRigidBody(c) }
         if let c = scene.component(Collider.self, for: entity) { comps["collider"] = serializeCollider(c) }
+        if let c = scene.component(Constraint.self, for: entity),
+           let a = entityIndexMap[c.entityA], let b = entityIndexMap[c.entityB] {
+            comps["constraint"] = serializeConstraint(c, entityA: a, entityB: b)
+        }
         if let c = scene.component(RenderMeshComponent.self, for: entity) { comps["renderMesh"] = serializeRenderMesh(c) }
         if let c = scene.component(RenderMaterialComponent.self, for: entity) { comps["renderMaterial"] = serializeRenderMaterial(c) }
         if let c = scene.component(AssetReferenceComponent.self, for: entity) { comps["assetReference"] = serializeAssetReference(c) }
@@ -165,6 +169,19 @@ public enum SceneSerializer {
             if let parent = entityMap[parentIdx] {
                 _ = scene.setParent(parent, for: child)
             }
+        }
+
+        // Deferred constraints: endpoints are list indices, resolved once all entities exist.
+        // A constraint whose endpoints are missing (e.g. trimmed by a prefab subtree) is dropped.
+        for (i, raw) in entities.enumerated() {
+            guard let host = entityMap[i],
+                  let obj = jsonToDict(raw),
+                  let comps = jsonToDict(obj["components"]),
+                  let cd = jsonToDict(comps["constraint"]),
+                  let ai = jsonToInt(cd["entityA"]), let bi = jsonToInt(cd["entityB"]),
+                  let a = entityMap[ai], let b = entityMap[bi]
+            else { continue }
+            _ = scene.setComponent(deserializeConstraint(cd, entityA: a, entityB: b), for: host)
         }
 
         return entities.indices.compactMap { entityMap[$0] }
@@ -407,6 +424,38 @@ public enum SceneSerializer {
             absolutePath: jsonToString(d["absolutePath"]) ?? "",
             kind: jsonToString(d["kind"]) ?? "",
             meshIndex: jsonToInt(d["meshIndex"]) ?? 0
+        )
+    }
+
+    /// Serializes a physics constraint. Endpoints are passed as resolved list indices
+    /// (computed by the caller from the entity index map).
+    private static func serializeConstraint(_ c: Constraint, entityA: Int, entityB: Int) -> [String: Any] {
+        [
+            "type": c.constraintType.rawValue,
+            "entityA": entityA,
+            "entityB": entityB,
+            "pivotA": vec3ToJSON(c.pivotA),
+            "pivotB": vec3ToJSON(c.pivotB),
+            "axisA": vec3ToJSON(c.axisA),
+            "axisB": vec3ToJSON(c.axisB),
+            "minLimit": c.minLimit,
+            "maxLimit": c.maxLimit,
+            "isEnabled": c.isEnabled,
+        ]
+    }
+
+    private static func deserializeConstraint(_ d: [String: Any], entityA: EntityID, entityB: EntityID) -> Constraint {
+        Constraint(
+            constraintType: ConstraintType(rawValue: jsonToString(d["type"]) ?? "pointToPoint") ?? .pointToPoint,
+            entityA: entityA,
+            entityB: entityB,
+            pivotA: jsonToFloatArray(d["pivotA"]).flatMap(jsonToVec3) ?? .zero,
+            pivotB: jsonToFloatArray(d["pivotB"]).flatMap(jsonToVec3) ?? .zero,
+            axisA: jsonToFloatArray(d["axisA"]).flatMap(jsonToVec3) ?? SIMD3<Float>(0, 1, 0),
+            axisB: jsonToFloatArray(d["axisB"]).flatMap(jsonToVec3) ?? SIMD3<Float>(0, 1, 0),
+            minLimit: jsonToFloat(d["minLimit"]) ?? 0,
+            maxLimit: jsonToFloat(d["maxLimit"]) ?? 0,
+            isEnabled: jsonToBool(d["isEnabled"]) ?? true
         )
     }
 
