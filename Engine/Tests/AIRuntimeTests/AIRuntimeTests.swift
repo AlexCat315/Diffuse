@@ -2575,6 +2575,89 @@ final class AIRuntimeTests: XCTestCase {
         .anthropic(apiKey: "test")
     }
 
+    // MARK: - Transient failure retry
+
+    /// Near-zero delays keep retry tests fast.
+    private static let fastRetry = RetryPolicy(maxRetries: 3, baseDelay: 0.001, maxDelay: 0.005, jitter: 0)
+
+    private static let editPlanOK = """
+    {"id":"msg","content":[{"type":"tool_use","id":"tu","name":"execute_edit_plan",
+     "input":{"summary":"Done","steps":[]}}],"stop_reason":"tool_use"}
+    """
+
+    func testSessionRetriesAfter429ThenSucceeds() async throws {
+        var callCount = 0
+        MockURLProtocol.requestHandler = { _ in
+            callCount += 1
+            if callCount == 1 {
+                let resp = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!,
+                                           statusCode: 429, httpVersion: nil,
+                                           headerFields: ["Retry-After": "0"])!
+                return (resp, Data("{\"error\":\"rate limited\"}".utf8))
+            }
+            let resp = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!,
+                                       statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (resp, Data(Self.editPlanOK.utf8))
+        }
+
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.protocolClasses = [MockURLProtocol.self]
+        let session = Session(id: "t",
+                              config: .anthropic(apiKey: "test", retryPolicy: Self.fastRetry),
+                              urlSession: URLSession(configuration: cfg))
+
+        let proposal = try await session.process(.naturalLanguage(text: "do it", locale: "en"))
+        XCTAssertEqual(callCount, 2, "should retry once after the 429")
+        XCTAssertEqual(proposal.plan.summary, "Done")
+    }
+
+    func testSessionDoesNotRetryNonRetryableStatus() async {
+        var callCount = 0
+        MockURLProtocol.requestHandler = { _ in
+            callCount += 1
+            let resp = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!,
+                                       statusCode: 401, httpVersion: nil, headerFields: nil)!
+            return (resp, Data("{\"error\":\"unauthorized\"}".utf8))
+        }
+
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.protocolClasses = [MockURLProtocol.self]
+        let session = Session(id: "t",
+                              config: .anthropic(apiKey: "test", retryPolicy: Self.fastRetry),
+                              urlSession: URLSession(configuration: cfg))
+
+        do {
+            _ = try await session.process(.naturalLanguage(text: "do it", locale: "en"))
+            XCTFail("expected an error")
+        } catch {
+            XCTAssertEqual(callCount, 1, "401 must not be retried")
+        }
+    }
+
+    func testSessionGivesUpAfterMaxRetries() async {
+        var callCount = 0
+        MockURLProtocol.requestHandler = { _ in
+            callCount += 1
+            let resp = HTTPURLResponse(url: URL(string: "https://api.anthropic.com")!,
+                                       statusCode: 503, httpVersion: nil, headerFields: nil)!
+            return (resp, Data("{\"error\":\"unavailable\"}".utf8))
+        }
+
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.protocolClasses = [MockURLProtocol.self]
+        let policy = RetryPolicy(maxRetries: 2, baseDelay: 0.001, maxDelay: 0.005, jitter: 0)
+        let session = Session(id: "t",
+                              config: .anthropic(apiKey: "test", retryPolicy: policy),
+                              urlSession: URLSession(configuration: cfg))
+
+        do {
+            _ = try await session.process(.naturalLanguage(text: "do it", locale: "en"))
+            XCTFail("expected an error")
+        } catch {
+            XCTAssertEqual(callCount, 3, "1 initial attempt + 2 retries")
+        }
+    }
+
     // MARK: - WorldView recentEdits ring
 
     func testWorldViewRecentEditsAccumulatesAndCapsAtTwenty() {
