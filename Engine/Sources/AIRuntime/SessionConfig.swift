@@ -58,6 +58,8 @@ public struct SessionConfig: Sendable {
     /// Project asset catalog surfaced in the system prompt. Set this to the asset
     /// names available in the project so Claude uses correct clip/mesh identifiers.
     public var assetCatalog: AssetCatalog
+    /// Backoff policy for transient inference failures (rate limits, 5xx, dropped connections).
+    public var retryPolicy: RetryPolicy
 
     public static let defaultModel          = "claude-sonnet-4-6"
     public static let defaultAnthropicModel = "claude-sonnet-4-6"
@@ -71,7 +73,8 @@ public struct SessionConfig: Sendable {
                 baseURL: URL,
                 apiFormat: SessionAPIFormat,
                 autoApprove: Bool = false,
-                assetCatalog: AssetCatalog = AssetCatalog()) {
+                assetCatalog: AssetCatalog = AssetCatalog(),
+                retryPolicy: RetryPolicy = .default) {
         self.apiKey = apiKey
         self.model = model
         self.maxTokens = maxTokens
@@ -80,6 +83,7 @@ public struct SessionConfig: Sendable {
         self.apiFormat = apiFormat
         self.autoApprove = autoApprove
         self.assetCatalog = assetCatalog
+        self.retryPolicy = retryPolicy
     }
 
     public static func anthropic(apiKey: String,
@@ -87,7 +91,8 @@ public struct SessionConfig: Sendable {
                                   maxTokens: Int = 2048,
                                   timeoutInterval: TimeInterval = 90,
                                   autoApprove: Bool = false,
-                                  assetCatalog: AssetCatalog = AssetCatalog()) -> SessionConfig {
+                                  assetCatalog: AssetCatalog = AssetCatalog(),
+                                  retryPolicy: RetryPolicy = .default) -> SessionConfig {
         SessionConfig(apiKey: apiKey,
                       model: model,
                       maxTokens: maxTokens,
@@ -95,7 +100,8 @@ public struct SessionConfig: Sendable {
                       baseURL: URL(string: "https://api.anthropic.com")!,
                       apiFormat: .anthropic,
                       autoApprove: autoApprove,
-                      assetCatalog: assetCatalog)
+                      assetCatalog: assetCatalog,
+                      retryPolicy: retryPolicy)
     }
 
     public static func openAI(apiKey: String,
@@ -103,7 +109,8 @@ public struct SessionConfig: Sendable {
                                maxTokens: Int = 2048,
                                timeoutInterval: TimeInterval = 90,
                                autoApprove: Bool = false,
-                               assetCatalog: AssetCatalog = AssetCatalog()) -> SessionConfig {
+                               assetCatalog: AssetCatalog = AssetCatalog(),
+                               retryPolicy: RetryPolicy = .default) -> SessionConfig {
         SessionConfig(apiKey: apiKey,
                       model: model,
                       maxTokens: maxTokens,
@@ -111,7 +118,8 @@ public struct SessionConfig: Sendable {
                       baseURL: URL(string: "https://api.openai.com")!,
                       apiFormat: .openAICompatible,
                       autoApprove: autoApprove,
-                      assetCatalog: assetCatalog)
+                      assetCatalog: assetCatalog,
+                      retryPolicy: retryPolicy)
     }
 
     public static func deepSeek(apiKey: String,
@@ -119,7 +127,8 @@ public struct SessionConfig: Sendable {
                                  maxTokens: Int = 2048,
                                  timeoutInterval: TimeInterval = 90,
                                  autoApprove: Bool = false,
-                                 assetCatalog: AssetCatalog = AssetCatalog()) -> SessionConfig {
+                                 assetCatalog: AssetCatalog = AssetCatalog(),
+                                 retryPolicy: RetryPolicy = .default) -> SessionConfig {
         SessionConfig(apiKey: apiKey,
                       model: model,
                       maxTokens: maxTokens,
@@ -127,6 +136,7 @@ public struct SessionConfig: Sendable {
                       baseURL: URL(string: "https://api.deepseek.com")!,
                       apiFormat: .openAICompatible,
                       autoApprove: autoApprove,
-                      assetCatalog: assetCatalog)
+                      assetCatalog: assetCatalog,
+                      retryPolicy: retryPolicy)
     }
 }

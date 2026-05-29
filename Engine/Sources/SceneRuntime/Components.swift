@@ -51,6 +51,9 @@ public enum ComponentCatalog {
 
         // Animation
         ComponentTypeID(AnimationPlayer.self),
+
+        // VFX
+        ComponentTypeID(ParticleEmitter.self),
     ]
 
     /// Number of registered component types.
