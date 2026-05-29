@@ -85,6 +85,9 @@ public enum SceneSerializer {
         if let c = scene.component(RigidBody.self, for: entity) { comps["rigidbody"] = serializeRigidBody(c) }
         if let c = scene.component(Collider.self, for: entity) { comps["collider"] = serializeCollider(c) }
         if let c = scene.component(RenderMeshComponent.self, for: entity) { comps["renderMesh"] = serializeRenderMesh(c) }
+        if let c = scene.component(RenderMaterialComponent.self, for: entity) { comps["renderMaterial"] = serializeRenderMaterial(c) }
+        if let c = scene.component(AssetReferenceComponent.self, for: entity) { comps["assetReference"] = serializeAssetReference(c) }
+        if let c = scene.component(ParticleEmitter.self, for: entity) { comps["particleEmitter"] = serializeParticleEmitter(c) }
         if let c = scene.component(CameraComponent.self, for: entity) { comps["camera"] = serializeCamera(c) }
         if let c = scene.component(LightComponent.self, for: entity) { comps["light"] = serializeLight(c) }
         if let c = scene.component(AudioSource.self, for: entity) { comps["audioSource"] = serializeAudioSource(c) }
@@ -131,6 +134,9 @@ public enum SceneSerializer {
         if let c = jsonToDict(comps["rigidbody"]) { _ = scene.setComponent(deserializeRigidBody(c), for: entity) }
         if let c = jsonToDict(comps["collider"]) { _ = scene.setComponent(deserializeCollider(c), for: entity) }
         if let c = jsonToDict(comps["renderMesh"]) { _ = scene.setComponent(deserializeRenderMesh(c), for: entity) }
+        if let c = jsonToDict(comps["renderMaterial"]) { _ = scene.setComponent(deserializeRenderMaterial(c), for: entity) }
+        if let c = jsonToDict(comps["assetReference"]) { _ = scene.setComponent(deserializeAssetReference(c), for: entity) }
+        if let c = jsonToDict(comps["particleEmitter"]) { _ = scene.setComponent(deserializeParticleEmitter(c), for: entity) }
         if let c = jsonToDict(comps["camera"]) { _ = scene.setComponent(deserializeCamera(c), for: entity) }
         if let c = jsonToDict(comps["light"]) { _ = scene.setComponent(deserializeLight(c), for: entity) }
         if let c = jsonToDict(comps["audioSource"]) { _ = scene.setComponent(deserializeAudioSource(c), for: entity) }
@@ -357,6 +363,95 @@ public enum SceneSerializer {
 
     private static func deserializeAudioListener(_ d: [String: Any]) -> AudioListener {
         AudioListener(masterVolume: jsonToFloat(d["masterVolume"]) ?? 1)
+    }
+
+    private static func serializeRenderMaterial(_ c: RenderMaterialComponent) -> [String: Any] {
+        var d: [String: Any] = [
+            "baseColorFactor": vec4ToJSON(c.baseColorFactor),
+            "metallicFactor": c.metallicFactor,
+            "roughnessFactor": c.roughnessFactor,
+            "emissiveFactor": vec3ToJSON(c.emissiveFactor),
+        ]
+        if let i = c.baseColorTextureIndex { d["baseColorTextureIndex"] = i }
+        if let i = c.normalTextureIndex { d["normalTextureIndex"] = i }
+        return d
+    }
+
+    private static func deserializeRenderMaterial(_ d: [String: Any]) -> RenderMaterialComponent {
+        RenderMaterialComponent(
+            baseColorFactor: jsonToFloatArray(d["baseColorFactor"]).flatMap(jsonToVec4) ?? SIMD4<Float>(1, 1, 1, 1),
+            baseColorTextureIndex: jsonToInt(d["baseColorTextureIndex"]),
+            normalTextureIndex: jsonToInt(d["normalTextureIndex"]),
+            metallicFactor: jsonToFloat(d["metallicFactor"]) ?? 0,
+            roughnessFactor: jsonToFloat(d["roughnessFactor"]) ?? 1,
+            emissiveFactor: jsonToFloatArray(d["emissiveFactor"]).flatMap(jsonToVec3) ?? .zero
+        )
+    }
+
+    private static func serializeAssetReference(_ c: AssetReferenceComponent) -> [String: Any] {
+        [
+            "assetID": c.assetID,
+            "name": c.name,
+            "relativePath": c.relativePath,
+            "absolutePath": c.absolutePath,
+            "kind": c.kind,
+            "meshIndex": c.meshIndex,
+        ]
+    }
+
+    private static func deserializeAssetReference(_ d: [String: Any]) -> AssetReferenceComponent {
+        AssetReferenceComponent(
+            assetID: jsonToString(d["assetID"]) ?? "",
+            name: jsonToString(d["name"]) ?? "",
+            relativePath: jsonToString(d["relativePath"]) ?? "",
+            absolutePath: jsonToString(d["absolutePath"]) ?? "",
+            kind: jsonToString(d["kind"]) ?? "",
+            meshIndex: jsonToInt(d["meshIndex"]) ?? 0
+        )
+    }
+
+    /// Serializes a particle emitter's configuration only — the live particle pool is
+    /// transient runtime state and is not persisted.
+    private static func serializeParticleEmitter(_ c: ParticleEmitter) -> [String: Any] {
+        [
+            "isEmitting": c.isEmitting,
+            "looping": c.looping,
+            "emissionRate": c.emissionRate,
+            "maxParticles": c.maxParticles,
+            "lifetime": c.lifetime,
+            "lifetimeRandomness": c.lifetimeRandomness,
+            "originOffset": vec3ToJSON(c.originOffset),
+            "spawnRadius": c.spawnRadius,
+            "startVelocity": vec3ToJSON(c.startVelocity),
+            "velocityRandomness": vec3ToJSON(c.velocityRandomness),
+            "gravity": vec3ToJSON(c.gravity),
+            "startSize": c.startSize,
+            "endSize": c.endSize,
+            "startColor": vec4ToJSON(c.startColor),
+            "endColor": vec4ToJSON(c.endColor),
+            "seed": Int(bitPattern: UInt(c.seed)),
+        ]
+    }
+
+    private static func deserializeParticleEmitter(_ d: [String: Any]) -> ParticleEmitter {
+        ParticleEmitter(
+            isEmitting: jsonToBool(d["isEmitting"]) ?? true,
+            looping: jsonToBool(d["looping"]) ?? true,
+            emissionRate: jsonToFloat(d["emissionRate"]) ?? 10,
+            maxParticles: jsonToInt(d["maxParticles"]) ?? 256,
+            lifetime: jsonToFloat(d["lifetime"]) ?? 2,
+            lifetimeRandomness: jsonToFloat(d["lifetimeRandomness"]) ?? 0,
+            originOffset: jsonToFloatArray(d["originOffset"]).flatMap(jsonToVec3) ?? .zero,
+            spawnRadius: jsonToFloat(d["spawnRadius"]) ?? 0,
+            startVelocity: jsonToFloatArray(d["startVelocity"]).flatMap(jsonToVec3) ?? SIMD3<Float>(0, 1, 0),
+            velocityRandomness: jsonToFloatArray(d["velocityRandomness"]).flatMap(jsonToVec3) ?? .zero,
+            gravity: jsonToFloatArray(d["gravity"]).flatMap(jsonToVec3) ?? SIMD3<Float>(0, -9.81, 0),
+            startSize: jsonToFloat(d["startSize"]) ?? 1,
+            endSize: jsonToFloat(d["endSize"]) ?? 0,
+            startColor: jsonToFloatArray(d["startColor"]).flatMap(jsonToVec4) ?? SIMD4<Float>(1, 1, 1, 1),
+            endColor: jsonToFloatArray(d["endColor"]).flatMap(jsonToVec4) ?? SIMD4<Float>(1, 1, 1, 0),
+            seed: UInt64(bitPattern: Int64(jsonToInt(d["seed"]) ?? 0))
+        )
     }
 }
 

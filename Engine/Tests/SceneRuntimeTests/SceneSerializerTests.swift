@@ -309,6 +309,90 @@ struct SceneSerializerTests {
         _ = restored.tick()
         #expect(restored.parent(of: player2!) == ground2)
     }
+
+    // MARK: - Render material
+
+    @Test("round-trip: render material (PBR factors + texture indices)")
+    func renderMaterialRoundTrip() throws {
+        var original = SceneRuntime()
+        let entity = original.createEntity()
+        _ = original.setComponent(
+            RenderMaterialComponent(baseColorFactor: SIMD4<Float>(0.2, 0.4, 0.6, 1),
+                                    baseColorTextureIndex: 7,
+                                    normalTextureIndex: 9,
+                                    metallicFactor: 0.8,
+                                    roughnessFactor: 0.3,
+                                    emissiveFactor: SIMD3<Float>(1, 0, 0)),
+            for: entity
+        )
+
+        let data = try SceneSerializer.serialize(original)
+        var restored = SceneRuntime()
+        try SceneSerializer.deserialize(data, into: &restored)
+
+        let m = restored.component(RenderMaterialComponent.self, for: restored.entities()[0])
+        #expect(m != nil)
+        #expect(m!.baseColorFactor == SIMD4<Float>(0.2, 0.4, 0.6, 1))
+        #expect(m!.baseColorTextureIndex == 7)
+        #expect(m!.normalTextureIndex == 9)
+        #expect(m!.metallicFactor == 0.8)
+        #expect(m!.roughnessFactor == 0.3)
+        #expect(m!.emissiveFactor == SIMD3<Float>(1, 0, 0))
+    }
+
+    // MARK: - Asset reference
+
+    @Test("round-trip: asset reference")
+    func assetReferenceRoundTrip() throws {
+        var original = SceneRuntime()
+        let entity = original.createEntity()
+        _ = original.setComponent(
+            AssetReferenceComponent(assetID: "a1", name: "Barrel", relativePath: "models/barrel.glb",
+                                    absolutePath: "/proj/models/barrel.glb", kind: "mesh", meshIndex: 4),
+            for: entity
+        )
+
+        let data = try SceneSerializer.serialize(original)
+        var restored = SceneRuntime()
+        try SceneSerializer.deserialize(data, into: &restored)
+
+        let a = restored.component(AssetReferenceComponent.self, for: restored.entities()[0])
+        #expect(a == AssetReferenceComponent(assetID: "a1", name: "Barrel", relativePath: "models/barrel.glb",
+                                             absolutePath: "/proj/models/barrel.glb", kind: "mesh", meshIndex: 4))
+    }
+
+    // MARK: - Particle emitter config
+
+    @Test("round-trip: particle emitter configuration")
+    func particleEmitterRoundTrip() throws {
+        var original = SceneRuntime()
+        let entity = original.createEntity()
+        _ = original.setComponent(
+            ParticleEmitter(emissionRate: 33, maxParticles: 128, lifetime: 1.5,
+                            spawnRadius: 0.25, startVelocity: SIMD3<Float>(0, 3, 0),
+                            gravity: SIMD3<Float>(0, -2, 0), startSize: 0.5, endSize: 0.1,
+                            seed: 12345),
+            for: entity
+        )
+
+        let data = try SceneSerializer.serialize(original)
+        var restored = SceneRuntime()
+        try SceneSerializer.deserialize(data, into: &restored)
+
+        let e = restored.component(ParticleEmitter.self, for: restored.entities()[0])
+        #expect(e != nil)
+        #expect(e!.emissionRate == 33)
+        #expect(e!.maxParticles == 128)
+        #expect(e!.lifetime == 1.5)
+        #expect(e!.spawnRadius == 0.25)
+        #expect(e!.startVelocity == SIMD3<Float>(0, 3, 0))
+        #expect(e!.seed == 12345)
+        // Deterministic config restored: same seed + same advance ⇒ same particles.
+        var a = e!; var b = original.component(ParticleEmitter.self, for: original.entities()[0])!
+        a.emit(5); b.emit(5)
+        a.advance(deltaTime: 0.1); b.advance(deltaTime: 0.1)
+        #expect(a.particles == b.particles)
+    }
 }
 
 private func translationMatrix(_ t: SIMD3<Float>) -> simd_float4x4 {
