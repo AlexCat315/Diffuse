@@ -51,6 +51,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
     public let script: EditorSceneManifestScript?
     public let audioSource: EditorSceneManifestAudioSource?
     public let animationPlayer: EditorSceneManifestAnimationPlayer?
+    public let particleEmitter: EditorSceneManifestParticleEmitter?
     public let children: [EditorSceneManifestNode]
 
     public init(id: UInt64,
@@ -68,6 +69,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
                 script: EditorSceneManifestScript? = nil,
                 audioSource: EditorSceneManifestAudioSource? = nil,
                 animationPlayer: EditorSceneManifestAnimationPlayer? = nil,
+                particleEmitter: EditorSceneManifestParticleEmitter? = nil,
                 children: [EditorSceneManifestNode] = []) {
         self.id = id
         self.name = name
@@ -84,6 +86,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.script = script
         self.audioSource = audioSource
         self.animationPlayer = animationPlayer
+        self.particleEmitter = particleEmitter
         self.children = children
     }
 }
@@ -698,6 +701,54 @@ public struct EditorSceneManifestAnimationPlayer: Codable, Sendable, Equatable {
     }
 }
 
+public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
+    public let isEmitting: Bool
+    public let looping: Bool
+    public let emissionRate: Float
+    public let maxParticles: Int
+    public let lifetime: Float
+    public let lifetimeRandomness: Float
+    public let originOffset: EditorSceneManifestVector3
+    public let spawnRadius: Float
+    public let startVelocity: EditorSceneManifestVector3
+    public let velocityRandomness: EditorSceneManifestVector3
+    public let gravity: EditorSceneManifestVector3
+    public let startSize: Float
+    public let endSize: Float
+    public let startColor: EditorSceneManifestVector4
+    public let endColor: EditorSceneManifestVector4
+    public let seed: UInt64
+
+    public init(_ component: ParticleEmitter) {
+        self.isEmitting = component.isEmitting
+        self.looping = component.looping
+        self.emissionRate = component.emissionRate
+        self.maxParticles = component.maxParticles
+        self.lifetime = component.lifetime
+        self.lifetimeRandomness = component.lifetimeRandomness
+        self.originOffset = EditorSceneManifestVector3(component.originOffset)
+        self.spawnRadius = component.spawnRadius
+        self.startVelocity = EditorSceneManifestVector3(component.startVelocity)
+        self.velocityRandomness = EditorSceneManifestVector3(component.velocityRandomness)
+        self.gravity = EditorSceneManifestVector3(component.gravity)
+        self.startSize = component.startSize
+        self.endSize = component.endSize
+        self.startColor = EditorSceneManifestVector4(component.startColor)
+        self.endColor = EditorSceneManifestVector4(component.endColor)
+        self.seed = component.seed
+    }
+
+    var component: ParticleEmitter {
+        ParticleEmitter(isEmitting: isEmitting, looping: looping, emissionRate: emissionRate,
+                        maxParticles: maxParticles, lifetime: lifetime,
+                        lifetimeRandomness: lifetimeRandomness, originOffset: originOffset.simdValue,
+                        spawnRadius: spawnRadius, startVelocity: startVelocity.simdValue,
+                        velocityRandomness: velocityRandomness.simdValue, gravity: gravity.simdValue,
+                        startSize: startSize, endSize: endSize, startColor: startColor.simdValue,
+                        endColor: endColor.simdValue, seed: seed)
+    }
+}
+
 public struct EditorInspectorSection {
     public let id: String
     public let title: String
@@ -847,6 +898,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             if let animationPlayer = node.animationPlayer {
                 _ = restoredScene.setComponent(animationPlayer.component, for: entity)
             }
+            if let particleEmitter = node.particleEmitter {
+                _ = restoredScene.setComponent(particleEmitter.component, for: entity)
+            }
             for child in node.children {
                 let childEntity = restoreNode(child)
                 _ = restoredScene.setParent(entity, for: childEntity)
@@ -991,6 +1045,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 .map(EditorSceneManifestAudioSource.init),
             animationPlayer: scene.component(AnimationPlayer.self, for: entity)
                 .map(EditorSceneManifestAnimationPlayer.init),
+            particleEmitter: scene.component(ParticleEmitter.self, for: entity)
+                .map(EditorSceneManifestParticleEmitter.init),
             children: scene.children(of: entity).map(manifestNode)
         )
     }
