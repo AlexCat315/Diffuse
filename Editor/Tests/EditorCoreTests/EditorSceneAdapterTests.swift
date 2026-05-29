@@ -118,6 +118,44 @@ struct EditorSceneAdapterTests {
         #expect(restoredMaterial?.emissiveFactor == SIMD3<Float>(0.1, 0.2, 0.3))
     }
 
+    @Test("Scene manifest round-trips a particle emitter through JSON")
+    func sceneManifestRoundTripsParticleEmitter() throws {
+        let source = EditorSceneAdapter()
+        guard let hero = flatten(source.roots).first(where: { $0.name == "Hero" }) else {
+            Issue.record("Expected preview scene hero")
+            return
+        }
+        _ = source.scene.setComponent(
+            ParticleEmitter(emissionRate: 24, maxParticles: 64, lifetime: 1.25,
+                            spawnRadius: 0.3, startVelocity: SIMD3<Float>(0, 2, 0),
+                            gravity: SIMD3<Float>(0, -3, 0), startSize: 0.4, endSize: 0.05,
+                            seed: 777),
+            for: entityID(hero.id)
+        )
+
+        let manifest = source.manifest(selectedEntityID: hero.id)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.emissionRate == 24)
+
+        // Survive a full Codable cycle (mirrors how saves persist the manifest).
+        let data = try JSONEncoder().encode(manifest)
+        let decoded = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
+
+        let restored = EditorSceneAdapter()
+        let result = restored.load(manifest: decoded)
+        guard let restoredID = result.selectedEntityID.map(entityID) else {
+            Issue.record("Expected restored selection")
+            return
+        }
+        let e = restored.scene.component(ParticleEmitter.self, for: restoredID)
+        #expect(e != nil)
+        #expect(e!.emissionRate == 24)
+        #expect(e!.maxParticles == 64)
+        #expect(e!.lifetime == 1.25)
+        #expect(e!.spawnRadius == 0.3)
+        #expect(e!.startVelocity == SIMD3<Float>(0, 2, 0))
+        #expect(e!.seed == 777)
+    }
+
     @Test("Resetting preview scene publishes a new revision")
     func resetPreviewScenePublishesRevision() {
         let scene = EditorSceneAdapter()
