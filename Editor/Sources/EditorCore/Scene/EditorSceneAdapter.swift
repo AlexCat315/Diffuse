@@ -989,6 +989,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         if let lightSection = lightSection(for: entity) {
             sections.append(lightSection)
         }
+        if let cameraSection = cameraSection(for: entity) {
+            sections.append(cameraSection)
+        }
         if let scriptSection = scriptSection(for: entity) {
             sections.append(scriptSection)
         }
@@ -1498,6 +1501,62 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             id: "light",
             title: L("Light"),
             fields: fields
+        )
+    }
+
+    private func cameraSection(for entity: EntityID) -> EditorInspectorSection? {
+        guard scene.hasComponent(CameraComponent.self, for: entity) else { return nil }
+        return EditorInspectorSection(
+            id: "camera",
+            title: L("Camera"),
+            fields: [
+                EditorInspectorField(
+                    id: "camera-active",
+                    label: L("Active"),
+                    value: .bool(cameraActiveBinding(for: entity))
+                ),
+                EditorInspectorField(
+                    id: "camera-fov",
+                    label: L("Field of View"),
+                    value: .constrainedNumber(cameraFOVBinding(for: entity),
+                                              min: 1, max: 179, step: 1, showsStepper: true)
+                ),
+            ]
+        )
+    }
+
+    private func cameraActiveBinding(for entity: EntityID) -> Binding<Bool> {
+        Binding(
+            get: { [self] in
+                scene.component(CameraComponent.self, for: entity)?.isActive ?? false
+            },
+            set: { [self] next in
+                guard let cam = scene.component(CameraComponent.self, for: entity),
+                      cam.isActive != next else { return }
+                _ = applySceneTransaction(intentVerb: "scene.set_camera_active",
+                                          summary: "Update camera active",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setCameraActive(entityID: entity.rawValue, isActive: next)])
+            }
+        )
+    }
+
+    /// Field of view exposed in degrees; the component stores radians.
+    private func cameraFOVBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                let radians = scene.component(CameraComponent.self, for: entity)?.fovYRadians ?? (.pi / 4)
+                return radians * 180 / .pi
+            },
+            set: { [self] next in
+                guard let cam = scene.component(CameraComponent.self, for: entity) else { return }
+                let currentDegrees = cam.fovYRadians * 180 / .pi
+                guard abs(currentDegrees - next) > 1e-4 else { return }
+                _ = applySceneTransaction(intentVerb: "scene.set_camera_fov",
+                                          summary: "Update camera field of view",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setCameraFOV(entityID: entity.rawValue, fovYDegrees: next)])
+            }
         )
     }
 
