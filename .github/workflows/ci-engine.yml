@@ -62,3 +62,4 @@ jobs:
           swift test --filter SequenceRuntimeTests
           swift test --filter CardBattleRuntimeTests
           swift test --filter IntentRuntimeTests
+          swift test --filter AIRuntimeTests
