@@ -393,6 +393,58 @@ struct SceneSerializerTests {
         a.advance(deltaTime: 0.1); b.advance(deltaTime: 0.1)
         #expect(a.particles == b.particles)
     }
+
+    // MARK: - Constraint
+
+    @Test("round-trip: constraint reconnects to remapped entities")
+    func constraintRoundTrip() throws {
+        var original = SceneRuntime()
+        let bodyA = original.createEntity()
+        _ = original.setComponent(SceneNameComponent(value: "A"), for: bodyA)
+        let bodyB = original.createEntity()
+        _ = original.setComponent(SceneNameComponent(value: "B"), for: bodyB)
+        _ = original.setComponent(
+            Constraint(constraintType: .hinge, entityA: bodyA, entityB: bodyB,
+                       pivotA: SIMD3<Float>(1, 0, 0), pivotB: SIMD3<Float>(-1, 0, 0),
+                       axisA: SIMD3<Float>(0, 0, 1), axisB: SIMD3<Float>(0, 0, 1),
+                       minLimit: -1.2, maxLimit: 1.2),
+            for: bodyA
+        )
+
+        let data = try SceneSerializer.serialize(original)
+        var restored = SceneRuntime()
+        try SceneSerializer.deserialize(data, into: &restored)
+
+        let a2 = restored.findEntity(named: "A")
+        let b2 = restored.findEntity(named: "B")
+        #expect(a2 != nil && b2 != nil)
+        let c = restored.component(Constraint.self, for: a2!)
+        #expect(c != nil)
+        #expect(c!.constraintType == .hinge)
+        #expect(c!.entityA == a2!)   // remapped to the restored entities, not the originals
+        #expect(c!.entityB == b2!)
+        #expect(c!.pivotA == SIMD3<Float>(1, 0, 0))
+        #expect(c!.minLimit == -1.2)
+        #expect(c!.maxLimit == 1.2)
+    }
+
+    @Test("prefab capture drops a constraint whose endpoint is outside the subtree")
+    func prefabDropsDanglingConstraint() throws {
+        var scene = SceneRuntime()
+        let root = scene.createEntity()
+        _ = scene.setComponent(SceneNameComponent(value: "Root"), for: root)
+        let external = scene.createEntity() // not part of the captured subtree
+        _ = scene.setComponent(
+            Constraint(constraintType: .distance, entityA: root, entityB: external),
+            for: root
+        )
+
+        let prefab = try #require(try Prefab.capture(from: scene, root: root))
+        var target = SceneRuntime()
+        let newRoot = try #require(try prefab.instantiate(into: &target))
+        // The constraint referenced an entity outside the subtree, so it must not survive.
+        #expect(target.component(Constraint.self, for: newRoot) == nil)
+    }
 }
 
 private func translationMatrix(_ t: SIMD3<Float>) -> simd_float4x4 {

@@ -26,11 +26,9 @@ public struct Prefab: Sendable, Equatable {
         var indexMap: [EntityID: Int] = [:]
         for (i, entity) in ordered.enumerated() { indexMap[entity] = i }
 
-        let entityList = ordered.map { entity -> [String: Any] in
-            // Only retain the parent link when the parent is captured too; the root drops it.
-            let parentIdx = scene.component(Parent.self, for: entity).flatMap { indexMap[$0.entity] }
-            return SceneSerializer.encodeEntity(entity, in: scene, parentIndex: parentIdx)
-        }
+        // Cross-references (parent, constraint endpoints) outside the captured subtree are
+        // dropped automatically since they are absent from `indexMap`.
+        let entityList = ordered.map { SceneSerializer.encodeEntity($0, in: scene, entityIndexMap: indexMap) }
 
         let json: [String: Any] = ["version": SceneSerializer.prefabVersion, "entities": entityList]
         let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
