@@ -105,6 +105,14 @@ let package = Package(
                 .product(name: "SIMDCompat", package: "Engine"),
             ]
         ),
+
+        .testTarget(
+            name: "EditorAppTests",
+            dependencies: [
+                "EditorApp",
+                "EditorCore",
+            ]
+        ),
     ],
     cxxLanguageStandard: .cxx17
 )
