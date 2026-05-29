@@ -104,6 +104,7 @@ let package = Package(
                 "EditorCore",
                 .product(name: "SIMDCompat", package: "Engine"),
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
+                .product(name: "GuavaUIRuntime", package: "GuavaUI"),
             ]
         ),
 
