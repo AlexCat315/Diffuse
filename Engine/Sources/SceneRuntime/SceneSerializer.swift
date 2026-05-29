@@ -28,85 +28,71 @@ private func jsonToFloatArray(_ val: Any?) -> [Float]? {
 public enum SceneSerializer {
     private static let currentVersion = 1
 
+    /// Document version stamped into captured prefabs. Shares the scene format.
+    static let prefabVersion = currentVersion
+
     // MARK: Save
 
     public static func serialize(_ scene: SceneRuntime) throws -> Data {
-        var json: [String: Any] = ["version": currentVersion]
-
         let entities = scene.entities()
-        var entityList: [[String: Any]] = []
         var entityIndexMap: [EntityID: Int] = [:]
         for (i, entity) in entities.enumerated() {
             entityIndexMap[entity] = i
         }
+        let entityList = entities.map { entity -> [String: Any] in
+            let parentIdx = scene.component(Parent.self, for: entity).flatMap { entityIndexMap[$0.entity] }
+            return encodeEntity(entity, in: scene, parentIndex: parentIdx)
+        }
+        let json: [String: Any] = ["version": currentVersion, "entities": entityList]
+        return try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
+    }
 
-        for entity in entities {
-            var obj: [String: Any] = [:]
+    /// Encodes one entity to a JSON dictionary. `parentIndex`, when non-nil, is the
+    /// position of the parent within the encoded entity list (cross-references are by
+    /// index, never `EntityID`, so the document is relocatable).
+    static func encodeEntity(_ entity: EntityID, in scene: SceneRuntime, parentIndex: Int?) -> [String: Any] {
+        var obj: [String: Any] = [:]
 
-            // Name / kind
-            if let name = scene.component(SceneNameComponent.self, for: entity) {
-                obj["name"] = name.value
-            }
-            if let kind = scene.component(SceneKindComponent.self, for: entity) {
-                obj["kind"] = kind.value
-            }
-
-            // Parent (store index, not EntityID)
-            if let parent = scene.component(Parent.self, for: entity),
-               let parentIdx = entityIndexMap[parent.entity] {
-                obj["parent"] = parentIdx
-            }
-
-            // Transform — encode as two arrays: translation + rotation + scale
-            if let t = scene.component(LocalTransform.self, for: entity) {
-                let translation = SIMD3<Float>(t.matrix.columns.3.x, t.matrix.columns.3.y, t.matrix.columns.3.z)
-                let c0 = SIMD3<Float>(t.matrix.columns.0.x, t.matrix.columns.0.y, t.matrix.columns.0.z)
-                let c1 = SIMD3<Float>(t.matrix.columns.1.x, t.matrix.columns.1.y, t.matrix.columns.1.z)
-                let c2 = SIMD3<Float>(t.matrix.columns.2.x, t.matrix.columns.2.y, t.matrix.columns.2.z)
-                let sx = simd_length(c0); let sy = simd_length(c1); let sz = simd_length(c2)
-                let r = simd_float3x3(columns: (c0 / (sx > 1e-6 ? sx : 1),
-                                                c1 / (sy > 1e-6 ? sy : 1),
-                                                c2 / (sz > 1e-6 ? sz : 1)))
-                let quat = simd_quatf(r)
-                obj["translation"] = vec3ToJSON(translation)
-                obj["rotation"] = vec4ToJSON(quat.vector)
-                obj["scale"] = vec3ToJSON(SIMD3<Float>(sx, sy, sz))
-            }
-
-            // Components
-            var comps: [String: Any] = [:]
-
-            if let c = scene.component(RigidBody.self, for: entity) {
-                comps["rigidbody"] = serializeRigidBody(c)
-            }
-            if let c = scene.component(Collider.self, for: entity) {
-                comps["collider"] = serializeCollider(c)
-            }
-            if let c = scene.component(RenderMeshComponent.self, for: entity) {
-                comps["renderMesh"] = serializeRenderMesh(c)
-            }
-            if let c = scene.component(CameraComponent.self, for: entity) {
-                comps["camera"] = serializeCamera(c)
-            }
-            if let c = scene.component(LightComponent.self, for: entity) {
-                comps["light"] = serializeLight(c)
-            }
-            if let c = scene.component(AudioSource.self, for: entity) {
-                comps["audioSource"] = serializeAudioSource(c)
-            }
-            if let c = scene.component(AnimationPlayer.self, for: entity) {
-                comps["animationPlayer"] = serializeAnimationPlayer(c)
-            }
-            if let c = scene.component(AudioListener.self, for: entity) {
-                comps["audioListener"] = serializeAudioListener(c)
-            }
-
-            if !comps.isEmpty { obj["components"] = comps }
-            entityList.append(obj)
+        // Name / kind
+        if let name = scene.component(SceneNameComponent.self, for: entity) {
+            obj["name"] = name.value
+        }
+        if let kind = scene.component(SceneKindComponent.self, for: entity) {
+            obj["kind"] = kind.value
         }
 
-        json["entities"] = entityList
-        return try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
+        // Parent (store index, not EntityID)
+        if let parentIndex { obj["parent"] = parentIndex }
+
+        // Transform — decompose into translation + rotation + scale
+        if let t = scene.component(LocalTransform.self, for: entity) {
+            let translation = SIMD3<Float>(t.matrix.columns.3.x, t.matrix.columns.3.y, t.matrix.columns.3.z)
+            let c0 = SIMD3<Float>(t.matrix.columns.0.x, t.matrix.columns.0.y, t.matrix.columns.0.z)
+            let c1 = SIMD3<Float>(t.matrix.columns.1.x, t.matrix.columns.1.y, t.matrix.columns.1.z)
+            let c2 = SIMD3<Float>(t.matrix.columns.2.x, t.matrix.columns.2.y, t.matrix.columns.2.z)
+            let sx = simd_length(c0); let sy = simd_length(c1); let sz = simd_length(c2)
+            let r = simd_float3x3(columns: (c0 / (sx > 1e-6 ? sx : 1),
+                                            c1 / (sy > 1e-6 ? sy : 1),
+                                            c2 / (sz > 1e-6 ? sz : 1)))
+            let quat = simd_quatf(r)
+            obj["translation"] = vec3ToJSON(translation)
+            obj["rotation"] = vec4ToJSON(quat.vector)
+            obj["scale"] = vec3ToJSON(SIMD3<Float>(sx, sy, sz))
+        }
+
+        // Components
+        var comps: [String: Any] = [:]
+        if let c = scene.component(RigidBody.self, for: entity) { comps["rigidbody"] = serializeRigidBody(c) }
+        if let c = scene.component(Collider.self, for: entity) { comps["collider"] = serializeCollider(c) }
+        if let c = scene.component(RenderMeshComponent.self, for: entity) { comps["renderMesh"] = serializeRenderMesh(c) }
+        if let c = scene.component(CameraComponent.self, for: entity) { comps["camera"] = serializeCamera(c) }
+        if let c = scene.component(LightComponent.self, for: entity) { comps["light"] = serializeLight(c) }
+        if let c = scene.component(AudioSource.self, for: entity) { comps["audioSource"] = serializeAudioSource(c) }
+        if let c = scene.component(AnimationPlayer.self, for: entity) { comps["animationPlayer"] = serializeAnimationPlayer(c) }
+        if let c = scene.component(AudioListener.self, for: entity) { comps["audioListener"] = serializeAudioListener(c) }
+        if !comps.isEmpty { obj["components"] = comps }
+
+        return obj
     }
 
     // MARK: Load
@@ -115,74 +101,67 @@ public enum SceneSerializer {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let entities = jsonToArray(json["entities"])
         else { throw SceneSerializerError.invalidFormat }
+        _ = loadEntities(entities, into: &scene)
+    }
 
+    /// Creates one entity from a JSON dictionary and applies its transform and components.
+    /// Parent wiring is the caller's responsibility (entities must exist first).
+    @discardableResult
+    static func decodeEntity(_ obj: [String: Any], into scene: inout SceneRuntime) -> EntityID {
+        let entity = scene.createEntity()
+
+        if let name = jsonToString(obj["name"]) {
+            _ = scene.setComponent(SceneNameComponent(value: name), for: entity)
+        }
+        if let kind = jsonToString(obj["kind"]) {
+            _ = scene.setComponent(SceneKindComponent(value: kind), for: entity)
+        }
+
+        let translation = jsonToFloatArray(obj["translation"]).flatMap(jsonToVec3) ?? .zero
+        let rotationVec = jsonToFloatArray(obj["rotation"]).flatMap(jsonToVec4) ?? SIMD4<Float>(0, 0, 0, 1)
+        let scale = jsonToFloatArray(obj["scale"]).flatMap(jsonToVec3) ?? SIMD3<Float>(repeating: 1)
+        let quat = simd_quatf(vector: rotationVec)
+        let m = simd_float4x4(quat)
+        let s = simd_float4x4(diagonal: SIMD4<Float>(scale.x, scale.y, scale.z, 1))
+        var matrix = s * m
+        matrix.columns.3 = SIMD4<Float>(translation.x, translation.y, translation.z, 1)
+        _ = scene.setLocalTransform(LocalTransform(matrix: matrix), for: entity)
+
+        guard let comps = jsonToDict(obj["components"]) else { return entity }
+        if let c = jsonToDict(comps["rigidbody"]) { _ = scene.setComponent(deserializeRigidBody(c), for: entity) }
+        if let c = jsonToDict(comps["collider"]) { _ = scene.setComponent(deserializeCollider(c), for: entity) }
+        if let c = jsonToDict(comps["renderMesh"]) { _ = scene.setComponent(deserializeRenderMesh(c), for: entity) }
+        if let c = jsonToDict(comps["camera"]) { _ = scene.setComponent(deserializeCamera(c), for: entity) }
+        if let c = jsonToDict(comps["light"]) { _ = scene.setComponent(deserializeLight(c), for: entity) }
+        if let c = jsonToDict(comps["audioSource"]) { _ = scene.setComponent(deserializeAudioSource(c), for: entity) }
+        if let c = jsonToDict(comps["animationPlayer"]) { _ = scene.setComponent(deserializeAnimationPlayer(c), for: entity) }
+        if let c = jsonToDict(comps["audioListener"]) { _ = scene.setComponent(deserializeAudioListener(c), for: entity) }
+        return entity
+    }
+
+    /// Creates every entity in `entities`, wires deferred parent links, and returns the
+    /// created entities aligned to the input order (the index used by `parent` fields).
+    @discardableResult
+    static func loadEntities(_ entities: [Any], into scene: inout SceneRuntime) -> [EntityID] {
         var entityMap: [Int: EntityID] = [:]
         var pendingParents: [(child: EntityID, parentIdx: Int)] = []
 
         for (i, raw) in entities.enumerated() {
             guard let obj = jsonToDict(raw) else { continue }
-            let entity = scene.createEntity()
+            let entity = decodeEntity(obj, into: &scene)
             entityMap[i] = entity
-
-            // Name / kind
-            if let name = jsonToString(obj["name"]) {
-                _ = scene.setComponent(SceneNameComponent(value: name), for: entity)
-            }
-            if let kind = jsonToString(obj["kind"]) {
-                _ = scene.setComponent(SceneKindComponent(value: kind), for: entity)
-            }
-
-            // Parent (deferred until all entities are created)
             if let parentIdx = jsonToInt(obj["parent"]) {
                 pendingParents.append((entity, parentIdx))
             }
-
-            // Transform
-            let translation = jsonToFloatArray(obj["translation"]).flatMap(jsonToVec3) ?? .zero
-            let rotationVec = jsonToFloatArray(obj["rotation"]).flatMap(jsonToVec4) ?? SIMD4<Float>(0, 0, 0, 1)
-            let scale = jsonToFloatArray(obj["scale"]).flatMap(jsonToVec3) ?? SIMD3<Float>(repeating: 1)
-            let quat = simd_quatf(vector: rotationVec)
-            let m = simd_float4x4(quat)
-            let s = simd_float4x4(diagonal: SIMD4<Float>(scale.x, scale.y, scale.z, 1))
-            var matrix = s * m
-            matrix.columns.3 = SIMD4<Float>(translation.x, translation.y, translation.z, 1)
-            _ = scene.setLocalTransform(LocalTransform(matrix: matrix), for: entity)
-
-            // Components
-            guard let comps = jsonToDict(obj["components"]) else { continue }
-
-            if let c = jsonToDict(comps["rigidbody"]) {
-                _ = scene.setComponent(deserializeRigidBody(c), for: entity)
-            }
-            if let c = jsonToDict(comps["collider"]) {
-                _ = scene.setComponent(deserializeCollider(c), for: entity)
-            }
-            if let c = jsonToDict(comps["renderMesh"]) {
-                _ = scene.setComponent(deserializeRenderMesh(c), for: entity)
-            }
-            if let c = jsonToDict(comps["camera"]) {
-                _ = scene.setComponent(deserializeCamera(c), for: entity)
-            }
-            if let c = jsonToDict(comps["light"]) {
-                _ = scene.setComponent(deserializeLight(c), for: entity)
-            }
-            if let c = jsonToDict(comps["audioSource"]) {
-                _ = scene.setComponent(deserializeAudioSource(c), for: entity)
-            }
-            if let c = jsonToDict(comps["animationPlayer"]) {
-                _ = scene.setComponent(deserializeAnimationPlayer(c), for: entity)
-            }
-            if let c = jsonToDict(comps["audioListener"]) {
-                _ = scene.setComponent(deserializeAudioListener(c), for: entity)
-            }
         }
 
-        // Apply deferred parent relationships
         for (child, parentIdx) in pendingParents {
             if let parent = entityMap[parentIdx] {
                 _ = scene.setParent(parent, for: child)
             }
         }
+
+        return entities.indices.compactMap { entityMap[$0] }
     }
 
     // MARK: - Component serializers
