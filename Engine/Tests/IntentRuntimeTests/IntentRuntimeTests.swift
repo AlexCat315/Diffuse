@@ -103,6 +103,53 @@ struct IntentRuntimeTests {
         #expect(updated.bindings == [next])
     }
 
+    @Test("scene transactions set a particle emitter component")
+    func sceneTransactionsSetParticleEmitter() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(ParticleEmitter(emissionRate: 10), for: entity)
+
+        let emitter = ParticleEmitter(emissionRate: 55, maxParticles: 200, lifetime: 3, seed: 99)
+        let transaction = TransactionIR(
+            intent: IntentIR(verb: "scene.set_particle_emitter", summary: "Update emitter", source: .human),
+            summary: "Update emitter",
+            operations: [.scene(.setParticleEmitter(entityID: entity.rawValue, emitter: emitter))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let applied = try executor.apply(transaction, to: &context)
+        let updated = try #require(context.sceneRuntime?.component(ParticleEmitter.self, for: entity))
+
+        #expect(applied.changedDomains == [.scene])
+        #expect(updated.emissionRate == 55)
+        #expect(updated.maxParticles == 200)
+        #expect(updated.seed == 99)
+    }
+
+    @Test("scene transactions set an audio listener master volume")
+    func sceneTransactionsSetAudioListener() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(AudioListener(masterVolume: 1), for: entity)
+
+        let transaction = TransactionIR(
+            intent: IntentIR(verb: "scene.set_audio_listener", summary: "Update listener", source: .human),
+            summary: "Update listener",
+            operations: [.scene(.setAudioListener(entityID: entity.rawValue, masterVolume: 0.3))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let applied = try executor.apply(transaction, to: &context)
+        let updated = try #require(context.sceneRuntime?.component(AudioListener.self, for: entity))
+
+        #expect(applied.changedDomains == [.scene])
+        #expect(updated.masterVolume == 0.3)
+    }
+
     @Test("scene transactions update rigid body inspector fields")
     func sceneTransactionsUpdateRigidBodyInspectorFields() throws {
         let executor = TransactionExecutor()
