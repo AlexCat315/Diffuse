@@ -556,27 +556,23 @@ public actor Session {
 
     private func streamOneTurn(extraMessages: [[String: Any]],
                                onProgress: @escaping @Sendable (String) -> Void) async throws -> RawToolCall {
-        var body = requestBody(extraMessages: extraMessages)
-        body["stream"] = true
+        let request = try makeInferenceRequest(body: requestBody(extraMessages: extraMessages), stream: true)
 
-        var request = URLRequest(url: inferenceEndpoint, timeoutInterval: config.timeoutInterval)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        switch config.apiFormat {
-        case .anthropic:
-            request.setValue(config.apiKey, forHTTPHeaderField: "x-api-key")
-            request.setValue(Self.anthropicAPIVersion, forHTTPHeaderField: "anthropic-version")
-        case .openAICompatible:
-            request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
-        }
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-
-        let (stream, response) = try await urlSession.bytes(for: request)
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            var errData = Data()
-            for try await byte in stream { errData.append(byte) }
-            throw SessionError.httpError(statusCode: http.statusCode,
-                                         body: String(data: errData, encoding: .utf8))
+        // Retry only the connect + status-check phase; once a 2xx stream is open we consume it.
+        let stream = try await withRetry { _ -> URLSession.AsyncBytes in
+            let (stream, response) = try await urlSession.bytes(for: request)
+            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                var errData = Data()
+                for try await byte in stream { errData.append(byte) }
+                let bodyText = String(data: errData, encoding: .utf8)
+                if RetryPolicy.isRetryable(statusCode: http.statusCode) {
+                    throw TransientHTTPError(statusCode: http.statusCode,
+                                             retryAfter: Self.retryAfter(from: http),
+                                             body: bodyText)
+                }
+                throw SessionError.httpError(statusCode: http.statusCode, body: bodyText)
+            }
+            return stream
         }
 
         var toolUseID = ""
@@ -1035,8 +1031,27 @@ public actor Session {
     // MARK: - HTTP
 
     private func post(_ body: [String: Any]) async throws -> Data {
-        var request = URLRequest(url: inferenceEndpoint,
-                                 timeoutInterval: config.timeoutInterval)
+        let request = try makeInferenceRequest(body: body, stream: false)
+        return try await withRetry { _ in
+            let (data, response) = try await urlSession.data(for: request)
+            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                let bodyText = String(data: data, encoding: .utf8)
+                if RetryPolicy.isRetryable(statusCode: http.statusCode) {
+                    throw TransientHTTPError(statusCode: http.statusCode,
+                                             retryAfter: Self.retryAfter(from: http),
+                                             body: bodyText)
+                }
+                throw SessionError.httpError(statusCode: http.statusCode, body: bodyText)
+            }
+            return data
+        }
+    }
+
+    /// Builds the inference request shared by streaming and non-streaming paths.
+    private func makeInferenceRequest(body: [String: Any], stream: Bool) throws -> URLRequest {
+        var body = body
+        if stream { body["stream"] = true }
+        var request = URLRequest(url: inferenceEndpoint, timeoutInterval: config.timeoutInterval)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         switch config.apiFormat {
@@ -1047,12 +1062,63 @@ public actor Session {
             request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
         }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, response) = try await urlSession.data(for: request)
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw SessionError.httpError(statusCode: http.statusCode,
-                                         body: String(data: data, encoding: .utf8))
+        return request
+    }
+
+    /// Internal transient-failure marker carrying the data needed to schedule a retry.
+    private struct TransientHTTPError: Error {
+        let statusCode: Int
+        let retryAfter: TimeInterval?
+        let body: String?
+    }
+
+    /// Runs `operation`, retrying transient HTTP and network failures per `config.retryPolicy`
+    /// with exponential backoff (honoring `Retry-After`). Non-transient errors propagate
+    /// immediately; once retries are exhausted a transient failure surfaces as `httpError`.
+    private func withRetry<T>(_ operation: (_ attempt: Int) async throws -> T) async throws -> T {
+        let policy = config.retryPolicy
+        var attempt = 0
+        while true {
+            do {
+                return try await operation(attempt)
+            } catch let error as TransientHTTPError {
+                guard attempt < policy.maxRetries else {
+                    throw SessionError.httpError(statusCode: error.statusCode, body: error.body)
+                }
+                try await backoff(policy: policy, attempt: attempt, retryAfter: error.retryAfter)
+                attempt += 1
+            } catch let error as URLError where Self.isRetryable(urlError: error) {
+                guard attempt < policy.maxRetries else { throw error }
+                try await backoff(policy: policy, attempt: attempt, retryAfter: nil)
+                attempt += 1
+            }
         }
-        return data
+    }
+
+    private func backoff(policy: RetryPolicy, attempt: Int, retryAfter: TimeInterval?) async throws {
+        let delay = policy.delay(forAttempt: attempt, retryAfter: retryAfter,
+                                 randomUnit: Double.random(in: 0...1))
+        if delay > 0 {
+            try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+        }
+    }
+
+    /// Parses a `Retry-After` header expressed in seconds. HTTP-date forms are ignored
+    /// (backoff falls through to the exponential schedule).
+    private static func retryAfter(from response: HTTPURLResponse) -> TimeInterval? {
+        guard let raw = response.value(forHTTPHeaderField: "Retry-After"),
+              let seconds = TimeInterval(raw.trimmingCharacters(in: .whitespaces)) else { return nil }
+        return seconds
+    }
+
+    private static func isRetryable(urlError: URLError) -> Bool {
+        switch urlError.code {
+        case .timedOut, .networkConnectionLost, .cannotConnectToHost,
+             .cannotFindHost, .dnsLookupFailed, .badServerResponse:
+            return true
+        default:
+            return false
+        }
     }
 
     // MARK: - Agentic loop helpers
