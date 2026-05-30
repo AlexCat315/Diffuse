@@ -233,7 +233,13 @@ let package = Package(
         .target(name: "CardBattleRuntime"),
         .target(
             name: "AudioRuntime",
-            dependencies: ["SceneRuntime"],
+            dependencies: [
+                "SIMDCompat",
+                "SceneRuntime",
+                // SDL3 audio backend (used on non-Apple platforms; the source file
+                // is gated to `!canImport(AVFoundation)` so it never builds on macOS).
+                "CSDL3",
+            ],
             linkerSettings: [
                 .linkedFramework("AVFoundation", .when(platforms: [.macOS])),
                 .linkedFramework("AudioToolbox", .when(platforms: [.macOS])),
@@ -400,6 +406,14 @@ let package = Package(
             dependencies: [
                 "SIMDCompat",
                 "AssetPipeline",
+            ]
+        ),
+        .testTarget(
+            name: "AudioRuntimeTests",
+            dependencies: [
+                "SIMDCompat",
+                "SceneRuntime",
+                "AudioRuntime",
             ]
         ),
         .testTarget(
