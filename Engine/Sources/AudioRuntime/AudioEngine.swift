@@ -33,16 +33,14 @@ public final class AudioEngine: @unchecked Sendable {
         self.init(backend: AudioEngine.makeDefaultBackend())
     }
 
-    /// Pick the strongest backend the current platform can offer.
+    /// SDL3 is the audio backend on every platform — it is already a core engine
+    /// dependency (windowing / input), so there is no need for an Apple-only
+    /// path. Falls back to silence only if no audio device can be opened.
     static func makeDefaultBackend() -> AudioBackend {
-        #if canImport(AVFoundation)
-        return AVFoundationAudioBackend()
-        #elseif canImport(CSDL3)
+        #if canImport(CSDL3)
         if let sdl = SDL3AudioBackend() { return sdl }
-        return SilentAudioBackend()
-        #else
-        return SilentAudioBackend()
         #endif
+        return SilentAudioBackend()
     }
 
     // MARK: - Clip loading

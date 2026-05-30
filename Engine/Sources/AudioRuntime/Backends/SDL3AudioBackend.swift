@@ -1,12 +1,12 @@
-// SDL3 audio sink — the cross-platform backend used where AVFoundation is not
-// available (Windows / Linux). Gated to non-Apple so it never participates in
-// the macOS build and cannot affect that toolchain.
+// SDL3 audio sink — the single cross-platform audio backend, used on every
+// platform (SDL3 is already a core dependency for windowing/input, so there is
+// no reason to keep an Apple-only AVFoundation path).
 //
-// First cut: WAV playback via `SDL_LoadWAV`. Each voice is its own
-// `SDL_AudioStream` bound to the default playback device; SDL mixes the bound
-// streams. Looping is driven from `pump()`. mp3/ogg decoding is a follow-up
-// (needs a decoder bridge); unsupported files simply fail to load.
-#if !canImport(AVFoundation) && canImport(CSDL3)
+// WAV playback via `SDL_LoadWAV`. Each voice is its own `SDL_AudioStream` bound
+// to the default playback device; SDL mixes the bound streams. Looping is driven
+// from `pump()`. mp3/ogg decoding is a follow-up (needs a decoder bridge);
+// unsupported files simply fail to load.
+#if canImport(CSDL3)
 import Foundation
 import CSDL3
 

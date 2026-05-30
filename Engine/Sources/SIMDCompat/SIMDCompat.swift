@@ -61,6 +61,16 @@ public func simd_length_squared(_ v: SIMD2<Float>) -> Float { (v * v).sum() }
 public func simd_length_squared(_ v: SIMD3<Float>) -> Float { (v * v).sum() }
 public func simd_length_squared(_ v: SIMD4<Float>) -> Float { (v * v).sum() }
 
+public func simd_distance(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float { simd_length(a - b) }
+public func simd_distance(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> Float { simd_length(a - b) }
+public func simd_distance(_ a: SIMD4<Float>, _ b: SIMD4<Float>) -> Float { simd_length(a - b) }
+public func distance(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float { simd_length(a - b) }
+public func distance(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> Float { simd_length(a - b) }
+public func distance(_ a: SIMD4<Float>, _ b: SIMD4<Float>) -> Float { simd_length(a - b) }
+public func simd_distance_squared(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float { simd_length_squared(a - b) }
+public func simd_distance_squared(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> Float { simd_length_squared(a - b) }
+public func simd_distance_squared(_ a: SIMD4<Float>, _ b: SIMD4<Float>) -> Float { simd_length_squared(a - b) }
+
 public func simd_normalize(_ v: SIMD2<Float>) -> SIMD2<Float> {
     let len = simd_length(v); return len > 0 ? v / len : v
 }
@@ -97,6 +107,11 @@ public struct simd_float4x4: Sendable {
             SIMD4<Float>(0, 0, d.z, 0),
             SIMD4<Float>(0, 0, 0, d.w)
         )
+    }
+
+    /// Scalar on the diagonal — matches Apple simd's `simd_float4x4(_ scalar)`.
+    public init(_ scalar: Float) {
+        self.init(diagonal: SIMD4<Float>(scalar, scalar, scalar, scalar))
     }
 
     // rows: each element is a row of the matrix; storage is column-major
@@ -236,6 +251,11 @@ public struct simd_float3x3: Sendable {
             SIMD3<Float>(0, d.y, 0),
             SIMD3<Float>(0, 0, d.z)
         )
+    }
+
+    /// Scalar on the diagonal — matches Apple simd's `simd_float3x3(_ scalar)`.
+    public init(_ scalar: Float) {
+        self.init(diagonal: SIMD3<Float>(scalar, scalar, scalar))
     }
 
     // Extract upper-left 3x3 from a 4x4

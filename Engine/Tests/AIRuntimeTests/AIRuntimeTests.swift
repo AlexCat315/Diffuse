@@ -1,10 +1,14 @@
 @testable import AIRuntime
+import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking   // URLSession lives here on non-Apple platforms
+#endif
 import ContextMemory
 import IntentRuntime
 import PerceptionRuntime
 import SceneRuntime
 import ScriptRuntime
-import simd
+import SIMDCompat
 import XCTest
 
 final class AIRuntimeTests: XCTestCase {
