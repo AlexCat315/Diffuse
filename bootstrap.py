@@ -99,8 +99,21 @@ install_prefix = str(Path(tempfile.gettempdir()) / "guava-native-install")
 
 print("\n── Engine ───────────────────────────────────────────────────────────")
 shell(cmake, "-S", engine_src, "-B", engine_bld, "-DCMAKE_BUILD_TYPE=Release")
-shell(cmake, "--build", engine_bld, "--parallel")
-shell(cmake, "--install", engine_bld, "--prefix", install_prefix)
+# `--config Release` is required by multi-config generators (Visual Studio):
+# they ignore CMAKE_BUILD_TYPE and otherwise default to Debug, which both
+# mismatches the Release-only Jolt config defines and triggers MSVC's parallel
+# PDB server (C1090) on the static-lib builds. Harmless on single-config
+# generators (Ninja/Make on macOS/Linux).
+shell(cmake, "--build", engine_bld, "--parallel", "--config", "Release")
+# stage_image_decode is not in the default ALL target, so the blanket build
+# above skips it. stage_sdl3 (ALL) already pulled SDL3-static in, but build it
+# explicitly too so SDL3-static exists before `--install` copies it into the
+# artifactbundle. Both are top-level custom targets, so `--target` resolves on
+# every generator (the Visual Studio generator cannot build the subdirectory
+# `SDL3-static` target directly). Mirrors .github/workflows/ci-engine.yml.
+shell(cmake, "--build", engine_bld, "--parallel", "--config", "Release", "--target", "stage_sdl3")
+shell(cmake, "--build", engine_bld, "--parallel", "--config", "Release", "--target", "stage_image_decode")
+shell(cmake, "--install", engine_bld, "--prefix", install_prefix, "--config", "Release")
 
 # ── GuavaUI ───────────────────────────────────────────────────────────────────
 
@@ -109,7 +122,7 @@ guava_bld = str(root / "GuavaUI" / "build" / "native")
 
 print("\n── GuavaUI ──────────────────────────────────────────────────────────")
 shell(cmake, "-S", guava_src, "-B", guava_bld, "-DCMAKE_BUILD_TYPE=Release")
-shell(cmake, "--build", guava_bld, "--parallel")
-shell(cmake, "--install", guava_bld, "--prefix", install_prefix)
+shell(cmake, "--build", guava_bld, "--parallel", "--config", "Release")
+shell(cmake, "--install", guava_bld, "--prefix", install_prefix, "--config", "Release")
 
 print("\nDone. Run: swift build --package-path Editor")
