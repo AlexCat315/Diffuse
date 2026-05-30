@@ -1,3 +1,6 @@
+// Fixtures are generated with CoreGraphics/ImageIO (Apple-only). Guarded until
+// image decoding is portable (stb_image); see ImageAssetDecoder.
+#if canImport(CoreGraphics)
 import AssetPipeline
 import CoreGraphics
 import Foundation
@@ -153,3 +156,4 @@ struct ImageAssetDecoderTests {
         return output as Data
     }
 }
+#endif

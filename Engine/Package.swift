@@ -236,14 +236,8 @@ let package = Package(
             dependencies: [
                 "SIMDCompat",
                 "SceneRuntime",
-                // SDL3 audio backend (used on non-Apple platforms; the source file
-                // is gated to `!canImport(AVFoundation)` so it never builds on macOS).
+                // SDL3 is the single audio backend on every platform.
                 "CSDL3",
-            ],
-            linkerSettings: [
-                .linkedFramework("AVFoundation", .when(platforms: [.macOS])),
-                .linkedFramework("AudioToolbox", .when(platforms: [.macOS])),
-                .linkedFramework("CoreAudio", .when(platforms: [.macOS])),
             ]
         ),
         .target(
@@ -469,6 +463,7 @@ let package = Package(
                 "IntentRuntime",
                 "PerceptionRuntime",
                 "ScriptRuntime",
+                "SIMDCompat",
             ]
         ),
         .testTarget(
