@@ -17,7 +17,15 @@ public func simd_max(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> SIMD2<Float> { poi
 public func simd_max(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> SIMD3<Float> { pointwiseMax(a, b) }
 public func simd_max(_ a: SIMD4<Float>, _ b: SIMD4<Float>) -> SIMD4<Float> { pointwiseMax(a, b) }
 
+public func simd_clamp(_ x: Float, _ lo: Float, _ hi: Float) -> Float { Swift.min(Swift.max(x, lo), hi) }
+public func simd_clamp(_ x: Double, _ lo: Double, _ hi: Double) -> Double { Swift.min(Swift.max(x, lo), hi) }
+public func simd_clamp(_ x: SIMD2<Float>, _ lo: SIMD2<Float>, _ hi: SIMD2<Float>) -> SIMD2<Float> {
+    simd_min(simd_max(x, lo), hi)
+}
 public func simd_clamp(_ x: SIMD3<Float>, _ lo: SIMD3<Float>, _ hi: SIMD3<Float>) -> SIMD3<Float> {
+    simd_min(simd_max(x, lo), hi)
+}
+public func simd_clamp(_ x: SIMD4<Float>, _ lo: SIMD4<Float>, _ hi: SIMD4<Float>) -> SIMD4<Float> {
     simd_min(simd_max(x, lo), hi)
 }
 
@@ -52,6 +60,16 @@ public func length(_ v: SIMD4<Float>) -> Float { simd_length(v) }
 public func simd_length_squared(_ v: SIMD2<Float>) -> Float { (v * v).sum() }
 public func simd_length_squared(_ v: SIMD3<Float>) -> Float { (v * v).sum() }
 public func simd_length_squared(_ v: SIMD4<Float>) -> Float { (v * v).sum() }
+
+public func simd_distance(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float { simd_length(a - b) }
+public func simd_distance(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> Float { simd_length(a - b) }
+public func simd_distance(_ a: SIMD4<Float>, _ b: SIMD4<Float>) -> Float { simd_length(a - b) }
+public func distance(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float { simd_length(a - b) }
+public func distance(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> Float { simd_length(a - b) }
+public func distance(_ a: SIMD4<Float>, _ b: SIMD4<Float>) -> Float { simd_length(a - b) }
+public func simd_distance_squared(_ a: SIMD2<Float>, _ b: SIMD2<Float>) -> Float { simd_length_squared(a - b) }
+public func simd_distance_squared(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> Float { simd_length_squared(a - b) }
+public func simd_distance_squared(_ a: SIMD4<Float>, _ b: SIMD4<Float>) -> Float { simd_length_squared(a - b) }
 
 public func simd_normalize(_ v: SIMD2<Float>) -> SIMD2<Float> {
     let len = simd_length(v); return len > 0 ? v / len : v
@@ -89,6 +107,11 @@ public struct simd_float4x4: Sendable {
             SIMD4<Float>(0, 0, d.z, 0),
             SIMD4<Float>(0, 0, 0, d.w)
         )
+    }
+
+    /// Scalar on the diagonal — matches Apple simd's `simd_float4x4(_ scalar)`.
+    public init(_ scalar: Float) {
+        self.init(diagonal: SIMD4<Float>(scalar, scalar, scalar, scalar))
     }
 
     // rows: each element is a row of the matrix; storage is column-major
@@ -230,6 +253,11 @@ public struct simd_float3x3: Sendable {
         )
     }
 
+    /// Scalar on the diagonal — matches Apple simd's `simd_float3x3(_ scalar)`.
+    public init(_ scalar: Float) {
+        self.init(diagonal: SIMD3<Float>(scalar, scalar, scalar))
+    }
+
     // Extract upper-left 3x3 from a 4x4
     public init(_ m: simd_float4x4) {
         columns = (
@@ -345,6 +373,28 @@ public struct simd_quatf: Sendable {
             normalizedAxis.x * s, normalizedAxis.y * s, normalizedAxis.z * s,
             Float(Foundation.cos(Double(halfAngle)))
         )
+    }
+
+    /// Shortest-arc rotation that takes `from` onto `to` (both need not be unit).
+    public init(from: SIMD3<Float>, to: SIMD3<Float>) {
+        let f = simd_normalize(from)
+        let t = simd_normalize(to)
+        let d = simd_dot(f, t)
+        if d >= 1 - 1e-6 {
+            vector = SIMD4<Float>(0, 0, 0, 1)          // already aligned → identity
+        } else if d <= -1 + 1e-6 {
+            // Opposed: rotate 180° about any axis orthogonal to `f`. A 180°
+            // rotation about a unit axis is the pure quaternion (axis, 0).
+            var axis = simd_cross(SIMD3<Float>(1, 0, 0), f)
+            if simd_length(axis) < 1e-6 { axis = simd_cross(SIMD3<Float>(0, 1, 0), f) }
+            axis = simd_normalize(axis)
+            vector = SIMD4<Float>(axis.x, axis.y, axis.z, 0)
+        } else {
+            let axis = simd_cross(f, t)
+            let s = sqrt((1 + d) * 2)
+            let invs = 1 / s
+            vector = SIMD4<Float>(axis.x * invs, axis.y * invs, axis.z * invs, s * 0.5)
+        }
     }
 
     // Init from 3x3 rotation matrix (Shepperd's method)

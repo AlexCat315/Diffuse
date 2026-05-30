@@ -1,4 +1,7 @@
-﻿import AssetPipeline
+﻿// Fixtures are generated with CoreGraphics/ImageIO (Apple-only). Guarded until
+// image decoding is portable (stb_image); see ImageAssetDecoder.
+#if canImport(CoreGraphics)
+import AssetPipeline
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -440,3 +443,4 @@ struct GLTFImporterTests {
         return output as Data
     }
 }
+#endif

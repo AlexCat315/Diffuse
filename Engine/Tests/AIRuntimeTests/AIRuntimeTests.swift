@@ -1,10 +1,14 @@
 @testable import AIRuntime
+import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking   // URLSession lives here on non-Apple platforms
+#endif
 import ContextMemory
 import IntentRuntime
 import PerceptionRuntime
 import SceneRuntime
 import ScriptRuntime
-import simd
+import SIMDCompat
 import XCTest
 
 final class AIRuntimeTests: XCTestCase {
@@ -2202,10 +2206,10 @@ final class AIRuntimeTests: XCTestCase {
         let session = Session(id: "dict-test", config: makeTestConfig())
         let dict = session.compactDict(for: record)
 
-        XCTAssertEqual(dict["materialBaseColor"] as? [Float], [0.8, 0.1, 0.1, 1.0])
-        XCTAssertEqual(dict["materialMetallic"] as? Float, 0.9)
-        XCTAssertEqual(dict["materialRoughness"] as? Float, 0.2)
-        XCTAssertEqual(dict["materialEmissive"] as? [Float], [0.0, 0.5, 0.0])
+        XCTAssertEqual(dict["materialBaseColor"].asFloatArray, [0.8, 0.1, 0.1, 1.0])
+        XCTAssertEqual(dict["materialMetallic"].asFloat, 0.9)
+        XCTAssertEqual(dict["materialRoughness"].asFloat, 0.2)
+        XCTAssertEqual(dict["materialEmissive"].asFloatArray, [0.0, 0.5, 0.0])
     }
 
     func testSessionCompactDictOmitsDefaultPBRMaterialFields() {
@@ -2246,7 +2250,7 @@ final class AIRuntimeTests: XCTestCase {
         let dict = Session(id: "d5", config: makeTestConfig()).compactDict(for: record)
         XCTAssertEqual(dict["colliderShape"] as? String, "capsule")
         XCTAssertEqual(dict["colliderIsTrigger"] as? Bool, true)
-        XCTAssertEqual(dict["colliderFriction"] as? Float, 0.3)
+        XCTAssertEqual(dict["colliderFriction"].asFloat, 0.3)
         XCTAssertEqual(dict["colliderLayerID"] as? Int, 5)
     }
 
@@ -3433,8 +3437,8 @@ final class AIRuntimeTests: XCTestCase {
         record.audioPitch = 1.25
         record.audioSpatialBlend = 0.6
         let dict = Session(id: "audio-dict", config: makeTestConfig()).compactDict(for: record)
-        XCTAssertEqual(dict["audioPitch"] as? Float, 1.25)
-        XCTAssertEqual(dict["audioSpatialBlend"] as? Float, 0.6)
+        XCTAssertEqual(dict["audioPitch"].asFloat, 1.25)
+        XCTAssertEqual(dict["audioSpatialBlend"].asFloat, 0.6)
     }
 
     func testCompactDictOmitsAudioPitchAndSpatialBlendWhenNil() {
@@ -3586,9 +3590,9 @@ final class AIRuntimeTests: XCTestCase {
         let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
         let entities = result["entities"] as! [[String: Any]]
 
-        let pos = entities.first?["position"] as? [Float]
+        let pos = entities.first?["position"].asFloatArray
         XCTAssertEqual(pos, [3.0, 0.0, -5.0], "position must appear in findEntities output")
-        let worldPos = entities.first?["worldPosition"] as? [Float]
+        let worldPos = entities.first?["worldPosition"].asFloatArray
         XCTAssertNotNil(worldPos, "worldPosition must appear in findEntities output when available")
     }
 
@@ -4213,7 +4217,7 @@ final class AIRuntimeTests: XCTestCase {
         let entities = result["entities"] as! [[String: Any]]
         XCTAssertEqual(entities.count, 1)
         XCTAssertEqual(entities[0]["lightType"] as? String, "directional")
-        XCTAssertEqual(entities[0]["lightIntensity"] as? Float, 8000)
+        XCTAssertEqual(entities[0]["lightIntensity"].asFloat, 8000)
         XCTAssertEqual(entities[0]["lightCastShadows"] as? Bool, true)
     }
 
@@ -4236,7 +4240,7 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(entities.count, 1)
         XCTAssertEqual(entities[0]["rigidBodyMotionType"] as? String, "dynamic")
         XCTAssertEqual(entities[0]["colliderShape"] as? String, "box")
-        let extents = entities[0]["colliderBoxHalfExtents"] as? [Float]
+        let extents = entities[0]["colliderBoxHalfExtents"].asFloatArray
         XCTAssertEqual(extents?.count, 3)
     }
 
@@ -4306,8 +4310,8 @@ final class AIRuntimeTests: XCTestCase {
         let json = await session.findEntitiesResult(input: [:])
         let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
         let entities = result["entities"] as! [[String: Any]]
-        XCTAssertEqual(entities[0]["eulerDegrees"] as? [Float], [45, 0, 30])
-        XCTAssertEqual(entities[0]["scale"] as? [Float], [2, 2, 2])
+        XCTAssertEqual(entities[0]["eulerDegrees"].asFloatArray, [45, 0, 30])
+        XCTAssertEqual(entities[0]["scale"].asFloatArray, [2, 2, 2])
     }
 
     func testFindEntitiesResultIncludesLightColorAndRange() async {
@@ -4330,10 +4334,10 @@ final class AIRuntimeTests: XCTestCase {
         let json = await session.findEntitiesResult(input: [:])
         let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
         let entity = (result["entities"] as! [[String: Any]])[0]
-        XCTAssertEqual(entity["lightColor"] as? [Float], [1.0, 0.9, 0.8])
-        XCTAssertEqual(entity["lightRange"] as? Float, 100)
-        XCTAssertEqual(entity["lightSpotInner"] as? Float, 15)
-        XCTAssertEqual(entity["lightSpotOuter"] as? Float, 30)
+        XCTAssertEqual(entity["lightColor"].asFloatArray, [1.0, 0.9, 0.8])
+        XCTAssertEqual(entity["lightRange"].asFloat, 100)
+        XCTAssertEqual(entity["lightSpotInner"].asFloat, 15)
+        XCTAssertEqual(entity["lightSpotOuter"].asFloat, 30)
     }
 
     func testFindEntitiesResultIncludesMeshVisibilityAndMaterial() async {
@@ -4356,9 +4360,9 @@ final class AIRuntimeTests: XCTestCase {
         let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
         let entity = (result["entities"] as! [[String: Any]])[0]
         XCTAssertEqual(entity["meshIsVisible"] as? Bool, false)
-        XCTAssertEqual(entity["meshColor"] as? [Float], [0.5, 0.5, 0.5])
-        XCTAssertEqual(entity["materialMetallic"] as? Float, 0.2)
-        XCTAssertEqual(entity["materialRoughness"] as? Float, 0.6)
+        XCTAssertEqual(entity["meshColor"].asFloatArray, [0.5, 0.5, 0.5])
+        XCTAssertEqual(entity["materialMetallic"].asFloat, 0.2)
+        XCTAssertEqual(entity["materialRoughness"].asFloat, 0.6)
         XCTAssertNotNil(entity["materialEmissive"], "materialEmissive must appear")
     }
 
@@ -4382,10 +4386,10 @@ final class AIRuntimeTests: XCTestCase {
         let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
         let entity = (result["entities"] as! [[String: Any]])[0]
         XCTAssertEqual(entity["audioClip"] as? String, "ambient_music")
-        XCTAssertEqual(entity["audioVolume"] as? Float, 0.8)
+        XCTAssertEqual(entity["audioVolume"].asFloat, 0.8)
         XCTAssertEqual(entity["audioLoop"] as? Bool, true)
-        XCTAssertEqual(entity["audioPitch"] as? Float, 1.1)
-        XCTAssertEqual(entity["audioSpatialBlend"] as? Float, 0.5)
+        XCTAssertEqual(entity["audioPitch"].asFloat, 1.1)
+        XCTAssertEqual(entity["audioSpatialBlend"].asFloat, 0.5)
     }
 
     func testFindEntitiesResultIncludesAnimationFields() async {
@@ -4406,7 +4410,7 @@ final class AIRuntimeTests: XCTestCase {
         let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
         let entity = (result["entities"] as! [[String: Any]])[0]
         XCTAssertEqual(entity["animationClip"] as? String, "dance_loop")
-        XCTAssertEqual(entity["animationSpeed"] as? Float, 1.5)
+        XCTAssertEqual(entity["animationSpeed"].asFloat, 1.5)
         XCTAssertEqual(entity["animationLoop"] as? Bool, true)
         XCTAssertEqual(entity["animationIsPlaying"] as? Bool, true)
     }
@@ -4431,8 +4435,8 @@ final class AIRuntimeTests: XCTestCase {
         let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
         let entity = (result["entities"] as! [[String: Any]])[0]
         XCTAssertEqual(entity["colliderIsTrigger"] as? Bool, false)
-        XCTAssertEqual(entity["colliderFriction"] as? Float, 0.7)
-        XCTAssertEqual(entity["colliderRestitution"] as? Float, 0.1)
+        XCTAssertEqual(entity["colliderFriction"].asFloat, 0.7)
+        XCTAssertEqual(entity["colliderRestitution"].asFloat, 0.1)
         XCTAssertEqual(entity["colliderLayerID"] as? Int, 3)
         XCTAssertEqual(entity["colliderLayerMask"] as? Int, 15)
     }
@@ -4454,7 +4458,7 @@ final class AIRuntimeTests: XCTestCase {
         let json = await session.findEntitiesResult(input: [:])
         let result = try! JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
         let entity = (result["entities"] as! [[String: Any]])[0]
-        XCTAssertEqual(entity["rigidBodyGravityScale"] as? Float, 0.5)
+        XCTAssertEqual(entity["rigidBodyGravityScale"].asFloat, 0.5)
         XCTAssertEqual(entity["rigidBodyAllowSleep"] as? Bool, false)
     }
 
@@ -4757,5 +4761,33 @@ private final class StubPerceptionWorker: PerceptionWorker, @unchecked Sendable 
 
     func analyzeImage(at url: URL, requestID: String, maxResults: Int) throws -> PerceptionResult {
         result
+    }
+}
+
+/// Numeric extraction from `[String: Any]` values that is correct on every
+/// platform. Compact in-memory dicts store a raw Swift `Float`; values that have
+/// gone through `JSONSerialization` come back as `NSNumber` (and on
+/// swift-corelibs-foundation `NSNumber as? Float` fails for fractional numbers,
+/// while `as? Double` works). This handles all three uniformly.
+private extension Optional where Wrapped == Any {
+    var asFloat: Float? {
+        switch self {
+        case let f as Float: return f
+        case let d as Double: return Float(d)
+        case let n as NSNumber: return n.floatValue
+        default: return nil
+        }
+    }
+    var asFloatArray: [Float]? {
+        guard let arr = self as? [Any] else { return nil }
+        var out: [Float] = []
+        out.reserveCapacity(arr.count)
+        for element in arr {
+            if let f = element as? Float { out.append(f) }
+            else if let d = element as? Double { out.append(Float(d)) }
+            else if let n = element as? NSNumber { out.append(n.floatValue) }
+            else { return nil }
+        }
+        return out
     }
 }
