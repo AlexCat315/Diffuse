@@ -71,7 +71,9 @@ struct EditorMenuModelTests {
             return false
         }
         #expect(undo?.keyEquivalent == "z")
-        #expect(undo?.keyModifiers.contains(.command) == true)
+        // `.primary` is Cmd on macOS, Ctrl elsewhere — assert against it rather
+        // than hardcoding `.command`, which is wrong on Windows/Linux.
+        #expect(undo?.keyModifiers.contains(.primary) == true)
     }
 
     @Test("model is non-empty across every playback state")
