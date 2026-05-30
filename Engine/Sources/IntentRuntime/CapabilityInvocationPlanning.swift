@@ -430,6 +430,14 @@ private struct CapabilityOperationProjection {
             self.arguments["speed"] = .number(Double(speed))
             self.arguments["loop"] = .bool(loop)
             self.arguments["is_playing"] = .bool(isPlaying)
+        case let .setAudioListener(_, masterVolume):
+            self.verb = "scene.set_audio_listener"
+            self.arguments["master_volume"] = .number(Double(masterVolume))
+        case let .setParticleEmitter(_, emitter):
+            self.verb = "scene.set_particle_emitter"
+            self.arguments["emission_rate"] = .number(Double(emitter.emissionRate))
+            self.arguments["max_particles"] = .integer(Int64(emitter.maxParticles))
+            self.arguments["is_emitting"] = .bool(emitter.isEmitting)
         }
     }
 
