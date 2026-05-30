@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 
 /// Content-addressed store for large binary artifacts (embeddings, masks, depth maps).
@@ -26,7 +25,7 @@ public actor LocalArtifactStore {
                       mediaType: String,
                       semanticKind: String,
                       redaction: String = "prompt_forbidden") throws -> ArtifactRef {
-        let hash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        let hash = SHA256Portable.hexDigest(data)
         let ext = fileExtension(for: mediaType)
         let fileURL = baseURL.appendingPathComponent("\(hash).\(ext)")
         if !FileManager.default.fileExists(atPath: fileURL.path) {
