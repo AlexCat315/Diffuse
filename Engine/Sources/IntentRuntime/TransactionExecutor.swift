@@ -765,6 +765,14 @@ public struct TransactionExecutor {
                     AnimationPlayer(clipName: clipName, speed: speed,
                                     loop: loop, isPlaying: isPlaying),
                     for: entity)
+
+            case let .setAudioListener(entityID, masterVolume):
+                let entity = try requireEntity(entityID, in: scene)
+                _ = scene.setComponent(AudioListener(masterVolume: masterVolume), for: entity)
+
+            case let .setParticleEmitter(entityID, emitter):
+                let entity = try requireEntity(entityID, in: scene)
+                _ = scene.setComponent(emitter, for: entity)
             }
         }
 
@@ -1107,6 +1115,10 @@ public struct TransactionExecutor {
             return "scene:audio_source:\(id)"
         case let .setAnimationPlayer(id, _, _, _, _):
             return "scene:animation_player:\(id)"
+        case let .setAudioListener(id, _):
+            return "scene:audio_listener:\(id)"
+        case let .setParticleEmitter(id, _):
+            return "scene:particle_emitter:\(id)"
         }
     }
 
@@ -1413,6 +1425,19 @@ public struct TransactionExecutor {
                     value: .bool(loop)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "animationIsPlaying",
                     value: .bool(isPlaying)))
+
+            case let .setAudioListener(entityID, masterVolume):
+                events.append(.entityAuthoredChanged(ref: "scene:\(entityID)",
+                    property: "audioListenerMasterVolume", value: .float(masterVolume)))
+
+            case let .setParticleEmitter(entityID, emitter):
+                let ref = "scene:\(entityID)"
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleEmissionRate",
+                    value: .float(emitter.emissionRate)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleMaxParticles",
+                    value: .float(Float(emitter.maxParticles))))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleEmitting",
+                    value: .bool(emitter.isEmitting)))
 
             case let .setConstraintEnabled(entityID, value):
                 events.append(.entityAuthoredChanged(

@@ -53,4 +53,6 @@ jobs:
 
       - name: Run tests
         working-directory: Editor
-        run: swift test --filter EditorCoreTests
+        run: |
+          swift test --filter EditorCoreTests
+          swift test --filter EditorAppTests

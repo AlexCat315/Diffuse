@@ -52,9 +52,12 @@ enum EditorCommandDispatcher {
         case .toggleTheme:
             store.dispatch(.setThemeMode(store.state.themeMode == .dark ? .light : .dark))
         case .buildProject:
-            app.logConsole("Build Editor command recorded", detail: "Use swift build in Editor until build jobs are wired")
+            _ = app.exportProject()
         case .buildAndRun:
-            app.logConsole("Build and Run command recorded", detail: "Use swift run EditorApp until build jobs are wired")
+            if let output = app.exportProject() {
+                app.logConsole("Run exported build",
+                               detail: "swift run GuavaPlayer --project \(output.path)")
+            }
         case .openDocumentation:
             app.logConsole("Documentation command recorded", detail: "Docs live under docs/")
         case .about:
