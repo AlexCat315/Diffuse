@@ -83,6 +83,10 @@ enum {
     GUAVA_SDL_EVENT_GAMEPAD_REMOVED     = SDL_EVENT_GAMEPAD_REMOVED,
 };
 
+// Audio subsystem constants (#define / pointer-cast macros not imported by Swift).
+static const Uint32 GUAVA_SDL_INIT_AUDIO = SDL_INIT_AUDIO;
+static const SDL_AudioDeviceID GUAVA_SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK = SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK;
+
 // System cursor identifiers (SDL_SystemCursor enum is not imported as raw ints by Swift).
 enum {
 	GUAVA_SDL_SYSTEM_CURSOR_DEFAULT      = SDL_SYSTEM_CURSOR_DEFAULT,

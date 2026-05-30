@@ -18,19 +18,24 @@ func editorCall(_ request: [String: Any]) -> [String: Any] {
 
 #if os(Windows)
     var wsaData = WSADATA()
-    guard WSAStartup(MAKEWORD(2, 2), &wsaData) == 0 else {
+    // MAKEWORD(2, 2): function-like C macros are not imported into Swift,
+    // so compute the requested Winsock version (2.2) directly.
+    let wsaVersion = WORD(2) | (WORD(2) << 8)
+    guard WSAStartup(wsaVersion, &wsaData) == 0 else {
         return ["ok": false, "error": "WSAStartup failed"]
     }
     defer { WSACleanup() }
 
-    let sock = WinSDK.socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+    let sock = WinSDK.socket(AF_INET, SOCK_STREAM, Int32(IPPROTO_TCP.rawValue))
     guard sock != INVALID_SOCKET else { return ["ok": false, "error": "socket() failed"] }
     defer { closesocket(sock) }
 
     var addr = sockaddr_in()
     addr.sin_family = ADDRESS_FAMILY(AF_INET)
     addr.sin_port = UInt16(9898).bigEndian
-    addr.sin_addr.s_addr = inet_addr("127.0.0.1")
+    // 127.0.0.1 (INADDR_LOOPBACK) in network byte order; avoids the
+    // deprecated inet_addr() and its WSA-state dependency.
+    addr.sin_addr.S_un.S_addr = UInt32(0x7f00_0001).bigEndian
     let connected = withUnsafePointer(to: &addr) {
         $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
             WinSDK.connect(sock, $0, Int32(MemoryLayout<sockaddr_in>.size))

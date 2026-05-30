@@ -2,42 +2,81 @@ name: GuavaEngine CI
 
 on:
   push:
-    branches: [main, guava-next]
+    branches: [main, guava-next, next]
     paths:
       - 'Engine/**'
       - '.github/workflows/ci-engine.yml'
   pull_request:
     paths:
       - 'Engine/**'
+      - '.github/workflows/ci-engine.yml'
 
 jobs:
   build:
-    name: Build
-    runs-on: macos-15
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.runs-on }}
+    # Linux/Windows are newly added. Keep them non-blocking until the native
+    # build + pure-Swift portability is green on those platforms; macOS stays
+    # the required check so nothing currently-green can regress.
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            runs-on: macos-15
+            experimental: false
+          - name: Linux
+            runs-on: ubuntu-latest
+            experimental: true
+          - name: Windows
+            runs-on: windows-latest
+            experimental: true
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
 
+      # macOS ships Swift with Xcode; Linux/Windows install the toolchain.
       - name: Select Xcode 26.3
+        if: runner.os == 'macOS'
         run: |
           sudo xcode-select -s /Applications/Xcode_26.3.app
           xcodebuild -version
-          swift --version
 
-      - name: Build native deps via CMake (SDL3 + Imath + OpenEXR)
+      - name: Set up Swift
+        if: runner.os != 'macOS'
+        uses: SwiftyLab/setup-swift@latest
+        with:
+          swift-version: "6.1"
+
+      - name: Swift version
+        shell: bash
+        run: swift --version
+
+      # Native C/C++ deps build the same way everywhere — CMake is
+      # cross-platform; only the Swift toolchain setup differs above.
+      # `--config Release` is required by multi-config generators (Visual Studio
+      # on Windows ignores CMAKE_BUILD_TYPE and would otherwise build Debug).
+      # `stage_sdl3` is a top-level ALL target that builds the subdirectory
+      # SDL3-static target — the VS generator cannot build `--target SDL3-static`
+      # directly (MSB1009).
+      - name: Build native deps via CMake (SDL3 + Imath + OpenEXR + Jolt)
+        shell: bash
         run: |
           cmake -S Engine/third-party -B Engine/build/native -DCMAKE_BUILD_TYPE=Release
-          cmake --build Engine/build/native --parallel --target SDL3-static
-          cmake --build Engine/build/native --parallel --target stage_jolt
-          cmake --install Engine/build/native
-          cmake --build Engine/build/native --parallel --target stage_ocio_openexr
+          cmake --build Engine/build/native --parallel --config Release --target stage_sdl3
+          cmake --build Engine/build/native --parallel --config Release --target stage_jolt
+          cmake --install Engine/build/native --config Release
+          cmake --build Engine/build/native --parallel --config Release --target stage_ocio_openexr
 
       - name: Resolve packages
+        shell: bash
         working-directory: Engine
         run: swift package resolve
 
       - name: Build pure-Swift targets
+        shell: bash
         working-directory: Engine
         run: |
           swift build --target EngineKernel
@@ -50,8 +89,12 @@ jobs:
           swift build --target AIRuntime
           swift build --target IntentRuntime
           swift build --target ScriptRuntime
+          # AudioRuntime pulls CSDL3; on Linux/Windows this compiles the SDL3
+          # audio backend, on macOS the AVFoundation one.
+          swift build --target AudioRuntime
 
       - name: Run pure-Swift tests
+        shell: bash
         working-directory: Engine
         run: |
           swift test --filter EngineMathTests
@@ -59,6 +102,7 @@ jobs:
           swift test --filter SceneRuntimeTests
           swift test --filter ScriptRuntimeTests
           swift test --filter AssetPipelineTests
+          swift test --filter AudioRuntimeTests
           swift test --filter SequenceRuntimeTests
           swift test --filter CardBattleRuntimeTests
           swift test --filter IntentRuntimeTests

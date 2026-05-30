@@ -9,13 +9,38 @@ on:
   pull_request:
     paths:
       - 'guava-mcp/**'
+      - '.github/workflows/ci-guava-mcp.yml'
 
+# guava-mcp is pure Swift with no native dependencies, so it builds on every
+# platform Swift supports. Compile it on all three to keep the per-OS socket
+# code (#if os(Windows) / Glibc / Darwin) honest — a macOS-only job let a
+# Windows-only compile break slip through unnoticed.
 jobs:
   build:
-    name: Build & Test
-    runs-on: macos-15
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            runs-on: macos-15
+          - name: Linux
+            runs-on: ubuntu-latest
+          - name: Windows
+            runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      # macOS ships Swift with Xcode; Linux/Windows need the toolchain installed.
+      - name: Set up Swift
+        if: runner.os != 'macOS'
+        uses: SwiftyLab/setup-swift@latest
+        with:
+          swift-version: "6.0"
+
+      - name: Swift version
+        run: swift --version
 
       - name: Build (release)
         working-directory: guava-mcp

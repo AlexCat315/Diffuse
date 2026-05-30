@@ -75,3 +75,14 @@ install(CODE "
 }
 \")
 ")
+
+# SDL3-static is EXCLUDE_FROM_ALL and lives in the `sdl3-build` subdirectory.
+# The blanket `cmake --build` (bootstrap) skips EXCLUDE_FROM_ALL targets, and the
+# Visual Studio generator cannot build a subdirectory target via
+# `cmake --build --target SDL3-static` (it looks for SDL3-static.vcxproj in the
+# build root → MSB1009). A top-level ALL custom target that depends on it fixes
+# both: the default build pulls SDL3-static in, and `--target stage_sdl3`
+# resolves at the build root on every generator (mirrors stage_jolt /
+# stage_ocio_openexr). The install() rules above then copy it into the bundle.
+add_custom_target(stage_sdl3 ALL COMMENT "Building SDL3-static")
+add_dependencies(stage_sdl3 SDL3-static)
