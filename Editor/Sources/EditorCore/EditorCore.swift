@@ -663,6 +663,28 @@ public final class EditorApplication: @unchecked Sendable {
         logConsole("Created new preview scene")
     }
 
+    /// Exports a portable, runnable project bundle to `<projectDirectory>/export`
+    /// (scene + assets + descriptor). Returns the output directory, or nil on failure.
+    @discardableResult
+    public func exportProject() -> URL? {
+        let output = URL(fileURLWithPath: projectDirectory, isDirectory: true)
+            .appendingPathComponent("export", isDirectory: true)
+        do {
+            let manifest = scene.manifest(selectedEntityID: store.state.selectedEntityID)
+            let assets = (try? EditorAssetCatalog.loadProject(at: projectDirectory)) ?? []
+            let descriptor = try ProjectExporter.export(manifest: manifest,
+                                                        appName: "Guava Game",
+                                                        assets: assets,
+                                                        to: output)
+            logConsole("Exported project bundle",
+                       detail: "\(descriptor.entityCount) entities, \(descriptor.assetCount) assets → \(output.path)")
+            return output
+        } catch {
+            logConsole("Project export failed", severity: .error, detail: String(describing: error))
+            return nil
+        }
+    }
+
     @discardableResult
     public func saveSceneManifest() -> URL? {
         do {

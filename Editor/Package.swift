@@ -103,6 +103,16 @@ let package = Package(
             dependencies: [
                 "EditorCore",
                 .product(name: "SIMDCompat", package: "Engine"),
+                .product(name: "GuavaUICompose", package: "GuavaUI"),
+                .product(name: "GuavaUIRuntime", package: "GuavaUI"),
+            ]
+        ),
+
+        .testTarget(
+            name: "EditorAppTests",
+            dependencies: [
+                "EditorApp",
+                "EditorCore",
             ]
         ),
     ],

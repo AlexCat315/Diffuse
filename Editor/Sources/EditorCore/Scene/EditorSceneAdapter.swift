@@ -51,6 +51,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
     public let script: EditorSceneManifestScript?
     public let audioSource: EditorSceneManifestAudioSource?
     public let animationPlayer: EditorSceneManifestAnimationPlayer?
+    public let particleEmitter: EditorSceneManifestParticleEmitter?
     public let children: [EditorSceneManifestNode]
 
     public init(id: UInt64,
@@ -68,6 +69,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
                 script: EditorSceneManifestScript? = nil,
                 audioSource: EditorSceneManifestAudioSource? = nil,
                 animationPlayer: EditorSceneManifestAnimationPlayer? = nil,
+                particleEmitter: EditorSceneManifestParticleEmitter? = nil,
                 children: [EditorSceneManifestNode] = []) {
         self.id = id
         self.name = name
@@ -84,6 +86,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.script = script
         self.audioSource = audioSource
         self.animationPlayer = animationPlayer
+        self.particleEmitter = particleEmitter
         self.children = children
     }
 }
@@ -698,6 +701,54 @@ public struct EditorSceneManifestAnimationPlayer: Codable, Sendable, Equatable {
     }
 }
 
+public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
+    public let isEmitting: Bool
+    public let looping: Bool
+    public let emissionRate: Float
+    public let maxParticles: Int
+    public let lifetime: Float
+    public let lifetimeRandomness: Float
+    public let originOffset: EditorSceneManifestVector3
+    public let spawnRadius: Float
+    public let startVelocity: EditorSceneManifestVector3
+    public let velocityRandomness: EditorSceneManifestVector3
+    public let gravity: EditorSceneManifestVector3
+    public let startSize: Float
+    public let endSize: Float
+    public let startColor: EditorSceneManifestVector4
+    public let endColor: EditorSceneManifestVector4
+    public let seed: UInt64
+
+    public init(_ component: ParticleEmitter) {
+        self.isEmitting = component.isEmitting
+        self.looping = component.looping
+        self.emissionRate = component.emissionRate
+        self.maxParticles = component.maxParticles
+        self.lifetime = component.lifetime
+        self.lifetimeRandomness = component.lifetimeRandomness
+        self.originOffset = EditorSceneManifestVector3(component.originOffset)
+        self.spawnRadius = component.spawnRadius
+        self.startVelocity = EditorSceneManifestVector3(component.startVelocity)
+        self.velocityRandomness = EditorSceneManifestVector3(component.velocityRandomness)
+        self.gravity = EditorSceneManifestVector3(component.gravity)
+        self.startSize = component.startSize
+        self.endSize = component.endSize
+        self.startColor = EditorSceneManifestVector4(component.startColor)
+        self.endColor = EditorSceneManifestVector4(component.endColor)
+        self.seed = component.seed
+    }
+
+    var component: ParticleEmitter {
+        ParticleEmitter(isEmitting: isEmitting, looping: looping, emissionRate: emissionRate,
+                        maxParticles: maxParticles, lifetime: lifetime,
+                        lifetimeRandomness: lifetimeRandomness, originOffset: originOffset.simdValue,
+                        spawnRadius: spawnRadius, startVelocity: startVelocity.simdValue,
+                        velocityRandomness: velocityRandomness.simdValue, gravity: gravity.simdValue,
+                        startSize: startSize, endSize: endSize, startColor: startColor.simdValue,
+                        endColor: endColor.simdValue, seed: seed)
+    }
+}
+
 public struct EditorInspectorSection {
     public let id: String
     public let title: String
@@ -847,6 +898,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             if let animationPlayer = node.animationPlayer {
                 _ = restoredScene.setComponent(animationPlayer.component, for: entity)
             }
+            if let particleEmitter = node.particleEmitter {
+                _ = restoredScene.setComponent(particleEmitter.component, for: entity)
+            }
             for child in node.children {
                 let childEntity = restoreNode(child)
                 _ = restoredScene.setParent(entity, for: childEntity)
@@ -935,6 +989,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         if let lightSection = lightSection(for: entity) {
             sections.append(lightSection)
         }
+        if let cameraSection = cameraSection(for: entity) {
+            sections.append(cameraSection)
+        }
         if let scriptSection = scriptSection(for: entity) {
             sections.append(scriptSection)
         }
@@ -943,6 +1000,12 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         }
         if let audioSourceSection = audioSourceSection(for: entity) {
             sections.append(audioSourceSection)
+        }
+        if let audioListenerSection = audioListenerSection(for: entity) {
+            sections.append(audioListenerSection)
+        }
+        if let particleEmitterSection = particleEmitterSection(for: entity) {
+            sections.append(particleEmitterSection)
         }
         if let renderMeshSection = renderMeshSection(for: entity) {
             sections.append(renderMeshSection)
@@ -991,6 +1054,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 .map(EditorSceneManifestAudioSource.init),
             animationPlayer: scene.component(AnimationPlayer.self, for: entity)
                 .map(EditorSceneManifestAnimationPlayer.init),
+            particleEmitter: scene.component(ParticleEmitter.self, for: entity)
+                .map(EditorSceneManifestParticleEmitter.init),
             children: scene.children(of: entity).map(manifestNode)
         )
     }
@@ -1442,6 +1507,217 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             id: "light",
             title: L("Light"),
             fields: fields
+        )
+    }
+
+    private func cameraSection(for entity: EntityID) -> EditorInspectorSection? {
+        guard scene.hasComponent(CameraComponent.self, for: entity) else { return nil }
+        return EditorInspectorSection(
+            id: "camera",
+            title: L("Camera"),
+            fields: [
+                EditorInspectorField(
+                    id: "camera-active",
+                    label: L("Active"),
+                    value: .bool(cameraActiveBinding(for: entity))
+                ),
+                EditorInspectorField(
+                    id: "camera-fov",
+                    label: L("Field of View"),
+                    value: .constrainedNumber(cameraFOVBinding(for: entity),
+                                              min: 1, max: 179, step: 1, showsStepper: true)
+                ),
+            ]
+        )
+    }
+
+    private func cameraActiveBinding(for entity: EntityID) -> Binding<Bool> {
+        Binding(
+            get: { [self] in
+                scene.component(CameraComponent.self, for: entity)?.isActive ?? false
+            },
+            set: { [self] next in
+                guard let cam = scene.component(CameraComponent.self, for: entity),
+                      cam.isActive != next else { return }
+                _ = applySceneTransaction(intentVerb: "scene.set_camera_active",
+                                          summary: "Update camera active",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setCameraActive(entityID: entity.rawValue, isActive: next)])
+            }
+        )
+    }
+
+    /// Field of view exposed in degrees; the component stores radians.
+    private func cameraFOVBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                let radians = scene.component(CameraComponent.self, for: entity)?.fovYRadians ?? (.pi / 4)
+                return radians * 180 / .pi
+            },
+            set: { [self] next in
+                guard let cam = scene.component(CameraComponent.self, for: entity) else { return }
+                let currentDegrees = cam.fovYRadians * 180 / .pi
+                guard abs(currentDegrees - next) > 1e-4 else { return }
+                _ = applySceneTransaction(intentVerb: "scene.set_camera_fov",
+                                          summary: "Update camera field of view",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setCameraFOV(entityID: entity.rawValue, fovYDegrees: next)])
+            }
+        )
+    }
+
+    private func audioListenerSection(for entity: EntityID) -> EditorInspectorSection? {
+        guard scene.hasComponent(AudioListener.self, for: entity) else { return nil }
+        return EditorInspectorSection(
+            id: "audio-listener",
+            title: L("Audio Listener"),
+            fields: [
+                EditorInspectorField(
+                    id: "audio-listener-volume",
+                    label: L("Master Volume"),
+                    value: .constrainedNumber(audioListenerVolumeBinding(for: entity),
+                                              min: 0, max: 1, step: 0.05, showsStepper: true)
+                ),
+            ]
+        )
+    }
+
+    private func audioListenerVolumeBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(AudioListener.self, for: entity)?.masterVolume ?? 1
+            },
+            set: { [self] next in
+                guard let listener = scene.component(AudioListener.self, for: entity),
+                      listener.masterVolume != next else { return }
+                _ = applySceneTransaction(intentVerb: "scene.set_audio_listener",
+                                          summary: "Update audio listener volume",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setAudioListener(entityID: entity.rawValue, masterVolume: next)])
+            }
+        )
+    }
+
+    private func particleEmitterSection(for entity: EntityID) -> EditorInspectorSection? {
+        guard scene.hasComponent(ParticleEmitter.self, for: entity) else { return nil }
+        return EditorInspectorSection(
+            id: "particle-emitter",
+            title: L("Particle Emitter"),
+            fields: [
+                EditorInspectorField(id: "particle-emitting", label: L("Emitting"),
+                                     value: .bool(particleBoolBinding(for: entity, \.isEmitting,
+                                                                      summary: "Toggle particle emitting"))),
+                EditorInspectorField(id: "particle-looping", label: L("Looping"),
+                                     value: .bool(particleBoolBinding(for: entity, \.looping,
+                                                                      summary: "Toggle particle looping"))),
+                EditorInspectorField(id: "particle-rate", label: L("Emission Rate"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.emissionRate,
+                                                                                    summary: "Update emission rate"),
+                                                               min: 0, max: 1000, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-max", label: L("Max Particles"),
+                                     value: .constrainedNumber(particleMaxBinding(for: entity),
+                                                               min: 0, max: 100_000, step: 16, showsStepper: true)),
+                EditorInspectorField(id: "particle-lifetime", label: L("Lifetime"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.lifetime,
+                                                                                    summary: "Update particle lifetime"),
+                                                               min: 0, max: 60, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-spawn-radius", label: L("Spawn Radius"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.spawnRadius,
+                                                                                    summary: "Update spawn radius"),
+                                                               min: 0, max: 100, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-start-size", label: L("Start Size"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.startSize,
+                                                                                    summary: "Update start size"),
+                                                               min: 0, max: 100, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-end-size", label: L("End Size"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.endSize,
+                                                                                    summary: "Update end size"),
+                                                               min: 0, max: 100, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-gravity", label: L("Gravity"),
+                                     value: .vector3(x: particleGravityBinding(for: entity, axis: 0),
+                                                     y: particleGravityBinding(for: entity, axis: 1),
+                                                     z: particleGravityBinding(for: entity, axis: 2))),
+                EditorInspectorField(id: "particle-start-color", label: L("Start Color"),
+                                     value: .color(particleColorBinding(for: entity, isStart: true))),
+                EditorInspectorField(id: "particle-end-color", label: L("End Color"),
+                                     value: .color(particleColorBinding(for: entity, isStart: false))),
+            ]
+        )
+    }
+
+    /// Applies `mutate` to a copy of the emitter and submits it as a whole-component update.
+    private func updateParticleEmitter(_ entity: EntityID, summary: String,
+                                       _ mutate: (inout ParticleEmitter) -> Void) {
+        guard var emitter = scene.component(ParticleEmitter.self, for: entity) else { return }
+        mutate(&emitter)
+        _ = applySceneTransaction(intentVerb: "scene.set_particle_emitter",
+                                  summary: summary,
+                                  targetRawIDs: [entity.rawValue],
+                                  mutations: [.setParticleEmitter(entityID: entity.rawValue, emitter: emitter)])
+    }
+
+    private func particleBoolBinding(for entity: EntityID,
+                                     _ keyPath: WritableKeyPath<ParticleEmitter, Bool>,
+                                     summary: String) -> Binding<Bool> {
+        Binding(
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?[keyPath: keyPath] ?? false },
+            set: { [self] next in
+                guard scene.component(ParticleEmitter.self, for: entity)?[keyPath: keyPath] != next else { return }
+                updateParticleEmitter(entity, summary: summary) { $0[keyPath: keyPath] = next }
+            }
+        )
+    }
+
+    private func particleFloatBinding(for entity: EntityID,
+                                      _ keyPath: WritableKeyPath<ParticleEmitter, Float>,
+                                      summary: String) -> Binding<Float> {
+        Binding(
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?[keyPath: keyPath] ?? 0 },
+            set: { [self] next in
+                guard scene.component(ParticleEmitter.self, for: entity)?[keyPath: keyPath] != next else { return }
+                updateParticleEmitter(entity, summary: summary) { $0[keyPath: keyPath] = next }
+            }
+        )
+    }
+
+    private func particleMaxBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in Float(scene.component(ParticleEmitter.self, for: entity)?.maxParticles ?? 0) },
+            set: { [self] next in
+                let value = max(0, Int(next.rounded()))
+                guard scene.component(ParticleEmitter.self, for: entity)?.maxParticles != value else { return }
+                updateParticleEmitter(entity, summary: "Update max particles") { $0.maxParticles = value }
+            }
+        )
+    }
+
+    private func particleGravityBinding(for entity: EntityID, axis: Int) -> Binding<Float> {
+        Binding(
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.gravity[axis] ?? 0 },
+            set: { [self] next in
+                guard scene.component(ParticleEmitter.self, for: entity)?.gravity[axis] != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle gravity") { $0.gravity[axis] = next }
+            }
+        )
+    }
+
+    private func particleColorBinding(for entity: EntityID, isStart: Bool) -> Binding<Color> {
+        Binding(
+            get: { [self] in
+                let c = scene.component(ParticleEmitter.self, for: entity)
+                    .map { isStart ? $0.startColor : $0.endColor } ?? SIMD4<Float>(1, 1, 1, 1)
+                return Color(r: c.x, g: c.y, b: c.z, a: c.w)
+            },
+            set: { [self] next in
+                let v = SIMD4<Float>(max(0, min(1, next.r)), max(0, min(1, next.g)),
+                                     max(0, min(1, next.b)), max(0, min(1, next.a)))
+                let current = scene.component(ParticleEmitter.self, for: entity)
+                    .map { isStart ? $0.startColor : $0.endColor }
+                guard current != v else { return }
+                updateParticleEmitter(entity, summary: "Update particle color") {
+                    if isStart { $0.startColor = v } else { $0.endColor = v }
+                }
+            }
         )
     }
 

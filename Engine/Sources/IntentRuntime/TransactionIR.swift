@@ -126,6 +126,8 @@ public enum SceneMutation: Sendable, Equatable {
     case setCameraActive(entityID: UInt64, isActive: Bool)
     case setAudioSource(entityID: UInt64, source: AudioSource)
     case setAnimationPlayer(entityID: UInt64, clipName: String?, speed: Float, loop: Bool, isPlaying: Bool)
+    case setAudioListener(entityID: UInt64, masterVolume: Float)
+    case setParticleEmitter(entityID: UInt64, emitter: ParticleEmitter)
 
     /// The primary entity targeted by this mutation, if any.
     /// `spawnImportedMeshEntity` returns `nil` because it creates entities
@@ -173,7 +175,9 @@ public enum SceneMutation: Sendable, Equatable {
              let .setCameraFOV(id, _),
              let .setCameraActive(id, _),
              let .setAudioSource(id, _),
-             let .setAnimationPlayer(id, _, _, _, _):
+             let .setAnimationPlayer(id, _, _, _, _),
+             let .setAudioListener(id, _),
+             let .setParticleEmitter(id, _):
             return id
         }
     }
