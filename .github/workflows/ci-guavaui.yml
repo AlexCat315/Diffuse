@@ -32,9 +32,9 @@ jobs:
           cmake -S Engine/third-party -B Engine/build/native -DCMAKE_BUILD_TYPE=Release
           cmake --build Engine/build/native --parallel --target SDL3-static
           cmake --build Engine/build/native --parallel --target stage_jolt
+          cmake --build Engine/build/native --parallel --target stage_image_decode
           cmake --install Engine/build/native --prefix "$RUNNER_TEMP/guava-native-install"
           cmake --build Engine/build/native --parallel --target stage_ocio_openexr
-          cmake --build Engine/build/native --parallel --target stage_image_decode
 
       - name: Build GuavaUI native deps via CMake (Yoga + FreeType + HarfBuzz)
         run: |
