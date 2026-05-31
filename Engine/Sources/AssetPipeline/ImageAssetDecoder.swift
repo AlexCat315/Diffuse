@@ -1,4 +1,5 @@
 import Foundation
+import CImageDecodeBridge
 
 public struct DecodedTextureAsset: Sendable, Equatable {
     public var pixels: [UInt8]
@@ -16,79 +17,57 @@ public enum ImageAssetDecoderError: Error, CustomStringConvertible {
     case sourceUnreadable(String)
     case imageMissing(String)
     case invalidDimensions(String)
-    case contextCreationFailed(String)
-    case platformNotSupported(String)
+    case decodeFailed(String)
 
     public var description: String {
         switch self {
         case let .sourceUnreadable(path): return "image source unreadable: \(path)"
         case let .imageMissing(path): return "image missing first frame: \(path)"
         case let .invalidDimensions(path): return "image has invalid dimensions: \(path)"
-        case let .contextCreationFailed(path): return "rgba context creation failed: \(path)"
-        case let .platformNotSupported(msg): return "image decoding not supported on this platform: \(msg)"
+        case let .decodeFailed(msg): return "image decode failed: \(msg)"
         }
     }
 }
 
+/// Decodes image files into straight-alpha RGBA8 via the cross-platform native
+/// bridge (stb_image for png/jpg/bmp/gif/tga, libwebp for webp, lunasvg for
+/// svg). One code path on every platform — no Apple ImageIO special-case.
 public enum ImageAssetDecoder {
-#if canImport(CoreGraphics) && canImport(ImageIO)
     public static func decodeRGBA8(path: String) throws -> DecodedTextureAsset {
-        try _decodeRGBA8CoreGraphics(path: path)
+        let url = URL(fileURLWithPath: path)
+        guard let data = try? Data(contentsOf: url) else {
+            throw ImageAssetDecoderError.sourceUnreadable(path)
+        }
+        return try decode(data: data, extension: url.pathExtension, label: path)
     }
 
     public static func decodeRGBA8(data: Data, label: String = "<memory>") throws -> DecodedTextureAsset {
-        try _decodeRGBA8CoreGraphics(data: data, label: label)
-    }
-#else
-    public static func decodeRGBA8(path: String) throws -> DecodedTextureAsset {
-        throw ImageAssetDecoderError.platformNotSupported(path)
+        // Extension is unknown for raw bytes; the bridge sniffs the format.
+        try decode(data: data, extension: "", label: label)
     }
 
-    public static func decodeRGBA8(data: Data, label: String = "<memory>") throws -> DecodedTextureAsset {
-        throw ImageAssetDecoderError.platformNotSupported(label)
+    private static func decode(data: Data, extension ext: String, label: String) throws -> DecodedTextureAsset {
+        guard !data.isEmpty else { throw ImageAssetDecoderError.sourceUnreadable(label) }
+
+        var result = GuavaImageDecodeResult()
+        let ok = data.withUnsafeBytes { raw -> Bool in
+            guard let base = raw.bindMemory(to: UInt8.self).baseAddress else { return false }
+            return ext.withCString { extC in
+                guava_image_decode_memory(base, data.count, extC, 0, 0, &result)
+            }
+        }
+        defer { guava_image_decode_free(&result) }
+
+        guard ok, let pixels = result.pixels else {
+            let message = result.error_message.map { String(cString: $0) } ?? "native image decoder failed"
+            throw ImageAssetDecoderError.decodeFailed("\(label): \(message)")
+        }
+        guard result.width > 0, result.height > 0 else {
+            throw ImageAssetDecoderError.invalidDimensions(label)
+        }
+        let byteCount = Int(result.width) * Int(result.height) * 4
+        return DecodedTextureAsset(pixels: Array(UnsafeBufferPointer(start: pixels, count: byteCount)),
+                                   width: Int(result.width),
+                                   height: Int(result.height))
     }
-#endif
 }
-
-#if canImport(CoreGraphics) && canImport(ImageIO)
-import CoreGraphics
-import ImageIO
-
-private func _decodeRGBA8CoreGraphics(path: String) throws -> DecodedTextureAsset {
-    let url = URL(fileURLWithPath: path)
-    guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
-        throw ImageAssetDecoderError.sourceUnreadable(path)
-    }
-    return try _decodeRGBA8CoreGraphics(source: source, label: path)
-}
-
-private func _decodeRGBA8CoreGraphics(data: Data, label: String) throws -> DecodedTextureAsset {
-    guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
-        throw ImageAssetDecoderError.sourceUnreadable(label)
-    }
-    return try _decodeRGBA8CoreGraphics(source: source, label: label)
-}
-
-private func _decodeRGBA8CoreGraphics(source: CGImageSource, label: String) throws -> DecodedTextureAsset {
-    guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-        throw ImageAssetDecoderError.imageMissing(label)
-    }
-    let width = image.width
-    let height = image.height
-    guard width > 0, height > 0 else {
-        throw ImageAssetDecoderError.invalidDimensions(label)
-    }
-    var pixels = [UInt8](repeating: 0, count: width * height * 4)
-    let colorSpace = CGColorSpaceCreateDeviceRGB()
-    let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
-    guard let context = CGContext(
-        data: &pixels, width: width, height: height,
-        bitsPerComponent: 8, bytesPerRow: width * 4,
-        space: colorSpace, bitmapInfo: bitmapInfo
-    ) else {
-        throw ImageAssetDecoderError.contextCreationFailed(label)
-    }
-    context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-    return DecodedTextureAsset(pixels: pixels, width: width, height: height)
-}
-#endif

@@ -1,13 +1,7 @@
-// Fixtures are generated with CoreGraphics/ImageIO (Apple-only). Guarded until
-// image decoding is portable (stb_image); see ImageAssetDecoder.
-#if canImport(CoreGraphics)
 import AssetPipeline
-import CoreGraphics
 import Foundation
-import ImageIO
 @testable import RenderBackend
 import Testing
-import UniformTypeIdentifiers
 
 @Suite("MeshTextureRegistry", .serialized)
 struct MeshTextureRegistryTests {
@@ -78,30 +72,6 @@ struct MeshTextureRegistryTests {
     }
 
     private func writePNG(url: URL, pixels: [UInt8], width: Int, height: Int) throws {
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        guard let provider = CGDataProvider(data: Data(pixels) as CFData),
-              let image = CGImage(width: width,
-                                  height: height,
-                                  bitsPerComponent: 8,
-                                  bitsPerPixel: 32,
-                                  bytesPerRow: width * 4,
-                                  space: colorSpace,
-                                  bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue),
-                                  provider: provider,
-                                  decode: nil,
-                                  shouldInterpolate: false,
-                                  intent: .defaultIntent),
-              let destination = CGImageDestinationCreateWithURL(url as CFURL,
-                                                                UTType.png.identifier as CFString,
-                                                                1,
-                                                                nil)
-        else {
-            throw CocoaError(.fileWriteUnknown)
-        }
-        CGImageDestinationAddImage(destination, image, nil)
-        if !CGImageDestinationFinalize(destination) {
-            throw CocoaError(.fileWriteUnknown)
-        }
+        try PortablePNG.encode(pixels: pixels, width: width, height: height).write(to: url)
     }
 }
-#endif
