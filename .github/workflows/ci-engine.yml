@@ -69,6 +69,7 @@ jobs:
           cmake --build Engine/build/native --parallel --config Release --target stage_jolt
           cmake --install Engine/build/native --config Release
           cmake --build Engine/build/native --parallel --config Release --target stage_ocio_openexr
+          cmake --build Engine/build/native --parallel --config Release --target stage_image_decode
 
       - name: Resolve packages
         shell: bash

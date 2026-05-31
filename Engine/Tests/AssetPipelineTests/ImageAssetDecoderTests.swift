@@ -1,12 +1,6 @@
-// Fixtures are generated with CoreGraphics/ImageIO (Apple-only). Guarded until
-// image decoding is portable (stb_image); see ImageAssetDecoder.
-#if canImport(CoreGraphics)
 import AssetPipeline
-import CoreGraphics
 import Foundation
-import ImageIO
 import Testing
-import UniformTypeIdentifiers
 
 @Suite("ImageAssetDecoder")
 struct ImageAssetDecoderTests {
@@ -128,32 +122,6 @@ struct ImageAssetDecoderTests {
     }
 
     private func makePNGData(pixels: [UInt8], width: Int, height: Int) throws -> Data {
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        guard let provider = CGDataProvider(data: Data(pixels) as CFData),
-              let image = CGImage(width: width,
-                                  height: height,
-                                  bitsPerComponent: 8,
-                                  bitsPerPixel: 32,
-                                  bytesPerRow: width * 4,
-                                  space: colorSpace,
-                                  bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue),
-                                  provider: provider,
-                                  decode: nil,
-                                  shouldInterpolate: false,
-                                  intent: .defaultIntent),
-              let output = CFDataCreateMutable(nil, 0),
-              let destination = CGImageDestinationCreateWithData(output,
-                                                                 UTType.png.identifier as CFString,
-                                                                 1,
-                                                                 nil)
-        else {
-            throw CocoaError(.fileWriteUnknown)
-        }
-        CGImageDestinationAddImage(destination, image, nil)
-        if !CGImageDestinationFinalize(destination) {
-            throw CocoaError(.fileWriteUnknown)
-        }
-        return output as Data
+        PortablePNG.encode(pixels: pixels, width: width, height: height)
     }
 }
-#endif
