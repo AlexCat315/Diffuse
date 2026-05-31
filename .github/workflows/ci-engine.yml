@@ -67,7 +67,10 @@ jobs:
           cmake -S Engine/third-party -B Engine/build/native -DCMAKE_BUILD_TYPE=Release
           cmake --build Engine/build/native --parallel --config Release --target stage_sdl3
           cmake --build Engine/build/native --parallel --config Release --target stage_jolt
-          cmake --install Engine/build/native --config Release
+          # --prefix redirects bundled deps' own install() rules (e.g. plutovg)
+          # away from the unwritable system /usr/local; SDL3 stages via absolute
+          # paths and is unaffected (mirrors bootstrap.py).
+          cmake --install Engine/build/native --config Release --prefix "$RUNNER_TEMP/guava-native-install"
           cmake --build Engine/build/native --parallel --config Release --target stage_ocio_openexr
           cmake --build Engine/build/native --parallel --config Release --target stage_image_decode
 
