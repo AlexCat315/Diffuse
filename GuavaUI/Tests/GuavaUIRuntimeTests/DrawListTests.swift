@@ -1,6 +1,10 @@
 import Foundation
 import Testing
+import GuavaUIBundledFonts
 @testable import GuavaUIRuntime
+
+/// Cross-platform test font: the bundled Inter.ttc.
+private let drawListTestFontPath = BundledFonts.bundledFontURL?.path ?? ""
 
 @Suite("DrawList")
 struct DrawListTests {
@@ -109,7 +113,7 @@ struct DrawListTests {
     @Test("addText produces glyph quads with atlas UVs")
     func addTextGeometry() {
         let atlas = FontAtlas()
-        atlas.loadFont(path: "/System/Library/Fonts/Supplemental/Arial.ttf", size: 16)
+        atlas.loadFont(path: drawListTestFontPath, size: 16)
 
         let shaper = TextShaper()
         shaper.setFont(ftFace: atlas.freetypeFace!, size: 16)
@@ -143,7 +147,7 @@ struct DrawListTests {
     @Test("addText snaps glyph quads to whole pixels")
     func addTextPixelSnap() {
         let atlas = FontAtlas()
-        atlas.loadFont(path: "/System/Library/Fonts/Supplemental/Arial.ttf", size: 16)
+        atlas.loadFont(path: drawListTestFontPath, size: 16)
 
         let shaper = TextShaper()
         shaper.setFont(ftFace: atlas.freetypeFace!, size: 16)
