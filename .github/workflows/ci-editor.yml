@@ -36,6 +36,7 @@ jobs:
           cmake --build Engine/build/native --parallel --target stage_jolt
           cmake --install Engine/build/native
           cmake --build Engine/build/native --parallel --target stage_ocio_openexr
+          cmake --build Engine/build/native --parallel --target stage_image_decode
 
       - name: Build GuavaUI native deps via CMake (Yoga + FreeType + HarfBuzz)
         run: |
