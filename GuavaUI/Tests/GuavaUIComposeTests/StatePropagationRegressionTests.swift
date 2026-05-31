@@ -58,6 +58,12 @@ struct StatePropagationRegressionTests: GuavaUIComposeSerializedSuite {
 
         let pointer = registry.handlers(for: host!).pointer
         #expect(pointer != nil)
+        // This test deliberately skips `computeLayout` (it reads `_DebugNode`
+        // markers stashed in `frame.origin.x`, which a layout pass would
+        // overwrite). Without layout the button keeps a zero frame, so the
+        // (0,0) press would miss its own bounds. Give it a hit-testable frame —
+        // in production the layout pass always supplies one.
+        host!.frame = CGRect(x: 0, y: 0, width: 100, height: 40)
         let evt = MouseButtonEvent(button: .left, x: 0, y: 0, clicks: 1)
         _ = pointer?(evt, .down, .target)
         _ = pointer?(evt, .up, .target)
