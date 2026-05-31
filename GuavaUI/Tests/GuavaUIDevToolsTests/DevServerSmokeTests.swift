@@ -1,3 +1,7 @@
+// DevServer uses Apple's Network.framework, so this end-to-end test only runs
+// where it is available. (Porting the dev hot-reload server to portable sockets
+// is tracked separately.)
+#if canImport(Network)
 import XCTest
 import Foundation
 import Network
@@ -147,3 +151,4 @@ final class DevServerSmokeTests: XCTestCase {
         return try JSONDecoder().decode(T.self, from: data)
     }
 }
+#endif

@@ -1,5 +1,9 @@
 import Testing
+#if canImport(CoreGraphics)
 import CoreGraphics
+#else
+import Foundation
+#endif
 @testable import GuavaUIRuntime
 
 /// Phase 5b dispatch-side tests. Verify that `InputScene`-driven hit-test
