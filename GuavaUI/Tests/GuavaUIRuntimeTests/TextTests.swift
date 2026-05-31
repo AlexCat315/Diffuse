@@ -1,8 +1,9 @@
 import Testing
+import GuavaUIBundledFonts
 @testable import GuavaUIRuntime
 
-/// System font path used for testing. Requires macOS with Arial installed.
-private let testFontPath = "/System/Library/Fonts/Supplemental/Arial.ttf"
+/// Cross-platform test font: the bundled Inter.ttc, present on every platform.
+private let testFontPath = BundledFonts.bundledFontURL?.path ?? ""
 
 @Suite("Text")
 struct TextTests {
@@ -122,6 +123,9 @@ struct TextTests {
         }
     }
 
+    // CJK shaping needs a CJK-capable system font + CoreText fallback, which is
+    // Apple-only. (The bundled Inter font is Latin; no portable CJK fallback yet.)
+    #if canImport(CoreText)
     @Test("TextShaper shapes CJK text")
     func shapeCJK() {
         let atlas = FontAtlas()
@@ -135,6 +139,7 @@ struct TextTests {
         let glyphs = shaper.shape(text: "你好")
         #expect(glyphs.count == 2)
     }
+    #endif
 
     @Test("TextShaper advances accumulate correctly")
     func shapeAdvances() {
@@ -184,6 +189,9 @@ struct TextTests {
         #expect(runs.allSatisfy { $0.font.postScriptName == primary?.postScriptName })
     }
 
+    // CJK fallback resolution is Apple CoreText-only; the portable FreeType path
+    // ships no CJK font, so these only run where CoreText is available.
+    #if canImport(CoreText)
     @Test("Bootstrapped system-font environment shapes CJK through fallback")
     func bootstrappedSystemFontShapesCJK() {
         let provider = FontProvider(size: 13)
@@ -211,6 +219,7 @@ struct TextTests {
         #expect(glyphs.first?.glyphID != 0)
         #expect((glyphs.first?.xAdvance ?? 0) > 0)
     }
+    #endif
 
     // MARK: - TextLayout
 
