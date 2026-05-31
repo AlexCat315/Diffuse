@@ -813,10 +813,12 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         graph.computeLayout(width: 240, height: 300)
 
         let parentScrollView = tree.root!.children.first!
+        // The menu's inner scroll viewport is maxVisibleRows(5) × rowHeight(34)
+        // = 170pt (Menu in Select.swift). Selector kept in sync with that.
         let menuScrollView = firstNode(in: tree.root, where: {
             $0 !== parentScrollView
                 && registry.handlers(for: $0).wheel != nil
-                && abs($0.frame.height - 160) < 0.1
+                && abs($0.frame.height - 170) < 0.1
         })
         #expect(menuScrollView != nil)
         guard let menuScrollView else { return }
