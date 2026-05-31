@@ -4,7 +4,6 @@ import EngineKernel
 import GuavaUICompose
 import GuavaUIRuntime
 
-@MainActor
 final class WindowChromeInteractionTests: XCTestCase {
     func testTitleBarControlsRemainHitTestableAcrossTheWholeBar() throws {
         let registry = InteractionRegistry()

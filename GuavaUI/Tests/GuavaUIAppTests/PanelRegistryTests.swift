@@ -2,7 +2,6 @@ import XCTest
 @testable import GuavaUIApp
 import GuavaUICompose
 
-@MainActor
 final class PanelRegistryTests: XCTestCase {
     func testRegisterAndResolve() {
         let registry = PanelRegistry()
