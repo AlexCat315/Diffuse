@@ -590,9 +590,15 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
                      modifiers: KeyModifiers,
                      registry: InteractionRegistry) {
         let pointer = registry.handlers(for: node).pointer!
+        // Hit-testing inside the handlers (e.g. isPointInsideButton) compares
+        // against the node's ABSOLUTE origin, so the synthetic click must use
+        // absolute coordinates — local frame.midX/Y miss for nested nodes.
+        var ax: CGFloat = 0, ay: CGFloat = 0
+        var walk: Node? = node
+        while let n = walk { ax += n.frame.origin.x; ay += n.frame.origin.y; walk = n.parent }
         let evt = MouseButtonEvent(button: .left,
-                                   x: Float(node.frame.midX.rounded()),
-                                   y: Float(node.frame.midY.rounded()),
+                                   x: Float((ax + node.frame.width / 2).rounded()),
+                                   y: Float((ay + node.frame.height / 2).rounded()),
                                    clicks: 1,
                                    modifiers: modifiers)
         _ = pointer(evt, .down, .target)
