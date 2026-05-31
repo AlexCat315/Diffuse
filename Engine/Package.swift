@@ -370,6 +370,7 @@ let package = Package(
                 "EngineMath",
                 "RenderBackend",
                 "SceneRuntime",
+                "CImageDecodeBridge",
             ]
         ),
         .testTarget(
@@ -400,6 +401,7 @@ let package = Package(
                 "ScriptRuntime",
                 "SceneRuntime",
                 "AssetPipeline",
+                "CImageDecodeBridge",
             ]
         ),
         .testTarget(
@@ -407,6 +409,10 @@ let package = Package(
             dependencies: [
                 "SIMDCompat",
                 "AssetPipeline",
+                // AssetPipeline imports the CImageDecodeBridge Clang module; test
+                // targets that import AssetPipeline must see it too (the macOS
+                // toolchain requires the Clang module transitively).
+                "CImageDecodeBridge",
             ]
         ),
         .testTarget(
@@ -441,6 +447,7 @@ let package = Package(
                 "SIMDCompat",
                 "IntentRuntime",
                 "AssetPipeline",
+                "CImageDecodeBridge",
                 "CapabilityRuntime",
                 "ObservationBus",
                 "SceneRuntime",
