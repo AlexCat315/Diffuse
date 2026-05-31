@@ -1,3 +1,6 @@
+// Exercises the Apple Network.framework DevServer via a URLSession WebSocket
+// client; only runs where Network.framework is available.
+#if canImport(Network)
 import XCTest
 import Foundation
 import EngineKernel
@@ -140,3 +143,4 @@ final class DevServerInputAndStateTests: XCTestCase {
         var value: [String: String] = [:]
     }
 }
+#endif

@@ -1,5 +1,9 @@
 import Testing
+#if canImport(CoreGraphics)
 import CoreGraphics
+#else
+import Foundation
+#endif
 @testable import GuavaUIRuntime
 
 /// Phase 5c: hit-test cache on `InputScene`. Repeated lookups at the same

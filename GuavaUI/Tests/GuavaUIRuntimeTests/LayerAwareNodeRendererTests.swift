@@ -1,5 +1,9 @@
 import Testing
+#if canImport(CoreGraphics)
 import CoreGraphics
+#else
+import Foundation
+#endif
 @testable import GuavaUIRuntime
 
 @Suite("Phase 4b LayerAwareNodeRenderer", .serialized)
