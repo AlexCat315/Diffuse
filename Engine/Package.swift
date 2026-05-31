@@ -211,7 +211,14 @@ let package = Package(
                 "CJoltBridge",
             ]
         ),
-        .target(name: "AssetPipeline", dependencies: ["SIMDCompat", "CImageDecodeBridge"]),
+        .target(
+            name: "AssetPipeline",
+            dependencies: [
+                "SIMDCompat",
+                "CImageDecodeBridge",
+                .product(name: "Logging", package: "swift-log"),
+            ]
+        ),
         .target(name: "SequenceRuntime"),
         .target(
             name: "ColorPipeline",
