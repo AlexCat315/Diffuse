@@ -64,17 +64,16 @@ jobs:
       - name: Build native deps via CMake (SDL3 + Imath + OpenEXR + Jolt)
         shell: bash
         run: |
+          # Mirror bootstrap.py exactly: a blanket build (ALL) first builds every
+          # bundled lib (all webp variants, plutovg, lunasvg, jolt, ocio/openexr,
+          # SDL3 via stage_sdl3 ALL) so the install step finds them; stage_sdl3 /
+          # stage_image_decode then stage the bundles; --prefix keeps stray
+          # install() rules out of the unwritable system /usr/local.
           cmake -S Engine/third-party -B Engine/build/native -DCMAKE_BUILD_TYPE=Release
+          cmake --build Engine/build/native --parallel --config Release
           cmake --build Engine/build/native --parallel --config Release --target stage_sdl3
-          cmake --build Engine/build/native --parallel --config Release --target stage_jolt
-          # Build image-decode libs (webp/lunasvg/plutovg) BEFORE install — its
-          # install() rules reference libplutovg.a, which must exist first.
           cmake --build Engine/build/native --parallel --config Release --target stage_image_decode
-          # --prefix redirects bundled deps' own install() rules (e.g. plutovg)
-          # away from the unwritable system /usr/local; SDL3 stages via absolute
-          # paths and is unaffected (mirrors bootstrap.py).
           cmake --install Engine/build/native --config Release --prefix "$RUNNER_TEMP/guava-native-install"
-          cmake --build Engine/build/native --parallel --config Release --target stage_ocio_openexr
 
       - name: Resolve packages
         shell: bash
