@@ -1,5 +1,8 @@
 import Foundation
-import CImageDecodeBridge
+// The C bridge is an internal detail (its types never appear in AssetPipeline's
+// API), so consumers/tests that import AssetPipeline don't need the C module in
+// their own import path.
+internal import CImageDecodeBridge
 
 public struct DecodedTextureAsset: Sendable, Equatable {
     public var pixels: [UInt8]
