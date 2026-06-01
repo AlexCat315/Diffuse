@@ -196,6 +196,12 @@ public final class AppRuntime {
         host.externalDisplayRequestDrain = {
             displayHandle.drainDisplayRequest()
         }
+        displayHandle.installFolderDialogControl { [weak self] defaultPath, accept in
+            guard let self else { accept(nil); return }
+            self.host.showOpenFolderDialog(windowID: self.host.mainSession?.id,
+                                           defaultPath: defaultPath,
+                                           accept: accept)
+        }
         displayHandle.installAuxiliaryWindowControls(
             open: { [weak self] request in
                 self?.openAuxiliaryWindow(request)

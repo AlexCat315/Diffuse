@@ -1,5 +1,9 @@
 import Testing
+#if canImport(CoreGraphics)
 import CoreGraphics
+#else
+import Foundation
+#endif
 import GuavaUIRuntime
 
 @Suite("Phase 8 / Interpolatable")

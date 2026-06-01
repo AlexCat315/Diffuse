@@ -231,6 +231,13 @@ public final class SDL3PlatformHost: PlatformHost {
         shell?.setWindowChromeHitTest(windowID, hitTest)
     }
 
+    public func showOpenFolderDialog(windowID: WindowID?,
+                                     defaultPath: String?,
+                                     accept: @escaping (String?) -> Void) {
+        guard let shell else { accept(nil); return }
+        shell.showOpenFolderDialog(windowID: windowID, defaultPath: defaultPath, accept: accept)
+    }
+
     /// Destroy a window. The matching `PlatformWindowSession` is dropped on
     /// the next iteration of the run loop via `pruneClosedSessions`.
     public func closeWindow(_ windowID: WindowID) {

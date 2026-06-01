@@ -52,6 +52,7 @@ public final class AppDisplayHandle: @unchecked Sendable {
     private var closeWindowByIDAction: (@MainActor (WindowID) -> Void)?
     private var windowMaximizedByIDQuery: (@MainActor (WindowID) -> Bool)?
     private var showWindowSystemMenuAction: (@MainActor (WindowID, Float, Float) -> Void)?
+    private var openFolderDialogAction: (@MainActor (String?, @escaping (String?) -> Void) -> Void)?
 
     public init() {}
 
@@ -152,6 +153,19 @@ public final class AppDisplayHandle: @unchecked Sendable {
         setMainWindowChromeHitTestAction?(hitTest)
     }
 
+    /// Present the native "choose a folder" dialog. `accept` receives the
+    /// chosen directory path, or `nil` if the user cancelled (or no platform
+    /// dialog is available). Delivered on the main thread.
+    @MainActor
+    public func requestOpenFolder(defaultPath: String? = nil,
+                                  accept: @escaping (String?) -> Void) {
+        guard let openFolderDialogAction else {
+            accept(nil)
+            return
+        }
+        openFolderDialogAction(defaultPath, accept)
+    }
+
     @MainActor
     public func openWindow<Root: View>(title: String,
                                        width: Int32 = 480,
@@ -179,6 +193,11 @@ public final class AppDisplayHandle: @unchecked Sendable {
 
     func drainDisplayRequest() -> Bool {
         signal.drain()
+    }
+
+    @MainActor
+    func installFolderDialogControl(_ action: @escaping @MainActor (String?, @escaping (String?) -> Void) -> Void) {
+        openFolderDialogAction = action
     }
 
     @MainActor

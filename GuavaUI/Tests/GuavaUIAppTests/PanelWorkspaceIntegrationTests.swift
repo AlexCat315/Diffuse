@@ -4,7 +4,6 @@ import GuavaUICompose
 import GuavaUIRuntime
 import GuavaUIWorkspace
 
-@MainActor
 final class PanelWorkspaceIntegrationTests: XCTestCase {
     func testPanelRegistryExportsTypedWorkspaceDescriptors() {
         let registry = PanelRegistry([

@@ -211,7 +211,14 @@ let package = Package(
                 "CJoltBridge",
             ]
         ),
-        .target(name: "AssetPipeline", dependencies: ["SIMDCompat"]),
+        .target(
+            name: "AssetPipeline",
+            dependencies: [
+                "SIMDCompat",
+                "CImageDecodeBridge",
+                .product(name: "Logging", package: "swift-log"),
+            ]
+        ),
         .target(name: "SequenceRuntime"),
         .target(
             name: "ColorPipeline",
@@ -363,6 +370,7 @@ let package = Package(
                 "EngineMath",
                 "RenderBackend",
                 "SceneRuntime",
+                "CImageDecodeBridge",
             ]
         ),
         .testTarget(
@@ -393,6 +401,7 @@ let package = Package(
                 "ScriptRuntime",
                 "SceneRuntime",
                 "AssetPipeline",
+                "CImageDecodeBridge",
             ]
         ),
         .testTarget(
@@ -400,6 +409,10 @@ let package = Package(
             dependencies: [
                 "SIMDCompat",
                 "AssetPipeline",
+                // AssetPipeline imports the CImageDecodeBridge Clang module; test
+                // targets that import AssetPipeline must see it too (the macOS
+                // toolchain requires the Clang module transitively).
+                "CImageDecodeBridge",
             ]
         ),
         .testTarget(
@@ -434,6 +447,7 @@ let package = Package(
                 "SIMDCompat",
                 "IntentRuntime",
                 "AssetPipeline",
+                "CImageDecodeBridge",
                 "CapabilityRuntime",
                 "ObservationBus",
                 "SceneRuntime",
@@ -446,6 +460,9 @@ let package = Package(
             dependencies: [
                 "IntentRuntime",
                 "SemanticPipeline",
+                // Transitively imports AssetPipeline → the CImageDecodeBridge
+                // Clang module must be a direct test-target dep on macOS.
+                "CImageDecodeBridge",
             ]
         ),
         .testTarget(
@@ -453,6 +470,7 @@ let package = Package(
             dependencies: [
                 "IntentRuntime",
                 "PerceptionRuntime",
+                "CImageDecodeBridge",
             ]
         ),
         .testTarget(
@@ -464,6 +482,7 @@ let package = Package(
                 "PerceptionRuntime",
                 "ScriptRuntime",
                 "SIMDCompat",
+                "CImageDecodeBridge",
             ]
         ),
         .testTarget(
@@ -471,6 +490,7 @@ let package = Package(
             dependencies: [
                 "ContextMemory",
                 "IntentRuntime",
+                "CImageDecodeBridge",
             ]
         ),
         .testTarget(

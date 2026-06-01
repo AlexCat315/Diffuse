@@ -1,5 +1,9 @@
 import Testing
+#if canImport(CoreGraphics)
 import CoreGraphics
+#else
+import Foundation
+#endif
 import Foundation
 #if canImport(ImageIO)
 import ImageIO

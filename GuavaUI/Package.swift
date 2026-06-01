@@ -142,6 +142,7 @@ let package = Package(
             name: "GuavaUIRuntimeTests",
             dependencies: [
                 "GuavaUIRuntime",
+                "GuavaUIBundledFonts",
                 .product(name: "PlatformShell", package: "Engine"),
             ]
         ),
@@ -150,6 +151,7 @@ let package = Package(
             dependencies: [
                 "GuavaUICompose",
                 "GuavaUIRuntime",
+                "GuavaUIBundledFonts",
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
             ]
