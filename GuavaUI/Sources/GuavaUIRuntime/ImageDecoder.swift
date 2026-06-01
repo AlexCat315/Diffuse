@@ -1,7 +1,5 @@
 import Foundation
-#if canImport(CImageDecodeBridge)
 import CImageDecodeBridge
-#endif
 #if canImport(AppKit)
 import AppKit
 #endif
@@ -46,13 +44,15 @@ public struct DecodedImage: Sendable {
     }
 }
 
-/// File → RGBA decoder. Bitmap formats (PNG/JPEG/GIF/HEIC/BMP/TIFF) flow
-/// PNG/JPEG/WebP/SVG flow through the cross-platform native bridge; Apple-only
-/// formats such as PDF keep using the ImageIO/AppKit fallback.
-///
-/// The renderer uses straight-alpha blending (`srcAlpha * src + (1-srcAlpha) * dst`),
-/// so this decoder un-premultiplies the bytes that CoreGraphics produces.
+/// File → RGBA decoder. png/jpg/bmp/gif/tga (stb_image), webp (libwebp) and
+/// svg (lunasvg) all flow through the cross-platform native bridge, on every
+/// platform. Only genuinely Apple-only formats (PDF, HEIC, TIFF) keep an
+/// ImageIO/AppKit path, guarded behind `#if`.
 public enum ImageDecoder {
+
+    /// Formats that have no portable decoder vendored — handled by Apple
+    /// frameworks where available, otherwise unsupported.
+    private static let appleOnlyExtensions: Set<String> = ["pdf", "heic", "heif", "tiff", "tif"]
 
     /// Decode an image file into raw RGBA8.
     ///
@@ -60,9 +60,8 @@ public enum ImageDecoder {
     ///   - url: Source file. Format is inferred from contents (bitmap) or
     ///          file extension (`.svg`, `.pdf` → vector).
     ///   - targetSize: Optional explicit size in pixels. **Required** for
-    ///                 vector formats (SVG/PDF). For bitmap formats it
-    ///                 forces a resample (CoreGraphics high-quality);
-    ///                 omit to keep the source resolution.
+    ///                 vector formats (SVG/PDF). For bitmap formats it forces a
+    ///                 resample; omit to keep the source resolution.
     public static func decode(url: URL,
                               targetSize: (width: Int, height: Int)? = nil) throws -> DecodedImage {
         let fm = FileManager.default
@@ -70,76 +69,54 @@ public enum ImageDecoder {
             throw ImageDecodeError.fileNotFound(url)
         }
         let ext = url.pathExtension.lowercased()
-        #if canImport(CImageDecodeBridge)
-        if Self.nativeSupportedExtensions.contains(ext) {
-            return try decodeNative(url: url, extension: ext, targetSize: targetSize)
-        }
-        #endif
 
         #if canImport(AppKit) && canImport(CoreGraphics) && canImport(ImageIO)
-        if ext == "pdf" {
-            return try decodeVector(url: url, targetSize: targetSize)
+        if appleOnlyExtensions.contains(ext) {
+            return ext == "pdf"
+                ? try decodeVector(url: url, targetSize: targetSize)
+                : try decodeBitmap(url: url, targetSize: targetSize)
         }
-        return try decodeBitmap(url: url, targetSize: targetSize)
-        #else
-        throw ImageDecodeError.unsupportedFormat(ext.isEmpty ? "<unknown>" : ext)
         #endif
+
+        let data = try Data(contentsOf: url)
+        return try decodeViaBridge(data: data, extension: ext, label: url.lastPathComponent, targetSize: targetSize)
     }
 
-    /// Decode raw in-memory bytes (e.g. PNG bytes loaded from a bundle).
-    /// Bitmap formats only — pass `targetSize` to resample.
+    /// Decode raw in-memory bytes (e.g. PNG/JPEG bytes loaded from a bundle).
+    /// The bridge sniffs the bitmap format from the data.
     public static func decode(data: Data,
                               targetSize: (width: Int, height: Int)? = nil) throws -> DecodedImage {
-        #if canImport(CoreGraphics) && canImport(ImageIO)
-        guard let src = CGImageSourceCreateWithData(data as CFData, nil),
-              let cg = CGImageSourceCreateImageAtIndex(src, 0, nil) else {
-            throw ImageDecodeError.decodeFailure("CGImageSource: cannot decode \(data.count) bytes")
-        }
-        return rasterize(cg, targetSize: targetSize)
-        #else
-        throw ImageDecodeError.unsupportedFormat("data decode requires CoreGraphics")
-        #endif
+        try decodeViaBridge(data: data, extension: "", label: "<memory>", targetSize: targetSize)
     }
 
-    #if canImport(CImageDecodeBridge)
+    // MARK: - Native bridge (all platforms)
 
-    private static let nativeSupportedExtensions: Set<String> = [
-        "png", "jpg", "jpeg", "webp", "svg"
-    ]
-
-    private static func decodeNative(url: URL,
-                                     extension ext: String,
-                                     targetSize: (Int, Int)?) throws -> DecodedImage {
-        let data = try Data(contentsOf: url)
+    private static func decodeViaBridge(data: Data,
+                                        extension ext: String,
+                                        label: String,
+                                        targetSize: (Int, Int)?) throws -> DecodedImage {
+        guard !data.isEmpty else { throw ImageDecodeError.decodeFailure("\(label): empty image data") }
         var result = GuavaImageDecodeResult()
-        let ok = data.withUnsafeBytes { rawBuffer in
-            guard let base = rawBuffer.bindMemory(to: UInt8.self).baseAddress else {
-                return false
-            }
+        let ok = data.withUnsafeBytes { rawBuffer -> Bool in
+            guard let base = rawBuffer.bindMemory(to: UInt8.self).baseAddress else { return false }
             return ext.withCString { extCString in
-                guava_image_decode_memory(
-                    base,
-                    data.count,
-                    extCString,
-                    Int32(targetSize?.0 ?? 0),
-                    Int32(targetSize?.1 ?? 0),
-                    &result
-                )
+                guava_image_decode_memory(base, data.count, extCString,
+                                          Int32(targetSize?.0 ?? 0), Int32(targetSize?.1 ?? 0),
+                                          &result)
             }
         }
         defer { guava_image_decode_free(&result) }
         guard ok, let pixels = result.pixels, result.width > 0, result.height > 0 else {
             let message = result.error_message.map { String(cString: $0) } ?? "native image decoder failed"
-            throw ImageDecodeError.decodeFailure("\(url.lastPathComponent): \(message)")
+            throw ImageDecodeError.decodeFailure("\(label): \(message)")
         }
         let byteCount = Int(result.width) * Int(result.height) * 4
-        let buffer = UnsafeBufferPointer(start: pixels, count: byteCount)
-        return DecodedImage(pixels: Array(buffer),
+        return DecodedImage(pixels: Array(UnsafeBufferPointer(start: pixels, count: byteCount)),
                             width: Int(result.width),
                             height: Int(result.height))
     }
 
-    #endif
+    // MARK: - Apple-only formats (PDF / HEIC / TIFF)
 
     #if canImport(AppKit) && canImport(CoreGraphics) && canImport(ImageIO)
 
@@ -157,9 +134,6 @@ public enum ImageDecoder {
         guard let nsImage = NSImage(contentsOf: url) else {
             throw ImageDecodeError.decodeFailure("NSImage: cannot load \(url.path)")
         }
-        // Vector images may report a zero size — fall back to a sensible
-        // default and require the caller to pass `targetSize` for crisp
-        // rasterisation.
         let intrinsic = nsImage.size
         let defaultW = intrinsic.width  > 0 ? Int(intrinsic.width.rounded())  : 64
         let defaultH = intrinsic.height > 0 ? Int(intrinsic.height.rounded()) : 64
@@ -175,9 +149,9 @@ public enum ImageDecoder {
         return rasterize(cg, targetSize: (w, h))
     }
 
-    /// Draw a `CGImage` into a normalized RGBA8 buffer at the requested size,
-    /// then un-premultiply so the resulting bytes match the renderer's
-    /// straight-alpha blend convention.
+    /// Draw a `CGImage` into a normalized RGBA8 buffer, then un-premultiply so
+    /// the bytes match the renderer's straight-alpha blend convention (the
+    /// native bridge already returns straight alpha).
     private static func rasterize(_ cg: CGImage,
                                   targetSize: (Int, Int)?) -> DecodedImage {
         let w = targetSize?.0 ?? cg.width
@@ -201,8 +175,6 @@ public enum ImageDecoder {
         return DecodedImage(pixels: bytes, width: w, height: h)
     }
 
-    /// CoreGraphics writes premultiplied RGBA. The renderer's alpha blend
-    /// state expects straight RGBA, so divide each colour channel by alpha.
     private static func unpremultiplyInPlace(_ bytes: inout [UInt8]) {
         let count = bytes.count
         var i = 0
@@ -214,8 +186,6 @@ public enum ImageDecoder {
                 bytes[i + 1] = UInt8(min(255, (Float(bytes[i + 1]) * 255.0 / af).rounded()))
                 bytes[i + 2] = UInt8(min(255, (Float(bytes[i + 2]) * 255.0 / af).rounded()))
             } else if a == 0 {
-                // Discard residual colour for fully-transparent pixels so
-                // bilinear sampling near edges doesn't bleed garbage.
                 bytes[i + 0] = 0
                 bytes[i + 1] = 0
                 bytes[i + 2] = 0

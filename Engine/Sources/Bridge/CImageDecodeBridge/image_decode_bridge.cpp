@@ -14,6 +14,10 @@
 
 #define STBI_ONLY_JPEG
 #define STBI_ONLY_PNG
+#define STBI_ONLY_BMP
+#define STBI_ONLY_GIF
+#define STBI_ONLY_TGA
+#define STBI_ONLY_PSD
 #define STBI_NO_STDIO
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -217,16 +221,16 @@ extern "C" bool guava_image_decode_memory(const uint8_t* data,
     }
 
     const std::string ext = lower_extension(extension);
-    if (ext == "png" || ext == "jpg" || ext == "jpeg") {
-        return decode_stb(data, data_size, target_width, target_height, out_result);
-    }
     if (ext == "webp") {
         return decode_webp(data, data_size, target_width, target_height, out_result);
     }
     if (ext == "svg") {
         return decode_svg(data, data_size, target_width, target_height, out_result);
     }
-    return fail(out_result, "unsupported image format");
+    // Everything else (png/jpg/bmp/gif/tga/psd, and an empty/unknown extension
+    // for raw in-memory bytes) goes through stb_image, which sniffs the format
+    // from the data itself.
+    return decode_stb(data, data_size, target_width, target_height, out_result);
 }
 
 extern "C" void guava_image_decode_free(GuavaImageDecodeResult* result) {

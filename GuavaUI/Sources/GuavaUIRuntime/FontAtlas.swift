@@ -118,7 +118,8 @@ public final class FontAtlas {
     /// - Parameters:
     ///   - path: Absolute path to a .ttf / .otf font file.
     ///   - size: Font size in points.
-    public func loadFont(path: String, size: Float, rasterScale: Float = 1) {
+    @discardableResult
+    public func loadFont(path: String, size: Float, rasterScale: Float = 1) -> Bool {
         if let face = ftFace {
             FT_Done_Face(face)
             ftFace = nil
@@ -126,7 +127,9 @@ public final class FontAtlas {
 
         var face: FT_Face?
         let err = FT_New_Face(ensureLibrary(), path, 0, &face)
-        precondition(err == 0, "FT_New_Face failed: \(err)")
+        // A missing or unreadable font must never crash the app — leave the atlas
+        // faceless so the caller can fall back to another font.
+        guard err == 0, let face else { return false }
         self.ftFace = face
         self.fontSize = size
         self.rasterScale = max(1, rasterScale)
@@ -141,6 +144,7 @@ public final class FontAtlas {
         rasterCache.removeAll()
         dirtyRegion = nil
         isDirty = false
+        return true
     }
 
     /// The underlying FreeType face (for HarfBuzz integration).
