@@ -1,5 +1,9 @@
 import Testing
+#if canImport(CoreGraphics)
 import CoreGraphics
+#else
+import Foundation
+#endif
 import EngineKernel
 import GuavaUIRuntime
 @testable import GuavaUICompose
@@ -490,6 +494,9 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         #expect(!rig.store.value.hasPrefix("Xalpha"))
     } }
 
+    // CJK glyph fallback resolves via Apple's CoreText font cascade; the portable
+    // FreeType path ships no CJK font, so these only run where CoreText exists.
+    #if canImport(CoreText)
     @Test("TextField renders CJK glyphs through font fallback")
     func rendersCJKGlyphs() { GlobalTestLock.locked {
         let rig = makeRig()
@@ -559,6 +566,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         #expect((info?.width ?? 0) > 0)
         #expect((info?.height ?? 0) > 0)
     } }
+    #endif
 
     // MARK: - Phase 6.4d — selection + modifiers + clipboard
 

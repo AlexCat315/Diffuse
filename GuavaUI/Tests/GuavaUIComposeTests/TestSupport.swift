@@ -1,5 +1,6 @@
 import Foundation
 import GuavaUIRuntime
+import GuavaUIBundledFonts
 @testable import GuavaUICompose
 
 /// All compose tests that mutate the process-wide holders
@@ -19,7 +20,7 @@ enum GlobalTestLock {
 protocol GuavaUIComposeSerializedSuite {}
 
 enum TestTextEnvironmentFactory {
-    static let fontPath = "/System/Library/Fonts/Supplemental/Arial.ttf"
+    static let fontPath = BundledFonts.bundledFontURL?.path ?? ""
 
     static func make(size: Float = 16,
                      lineHeight: Float = 20) -> TextEnvironment {

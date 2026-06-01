@@ -440,11 +440,12 @@ public final class SDL3Shell: Shell {
         let windowFlags = SDL_WindowFlags(
             GUAVA_SDL_WINDOW_RESIZABLE | GUAVA_SDL_WINDOW_HIGH_PIXEL_DENSITY | GUAVA_SDL_WINDOW_METAL)
 #else
-        var rawWindowFlags = GUAVA_SDL_WINDOW_RESIZABLE | GUAVA_SDL_WINDOW_HIGH_PIXEL_DENSITY
-        if options.titleBarStyle == .hiddenInset {
-            rawWindowFlags |= GUAVA_SDL_WINDOW_BORDERLESS
-        }
-        let windowFlags = SDL_WindowFlags(rawWindowFlags)
+        // Windows/Linux use native window decorations (title bar with
+        // minimize / maximize / close). The macOS hidden-inset custom-chrome
+        // style is an Apple aesthetic; off-Apple it would leave the window
+        // borderless with no way to move, minimize, or close it.
+        let windowFlags = SDL_WindowFlags(
+            GUAVA_SDL_WINDOW_RESIZABLE | GUAVA_SDL_WINDOW_HIGH_PIXEL_DENSITY)
 #endif
 
         // On Windows with DPI awareness enabled, SDL_CreateWindow coordinates are
@@ -805,6 +806,40 @@ public final class SDL3Shell: Shell {
 
     public func setWindowChromeHitTest(_ windowID: WindowID, _ hitTest: WindowChromeHitTest?) {
         windows[windowID]?.setChromeHitTest(hitTest)
+    }
+
+    /// Boxes the Swift completion so it can ride through SDL's `void *userdata`
+    /// across the C dialog callback. Retained on call, released in the callback.
+    private final class FolderDialogBox {
+        let accept: (String?) -> Void
+        init(_ accept: @escaping (String?) -> Void) { self.accept = accept }
+    }
+
+    public func showOpenFolderDialog(windowID: WindowID?,
+                                     defaultPath: String?,
+                                     accept: @escaping (String?) -> Void) {
+        let parent = (windowID.flatMap { windows[$0] } ?? mainWindowID.flatMap { windows[$0] })?.window
+        let userdata = Unmanaged.passRetained(FolderDialogBox(accept)).toOpaque()
+
+        let callback: SDL_DialogFileCallback = { userdata, filelist, _ in
+            guard let userdata else { return }
+            let box = Unmanaged<FolderDialogBox>.fromOpaque(userdata).takeRetainedValue()
+            // `filelist == nil` is an error; a non-nil list with a nil first
+            // entry is a user cancel. Either way we report no selection.
+            var chosen: String? = nil
+            if let filelist, let first = filelist.pointee {
+                chosen = String(cString: first)
+            }
+            box.accept(chosen)
+        }
+
+        if let defaultPath {
+            defaultPath.withCString { location in
+                SDL_ShowOpenFolderDialog(callback, userdata, parent, location, false)
+            }
+        } else {
+            SDL_ShowOpenFolderDialog(callback, userdata, parent, nil, false)
+        }
     }
 
     public func displayRefreshRate(windowID: WindowID? = nil) -> Double? {
