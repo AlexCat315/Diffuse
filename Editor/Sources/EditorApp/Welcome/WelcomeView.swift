@@ -1,6 +1,3 @@
-#if os(macOS)
-import AppKit
-#endif
 import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
@@ -97,37 +94,35 @@ struct WelcomeView: View {
     }
 
     private func pickExistingProject() {
-        #if os(macOS)
-        let panel = NSOpenPanel()
-        panel.title = L("Open Project")
-        panel.message = L("Choose the root folder of your Guava project.")
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.begin { response in
-            guard response == .OK, let url = panel.url else { return }
-            Task { @MainActor [self] in
-                self.open(path: url.path)
+        Task { @MainActor [self] in
+            guard let display = context.display else {
+                errorMessage = L("Folder picker is unavailable on this platform.")
+                return
+            }
+            display.requestOpenFolder { path in
+                guard let path else { return }
+                Task { @MainActor [self] in
+                    self.open(path: path)
+                }
             }
         }
-        #endif
     }
 
     private func pickNewProject() {
-        #if os(macOS)
-        let panel = NSSavePanel()
-        panel.title = L("New Project")
-        panel.message = L("Choose a location and name for your new Guava project.")
-        panel.nameFieldLabel = L("Project Name:")
-        panel.nameFieldStringValue = "MyGame"
-        panel.canCreateDirectories = true
-        panel.begin { response in
-            guard response == .OK, let url = panel.url else { return }
-            Task { @MainActor [self] in
-                self.createAndOpen(at: url)
+        Task { @MainActor [self] in
+            guard let display = context.display else {
+                errorMessage = L("Folder picker is unavailable on this platform.")
+                return
+            }
+            // SDL's native folder dialog selects an existing directory (the user
+            // can create one in the dialog). The chosen folder becomes the root.
+            display.requestOpenFolder { path in
+                guard let path else { return }
+                Task { @MainActor [self] in
+                    self.createAndOpen(at: URL(fileURLWithPath: path, isDirectory: true))
+                }
             }
         }
-        #endif
     }
 
     private func createAndOpen(at url: URL) {

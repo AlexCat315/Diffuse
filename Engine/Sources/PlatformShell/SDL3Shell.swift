@@ -808,6 +808,40 @@ public final class SDL3Shell: Shell {
         windows[windowID]?.setChromeHitTest(hitTest)
     }
 
+    /// Boxes the Swift completion so it can ride through SDL's `void *userdata`
+    /// across the C dialog callback. Retained on call, released in the callback.
+    private final class FolderDialogBox {
+        let accept: (String?) -> Void
+        init(_ accept: @escaping (String?) -> Void) { self.accept = accept }
+    }
+
+    public func showOpenFolderDialog(windowID: WindowID?,
+                                     defaultPath: String?,
+                                     accept: @escaping (String?) -> Void) {
+        let parent = (windowID.flatMap { windows[$0] } ?? mainWindowID.flatMap { windows[$0] })?.window
+        let userdata = Unmanaged.passRetained(FolderDialogBox(accept)).toOpaque()
+
+        let callback: SDL_DialogFileCallback = { userdata, filelist, _ in
+            guard let userdata else { return }
+            let box = Unmanaged<FolderDialogBox>.fromOpaque(userdata).takeRetainedValue()
+            // `filelist == nil` is an error; a non-nil list with a nil first
+            // entry is a user cancel. Either way we report no selection.
+            var chosen: String? = nil
+            if let filelist, let first = filelist.pointee {
+                chosen = String(cString: first)
+            }
+            box.accept(chosen)
+        }
+
+        if let defaultPath {
+            defaultPath.withCString { location in
+                SDL_ShowOpenFolderDialog(callback, userdata, parent, location, false)
+            }
+        } else {
+            SDL_ShowOpenFolderDialog(callback, userdata, parent, nil, false)
+        }
+    }
+
     public func displayRefreshRate(windowID: WindowID? = nil) -> Double? {
         guard didInitializeSDL else { return nil }
 
