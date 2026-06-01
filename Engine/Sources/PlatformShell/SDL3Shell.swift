@@ -440,12 +440,16 @@ public final class SDL3Shell: Shell {
         let windowFlags = SDL_WindowFlags(
             GUAVA_SDL_WINDOW_RESIZABLE | GUAVA_SDL_WINDOW_HIGH_PIXEL_DENSITY | GUAVA_SDL_WINDOW_METAL)
 #else
-        // Windows/Linux use native window decorations (title bar with
-        // minimize / maximize / close). The macOS hidden-inset custom-chrome
-        // style is an Apple aesthetic; off-Apple it would leave the window
-        // borderless with no way to move, minimize, or close it.
-        let windowFlags = SDL_WindowFlags(
-            GUAVA_SDL_WINDOW_RESIZABLE | GUAVA_SDL_WINDOW_HIGH_PIXEL_DENSITY)
+        // The `.hiddenInset` style is the engine's immersive look: a borderless
+        // window whose title bar (with minimize / maximize / close) is drawn by
+        // the app via ImmersiveWindowTitleBar. Every screen that wants window
+        // controls must include that chrome; otherwise the borderless window has
+        // no decorations at all.
+        var rawWindowFlags = GUAVA_SDL_WINDOW_RESIZABLE | GUAVA_SDL_WINDOW_HIGH_PIXEL_DENSITY
+        if options.titleBarStyle == .hiddenInset {
+            rawWindowFlags |= GUAVA_SDL_WINDOW_BORDERLESS
+        }
+        let windowFlags = SDL_WindowFlags(rawWindowFlags)
 #endif
 
         // On Windows with DPI awareness enabled, SDL_CreateWindow coordinates are
