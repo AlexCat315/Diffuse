@@ -34,7 +34,7 @@ private struct _PopoverProbe: _PrimitiveView {
 }
 
 @Suite("Popover")
-struct PopoverTests {
+struct PopoverTests: GuavaUIComposeSerializedSuite {
     private final class ActionBox {
         var fired = 0
     }
@@ -57,7 +57,13 @@ struct PopoverTests {
     }
 
     @Test("Opening Popover does not move following siblings")
-    func openingPopoverDoesNotAffectSiblingLayout() {
+    func openingPopoverDoesNotAffectSiblingLayout() { GlobalTestLock.locked {
+        // Presenting the popover registers into the process-wide PortalRegistry,
+        // so this case must hold the lock and clear it like the others —
+        // otherwise it races the other Popover/Portal tests.
+        PortalRegistry.clear()
+        defer { PortalRegistry.clear() }
+
         let tree = NodeTree()
         let recomposer = Recomposer()
         let graph = ViewGraph(tree: tree, recomposer: recomposer)
@@ -75,7 +81,7 @@ struct PopoverTests {
 
         let expandedSiblingY = findProbe(id: "sibling", in: tree.root)?.frame.origin.y
         #expect(expandedSiblingY == initialSiblingY)
-    }
+    } }
 
     private struct MenuHarness: View {
         let box: ActionBox
