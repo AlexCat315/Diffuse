@@ -460,6 +460,9 @@ let package = Package(
             dependencies: [
                 "IntentRuntime",
                 "SemanticPipeline",
+                // Transitively imports AssetPipeline → the CImageDecodeBridge
+                // Clang module must be a direct test-target dep on macOS.
+                "CImageDecodeBridge",
             ]
         ),
         .testTarget(
@@ -467,6 +470,7 @@ let package = Package(
             dependencies: [
                 "IntentRuntime",
                 "PerceptionRuntime",
+                "CImageDecodeBridge",
             ]
         ),
         .testTarget(
@@ -478,6 +482,7 @@ let package = Package(
                 "PerceptionRuntime",
                 "ScriptRuntime",
                 "SIMDCompat",
+                "CImageDecodeBridge",
             ]
         ),
         .testTarget(
@@ -485,6 +490,7 @@ let package = Package(
             dependencies: [
                 "ContextMemory",
                 "IntentRuntime",
+                "CImageDecodeBridge",
             ]
         ),
         .testTarget(
