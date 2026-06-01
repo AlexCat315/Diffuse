@@ -177,6 +177,14 @@ public protocol Shell: AnyObject {
     func showWindowSystemMenu(_ windowID: WindowID, x: Float, y: Float)
     func setWindowChromeHitTest(_ windowID: WindowID, _ hitTest: WindowChromeHitTest?)
 
+    /// Present the OS "choose a folder" dialog, parented to `windowID` when
+    /// supplied. `accept` is invoked once the user confirms (the chosen
+    /// directory path) or cancels (`nil`), on the main thread. Cross-platform:
+    /// the same native dialog on macOS / Windows / Linux — no Apple special-case.
+    func showOpenFolderDialog(windowID: WindowID?,
+                              defaultPath: String?,
+                              accept: @escaping (String?) -> Void)
+
     /// Refresh rate of the display currently containing `windowID`.
     /// Returns `nil` when the platform cannot report it.
     func displayRefreshRate(windowID: WindowID?) -> Double?
@@ -244,6 +252,9 @@ public extension Shell {
     func isWindowMaximized(_ windowID: WindowID) -> Bool { false }
     func showWindowSystemMenu(_ windowID: WindowID, x: Float, y: Float) {}
     func setWindowChromeHitTest(_ windowID: WindowID, _ hitTest: WindowChromeHitTest?) {}
+    func showOpenFolderDialog(windowID: WindowID?,
+                              defaultPath: String?,
+                              accept: @escaping (String?) -> Void) { accept(nil) }
     func displayRefreshRate(windowID: WindowID? = nil) -> Double? { nil }
 }
 
