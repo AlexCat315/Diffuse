@@ -129,6 +129,30 @@ public final class SDL3PlatformHost: PlatformHost {
     private var mainWindowID: WindowID?
     private var _isRunning: Bool = false
 
+    /// Thread-safe inbox for closures that must run on the main loop thread.
+    /// Native callbacks (e.g. SDL's file-dialog thread) cannot rely on Swift
+    /// concurrency here — the custom SDL run loop never services the MainActor
+    /// executor — so they hand work back through this queue, which `runLoop`
+    /// drains every iteration on the main thread.
+    private final class MainThreadInbox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var pending: [() -> Void] = []
+
+        func enqueue(_ work: @escaping () -> Void) {
+            lock.lock(); pending.append(work); lock.unlock()
+        }
+
+        func drain() -> [() -> Void] {
+            lock.lock()
+            let items = pending
+            pending.removeAll(keepingCapacity: true)
+            lock.unlock()
+            return items
+        }
+    }
+
+    private let mainThreadInbox = MainThreadInbox()
+
     public var recomposer: Recomposer { mainRecomposer }
     public var interactions: InteractionRegistry { mainInputContext.interactions }
     public var pointerCapture: PointerCapture { mainInputContext.pointerCapture }
@@ -235,7 +259,14 @@ public final class SDL3PlatformHost: PlatformHost {
                                      defaultPath: String?,
                                      accept: @escaping (String?) -> Void) {
         guard let shell else { accept(nil); return }
-        shell.showOpenFolderDialog(windowID: windowID, defaultPath: defaultPath, accept: accept)
+        // The platform fires its dialog callback on a background thread (SDL
+        // runs the Windows folder dialog on its own thread). Marshal the result
+        // back onto the main loop thread so `accept` runs where it is safe to
+        // touch UI / load a project.
+        let inbox = mainThreadInbox
+        shell.showOpenFolderDialog(windowID: windowID, defaultPath: defaultPath) { path in
+            inbox.enqueue { accept(path) }
+        }
     }
 
     /// Destroy a window. The matching `PlatformWindowSession` is dropped on
@@ -330,6 +361,17 @@ public final class SDL3PlatformHost: PlatformHost {
             }
             let externalDisplayRequested = externalDisplayRequestDrain?() == true
             if externalDisplayRequested {
+                for session in sessions.values {
+                    session.needsDisplay = true
+                }
+            }
+
+            // Run work handed back from native callbacks (e.g. file dialogs) on
+            // the main thread, then force a frame so any resulting UI change
+            // (such as a freshly loaded project) is shown promptly.
+            let pendingMainThreadWork = mainThreadInbox.drain()
+            if !pendingMainThreadWork.isEmpty {
+                for work in pendingMainThreadWork { work() }
                 for session in sessions.values {
                     session.needsDisplay = true
                 }

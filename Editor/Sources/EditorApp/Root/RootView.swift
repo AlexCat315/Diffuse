@@ -17,39 +17,43 @@ struct EditorRootView: View {
                                      commandPaletteVisible: store.commandPaletteVisible)
             EditorPresentationBoundary(presentation: store.presentation) {
                 LayerRoot {
-                    Box(direction: .column, alignItems: .stretch, spacing: 0) {
-                        ShortcutHost(onKeyDown: cb.handleShortcut)
+                    // WindowScaffold provides the immersive title bar (drag region
+                    // + minimize / maximize / close); we supply the menu bar as its
+                    // leading content. ShortcutHost is a non-visual key handler, so
+                    // it lives inside the content column.
+                    WindowScaffold(titleBar: {
+                        EditorApplicationMenuBar(
+                            workspaceMode: store.workspaceMode,
+                            activeLayoutPreset: store.activeLayoutPreset,
+                            playbackState: store.playbackState,
+                            onCommand: cb.handleMenuCommand
+                        )
+                    }) {
+                        Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                            ShortcutHost(onKeyDown: cb.handleShortcut)
 
-                        ImmersiveWindowTitleBar {
-                            EditorApplicationMenuBar(
-                                workspaceMode: store.workspaceMode,
-                                activeLayoutPreset: store.activeLayoutPreset,
-                                playbackState: store.playbackState,
-                                onCommand: cb.handleMenuCommand
-                            )
+                            Divider()
+
+                            PanelWorkspace(controller: controller,
+                                           registry: registry)
+                                .flex()
+                                .frame(minWidth: 0, minHeight: 0)
+                                .layoutRole("editor-workspace")
+                                .debugName("editor-workspace")
+
+                            Divider()
+
+                            EditorStatusBar(store: app.store, getTiming: { app.currentFrameTiming() })
+                                .layoutRole("editor-status-bar")
+                                .debugName("editor-status-bar")
                         }
-
-                        Divider()
-
-                        PanelWorkspace(controller: controller,
-                                       registry: registry)
-                            .flex()
-                            .frame(minWidth: 0, minHeight: 0)
-                            .layoutRole("editor-workspace")
-                            .debugName("editor-workspace")
-
-                        Divider()
-
-                        EditorStatusBar(store: app.store, getTiming: { app.currentFrameTiming() })
-                            .layoutRole("editor-status-bar")
-                            .debugName("editor-status-bar")
+                        .background(.background)
+                        .flex()
+                        .frame(width: .percent(100),
+                               height: .percent(100),
+                               minWidth: 0,
+                               minHeight: 0)
                     }
-                    .background(.background)
-                    .flex()
-                    .frame(width: .percent(100),
-                           height: .percent(100),
-                           minWidth: 0,
-                           minHeight: 0)
                 } portals: {
                     PortalHost()
                     if store.commandPaletteVisible {

@@ -189,8 +189,11 @@ struct TextTests {
         #expect(runs.allSatisfy { $0.font.postScriptName == primary?.postScriptName })
     }
 
-    // CJK fallback resolution is Apple CoreText-only; the portable FreeType path
-    // ships no CJK font, so these only run where CoreText is available.
+    // These assert strong CJK shaping that depends on a guaranteed system CJK
+    // face, which is only certain on Apple (PingFang via CoreText). The portable
+    // FreeType path now also falls back (Windows YaHei, Linux Noto) — covered by
+    // `fontProviderRoutesCJKToFallbackWhenInstalled` below, which tolerates hosts
+    // that ship no CJK font.
     #if canImport(CoreText)
     @Test("Bootstrapped system-font environment shapes CJK through fallback")
     func bootstrappedSystemFontShapesCJK() {
@@ -220,6 +223,32 @@ struct TextTests {
         #expect((glyphs.first?.xAdvance ?? 0) > 0)
     }
     #endif
+
+    @Test("FontProvider routes CJK to a fallback face when one is installed")
+    func fontProviderRoutesCJKToFallbackWhenInstalled() {
+        let provider = FontProvider(size: 14, rasterScale: 2)
+        let primary = provider.loadPrimaryFont(name: SystemFontDefaults.primaryFontName)
+        #expect(primary != nil)
+
+        let runs = provider.resolveRuns(text: "Hello 你好")
+        // Text must never be dropped, regardless of which faces the host ships.
+        #expect(runs.isEmpty == false)
+        #expect(runs.map(\.text).joined() == "Hello 你好")
+
+        // When a CJK-capable fallback is available (Apple PingFang, Windows
+        // YaHei, Linux Noto, …) the CJK run resolves to a different face than the
+        // Latin primary and shapes to real glyphs. On a host with no CJK font we
+        // still must not drop the text (asserted above), so guard the strong
+        // checks on an actual fallback having been found.
+        let cjkRun = runs.first { $0.text.contains("你") }
+        #expect(cjkRun != nil)
+        if let cjkRun, cjkRun.font.postScriptName != primary?.postScriptName {
+            let glyphs = provider.shapeRun(cjkRun)
+            #expect(glyphs.isEmpty == false)
+            #expect(glyphs.contains { $0.glyphID != 0 })
+            #expect((glyphs.first?.xAdvance ?? 0) > 0)
+        }
+    }
 
     // MARK: - TextLayout
 
