@@ -62,6 +62,11 @@ public final class FontProvider {
 
 #if canImport(CoreText)
     private var primaryCTFont: CTFont?
+#else
+    // Lazily-loaded system fallback faces (CJK etc.) and the paths still to try.
+    private var fallbackChain: [ManagedFont] = []
+    private var triedFallbackPaths: Set<String> = []
+    private lazy var fallbackFontPaths: [String] = Self.systemFallbackFontPaths()
 #endif
 
     public init(size: Float, rasterScale: Float = 1, idBase: Int = 0) {
@@ -75,7 +80,13 @@ public final class FontProvider {
     }
 
     deinit {
+        // Every face must be released before the library: a ManagedFont still
+        // held by `fallbackChain` would otherwise run FT_Done_Face against an
+        // already-freed FT_Library (use-after-free).
         fonts.removeAll()
+#if !canImport(CoreText)
+        fallbackChain.removeAll()
+#endif
         FT_Done_FreeType(ftLibrary)
     }
 
@@ -162,9 +173,40 @@ public final class FontProvider {
 
         return result
 #else
-        // On non-Apple platforms, return a single run with the primary font.
-        guard !text.isEmpty, let name = primaryPSName, let font = fonts[name] else { return [] }
-        return [FontRun(font: font, text: text, utf8Offset: 0)]
+        // Off Apple there is no CoreText cascade, so walk the text by grapheme
+        // cluster and route each to the primary font or, when the primary lacks
+        // the glyph (e.g. CJK in the Latin bundled face), a lazily-loaded system
+        // fallback. Consecutive clusters sharing a font are merged into one run.
+        guard !text.isEmpty,
+              let primaryName = primaryPSName,
+              let primary = fonts[primaryName] else { return [] }
+
+        var result: [FontRun] = []
+        var currentFont: ManagedFont?
+        var currentText = ""
+        var currentUTF8Offset = 0
+        var runningUTF8Offset = 0
+
+        func flushCurrentRun() {
+            guard let currentFont, !currentText.isEmpty else { return }
+            result.append(FontRun(font: currentFont, text: currentText, utf8Offset: currentUTF8Offset))
+            currentText = ""
+        }
+
+        for character in text {
+            let cluster = String(character)
+            let font = fallbackFont(for: cluster, primary: primary)
+            if currentFont?.id != font.id {
+                flushCurrentRun()
+                currentFont = font
+                currentUTF8Offset = runningUTF8Offset
+            }
+            currentText += cluster
+            runningUTF8Offset += cluster.utf8.count
+        }
+
+        flushCurrentRun()
+        return result
 #endif
     }
 
@@ -276,6 +318,69 @@ public final class FontProvider {
         if primaryPSName == nil { primaryPSName = resolvedPSName }
         return managed
     }
+
+    // MARK: - Non-Apple font fallback
+
+    /// Resolves the face that should render `cluster`: the primary when it has
+    /// the glyph, otherwise a system fallback (loaded on first need), or the
+    /// primary as a last resort (renders .notdef rather than dropping the text).
+    private func fallbackFont(for cluster: String, primary: ManagedFont) -> ManagedFont {
+        if managedFontCanRenderText(primary, text: cluster) { return primary }
+
+        for font in fallbackChain where managedFontCanRenderText(font, text: cluster) {
+            return font
+        }
+
+        for path in fallbackFontPaths where !triedFallbackPaths.contains(path) {
+            triedFallbackPaths.insert(path)
+            guard let font = loadFallbackFont(path: path) else { continue }
+            fallbackChain.append(font)
+            if managedFontCanRenderText(font, text: cluster) { return font }
+        }
+
+        return primary
+    }
+
+    private func loadFallbackFont(path: String) -> ManagedFont? {
+        let cacheKey = "fallback:" + path
+        if let existing = fonts[cacheKey] { return existing }
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)) else { return nil }
+        return loadFontFromData(data, psName: cacheKey, faceIndex: 0)
+    }
+
+    /// System faces that, together, cover CJK / common non-Latin scripts the
+    /// bundled Latin primary lacks. Probed in order; the first that resolves a
+    /// given cluster wins.
+    private static func systemFallbackFontPaths() -> [String] {
+#if os(Windows)
+        let dir = "C:\\Windows\\Fonts\\"
+        return [
+            "msyh.ttc",      // Microsoft YaHei — Simplified Chinese
+            "msyhl.ttc",
+            "simsun.ttc",    // SimSun
+            "msjh.ttc",      // Microsoft JhengHei — Traditional Chinese
+            "msgothic.ttc",  // MS Gothic — Japanese
+            "yugothm.ttc",
+            "malgun.ttf",    // Malgun Gothic — Korean
+            "seguiemj.ttf",  // Segoe UI Emoji
+            "arial.ttf",
+        ].map { dir + $0 }
+#elseif os(Linux)
+        return [
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+            "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+            "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        ]
+#else
+        return []
+#endif
+    }
 #endif
 
     // MARK: - Apple CoreText-based loading
@@ -312,13 +417,6 @@ public final class FontProvider {
         }
 
         return nil
-    }
-
-    private func managedFontCanRenderText(_ font: ManagedFont, text: String) -> Bool {
-        guard !text.isEmpty else { return true }
-        return text.unicodeScalars.allSatisfy { scalar in
-            FT_Get_Char_Index(font.ftFace, FT_ULong(scalar.value)) != 0
-        }
     }
 
     private func loadFontFromCTFont(_ ctFont: CTFont, psName: String) -> ManagedFont? {
@@ -489,6 +587,15 @@ public final class FontProvider {
 #endif
 
     // MARK: - FreeType utilities (shared)
+
+    /// True when `font` has a glyph for every scalar in `text` (a missing glyph
+    /// maps to index 0 / .notdef in FreeType).
+    private func managedFontCanRenderText(_ font: ManagedFont, text: String) -> Bool {
+        guard !text.isEmpty else { return true }
+        return text.unicodeScalars.allSatisfy { scalar in
+            FT_Get_Char_Index(font.ftFace, FT_ULong(scalar.value)) != 0
+        }
+    }
 
     private func findFaceIndex(in data: Data, targetPSName: String) -> Int? {
         let probe = UnsafeMutablePointer<UInt8>.allocate(capacity: data.count)

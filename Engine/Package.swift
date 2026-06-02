@@ -515,3 +515,22 @@ let package = Package(
     ],
     cxxLanguageStandard: .cxx17
 )
+
+// macOS builds the package's tests as one bundle: SwiftPM's synthesized
+// `GuavaEnginePackageTests` runner links every test target and transitively
+// loads AssetPipeline, which imports the CImageDecodeBridge Clang module. The
+// macOS explicit-module build then requires that module's modulemap in scope
+// for the whole bundle — not just the test targets that import AssetPipeline
+// directly. Declaring it per-target never converges (the runner is synthesized
+// and cannot take an explicit dependency), so apply the rule uniformly: every
+// test target depends on CImageDecodeBridge. (Lenient toolchains — Windows /
+// Linux — do not need this, but the extra dependency is harmless there.)
+for target in package.targets where target.isTest {
+    if !target.dependencies.contains(where: { dependency in
+        if case let .targetItem(name, _) = dependency { return name == "CImageDecodeBridge" }
+        if case let .byNameItem(name, _) = dependency { return name == "CImageDecodeBridge" }
+        return false
+    }) {
+        target.dependencies.append("CImageDecodeBridge")
+    }
+}
