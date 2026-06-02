@@ -17,11 +17,17 @@ struct EditorRootView: View {
                                      commandPaletteVisible: store.commandPaletteVisible)
             EditorPresentationBoundary(presentation: store.presentation) {
                 LayerRoot {
-                    // The immersive title bar (drag region + window controls) is
-                    // mounted by AppRuntime; we feed it the menu bar via
-                    // .windowTitleBar. ShortcutHost is a non-visual key handler.
                     Box(direction: .column, alignItems: .stretch, spacing: 0) {
                         ShortcutHost(onKeyDown: cb.handleShortcut)
+
+                        ImmersiveWindowTitleBar {
+                            EditorApplicationMenuBar(
+                                workspaceMode: store.workspaceMode,
+                                activeLayoutPreset: store.activeLayoutPreset,
+                                playbackState: store.playbackState,
+                                onCommand: cb.handleMenuCommand
+                            )
+                        }
 
                         Divider()
 
@@ -44,14 +50,6 @@ struct EditorRootView: View {
                            height: .percent(100),
                            minWidth: 0,
                            minHeight: 0)
-                    .windowTitleBar {
-                        EditorApplicationMenuBar(
-                            workspaceMode: store.workspaceMode,
-                            activeLayoutPreset: store.activeLayoutPreset,
-                            playbackState: store.playbackState,
-                            onCommand: cb.handleMenuCommand
-                        )
-                    }
                 } portals: {
                     PortalHost()
                     if store.commandPaletteVisible {
