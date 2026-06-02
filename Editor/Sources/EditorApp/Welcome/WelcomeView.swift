@@ -10,17 +10,15 @@ struct WelcomeView: View {
     @State private var errorMessage: String? = nil
 
     var body: some View {
-        // The window is borderless (immersive). Mount the same title bar the
-        // editor uses so the welcome screen has draggable chrome plus
-        // minimize / maximize / close controls.
-        Box(direction: .column, alignItems: .stretch, spacing: 0) {
-            ImmersiveWindowTitleBar {
-                Text(L("GuavaNext Editor"))
-                    .font(.label)
-                    .foregroundColor(.onSurfaceMuted)
-                    .padding(EdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 0))
-            }
-
+        // Borderless (immersive) window: WindowScaffold supplies the draggable
+        // title bar with minimize / maximize / close controls; we only provide
+        // the leading title content.
+        WindowScaffold {
+            Text(L("GuavaNext Editor"))
+                .font(.label)
+                .foregroundColor(.onSurfaceMuted)
+                .padding(EdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 0))
+        } content: {
             Box(direction: .column, alignItems: .center, justifyContent: .center, spacing: 0) {
                 Box(direction: .column, alignItems: .center, spacing: 8) {
                     Text("GuavaNext Editor")
@@ -72,7 +70,6 @@ struct WelcomeView: View {
             .background(.background)
             .flex()
         }
-        .flex()
     }
 
     private func recentProjectRow(path: String) -> AnyView {
