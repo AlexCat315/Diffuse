@@ -44,6 +44,9 @@ public enum WGPUBackendPreference: String, Sendable, CaseIterable {
 #elseif os(Windows)
         // wgpu-native currently validates Win32 surfaces more reliably through Vulkan.
         // Keep D3D12 as a fallback for systems without Vulkan support.
+        // (D3D12-first panics with "wgpuSurfaceConfigure: Invalid surface" on the
+        // editor window — the 120Hz→60Hz cap must be solved on the Vulkan path,
+        // not by switching backend.)
         return [.vulkan, .d3d12, .automatic]
 #elseif os(Linux)
         return [.vulkan, .automatic]
@@ -134,10 +137,20 @@ public final class WGPUBackend: @unchecked Sendable {
         instance = out
         state = .instanceReady
 
-        let backendOrder = config.preferredBackends.isEmpty
-            ? WGPUBackendPreference.platformDefaultOrder
-            : config.preferredBackends
-        Logger.renderer.debug("requested backend order=\(backendOrder.map { $0.rawValue }.joined(separator: ","))")
+        // Diagnostic override: GUAVA_WGPU_BACKEND=d3d12|vulkan|... forces a
+        // single backend first (e.g. to compare DX12 flip-model/allow-tearing
+        // against the Vulkan windowed present path on Windows).
+        let envBackend = ProcessInfo.processInfo.environment["GUAVA_WGPU_BACKEND"]
+            .flatMap { WGPUBackendPreference(rawValue: $0.lowercased()) }
+        let backendOrder: [WGPUBackendPreference]
+        if let envBackend {
+            backendOrder = [envBackend, .automatic]
+        } else if config.preferredBackends.isEmpty {
+            backendOrder = WGPUBackendPreference.platformDefaultOrder
+        } else {
+            backendOrder = config.preferredBackends
+        }
+        Logger.renderer.info("requested backend order=\(backendOrder.map { $0.rawValue }.joined(separator: ","))")
 
         var outAdapter: UnsafeMutableRawPointer?
         var adapterErrors: [String] = []
