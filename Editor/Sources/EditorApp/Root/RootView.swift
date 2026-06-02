@@ -17,42 +17,40 @@ struct EditorRootView: View {
                                      commandPaletteVisible: store.commandPaletteVisible)
             EditorPresentationBoundary(presentation: store.presentation) {
                 LayerRoot {
-                    // WindowScaffold provides the immersive title bar (drag region
-                    // + minimize / maximize / close); we supply the menu bar as its
-                    // leading content. ShortcutHost is a non-visual key handler, so
-                    // it lives inside the content column.
-                    WindowScaffold(titleBar: {
+                    // The immersive title bar (drag region + window controls) is
+                    // mounted by AppRuntime; we feed it the menu bar via
+                    // .windowTitleBar. ShortcutHost is a non-visual key handler.
+                    Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                        ShortcutHost(onKeyDown: cb.handleShortcut)
+
+                        Divider()
+
+                        PanelWorkspace(controller: controller,
+                                       registry: registry)
+                            .flex()
+                            .frame(minWidth: 0, minHeight: 0)
+                            .layoutRole("editor-workspace")
+                            .debugName("editor-workspace")
+
+                        Divider()
+
+                        EditorStatusBar(store: app.store, getTiming: { app.currentFrameTiming() })
+                            .layoutRole("editor-status-bar")
+                            .debugName("editor-status-bar")
+                    }
+                    .background(.background)
+                    .flex()
+                    .frame(width: .percent(100),
+                           height: .percent(100),
+                           minWidth: 0,
+                           minHeight: 0)
+                    .windowTitleBar {
                         EditorApplicationMenuBar(
                             workspaceMode: store.workspaceMode,
                             activeLayoutPreset: store.activeLayoutPreset,
                             playbackState: store.playbackState,
                             onCommand: cb.handleMenuCommand
                         )
-                    }) {
-                        Box(direction: .column, alignItems: .stretch, spacing: 0) {
-                            ShortcutHost(onKeyDown: cb.handleShortcut)
-
-                            Divider()
-
-                            PanelWorkspace(controller: controller,
-                                           registry: registry)
-                                .flex()
-                                .frame(minWidth: 0, minHeight: 0)
-                                .layoutRole("editor-workspace")
-                                .debugName("editor-workspace")
-
-                            Divider()
-
-                            EditorStatusBar(store: app.store, getTiming: { app.currentFrameTiming() })
-                                .layoutRole("editor-status-bar")
-                                .debugName("editor-status-bar")
-                        }
-                        .background(.background)
-                        .flex()
-                        .frame(width: .percent(100),
-                               height: .percent(100),
-                               minWidth: 0,
-                               minHeight: 0)
                     }
                 } portals: {
                     PortalHost()
