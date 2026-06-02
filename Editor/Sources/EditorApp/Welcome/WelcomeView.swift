@@ -10,65 +10,63 @@ struct WelcomeView: View {
     @State private var errorMessage: String? = nil
 
     var body: some View {
-        // Borderless (immersive) window: WindowScaffold supplies the draggable
-        // title bar with minimize / maximize / close controls; we only provide
-        // the leading title content.
-        WindowScaffold {
+        // The immersive title bar (drag region + window controls) is mounted by
+        // AppRuntime; we only contribute the leading title via .windowTitleBar.
+        Box(direction: .column, alignItems: .center, justifyContent: .center, spacing: 0) {
+            Box(direction: .column, alignItems: .center, spacing: 8) {
+                Text("GuavaNext Editor")
+                    .font(.title)
+                    .foregroundColor(.onSurface)
+                Text("Select or create a project to get started.")
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
+            .padding(horizontal: 0, vertical: 0)
+            .padding(EdgeInsets(top: 0, leading: 0, bottom: 32, trailing: 0))
+
+            if !recentProjects.isEmpty {
+                Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                    Text(L("Recent Projects"))
+                        .font(.label)
+                        .foregroundColor(.onSurfaceMuted)
+                        .padding(EdgeInsets(top: 0, leading: 0, bottom: 6, trailing: 0))
+
+                    Box(direction: .column, alignItems: .stretch, spacing: 1) {
+                        for path in recentProjects {
+                            recentProjectRow(path: path)
+                        }
+                    }
+                }
+                .frame(width: 420)
+                .padding(EdgeInsets(top: 0, leading: 0, bottom: 24, trailing: 0))
+            }
+
+            if let msg = errorMessage {
+                Text(msg)
+                    .font(.caption)
+                    .foregroundColor(.error)
+                    .padding(EdgeInsets(top: 0, leading: 0, bottom: 12, trailing: 0))
+            }
+
+            Row(alignment: .center, spacing: 12) {
+                Button(L("New Project...")) {
+                    pickNewProject()
+                }
+                .frame(width: 140)
+
+                Button(L("Open Project...")) {
+                    pickExistingProject()
+                }
+                .frame(width: 140)
+            }
+        }
+        .background(.background)
+        .flex()
+        .windowTitleBar {
             Text(L("GuavaNext Editor"))
                 .font(.label)
                 .foregroundColor(.onSurfaceMuted)
                 .padding(EdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 0))
-        } content: {
-            Box(direction: .column, alignItems: .center, justifyContent: .center, spacing: 0) {
-                Box(direction: .column, alignItems: .center, spacing: 8) {
-                    Text("GuavaNext Editor")
-                        .font(.title)
-                        .foregroundColor(.onSurface)
-                    Text("Select or create a project to get started.")
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
-                }
-                .padding(horizontal: 0, vertical: 0)
-                .padding(EdgeInsets(top: 0, leading: 0, bottom: 32, trailing: 0))
-
-                if !recentProjects.isEmpty {
-                    Box(direction: .column, alignItems: .stretch, spacing: 0) {
-                        Text(L("Recent Projects"))
-                            .font(.label)
-                            .foregroundColor(.onSurfaceMuted)
-                            .padding(EdgeInsets(top: 0, leading: 0, bottom: 6, trailing: 0))
-
-                        Box(direction: .column, alignItems: .stretch, spacing: 1) {
-                            for path in recentProjects {
-                                recentProjectRow(path: path)
-                            }
-                        }
-                    }
-                    .frame(width: 420)
-                    .padding(EdgeInsets(top: 0, leading: 0, bottom: 24, trailing: 0))
-                }
-
-                if let msg = errorMessage {
-                    Text(msg)
-                        .font(.caption)
-                        .foregroundColor(.error)
-                        .padding(EdgeInsets(top: 0, leading: 0, bottom: 12, trailing: 0))
-                }
-
-                Row(alignment: .center, spacing: 12) {
-                    Button(L("New Project...")) {
-                        pickNewProject()
-                    }
-                    .frame(width: 140)
-
-                    Button(L("Open Project...")) {
-                        pickExistingProject()
-                    }
-                    .frame(width: 140)
-                }
-            }
-            .background(.background)
-            .flex()
         }
     }
 
