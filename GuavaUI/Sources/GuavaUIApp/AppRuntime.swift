@@ -305,12 +305,8 @@ public final class AppRuntime {
         configureTextEnvironment(scale: host.contentScaleFactor)
 
         if !didInstallRoot {
-            let mainWindowID = host.mainSession?.id
-            withWindowChromeContext(mainWindowID) {
-                installAppRoot(rootView,
-                               windowID: mainWindowID,
-                               titleBarStyle: config.titleBarStyle,
-                               into: graph)
+            withWindowChromeContext(host.mainSession?.id) {
+                graph.install(root: rootView)
             }
             graph.computeLayout(width: Float(logicalW), height: Float(logicalH))
             syncMainWindowChromeHitTest()
@@ -775,10 +771,7 @@ private final class AuxiliaryAppWindow {
             configureTextEnvironment(session.contentScaleFactor)
             if !didInstallRoot {
                 withWindowChromeContext(session.id) {
-                    installAppRoot(rootView,
-                                   windowID: session.id,
-                                   titleBarStyle: config.titleBarStyle,
-                                   into: graph)
+                    graph.install(root: rootView)
                 }
                 graph.computeLayout(width: Float(logicalW), height: Float(logicalH))
                 syncWindowChromeHitTest()
