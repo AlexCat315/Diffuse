@@ -177,15 +177,6 @@ public final class SDL3PlatformHost: PlatformHost {
     private var frameRateMode: PlatformFrameRateMode = .eventDriven
     private var frameTimingLogCounter = 0
 
-    /// Optional idle heartbeat: when set, the loop forces at least one frame
-    /// every `idleFrameInterval` seconds even with no pending display work. This
-    /// is the safety floor for on-demand (event-driven) hosts like the editor —
-    /// a render-on-demand UI parks its per-frame redraw when nothing is
-    /// happening, and this floor guarantees a live preview / any unmodeled
-    /// change still refreshes a few times a second instead of freezing. `nil`
-    /// (default) keeps the legacy always-on cadence.
-    private var idleFrameInterval: Double?
-
     public init(title: String = "GuavaUI",
                 mainWindowOptions: WindowOptions = WindowOptions(),
                 recomposer: Recomposer = Recomposer(),
@@ -335,17 +326,6 @@ public final class SDL3PlatformHost: PlatformHost {
         }
     }
 
-    /// Set the idle heartbeat rate (frames/second) for on-demand hosts, or
-    /// `nil`/`0` to disable it and keep redrawing on display work only. See
-    /// `idleFrameInterval`.
-    public func setIdleFrameRate(_ framesPerSecond: Double?) {
-        guard let framesPerSecond, framesPerSecond.isFinite, framesPerSecond > 0 else {
-            idleFrameInterval = nil
-            return
-        }
-        idleFrameInterval = 1.0 / Self.sanitizedFrameRate(framesPerSecond)
-    }
-
     public func currentDisplayRefreshRate(windowID: WindowID? = nil) -> Double? {
         guard let shell else { return nil }
         let resolvedWindowID = windowID ?? mainWindowID
@@ -369,7 +349,6 @@ public final class SDL3PlatformHost: PlatformHost {
         Logger.runtime.info("running — \(title)")
         var lastLoopTime = TimingTrace.now()
         var lastFramePreparationTime: Double?
-        var lastRenderTime = TimingTrace.now()
 
         while _isRunning && shell.isRunning && !sessions.isEmpty {
             let frameStart = TimingTrace.now()
@@ -411,16 +390,6 @@ public final class SDL3PlatformHost: PlatformHost {
                 }
             }
             timing.mark("events")
-
-            // Idle heartbeat: if an on-demand host has parked its redraw, still
-            // force a frame once per `idleFrameInterval` so a live viewport /
-            // any change not captured by a dirty flag keeps refreshing.
-            if let idleFrameInterval,
-               frameStart - lastRenderTime >= idleFrameInterval,
-               let mainWindowID,
-               let session = sessions[mainWindowID] {
-                session.needsDisplay = true
-            }
 
             let hasDisplayWork = sessions.values.contains { session in
                 session.needsDisplay || session.tree.hasRenderUpdates || session.recomposer.hasPending
@@ -465,11 +434,6 @@ public final class SDL3PlatformHost: PlatformHost {
 
             AnimatorScheduler.current.tick(deltaTime: loopDeltaTime)
             let animationsActive = AnimatorScheduler.current.hasActiveAnimations
-            // Active UI animations need a continuous frame stream regardless of
-            // an on-demand host's redraw policy, so drive the render directly.
-            if animationsActive {
-                for session in sessions.values { session.needsDisplay = true }
-            }
             timing.mark("animations")
 
             var renderedAnyFrame = false
@@ -543,7 +507,6 @@ public final class SDL3PlatformHost: PlatformHost {
             timing.mark("windows")
 
             if renderedAnyFrame {
-                lastRenderTime = frameStart
                 let deltaText = String(format: "%.2fms", framePreparationDelta * 1000)
                 let extra = [
                     "delta=\(deltaText)",
