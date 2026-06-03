@@ -342,7 +342,7 @@ public final class AppRuntime {
 
         try uploadAtlasIfNeeded()
         configuredSurface = true
-        lastFrameTime = ProcessInfo.processInfo.systemUptime
+        lastFrameTime = TimingTrace.now()
         
         // Request an initial frame to ensure surfaces like viewport have
         // time to initialize before the first render.
@@ -422,13 +422,13 @@ public final class AppRuntime {
     private func handleFrame() -> Bool {
         guard configuredSurface, let surface, let root = tree.root else { return false }
 
-        let frameStart = ProcessInfo.processInfo.systemUptime
+        let frameStart = TimingTrace.now()
 
         configureTextEnvironment(scale: host.contentScaleFactor)
-        let layoutStart = ProcessInfo.processInfo.systemUptime
+        let layoutStart = TimingTrace.now()
         _ = graph.computeLayoutIfNeeded(width: Float(logicalW), height: Float(logicalH))
         syncMainWindowChromeHitTest()
-        let layoutEnd = ProcessInfo.processInfo.systemUptime
+        let layoutEnd = TimingTrace.now()
 
         drawList.reset()
         if useLegacyRenderer {
@@ -437,7 +437,7 @@ public final class AppRuntime {
             layerRenderer.render(tree: graph.renderTree, into: drawList)
         }
         TooltipOverlayRegistry.drawAll(into: drawList)
-        let drawEnd = ProcessInfo.processInfo.systemUptime
+        let drawEnd = TimingTrace.now()
 
         do {
             if atlas?.isDirty == true {
@@ -485,7 +485,7 @@ public final class AppRuntime {
             backend.submit(buffer)
             surface.present()
             host.requestDisplay()
-            let presentEnd = ProcessInfo.processInfo.systemUptime
+            let presentEnd = TimingTrace.now()
 
             if Self.fpsLogEnabled {
                 recordFPSSample(layoutMs: (layoutEnd - layoutStart) * 1000,
@@ -528,11 +528,11 @@ public final class AppRuntime {
 
     private func handleFramePreparation(deltaTime: Double) {
         let delta = max(0, deltaTime)
-        lastFrameTime = ProcessInfo.processInfo.systemUptime
-        let tickStart = ProcessInfo.processInfo.systemUptime
+        lastFrameTime = TimingTrace.now()
+        let tickStart = TimingTrace.now()
         onTick?(delta)
         if Self.fpsLogEnabled {
-            fpsTickAccum += (ProcessInfo.processInfo.systemUptime - tickStart) * 1000
+            fpsTickAccum += (TimingTrace.now() - tickStart) * 1000
         }
         syncAuxiliaryWindows()
     }
@@ -541,7 +541,7 @@ public final class AppRuntime {
     /// per second. `presentMs` covers acquire + encode + submit + present, i.e.
     /// the part that blocks on vsync / GPU / cross-adapter copy.
     private func recordFPSSample(layoutMs: Double, drawMs: Double, presentMs: Double) {
-        let now = ProcessInfo.processInfo.systemUptime
+        let now = TimingTrace.now()
         if fpsWindowStart == 0 { fpsWindowStart = now }
         fpsFrames += 1
         fpsLayoutAccum += layoutMs
