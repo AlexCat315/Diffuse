@@ -2,6 +2,9 @@ import EngineKernel
 import Foundation
 import Logging
 import PlatformShell
+#if canImport(WinSDK)
+import WinSDK
+#endif
 
 @MainActor
 public final class PlatformWindowSession {
@@ -332,6 +335,16 @@ public final class SDL3PlatformHost: PlatformHost {
     private func runLoop() {
         guard let shell else { return }
 
+        #if os(Windows)
+        // Default Windows timer granularity is ~15.6ms, so the Thread.sleep
+        // frame pacing below rounds every sleep up to ~15.6ms and caps the loop
+        // at 64fps (1000/15.625) regardless of vsync/backend. Raise the
+        // multimedia timer resolution to 1ms for the loop's lifetime. macOS and
+        // Linux already have high-resolution sleep.
+        timeBeginPeriod(1)
+        defer { timeEndPeriod(1) }
+        #endif
+
         _isRunning = true
         Logger.runtime.info("running — \(title)")
         var lastLoopTime = TimingTrace.now()
@@ -508,14 +521,18 @@ public final class SDL3PlatformHost: PlatformHost {
 
             pruneClosedSessions(using: shell)
 
-            if let targetFrameInterval,
-               let lastFramePreparationTime {
-                let nextFrameTime = lastFramePreparationTime + targetFrameInterval
-                let remaining = nextFrameTime - TimingTrace.now()
-                if remaining > 0 {
-                    Thread.sleep(forTimeInterval: min(max(remaining, 0.001), 0.005))
+            if let targetFrameInterval, let lastFramePreparationTime {
+                // Only an explicit `.fixed(N)` cap reaches here; `.displayRefresh`
+                // returns nil and lets the swapchain present (FIFO/vsync) pace
+                // the loop instead. Sleep almost the whole remaining interval —
+                // timeBeginPeriod(1) above keeps this accurate on Windows — and
+                // let the next iteration spin out the final sub-millisecond.
+                let remaining = (lastFramePreparationTime + targetFrameInterval) - TimingTrace.now()
+                if remaining > 0.001 {
+                    Thread.sleep(forTimeInterval: remaining - 0.0003)
                 }
             } else if !handledEvents && !committedAny && !renderedAnyFrame {
+                // Nothing to draw (idle / occluded window) — yield briefly.
                 Thread.sleep(forTimeInterval: 0.001)
             }
         }
@@ -533,15 +550,12 @@ public final class SDL3PlatformHost: PlatformHost {
 
     private func currentFrameInterval(shell: any Shell) -> Double? {
         switch frameRateMode {
-        case .eventDriven:
+        case .eventDriven, .displayRefresh:
+            // VSync is provided by the surface's FIFO present, which blocks at
+            // vblank and paces the loop to the refresh rate. A separate sleep
+            // pacer here would stack on top and halve the rate, so we pace only
+            // for an explicit fixed cap.
             return nil
-        case .displayRefresh:
-            let refreshRate = max(60,
-                Self.sanitizedOptionalFrameRate(
-                    shell.displayRefreshRate(windowID: mainWindowID)
-                ) ?? 60
-            )
-            return 1.0 / refreshRate
         case let .fixed(framesPerSecond):
             return 1.0 / Self.sanitizedFrameRate(framesPerSecond)
         }
