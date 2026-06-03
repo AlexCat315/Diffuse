@@ -42,12 +42,15 @@ public enum WGPUBackendPreference: String, Sendable, CaseIterable {
 #if os(macOS)
         return [.metal, .automatic]
 #elseif os(Windows)
-        // wgpu-native currently validates Win32 surfaces more reliably through Vulkan.
-        // Keep D3D12 as a fallback for systems without Vulkan support.
-        // (D3D12-first panics with "wgpuSurfaceConfigure: Invalid surface" on the
-        // editor window — the 120Hz→60Hz cap must be solved on the Vulkan path,
-        // not by switching backend.)
-        return [.vulkan, .d3d12, .automatic]
+        // Default to D3D12: its DXGI flip-model swap chain presents at the
+        // display's true refresh rate (incl. 120Hz+), whereas the Vulkan
+        // windowed present path on Windows is locked to ~60Hz by DWM. The old
+        // "D3D12 panics with Invalid surface on resize" problem was a leaked
+        // surface texture each frame (see GPUSurface.getCurrentTextureView);
+        // releasing it lets DXGI ResizeBuffers succeed, so D3D12 reconfigure /
+        // resize now works. Vulkan stays as a fallback; override per run with
+        // GUAVA_WGPU_BACKEND=vulkan.
+        return [.d3d12, .vulkan, .automatic]
 #elseif os(Linux)
         return [.vulkan, .automatic]
 #else
