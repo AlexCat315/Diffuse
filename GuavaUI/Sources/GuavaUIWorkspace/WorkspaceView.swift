@@ -920,12 +920,20 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
 
     func _children(for node: Node) -> [any View] {
         let style = isActive ? AnyButtonStyle(SecondaryButtonStyle()) : AnyButtonStyle(GhostButtonStyle())
+        // Resolve the title color eagerly from this (parented) host node's theme
+        // and pass it to `Text` directly. The button style's deferred
+        // `.foregroundColor(.onSurface)` resolves against the *label* node's
+        // theme at apply-time, and that label — built deep inside this
+        // primitive's `_children` — isn't parented under the theme provider yet,
+        // so it falls back to `.defaultDark` and bakes near-white tab titles in
+        // light mode. `node.theme` here is correct (it already drives the tab bg).
+        let titleColor = node.theme.colors.onSurface
         let config = ButtonStyleConfiguration(label: AnyView(Row(alignment: .center, spacing: 4) {
                                                   if isPinned {
-                                                      Text("•")
+                                                      Text("•", color: titleColor)
                                                           .font(.label)
                                                   }
-                                                  Text(title).font(.label)
+                                                  Text(title, color: titleColor).font(.label)
                                               }),
                                               role: .normal,
                                               isPressed: isPressed,
