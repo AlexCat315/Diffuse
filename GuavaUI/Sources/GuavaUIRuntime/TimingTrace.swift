@@ -1,3 +1,4 @@
+import Dispatch
 import Foundation
 
 public struct TimingTrace {
@@ -20,7 +21,16 @@ public struct TimingTrace {
 
     @inline(__always)
     public static func now() -> Double {
-        ProcessInfo.processInfo.systemUptime
+        // High-resolution monotonic clock. `ProcessInfo.systemUptime` is backed
+        // by `GetTickCount` on Windows (~16 ms granularity), which quantizes
+        // every per-frame deltaTime to 0 or ~16 ms — corrupting animation /
+        // physics timesteps and the editor FPS readout (and `timeBeginPeriod(1)`
+        // does not help, it only affects `Sleep`). `DispatchTime` is
+        // QueryPerformanceCounter-backed on Windows (mach_absolute_time on
+        // Apple, CLOCK_MONOTONIC on Linux) and resolves to well under a
+        // microsecond. The ns value fits exactly in a Double for >100 days of
+        // uptime, and deltas keep sub-ns resolution well beyond that.
+        Double(DispatchTime.now().uptimeNanoseconds) / 1_000_000_000
     }
 
     public mutating func mark(_ stage: String) {
