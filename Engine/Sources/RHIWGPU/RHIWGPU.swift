@@ -42,9 +42,15 @@ public enum WGPUBackendPreference: String, Sendable, CaseIterable {
 #if os(macOS)
         return [.metal, .automatic]
 #elseif os(Windows)
-        // wgpu-native currently validates Win32 surfaces more reliably through Vulkan.
-        // Keep D3D12 as a fallback for systems without Vulkan support.
-        return [.vulkan, .d3d12, .automatic]
+        // Default to D3D12: its DXGI flip-model swap chain presents at the
+        // display's true refresh rate (incl. 120Hz+), whereas the Vulkan
+        // windowed present path on Windows is locked to ~60Hz by DWM. The old
+        // "D3D12 panics with Invalid surface on resize" problem was a leaked
+        // surface texture each frame (see GPUSurface.getCurrentTextureView);
+        // releasing it lets DXGI ResizeBuffers succeed, so D3D12 reconfigure /
+        // resize now works. Vulkan stays as a fallback; override per run with
+        // GUAVA_WGPU_BACKEND=vulkan.
+        return [.d3d12, .vulkan, .automatic]
 #elseif os(Linux)
         return [.vulkan, .automatic]
 #else
@@ -134,10 +140,20 @@ public final class WGPUBackend: @unchecked Sendable {
         instance = out
         state = .instanceReady
 
-        let backendOrder = config.preferredBackends.isEmpty
-            ? WGPUBackendPreference.platformDefaultOrder
-            : config.preferredBackends
-        Logger.renderer.debug("requested backend order=\(backendOrder.map { $0.rawValue }.joined(separator: ","))")
+        // Diagnostic override: GUAVA_WGPU_BACKEND=d3d12|vulkan|... forces a
+        // single backend first (e.g. to compare DX12 flip-model/allow-tearing
+        // against the Vulkan windowed present path on Windows).
+        let envBackend = ProcessInfo.processInfo.environment["GUAVA_WGPU_BACKEND"]
+            .flatMap { WGPUBackendPreference(rawValue: $0.lowercased()) }
+        let backendOrder: [WGPUBackendPreference]
+        if let envBackend {
+            backendOrder = [envBackend, .automatic]
+        } else if config.preferredBackends.isEmpty {
+            backendOrder = WGPUBackendPreference.platformDefaultOrder
+        } else {
+            backendOrder = config.preferredBackends
+        }
+        Logger.renderer.info("requested backend order=\(backendOrder.map { $0.rawValue }.joined(separator: ","))")
 
         var outAdapter: UnsafeMutableRawPointer?
         var adapterErrors: [String] = []

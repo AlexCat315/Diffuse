@@ -46,8 +46,15 @@ public final class GPUSurface {
             throw GPUSurfaceError.acquireTextureFailed(msg)
         }
         guard let texPtr, let viewPtr else { return nil }
+        // The surface texture from wgpuSurfaceGetCurrentTexture carries a
+        // reference the caller must release. `owned: true` drops it when the
+        // per-frame texture goes out of scope (after present). Leaking it
+        // (owned: false) keeps swapchain back-buffer references alive, which
+        // makes DXGI ResizeBuffers fail on D3D12 surface reconfigure/resize
+        // ("Invalid surface" / 0x887A0001). Vulkan tolerates the leak; D3D12
+        // does not.
         return (
-            GPUTexture(handle: texPtr, owned: false),
+            GPUTexture(handle: texPtr, owned: true),
             GPUTextureView(handle: viewPtr)
         )
     }

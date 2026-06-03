@@ -378,6 +378,21 @@ int wgpu_bridge_request_adapter_with_backend(void* instance,
     options.backendType = to_wgpu_backend_type(backend_type);
     options.powerPreference = WGPUPowerPreference_HighPerformance;
 
+    /* Diagnostic / hybrid-GPU override. On laptops where the display is wired
+       to the integrated GPU, requesting HighPerformance picks the discrete GPU
+       and forces a per-frame cross-adapter copy on present (which caps fps near
+       the refresh rate). Set GUAVA_WGPU_POWER=low to render on the GPU that owns
+       the display and remove that copy. */
+    const char* power_env = getenv("GUAVA_WGPU_POWER");
+    if (power_env != NULL && strcmp(power_env, "low") == 0) {
+        options.powerPreference = WGPUPowerPreference_LowPower;
+    }
+    fprintf(stderr,
+            "[guava.wgpu] requesting adapter backendType=%d powerPreference=%s\n",
+            (int)options.backendType,
+            options.powerPreference == WGPUPowerPreference_LowPower
+                ? "LowPower" : "HighPerformance");
+
     WGPURequestAdapterCallbackInfo cb = WGPU_REQUEST_ADAPTER_CALLBACK_INFO_INIT;
     cb.mode = WGPUCallbackMode_AllowProcessEvents;
     cb.callback = on_request_adapter;

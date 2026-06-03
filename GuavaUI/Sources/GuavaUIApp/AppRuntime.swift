@@ -89,8 +89,31 @@ public final class AppRuntime {
     private var didInstallRoot = false
     private var lastFrameTime: Double = 0
     private var auxiliaryWindows: [WindowID: AuxiliaryAppWindow] = [:]
-    private var isVSyncEnabled = true
+    /// Diagnostic override: GUAVA_VSYNC=off forces vsync off regardless of the
+    /// persisted editor setting, so the real per-frame GPU cost is visible
+    /// instead of being hidden behind the vsync wait.
+    private static let forceVSyncOff: Bool = {
+        switch ProcessInfo.processInfo.environment["GUAVA_VSYNC"]?.lowercased() {
+        case "off", "0", "false", "no": return true
+        default: return false
+        }
+    }()
+    private var isVSyncEnabled = !AppRuntime.forceVSyncOff
     private var lastMainWindowChromeHitTest: WindowChromeHitTest?
+
+    /// Lightweight per-second FPS + frame-cost breakdown to stdout, enabled
+    /// with GUAVA_FPS_LOG=1. Splits CPU build cost (layout/draw) from the
+    /// acquire+submit+present cost so we can tell whether the loop is
+    /// CPU-bound (→ pipelining/parallelism helps) or present/GPU-bound
+    /// (→ it does not — look at vsync / cross-adapter present instead).
+    private static let fpsLogEnabled =
+        ProcessInfo.processInfo.environment["GUAVA_FPS_LOG"] == "1"
+    private var fpsFrames = 0
+    private var fpsWindowStart: Double = 0
+    private var fpsLayoutAccum = 0.0
+    private var fpsDrawAccum = 0.0
+    private var fpsPresentAccum = 0.0
+    private var fpsTickAccum = 0.0
 
     private var currentPresentMode: GPUPresentMode {
         isVSyncEnabled ? .fifo : .immediate
@@ -319,7 +342,7 @@ public final class AppRuntime {
 
         try uploadAtlasIfNeeded()
         configuredSurface = true
-        lastFrameTime = ProcessInfo.processInfo.systemUptime
+        lastFrameTime = TimingTrace.now()
         
         // Request an initial frame to ensure surfaces like viewport have
         // time to initialize before the first render.
@@ -345,6 +368,7 @@ public final class AppRuntime {
     }
 
     private func setVSyncEnabled(_ enabled: Bool) {
+        let enabled = enabled && !Self.forceVSyncOff
         let changed = isVSyncEnabled != enabled
         if changed {
             isVSyncEnabled = enabled
@@ -398,13 +422,13 @@ public final class AppRuntime {
     private func handleFrame() -> Bool {
         guard configuredSurface, let surface, let root = tree.root else { return false }
 
-        let frameStart = ProcessInfo.processInfo.systemUptime
+        let frameStart = TimingTrace.now()
 
         configureTextEnvironment(scale: host.contentScaleFactor)
-        let layoutStart = ProcessInfo.processInfo.systemUptime
+        let layoutStart = TimingTrace.now()
         _ = graph.computeLayoutIfNeeded(width: Float(logicalW), height: Float(logicalH))
         syncMainWindowChromeHitTest()
-        let layoutEnd = ProcessInfo.processInfo.systemUptime
+        let layoutEnd = TimingTrace.now()
 
         drawList.reset()
         if useLegacyRenderer {
@@ -413,7 +437,7 @@ public final class AppRuntime {
             layerRenderer.render(tree: graph.renderTree, into: drawList)
         }
         TooltipOverlayRegistry.drawAll(into: drawList)
-        let drawEnd = ProcessInfo.processInfo.systemUptime
+        let drawEnd = TimingTrace.now()
 
         do {
             if atlas?.isDirty == true {
@@ -461,7 +485,13 @@ public final class AppRuntime {
             backend.submit(buffer)
             surface.present()
             host.requestDisplay()
-            let presentEnd = ProcessInfo.processInfo.systemUptime
+            let presentEnd = TimingTrace.now()
+
+            if Self.fpsLogEnabled {
+                recordFPSSample(layoutMs: (layoutEnd - layoutStart) * 1000,
+                                drawMs: (drawEnd - layoutEnd) * 1000,
+                                presentMs: (presentEnd - drawEnd) * 1000)
+            }
 
             if let dev = devTools {
                 devToolsTickedOnce = true
@@ -498,9 +528,45 @@ public final class AppRuntime {
 
     private func handleFramePreparation(deltaTime: Double) {
         let delta = max(0, deltaTime)
-        lastFrameTime = ProcessInfo.processInfo.systemUptime
+        lastFrameTime = TimingTrace.now()
+        let tickStart = TimingTrace.now()
         onTick?(delta)
+        if Self.fpsLogEnabled {
+            fpsTickAccum += (TimingTrace.now() - tickStart) * 1000
+        }
         syncAuxiliaryWindows()
+    }
+
+    /// Accumulate one frame's timing and emit a one-line summary roughly once
+    /// per second. `presentMs` covers acquire + encode + submit + present, i.e.
+    /// the part that blocks on vsync / GPU / cross-adapter copy.
+    private func recordFPSSample(layoutMs: Double, drawMs: Double, presentMs: Double) {
+        let now = TimingTrace.now()
+        if fpsWindowStart == 0 { fpsWindowStart = now }
+        fpsFrames += 1
+        fpsLayoutAccum += layoutMs
+        fpsDrawAccum += drawMs
+        fpsPresentAccum += presentMs
+
+        let elapsed = now - fpsWindowStart
+        guard elapsed >= 1.0 else { return }
+        let n = Double(fpsFrames)
+        // Write to stderr: when stdout is redirected to a file it is block
+        // buffered, so a force-killed GUI run would lose buffered samples.
+        let line = String(format: "[guava.fps] %.1f fps | sim/tick=%.2fms | cpu: layout=%.2fms draw=%.2fms | gpu/present=%.2fms (n=%d)\n",
+                          n / elapsed,
+                          fpsTickAccum / n,
+                          fpsLayoutAccum / n,
+                          fpsDrawAccum / n,
+                          fpsPresentAccum / n,
+                          fpsFrames)
+        FileHandle.standardError.write(Data(line.utf8))
+        fpsFrames = 0
+        fpsWindowStart = now
+        fpsLayoutAccum = 0
+        fpsDrawAccum = 0
+        fpsPresentAccum = 0
+        fpsTickAccum = 0
     }
 
     /// Recursive scene-graph node count used purely for the timing payload.
