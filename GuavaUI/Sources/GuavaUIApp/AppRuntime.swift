@@ -119,15 +119,6 @@ public final class AppRuntime {
         isVSyncEnabled ? .fifo : .immediate
     }
 
-    /// On-demand redraw policy. When this returns `false`, AppRuntime stops
-    /// requesting a fresh frame after each present, letting the platform host
-    /// park at its idle heartbeat until input, recomposition, animation, or this
-    /// policy goes live again. Default keeps the legacy always-on cadence
-    /// (games / players render every frame); the editor wires it to "the user or
-    /// scene is actually doing something" so a static IDE stops rebuilding the
-    /// whole UI 120×/second.
-    private var shouldKeepRedrawing: () -> Bool = { true }
-
     /// 进程内 DevTools 调试服务器。仅当 `config.devTools != nil` 时创建。
     private var devTools: DevTools?
     private var devToolsTickedOnce = false
@@ -233,9 +224,6 @@ public final class AppRuntime {
             self.host.showOpenFolderDialog(windowID: self.host.mainSession?.id,
                                            defaultPath: defaultPath,
                                            accept: accept)
-        }
-        displayHandle.installRedrawPolicyControl { [weak self] policy, idleFrameRate in
-            self?.setRedrawPolicy(policy, idleFrameRate: idleFrameRate)
         }
         displayHandle.installAuxiliaryWindowControls(
             open: { [weak self] request in
@@ -379,12 +367,6 @@ public final class AppRuntime {
         try uploadAtlasIfNeeded()
     }
 
-    private func setRedrawPolicy(_ policy: @escaping () -> Bool, idleFrameRate: Double?) {
-        shouldKeepRedrawing = policy
-        host.setIdleFrameRate(idleFrameRate)
-        host.requestDisplay()
-    }
-
     private func setVSyncEnabled(_ enabled: Bool) {
         let enabled = enabled && !Self.forceVSyncOff
         let changed = isVSyncEnabled != enabled
@@ -502,13 +484,7 @@ public final class AppRuntime {
             let buffer = try encoder.finish()
             backend.submit(buffer)
             surface.present()
-            // Schedule the next frame only while the redraw policy is live
-            // (games: always; editor: while playing / interacting / animating).
-            // Otherwise the host parks at its idle heartbeat instead of burning
-            // a full rebuild every frame on a static scene.
-            if shouldKeepRedrawing() {
-                host.requestDisplay()
-            }
+            host.requestDisplay()
             let presentEnd = TimingTrace.now()
 
             if Self.fpsLogEnabled {

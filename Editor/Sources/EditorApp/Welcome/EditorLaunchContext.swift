@@ -8,18 +8,6 @@ import GuavaUIWorkspace
 import PlatformShell
 import RHIWGPU
 
-/// Thread-safe liveness flag shared between the loop thread (which refreshes it
-/// from the redraw policy each present) and the engine's viewport-render
-/// completion callback (which may fire on a background thread). Lets the
-/// callback decide whether to drive a full-rate frame without touching
-/// main-thread editor state.
-private final class RedrawLiveFlag: @unchecked Sendable {
-    private let lock = NSLock()
-    private var value = false
-    func set(_ newValue: Bool) { lock.lock(); value = newValue; lock.unlock() }
-    func get() -> Bool { lock.lock(); defer { lock.unlock() }; return value }
-}
-
 final class EditorLaunchContext: @unchecked Sendable {
     private(set) var bundle: EditorLaunchBundle?
     private var shellPreferenceToken: EditorStore.SubscriptionToken?
@@ -128,38 +116,8 @@ final class EditorLaunchContext: @unchecked Sendable {
         app.setDisplayInvalidationHandler {
             display.requestDisplay()
         }
-
-        // Render-on-demand policy: keep redrawing at full rate only while the
-        // scene is genuinely live — playing the simulation, or the user is
-        // dragging the camera / a gizmo / holding a fly-camera key. Otherwise
-        // the host parks at a 10fps idle heartbeat instead of rebuilding the
-        // whole IDE every frame on a static scene. Input, recomposition (store
-        // changes), and UI animations still wake a frame immediately, so the
-        // editor stays responsive; the heartbeat is just a safety floor so a
-        // live viewport / any unmodeled change still refreshes a few times a
-        // second. Explicit invalidations (selection, scene edits, preference
-        // changes) go through `setDisplayInvalidationHandler` above and redraw
-        // immediately regardless of this policy.
-        let liveFlag = RedrawLiveFlag()
-        // Evaluated on the loop thread after every present. Returns whether the
-        // scene is live (drives full-rate redraw) and mirrors it into `liveFlag`
-        // so the viewport-completion callback — which may run on a background
-        // thread — can read liveness without touching main-thread state.
-        display.setRedrawPolicy(continuous: { [weak app] in
-            let live: Bool = {
-                guard let app else { return false }
-                if app.store.state.playbackState == .playing { return true }
-                let viewport = EditorViewportInputController.shared
-                return viewport.hasActivePointerSession || !viewport.pressedScancodes.isEmpty
-            }()
-            liveFlag.set(live)
-            return live
-        }, idleFrameRate: 10)
         app.setViewportRenderCompletionHandler { _ in
-            // A fresh engine viewport frame only needs to spin the loop back up
-            // to full rate while the scene is live; when idle, the 10fps
-            // heartbeat already repaints (and re-renders) it, so don't.
-            if liveFlag.get() { display.requestDisplay() }
+            display.requestDisplay()
         }
         app.setOpenSettingsWindowHandler { [weak self] in
             guard let self else { return }

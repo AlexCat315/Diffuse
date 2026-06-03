@@ -58,22 +58,6 @@ private func resolveProjectDirectory() -> String? {
     return nil
 }
 
-/// Player frame-rate cap. Defaults to 60fps; override with
-/// `GUAVA_TARGET_FPS=<n>` for a different cap, or `GUAVA_TARGET_FPS=0`/`off`
-/// to disable the cap entirely (useful for benchmarking the render ceiling —
-/// pair with `GUAVA_VSYNC=off` so the swapchain doesn't pace it either).
-private func resolveTargetFrameRate() -> Double? {
-    guard let raw = ProcessInfo.processInfo.environment["GUAVA_TARGET_FPS"] else {
-        return 60
-    }
-    switch raw.lowercased() {
-    case "0", "off", "none", "uncapped", "unlimited":
-        return nil
-    default:
-        return Double(raw).map { max(1, $0) } ?? 60
-    }
-}
-
 @MainActor
 @preconcurrency
 private func runPlayer() throws {
@@ -98,7 +82,7 @@ private func runPlayer() throws {
             clearColor: GPUColor(r: 0, g: 0, b: 0, a: 1),
             backendConfig: WGPUDeviceConfig(),
             titleBarStyle: .standard,
-            targetFrameRate: resolveTargetFrameRate()
+            targetFrameRate: 60
         ),
         backend: backend,
         onTick: { dt in
