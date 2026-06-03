@@ -37,6 +37,7 @@ public final class AppDisplayHandle: @unchecked Sendable {
     private var auxiliaryWindowIsOpen: (@MainActor (WindowID) -> Bool)?
     private var setRuntimeTargetFrameRate: (@MainActor (Double?) -> Void)?
     private var setRuntimeFrameRateMode: (@MainActor (PlatformFrameRateMode) -> Void)?
+    private var setRuntimeRedrawPolicy: (@MainActor (@escaping () -> Bool, Double?) -> Void)?
     private var setRuntimeVSyncEnabled: (@MainActor (Bool) -> Void)?
     private var currentRuntimeDisplayRefreshRate: (@MainActor () -> Double?)?
     private var installRuntimeNativeMenuBar: (@MainActor (NativeMenuBar) -> Void)?
@@ -76,6 +77,18 @@ public final class AppDisplayHandle: @unchecked Sendable {
     public func setVSyncEnabled(_ enabled: Bool) {
         setRuntimeVSyncEnabled?(enabled)
         requestDisplay()
+    }
+
+    /// Install an on-demand redraw policy. `continuous` is evaluated after every
+    /// present: while it returns `true` the runtime keeps requesting frames at
+    /// full rate (e.g. editor playing / interacting / animating); while `false`
+    /// the runtime parks and the host falls back to `idleFrameRate` (frames per
+    /// second) as a safety heartbeat so a static scene stops rebuilding the
+    /// whole UI every frame. Pass `idleFrameRate: nil` to render strictly
+    /// on-demand. Not setting a policy keeps the default always-on cadence.
+    @MainActor
+    public func setRedrawPolicy(continuous: @escaping () -> Bool, idleFrameRate: Double?) {
+        setRuntimeRedrawPolicy?(continuous, idleFrameRate)
     }
 
     @MainActor
@@ -198,6 +211,11 @@ public final class AppDisplayHandle: @unchecked Sendable {
     @MainActor
     func installFolderDialogControl(_ action: @escaping @MainActor (String?, @escaping (String?) -> Void) -> Void) {
         openFolderDialogAction = action
+    }
+
+    @MainActor
+    func installRedrawPolicyControl(_ action: @escaping @MainActor (@escaping () -> Bool, Double?) -> Void) {
+        setRuntimeRedrawPolicy = action
     }
 
     @MainActor
