@@ -92,15 +92,29 @@ public final class DrawList {
         let baseVertex = UInt32(vertices.count)
         let baseIndex = UInt32(indices.count)
         vertices.append(contentsOf: other.vertices)
-        indices.reserveCapacity(indices.count + other.indices.count)
-        for i in other.indices { indices.append(i + baseVertex) }
-        for b in other.batches {
-            batches.append(DrawBatch(
-                indexOffset: b.indexOffset + baseIndex,
-                indexCount: b.indexCount,
-                textureID: b.textureID,
-                scissor: b.scissor
-            ))
+        // Fast path: appending into an empty list (the common single-root-layer
+        // composite) needs no index/offset shift, so bulk-copy instead of the
+        // per-element loop. `i + 0 == i` and `offset + 0 == offset`, so the
+        // output is identical — this just avoids ~O(indices) element appends
+        // (which are very costly under -Onone debug builds).
+        if baseVertex == 0 {
+            indices.append(contentsOf: other.indices)
+        } else {
+            indices.reserveCapacity(indices.count + other.indices.count)
+            for i in other.indices { indices.append(i + baseVertex) }
+        }
+        if baseIndex == 0 {
+            batches.append(contentsOf: other.batches)
+        } else {
+            batches.reserveCapacity(batches.count + other.batches.count)
+            for b in other.batches {
+                batches.append(DrawBatch(
+                    indexOffset: b.indexOffset + baseIndex,
+                    indexCount: b.indexCount,
+                    textureID: b.textureID,
+                    scissor: b.scissor
+                ))
+            }
         }
     }
 
