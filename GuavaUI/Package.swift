@@ -54,6 +54,12 @@ let package = Package(
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "ImageDecodeBridge", package: "Engine"),
                 .product(name: "Logging", package: "swift-log"),
+            ],
+            linkerSettings: [
+                // winmm provides timeBeginPeriod/timeEndPeriod, used by the run
+                // loop to raise the Windows timer resolution so Thread.sleep
+                // pacing isn't quantized to ~15.6ms (which caps fps at 64).
+                .linkedLibrary("winmm", .when(platforms: [.windows])),
             ]
         ),
 
