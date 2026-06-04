@@ -1,7 +1,23 @@
 import Foundation
 import GuavaUIRuntime
-import GuavaUIBundledFonts
 @testable import GuavaUICompose
+
+/// Cross-platform test font resolved from the host's system fonts. GuavaUI no
+/// longer bundles a font; the assertions in these tests are font-agnostic.
+func systemTestFontPath() -> String {
+    let fm = FileManager.default
+    let candidates = [
+        "C:\\Windows\\Fonts\\segoeui.ttf",
+        "C:\\Windows\\Fonts\\arial.ttf",
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/Library/Fonts/Arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+    ]
+    return candidates.first { fm.fileExists(atPath: $0) } ?? ""
+}
 
 /// All compose tests that mutate the process-wide holders
 /// (`InteractionRegistryHolder`, `FocusChainHolder`, `TextEnvironmentHolder`)
@@ -20,7 +36,7 @@ enum GlobalTestLock {
 protocol GuavaUIComposeSerializedSuite {}
 
 enum TestTextEnvironmentFactory {
-    static let fontPath = BundledFonts.bundledFontURL?.path ?? ""
+    static let fontPath = systemTestFontPath()
 
     static func make(size: Float = 16,
                      lineHeight: Float = 20) -> TextEnvironment {

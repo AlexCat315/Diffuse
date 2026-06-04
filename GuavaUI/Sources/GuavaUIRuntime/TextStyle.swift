@@ -38,7 +38,6 @@ public enum SystemFontDefaults {
     /// CJK glyphs are resolved through CoreText's cascade list at shape
     /// time, so we only need a single primary face here.
     public static let fontStack: [String] = [
-        "Inter",
         "Helvetica Neue",
         "Helvetica",
         "PingFang SC",
@@ -52,21 +51,20 @@ public enum SystemFontDefaults {
 
 #if canImport(CoreText)
     private static func resolvePrimaryFontName() -> String {
-        for name in fontStack {
-            if isInstalled(family: name) {
-                return name
+        // Prefer the actual platform UI font (San Francisco on modern macOS)
+        // so the app matches native chrome instead of a bundled face.
+        if let systemFont = CTFontCreateUIFontForLanguage(.system, 13, nil) {
+            let familyName = CTFontCopyFamilyName(systemFont) as String
+            if !familyName.isEmpty {
+                return familyName
+            }
+            let postScriptName = CTFontCopyPostScriptName(systemFont) as String
+            if !postScriptName.isEmpty {
+                return postScriptName
             }
         }
-        guard let systemFont = CTFontCreateUIFontForLanguage(.system, 13, nil) else {
-            return "Helvetica Neue"
-        }
-        let familyName = CTFontCopyFamilyName(systemFont) as String
-        if !familyName.isEmpty {
-            return familyName
-        }
-        let postScriptName = CTFontCopyPostScriptName(systemFont) as String
-        if !postScriptName.isEmpty {
-            return postScriptName
+        for name in fontStack where isInstalled(family: name) {
+            return name
         }
         return "Helvetica Neue"
     }
@@ -81,8 +79,13 @@ public enum SystemFontDefaults {
     }
 #else
     private static func resolvePrimaryFontName() -> String {
-        // On non-Apple platforms, use the bundled Inter font directly.
-        return "Inter"
+        // Name of the platform's default UI font. The actual file is located by
+        // `FontProvider.systemPrimaryFontPaths()`; this name is just a label.
+        #if os(Windows)
+        return "Segoe UI"
+        #else
+        return "DejaVu Sans"
+        #endif
     }
 #endif
 }
