@@ -19,6 +19,10 @@ enum UIShader {
     static let wgsl: String = """
     struct Uniforms {
         viewport: vec2<f32>,
+        // 1.0 when the render target is sRGB (gamma-correct path); 0.0 for
+        // legacy non-sRGB targets (e.g. in-game UI matching the game surface).
+        srgb: f32,
+        _pad: f32,
     };
 
     @group(0) @binding(0) var<uniform> u: Uniforms;
@@ -49,34 +53,47 @@ enum UIShader {
         return out;
     }
 
+    // sRGB → linear. Vertex/tint colors and sampled image texels are sRGB-
+    // encoded; the render target is sRGB, so the shader must output LINEAR and
+    // the hardware re-encodes on write. Crucially this also means alpha blending
+    // (incl. glyph antialiasing) happens in linear light — gamma-correct, the
+    // way DirectWrite/Chromium render text — instead of smearing on gamma-
+    // encoded values.
+    fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {
+        let lower = c / 12.92;
+        let higher = pow((c + vec3<f32>(0.055)) / 1.055, vec3<f32>(2.4));
+        return select(higher, lower, c <= vec3<f32>(0.04045));
+    }
+
     @fragment
     fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
+        let is_srgb = u.srgb > 0.5;
+        // sRGB target: output linear so the hardware re-encodes and, crucially,
+        // blends in linear light. Non-sRGB target: keep the original behaviour.
+        let rgb = select(in.color.rgb, srgb_to_linear(in.color.rgb), is_srgb);
         // u < 0 → solid color path (no texture sample).
         if (in.uv.x < 0.0) {
-            return in.color;
+            return vec4<f32>(rgb, in.color.a);
         }
-        // u >= 20 → alpha-mask image. Use the source alpha as coverage and
-        // theme/tint color as final RGB.
+        // u >= 20 → alpha-mask image. Source alpha is coverage; tint is RGB.
         if (in.uv.x >= 20.0) {
             let real_uv = vec2<f32>(in.uv.x - 20.0, in.uv.y);
             let s = textureSample(atlas_tex, atlas_sampler, real_uv);
-            return vec4<f32>(in.color.rgb, in.color.a * s.a);
+            return vec4<f32>(rgb, in.color.a * s.a);
         }
-        // u >= 10 → RGBA color image; subtract the 10-unit offset to recover
-        // the real uv. Result is the texture sample tinted by `color`.
+        // u >= 10 → RGBA color image tinted by `color` (icons, the 3D viewport).
         if (in.uv.x >= 10.0) {
             let real_uv = vec2<f32>(in.uv.x - 10.0, in.uv.y);
             let s = textureSample(atlas_tex, atlas_sampler, real_uv);
-            return in.color * s;
+            let stex = select(s.rgb, srgb_to_linear(s.rgb), is_srgb);
+            return vec4<f32>(rgb * stex, in.color.a * s.a);
         }
-        // Otherwise: alpha-only texture (font glyph). Sample .r as coverage.
+        // Otherwise: alpha-only font glyph. On sRGB targets the coverage blends
+        // gamma-correctly in linear light (the DirectWrite/Chromium way); on
+        // legacy targets keep the ad-hoc midtone boost so they don't regress.
         let a = textureSample(atlas_tex, atlas_sampler, in.uv).r;
-        // FreeType produces linear coverage fractions, but display gamma (~2.2)
-        // causes thin strokes to look lighter/thinner than intended. A mild
-        // power curve boosts midtone coverage so 12-14 px labels look crisp
-        // on a dark background without appearing artificially bold at larger sizes.
-        let a_corrected = pow(a, 0.75);
-        return vec4<f32>(in.color.rgb, in.color.a * a_corrected);
+        let cov = select(pow(a, 0.75), a, is_srgb);
+        return vec4<f32>(rgb, in.color.a * cov);
     }
     """
 }
