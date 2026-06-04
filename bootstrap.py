@@ -97,7 +97,7 @@ engine_src     = str(root / "Engine"  / "third-party")
 engine_bld     = str(root / "Engine"  / "build" / "native")
 install_prefix = str(Path(tempfile.gettempdir()) / "guava-native-install")
 
-print("\n── Engine ───────────────────────────────────────────────────────────")
+print("\n[ Engine ]")
 shell(cmake, "-S", engine_src, "-B", engine_bld, "-DCMAKE_BUILD_TYPE=Release")
 # `--config Release` is required by multi-config generators (Visual Studio):
 # they ignore CMAKE_BUILD_TYPE and otherwise default to Debug, which both
@@ -120,7 +120,7 @@ shell(cmake, "--install", engine_bld, "--prefix", install_prefix, "--config", "R
 guava_src = str(root / "GuavaUI" / "third-party")
 guava_bld = str(root / "GuavaUI" / "build" / "native")
 
-print("\n── GuavaUI ──────────────────────────────────────────────────────────")
+print("\n[ GuavaUI ]")
 shell(cmake, "-S", guava_src, "-B", guava_bld, "-DCMAKE_BUILD_TYPE=Release")
 shell(cmake, "--build", guava_bld, "--parallel", "--config", "Release")
 shell(cmake, "--install", guava_bld, "--prefix", install_prefix, "--config", "Release")
