@@ -29,7 +29,8 @@ struct AssetBrowserPanel: View {
         // The picker is invoked from a button tap on the main loop thread.
         MainActor.assumeIsolated {
             display.requestOpenFile(
-                filters: [(name: L("3D Models"), extensions: ["glb", "gltf", "obj"])],
+                filters: [(name: L("3D Models"),
+                           extensions: AssetImportResolver.supportedExtensions.sorted())],
                 allowsMultiple: true,
                 defaultPath: importDestination(for: folder)
             ) { paths in
@@ -44,98 +45,81 @@ struct AssetBrowserPanel: View {
         return folder.isEmpty ? base.path : base.appendingPathComponent(folder, isDirectory: true).path
     }
 
-    /// Copies the chosen files (and any external dependencies) into the viewed
-    /// folder, then reloads the asset registry.
+    /// Imports the chosen files into the viewed folder. Each file is dispatched
+    /// through `AssetImportResolver`, which (like UE/Godot) pulls every external
+    /// dependency — glTF `.bin` buffers and textures, OBJ `.mtl` + its maps —
+    /// along with the asset, preserving relative layout. Results are reported in
+    /// the console: imported count, missing dependencies, unsupported formats.
     private func importFiles(_ paths: [String], into folder: String) {
         guard !paths.isEmpty else { return }
         let destDir = URL(fileURLWithPath: importDestination(for: folder), isDirectory: true)
             .resolvingSymlinksInPath()
         try? FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
-        var copied = false
+
+        var importedNames: [String] = []
+        var missingDependencies: [String] = []
+        var unsupported: [String] = []
+
         for path in paths {
-            if copyAsset(from: URL(fileURLWithPath: path), into: destDir) { copied = true }
+            let src = URL(fileURLWithPath: path)
+            guard AssetImportResolver.isSupported(src) else {
+                unsupported.append(src.lastPathComponent)
+                continue
+            }
+            let outcome = copyAsset(from: src, into: destDir)
+            if outcome.copied { importedNames.append(src.lastPathComponent) }
+            missingDependencies.append(contentsOf: outcome.missing)
         }
-        if copied {
+
+        if !importedNames.isEmpty {
             _ = app.reloadAssets()
             // A re-imported file may reuse an id, so drop cached thumbnails.
             AssetThumbnailRasterizer.invalidate()
+            app.logConsole("Imported \(importedNames.count) asset\(importedNames.count == 1 ? "" : "s")",
+                           detail: importedNames.joined(separator: ", "))
+        }
+        if !missingDependencies.isEmpty {
+            app.logConsole("Asset imported with missing dependencies",
+                           severity: .warning,
+                           detail: missingDependencies.joined(separator: ", "))
+        }
+        if !unsupported.isEmpty {
+            app.logConsole("Unsupported format — import glTF (.glb/.gltf) or .obj",
+                           severity: .warning,
+                           detail: unsupported.joined(separator: ", "))
         }
     }
 
-    /// Copies one asset file into `destDir`. A `.gltf` is a text index that
-    /// references an external `.bin` buffer and texture images by relative URI,
-    /// so those siblings are copied alongside it (preserving their relative
-    /// subpaths) — without them the importer can't resolve the mesh. `.glb` is
-    /// self-contained and `.obj` carries its geometry inline, so both copy as-is.
-    @discardableResult
-    private func copyAsset(from src: URL, into destDir: URL) -> Bool {
-        var items: [(src: URL, relative: String)] = [(src, src.lastPathComponent)]
-        if src.pathExtension.lowercased() == "gltf" {
-            items.append(contentsOf: gltfDependencies(of: src))
-        }
+    /// Copies a resolved asset (and its dependencies) into `destDir`, preserving
+    /// each file's relative path. Returns whether anything was copied and the
+    /// relative paths of any referenced files missing from disk.
+    private func copyAsset(from src: URL, into destDir: URL) -> (copied: Bool, missing: [String]) {
         var copiedAny = false
-        for item in items {
-            guard let relative = Self.sanitizedRelativePath(item.relative) else { continue }
-            let target = destDir.appendingPathComponent(relative)
+        var missing: [String] = []
+        for file in AssetImportResolver.resolve(src) {
+            let target = destDir.appendingPathComponent(file.relativePath)
             // Already in place (importing from inside the project)? Count it.
-            if item.src.resolvingSymlinksInPath().path == target.resolvingSymlinksInPath().path {
+            if file.source.resolvingSymlinksInPath().path == target.resolvingSymlinksInPath().path {
                 copiedAny = true
                 continue
             }
-            guard FileManager.default.fileExists(atPath: item.src.path) else { continue }
+            guard FileManager.default.fileExists(atPath: file.source.path) else {
+                missing.append(file.relativePath)
+                continue
+            }
             do {
                 try FileManager.default.createDirectory(at: target.deletingLastPathComponent(),
                                                         withIntermediateDirectories: true)
                 if FileManager.default.fileExists(atPath: target.path) {
                     try FileManager.default.removeItem(at: target)
                 }
-                try FileManager.default.copyItem(at: item.src, to: target)
+                try FileManager.default.copyItem(at: file.source, to: target)
                 copiedAny = true
             } catch {
-                // A dependency that can't be copied just means the importer warns.
+                missing.append(file.relativePath)
             }
         }
-        return copiedAny
-    }
-
-    /// External files a `.gltf` references (buffer `.bin`s and texture images),
-    /// resolved relative to the `.gltf`'s own directory. Skips embedded `data:`
-    /// URIs and remote `http(s)` URLs.
-    private func gltfDependencies(of gltf: URL) -> [(src: URL, relative: String)] {
-        guard let data = try? Data(contentsOf: gltf),
-              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return [] }
-        let baseDir = gltf.deletingLastPathComponent()
-        var result: [(URL, String)] = []
-        var seen = Set<String>()
-        for key in ["buffers", "images"] {
-            guard let entries = root[key] as? [[String: Any]] else { continue }
-            for entry in entries {
-                guard let uri = entry["uri"] as? String, !uri.isEmpty,
-                      !uri.hasPrefix("data:"),
-                      !uri.hasPrefix("http://"), !uri.hasPrefix("https://")
-                else { continue }
-                let decoded = uri.removingPercentEncoding ?? uri
-                guard let relative = Self.sanitizedRelativePath(decoded),
-                      seen.insert(relative).inserted
-                else { continue }
-                result.append((baseDir.appendingPathComponent(relative), relative))
-            }
-        }
-        return result
-    }
-
-    /// Normalizes a glTF-relative URI and rejects anything that would escape the
-    /// destination folder (absolute paths, drive letters, `..` segments).
-    private static func sanitizedRelativePath(_ path: String) -> String? {
-        var p = path.replacingOccurrences(of: "\\", with: "/")
-        while p.hasPrefix("./") { p.removeFirst(2) }
-        guard !p.isEmpty,
-              !p.hasPrefix("/"),
-              !p.contains(".."),
-              p.range(of: "^[A-Za-z]:", options: .regularExpression) == nil
-        else { return nil }
-        return p
+        return (copiedAny, missing)
     }
 
     private var trimmedQuery: String {
