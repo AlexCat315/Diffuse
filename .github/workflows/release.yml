@@ -48,6 +48,12 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "target=$target" >> "$GITHUB_OUTPUT"
 
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.target }}
+          fetch-depth: 0
+
       - name: Ensure GitHub Release exists
         shell: bash
         run: |
