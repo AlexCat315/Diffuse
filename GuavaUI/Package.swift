@@ -88,13 +88,11 @@ let package = Package(
         ),
 
         // MARK: - Bundled fonts
-        // Google Sans Code variable font shipped with GuavaUI.
+        // Font shim target. No font is bundled — each platform uses its system
+        // default UI font (see SystemFontDefaults / FontProvider).
         .target(
             name: "GuavaUIBundledFonts",
-            path: "Sources/Font",
-            resources: [
-                .copy("Inter.ttc"),
-            ]
+            path: "Sources/Font"
         ),
 
         // MARK: - App

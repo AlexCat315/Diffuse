@@ -34,7 +34,7 @@ public struct AppConfig: Sendable {
     public var devTools: DevToolsConfig?
 
     public init(title: String = "GuavaUI",
-                primaryFontName: String = "Inter",
+                primaryFontName: String = SystemFontDefaults.primaryFontName,
                 defaultFontSize: Float = 14,
                 defaultLineHeight: Float = 20,
                 clearColor: GPUColor = GPUColor(r: 0.05, g: 0.06, b: 0.08, a: 1),
