@@ -106,29 +106,34 @@ public struct Box<Content: View>: _PrimitiveView {
     public let direction: FlexDirection
     public let alignItems: Align
     public let justifyContent: Justify
+    public let wrap: Wrap
     public let spacing: Float
     public let content: Content
 
     public init(direction: FlexDirection = .column,
                 alignItems: Align = .stretch,
                 justifyContent: Justify = .flexStart,
+                wrap: Wrap = .noWrap,
                 spacing: Float = 0,
                 @ViewBuilder content: () -> Content) {
         self.direction = direction
         self.alignItems = alignItems
         self.justifyContent = justifyContent
+        self.wrap = wrap
         self.spacing = spacing
         self.content = content()
     }
 
     public init(direction: FlexDirection = .column,
                 alignment: Alignment,
+                wrap: Wrap = .noWrap,
                 spacing: Float = 0,
                 @ViewBuilder content: () -> Content) {
         let yogaValues = alignment.yogaValues(for: direction)
         self.init(direction: direction,
                   alignItems: yogaValues.alignItems,
                   justifyContent: yogaValues.justifyContent,
+                  wrap: wrap,
                   spacing: spacing,
                   content: content)
     }
@@ -145,6 +150,12 @@ public struct Box<Content: View>: _PrimitiveView {
         layout.flexDirection = direction
         layout.alignItems = alignItems
         layout.justifyContent = justifyContent
+        layout.flexWrap = wrap
+        // A wrapping grid should pack its lines toward the cross-axis start
+        // rather than Yoga's default `stretch`, which would inflate row gaps.
+        if wrap != .noWrap {
+            layout.alignContent = .flexStart
+        }
         if spacing > 0 {
             layout.setGap(spacing, gutter: .all)
         }

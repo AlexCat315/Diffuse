@@ -105,6 +105,22 @@ public enum ShellError: Error, CustomStringConvertible {
     }
 }
 
+/// One entry in a file-open dialog's type filter. Mirrors SDL's
+/// `SDL_DialogFileFilter`: `name` is a human label ("3D Models") and
+/// `extensions` is the bare extension list (no dots), e.g. `["glb", "gltf"]`.
+public struct FileDialogFilter: Sendable, Equatable {
+    public let name: String
+    public let extensions: [String]
+
+    public init(name: String, extensions: [String]) {
+        self.name = name
+        self.extensions = extensions
+    }
+
+    /// SDL's semicolon-separated pattern form ("glb;gltf;obj").
+    public var pattern: String { extensions.joined(separator: ";") }
+}
+
 @MainActor
 public protocol WindowHandle: AnyObject {
     var id: WindowID { get }
@@ -185,6 +201,16 @@ public protocol Shell: AnyObject {
                               defaultPath: String?,
                               accept: @escaping (String?) -> Void)
 
+    /// Present the OS "choose file(s)" dialog, parented to `windowID` when
+    /// supplied. `filters` restricts selectable types (empty = all files).
+    /// `accept` receives the chosen absolute paths (empty on cancel), on the
+    /// main thread. Cross-platform: the same native dialog everywhere.
+    func showOpenFileDialog(windowID: WindowID?,
+                            defaultPath: String?,
+                            filters: [FileDialogFilter],
+                            allowsMultiple: Bool,
+                            accept: @escaping ([String]) -> Void)
+
     /// Refresh rate of the display currently containing `windowID`.
     /// Returns `nil` when the platform cannot report it.
     func displayRefreshRate(windowID: WindowID?) -> Double?
@@ -255,6 +281,11 @@ public extension Shell {
     func showOpenFolderDialog(windowID: WindowID?,
                               defaultPath: String?,
                               accept: @escaping (String?) -> Void) { accept(nil) }
+    func showOpenFileDialog(windowID: WindowID?,
+                            defaultPath: String?,
+                            filters: [FileDialogFilter],
+                            allowsMultiple: Bool,
+                            accept: @escaping ([String]) -> Void) { accept([]) }
     func displayRefreshRate(windowID: WindowID? = nil) -> Double? { nil }
 }
 
