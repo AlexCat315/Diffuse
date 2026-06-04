@@ -272,6 +272,23 @@ public final class SDL3PlatformHost: PlatformHost {
         }
     }
 
+    public func showOpenFileDialog(windowID: WindowID?,
+                                   defaultPath: String?,
+                                   filters: [FileDialogFilter],
+                                   allowsMultiple: Bool,
+                                   accept: @escaping ([String]) -> Void) {
+        guard let shell else { accept([]); return }
+        // SDL runs the native file dialog on its own thread; marshal the result
+        // back onto the main loop thread before touching UI / loading assets.
+        let inbox = mainThreadInbox
+        shell.showOpenFileDialog(windowID: windowID,
+                                 defaultPath: defaultPath,
+                                 filters: filters,
+                                 allowsMultiple: allowsMultiple) { paths in
+            inbox.enqueue { accept(paths) }
+        }
+    }
+
     /// Destroy a window. The matching `PlatformWindowSession` is dropped on
     /// the next iteration of the run loop via `pruneClosedSessions`.
     public func closeWindow(_ windowID: WindowID) {
