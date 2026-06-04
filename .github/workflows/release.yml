@@ -54,6 +54,11 @@ jobs:
           tag="${{ steps.release.outputs.tag }}"
           target="${{ steps.release.outputs.target }}"
 
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "Release $tag was created by the triggering event; skipping re-creation."
+            exit 0
+          fi
+
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release $tag already exists"
           else
