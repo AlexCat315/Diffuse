@@ -250,6 +250,26 @@ public final class DrawList {
         appendQuad(v0, v1, v2, v3, textureID: .none)
     }
 
+    /// Append a solid-color triangle. Used by CPU-projected geometry such as the
+    /// asset-browser mesh thumbnail rasterizer; winding is not enforced (the
+    /// caller is responsible for any back-face culling it wants).
+    public func addTriangle(_ ax: Float, _ ay: Float,
+                            _ bx: Float, _ by: Float,
+                            _ cx: Float, _ cy: Float,
+                            color: Color) {
+        let packed = color.rgba8
+        let baseVertex = UInt32(vertices.count)
+        // Sentinel uv (-1, 0) → solid color path in the shader.
+        vertices.append(UIVertex(posX: ax, posY: ay, u: -1, v: 0, color: packed))
+        vertices.append(UIVertex(posX: bx, posY: by, u: -1, v: 0, color: packed))
+        vertices.append(UIVertex(posX: cx, posY: cy, u: -1, v: 0, color: packed))
+        let baseIndex = UInt32(indices.count)
+        indices.append(baseVertex)
+        indices.append(baseVertex + 1)
+        indices.append(baseVertex + 2)
+        recordIndices(at: baseIndex, count: 3, textureID: .none)
+    }
+
     /// Append a fully laid-out text result. The atlas texture must be registered
     /// with the renderer under `textureID`.
     public func addText(

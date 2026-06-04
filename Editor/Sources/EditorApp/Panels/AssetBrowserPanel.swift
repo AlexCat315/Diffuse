@@ -44,8 +44,8 @@ struct AssetBrowserPanel: View {
         return folder.isEmpty ? base.path : base.appendingPathComponent(folder, isDirectory: true).path
     }
 
-    /// Copies the chosen files into the viewed folder (unless they already live
-    /// there) and reloads the asset registry.
+    /// Copies the chosen files (and any external dependencies) into the viewed
+    /// folder, then reloads the asset registry.
     private func importFiles(_ paths: [String], into folder: String) {
         guard !paths.isEmpty else { return }
         let destDir = URL(fileURLWithPath: importDestination(for: folder), isDirectory: true)
@@ -53,24 +53,89 @@ struct AssetBrowserPanel: View {
         try? FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
         var copied = false
         for path in paths {
-            let src = URL(fileURLWithPath: path)
-            let target = destDir.appendingPathComponent(src.lastPathComponent)
-            // Already in place? No copy needed — just register it on reload.
-            if src.resolvingSymlinksInPath().path == target.resolvingSymlinksInPath().path {
-                copied = true
+            if copyAsset(from: URL(fileURLWithPath: path), into: destDir) { copied = true }
+        }
+        if copied {
+            _ = app.reloadAssets()
+            // A re-imported file may reuse an id, so drop cached thumbnails.
+            AssetThumbnailRasterizer.invalidate()
+        }
+    }
+
+    /// Copies one asset file into `destDir`. A `.gltf` is a text index that
+    /// references an external `.bin` buffer and texture images by relative URI,
+    /// so those siblings are copied alongside it (preserving their relative
+    /// subpaths) — without them the importer can't resolve the mesh. `.glb` is
+    /// self-contained and `.obj` carries its geometry inline, so both copy as-is.
+    @discardableResult
+    private func copyAsset(from src: URL, into destDir: URL) -> Bool {
+        var items: [(src: URL, relative: String)] = [(src, src.lastPathComponent)]
+        if src.pathExtension.lowercased() == "gltf" {
+            items.append(contentsOf: gltfDependencies(of: src))
+        }
+        var copiedAny = false
+        for item in items {
+            guard let relative = Self.sanitizedRelativePath(item.relative) else { continue }
+            let target = destDir.appendingPathComponent(relative)
+            // Already in place (importing from inside the project)? Count it.
+            if item.src.resolvingSymlinksInPath().path == target.resolvingSymlinksInPath().path {
+                copiedAny = true
                 continue
             }
+            guard FileManager.default.fileExists(atPath: item.src.path) else { continue }
             do {
+                try FileManager.default.createDirectory(at: target.deletingLastPathComponent(),
+                                                        withIntermediateDirectories: true)
                 if FileManager.default.fileExists(atPath: target.path) {
                     try FileManager.default.removeItem(at: target)
                 }
-                try FileManager.default.copyItem(at: src, to: target)
-                copied = true
+                try FileManager.default.copyItem(at: item.src, to: target)
+                copiedAny = true
             } catch {
-                // Skip files that can't be copied; the reload simply won't list them.
+                // A dependency that can't be copied just means the importer warns.
             }
         }
-        if copied { _ = app.reloadAssets() }
+        return copiedAny
+    }
+
+    /// External files a `.gltf` references (buffer `.bin`s and texture images),
+    /// resolved relative to the `.gltf`'s own directory. Skips embedded `data:`
+    /// URIs and remote `http(s)` URLs.
+    private func gltfDependencies(of gltf: URL) -> [(src: URL, relative: String)] {
+        guard let data = try? Data(contentsOf: gltf),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return [] }
+        let baseDir = gltf.deletingLastPathComponent()
+        var result: [(URL, String)] = []
+        var seen = Set<String>()
+        for key in ["buffers", "images"] {
+            guard let entries = root[key] as? [[String: Any]] else { continue }
+            for entry in entries {
+                guard let uri = entry["uri"] as? String, !uri.isEmpty,
+                      !uri.hasPrefix("data:"),
+                      !uri.hasPrefix("http://"), !uri.hasPrefix("https://")
+                else { continue }
+                let decoded = uri.removingPercentEncoding ?? uri
+                guard let relative = Self.sanitizedRelativePath(decoded),
+                      seen.insert(relative).inserted
+                else { continue }
+                result.append((baseDir.appendingPathComponent(relative), relative))
+            }
+        }
+        return result
+    }
+
+    /// Normalizes a glTF-relative URI and rejects anything that would escape the
+    /// destination folder (absolute paths, drive letters, `..` segments).
+    private static func sanitizedRelativePath(_ path: String) -> String? {
+        var p = path.replacingOccurrences(of: "\\", with: "/")
+        while p.hasPrefix("./") { p.removeFirst(2) }
+        guard !p.isEmpty,
+              !p.hasPrefix("/"),
+              !p.contains(".."),
+              p.range(of: "^[A-Za-z]:", options: .regularExpression) == nil
+        else { return nil }
+        return p
     }
 
     private var trimmedQuery: String {
@@ -435,7 +500,7 @@ private struct AssetTile: View {
     var body: some View {
         AssetDragSource(asset: asset, app: app, onSelect: onSelect) {
             Box(direction: .column, alignItems: .center, spacing: 6) {
-                AssetThumbnail(kind: asset.kind)
+                AssetThumbnail(asset: asset)
 
                 Text(asset.name, alignment: .center, lineLimit: 2)
                     .font(.caption)
@@ -453,24 +518,27 @@ private struct AssetTile: View {
 }
 
 private struct AssetThumbnail: View {
-    let kind: ImportableAssetKind
+    let asset: EditorAsset
 
     var body: some View {
-        Box(direction: .column, alignItems: .center, justifyContent: .center, spacing: 6) {
-            Image(resource: .svg(named: "cube", in: .module, subdirectory: "HierarchyIcons"),
-                  width: 30, height: 30,
-                  tint: .white,
-                  contentMode: .fit,
-                  renderingMode: .alphaMask)
-                .foregroundColor(kind.tint)
-                .frame(width: 30, height: 30)
+        Box(direction: .column, alignItems: .stretch) {
+            // Software-rendered shaded preview of the actual mesh, square-fit.
+            MeshThumbnailView(assetID: asset.id, meshIndex: asset.meshIndex)
+                .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
 
-            Text(kind.badge)
-                .font(.caption)
-                .foregroundColor(.onSurfaceMuted)
+            // Format badge — a small corner chip over the preview.
+            Box(direction: .column, alignItems: .flexStart) {
+                Text(asset.kind.badge)
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .padding(horizontal: 4, vertical: 1)
+                    .background(asset.kind.tint)
+                    .cornerRadius(3)
+            }
+            .absolutePosition(left: 4, bottom: 4)
         }
         .frame(width: 76, height: 72)
-        .background(.surfaceVariant)
+        .background(AssetTilePalette.thumbnailBackdrop)
         .cornerRadius(5)
     }
 }
@@ -576,6 +644,9 @@ private enum AssetTilePalette {
     static let transparent = Color(r: 0, g: 0, b: 0, a: 0)
     static let selectionFill = Color(red: 0x4F, green: 0x9D, blue: 0xFF, alpha: 0x33)
     static let selectionStroke = Color(red: 0x4F, green: 0x9D, blue: 0xFF, alpha: 0xC8)
+    /// Fixed neutral slate backdrop for thumbnails so the clay-shaded mesh reads
+    /// the same in light and dark themes (matches how UE/Unity render previews).
+    static let thumbnailBackdrop = Color(red: 0x2E, green: 0x31, blue: 0x38)
 }
 
 private extension ImportableAssetKind {
