@@ -251,7 +251,15 @@ public struct Text: _PrimitiveView {
                 maxWidth: snapshot.resolvedMaxWidth(Float(node.frame.width)),
                 alignment: snapshot.alignment
             )
-            let baseColor = snapshot.color ?? node.foregroundColor ?? env.defaultColor
+            // Fall back to the theme's `onSurface` (resolved here at draw-time,
+            // when the node is fully parented under any `.theme(_:)` provider)
+            // rather than `env.defaultColor`, which is a theme-agnostic constant
+            // (white) and rendered near-invisible in light mode. This matters
+            // for text whose `.foregroundColor(_:)` landed on an ancestor
+            // container instead of the leaf — `foregroundColor` is not inherited,
+            // so e.g. a `Row { Text }` button label never receives it and would
+            // otherwise use the white constant.
+            let baseColor = snapshot.color ?? node.foregroundColor ?? node.theme.colors.onSurface
             let drawColor = baseColor.multipliedAlpha(node.opacity)
             list.addText(result,
                          origin: (Float(origin.x), Float(origin.y)),

@@ -281,7 +281,16 @@ public final class DrawList {
     // MARK: - Internal
 
     private func snappedTextPixel(_ value: Float) -> Float {
-        value.rounded()
+        // Snap to a whole *physical* pixel. The draw list is in logical
+        // coordinates that the renderer scales by `ContentScaleHolder.current`
+        // to physical pixels; rounding in logical space lands glyphs on
+        // half-physical-pixels at fractional scales (e.g. 10→15 but 11→16.5 at
+        // 1.5×), so bilinear atlas sampling smears them. The glyph quad size is
+        // already an exact physical-pixel count, so a physical-aligned origin
+        // makes the atlas map 1:1 to the screen and stay crisp on HiDPI.
+        let scale = ContentScaleHolder.current
+        guard scale.isFinite, scale > 0 else { return value.rounded() }
+        return (value * scale).rounded() / scale
     }
 
     private func appendQuad(_ v0: UIVertex, _ v1: UIVertex, _ v2: UIVertex, _ v3: UIVertex, textureID: TextureID) {

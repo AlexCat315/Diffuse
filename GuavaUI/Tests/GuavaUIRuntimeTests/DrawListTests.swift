@@ -1,10 +1,10 @@
 import Foundation
 import Testing
-import GuavaUIBundledFonts
 @testable import GuavaUIRuntime
 
-/// Cross-platform test font: the bundled Inter.ttc.
-private let drawListTestFontPath = BundledFonts.bundledFontURL?.path ?? ""
+/// Cross-platform test font resolved from the host's system fonts
+/// (see `systemTestFontPath()` in TextTests.swift).
+private let drawListTestFontPath = systemTestFontPath()
 
 @Suite("DrawList")
 struct DrawListTests {
