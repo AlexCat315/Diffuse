@@ -24,6 +24,7 @@ typedef enum {
     WGPUBridge_TextureFormat_RGBA16Float,
     WGPUBridge_TextureFormat_Depth24Plus,
     WGPUBridge_TextureFormat_Depth32Float,
+    WGPUBridge_TextureFormat_BGRA8UnormSrgb,
 } WGPUBridgeTextureFormat;
 
 typedef enum {
