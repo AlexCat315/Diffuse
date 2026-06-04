@@ -7,43 +7,55 @@ import EngineKernel
 import AssetPipeline
 
 /// Content Browser — the editor's asset panel, modeled after Unreal's. A
-/// toolbar (import + live search + item count), a path bar with a grid/list
-/// toggle, and a scrollable, reflowing tile grid. Every tile is a drag source:
-/// click to select, drag past a threshold to drop a Static Mesh into the
-/// viewport. Import works on every platform through the native file dialog.
+/// toolbar (import + live search + item count), a breadcrumb bar with a
+/// grid/list toggle, and a scrollable, reflowing grid that navigates the
+/// project's folder hierarchy (folders first, then assets). Every asset tile is
+/// a drag source: click to select, drag past a threshold to drop a Static Mesh
+/// into the viewport. Import works on every platform via the native file
+/// dialog, into the folder currently being viewed.
 struct AssetBrowserPanel: View {
     let app: EditorApplication
 
     @State private var searchText: String = ""
     @State private var viewMode: AssetViewMode = .grid
     @State private var selectedAssetID: String? = nil
+    /// Relative folder path currently shown ("" == project root). Uses "/" as
+    /// separator, matching `AssetRegistryEntry.relativePath`.
+    @State private var currentFolder: String = ""
 
     private func importAssets() {
         guard let display = AppDisplayHandleHolder.current else { return }
+        let folder = currentFolder
         // The picker is invoked from a button tap on the main loop thread.
         MainActor.assumeIsolated {
             display.requestOpenFile(
                 filters: [(name: L("3D Models"), extensions: ["glb", "gltf", "obj"])],
                 allowsMultiple: true,
-                defaultPath: app.projectDirectory
+                defaultPath: importDestination(for: folder)
             ) { paths in
                 // Delivered on the main thread by the platform host.
-                importFiles(paths)
+                importFiles(paths, into: folder)
             }
         }
     }
 
-    /// Copies the chosen files into the project directory (unless they already
-    /// live there) and reloads the asset registry.
-    private func importFiles(_ paths: [String]) {
+    private func importDestination(for folder: String) -> String {
+        let base = URL(fileURLWithPath: app.projectDirectory, isDirectory: true)
+        return folder.isEmpty ? base.path : base.appendingPathComponent(folder, isDirectory: true).path
+    }
+
+    /// Copies the chosen files into the viewed folder (unless they already live
+    /// there) and reloads the asset registry.
+    private func importFiles(_ paths: [String], into folder: String) {
         guard !paths.isEmpty else { return }
-        let dest = URL(fileURLWithPath: app.projectDirectory, isDirectory: true)
+        let destDir = URL(fileURLWithPath: importDestination(for: folder), isDirectory: true)
             .resolvingSymlinksInPath()
+        try? FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
         var copied = false
         for path in paths {
             let src = URL(fileURLWithPath: path)
-            let target = dest.appendingPathComponent(src.lastPathComponent)
-            // Already inside the project? No copy needed — just register it.
+            let target = destDir.appendingPathComponent(src.lastPathComponent)
+            // Already in place? No copy needed — just register it on reload.
             if src.resolvingSymlinksInPath().path == target.resolvingSymlinksInPath().path {
                 copied = true
                 continue
@@ -61,8 +73,12 @@ struct AssetBrowserPanel: View {
         if copied { _ = app.reloadAssets() }
     }
 
-    private func filtered(_ assets: [EditorAsset]) -> [EditorAsset] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    private var trimmedQuery: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func searchMatches(_ assets: [EditorAsset]) -> [EditorAsset] {
+        let query = trimmedQuery
         guard !query.isEmpty else { return assets }
         return assets.filter {
             $0.name.range(of: query, options: .caseInsensitive) != nil
@@ -70,69 +86,149 @@ struct AssetBrowserPanel: View {
         }
     }
 
+    private func navigate(to folder: String) {
+        currentFolder = folder
+        selectedAssetID = nil
+    }
+
     var body: some View {
         StoreScope(app.store) { _ in
             let allAssets = EditorAssetCatalog.entries()
-            let visible = filtered(allAssets)
+            let isSearching = !trimmedQuery.isEmpty
+            // While searching, ignore folder structure and show flat matches
+            // across the whole project (Unreal's search behaviour).
+            let listing = isSearching
+                ? AssetFolderListing(folders: [], assets: searchMatches(allAssets))
+                : AssetFolderListing.make(folder: currentFolder, from: allAssets)
+            let itemCount = listing.folders.count + listing.assets.count
 
             Box(direction: .column, alignItems: .stretch) {
                 AssetBrowserToolbar(searchText: $searchText,
                                     totalCount: allAssets.count,
-                                    visibleCount: visible.count,
-                                    isFiltering: !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                                    visibleCount: itemCount,
+                                    isFiltering: isSearching,
                                     onImport: { importAssets() })
                     .padding(horizontal: 10, vertical: 7)
 
                 Divider()
 
-                AssetBrowserPathBar(projectDirectory: app.projectDirectory,
-                                    viewMode: $viewMode)
+                AssetBreadcrumbBar(rootName: rootName,
+                                   currentFolder: currentFolder,
+                                   isSearching: isSearching,
+                                   viewMode: $viewMode,
+                                   onNavigate: { navigate(to: $0) })
                     .padding(horizontal: 10, vertical: 5)
 
                 Divider()
 
-                if allAssets.isEmpty {
-                    AssetBrowserEmptyState(projectDirectory: app.projectDirectory,
-                                           onImport: { importAssets() })
-                        .flex()
-                } else if visible.isEmpty {
-                    AssetBrowserNoResults(query: searchText)
-                        .flex()
-                } else {
-                    ScrollView(.vertical) {
-                        switch viewMode {
-                        case .grid:
-                            Box(direction: .row, alignItems: .flexStart, wrap: .wrap, spacing: 10) {
-                                for asset in visible {
-                                    AssetTile(asset: asset,
-                                              app: app,
-                                              isSelected: selectedAssetID == asset.id,
-                                              onSelect: { selectedAssetID = asset.id })
-                                }
-                            }
-                            .padding(horizontal: 10, vertical: 10)
-                        case .list:
-                            Box(direction: .column, alignItems: .stretch, spacing: 2) {
-                                for asset in visible {
-                                    AssetListRow(asset: asset,
-                                                 app: app,
-                                                 isSelected: selectedAssetID == asset.id,
-                                                 onSelect: { selectedAssetID = asset.id })
-                                }
-                            }
-                            .padding(horizontal: 6, vertical: 6)
-                        }
-                    }
-                    .flex()
-                }
+                content(allAssets: allAssets, listing: listing, isSearching: isSearching)
             }
             .frame(minWidth: 240)
+        }
+    }
+
+    private var rootName: String {
+        let name = URL(fileURLWithPath: app.projectDirectory, isDirectory: true).lastPathComponent
+        return name.isEmpty ? L("Content") : name
+    }
+
+    @ViewBuilder
+    private func content(allAssets: [EditorAsset],
+                         listing: AssetFolderListing,
+                         isSearching: Bool) -> some View {
+        if allAssets.isEmpty {
+            AssetBrowserEmptyState(projectDirectory: app.projectDirectory,
+                                   onImport: { importAssets() })
+                .flex()
+        } else if listing.folders.isEmpty && listing.assets.isEmpty {
+            if isSearching {
+                AssetBrowserPlaceholder(title: L("No matching assets"),
+                                        subtitle: "\"\(trimmedQuery)\"")
+                    .flex()
+            } else {
+                AssetBrowserPlaceholder(title: L("This folder is empty"),
+                                        subtitle: currentFolder)
+                    .flex()
+            }
+        } else {
+            ScrollView(.vertical) {
+                switch viewMode {
+                case .grid:
+                    Box(direction: .row, alignItems: .flexStart, wrap: .wrap, spacing: 10) {
+                        for folder in listing.folders {
+                            AssetFolderTile(name: folder.name,
+                                            onOpen: { navigate(to: folder.path) })
+                        }
+                        for asset in listing.assets {
+                            AssetTile(asset: asset,
+                                      app: app,
+                                      isSelected: selectedAssetID == asset.id,
+                                      onSelect: { selectedAssetID = asset.id })
+                        }
+                    }
+                    .padding(horizontal: 10, vertical: 10)
+                case .list:
+                    Box(direction: .column, alignItems: .stretch, spacing: 2) {
+                        for folder in listing.folders {
+                            AssetFolderListRow(name: folder.name,
+                                               onOpen: { navigate(to: folder.path) })
+                        }
+                        for asset in listing.assets {
+                            AssetListRow(asset: asset,
+                                         app: app,
+                                         isSelected: selectedAssetID == asset.id,
+                                         onSelect: { selectedAssetID = asset.id })
+                        }
+                    }
+                    .padding(horizontal: 6, vertical: 6)
+                }
+            }
+            .flex()
         }
     }
 }
 
 private enum AssetViewMode: Sendable, Equatable {
     case grid, list
+}
+
+// MARK: - Folder listing derivation
+
+private struct AssetFolderRef: Equatable {
+    let name: String   // immediate folder name
+    let path: String   // full relative path to navigate into
+}
+
+/// The immediate contents of one folder: subfolder names plus the assets that
+/// live directly in it. Derived purely from the flat `relativePath` list.
+private struct AssetFolderListing {
+    let folders: [AssetFolderRef]
+    let assets: [EditorAsset]
+
+    init(folders: [AssetFolderRef], assets: [EditorAsset]) {
+        self.folders = folders
+        self.assets = assets
+    }
+
+    static func make(folder: String, from all: [EditorAsset]) -> AssetFolderListing {
+        let prefix = folder.isEmpty ? "" : folder + "/"
+        var folderNames: Set<String> = []
+        var assets: [EditorAsset] = []
+        for asset in all {
+            let rel = asset.relativePath
+            guard rel.hasPrefix(prefix) else { continue }
+            let remainder = rel.dropFirst(prefix.count)
+            if let slash = remainder.firstIndex(of: "/") {
+                folderNames.insert(String(remainder[..<slash]))
+            } else if !remainder.isEmpty {
+                assets.append(asset)
+            }
+        }
+        let folders = folderNames.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+            .map { AssetFolderRef(name: $0, path: prefix + $0) }
+        let sortedAssets = assets.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        return AssetFolderListing(folders: folders, assets: sortedAssets)
+    }
 }
 
 // MARK: - Toolbar
@@ -156,37 +252,55 @@ private struct AssetBrowserToolbar: View {
                 .font(.caption)
                 .flex()
 
-            Text(isFiltering ? "\(visibleCount)/\(totalCount)" : "\(totalCount) items")
+            Text(isFiltering ? "\(visibleCount)/\(totalCount)" : "\(visibleCount) items")
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
         }
     }
 }
 
-// MARK: - Path bar + view toggle
+// MARK: - Breadcrumb + view toggle
 
-private struct AssetBrowserPathBar: View {
-    let projectDirectory: String
+private struct AssetBreadcrumbBar: View {
+    let rootName: String
+    let currentFolder: String
+    let isSearching: Bool
     let viewMode: Binding<AssetViewMode>
+    let onNavigate: (String) -> Void
 
-    private var rootName: String {
-        let name = URL(fileURLWithPath: projectDirectory, isDirectory: true).lastPathComponent
-        return name.isEmpty ? L("Content") : name
+    private var segments: [(label: String, path: String)] {
+        var result: [(String, String)] = [(rootName, "")]
+        guard !currentFolder.isEmpty else { return result }
+        var accumulated = ""
+        for component in currentFolder.split(separator: "/") {
+            accumulated = accumulated.isEmpty ? String(component) : accumulated + "/" + component
+            result.append((String(component), accumulated))
+        }
+        return result
     }
 
     var body: some View {
-        Row(alignment: .center, spacing: 6) {
-            Image(resource: .svg(named: "squares-2x2", in: .module, subdirectory: "HierarchyIcons"),
+        Row(alignment: .center, spacing: 4) {
+            Image(resource: .svg(named: "folder", in: .module, subdirectory: "ToolbarIcons"),
                   width: 13, height: 13,
                   tint: .white,
                   contentMode: .fit,
                   renderingMode: .alphaMask)
                 .foregroundColor(.onSurfaceVariant)
-                .frame(width: 14, height: 14)
+                .frame(width: 15, height: 15)
 
-            Text(rootName)
-                .font(.caption)
-                .foregroundColor(.onSurfaceVariant)
+            if isSearching {
+                Text(L("Search results"))
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceVariant)
+            } else {
+                for (index, crumb) in segments.enumerated() {
+                    AssetBreadcrumbSegment(label: crumb.label,
+                                           showSeparator: index > 0,
+                                           isLast: index == segments.count - 1,
+                                           action: { onNavigate(crumb.path) })
+                }
+            }
 
             Spacer(minLength: 0)
 
@@ -196,6 +310,29 @@ private struct AssetBrowserPathBar: View {
             AssetViewModeButton(title: L("List"),
                                 isActive: viewMode.wrappedValue == .list,
                                 action: { viewMode.wrappedValue = .list })
+        }
+    }
+}
+
+private struct AssetBreadcrumbSegment: View {
+    let label: String
+    let showSeparator: Bool
+    let isLast: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Row(alignment: .center, spacing: 4) {
+            if showSeparator {
+                Text("›")
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
+            Button(action: action) {
+                Text(label, lineLimit: 1)
+                    .font(.caption)
+                    .foregroundColor(isLast ? .onSurface : .onSurfaceVariant)
+            }
+            .buttonStyle(.plain)
         }
     }
 }
@@ -218,7 +355,76 @@ private struct AssetViewModeButton: View {
     }
 }
 
-// MARK: - Grid tile
+// MARK: - Folder tile / row
+
+private struct AssetFolderTile: View {
+    let name: String
+    let onOpen: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            Box(direction: .column, alignItems: .center, spacing: 6) {
+                Box(direction: .column, alignItems: .center, justifyContent: .center) {
+                    Image(resource: .svg(named: "folder", in: .module, subdirectory: "ToolbarIcons"),
+                          width: 38, height: 38,
+                          tint: .white,
+                          contentMode: .fit,
+                          renderingMode: .alphaMask)
+                        .foregroundColor(.accent)
+                        .frame(width: 38, height: 38)
+                }
+                .frame(width: 76, height: 72)
+                .background(.surfaceVariant)
+                .cornerRadius(5)
+
+                Text(name, alignment: .center, lineLimit: 2)
+                    .font(.caption)
+                    .foregroundColor(.onSurface)
+                    .frame(width: 76, height: 30)
+                    .clipped()
+            }
+            .padding(horizontal: 5, vertical: 6)
+            .frame(width: 88)
+            .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct AssetFolderListRow: View {
+    let name: String
+    let onOpen: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            Row(alignment: .center, spacing: 9) {
+                Box(direction: .column, alignItems: .center, justifyContent: .center) {
+                    Image(resource: .svg(named: "folder", in: .module, subdirectory: "ToolbarIcons"),
+                          width: 18, height: 18,
+                          tint: .white,
+                          contentMode: .fit,
+                          renderingMode: .alphaMask)
+                        .foregroundColor(.accent)
+                        .frame(width: 18, height: 18)
+                }
+                .frame(width: 26, height: 26)
+
+                Text(name, lineLimit: 1)
+                    .font(.body)
+                    .foregroundColor(.onSurface)
+                    .flex(1, shrink: 1, basis: 0)
+                    .clipped()
+
+                Spacer(minLength: 0)
+            }
+            .padding(horizontal: 8, vertical: 6)
+            .cornerRadius(3)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Asset grid tile
 
 private struct AssetTile: View {
     let asset: EditorAsset
@@ -269,7 +475,7 @@ private struct AssetThumbnail: View {
     }
 }
 
-// MARK: - List row
+// MARK: - Asset list row
 
 private struct AssetListRow: View {
     let asset: EditorAsset
@@ -315,7 +521,7 @@ private struct AssetListRow: View {
     }
 }
 
-// MARK: - Empty / no-results states
+// MARK: - Empty / placeholder states
 
 private struct AssetBrowserEmptyState: View {
     let projectDirectory: String
@@ -343,17 +549,20 @@ private struct AssetBrowserEmptyState: View {
     }
 }
 
-private struct AssetBrowserNoResults: View {
-    let query: String
+private struct AssetBrowserPlaceholder: View {
+    let title: String
+    let subtitle: String
 
     var body: some View {
         Box(direction: .column, alignItems: .center, justifyContent: .center, spacing: 6) {
-            Text(L("No matching assets"))
+            Text(title)
                 .font(.bodyStrong)
                 .foregroundColor(.onSurface)
-            Text("\"\(query)\"")
-                .font(.caption)
-                .foregroundColor(.onSurfaceMuted)
+            if !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
         }
         .padding(horizontal: 16, vertical: 16)
     }
