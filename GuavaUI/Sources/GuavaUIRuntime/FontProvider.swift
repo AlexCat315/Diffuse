@@ -252,28 +252,59 @@ public final class FontProvider {
 
 #if !canImport(CoreText)
     private func loadPrimaryFontDirect(name: String) -> ManagedFont? {
-        // Try bundled Inter font first
-        if let url = BundledFonts.bundledFontURL,
-           let data = try? Data(contentsOf: url) {
-            let psName = name.isEmpty ? "Inter-Regular" : name
-            return loadFontFromData(data, psName: psName, faceIndex: 0)
-        }
-        // Fallback: try common system font directories
-        let extensions = ["ttc", "ttf", "otf"]
-        let systemDirs = [
-            "C:\\Windows\\Fonts\\",
-            "/usr/share/fonts/",
-            "/usr/local/share/fonts/",
-        ]
-        for dir in systemDirs {
-            for ext in extensions {
-                let path = dir + name + "." + ext
-                if let data = try? Data(contentsOf: URL(fileURLWithPath: path)) {
-                    return loadFontFromData(data, psName: name, faceIndex: 0)
+        // 1. If `name` happens to match a font file by basename, load it.
+        if !name.isEmpty {
+            let extensions = ["ttc", "ttf", "otf"]
+            let systemDirs = [
+                "C:\\Windows\\Fonts\\",
+                "/usr/share/fonts/",
+                "/usr/local/share/fonts/",
+            ]
+            for dir in systemDirs {
+                for ext in extensions {
+                    let path = dir + name + "." + ext
+                    if let data = try? Data(contentsOf: URL(fileURLWithPath: path)) {
+                        return loadFontFromData(data, psName: name, faceIndex: 0)
+                    }
                 }
             }
         }
+        // 2. Fall back to the platform's default UI font (Segoe UI on Windows,
+        //    a common sans on Linux). The system pairs this with its own CJK
+        //    fallback (e.g. YaHei) so mixed scripts stay visually consistent.
+        for path in Self.systemPrimaryFontPaths() {
+            if let data = try? Data(contentsOf: URL(fileURLWithPath: path)) {
+                return loadFontFromData(data,
+                                        psName: name.isEmpty ? "system-ui" : name,
+                                        faceIndex: 0)
+            }
+        }
         return nil
+    }
+
+    /// Path(s) to the platform's default UI font, used as the primary face on
+    /// non-Apple platforms now that no font is bundled. Probed in order.
+    private static func systemPrimaryFontPaths() -> [String] {
+#if os(Windows)
+        let dir = "C:\\Windows\\Fonts\\"
+        return [
+            "segoeui.ttf",   // Segoe UI — the Windows shell UI font
+            "tahoma.ttf",
+            "arial.ttf",
+        ].map { dir + $0 }
+#elseif os(Linux)
+        return [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/TTF/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
+            "/usr/share/fonts/noto/NotoSans-Regular.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+        ]
+#else
+        return []
+#endif
     }
 
     private func loadFontFromData(_ data: Data, psName: String, faceIndex: Int) -> ManagedFont? {
