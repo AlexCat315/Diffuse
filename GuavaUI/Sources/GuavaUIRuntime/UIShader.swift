@@ -88,11 +88,16 @@ enum UIShader {
             let stex = select(s.rgb, srgb_to_linear(s.rgb), is_srgb);
             return vec4<f32>(rgb * stex, in.color.a * s.a);
         }
-        // Otherwise: alpha-only font glyph. On sRGB targets the coverage blends
-        // gamma-correctly in linear light (the DirectWrite/Chromium way); on
-        // legacy targets keep the ad-hoc midtone boost so they don't regress.
+        // Otherwise: alpha-only font glyph.
         let a = textureSample(atlas_tex, atlas_sampler, in.uv).r;
-        let cov = select(pow(a, 0.75), a, is_srgb);
+        // Pure linear-light blending makes glyph stems look too THIN (which is
+        // why DirectWrite/ClearType apply a "text gamma" rather than blending
+        // in pure linear). On sRGB targets we remap the coverage so the linear
+        // hardware blend reproduces perceptual (gamma-space) stem weight:
+        //   cov' = 1 - linear(1 - a)   ⇒  a 0.5 → ~0.79, restoring proper weight.
+        // Legacy non-sRGB targets keep the historical midtone boost.
+        let cov_srgb = 1.0 - srgb_to_linear(vec3<f32>(1.0 - a)).x;
+        let cov = select(pow(a, 0.75), cov_srgb, is_srgb);
         return vec4<f32>(rgb, in.color.a * cov);
     }
     """
