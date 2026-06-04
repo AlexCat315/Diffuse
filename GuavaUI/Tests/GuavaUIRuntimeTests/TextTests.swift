@@ -1,9 +1,26 @@
 import Testing
-import GuavaUIBundledFonts
+import Foundation
 @testable import GuavaUIRuntime
 
-/// Cross-platform test font: the bundled Inter.ttc, present on every platform.
-private let testFontPath = BundledFonts.bundledFontURL?.path ?? ""
+/// Resolves a real font file from the host's system font directories. GuavaUI
+/// no longer bundles a font, so tests use whatever sans the platform ships
+/// (the assertions here are font-agnostic). Shared across `GuavaUIRuntimeTests`.
+func systemTestFontPath() -> String {
+    let fm = FileManager.default
+    let candidates = [
+        "C:\\Windows\\Fonts\\segoeui.ttf",
+        "C:\\Windows\\Fonts\\arial.ttf",
+        "/System/Library/Fonts/Helvetica.ttc",
+        "/Library/Fonts/Arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/TTF/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+    ]
+    return candidates.first { fm.fileExists(atPath: $0) } ?? ""
+}
+
+private let testFontPath = systemTestFontPath()
 
 @Suite("Text")
 struct TextTests {
