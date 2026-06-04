@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.release.outputs.tag }}
+      target: ${{ steps.release.outputs.target }}
     steps:
       - name: Resolve release tag
         id: release
@@ -83,7 +84,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.prepare-release.outputs.tag }}
+          ref: ${{ needs.prepare-release.outputs.target }}
           submodules: recursive
 
       - name: Select Xcode
@@ -149,7 +150,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.prepare-release.outputs.tag }}
+          ref: ${{ needs.prepare-release.outputs.target }}
           submodules: recursive
 
       - name: Install Swift
