@@ -846,6 +846,95 @@ public final class SDL3Shell: Shell {
         }
     }
 
+    /// Boxes the file-dialog completion *and* owns the heap-allocated filter
+    /// strings/array. SDL reads the filter pointer asynchronously on its own
+    /// dialog thread, so the storage must outlive `showOpenFileDialog`; the box
+    /// is retained for the dialog's lifetime and frees everything in `deinit`
+    /// (which runs when the callback releases the last reference).
+    private final class FileDialogBox {
+        let accept: ([String]) -> Void
+        private let cStrings: [UnsafeMutablePointer<CChar>]
+        private let filters: UnsafeMutablePointer<SDL_DialogFileFilter>?
+
+        init(accept: @escaping ([String]) -> Void,
+             cStrings: [UnsafeMutablePointer<CChar>],
+             filters: UnsafeMutablePointer<SDL_DialogFileFilter>?) {
+            self.accept = accept
+            self.cStrings = cStrings
+            self.filters = filters
+        }
+
+        deinit {
+            for s in cStrings { s.deallocate() }
+            filters?.deallocate()
+        }
+    }
+
+    public func showOpenFileDialog(windowID: WindowID?,
+                                   defaultPath: String?,
+                                   filters: [FileDialogFilter],
+                                   allowsMultiple: Bool,
+                                   accept: @escaping ([String]) -> Void) {
+        let parent = (windowID.flatMap { windows[$0] } ?? mainWindowID.flatMap { windows[$0] })?.window
+
+        // Duplicate every filter name/pattern onto the heap and build the
+        // C filter array. SDL keeps this pointer until the dialog resolves on
+        // its background thread, so it cannot live on the Swift stack.
+        var cStrings: [UnsafeMutablePointer<CChar>] = []
+        let sdlFilters: UnsafeMutablePointer<SDL_DialogFileFilter>?
+        if filters.isEmpty {
+            sdlFilters = nil
+        } else {
+            let buffer = UnsafeMutablePointer<SDL_DialogFileFilter>.allocate(capacity: filters.count)
+            for (index, filter) in filters.enumerated() {
+                let name = Self.heapCString(filter.name)
+                let pattern = Self.heapCString(filter.pattern)
+                cStrings.append(name)
+                cStrings.append(pattern)
+                buffer[index] = SDL_DialogFileFilter(name: UnsafePointer(name),
+                                                     pattern: UnsafePointer(pattern))
+            }
+            sdlFilters = buffer
+        }
+
+        let box = FileDialogBox(accept: accept, cStrings: cStrings, filters: sdlFilters)
+        let userdata = Unmanaged.passRetained(box).toOpaque()
+
+        let callback: SDL_DialogFileCallback = { userdata, filelist, _ in
+            guard let userdata else { return }
+            let box = Unmanaged<FileDialogBox>.fromOpaque(userdata).takeRetainedValue()
+            // `filelist == nil` is an error; a non-nil list terminates at the
+            // first nil entry (and an immediate nil means the user cancelled).
+            var chosen: [String] = []
+            if let filelist {
+                var i = 0
+                while let entry = filelist[i] {
+                    chosen.append(String(cString: entry))
+                    i += 1
+                }
+            }
+            box.accept(chosen)
+        }
+
+        let nfilters = Int32(filters.count)
+        if let defaultPath {
+            defaultPath.withCString { location in
+                SDL_ShowOpenFileDialog(callback, userdata, parent, sdlFilters, nfilters, location, allowsMultiple)
+            }
+        } else {
+            SDL_ShowOpenFileDialog(callback, userdata, parent, sdlFilters, nfilters, nil, allowsMultiple)
+        }
+    }
+
+    /// Copies a Swift string into a freshly heap-allocated, null-terminated C
+    /// string. Caller owns the buffer and must `deallocate()` it.
+    private static func heapCString(_ string: String) -> UnsafeMutablePointer<CChar> {
+        let bytes = Array(string.utf8CString) // includes the trailing NUL
+        let buffer = UnsafeMutablePointer<CChar>.allocate(capacity: bytes.count)
+        buffer.initialize(from: bytes, count: bytes.count)
+        return buffer
+    }
+
     public func displayRefreshRate(windowID: WindowID? = nil) -> Double? {
         guard didInitializeSDL else { return nil }
 

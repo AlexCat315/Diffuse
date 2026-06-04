@@ -225,6 +225,14 @@ public final class AppRuntime {
                                            defaultPath: defaultPath,
                                            accept: accept)
         }
+        displayHandle.installFileDialogControl { [weak self] defaultPath, filters, allowsMultiple, accept in
+            guard let self else { accept([]); return }
+            self.host.showOpenFileDialog(windowID: self.host.mainSession?.id,
+                                         defaultPath: defaultPath,
+                                         filters: filters,
+                                         allowsMultiple: allowsMultiple,
+                                         accept: accept)
+        }
         displayHandle.installAuxiliaryWindowControls(
             open: { [weak self] request in
                 self?.openAuxiliaryWindow(request)
