@@ -8,7 +8,7 @@ on:
       tag:
         description: Release tag to publish assets to
         required: true
-        default: v0.0.2
+        default: v0.0.3
       target:
         description: Commit SHA or branch to use when creating a missing release
         required: false
