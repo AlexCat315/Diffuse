@@ -41,6 +41,7 @@ struct ShadowUniforms {
 @group(0) @binding(7) var shadow_texture : texture_2d<f32>;
 @group(0) @binding(8) var<storage, read> joint_palette : array<mat4x4<f32>>;
 @group(0) @binding(9) var normal_map_texture : texture_2d<f32>;
+@group(0) @binding(10) var mr_texture : texture_2d<f32>;
 
 struct VsIn {
     @location(0) pos            : vec3<f32>,
@@ -263,10 +264,126 @@ fn scene_lighting(normal : vec3<f32>, world_pos : vec3<f32>) -> vec3<f32> {
     return max(lighting, vec3<f32>(0.0));
 }
 
+// Radiance of the procedural sky in `dir`, matching skybox.wgsl so metals
+// reflect the *actual* visible environment. Returned in LINEAR space (the
+// skybox tints are authored in display space, so they're de-gamma'd here to
+// join this shader's linear pipeline).
+fn sky_radiance(dir : vec3<f32>) -> vec3<f32> {
+    // Neutral studio environment used to LIGHT/REFLECT materials, decoupled from
+    // the stylized background skybox — this is what asset viewers (UE, Sketchfab)
+    // do, so imported PBR materials read correctly instead of taking on the
+    // scene's saturated warm sky. Dark dome + a bright key and a soft fill so
+    // metals get a gunmetal body with crisp highlights. Returned in linear space.
+    let t = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
+    let dome = mix(vec3<f32>(0.012, 0.012, 0.016), vec3<f32>(0.16, 0.17, 0.20), t);
+    let key_dir  = normalize(vec3<f32>(0.40, 0.72, 0.45));
+    let fill_dir = normalize(vec3<f32>(-0.55, 0.30, -0.35));
+    let key  = pow(max(dot(dir, key_dir), 0.0), 90.0) * 3.0
+             + pow(max(dot(dir, key_dir), 0.0), 8.0) * 0.20;
+    let fill = pow(max(dot(dir, fill_dir), 0.0), 16.0) * 0.30;
+    return dome + vec3<f32>(key) + vec3<f32>(fill);
+}
+
+// Approximate prefiltered specular IBL: as roughness grows, bend the reflection
+// toward the surface normal and fade the sharp sky into its hemisphere average,
+// turning a mirror reflection into a soft sheen.
+fn env_specular(R : vec3<f32>, N : vec3<f32>, roughness : f32) -> vec3<f32> {
+    let dir = safe_normalize(mix(R, N, roughness * roughness));
+    let sharp = sky_radiance(dir);
+    let soft = (sky_radiance(N) + sky_radiance(vec3<f32>(0.0, 1.0, 0.0))) * 0.5;
+    return mix(sharp, soft, roughness * 0.7);
+}
+
+// ACES-ish filmic tonemap so bright lights (the key light is intensity 3) roll
+// off instead of clamping to white.
+fn tonemap_aces(x : vec3<f32>) -> vec3<f32> {
+    let a = 2.51; let b = 0.03; let c = 2.43; let d = 0.59; let e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), vec3<f32>(0.0), vec3<f32>(1.0));
+}
+
+const PI = 3.14159265359;
+
+fn d_ggx(NdotH : f32, rough : f32) -> f32 {
+    let a = rough * rough;
+    let a2 = a * a;
+    let denom = NdotH * NdotH * (a2 - 1.0) + 1.0;
+    return a2 / max(PI * denom * denom, 1e-6);
+}
+
+fn g_smith(NdotV : f32, NdotL : f32, rough : f32) -> f32 {
+    let r = rough + 1.0;
+    let k = (r * r) / 8.0;
+    let gv = NdotV / (NdotV * (1.0 - k) + k);
+    let gl = NdotL / (NdotL * (1.0 - k) + k);
+    return gv * gl;
+}
+
+fn f_schlick(cos_theta : f32, F0 : vec3<f32>) -> vec3<f32> {
+    return F0 + (vec3<f32>(1.0) - F0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
+}
+
+// Direct Cook-Torrance lighting (diffuse + GGX specular) over the scene lights.
+// The specular term is what gives metal its sharp highlights and reveals the
+// normal-mapped brushing/scratches — the previous shader had none.
+fn direct_lighting(N : vec3<f32>, V : vec3<f32>, world_pos : vec3<f32>,
+                   diffuse_albedo : vec3<f32>, F0 : vec3<f32>, roughness : f32) -> vec3<f32> {
+    let NdotV = max(dot(N, V), 1e-4);
+    var result = scene_lights.ambient_color_intensity.rgb
+                 * scene_lights.ambient_color_intensity.a * diffuse_albedo;
+    let count = min(u32(scene_lights.exposure_light_count.y), 8u);
+    for (var i = 0u; i < 8u; i = i + 1u) {
+        if i >= count { continue; }
+        let light = scene_lights.lights[i];
+        let light_type = light.position_and_type.w;
+        var L = vec3<f32>(0.0, 1.0, 0.0);
+        var attenuation = 1.0;
+        if light_type < 0.5 {
+            L = safe_normalize(-light.direction_and_range.xyz);
+        } else {
+            let offset = light.position_and_type.xyz - world_pos;
+            let dist = length(offset);
+            L = safe_normalize(offset);
+            let range = max(light.direction_and_range.w, 0.001);
+            attenuation = pow(1.0 - clamp(dist / range, 0.0, 1.0), 2.0);
+        }
+        let NdotL = max(dot(N, L), 0.0);
+        if NdotL <= 0.0 { continue; }
+        var visibility = 1.0;
+        if light_type < 0.5 {
+            let slot = i32(light.spot_angles_and_padding.z) - 1;
+            let casc = i32(max(light.spot_angles_and_padding.w, 1.0));
+            if slot >= 0 {
+                visibility = shadow_visibility(world_pos, u32(slot), u32(max(casc, 1)));
+            }
+        }
+        let radiance = light.color_and_intensity.rgb * light.color_and_intensity.a * attenuation * visibility;
+        let H = safe_normalize(V + L);
+        let NdotH = max(dot(N, H), 0.0);
+        let HdotV = max(dot(H, V), 0.0);
+        let D = d_ggx(NdotH, roughness);
+        let G = g_smith(NdotV, NdotL, roughness);
+        let F = f_schlick(HdotV, F0);
+        let specular = (D * G * F) / max(4.0 * NdotV * NdotL, 1e-4);
+        let kd = vec3<f32>(1.0) - F; // energy left for diffuse (metals → ~0)
+        result = result + (kd * diffuse_albedo / PI + specular) * radiance * NdotL;
+    }
+    return result;
+}
+
 @fragment
 fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
     let texel = textureSample(base_color_texture, base_color_sampler, in.uv);
-    let base  = in.color * texel.rgb * u.color_tint.rgb;
+    // Base-color textures are authored in sRGB; linearize before lighting so
+    // the whole shading math is done in linear light (the previous shader lit
+    // sRGB values directly, which over-brightened and washed everything out).
+    let albedo = pow(in.color * texel.rgb * u.color_tint.rgb, vec3<f32>(2.2));
+
+    // ORM/ARM map: occlusion (R), roughness (G), metallic (B). Defaults to a
+    // non-metal fallback (metallic = 0) for meshes without one.
+    let arm       = textureSample(mr_texture, base_color_sampler, in.uv);
+    let ao        = arm.r;
+    let roughness = clamp(arm.g, 0.05, 1.0);
+    let metallic  = arm.b;
 
     let nm_sample = textureSample(normal_map_texture, base_color_sampler, in.uv).rgb;
     let tangent_n = nm_sample * 2.0 - 1.0;
@@ -275,9 +392,30 @@ fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
     let B = safe_normalize(in.bitangent);
     let normal = safe_normalize(mat3x3<f32>(T, B, N) * tangent_n);
 
-    let rim      = pow(1.0 - max(normal.z, 0.0), 2.0);
-    let lighting = scene_lighting(normal, in.world_pos);
+    let cam = shadow.camera_position_and_padding.xyz;
+    let V = safe_normalize(cam - in.world_pos);
+    let R = reflect(-V, normal);
+    let NdotV = max(dot(normal, V), 1e-3);
     let exposure = scene_lights.exposure_light_count.x;
-    let hdr      = base * (lighting + rim * 0.18) * exposure;
-    return vec4<f32>(hdr, texel.a * u.color_tint.a);
+
+    // Metal reflectance vs dielectric: metals take their colour from F0 and have
+    // no diffuse; dielectrics keep a 4% specular and a diffuse albedo.
+    let F0 = mix(vec3<f32>(0.04), albedo, metallic);
+    let diffuse_albedo = albedo * (1.0 - metallic);
+    let fresnel = F0 + (max(vec3<f32>(1.0 - roughness), F0) - F0) * pow(1.0 - NdotV, 5.0);
+
+    // Direct Cook-Torrance lighting (diffuse + sharp GGX specular highlights).
+    let direct = direct_lighting(normal, V, in.world_pos, diffuse_albedo, F0, roughness) * exposure;
+
+    // Image-based ambient from the actual sky: a specular reflection of the
+    // environment (so metals mirror the visible sky/horizon/sun) plus a
+    // sky-coloured diffuse fill in the normal's direction.
+    let env_spec = env_specular(R, normal, roughness) * fresnel;
+    let env_diff = sky_radiance(normal) * diffuse_albedo * 0.35;
+    let ambient = (env_spec + env_diff) * ao;
+
+    var color = direct + ambient;
+    color = tonemap_aces(color);
+    color = pow(color, vec3<f32>(1.0 / 2.2)); // linear → sRGB for the viewport target
+    return vec4<f32>(color, texel.a * u.color_tint.a);
 }
