@@ -64,6 +64,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     var fallbackMeshTextureView: GPUTextureView?
     var fallbackNormalMapTexture: GPUTexture?
     var fallbackNormalMapTextureView: GPUTextureView?
+    var fallbackMetallicRoughnessTexture: GPUTexture?
+    var fallbackMetallicRoughnessTextureView: GPUTextureView?
     private var skyboxUniformBuffer: GPUBuffer?
     private var tonemapUniformBuffer: GPUBuffer?
     private var bloomUniformBuffer: GPUBuffer?
@@ -674,6 +676,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 ),
                 GPUBindGroupLayoutEntry(
                     binding: 9,
+                    visibility: .fragment,
+                    type: .sampledTexture
+                ),
+                GPUBindGroupLayoutEntry(
+                    binding: 10,
                     visibility: .fragment,
                     type: .sampledTexture
                 ),

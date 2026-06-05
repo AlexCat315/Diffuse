@@ -47,6 +47,9 @@ public struct MeshMaterial: Sendable, Equatable {
     public var baseColorFactor: SIMD4<Float>
     public var baseColorTextureIndex: Int?
     public var normalTextureIndex: Int?
+    /// glTF metallic-roughness map (ORM/ARM): occlusion in R, roughness in G,
+    /// metallic in B. PolyHaven-style assets pack all three here.
+    public var metallicRoughnessTextureIndex: Int?
     public var metallicFactor: Float
     public var roughnessFactor: Float
 
@@ -54,12 +57,14 @@ public struct MeshMaterial: Sendable, Equatable {
                 baseColorFactor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1),
                 baseColorTextureIndex: Int? = nil,
                 normalTextureIndex: Int? = nil,
+                metallicRoughnessTextureIndex: Int? = nil,
                 metallicFactor: Float = 1,
                 roughnessFactor: Float = 1) {
         self.name = name
         self.baseColorFactor = baseColorFactor
         self.baseColorTextureIndex = baseColorTextureIndex
         self.normalTextureIndex = normalTextureIndex
+        self.metallicRoughnessTextureIndex = metallicRoughnessTextureIndex
         self.metallicFactor = metallicFactor
         self.roughnessFactor = roughnessFactor
     }

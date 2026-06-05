@@ -321,7 +321,25 @@ private struct MeshBuilder {
             ))
             let normalMatrix = simd_transpose(simd_inverse(basis))
 
-            for rawIndex in primitiveIndices {
+            // Generate tangents when the glTF omits the TANGENT attribute.
+            // Without a valid tangent frame the normal map can't be applied, so
+            // all surface microdetail (brushing, engraving, scratches) is lost
+            // and a textured metal renders like a smooth grey model.
+            let generatedTangents: [SIMD4<Float>]?
+            if tangents == nil, let uvs, let normals {
+                let worldNormals = normals.map { n -> SIMD3<Float> in
+                    let tr = normalMatrix * n
+                    return simd_length_squared(tr) > 0 ? simd_normalize(tr) : SIMD3<Float>(0, 0, 1)
+                }
+                generatedTangents = generateTangents(primitiveIndices: primitiveIndices,
+                                                      worldPositions: topologyPositions,
+                                                      uvs: uvs,
+                                                      worldNormals: worldNormals)
+            } else {
+                generatedTangents = nil
+            }
+
+            for (vertexSlot, rawIndex) in primitiveIndices.enumerated() {
                 guard positions.indices.contains(rawIndex) else {
                     throw GLTFImporterError.outOfBounds("position index \(rawIndex) out of range")
                 }
@@ -343,7 +361,8 @@ private struct MeshBuilder {
                 }
 
                 let uv = uvs.flatMap { $0.indices.contains(rawIndex) ? $0[rawIndex] : nil } ?? .zero
-                let tangent = tangents.flatMap { $0.indices.contains(rawIndex) ? $0[rawIndex] : nil }
+                let tangent = generatedTangents?[vertexSlot]
+                    ?? tangents.flatMap { $0.indices.contains(rawIndex) ? $0[rawIndex] : nil }
                     ?? SIMD4<Float>(1, 0, 0, 1)
                 let joint = joints.flatMap { $0.indices.contains(rawIndex) ? $0[rawIndex] : nil } ?? .zero
                 let weight = weights.flatMap { $0.indices.contains(rawIndex) ? $0[rawIndex] : nil }
@@ -1018,6 +1037,50 @@ private struct GLTFPrimitive: Decodable {
     let material: Int?
 }
 
+/// Per-vertex tangents for an expanded (non-indexed) triangle list, computed
+/// from positions + UVs (Lengyel's method) and orthonormalized against each
+/// vertex normal. `worldPositions`/`worldNormals` must be in the same space as
+/// the stored vertex normals. Returns one tangent (xyz + handedness in w) per
+/// entry of `primitiveIndices`.
+private func generateTangents(primitiveIndices: [Int],
+                              worldPositions: [SIMD3<Float>],
+                              uvs: [SIMD2<Float>],
+                              worldNormals: [SIMD3<Float>]) -> [SIMD4<Float>] {
+    var out = [SIMD4<Float>](repeating: SIMD4<Float>(1, 0, 0, 1), count: primitiveIndices.count)
+    var t = 0
+    while t + 2 < primitiveIndices.count {
+        let ia = primitiveIndices[t], ib = primitiveIndices[t + 1], ic = primitiveIndices[t + 2]
+        guard worldPositions.indices.contains(ia), worldPositions.indices.contains(ib),
+              worldPositions.indices.contains(ic),
+              uvs.indices.contains(ia), uvs.indices.contains(ib), uvs.indices.contains(ic) else {
+            t += 3
+            continue
+        }
+        let p0 = worldPositions[ia], p1 = worldPositions[ib], p2 = worldPositions[ic]
+        let w0 = uvs[ia], w1 = uvs[ib], w2 = uvs[ic]
+        let e1 = p1 - p0, e2 = p2 - p0
+        let du1 = w1 - w0, du2 = w2 - w0
+        let denom = du1.x * du2.y - du2.x * du1.y
+        let r: Float = abs(denom) > 1e-9 ? 1.0 / denom : 0.0
+        let faceT = (e1 * du2.y - e2 * du1.y) * r
+        let faceB = (e2 * du1.x - e1 * du2.x) * r
+        for (slot, vi) in [(t, ia), (t + 1, ib), (t + 2, ic)] {
+            let n = (worldNormals.indices.contains(vi) && simd_length_squared(worldNormals[vi]) > 0)
+                ? simd_normalize(worldNormals[vi]) : SIMD3<Float>(0, 0, 1)
+            var tan = faceT - n * simd_dot(n, faceT) // Gram-Schmidt against the normal
+            if simd_length_squared(tan) < 1e-12 {
+                let helper = abs(n.x) < 0.9 ? SIMD3<Float>(1, 0, 0) : SIMD3<Float>(0, 1, 0)
+                tan = helper - n * simd_dot(n, helper)
+            }
+            tan = simd_length_squared(tan) > 0 ? simd_normalize(tan) : SIMD3<Float>(1, 0, 0)
+            let handedness: Float = simd_dot(simd_cross(n, tan), faceB) < 0 ? -1 : 1
+            out[slot] = SIMD4<Float>(tan.x, tan.y, tan.z, handedness)
+        }
+        t += 3
+    }
+    return out
+}
+
 private struct GLTFMaterial: Decodable {
     let name: String?
     let pbrMetallicRoughness: GLTFPBRMetallicRoughness?
@@ -1027,6 +1090,7 @@ private struct GLTFMaterial: Decodable {
 private struct GLTFPBRMetallicRoughness: Decodable {
     let baseColorFactor: [Float]?
     let baseColorTexture: GLTFTextureInfo?
+    let metallicRoughnessTexture: GLTFTextureInfo?
     let metallicFactor: Float?
     let roughnessFactor: Float?
 }
@@ -1118,6 +1182,7 @@ private extension GLTFDocument {
                 baseColorFactor: Self.vec4(pbr?.baseColorFactor, fallback: SIMD4<Float>(1, 1, 1, 1)),
                 baseColorTextureIndex: pbr?.baseColorTexture?.index,
                 normalTextureIndex: material.normalTexture?.index,
+                metallicRoughnessTextureIndex: pbr?.metallicRoughnessTexture?.index,
                 metallicFactor: pbr?.metallicFactor ?? 1,
                 roughnessFactor: pbr?.roughnessFactor ?? 1
             )
