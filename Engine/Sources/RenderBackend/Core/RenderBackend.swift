@@ -1,4 +1,4 @@
-﻿import AssetPipeline
+import AssetPipeline
 import EngineKernel
 import Foundation
 import Logging
@@ -66,6 +66,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     var fallbackNormalMapTextureView: GPUTextureView?
     var fallbackMetallicRoughnessTexture: GPUTexture?
     var fallbackMetallicRoughnessTextureView: GPUTextureView?
+    var iblEnvironmentTexture: GPUTexture?
+    var iblEnvironmentView: GPUTextureView?
     private var skyboxUniformBuffer: GPUBuffer?
     private var tonemapUniformBuffer: GPUBuffer?
     private var bloomUniformBuffer: GPUBuffer?
@@ -681,6 +683,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 ),
                 GPUBindGroupLayoutEntry(
                     binding: 10,
+                    visibility: .fragment,
+                    type: .sampledTexture
+                ),
+                GPUBindGroupLayoutEntry(
+                    binding: 11,
                     visibility: .fragment,
                     type: .sampledTexture
                 ),

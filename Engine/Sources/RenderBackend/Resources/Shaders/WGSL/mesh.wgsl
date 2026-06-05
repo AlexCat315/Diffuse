@@ -42,6 +42,7 @@ struct ShadowUniforms {
 @group(0) @binding(8) var<storage, read> joint_palette : array<mat4x4<f32>>;
 @group(0) @binding(9) var normal_map_texture : texture_2d<f32>;
 @group(0) @binding(10) var mr_texture : texture_2d<f32>;
+@group(0) @binding(11) var ibl_env : texture_2d<f32>;
 
 struct VsIn {
     @location(0) pos            : vec3<f32>,
@@ -264,34 +265,27 @@ fn scene_lighting(normal : vec3<f32>, world_pos : vec3<f32>) -> vec3<f32> {
     return max(lighting, vec3<f32>(0.0));
 }
 
-// Radiance of the procedural sky in `dir`, matching skybox.wgsl so metals
-// reflect the *actual* visible environment. Returned in LINEAR space (the
-// skybox tints are authored in display space, so they're de-gamma'd here to
-// join this shader's linear pipeline).
-fn sky_radiance(dir : vec3<f32>) -> vec3<f32> {
-    // Neutral studio environment used to LIGHT/REFLECT materials, decoupled from
-    // the stylized background skybox — this is what asset viewers (UE, Sketchfab)
-    // do, so imported PBR materials read correctly instead of taking on the
-    // scene's saturated warm sky. Dark dome + a bright key and a soft fill so
-    // metals get a gunmetal body with crisp highlights. Returned in linear space.
-    let t = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
-    let dome = mix(vec3<f32>(0.012, 0.012, 0.016), vec3<f32>(0.16, 0.17, 0.20), t);
-    let key_dir  = normalize(vec3<f32>(0.40, 0.72, 0.45));
-    let fill_dir = normalize(vec3<f32>(-0.55, 0.30, -0.35));
-    let key  = pow(max(dot(dir, key_dir), 0.0), 90.0) * 3.0
-             + pow(max(dot(dir, key_dir), 0.0), 8.0) * 0.20;
-    let fill = pow(max(dot(dir, fill_dir), 0.0), 16.0) * 0.30;
-    return dome + vec3<f32>(key) + vec3<f32>(fill);
+// Image-based lighting from the baked studio environment (a mipmapped equirect
+// HDR; mip level stands in for roughness prefilter).
+const IBL_MAX_LOD : f32 = 5.0;
+
+fn equirect_uv(d : vec3<f32>) -> vec2<f32> {
+    let phi = atan2(d.z, d.x);
+    let theta = acos(clamp(d.y, -1.0, 1.0));
+    return vec2<f32>(phi * 0.15915494 + 0.5, theta * 0.31830989); // 1/2π, 1/π
 }
 
-// Approximate prefiltered specular IBL: as roughness grows, bend the reflection
-// toward the surface normal and fade the sharp sky into its hemisphere average,
-// turning a mirror reflection into a soft sheen.
-fn env_specular(R : vec3<f32>, N : vec3<f32>, roughness : f32) -> vec3<f32> {
-    let dir = safe_normalize(mix(R, N, roughness * roughness));
-    let sharp = sky_radiance(dir);
-    let soft = (sky_radiance(N) + sky_radiance(vec3<f32>(0.0, 1.0, 0.0))) * 0.5;
-    return mix(sharp, soft, roughness * 0.7);
+fn ibl_sample(dir : vec3<f32>, lod : f32) -> vec3<f32> {
+    return textureSampleLevel(ibl_env, base_color_sampler, equirect_uv(dir), lod).rgb;
+}
+
+// Karis' analytic environment BRDF (avoids needing a BRDF integration LUT).
+fn env_brdf_approx(NdotV : f32, roughness : f32) -> vec2<f32> {
+    let c0 = vec4<f32>(-1.0, -0.0275, -0.572, 0.022);
+    let c1 = vec4<f32>(1.0, 0.0425, 1.04, -0.04);
+    let r = roughness * c0 + c1;
+    let a004 = min(r.x * r.x, exp2(-9.28 * NdotV)) * r.x + r.y;
+    return vec2<f32>(-1.04, 1.04) * a004 + vec2<f32>(r.z, r.w);
 }
 
 // ACES-ish filmic tonemap so bright lights (the key light is intensity 3) roll
@@ -394,7 +388,10 @@ fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
 
     let cam = shadow.camera_position_and_padding.xyz;
     let V = safe_normalize(cam - in.world_pos);
-    let R = reflect(-V, normal);
+    // Reflect the environment with the SMOOTH geometric normal — using the
+    // detail-normal here turns the high-frequency normal map into reflection
+    // noise. The detail normal is still used for direct lighting below.
+    let R = reflect(-V, N);
     let NdotV = max(dot(normal, V), 1e-3);
     let exposure = scene_lights.exposure_light_count.x;
 
@@ -407,11 +404,12 @@ fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
     // Direct Cook-Torrance lighting (diffuse + sharp GGX specular highlights).
     let direct = direct_lighting(normal, V, in.world_pos, diffuse_albedo, F0, roughness) * exposure;
 
-    // Image-based ambient from the actual sky: a specular reflection of the
-    // environment (so metals mirror the visible sky/horizon/sun) plus a
-    // sky-coloured diffuse fill in the normal's direction.
-    let env_spec = env_specular(R, normal, roughness) * fresnel;
-    let env_diff = sky_radiance(normal) * diffuse_albedo * 0.35;
+    // Prefiltered IBL: specular reflection of the studio environment (mip level
+    // = roughness) weighted by the analytic environment BRDF, plus an irradiance
+    // diffuse fill from the most-blurred mip.
+    let env_brdf = env_brdf_approx(NdotV, roughness);
+    let env_spec = ibl_sample(R, roughness * IBL_MAX_LOD) * (F0 * env_brdf.x + env_brdf.y);
+    let env_diff = ibl_sample(normal, IBL_MAX_LOD) * diffuse_albedo;
     let ambient = (env_spec + env_diff) * ao;
 
     var color = direct + ambient;
