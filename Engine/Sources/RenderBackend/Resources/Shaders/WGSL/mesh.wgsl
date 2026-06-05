@@ -288,13 +288,6 @@ fn env_brdf_approx(NdotV : f32, roughness : f32) -> vec2<f32> {
     return vec2<f32>(-1.04, 1.04) * a004 + vec2<f32>(r.z, r.w);
 }
 
-// ACES-ish filmic tonemap so bright lights (the key light is intensity 3) roll
-// off instead of clamping to white.
-fn tonemap_aces(x : vec3<f32>) -> vec3<f32> {
-    let a = 2.51; let b = 0.03; let c = 2.43; let d = 0.59; let e = 0.14;
-    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), vec3<f32>(0.0), vec3<f32>(1.0));
-}
-
 const PI = 3.14159265359;
 
 fn d_ggx(NdotH : f32, rough : f32) -> f32 {
@@ -402,7 +395,7 @@ fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
     let fresnel = F0 + (max(vec3<f32>(1.0 - roughness), F0) - F0) * pow(1.0 - NdotV, 5.0);
 
     // Direct Cook-Torrance lighting (diffuse + sharp GGX specular highlights).
-    let direct = direct_lighting(normal, V, in.world_pos, diffuse_albedo, F0, roughness) * exposure;
+    let direct = direct_lighting(normal, V, in.world_pos, diffuse_albedo, F0, roughness);
 
     // Prefiltered IBL: specular reflection of the studio environment (mip level
     // = roughness) weighted by the analytic environment BRDF, plus an irradiance
@@ -412,8 +405,9 @@ fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
     let env_diff = ibl_sample(normal, IBL_MAX_LOD) * diffuse_albedo;
     let ambient = (env_spec + env_diff) * ao;
 
-    var color = direct + ambient;
-    color = tonemap_aces(color);
-    color = pow(color, vec3<f32>(1.0 / 2.2)); // linear → sRGB for the viewport target
+    // Output LINEAR HDR radiance. The dedicated tonemap pass (this stage's frame
+    // graph) applies exposure + ACES + sRGB — doing it here as well was a double
+    // tonemap + double gamma that crushed contrast across the whole image.
+    let color = (direct + ambient) * exposure;
     return vec4<f32>(color, texel.a * u.color_tint.a);
 }
