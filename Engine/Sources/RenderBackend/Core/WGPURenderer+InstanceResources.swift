@@ -1,4 +1,4 @@
-﻿import RHIWGPU
+import RHIWGPU
 import SceneRuntime
 import SIMDCompat
 
@@ -126,6 +126,7 @@ extension WGPURenderer {
                               jointPaletteBuffer: GPUBuffer? = nil) throws -> [GPUBindGroupEntry] {
         try ensureStylizedCharacterUniformBuffer()
         try ensureMeshSamplingFallbackResources()
+        try ensureIBLEnvironment()
         try ensureSceneLightUniformBuffer()
         try ensureShadowResources(settings: activeRenderSettings.shadowSettings)
         try ensureFallbackJointPaletteBuffer()
@@ -145,6 +146,7 @@ extension WGPURenderer {
         let textureView = baseColorTextureView ?? fallbackMeshTextureView
         let normalView  = normalMapTextureView ?? fallbackNormalMapTextureView
         let mrView      = metallicRoughnessTextureView ?? fallbackMetallicRoughnessTextureView
+        let iblView     = iblEnvironmentView ?? fallbackMeshTextureView
         let paletteBuffer = jointPaletteBuffer ?? fallbackJointPaletteBuffer
         return [
             GPUBindGroupEntry(
@@ -183,6 +185,7 @@ extension WGPURenderer {
             ),
             GPUBindGroupEntry(binding: 9, textureView: normalView),
             GPUBindGroupEntry(binding: 10, textureView: mrView),
+            GPUBindGroupEntry(binding: 11, textureView: iblView),
         ]
     }
 
@@ -407,5 +410,33 @@ extension WGPURenderer {
             fallbackMetallicRoughnessTexture = texture
             fallbackMetallicRoughnessTextureView = try texture.createView()
         }
+    }
+
+    /// Bakes the studio IBL environment into a mipmapped equirect HDR texture
+    /// (mip 0 sharp, higher mips = rougher prefilter) once, for sampling in the
+    /// mesh shader.
+    func ensureIBLEnvironment() throws {
+        guard backend.rawDevice != nil, iblEnvironmentView == nil else { return }
+        let mips = StudioEnvironmentIBL.generate()
+        guard let base = mips.first else { return }
+        let texture = try backend.createTexture(
+            width: UInt32(base.width),
+            height: UInt32(base.height),
+            format: .rgba16Float,
+            usage: [.textureBinding, .copyDst],
+            mipLevels: UInt32(mips.count)
+        )
+        for (level, mip) in mips.enumerated() {
+            mip.halfRGBA.withUnsafeBytes { raw in
+                guard let ptr = raw.baseAddress else { return }
+                backend.writeTexture(texture, data: ptr, dataSize: raw.count,
+                                     bytesPerRow: UInt32(mip.width * 4 * 2),
+                                     rowsPerImage: UInt32(mip.height),
+                                     width: UInt32(mip.width), height: UInt32(mip.height),
+                                     mipLevel: UInt32(level))
+            }
+        }
+        iblEnvironmentTexture = texture
+        iblEnvironmentView = try texture.createView()
     }
 }
