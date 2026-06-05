@@ -109,6 +109,7 @@ extension WGPURenderer {
                     instanceUniformBuffer: uniformBuffer,
                     baseColorTextureView: baseColorTextureView(for: instance),
                     normalMapTextureView: normalMapTextureView(for: instance),
+                    metallicRoughnessTextureView: metallicRoughnessTextureView(for: instance),
                     jointPaletteBuffer: paletteBuffer
                 )
             )
@@ -121,6 +122,7 @@ extension WGPURenderer {
     func meshBindGroupEntries(instanceUniformBuffer: GPUBuffer,
                               baseColorTextureView: GPUTextureView? = nil,
                               normalMapTextureView: GPUTextureView? = nil,
+                              metallicRoughnessTextureView: GPUTextureView? = nil,
                               jointPaletteBuffer: GPUBuffer? = nil) throws -> [GPUBindGroupEntry] {
         try ensureStylizedCharacterUniformBuffer()
         try ensureMeshSamplingFallbackResources()
@@ -131,6 +133,7 @@ extension WGPURenderer {
               let linearSampler,
               let fallbackMeshTextureView,
               let fallbackNormalMapTextureView,
+              let fallbackMetallicRoughnessTextureView,
               let sceneLightUniformBuffer,
               let shadowUniformBuffer,
               let shadowSampler,
@@ -141,6 +144,7 @@ extension WGPURenderer {
         }
         let textureView = baseColorTextureView ?? fallbackMeshTextureView
         let normalView  = normalMapTextureView ?? fallbackNormalMapTextureView
+        let mrView      = metallicRoughnessTextureView ?? fallbackMetallicRoughnessTextureView
         let paletteBuffer = jointPaletteBuffer ?? fallbackJointPaletteBuffer
         return [
             GPUBindGroupEntry(
@@ -178,6 +182,7 @@ extension WGPURenderer {
                 size: paletteBuffer.size
             ),
             GPUBindGroupEntry(binding: 9, textureView: normalView),
+            GPUBindGroupEntry(binding: 10, textureView: mrView),
         ]
     }
 
@@ -221,6 +226,22 @@ extension WGPURenderer {
         return meshTextureResources[meshIndex]?[textureIndex]?.view
     }
 
+    func metallicRoughnessTextureView(for instance: RenderInstance) -> GPUTextureView? {
+        let meshIndex = instance.meshIndex
+        guard let materialSet = MeshMaterialRegistry.shared.materials(for: meshIndex),
+              let textureIndex = materialSet.materials.compactMap(\.metallicRoughnessTextureIndex).first
+        else { return nil }
+        return meshTextureResources[meshIndex]?[textureIndex]?.view
+    }
+
+    func metallicRoughnessTextureView(for meshIndex: Int, materialIndex: Int) -> GPUTextureView? {
+        guard let materialSet = MeshMaterialRegistry.shared.materials(for: meshIndex),
+              materialSet.materials.indices.contains(materialIndex),
+              let textureIndex = materialSet.materials[materialIndex].metallicRoughnessTextureIndex
+        else { return nil }
+        return meshTextureResources[meshIndex]?[textureIndex]?.view
+    }
+
     func makeSubmeshBindGroup(instanceUniformBuffer: GPUBuffer,
                               meshIndex: Int,
                               materialIndex: Int,
@@ -234,6 +255,7 @@ extension WGPURenderer {
                 instanceUniformBuffer: instanceUniformBuffer,
                 baseColorTextureView: baseColorTextureView(for: meshIndex, materialIndex: materialIndex),
                 normalMapTextureView: normalMapTextureView(for: meshIndex, materialIndex: materialIndex),
+                metallicRoughnessTextureView: metallicRoughnessTextureView(for: meshIndex, materialIndex: materialIndex),
                 jointPaletteBuffer: jointPaletteBuffer
             )
         )
@@ -368,6 +390,22 @@ extension WGPURenderer {
             }
             fallbackNormalMapTexture = texture
             fallbackNormalMapTextureView = try texture.createView()
+        }
+        if fallbackMetallicRoughnessTextureView == nil {
+            let texture = try backend.createTexture(
+                width: 1, height: 1, format: .rgba8Unorm, usage: [.textureBinding, .copyDst])
+            // ORM/ARM default: AO=1 (R), roughness=1 (G), metallic=0 (B). A
+            // metallic of 0 makes the metal BRDF reduce to the existing diffuse
+            // look, so meshes without a metallic-roughness map are unchanged.
+            let nonMetal: [UInt8] = [255, 255, 0, 255]
+            nonMetal.withUnsafeBytes { raw in
+                if let base = raw.baseAddress {
+                    backend.writeTexture(texture, data: base, dataSize: raw.count,
+                                         bytesPerRow: 4, rowsPerImage: 1, width: 1, height: 1)
+                }
+            }
+            fallbackMetallicRoughnessTexture = texture
+            fallbackMetallicRoughnessTextureView = try texture.createView()
         }
     }
 }
