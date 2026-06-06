@@ -39,6 +39,16 @@ public final class Node: @unchecked Sendable {
         didSet {
             if oldValue != frame {
                 markRenderDirty(reason: .layoutChange)
+                // A frame change moves the node, so any cached hit-test answer
+                // for a point is now stale. The hit cache is keyed on the
+                // structural `version` + point, and a layout-only move does NOT
+                // bump that version (no add/remove) — so without this the cache
+                // keeps returning a hit computed against the OLD geometry until
+                // the next structural change, silently misrouting clicks (a
+                // control "works once then stops responding" after any resize /
+                // reflow). Mirrors `contentOffset` and `zIndex`, which already
+                // invalidate here.
+                inputNode?.scene?.invalidateHitCache()
             }
         }
     }
