@@ -84,9 +84,35 @@ public enum EditorGizmoSpace: String, Codable, Sendable, Hashable {
     case world
 }
 
-public enum EditorViewportShadingMode: String, Codable, Sendable, Hashable {
+public enum EditorViewportShadingMode: String, Codable, Sendable, CaseIterable, Hashable {
+    /// Full PBR.
     case lit
+    /// Mesh edges drawn as an overlay over the lit surface (topology view).
     case wireframe
+    /// Material albedo with ambient occlusion, no lighting (UE "Unlit").
+    case unlit
+    /// Raw base-color texture only (the albedo G-buffer).
+    case baseColor
+    /// Surface normal visualized as RGB.
+    case normal
+    /// Roughness channel as greyscale.
+    case roughness
+    /// Metallic channel as greyscale.
+    case metallic
+
+    /// Debug-view index handed to the mesh shader (`exposure_light_count.z`).
+    /// `.wireframe` shades the surface normally (lit) and overlays edges, so it
+    /// maps to the same shaded path as `.lit`.
+    public var debugViewIndex: Int {
+        switch self {
+        case .lit, .wireframe: return 0
+        case .unlit:           return 1
+        case .baseColor:       return 2
+        case .normal:          return 3
+        case .roughness:       return 4
+        case .metallic:        return 5
+        }
+    }
 }
 
 public enum EditorViewportShadowDebugMode: String, Codable, Sendable, CaseIterable, Hashable {
@@ -253,7 +279,7 @@ public struct EditorState: Codable, Sendable {
         gizmoMode: EditorGizmoMode = .translate,
         gizmoSpace: EditorGizmoSpace = .local,
         viewportShadingMode: EditorViewportShadingMode = .lit,
-        viewportShadowsEnabled: Bool = false,
+        viewportShadowsEnabled: Bool = true,
         viewportShadowMapResolution: UInt32 = 1024,
         viewportMaxShadowedDirectionalLights: Int = 1,
         viewportDirectionalCascadeCount: Int = 1,
@@ -417,7 +443,7 @@ public struct EditorState: Codable, Sendable {
             gizmoMode: try c.decodeIfPresent(EditorGizmoMode.self, forKey: .gizmoMode) ?? .translate,
             gizmoSpace: try c.decodeIfPresent(EditorGizmoSpace.self, forKey: .gizmoSpace) ?? .local,
             viewportShadingMode: try c.decodeIfPresent(EditorViewportShadingMode.self, forKey: .viewportShadingMode) ?? .lit,
-            viewportShadowsEnabled: try c.decodeIfPresent(Bool.self, forKey: .viewportShadowsEnabled) ?? false,
+            viewportShadowsEnabled: try c.decodeIfPresent(Bool.self, forKey: .viewportShadowsEnabled) ?? true,
             viewportShadowMapResolution: try c.decodeIfPresent(UInt32.self, forKey: .viewportShadowMapResolution) ?? 1024,
             viewportMaxShadowedDirectionalLights: try c.decodeIfPresent(Int.self, forKey: .viewportMaxShadowedDirectionalLights) ?? 1,
             viewportDirectionalCascadeCount: try c.decodeIfPresent(Int.self, forKey: .viewportDirectionalCascadeCount) ?? 1,

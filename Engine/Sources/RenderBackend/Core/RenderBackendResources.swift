@@ -150,7 +150,15 @@ struct ShadowUniforms: Equatable, Sendable {
         cameraForwardAndPadding: SIMD4<Float>(0, 0, -1, 0)
     )
 
-    static func disabled(mapResolution: UInt32) -> ShadowUniforms {
+    /// Disabled-shadow uniforms. The camera position/forward must still be the
+    /// real camera: the mesh shader reads `camera_position_and_padding` to build
+    /// its view vector for ALL view-dependent shading (specular, Fresnel, and the
+    /// environment reflection). Leaving it zero when shadows are off pins the view
+    /// vector to the world origin and blows glossy metal out to a flat "white
+    /// model" — independent of whether any shadow is actually cast.
+    static func disabled(mapResolution: UInt32,
+                         cameraPosition: SIMD3<Float> = .zero,
+                         cameraForward: SIMD3<Float> = SIMD3<Float>(0, 0, -1)) -> ShadowUniforms {
         ShadowUniforms(
             lightViewProjection0: matrix_identity_float4x4,
             lightViewProjection1: matrix_identity_float4x4,
@@ -162,8 +170,8 @@ struct ShadowUniforms: Equatable, Sendable {
             params3: SIMD4<Float>(0.004, 0.55, 0, 0),
             atlasParams: SIMD4<Float>(0, 0, Float(mapResolution), Float(mapResolution)),
             cascadeSplits: .zero,
-            cameraPositionAndPadding: .zero,
-            cameraForwardAndPadding: SIMD4<Float>(0, 0, -1, 0)
+            cameraPositionAndPadding: SIMD4<Float>(cameraPosition, 0),
+            cameraForwardAndPadding: SIMD4<Float>(cameraForward, 0)
         )
     }
 
