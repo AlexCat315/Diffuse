@@ -176,7 +176,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             )
             writeSceneLightUniforms(
                 scene: packet.scene,
-                shadowBindingsByLightIndex: shadowPlan.shadowBindingsByLightIndex
+                shadowBindingsByLightIndex: shadowPlan.shadowBindingsByLightIndex,
+                debugViewMode: activeRenderSettings.debugViewMode.rawValue
             )
             try ensureJointPaletteBuffers(from: packet.jointPaletteMap)
             writeJointPaletteBuffers(from: packet.jointPaletteMap)
