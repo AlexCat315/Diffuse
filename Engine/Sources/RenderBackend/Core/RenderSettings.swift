@@ -85,7 +85,20 @@ public struct RenderSettings: Sendable, Equatable {
         case r5PostProcess = 5
     }
 
+    /// Viewport debug visualization (editor "view mode"). `.shaded` is the normal
+    /// PBR result; the rest are G-buffer inspection modes like UE/Godot/Unity.
+    /// The raw value is forwarded to the mesh shader via `exposure_light_count.z`.
+    public enum DebugViewMode: Int, Sendable, Equatable, CaseIterable {
+        case shaded = 0
+        case unlit = 1
+        case baseColor = 2
+        case worldNormal = 3
+        case roughness = 4
+        case metallic = 5
+    }
+
     public var stage: ReplacementStage
+    public var debugViewMode: DebugViewMode
     public var enableFXAA: Bool
     public var enableSSAO: Bool
     public var enableSSR: Bool
@@ -105,6 +118,7 @@ public struct RenderSettings: Sendable, Equatable {
 
     public init(
         stage: ReplacementStage = .r1MeshCamera,
+        debugViewMode: DebugViewMode = .shaded,
         enableFXAA: Bool = false,
         enableSSAO: Bool = false,
         enableSSR: Bool = false,
@@ -120,6 +134,7 @@ public struct RenderSettings: Sendable, Equatable {
         stylizedCharacterStyle: StylizedCharacterStyle = .colorfulInkCard
     ) {
         self.stage = stage
+        self.debugViewMode = debugViewMode
         self.enableFXAA = enableFXAA
         self.enableSSAO = enableSSAO
         self.enableSSR = enableSSR

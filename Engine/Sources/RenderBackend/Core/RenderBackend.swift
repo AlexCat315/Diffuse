@@ -1,4 +1,4 @@
-﻿import AssetPipeline
+import AssetPipeline
 import EngineKernel
 import Foundation
 import Logging
@@ -64,6 +64,10 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     var fallbackMeshTextureView: GPUTextureView?
     var fallbackNormalMapTexture: GPUTexture?
     var fallbackNormalMapTextureView: GPUTextureView?
+    var fallbackMetallicRoughnessTexture: GPUTexture?
+    var fallbackMetallicRoughnessTextureView: GPUTextureView?
+    var iblEnvironmentTexture: GPUTexture?
+    var iblEnvironmentView: GPUTextureView?
     private var skyboxUniformBuffer: GPUBuffer?
     private var tonemapUniformBuffer: GPUBuffer?
     private var bloomUniformBuffer: GPUBuffer?
@@ -172,7 +176,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             )
             writeSceneLightUniforms(
                 scene: packet.scene,
-                shadowBindingsByLightIndex: shadowPlan.shadowBindingsByLightIndex
+                shadowBindingsByLightIndex: shadowPlan.shadowBindingsByLightIndex,
+                debugViewMode: activeRenderSettings.debugViewMode.rawValue
             )
             try ensureJointPaletteBuffers(from: packet.jointPaletteMap)
             writeJointPaletteBuffers(from: packet.jointPaletteMap)
@@ -674,6 +679,16 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 ),
                 GPUBindGroupLayoutEntry(
                     binding: 9,
+                    visibility: .fragment,
+                    type: .sampledTexture
+                ),
+                GPUBindGroupLayoutEntry(
+                    binding: 10,
+                    visibility: .fragment,
+                    type: .sampledTexture
+                ),
+                GPUBindGroupLayoutEntry(
+                    binding: 11,
                     visibility: .fragment,
                     type: .sampledTexture
                 ),

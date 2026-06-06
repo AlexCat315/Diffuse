@@ -225,6 +225,14 @@ public final class AppRuntime {
                                            defaultPath: defaultPath,
                                            accept: accept)
         }
+        displayHandle.installFileDialogControl { [weak self] defaultPath, filters, allowsMultiple, accept in
+            guard let self else { accept([]); return }
+            self.host.showOpenFileDialog(windowID: self.host.mainSession?.id,
+                                         defaultPath: defaultPath,
+                                         filters: filters,
+                                         allowsMultiple: allowsMultiple,
+                                         accept: accept)
+        }
         displayHandle.installAuxiliaryWindowControls(
             open: { [weak self] request in
                 self?.openAuxiliaryWindow(request)
@@ -314,13 +322,13 @@ public final class AppRuntime {
         let gpu = try SurfaceFactory.make(backend: backend, native: native)
         try gpu.configure(
             device: backend.rawDevice!,
-            format: .bgra8Unorm,
+            format: .bgra8UnormSrgb,
             width: widthPx,
             height: heightPx,
             presentMode: currentPresentMode
         )
         if !isVSyncEnabled { native.disableDisplaySync() }
-        try renderer.configure(format: .bgra8Unorm,
+        try renderer.configure(format: .bgra8UnormSrgb,
                                sampleCount: config.msaaSampleCount)
         try ensureMSAATarget(widthPx: widthPx, heightPx: heightPx)
         surface = gpu
@@ -357,7 +365,7 @@ public final class AppRuntime {
         guard let surface, let device = backend.rawDevice else { return }
         try surface.configure(
             device: device,
-            format: .bgra8Unorm,
+            format: .bgra8UnormSrgb,
             width: widthPx,
             height: heightPx,
             presentMode: currentPresentMode
@@ -392,7 +400,7 @@ public final class AppRuntime {
         do {
             try surface.configure(
                 device: device,
-                format: .bgra8Unorm,
+                format: .bgra8UnormSrgb,
                 width: drawableW,
                 height: drawableH,
                 presentMode: currentPresentMode
@@ -640,7 +648,7 @@ public final class AppRuntime {
         let texture = try backend.createTexture(
             width: widthPx,
             height: heightPx,
-            format: .bgra8Unorm,
+            format: .bgra8UnormSrgb,
             usage: [.renderAttachment],
             mipLevels: 1,
             depthOrLayers: 1,
@@ -825,7 +833,7 @@ private final class AuxiliaryAppWindow {
         let gpu = try SurfaceFactory.make(backend: backend, native: native)
         try gpu.configure(
             device: backend.rawDevice!,
-            format: .bgra8Unorm,
+            format: .bgra8UnormSrgb,
             width: widthPx,
             height: heightPx,
             presentMode: presentMode
@@ -862,7 +870,7 @@ private final class AuxiliaryAppWindow {
         guard let surface, let device = backend.rawDevice else { return }
         try surface.configure(
             device: device,
-            format: .bgra8Unorm,
+            format: .bgra8UnormSrgb,
             width: widthPx,
             height: heightPx,
             presentMode: presentMode
@@ -887,7 +895,7 @@ private final class AuxiliaryAppWindow {
         do {
             try surface.configure(
                 device: device,
-                format: .bgra8Unorm,
+                format: .bgra8UnormSrgb,
                 width: drawableW,
                 height: drawableH,
                 presentMode: presentMode
@@ -1003,7 +1011,7 @@ private final class AuxiliaryAppWindow {
         let texture = try backend.createTexture(
             width: widthPx,
             height: heightPx,
-            format: .bgra8Unorm,
+            format: .bgra8UnormSrgb,
             usage: [.renderAttachment],
             mipLevels: 1,
             depthOrLayers: 1,

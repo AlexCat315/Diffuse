@@ -339,10 +339,11 @@ public final class DrawListRenderer {
         let scaleX = viewport.width > 0 ? Float(viewportPx.width) / viewport.width : 1
         let scaleY = viewport.height > 0 ? Float(viewportPx.height) / viewport.height : 1
 
-        // 1. Upload uniforms (viewport size).
+        // 1. Upload uniforms (viewport size + sRGB-target flag).
+        let srgbFlag: Float = { if case .bgra8UnormSrgb = configuredFormat { return 1 } else { return 0 } }()
         var u: (Float, Float, Float, Float) = (viewport.width,
                                                viewport.height,
-                                               0, 0)
+                                               srgbFlag, 0)
         withUnsafePointer(to: &u) { ptr in
             ptr.withMemoryRebound(to: UInt8.self, capacity: 16) { raw in
                 backend.writeBuffer(uniformBuffer, data: raw, size: 16)
