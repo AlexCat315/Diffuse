@@ -97,12 +97,16 @@ extension WGPURenderer {
         let capacity = shadowAtlasCapacity(settings: settings)
         let gridDimension = shadowAtlasGridDimension(capacity: capacity)
         let atlasSize = tileSize * gridDimension
-        guard enabled,
-              settings.enabled,
-              settings.maxShadowedDirectionalLights > 0
-        else {
-            return ShadowAtlasPlan(
-                uniforms: .disabled(mapResolution: tileSize),
+        // The disabled plan still has to carry the real camera: the mesh shader
+        // derives its view vector from the shadow uniforms, so an unshadowed scene
+        // must NOT zero the camera out (that breaks all view-dependent shading).
+        let disabledCameraForward = normalized(scene.camera.target - scene.camera.eye,
+                                               fallback: SIMD3<Float>(0, 0, -1))
+        func disabledPlan() -> ShadowAtlasPlan {
+            ShadowAtlasPlan(
+                uniforms: .disabled(mapResolution: tileSize,
+                                    cameraPosition: scene.camera.eye,
+                                    cameraForward: disabledCameraForward),
                 lights: [],
                 tileSize: tileSize,
                 atlasSize: atlasSize,
@@ -110,17 +114,16 @@ extension WGPURenderer {
                 cascadeCount: 0
             )
         }
+        guard enabled,
+              settings.enabled,
+              settings.maxShadowedDirectionalLights > 0
+        else {
+            return disabledPlan()
+        }
 
         let selectedLights = selectedDirectionalShadowLights(in: scene, settings: settings)
         guard !selectedLights.isEmpty else {
-            return ShadowAtlasPlan(
-                uniforms: .disabled(mapResolution: tileSize),
-                lights: [],
-                tileSize: tileSize,
-                atlasSize: atlasSize,
-                gridDimension: gridDimension,
-                cascadeCount: 0
-            )
+            return disabledPlan()
         }
         let sceneBounds = worldBounds(for: scene)
         let allocations = directionalShadowAllocations(

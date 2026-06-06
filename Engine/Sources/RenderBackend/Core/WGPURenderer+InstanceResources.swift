@@ -1,4 +1,4 @@
-﻿import RHIWGPU
+import RHIWGPU
 import SceneRuntime
 import SIMDCompat
 
@@ -109,6 +109,7 @@ extension WGPURenderer {
                     instanceUniformBuffer: uniformBuffer,
                     baseColorTextureView: baseColorTextureView(for: instance),
                     normalMapTextureView: normalMapTextureView(for: instance),
+                    metallicRoughnessTextureView: metallicRoughnessTextureView(for: instance),
                     jointPaletteBuffer: paletteBuffer
                 )
             )
@@ -121,9 +122,11 @@ extension WGPURenderer {
     func meshBindGroupEntries(instanceUniformBuffer: GPUBuffer,
                               baseColorTextureView: GPUTextureView? = nil,
                               normalMapTextureView: GPUTextureView? = nil,
+                              metallicRoughnessTextureView: GPUTextureView? = nil,
                               jointPaletteBuffer: GPUBuffer? = nil) throws -> [GPUBindGroupEntry] {
         try ensureStylizedCharacterUniformBuffer()
         try ensureMeshSamplingFallbackResources()
+        try ensureIBLEnvironment()
         try ensureSceneLightUniformBuffer()
         try ensureShadowResources(settings: activeRenderSettings.shadowSettings)
         try ensureFallbackJointPaletteBuffer()
@@ -131,6 +134,7 @@ extension WGPURenderer {
               let linearSampler,
               let fallbackMeshTextureView,
               let fallbackNormalMapTextureView,
+              let fallbackMetallicRoughnessTextureView,
               let sceneLightUniformBuffer,
               let shadowUniformBuffer,
               let shadowSampler,
@@ -141,6 +145,8 @@ extension WGPURenderer {
         }
         let textureView = baseColorTextureView ?? fallbackMeshTextureView
         let normalView  = normalMapTextureView ?? fallbackNormalMapTextureView
+        let mrView      = metallicRoughnessTextureView ?? fallbackMetallicRoughnessTextureView
+        let iblView     = iblEnvironmentView ?? fallbackMeshTextureView
         let paletteBuffer = jointPaletteBuffer ?? fallbackJointPaletteBuffer
         return [
             GPUBindGroupEntry(
@@ -178,6 +184,8 @@ extension WGPURenderer {
                 size: paletteBuffer.size
             ),
             GPUBindGroupEntry(binding: 9, textureView: normalView),
+            GPUBindGroupEntry(binding: 10, textureView: mrView),
+            GPUBindGroupEntry(binding: 11, textureView: iblView),
         ]
     }
 
@@ -221,6 +229,22 @@ extension WGPURenderer {
         return meshTextureResources[meshIndex]?[textureIndex]?.view
     }
 
+    func metallicRoughnessTextureView(for instance: RenderInstance) -> GPUTextureView? {
+        let meshIndex = instance.meshIndex
+        guard let materialSet = MeshMaterialRegistry.shared.materials(for: meshIndex),
+              let textureIndex = materialSet.materials.compactMap(\.metallicRoughnessTextureIndex).first
+        else { return nil }
+        return meshTextureResources[meshIndex]?[textureIndex]?.view
+    }
+
+    func metallicRoughnessTextureView(for meshIndex: Int, materialIndex: Int) -> GPUTextureView? {
+        guard let materialSet = MeshMaterialRegistry.shared.materials(for: meshIndex),
+              materialSet.materials.indices.contains(materialIndex),
+              let textureIndex = materialSet.materials[materialIndex].metallicRoughnessTextureIndex
+        else { return nil }
+        return meshTextureResources[meshIndex]?[textureIndex]?.view
+    }
+
     func makeSubmeshBindGroup(instanceUniformBuffer: GPUBuffer,
                               meshIndex: Int,
                               materialIndex: Int,
@@ -234,6 +258,7 @@ extension WGPURenderer {
                 instanceUniformBuffer: instanceUniformBuffer,
                 baseColorTextureView: baseColorTextureView(for: meshIndex, materialIndex: materialIndex),
                 normalMapTextureView: normalMapTextureView(for: meshIndex, materialIndex: materialIndex),
+                metallicRoughnessTextureView: metallicRoughnessTextureView(for: meshIndex, materialIndex: materialIndex),
                 jointPaletteBuffer: jointPaletteBuffer
             )
         )
@@ -286,13 +311,17 @@ extension WGPURenderer {
 
     func writeSceneLightUniforms(
         scene: RenderScene,
-        shadowBindingsByLightIndex: [Int: ShadowLightBinding] = [:]
+        shadowBindingsByLightIndex: [Int: ShadowLightBinding] = [:],
+        debugViewMode: Int = 0
     ) {
         guard let sceneLightUniformBuffer else { return }
         var uniforms = SceneLightUniforms(
             scene: scene,
             shadowBindingsByLightIndex: shadowBindingsByLightIndex
         )
+        // Pack the viewport debug-view selector into the free .z lane so the mesh
+        // shader can switch G-buffer visualizations without a dedicated binding.
+        uniforms.exposureAndLightCount.z = Float(debugViewMode)
         writeUniform(&uniforms, buffer: sceneLightUniformBuffer)
     }
 
@@ -369,5 +398,49 @@ extension WGPURenderer {
             fallbackNormalMapTexture = texture
             fallbackNormalMapTextureView = try texture.createView()
         }
+        if fallbackMetallicRoughnessTextureView == nil {
+            let texture = try backend.createTexture(
+                width: 1, height: 1, format: .rgba8Unorm, usage: [.textureBinding, .copyDst])
+            // ORM/ARM default: AO=1 (R), roughness=1 (G), metallic=0 (B). A
+            // metallic of 0 makes the metal BRDF reduce to the existing diffuse
+            // look, so meshes without a metallic-roughness map are unchanged.
+            let nonMetal: [UInt8] = [255, 255, 0, 255]
+            nonMetal.withUnsafeBytes { raw in
+                if let base = raw.baseAddress {
+                    backend.writeTexture(texture, data: base, dataSize: raw.count,
+                                         bytesPerRow: 4, rowsPerImage: 1, width: 1, height: 1)
+                }
+            }
+            fallbackMetallicRoughnessTexture = texture
+            fallbackMetallicRoughnessTextureView = try texture.createView()
+        }
+    }
+
+    /// Bakes the studio IBL environment into a mipmapped equirect HDR texture
+    /// (mip 0 sharp, higher mips = rougher prefilter) once, for sampling in the
+    /// mesh shader.
+    func ensureIBLEnvironment() throws {
+        guard backend.rawDevice != nil, iblEnvironmentView == nil else { return }
+        let mips = StudioEnvironmentIBL.generate()
+        guard let base = mips.first else { return }
+        let texture = try backend.createTexture(
+            width: UInt32(base.width),
+            height: UInt32(base.height),
+            format: .rgba16Float,
+            usage: [.textureBinding, .copyDst],
+            mipLevels: UInt32(mips.count)
+        )
+        for (level, mip) in mips.enumerated() {
+            mip.halfRGBA.withUnsafeBytes { raw in
+                guard let ptr = raw.baseAddress else { return }
+                backend.writeTexture(texture, data: ptr, dataSize: raw.count,
+                                     bytesPerRow: UInt32(mip.width * 4 * 2),
+                                     rowsPerImage: UInt32(mip.height),
+                                     width: UInt32(mip.width), height: UInt32(mip.height),
+                                     mipLevel: UInt32(level))
+            }
+        }
+        iblEnvironmentTexture = texture
+        iblEnvironmentView = try texture.createView()
     }
 }

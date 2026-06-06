@@ -41,6 +41,8 @@ struct ShadowUniforms {
 @group(0) @binding(7) var shadow_texture : texture_2d<f32>;
 @group(0) @binding(8) var<storage, read> joint_palette : array<mat4x4<f32>>;
 @group(0) @binding(9) var normal_map_texture : texture_2d<f32>;
+@group(0) @binding(10) var mr_texture : texture_2d<f32>;
+@group(0) @binding(11) var ibl_env : texture_2d<f32>;
 
 struct VsIn {
     @location(0) pos            : vec3<f32>,
@@ -263,10 +265,141 @@ fn scene_lighting(normal : vec3<f32>, world_pos : vec3<f32>) -> vec3<f32> {
     return max(lighting, vec3<f32>(0.0));
 }
 
+// Image-based lighting from the baked studio environment (a mipmapped equirect
+// HDR; mip level stands in for roughness prefilter).
+const IBL_MAX_LOD : f32 = 5.0;
+
+fn equirect_uv(d : vec3<f32>) -> vec2<f32> {
+    let phi = atan2(d.z, d.x);
+    let theta = acos(clamp(d.y, -1.0, 1.0));
+    return vec2<f32>(phi * 0.15915494 + 0.5, theta * 0.31830989); // 1/2π, 1/π
+}
+
+fn ibl_sample(dir : vec3<f32>, lod : f32) -> vec3<f32> {
+    return textureSampleLevel(ibl_env, base_color_sampler, equirect_uv(dir), lod).rgb;
+}
+
+// Karis' analytic environment BRDF (avoids needing a BRDF integration LUT).
+fn env_brdf_approx(NdotV : f32, roughness : f32) -> vec2<f32> {
+    let c0 = vec4<f32>(-1.0, -0.0275, -0.572, 0.022);
+    let c1 = vec4<f32>(1.0, 0.0425, 1.04, -0.04);
+    let r = roughness * c0 + c1;
+    let a004 = min(r.x * r.x, exp2(-9.28 * NdotV)) * r.x + r.y;
+    return vec2<f32>(-1.04, 1.04) * a004 + vec2<f32>(r.z, r.w);
+}
+
+const PI = 3.14159265359;
+
+fn d_ggx(NdotH : f32, rough : f32) -> f32 {
+    let a = rough * rough;
+    let a2 = a * a;
+    let denom = NdotH * NdotH * (a2 - 1.0) + 1.0;
+    return a2 / max(PI * denom * denom, 1e-6);
+}
+
+fn g_smith(NdotV : f32, NdotL : f32, rough : f32) -> f32 {
+    let r = rough + 1.0;
+    let k = (r * r) / 8.0;
+    let gv = NdotV / (NdotV * (1.0 - k) + k);
+    let gl = NdotL / (NdotL * (1.0 - k) + k);
+    return gv * gl;
+}
+
+fn f_schlick(cos_theta : f32, F0 : vec3<f32>) -> vec3<f32> {
+    return F0 + (vec3<f32>(1.0) - F0) * pow(clamp(1.0 - cos_theta, 0.0, 1.0), 5.0);
+}
+
+// Direct Cook-Torrance lighting (diffuse + GGX specular) over the scene lights.
+// The specular term is what gives metal its sharp highlights and reveals the
+// normal-mapped brushing/scratches — the previous shader had none.
+fn direct_lighting(N : vec3<f32>, V : vec3<f32>, world_pos : vec3<f32>,
+                   diffuse_albedo : vec3<f32>, F0 : vec3<f32>, roughness : f32) -> vec3<f32> {
+    let NdotV = max(dot(N, V), 1e-4);
+    var result = scene_lights.ambient_color_intensity.rgb
+                 * scene_lights.ambient_color_intensity.a * diffuse_albedo;
+    let count = min(u32(scene_lights.exposure_light_count.y), 8u);
+    for (var i = 0u; i < 8u; i = i + 1u) {
+        if i >= count { continue; }
+        let light = scene_lights.lights[i];
+        let light_type = light.position_and_type.w;
+        var L = vec3<f32>(0.0, 1.0, 0.0);
+        var attenuation = 1.0;
+        if light_type < 0.5 {
+            L = safe_normalize(-light.direction_and_range.xyz);
+        } else {
+            let offset = light.position_and_type.xyz - world_pos;
+            let dist = length(offset);
+            L = safe_normalize(offset);
+            let range = max(light.direction_and_range.w, 0.001);
+            attenuation = pow(1.0 - clamp(dist / range, 0.0, 1.0), 2.0);
+        }
+        let NdotL = max(dot(N, L), 0.0);
+        if NdotL <= 0.0 { continue; }
+        var visibility = 1.0;
+        if light_type < 0.5 {
+            let slot = i32(light.spot_angles_and_padding.z) - 1;
+            let casc = i32(max(light.spot_angles_and_padding.w, 1.0));
+            if slot >= 0 {
+                visibility = shadow_visibility(world_pos, u32(slot), u32(max(casc, 1)));
+            }
+        }
+        let radiance = light.color_and_intensity.rgb * light.color_and_intensity.a * attenuation * visibility;
+        let H = safe_normalize(V + L);
+        let NdotH = max(dot(N, H), 0.0);
+        let HdotV = max(dot(H, V), 0.0);
+        let D = d_ggx(NdotH, roughness);
+        let G = g_smith(NdotV, NdotL, roughness);
+        let F = f_schlick(HdotV, F0);
+        let specular = (D * G * F) / max(4.0 * NdotV * NdotL, 1e-4);
+        let kd = vec3<f32>(1.0) - F; // energy left for diffuse (metals → ~0)
+        result = result + (kd * diffuse_albedo / PI + specular) * radiance * NdotL;
+    }
+    return result;
+}
+
+// --- Debug G-buffer visualization (editor "view modes") ---------------------
+// The frame graph's tonemap pass always applies aces + linear→sRGB, so to show a
+// chosen display colour D truthfully we emit inverse_aces(srgb_to_linear(D))/exp:
+// it then round-trips through the pipeline back to exactly D. This is how the
+// editor inspects raw buffers (base color / normal / roughness / metallic)
+// without the tone curve distorting the readout.
+fn srgb_to_linear_c(c : vec3<f32>) -> vec3<f32> {
+    let lo = c / 12.92;
+    let hi = pow((c + vec3<f32>(0.055)) / 1.055, vec3<f32>(2.4));
+    return select(lo, hi, c > vec3<f32>(0.04045));
+}
+
+fn aces_inv_c(y : f32) -> f32 {
+    // Inverse of the Narkowicz ACES fit in tonemap.wgsl (A·x² + B·x + C = 0).
+    let a = 2.51; let b = 0.03; let c = 2.43; let d = 0.59; let e = 0.14;
+    let yy = clamp(y, 0.0, 0.9999);
+    let A = yy * c - a;
+    let B = yy * d - b;
+    let C = yy * e;
+    let disc = max(B * B - 4.0 * A * C, 0.0);
+    return max((-B - sqrt(disc)) / (2.0 * A), 0.0);
+}
+
+fn debug_present(display_srgb : vec3<f32>, exposure : f32) -> vec3<f32> {
+    let lin = srgb_to_linear_c(clamp(display_srgb, vec3<f32>(0.0), vec3<f32>(1.0)));
+    let pre = vec3<f32>(aces_inv_c(lin.x), aces_inv_c(lin.y), aces_inv_c(lin.z));
+    return pre / max(exposure, 1e-3);
+}
+
 @fragment
 fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
     let texel = textureSample(base_color_texture, base_color_sampler, in.uv);
-    let base  = in.color * texel.rgb * u.color_tint.rgb;
+    // Base-color textures are authored in sRGB; linearize before lighting so
+    // the whole shading math is done in linear light (the previous shader lit
+    // sRGB values directly, which over-brightened and washed everything out).
+    let albedo = pow(in.color * texel.rgb * u.color_tint.rgb, vec3<f32>(2.2));
+
+    // ORM/ARM map: occlusion (R), roughness (G), metallic (B). Defaults to a
+    // non-metal fallback (metallic = 0) for meshes without one.
+    let arm       = textureSample(mr_texture, base_color_sampler, in.uv);
+    let ao        = arm.r;
+    let roughness = clamp(arm.g, 0.05, 1.0);
+    let metallic  = arm.b;
 
     let nm_sample = textureSample(normal_map_texture, base_color_sampler, in.uv).rgb;
     let tangent_n = nm_sample * 2.0 - 1.0;
@@ -275,9 +408,54 @@ fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
     let B = safe_normalize(in.bitangent);
     let normal = safe_normalize(mat3x3<f32>(T, B, N) * tangent_n);
 
-    let rim      = pow(1.0 - max(normal.z, 0.0), 2.0);
-    let lighting = scene_lighting(normal, in.world_pos);
+    let cam = shadow.camera_position_and_padding.xyz;
+    let V = safe_normalize(cam - in.world_pos);
+    // Reflect the environment with the SMOOTH geometric normal — using the
+    // detail-normal here turns the high-frequency normal map into reflection
+    // noise. The detail normal is still used for direct lighting below.
+    let R = reflect(-V, N);
+    let NdotV = max(dot(normal, V), 1e-3);
     let exposure = scene_lights.exposure_light_count.x;
-    let hdr      = base * (lighting + rim * 0.18) * exposure;
-    return vec4<f32>(hdr, texel.a * u.color_tint.a);
+
+    // Metal reflectance vs dielectric: metals take their colour from F0 and have
+    // no diffuse; dielectrics keep a 4% specular and a diffuse albedo.
+    let F0 = mix(vec3<f32>(0.04), albedo, metallic);
+    let diffuse_albedo = albedo * (1.0 - metallic);
+    let fresnel = F0 + (max(vec3<f32>(1.0 - roughness), F0) - F0) * pow(1.0 - NdotV, 5.0);
+
+    // Editor debug view modes (G-buffer inspection). 0 = normal shaded output.
+    let debug_mode = i32(scene_lights.exposure_light_count.z + 0.5);
+    if debug_mode != 0 {
+        var dbg = vec3<f32>(0.0);
+        if debug_mode == 1 {        // Unlit: material colour with AO, no lighting
+            dbg = clamp(in.color * texel.rgb * u.color_tint.rgb,
+                        vec3<f32>(0.0), vec3<f32>(1.0)) * ao;
+        } else if debug_mode == 2 { // Base Color: raw albedo texture
+            dbg = texel.rgb;
+        } else if debug_mode == 3 { // World normal
+            dbg = normal * 0.5 + vec3<f32>(0.5);
+        } else if debug_mode == 4 { // Roughness
+            dbg = vec3<f32>(roughness);
+        } else if debug_mode == 5 { // Metallic
+            dbg = vec3<f32>(metallic);
+        }
+        return vec4<f32>(debug_present(dbg, exposure), 1.0);
+    }
+
+    // Direct Cook-Torrance lighting (diffuse + sharp GGX specular highlights).
+    let direct = direct_lighting(normal, V, in.world_pos, diffuse_albedo, F0, roughness);
+
+    // Prefiltered IBL: specular reflection of the studio environment (mip level
+    // = roughness) weighted by the analytic environment BRDF, plus an irradiance
+    // diffuse fill from the most-blurred mip.
+    let env_brdf = env_brdf_approx(NdotV, roughness);
+    let env_spec = ibl_sample(R, roughness * IBL_MAX_LOD) * (F0 * env_brdf.x + env_brdf.y);
+    let env_diff = ibl_sample(normal, IBL_MAX_LOD) * diffuse_albedo;
+    let ambient = (env_spec + env_diff) * ao;
+
+    // Output LINEAR HDR radiance. The dedicated tonemap pass (this stage's frame
+    // graph) applies exposure + ACES + sRGB — doing it here as well was a double
+    // tonemap + double gamma that crushed contrast across the whole image.
+    let color = (direct + ambient) * exposure;
+    return vec4<f32>(color, texel.a * u.color_tint.a);
 }
