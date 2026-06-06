@@ -1,4 +1,4 @@
-﻿import EditorCore
+import EditorCore
 import EngineKernel
 #if canImport(CoreGraphics)
 import CoreGraphics
@@ -83,9 +83,7 @@ struct ViewportPanel: View {
                                             }
                                         },
                                         onSelectShadingMode: { mode in
-                                            if shadingMode != mode {
-                                                store.dispatch(.setViewportShadingMode(mode))
-                                            }
+                                            app.setViewportShadingMode(mode)
                                         },
                                         onToggleShadows: {
                                             app.setViewportShadowsEnabled(!shadowsEnabled)
@@ -1257,18 +1255,8 @@ private struct ViewportInfoBar: View {
                     onSelectGizmoSpace(.world)
                 }
 
-                Button(icon: .resource(ViewportToolbarIcon.lit.resource),
-                           size: 15,
-                           tooltip: L("Lit")) {
-                    onSelectShadingMode(.lit)
-                }
-                .toggleButtonStyle(shadingMode == .lit)
-                Button(icon: .resource(ViewportToolbarIcon.wireframe.resource),
-                           size: 15,
-                           tooltip: L("Wire")) {
-                    onSelectShadingMode(.wireframe)
-                }
-                .toggleButtonStyle(shadingMode == .wireframe)
+                ViewModeSelector(shadingMode: shadingMode,
+                                 onSelect: onSelectShadingMode)
                 Button(icon: .resource(ViewportToolbarIcon.shadows.resource),
                            size: 15,
                            tooltip: L("Shadows")) {
@@ -1440,5 +1428,58 @@ private struct GizmoAxisChip: View {
             .padding(horizontal: 8, vertical: 3)
             .background(color)
             .cornerRadius(2)
+    }
+}
+
+private struct ViewModeSelector: View {
+    let shadingMode: EditorViewportShadingMode
+    let onSelect: (EditorViewportShadingMode) -> Void
+    @State private var isPresented: Bool = false
+
+    var body: some View {
+        Popover(isPresented: $isPresented, width: 128) {
+            Row(alignment: .center, spacing: 5) {
+                Text(Self.label(for: shadingMode), lineLimit: 1)
+                    .font(.caption)
+                    .foregroundColor(.onSurface)
+                Text("\u{25BC}")
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
+            .padding(horizontal: 8, vertical: 4)
+            .background(.surfaceSunken)
+            .cornerRadius(3)
+        } content: {
+            Menu(menuEntries, width: 128, maxVisibleRows: 8, onItemActivated: {
+                isPresented = false
+            })
+        }
+    }
+
+    private var menuEntries: [MenuEntry] {
+        var entries: [MenuEntry] = []
+        let shaded: [EditorViewportShadingMode] = [.lit, .unlit, .baseColor, .normal, .roughness, .metallic]
+        for mode in shaded {
+            entries.append(.item(MenuItem(id: "viewmode-\(mode.rawValue)",
+                                          title: Self.label(for: mode),
+                                          action: { onSelect(mode) })))
+        }
+        entries.append(.separator(id: "viewmode-sep"))
+        entries.append(.item(MenuItem(id: "viewmode-wireframe",
+                                      title: Self.label(for: .wireframe),
+                                      action: { onSelect(.wireframe) })))
+        return entries
+    }
+
+    private static func label(for mode: EditorViewportShadingMode) -> String {
+        switch mode {
+        case .lit: return L("Lit")
+        case .unlit: return L("Unlit")
+        case .baseColor: return L("Base Color")
+        case .normal: return L("Normal")
+        case .roughness: return L("Roughness")
+        case .metallic: return L("Metallic")
+        case .wireframe: return L("Wireframe")
+        }
     }
 }

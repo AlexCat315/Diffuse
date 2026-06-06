@@ -53,6 +53,7 @@ public final class AppDisplayHandle: @unchecked Sendable {
     private var windowMaximizedByIDQuery: (@MainActor (WindowID) -> Bool)?
     private var showWindowSystemMenuAction: (@MainActor (WindowID, Float, Float) -> Void)?
     private var openFolderDialogAction: (@MainActor (String?, @escaping (String?) -> Void) -> Void)?
+    private var openFileDialogAction: (@MainActor (String?, [FileDialogFilter], Bool, @escaping ([String]) -> Void) -> Void)?
 
     public init() {}
 
@@ -166,6 +167,25 @@ public final class AppDisplayHandle: @unchecked Sendable {
         openFolderDialogAction(defaultPath, accept)
     }
 
+    /// Present the native "choose file(s)" dialog. `filters` restricts the
+    /// selectable types — each entry pairs a human label with bare extensions
+    /// (no dots), e.g. `(name: "3D Models", extensions: ["glb", "gltf", "obj"])`.
+    /// `accept` receives the chosen absolute paths (empty when the user
+    /// cancelled or no platform dialog is available), delivered on the main
+    /// thread.
+    @MainActor
+    public func requestOpenFile(filters: [(name: String, extensions: [String])] = [],
+                                allowsMultiple: Bool = false,
+                                defaultPath: String? = nil,
+                                accept: @escaping ([String]) -> Void) {
+        guard let openFileDialogAction else {
+            accept([])
+            return
+        }
+        let mapped = filters.map { FileDialogFilter(name: $0.name, extensions: $0.extensions) }
+        openFileDialogAction(defaultPath, mapped, allowsMultiple, accept)
+    }
+
     @MainActor
     public func openWindow<Root: View>(title: String,
                                        width: Int32 = 480,
@@ -198,6 +218,11 @@ public final class AppDisplayHandle: @unchecked Sendable {
     @MainActor
     func installFolderDialogControl(_ action: @escaping @MainActor (String?, @escaping (String?) -> Void) -> Void) {
         openFolderDialogAction = action
+    }
+
+    @MainActor
+    func installFileDialogControl(_ action: @escaping @MainActor (String?, [FileDialogFilter], Bool, @escaping ([String]) -> Void) -> Void) {
+        openFileDialogAction = action
     }
 
     @MainActor

@@ -1,4 +1,4 @@
-﻿import AIRuntime
+import AIRuntime
 import ContextMemory
 import AssetPipeline
 import AudioRuntime
@@ -163,7 +163,9 @@ public final class EditorApplication: @unchecked Sendable {
         engine.start(renderSurface: nil, enableViewportSurface: true)
         // 榛樿鍚敤绂诲睆娓叉煋锛岃寮曟搸娓叉煋鍒颁竴涓?viewport 绾圭悊浜ょ粰缂栬緫鍣ㄦ樉绀恒€?
         // 涓嶅紑鍚?viewportResolve 鏃?UI 浼氫竴鐩村仠鍦?"Waiting for first render packet"銆?
-        engine.queueRenderSettings(makeViewportRenderSettings(shadowsEnabled: store.state.viewportShadowsEnabled))
+        engine.queueRenderSettings(makeViewportRenderSettings(
+            shadowsEnabled: store.state.viewportShadowsEnabled,
+            shadingMode: store.state.viewportShadingMode))
         store.dispatch(.setConnected(true))
         logConsole("Editor connected to runtime")
     }
@@ -494,8 +496,21 @@ public final class EditorApplication: @unchecked Sendable {
         if store.state.viewportShadowsEnabled != enabled {
             store.dispatch(.setViewportShadowsEnabled(enabled))
         }
-        engine.queueRenderSettings(makeViewportRenderSettings(shadowsEnabled: enabled))
+        engine.queueRenderSettings(makeViewportRenderSettings(
+            shadowsEnabled: enabled,
+            shadingMode: store.state.viewportShadingMode))
         logConsole(enabled ? "Viewport shadows enabled" : "Viewport shadows disabled")
+    }
+
+    /// Switches the viewport shading / debug-view mode and re-queues render
+    /// settings so the mesh shader updates its G-buffer visualization.
+    public func setViewportShadingMode(_ mode: EditorViewportShadingMode) {
+        if store.state.viewportShadingMode != mode {
+            store.dispatch(.setViewportShadingMode(mode))
+        }
+        engine.queueRenderSettings(makeViewportRenderSettings(
+            shadowsEnabled: store.state.viewportShadowsEnabled,
+            shadingMode: mode))
     }
 
     /// Transitions to a new playback state.
@@ -645,9 +660,13 @@ public final class EditorApplication: @unchecked Sendable {
         try? FileManager.default.removeItem(at: physicsPlaySnapshotURL)
     }
 
-    private func makeViewportRenderSettings(shadowsEnabled: Bool) -> RenderSettings {
+    private func makeViewportRenderSettings(
+        shadowsEnabled: Bool,
+        shadingMode: EditorViewportShadingMode
+    ) -> RenderSettings {
         RenderSettings(
             stage: .r4LightingPBRShadow,
+            debugViewMode: RenderSettings.DebugViewMode(rawValue: shadingMode.debugViewIndex) ?? .shaded,
             shadowSettings: RenderShadowSettings(enabled: shadowsEnabled),
             enableOffscreenViewport: true
         )
