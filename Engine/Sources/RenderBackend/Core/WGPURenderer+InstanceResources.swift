@@ -311,13 +311,17 @@ extension WGPURenderer {
 
     func writeSceneLightUniforms(
         scene: RenderScene,
-        shadowBindingsByLightIndex: [Int: ShadowLightBinding] = [:]
+        shadowBindingsByLightIndex: [Int: ShadowLightBinding] = [:],
+        debugViewMode: Int = 0
     ) {
         guard let sceneLightUniformBuffer else { return }
         var uniforms = SceneLightUniforms(
             scene: scene,
             shadowBindingsByLightIndex: shadowBindingsByLightIndex
         )
+        // Pack the viewport debug-view selector into the free .z lane so the mesh
+        // shader can switch G-buffer visualizations without a dedicated binding.
+        uniforms.exposureAndLightCount.z = Float(debugViewMode)
         writeUniform(&uniforms, buffer: sceneLightUniformBuffer)
     }
 

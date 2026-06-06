@@ -357,6 +357,35 @@ fn direct_lighting(N : vec3<f32>, V : vec3<f32>, world_pos : vec3<f32>,
     return result;
 }
 
+// --- Debug G-buffer visualization (editor "view modes") ---------------------
+// The frame graph's tonemap pass always applies aces + linear→sRGB, so to show a
+// chosen display colour D truthfully we emit inverse_aces(srgb_to_linear(D))/exp:
+// it then round-trips through the pipeline back to exactly D. This is how the
+// editor inspects raw buffers (base color / normal / roughness / metallic)
+// without the tone curve distorting the readout.
+fn srgb_to_linear_c(c : vec3<f32>) -> vec3<f32> {
+    let lo = c / 12.92;
+    let hi = pow((c + vec3<f32>(0.055)) / 1.055, vec3<f32>(2.4));
+    return select(lo, hi, c > vec3<f32>(0.04045));
+}
+
+fn aces_inv_c(y : f32) -> f32 {
+    // Inverse of the Narkowicz ACES fit in tonemap.wgsl (A·x² + B·x + C = 0).
+    let a = 2.51; let b = 0.03; let c = 2.43; let d = 0.59; let e = 0.14;
+    let yy = clamp(y, 0.0, 0.9999);
+    let A = yy * c - a;
+    let B = yy * d - b;
+    let C = yy * e;
+    let disc = max(B * B - 4.0 * A * C, 0.0);
+    return max((-B - sqrt(disc)) / (2.0 * A), 0.0);
+}
+
+fn debug_present(display_srgb : vec3<f32>, exposure : f32) -> vec3<f32> {
+    let lin = srgb_to_linear_c(clamp(display_srgb, vec3<f32>(0.0), vec3<f32>(1.0)));
+    let pre = vec3<f32>(aces_inv_c(lin.x), aces_inv_c(lin.y), aces_inv_c(lin.z));
+    return pre / max(exposure, 1e-3);
+}
+
 @fragment
 fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
     let texel = textureSample(base_color_texture, base_color_sampler, in.uv);
@@ -393,6 +422,25 @@ fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
     let F0 = mix(vec3<f32>(0.04), albedo, metallic);
     let diffuse_albedo = albedo * (1.0 - metallic);
     let fresnel = F0 + (max(vec3<f32>(1.0 - roughness), F0) - F0) * pow(1.0 - NdotV, 5.0);
+
+    // Editor debug view modes (G-buffer inspection). 0 = normal shaded output.
+    let debug_mode = i32(scene_lights.exposure_light_count.z + 0.5);
+    if debug_mode != 0 {
+        var dbg = vec3<f32>(0.0);
+        if debug_mode == 1 {        // Unlit: material colour with AO, no lighting
+            dbg = clamp(in.color * texel.rgb * u.color_tint.rgb,
+                        vec3<f32>(0.0), vec3<f32>(1.0)) * ao;
+        } else if debug_mode == 2 { // Base Color: raw albedo texture
+            dbg = texel.rgb;
+        } else if debug_mode == 3 { // World normal
+            dbg = normal * 0.5 + vec3<f32>(0.5);
+        } else if debug_mode == 4 { // Roughness
+            dbg = vec3<f32>(roughness);
+        } else if debug_mode == 5 { // Metallic
+            dbg = vec3<f32>(metallic);
+        }
+        return vec4<f32>(debug_present(dbg, exposure), 1.0);
+    }
 
     // Direct Cook-Torrance lighting (diffuse + sharp GGX specular highlights).
     let direct = direct_lighting(normal, V, in.world_pos, diffuse_albedo, F0, roughness);
