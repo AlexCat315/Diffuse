@@ -42,6 +42,13 @@ struct LayoutTests {
         #expect(b.geometry.frame == Rect(x: 0, y: 50, width: 50, height: 50))
     }
 
+    @Test("LayoutStyle.flexShrink is present and defaults to 0")
+    func flexShrinkDefault() {
+        let style = LayoutStyle()
+        #expect(style.flexGrow == 0)
+        #expect(style.flexShrink == 0)
+    }
+
     @Test("padding offsets children")
     func padding() {
         let root = node { $0.padding = .all(10); $0.width = .points(100); $0.height = .points(100) }
