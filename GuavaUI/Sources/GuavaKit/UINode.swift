@@ -23,6 +23,10 @@ public final class UINode {
     /// `UIContext.layoutIfNeeded` recomputes frames.
     public private(set) var layoutStyle = LayoutStyle()
 
+    /// Pointer/hover handlers for this node. Lives on the node, so it shares the
+    /// node's lifetime — no global handler registry to leak or desync.
+    public var interaction = Interaction()
+
     /// The context (per-tree) this node is currently attached to, if any.
     public internal(set) weak var context: UIContext?
 
