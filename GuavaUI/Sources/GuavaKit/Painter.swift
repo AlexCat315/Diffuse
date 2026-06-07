@@ -14,15 +14,35 @@ public struct Painter {
 
     private func paint(node: UINode, parentContentOrigin: Point, into list: inout DisplayList) {
         let g = node.geometry
+        let p = node.paint
         let absFrame = Rect(x: parentContentOrigin.x + g.frame.minX,
                             y: parentContentOrigin.y + g.frame.minY,
                             width: g.frame.size.width,
                             height: g.frame.size.height)
 
         // Self paint (background under border, then text on top).
-        if let bg = node.paint.background { list.fill(absFrame, bg) }
-        if let border = node.paint.border { list.stroke(absFrame, border.color, width: border.width) }
-        if let t = node.textContent { list.text(t.string, absFrame, t.color, size: t.size) }
+        // Opacity multiplies the colour alpha channel.
+        if let bg = p.background {
+            let c = p.opacity < 1 ? Color(r: bg.r, g: bg.g, b: bg.b, a: bg.a * p.opacity) : bg
+            if let r = p.cornerRadius, r > 0 {
+                list.fillRounded(absFrame, c, radius: r)
+            } else {
+                list.fill(absFrame, c)
+            }
+        }
+        if let border = p.border {
+            let bc = p.opacity < 1
+                ? Color(r: border.color.r, g: border.color.g, b: border.color.b,
+                        a: border.color.a * p.opacity)
+                : border.color
+            list.stroke(absFrame, bc, width: border.width)
+        }
+        if let t = node.textContent {
+            let tc = p.opacity < 1
+                ? Color(r: t.color.r, g: t.color.g, b: t.color.b, a: t.color.a * p.opacity)
+                : t.color
+            list.text(t.string, absFrame, tc, size: t.size)
+        }
 
         if g.clipsToBounds { list.pushClip(absFrame) }
 

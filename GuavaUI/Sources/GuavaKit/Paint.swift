@@ -19,9 +19,17 @@ public struct Border: Equatable, Sendable {
 public struct Paint: Equatable, Sendable {
     public var background: Color?
     public var border: Border?
-    public init(background: Color? = nil, border: Border? = nil) {
+    /// Multiplies the output alpha (0 = fully transparent, 1 = opaque).
+    public var opacity: Float = 1
+    /// Rounded-rect corner radius for the background fill. `nil` = sharp.
+    public var cornerRadius: Float?
+
+    public init(background: Color? = nil, border: Border? = nil,
+                opacity: Float = 1, cornerRadius: Float? = nil) {
         self.background = background
         self.border = border
+        self.opacity = opacity
+        self.cornerRadius = cornerRadius
     }
 
     var isEmpty: Bool { background == nil && border == nil }

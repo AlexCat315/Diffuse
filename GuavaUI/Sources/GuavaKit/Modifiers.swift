@@ -64,6 +64,15 @@ public extension View {
     func fontSize(_ size: Float) -> _ModifiedView {
         _ModifiedView(wrapping: self, adding: _FontSizeModifier(size: size))
     }
+    func opacity(_ value: Float) -> _ModifiedView {
+        _ModifiedView(wrapping: self, adding: _OpacityModifier(opacity: value))
+    }
+    func cornerRadius(_ radius: Float) -> _ModifiedView {
+        _ModifiedView(wrapping: self, adding: _CornerRadiusModifier(radius: radius))
+    }
+    func clipped() -> _ModifiedView {
+        _ModifiedView(wrapping: self, adding: _ClippedModifier())
+    }
 }
 
 struct _FrameModifier: NodeModifier {
@@ -90,4 +99,15 @@ struct _ForegroundColorModifier: NodeModifier {
 struct _FontSizeModifier: NodeModifier {
     let size: Float
     func apply(_ node: UINode) { node.modifyTextSize(size) }
+}
+struct _OpacityModifier: NodeModifier {
+    let opacity: Float
+    func apply(_ node: UINode) { node.modifyPaint { $0.opacity = opacity } }
+}
+struct _CornerRadiusModifier: NodeModifier {
+    let radius: Float
+    func apply(_ node: UINode) { node.modifyPaint { $0.cornerRadius = radius } }
+}
+struct _ClippedModifier: NodeModifier {
+    func apply(_ node: UINode) { node.setClipsToBounds(true) }
 }
