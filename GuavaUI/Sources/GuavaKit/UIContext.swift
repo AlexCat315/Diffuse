@@ -24,6 +24,10 @@ public final class UIContext {
     /// Overlay registry (popovers/menus). Scoped to this tree — never global.
     public let portals = PortalStore()
 
+    /// How `Text` measures itself. Defaults to a standalone approximation; the
+    /// editor host swaps in real font metrics.
+    public var textMeasurer: TextMeasuring = ApproxTextMeasurer()
+
     /// Accumulated dirty flags for the current frame (drained by the host's
     /// layout/paint pass). Exposed read-only for diagnostics/tests.
     public private(set) var pendingDirty: DirtyFlags = []
