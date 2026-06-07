@@ -1,67 +1,70 @@
 import EditorCore
-import GuavaUICompose
+import GuavaKit
 
-struct ConsolePanel: View {
-    let store: EditorStore
+struct ConsolePanel: GuavaKit.View {
+    @Observed var store: EditorStore
 
-    var body: some View {
-        StoreScope(store) { store in
-            Box(direction: .column, alignItems: .stretch, spacing: 8) {
-                Row(alignment: .center, spacing: 8) {
-                    Text(store.connected ? L("Connected") : L("Offline"))
+    init(store: EditorStore) {
+        self.store = store
+    }
+
+    var body: some GuavaKit.View {
+        Column(alignment: .stretch, spacing: 8) {
+            Row(alignment: .center, spacing: 8) {
+                Text(store.connected ? L("Connected") : L("Offline"))
+                    .font(.caption)
+                    .foregroundColor(store.connected ? .success : .warning)
+
+                Spacer()
+
+                Text("revision \(store.sceneRevision)")
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+
+                Button(action: { store.dispatch(.clearConsole) }) {
+                    Text(L("Clear"))
+                        .foregroundColor(.onSurfaceVariant)
                         .font(.caption)
-                        .foregroundColor(store.connected ? .success : .warning)
-
-                    Spacer(minLength: 0)
-
-                    Text("revision \(store.sceneRevision)")
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
-
-                    Button(L("Clear")) {
-                        store.dispatch(.clearConsole)
-                    }
-                    .buttonStyle(.ghost)
-                    .frame(height: 24)
                 }
+                .frame(height: 24)
+            }
 
-                ScrollView(.vertical) {
-                    Box(direction: .column, alignItems: .stretch, spacing: 4) {
-                        if store.consoleEntries.isEmpty {
-                            ConsoleEntryRow(
-                                entry: EditorConsoleEntry(id: 0,
-                                                          severity: .info,
-                                                          message: L("No console messages"))
-                            )
-                        } else {
-                            for entry in store.consoleEntries.suffix(80) {
-                                ConsoleEntryRow(entry: entry)
-                            }
+            ScrollView(.column) {
+                Column(alignment: .stretch, spacing: 4) {
+                    if store.consoleEntries.isEmpty {
+                        ConsoleEntryRow(
+                            entry: EditorConsoleEntry(id: 0,
+                                                      severity: .info,
+                                                      message: L("No console messages"))
+                        )
+                    } else {
+                        for entry in store.consoleEntries.suffix(80) {
+                            ConsoleEntryRow(entry: entry)
                         }
                     }
-                    .padding(8)
                 }
-                .background(.surfaceSunken)
-                .cornerRadius(2)
-                .flex()
+                .padding(8)
             }
-            .padding(10)
-            .frame(minHeight: 140)
+            .background(.surfaceSunken)
+            .cornerRadius(2)
+            .flex(1, shrink: 1)
         }
+        .padding(10)
+        .frame(minHeight: 140)
     }
 }
 
-private struct ConsoleEntryRow: View {
+private struct ConsoleEntryRow: GuavaKit.View {
     let entry: EditorConsoleEntry
 
-    var body: some View {
-        Row(alignment: .top, spacing: 8) {
+    var body: some GuavaKit.View {
+        Row(alignment: .start, spacing: 8) {
             Text(severityLabel)
                 .font(.mono)
                 .foregroundColor(severityColor)
                 .frame(width: 44)
 
-            Box(direction: .column, alignItems: .stretch, spacing: 2) {
+            Column(alignment: .stretch, spacing: 2) {
                 Text(entry.message, lineLimit: 1)
                     .font(.mono)
                     .foregroundColor(.onSurface)
@@ -71,7 +74,7 @@ private struct ConsoleEntryRow: View {
                         .foregroundColor(.onSurfaceMuted)
                 }
             }
-            .flex()
+            .flex(1, shrink: 1)
         }
         .padding(horizontal: 6, vertical: 3)
     }

@@ -40,9 +40,10 @@ struct EditorRootView: View {
 
                         Divider()
 
-                        EditorStatusBar(store: app.store, getTiming: { app.currentFrameTiming() })
-                            .layoutRole("editor-status-bar")
-                            .debugName("editor-status-bar")
+                        // TODO: Re-enable when RootView is migrated to GuavaKit (batch 6).
+                        // EditorStatusBar is now a GuavaKit.View; RootView still uses
+                        // GuavaUICompose.View.
+                        // EditorStatusBar(store: app.store, getTiming: { app.currentFrameTiming() })
                     }
                     .background(.background)
                     .flex()
@@ -53,7 +54,7 @@ struct EditorRootView: View {
                 } portals: {
                     PortalHost()
                     if store.commandPaletteVisible {
-                        CommandPaletteOverlay(app: app)
+                        // TODO batch 6: CommandPaletteOverlay(app: app) — migrated to GuavaKit.View
                     }
                 }
             }
