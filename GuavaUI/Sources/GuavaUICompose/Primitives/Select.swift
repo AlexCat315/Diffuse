@@ -509,9 +509,9 @@ private struct _PopoverFrontmostModifier: ViewModifier {
         // handled by _PortalLayer's elevated zIndex — reordering the
         // node tree is unnecessary and inverts hit-test priority.
         guard !isPresented else { return }
-        if let entryID = node.attachments["__popover_entry_id"] as? String {
+        if let entryID = node.attachments[popoverPortalEntryAttachmentKey] as? String {
             PortalRegistry.unregister(entryID)
-            node.attachments.removeValue(forKey: "__popover_entry_id")
+            node.attachments.removeValue(forKey: popoverPortalEntryAttachmentKey)
         }
     }
 }
@@ -549,8 +549,12 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
         let overlayY = absY + (boxNode?.frame.height ?? 0)
         let position = CGPoint(x: absX, y: overlayY)
 
-        // Register / update the portal overlay entry
-        if let entryID = node.attachments["__popover_entry_id"] as? String {
+        // Register / update the portal overlay entry. Re-verify the entry still
+        // exists: if this node is reused after its entry was unregistered
+        // (teardown/close cleanup), `updatePosition`/`updateContent` would
+        // silently no-op and the menu would never re-appear — so re-register.
+        if let entryID = node.attachments[popoverPortalEntryAttachmentKey] as? String,
+           PortalRegistry.contains(entryID) {
             PortalRegistry.updatePosition(entryID, position: position)
             PortalRegistry.updateContent(entryID, content: AnyView(content))
         } else {
@@ -559,9 +563,9 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
                 width: width,
                 content: AnyView(content)
             )
-            node.attachments["__popover_entry_id"] = entryID
+            node.attachments[popoverPortalEntryAttachmentKey] = entryID
             // Also store on parent so _PopoverFrontmostModifier can clean up
-            boxNode?.attachments["__popover_entry_id"] = entryID
+            boxNode?.attachments[popoverPortalEntryAttachmentKey] = entryID
         }
 
         // Keyboard handler

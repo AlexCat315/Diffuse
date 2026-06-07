@@ -1,4 +1,4 @@
-﻿import EngineKernel
+import EngineKernel
 import SIMDCompat
 
 public struct SpatialAABB: Sendable, Equatable {
@@ -1385,7 +1385,7 @@ func performPhysicsOverlapAABB(_ query: PhysicsOverlapAABBQuery,
                                statsRecorder: SpatialQueryStatsRecorder? = nil) -> [PhysicsOverlapHit] {
     let maxResults = query.maxResults
     // Use forEachOverlappingWhile so the traversal can stop the moment we reach maxResults.
-    // Filter checks are ordered cheapest-first (trigger flag 鈫?layer masks 鈫?per-entry AABB 鈫?
+    // Filter checks are ordered cheapest-first (trigger flag → layer masks → per-entry AABB →
     // narrow phase) to minimise work before the expensive preciseOverlap call.
     if let scratch {
         scratch.physicsOverlapHitsBuffer.removeAll(keepingCapacity: true)
