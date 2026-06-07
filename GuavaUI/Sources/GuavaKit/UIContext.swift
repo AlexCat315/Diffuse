@@ -21,6 +21,9 @@ public final class UIContext {
     /// layout/paint pass). Exposed read-only for diagnostics/tests.
     public private(set) var pendingDirty: DirtyFlags = []
 
+    /// Available size used by the last layout pass; a change forces re-layout.
+    private var lastAvailable: Size?
+
     public init() {}
 
     // MARK: - Install / teardown
@@ -74,6 +77,23 @@ public final class UIContext {
         node.context = nil
         hitIndex.invalidate()
         if root === node { root = nil }
+    }
+
+    // MARK: - Layout
+
+    /// Run `engine` only when something actually changed — the tree is
+    /// `.layout`-dirty or the available size differs from last time. Layout
+    /// writes frames via `setFrame`, which re-enters `invalidate` and refreshes
+    /// the hit cache automatically. Returns whether a layout pass ran.
+    @discardableResult
+    public func layoutIfNeeded(engine: LayoutEngine, available: Size) -> Bool {
+        guard pendingDirty.contains(.layout) || lastAvailable != available else { return false }
+        lastAvailable = available
+        if let root { engine.layout(root: root, available: available) }
+        // Layout is satisfied; geometry/paint flags raised by setFrame remain for
+        // the downstream paint pass.
+        pendingDirty.subtract(.layout)
+        return true
     }
 
     // MARK: - Convenience
