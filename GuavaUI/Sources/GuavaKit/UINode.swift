@@ -27,6 +27,10 @@ public final class UINode {
     /// node's lifetime — no global handler registry to leak or desync.
     public var interaction = Interaction()
 
+    /// Visual description (paint *input*). Changing it marks the tree
+    /// `.paint`-dirty so the next render rebuilds the display list.
+    public private(set) var paint = Paint()
+
     /// The context (per-tree) this node is currently attached to, if any.
     public internal(set) weak var context: UIContext?
 
@@ -88,6 +92,13 @@ public final class UINode {
         setLayoutStyle(s)
     }
 
+    /// Update the visual description. Marks the tree `.paint`-dirty.
+    public func setPaint(_ newPaint: Paint) {
+        guard newPaint != paint else { return }
+        paint = newPaint
+        context?.invalidate(self, [.paint])
+    }
+
     // MARK: - Hierarchy
 
     /// Append `child` (re-parenting it if needed). If this node is attached to a
@@ -97,7 +108,7 @@ public final class UINode {
         child.parent = self
         children.append(child)
         if let context { context.attach(child) }
-        context?.invalidate(self, [.hierarchy, .layout])
+        context?.invalidate(self, [.hierarchy, .layout, .paint])
     }
 
     /// Remove this node (and its subtree) from its parent. Detaching from the
@@ -108,7 +119,7 @@ public final class UINode {
         parent.children.removeAll { $0 === self }
         self.parent = nil
         if let ctx { ctx.detach(self) }
-        ctx?.invalidate(parent, [.hierarchy, .layout])
+        ctx?.invalidate(parent, [.hierarchy, .layout, .paint])
     }
 
     // MARK: - Resources
