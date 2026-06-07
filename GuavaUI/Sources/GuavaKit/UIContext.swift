@@ -21,6 +21,9 @@ public final class UIContext {
     /// released automatically when the captured node detaches — see `detach`.
     public let pointerCapture = PointerCapture()
 
+    /// Overlay registry (popovers/menus). Scoped to this tree — never global.
+    public let portals = PortalStore()
+
     /// Accumulated dirty flags for the current frame (drained by the host's
     /// layout/paint pass). Exposed read-only for diagnostics/tests.
     public private(set) var pendingDirty: DirtyFlags = []

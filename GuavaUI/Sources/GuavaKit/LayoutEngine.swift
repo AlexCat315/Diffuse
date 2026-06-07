@@ -43,14 +43,15 @@ public struct StackLayoutEngine: LayoutEngine {
 
     private func measureChildren(_ node: UINode, available: Size) -> Size {
         let s = node.layoutStyle
-        guard !node.children.isEmpty else { return .zero }
+        let flow = node.children.filter { if case .flow = $0.layoutStyle.position { return true }; return false }
+        guard !flow.isEmpty else { return .zero }
         var mainTotal: Float = 0
         var crossMax: Float = 0
-        for (i, child) in node.children.enumerated() {
+        for (i, child) in flow.enumerated() {
             let cs = measure(child, available: available)
             let p = project(cs, s.direction)
             mainTotal += p.main
-            if i < node.children.count - 1 { mainTotal += s.spacing }
+            if i < flow.count - 1 { mainTotal += s.spacing }
             crossMax = max(crossMax, p.cross)
         }
         return unproject(main: mainTotal, cross: crossMax, axis: s.direction)
@@ -62,7 +63,15 @@ public struct StackLayoutEngine: LayoutEngine {
         node.setFrame(frame) // ← single funnel: also invalidates geometry/hit cache
 
         let s = node.layoutStyle
-        let kids = node.children
+
+        // Absolutely-positioned children are placed at their rect and excluded
+        // from the flow math (used by overlays/portals).
+        for child in node.children {
+            if case .absolute(let rect) = child.layoutStyle.position {
+                arrange(child, frame: rect)
+            }
+        }
+        let kids = node.children.filter { if case .flow = $0.layoutStyle.position { return true }; return false }
         guard !kids.isEmpty else { return }
 
         let contentMain = project(frame.size, s.direction).main - paddingMain(s)
