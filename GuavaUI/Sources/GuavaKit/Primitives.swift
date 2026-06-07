@@ -122,3 +122,66 @@ public struct Divider: _PrimitiveView {
         }
     }
 }
+
+// MARK: - ScrollView
+
+/// A scrollable container. Clips overflowing content and updates `contentOffset`
+/// in response to wheel events. The parent must constrain the ScrollView's size
+/// (via `.frame()` or a fixed container); the content is laid out naturally and
+/// scrolls when it overflows the viewport.
+///
+/// Direction `.column` scrolls vertically; `.row` scrolls horizontally.
+public struct ScrollView<Content: View>: _PrimitiveView {
+    public var direction: Axis
+    private let content: Content
+
+    public init(_ direction: Axis = .column, @ViewBuilder content: () -> Content) {
+        self.direction = direction
+        self.content = content()
+    }
+
+    public func makeNode() -> UINode { UINode() }
+
+    public func updateNode(_ node: UINode) {
+        node.setClipsToBounds(true)
+        node.interaction.onWheel = { [weak node] event in
+            guard let node else { return .ignored }
+            var offset = node.geometry.contentOffset
+            switch node.layoutStyle.direction {
+            case .column:
+                offset.y += event.deltaY
+            case .row:
+                offset.x += event.deltaX
+            }
+            // Clamp to prevent scrolling past content bounds.
+            // (Content size tracking is a future refinement.)
+            if offset.y < 0 { offset.y = 0 }
+            if offset.x < 0 { offset.x = 0 }
+            node.setContentOffset(offset)
+            return .handled
+        }
+    }
+
+    public var childViews: [any View] { [content] }
+}
+
+// Convenience aliases.
+public struct VScroll<Content: View>: _PrimitiveView {
+    private let inner: ScrollView<Content>
+    public init(@ViewBuilder content: () -> Content) {
+        inner = ScrollView(.column, content: content)
+    }
+    public func makeNode() -> UINode { inner.makeNode() }
+    public func updateNode(_ node: UINode) { inner.updateNode(node) }
+    public var childViews: [any View] { inner.childViews }
+}
+
+public struct HScroll<Content: View>: _PrimitiveView {
+    private let inner: ScrollView<Content>
+    public init(@ViewBuilder content: () -> Content) {
+        inner = ScrollView(.row, content: content)
+    }
+    public func makeNode() -> UINode { inner.makeNode() }
+    public func updateNode(_ node: UINode) { inner.updateNode(node) }
+    public var childViews: [any View] { inner.childViews }
+}

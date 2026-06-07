@@ -30,6 +30,9 @@ public struct DisplayListRenderer {
             case .fillRect(let rect, let color):
                 draw.addRect(uiRect(rect), color: uiColor(color))
 
+            case .fillRoundedRect(let rect, let color, let radius):
+                draw.addRoundedRect(uiRect(rect), radius: radius, color: uiColor(color))
+
             case .strokeRect(let rect, let color, let width):
                 strokeRect(uiRect(rect), color: uiColor(color), width: width, into: draw)
 
