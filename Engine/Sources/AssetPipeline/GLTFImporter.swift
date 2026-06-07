@@ -1,4 +1,4 @@
-﻿import Foundation
+import Foundation
 import SIMDCompat
 
 /// Per-primitive topology using shared vertex pool with optional index remap.
@@ -653,7 +653,7 @@ private struct MeshBuilder {
 
     func meshNodes() -> [MeshNode] {
         guard let gltfNodes = document.nodes, !gltfNodes.isEmpty else { return [] }
-        // Build parent lookup: child 鈫?parent index
+        // Build parent lookup: child → parent index
         var parentOf = [Int: Int]()
         for (i, node) in gltfNodes.enumerated() {
             for child in node.children ?? [] {

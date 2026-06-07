@@ -1,4 +1,4 @@
-﻿import AssetPipeline
+import AssetPipeline
 import CapabilityRuntime
 import Foundation
 import IntentRuntime
@@ -788,7 +788,7 @@ struct IntentRuntimeTests {
 @Suite("IntentRuntime end-to-end", .serialized)
 struct IntentRuntimeEndToEndTests {
 
-    @Test("ObservationBus 鈫?IntentIR 鈫?TransactionIR 鈫?SceneRuntime full pipeline")
+    @Test("ObservationBus →IntentIR →TransactionIR →SceneRuntime full pipeline")
     func fullPipelineSpawnEntity() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -806,7 +806,7 @@ struct IntentRuntimeEndToEndTests {
             startFrom: .latest,
             bufferPolicy: .dropOldest(size: 8)))
 
-        // 2. IntentIR 鈥?what the user/AI intends
+        // 2. IntentIR —what the user/AI intends
         let intent = IntentIR(
             id: "intent-\(UUID().uuidString.prefix(8))",
             verb: "scene.spawn_entity",
@@ -816,7 +816,7 @@ struct IntentRuntimeEndToEndTests {
             createdAt: Date()
         )
 
-        // 3. TransactionIR 鈥?structured operations
+        // 3. TransactionIR —structured operations
         let tx = TransactionIR(
             intent: intent,
             summary: "Spawn hero mesh",
@@ -831,14 +831,14 @@ struct IntentRuntimeEndToEndTests {
             provenance: .authored
         )
 
-        // 4. SceneRuntime 鈥?target for mutation
+        // 4. SceneRuntime —target for mutation
         var context = TransactionExecutionContext(
             sceneRuntime: SceneRuntime(),
             observationBus: bus,
             eventOrigin: EventOrigin(process: .editor, host: "test", user: "e2e"),
             sceneStreamID: "scene:e2e")
 
-        // 5. TransactionExecutor 鈥?applies transaction, emits events
+        // 5. TransactionExecutor —applies transaction, emits events
         let executor = TransactionExecutor()
         let result = try executor.apply(tx, to: &context)
 
@@ -855,13 +855,13 @@ struct IntentRuntimeEndToEndTests {
         #expect(txSubscription.drain().map(\.kind) == [.transactionApplied])
         #expect(sceneSubscription.drain().map(\.kind) == [.sceneChanged])
 
-        // 8. Cold log replay 鈥?at minimum sceneChanged events are recorded
+        // 8. Cold log replay —at minimum sceneChanged events are recorded
         let replayed = try bus.replay(streamID: "scene:e2e", fromSeq: 1)
         #expect(replayed.count >= 1)
         #expect(replayed.contains { $0.kind == .sceneChanged })
     }
 
-    @Test("Multi-step pipeline: spawn 鈫?setLocalTransform 鈫?verify via cold log replay")
+    @Test("Multi-step pipeline: spawn →setLocalTransform →verify via cold log replay")
     func multiStepSpawnAndTransform() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -1033,7 +1033,7 @@ struct UndoStackTests {
 
         let r0 = ctx.sceneRuntime!.snapshot.revision
 
-        // Apply two transactions 鈥?each pushes a snapshot
+        // Apply two transactions —each pushes a snapshot
         _ = try coordinator.submitPlan(makeSpawnTransaction(revision: r0), executionContext: &ctx)
         let r1 = ctx.sceneRuntime!.snapshot.revision
 
@@ -1044,24 +1044,24 @@ struct UndoStackTests {
         #expect(coordinator.undoStack.canUndo)
         #expect(!coordinator.undoStack.canRedo)
 
-        // Undo once 鈥?scene should go back to r1
+        // Undo once —scene should go back to r1
         let didUndo = coordinator.undo(executionContext: &ctx)
         #expect(didUndo)
         #expect(ctx.sceneRuntime?.snapshot.revision == r1)
         #expect(coordinator.undoStack.undoDepth == 1)
         #expect(coordinator.undoStack.redoDepth == 1)
 
-        // Undo again 鈥?scene should go back to r0
+        // Undo again —scene should go back to r0
         coordinator.undo(executionContext: &ctx)
         #expect(ctx.sceneRuntime?.snapshot.revision == r0)
         #expect(coordinator.undoStack.undoDepth == 0)
         #expect(coordinator.undoStack.redoDepth == 2)
 
-        // Redo once 鈥?back to r1
+        // Redo once —back to r1
         coordinator.redo(executionContext: &ctx)
         #expect(ctx.sceneRuntime?.snapshot.revision == r1)
 
-        // Redo again 鈥?back to r2
+        // Redo again —back to r2
         coordinator.redo(executionContext: &ctx)
         #expect(ctx.sceneRuntime?.snapshot.revision == r2)
         #expect(coordinator.undoStack.redoDepth == 0)
@@ -1741,7 +1741,7 @@ struct UndoStackTests {
         stack.push(scenes[0])
         stack.push(scenes[1])
         stack.push(scenes[2])
-        // Exceeds capacity 鈥?scenes[0] should be evicted
+        // Exceeds capacity —scenes[0] should be evicted
         stack.push(scenes[3])
 
         #expect(stack.undoDepth == 3)
