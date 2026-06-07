@@ -5,6 +5,7 @@
 
 public enum DrawCommand: Equatable, Sendable {
     case fillRect(Rect, Color)
+    case fillRoundedRect(Rect, Color, radius: Float)
     case strokeRect(Rect, Color, width: Float)
     case text(String, Rect, Color, size: Float)
     /// Restrict subsequent drawing to `rect` until the matching `popClip`.
@@ -17,6 +18,9 @@ public struct DisplayList: Equatable, Sendable {
     public init() {}
 
     mutating func fill(_ rect: Rect, _ color: Color) { commands.append(.fillRect(rect, color)) }
+    mutating func fillRounded(_ rect: Rect, _ color: Color, radius: Float) {
+        commands.append(.fillRoundedRect(rect, color, radius: radius))
+    }
     mutating func stroke(_ rect: Rect, _ color: Color, width: Float) {
         commands.append(.strokeRect(rect, color, width: width))
     }
