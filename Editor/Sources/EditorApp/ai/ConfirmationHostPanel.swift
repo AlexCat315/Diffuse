@@ -1,41 +1,41 @@
 import EditorCore
-import GuavaUICompose
+import GuavaKit
 import IntentRuntime
 
-struct ConfirmationHostPanel: View {
+struct ConfirmationHostPanel: GuavaKit.View {
+    @Observed var store: EditorStore
     let app: EditorApplication
 
     init(app: EditorApplication) {
         self.app = app
+        self.store = app.store
     }
 
-    var body: some View {
-        StoreScope(app.store) { store in
-            ScrollView(.vertical) {
-                Box(direction: .column, alignItems: .stretch, spacing: 10) {
-                    if let request = store.pendingConfirmationRequest {
-                        ConfirmationBatchView(app: app, request: request)
-                    } else {
-                        Box(direction: .column, alignItems: .stretch, spacing: 6) {
-                            Text(L("No pending confirmation"))
-                                .font(.bodyStrong)
-                            Text(L("Warn, required, and destructive AI actions will appear here before they mutate the scene."))
-                                .font(.caption)
-                                .foregroundColor(.onSurfaceMuted)
-                        }
-                        .padding(10)
-                        .background(.surfaceSunken)
-                        .cornerRadius(2)
+    var body: some GuavaKit.View {
+        ScrollView(.column) {
+            Column(alignment: .stretch, spacing: 10) {
+                if let request = store.pendingConfirmationRequest {
+                    ConfirmationBatchView(app: app, request: request)
+                } else {
+                    Column(alignment: .stretch, spacing: 6) {
+                        Text(L("No pending confirmation"))
+                            .font(.bodyStrong)
+                        Text(L("Warn, required, and destructive AI actions will appear here before they mutate the scene."))
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
                     }
+                    .padding(10)
+                    .background(.surfaceSunken)
+                    .cornerRadius(2)
                 }
-                .padding(10)
             }
-            .frame(minWidth: 320)
+            .padding(10)
         }
+        .frame(minWidth: 320)
     }
 }
 
-private struct ConfirmationBatchView: View {
+private struct ConfirmationBatchView: GuavaKit.View {
     let app: EditorApplication
     let request: ConfirmationRequestBatch
 
@@ -44,9 +44,9 @@ private struct ConfirmationBatchView: View {
         self.request = request
     }
 
-    var body: some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 10) {
-            Box(direction: .column, alignItems: .stretch, spacing: 4) {
+    var body: some GuavaKit.View {
+        Column(alignment: .stretch, spacing: 10) {
+            Column(alignment: .stretch, spacing: 4) {
                 Text("\(request.questions.count) item requires confirmation")
                     .font(.bodyStrong)
                 Text("origin: \(request.origin)")
@@ -61,7 +61,7 @@ private struct ConfirmationBatchView: View {
     }
 }
 
-private struct ConfirmationQuestionCard: View {
+private struct ConfirmationQuestionCard: GuavaKit.View {
     let app: EditorApplication
     let question: ConfirmationQuestion
 
@@ -70,12 +70,12 @@ private struct ConfirmationQuestionCard: View {
         self.question = question
     }
 
-    var body: some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 8) {
+    var body: some GuavaKit.View {
+        Column(alignment: .stretch, spacing: 8) {
             Row(alignment: .center, spacing: 8) {
                 Text(question.promptShort)
                     .font(.bodyStrong)
-                    .flex()
+                    .flex(1, shrink: 1)
                 SeverityBadge(severity: question.severity, reversible: question.reversible)
             }
 
@@ -87,21 +87,26 @@ private struct ConfirmationQuestionCard: View {
 
             Row(alignment: .center, spacing: 8) {
                 for option in question.options {
-                    let isDestructiveSkip = option.id == "skip" && question.severity == .destructive
-                    Button(option.labelShort,
-                           role: isDestructiveSkip ? .destructive : .normal) {
+                    Button(action: {
                         app.resolvePendingConfirmation(pickedOptionID: option.id)
+                    }) {
+                        Text(option.labelShort)
+                            .font(.caption)
+                            .foregroundColor(.onSurface)
+                            .padding(horizontal: 8, vertical: 4)
+                            .background(.surfaceVariant)
+                            .cornerRadius(3)
                     }
                 }
             }
         }
         .padding(10)
-        .background(question.severity == .destructive ? .surfaceSunken : .surfaceOverlay)
+        .background(.surfaceSunken)
         .cornerRadius(2)
     }
 }
 
-private struct SeverityBadge: View {
+private struct SeverityBadge: GuavaKit.View {
     let severity: ConfirmationSeverity
     let reversible: Bool
 
@@ -110,7 +115,7 @@ private struct SeverityBadge: View {
         self.reversible = reversible
     }
 
-    var body: some View {
+    var body: some GuavaKit.View {
         let (label, color): (String, SemanticColorRef) = {
             switch severity {
             case .destructive: return (reversible ? "destructive" : "destructive ·  perm", .error)

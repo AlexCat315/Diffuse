@@ -92,13 +92,12 @@ public struct EditorShell: GuavaKit.View {
 
     @GuavaKit.ViewBuilder
     private var bottomTabBar: some GuavaKit.View {
-        GuavaKit.Stack(.row, spacing: 0)
-            .background(GuavaKit.Color(r: 0.12, g: 0.12, b: 0.16))
-            {
+        GuavaKit.Stack(.row, spacing: 0) {
             bottomTab("Console")
             bottomTab("Output")
             GuavaKit.Spacer()
         }
+        .background(GuavaKit.Color(r: 0.12, g: 0.12, b: 0.16))
     }
 
     private func bottomTab(_ name: String) -> some GuavaKit.View {
@@ -106,7 +105,7 @@ public struct EditorShell: GuavaKit.View {
         return GuavaKit.Button(action: { activeBottomTab = name }) {
             GuavaKit.Text(name, fontSize: 12)
                 .foregroundColor(isActive ? GuavaKit.Color(r: 1, g: 1, b: 1) : GuavaKit.Color(r: 0.4, g: 0.4, b: 0.5))
-                .padding(.all(8))
+                .padding(Edges.all(8))
                 .background(isActive ? GuavaKit.Color(r: 0.16, g: 0.16, b: 0.20) : GuavaKit.Color(r: 0, g: 0, b: 0, a: 0))
         }
     }
@@ -141,7 +140,7 @@ public struct EditorShell: GuavaKit.View {
         GuavaKit.Button(action: {}) {
             GuavaKit.Text(label, fontSize: 14)
                 .foregroundColor(GuavaKit.Color(r: 0.7, g: 0.7, b: 0.8))
-                .padding(.all(4))
+                .padding(Edges.all(4))
         }
     }
 

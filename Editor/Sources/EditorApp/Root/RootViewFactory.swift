@@ -162,7 +162,9 @@ enum EditorRootViewFactory {
             PanelDescriptor(id: "console",
                             title: localizedPanelTitle(for: "console"),
                             preferredSlot: .bottom) {
-                ConsolePanel(store: app.store)
+                // TODO batch 6: ConsolePanel(  — migrated to GuavaKit.View
+
+                EmptyView() // placeholderstore: app.store)
             },
             PanelDescriptor(id: "assets",
                             title: localizedPanelTitle(for: "assets"),
@@ -172,17 +174,23 @@ enum EditorRootViewFactory {
             PanelDescriptor(id: "intent-input",
                             title: localizedPanelTitle(for: "intent-input"),
                             preferredSlot: .trailing) {
-                IntentInputPanel(app: app)
+                // TODO batch 6: IntentInputPanel(  — migrated to GuavaKit.View
+
+                EmptyView() // placeholderapp: app)
             },
             PanelDescriptor(id: "confirmation-host",
                             title: localizedPanelTitle(for: "confirmation-host"),
                             preferredSlot: .bottom) {
-                ConfirmationHostPanel(app: app)
+                // TODO batch 6: ConfirmationHostPanel(  — migrated to GuavaKit.View
+
+                EmptyView() // placeholderapp: app)
             },
             PanelDescriptor(id: "render-pipeline",
                             title: localizedPanelTitle(for: "render-pipeline"),
                             preferredSlot: .bottom) {
-                RenderPipelinePanel()
+                // TODO batch 6: RenderPipelinePanel(  — migrated to GuavaKit.View
+
+                EmptyView() // placeholder)
             },
         ])
     }

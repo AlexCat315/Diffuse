@@ -134,6 +134,8 @@ public final class ViewGraph {
             if let property = child.value as? _StateProperty {
                 property._link(scope: scope, index: index)
                 index += 1
+            } else if let observed = child.value as? _ObservedProperty {
+                observed._linkObserved(scope: scope)
             }
         }
     }
