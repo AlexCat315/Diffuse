@@ -1,4 +1,4 @@
-﻿import Foundation
+import Foundation
 import SIMDCompat
 
 public struct ViewTransform: Sendable {
@@ -23,7 +23,7 @@ public struct ViewTransform: Sendable {
         let fromSpace = config.workingSpace.rawValue
         let toSpace = config.displayTransform.rawValue
         let vt = config.viewTransform.rawValue
-        return "OCIO: \(fromSpace) 鈫?\(toSpace) [\(vt)] exp=\(exposure) gamma=\(gamma)"
+        return "OCIO: \(fromSpace) → \(toSpace) [\(vt)] exp=\(exposure) gamma=\(gamma)"
     }
 
     public func apply(to pixels: inout [Float],
