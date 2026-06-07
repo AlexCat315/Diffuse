@@ -155,10 +155,23 @@ let package = Package(
             exclude: ["Architecture.md"]
         ),
 
+        // Bridge: translates GuavaKit's backend-agnostic DisplayList into the
+        // existing GuavaUIRuntime DrawList (reusing the whole wgpu pipeline), and
+        // will host the run loop / event adapter for the editor switchover.
+        .target(
+            name: "GuavaKitHost",
+            dependencies: ["GuavaKit", "GuavaUIRuntime"],
+            path: "Sources/GuavaKitHost"
+        ),
+
         // MARK: - Tests
         .testTarget(
             name: "GuavaKitTests",
             dependencies: ["GuavaKit"]
+        ),
+        .testTarget(
+            name: "GuavaKitHostTests",
+            dependencies: ["GuavaKitHost", "GuavaKit", "GuavaUIRuntime"]
         ),
         .testTarget(
             name: "GuavaUIRuntimeTests",

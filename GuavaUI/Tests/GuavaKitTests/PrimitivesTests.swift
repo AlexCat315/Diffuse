@@ -41,15 +41,28 @@ struct PrimitivesTests {
         graph.install(root: TextApp())
         let node = graph.root.children[0]
         #expect(node.textContent?.string == "hi")
-        #expect(node.intrinsicSize == Size(width: 16, height: 16)) // 2 glyphs × 8
+        // Default ApproxTextMeasurer: 0.5×1.2 · fontSize(16) → 2 glyphs wide.
+        #expect(node.intrinsicSize == Size(width: 16, height: 19.2))
 
         // Layout gives an auto Text leaf its intrinsic size.
         ctx.layoutIfNeeded(engine: StackLayoutEngine(), available: Size(width: 200, height: 200))
-        #expect(node.geometry.frame.size == Size(width: 16, height: 16))
+        #expect(node.geometry.frame.size == Size(width: 16, height: 19.2))
 
         // And paint emits the text command.
         let list = Painter().paint(root: graph.root)
         #expect(list.commands.contains { if case .text("hi", _, _) = $0 { return true }; return false })
+    }
+
+    @Test("Text uses the context's injected font measurer")
+    func injectedMeasurer() {
+        struct Fixed: TextMeasuring {
+            func measure(_ string: String, fontSize: Float) -> Size { Size(width: 99, height: 7) }
+        }
+        let ctx = UIContext()
+        ctx.textMeasurer = Fixed()
+        let graph = ViewGraph(context: ctx)
+        graph.install(root: TextApp())
+        #expect(graph.root.children[0].intrinsicSize == Size(width: 99, height: 7))
     }
 
     // MARK: - Button
