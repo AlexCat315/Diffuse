@@ -123,6 +123,20 @@ public final class UINode {
         context?.invalidate(self, [.paint])
     }
 
+    /// Replace only the colour of the already-set text (modifier path).
+    public func modifyTextColor(_ color: Color) {
+        guard let t = textContent, t.color != color else { return }
+        textContent = (t.string, color, t.size)
+        context?.invalidate(self, [.paint])
+    }
+
+    /// Replace only the font size of the already-set text (modifier path).
+    public func modifyTextSize(_ size: Float) {
+        guard let t = textContent, t.size != size else { return }
+        textContent = (t.string, t.color, size)
+        context?.invalidate(self, [.paint])
+    }
+
     // MARK: - Hierarchy
 
     /// Append `child` (re-parenting it if needed). If this node is attached to a
