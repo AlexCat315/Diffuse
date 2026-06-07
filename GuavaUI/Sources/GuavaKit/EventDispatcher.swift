@@ -107,4 +107,23 @@ public final class EventDispatcher {
         while let n = cur { out.append(n); cur = n.parent }
         return out.reversed()
     }
+
+    // MARK: - Wheel
+
+    /// Delivers a wheel event to the deepest hit node first, then walks up
+    /// the ancestor chain. The first handler returning `.handled` consumes the
+    /// event (so an inner ScrollView doesn't also scroll its outer parent).
+    @discardableResult
+    public func dispatchWheel(_ event: WheelEvent) -> EventResult {
+        guard let path = context.hitTest(event.position)?.path, !path.isEmpty else {
+            return .ignored
+        }
+        // Deepest → root: inner view gets first refusal.
+        for node in path.reversed() {
+            if let handler = node.interaction.onWheel {
+                if handler(event) == .handled { return .handled }
+            }
+        }
+        return .ignored
+    }
 }

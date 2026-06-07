@@ -18,6 +18,18 @@ public struct PointerEvent: Sendable {
     }
 }
 
+/// A scroll-wheel event. Delta values are in logical pixels; positive Y is
+/// the platform's natural scroll direction (may be inverted by OS settings).
+public struct WheelEvent: Sendable {
+    public var deltaX: Float
+    public var deltaY: Float
+    /// Cursor position at the moment of the wheel event, in window-local coords.
+    public var position: Point
+    public init(deltaX: Float = 0, deltaY: Float = 0, position: Point = .zero) {
+        self.deltaX = deltaX; self.deltaY = deltaY; self.position = position
+    }
+}
+
 /// DOM-style delivery phase: ancestors first (`capture`), then the hit node
 /// (`target`), then ancestors again on the way out (`bubble`).
 public enum EventPhase: Sendable { case capture, target, bubble }
@@ -31,11 +43,14 @@ public struct Interaction {
     /// phase. The closure decides whether to acquire pointer capture (via the
     /// context passed in) for drags.
     public var onPointer: ((PointerEvent, EventPhase, UIContext) -> EventResult)?
+    /// Scroll wheel handler. Called on the deepest hit node; returning
+    /// `.handled` consumes the event so ancestor scroll views don't double-scroll.
+    public var onWheel: ((WheelEvent) -> EventResult)?
     public var onHoverEnter: (() -> Void)?
     public var onHoverLeave: (() -> Void)?
     public init() {}
 
-    var isEmpty: Bool { onPointer == nil && onHoverEnter == nil && onHoverLeave == nil }
+    var isEmpty: Bool { onPointer == nil && onWheel == nil && onHoverEnter == nil && onHoverLeave == nil }
 }
 
 /// Tracks the node that has captured the pointer (e.g. an in-progress drag).

@@ -87,3 +87,38 @@ public struct Stack<Content: View>: _PrimitiveView {
     }
     public var childViews: [any View] { [content] }
 }
+
+// MARK: - Spacer
+
+/// Fills available space along the flex direction. Has zero intrinsic size;
+/// flexGrow = 1 means it consumes leftover space after fixed-size siblings.
+public struct Spacer: _PrimitiveView {
+    public init() {}
+    public func makeNode() -> UINode { UINode() }
+    public func updateNode(_ node: UINode) {
+        node.modifyLayout { $0.flexGrow = 1 }
+    }
+}
+
+// MARK: - Divider
+
+/// A thin visual separator. Renders as a filled rect; defaults to a flexible
+/// horizontal line when placed in a `Column`, or a vertical line in a `Row`.
+public struct Divider: _PrimitiveView {
+    public var color: Color
+    public var thickness: Float
+
+    public init(color: Color = Color(r: 0.3, g: 0.3, b: 0.3), thickness: Float = 1) {
+        self.color = color
+        self.thickness = max(1, thickness)
+    }
+
+    public func makeNode() -> UINode { UINode() }
+    public func updateNode(_ node: UINode) {
+        node.setPaint(Paint(background: color))
+        node.modifyLayout {
+            $0.height = .points(thickness)
+            $0.flexGrow = 0
+        }
+    }
+}
