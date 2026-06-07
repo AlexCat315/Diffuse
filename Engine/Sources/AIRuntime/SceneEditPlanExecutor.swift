@@ -1,4 +1,4 @@
-﻿import Foundation
+import Foundation
 import SceneRuntime
 import ScriptRuntime
 import IntentRuntime
@@ -586,7 +586,7 @@ public struct SceneEditPlanExecutor: Sendable {
         return SIMD3(a[0], a[1], a[2])
     }
 
-    /// Builds a 4脳4 rotation matrix from XYZ intrinsic Euler angles (degrees).
+    /// Builds a 4×4 rotation matrix from XYZ intrinsic Euler angles (degrees).
     private func rotationMatrix(eulerXYZDegrees e: SIMD3<Float>) -> simd_float4x4 {
         let toRad: Float = .pi / 180
         let rx = simd_float4x4(simd_quatf(angle: e.x * toRad, axis: SIMD3(1, 0, 0)))
