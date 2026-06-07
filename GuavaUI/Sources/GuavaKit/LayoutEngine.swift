@@ -33,10 +33,14 @@ public struct StackLayoutEngine: LayoutEngine {
         let h = s.height.resolve(available.height)
         if let w, let h { return Size(width: w, height: h) }
 
-        // One or both axes are auto → derive from children.
+        // One or both axes are auto → derive from flow children, or from the
+        // node's intrinsic size when it is a leaf (e.g. measured text).
         let inner = Size(width: (w ?? available.width) - s.padding.horizontal,
                          height: (h ?? available.height) - s.padding.vertical)
-        let content = measureChildren(node, available: inner)
+        let hasFlowChildren = node.children.contains {
+            if case .flow = $0.layoutStyle.position { return true }; return false
+        }
+        let content = hasFlowChildren ? measureChildren(node, available: inner) : (node.intrinsicSize ?? .zero)
         return Size(width: w ?? content.width + s.padding.horizontal,
                     height: h ?? content.height + s.padding.vertical)
     }

@@ -31,6 +31,13 @@ public final class UINode {
     /// `.paint`-dirty so the next render rebuilds the display list.
     public private(set) var paint = Paint()
 
+    /// Intrinsic content size for leaves (e.g. measured text). The layout engine
+    /// uses it when a leaf's dimension is `.auto`.
+    public private(set) var intrinsicSize: Size?
+
+    /// Text to draw for this node, if any (string + colour). Set by `Text`.
+    public private(set) var textContent: (string: String, color: Color)?
+
     /// The context (per-tree) this node is currently attached to, if any.
     public internal(set) weak var context: UIContext?
 
@@ -96,6 +103,23 @@ public final class UINode {
     public func setPaint(_ newPaint: Paint) {
         guard newPaint != paint else { return }
         paint = newPaint
+        context?.invalidate(self, [.paint])
+    }
+
+    /// In-place paint edit (composes with existing paint instead of replacing).
+    public func modifyPaint(_ edit: (inout Paint) -> Void) {
+        var p = paint; edit(&p); setPaint(p)
+    }
+
+    public func setIntrinsicSize(_ size: Size?) {
+        guard size != intrinsicSize else { return }
+        intrinsicSize = size
+        context?.invalidate(self, [.layout, .paint])
+    }
+
+    public func setText(_ string: String, color: Color) {
+        if let t = textContent, t.string == string, t.color == color { return }
+        textContent = (string, color)
         context?.invalidate(self, [.paint])
     }
 
