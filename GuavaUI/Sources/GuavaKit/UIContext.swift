@@ -17,6 +17,10 @@ public final class UIContext {
     /// Hit-test cache, invalidated automatically below. Scoped to this tree.
     public let hitIndex = HitTestIndex()
 
+    /// Pointer capture (in-progress drag target). Scoped to this tree and
+    /// released automatically when the captured node detaches — see `detach`.
+    public let pointerCapture = PointerCapture()
+
     /// Accumulated dirty flags for the current frame (drained by the host's
     /// layout/paint pass). Exposed read-only for diagnostics/tests.
     public private(set) var pendingDirty: DirtyFlags = []
@@ -74,6 +78,9 @@ public final class UIContext {
     func detach(_ node: UINode) {
         for child in node.children { detach(child) }
         node.unmountResources(self)
+        // A node leaving the tree must not keep the pointer captured — otherwise
+        // every later click routes to a dead node (the legacy stuck-capture bug).
+        if pointerCapture.target === node { pointerCapture.release() }
         node.context = nil
         hitIndex.invalidate()
         if root === node { root = nil }
