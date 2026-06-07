@@ -19,9 +19,10 @@ public struct Painter {
                             width: g.frame.size.width,
                             height: g.frame.size.height)
 
-        // Self paint (background under border).
+        // Self paint (background under border, then text on top).
         if let bg = node.paint.background { list.fill(absFrame, bg) }
         if let border = node.paint.border { list.stroke(absFrame, border.color, width: border.width) }
+        if let t = node.textContent { list.text(t.string, absFrame, t.color) }
 
         if g.clipsToBounds { list.pushClip(absFrame) }
 
