@@ -4,6 +4,7 @@ import RHIWGPU
 struct EditorAppLaunchOptions {
     let backendConfig: WGPUDeviceConfig
     let projectDirectory: String?
+    let useGuavaKit: Bool
 
     static func load(
         arguments: [String] = CommandLine.arguments,
@@ -27,6 +28,9 @@ struct EditorAppLaunchOptions {
         let projectDirectory = commandLine.projectDirectory
             ?? environment["GUAVA_PROJECT_DIR"]
 
+        let useGuavaKit = commandLine.useGuavaKit
+            || environment["GUAVA_KIT"] == "1"
+
         return EditorAppLaunchOptions(
             backendConfig: WGPUDeviceConfig(
                 validationEnabled: validationEnabled,
@@ -34,7 +38,8 @@ struct EditorAppLaunchOptions {
                 libraryPath: libraryPath,
                 preferredBackends: preferredBackends
             ),
-            projectDirectory: projectDirectory
+            projectDirectory: projectDirectory,
+            useGuavaKit: useGuavaKit
         )
     }
 
@@ -107,11 +112,13 @@ private struct ParsedCommandLine {
     let backendList: String?
     let configPath: String?
     let projectDirectory: String?
+    let useGuavaKit: Bool
 
     init(arguments: [String]) throws {
         var backendList: String?
         var configPath: String?
         var projectDirectory: String?
+        var useGuavaKit = false
 
         var index = 1
         while index < arguments.count {
@@ -147,6 +154,9 @@ private struct ParsedCommandLine {
                 case let value where value.hasPrefix("--project-dir="):
                     projectDirectory = String(value.dropFirst("--project-dir=".count))
 
+                case "--guava-kit":
+                    useGuavaKit = true
+
                 default:
                     break
             }
@@ -156,6 +166,7 @@ private struct ParsedCommandLine {
         self.backendList = backendList
         self.configPath = configPath
         self.projectDirectory = projectDirectory
+        self.useGuavaKit = useGuavaKit
     }
 }
 

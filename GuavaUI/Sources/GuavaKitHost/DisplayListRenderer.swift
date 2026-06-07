@@ -1,12 +1,28 @@
 import GuavaKit
 import GuavaUIRuntime
 
-// Translates a GuavaKit `DisplayList` (pure data) into the existing
-// GuavaUIRuntime `DrawList`, so the new framework reuses the entire wgpu
-// rendering pipeline unchanged. This is the whole point of keeping the core
-// backend-agnostic: the GPU layer never needs to know GuavaKit exists.
+/// Translates a GuavaKit `DisplayList` (pure data) into the existing
+/// GuavaUIRuntime `DrawList`, so the new framework reuses the entire wgpu
+/// rendering pipeline unchanged. Text rendering is handled via a pluggable
+/// `FontBridge` that connects GuavaKit's backend-agnostic `.text` commands to
+/// the full shape → layout → rasterize → glyph-quad pipeline.
 public struct DisplayListRenderer {
-    public init() {}
+    private let textRenderer: TextRenderer?
+
+    /// Creates a solid-shapes-only renderer. `.text` commands are skipped.
+    public init() {
+        self.textRenderer = nil
+    }
+
+    /// Creates a renderer with text support via a `FontBridge`.
+    ///
+    /// - Parameters:
+    ///   - fontBridge: Configured and loaded with at least one font face.
+    ///   - atlasTextureID: GPU-side texture ID the renderer registers the
+    ///     atlas bitmap under. Must match the ID used by the wgpu pipeline.
+    public init(fontBridge: FontBridge, atlasTextureID: TextureID) {
+        self.textRenderer = TextRenderer(bridge: fontBridge, textureID: atlasTextureID)
+    }
 
     public func render(_ list: GuavaKit.DisplayList, into draw: DrawList) {
         for command in list.commands {
@@ -17,11 +33,10 @@ public struct DisplayListRenderer {
             case .strokeRect(let rect, let color, let width):
                 strokeRect(uiRect(rect), color: uiColor(color), width: width, into: draw)
 
-            case .text:
-                // Glyph emission needs the font-atlas bridge (next integration
-                // step); the layout/measurement side is already wired via
-                // `TextMeasuring`. Skipped here so non-text UI renders today.
-                break
+            case .text(let string, let rect, let color, let size):
+                if let tr = textRenderer {
+                    tr.render(text: string, rect: rect, color: uiColor(color), size: size, into: draw)
+                }
 
             case .pushClip(let rect):
                 draw.pushClip(uiRect(rect))
@@ -46,5 +61,30 @@ public struct DisplayListRenderer {
         draw.addRect(UIRect(x: r.minX, y: r.maxY - w, width: r.width, height: w), color: color)        // bottom
         draw.addRect(UIRect(x: r.minX, y: r.minY, width: w, height: r.height), color: color)           // left
         draw.addRect(UIRect(x: r.maxX - w, y: r.minY, width: w, height: r.height), color: color)       // right
+    }
+}
+
+// MARK: - Text renderer (private bridge adapter)
+
+private struct TextRenderer {
+    let bridge: FontBridge
+    let textureID: TextureID
+
+    func render(
+        text: String, rect: GuavaKit.Rect, color: RuntimeColor, size: Float,
+        into draw: DrawList
+    ) {
+        // The rect's width is the max width for line wrapping; the rect's
+        // origin is the top-left where text should start.
+        let maxWidth = rect.size.width > 0 ? rect.size.width : Float.infinity
+        let origin = (x: rect.minX, y: rect.minY)
+        bridge.render(
+            text: text,
+            maxWidth: maxWidth,
+            color: color,
+            origin: origin,
+            textureID: textureID,
+            into: draw
+        )
     }
 }

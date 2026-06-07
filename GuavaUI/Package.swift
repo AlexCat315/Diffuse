@@ -16,6 +16,8 @@ let package = Package(
         // the legacy GuavaUI targets until it reaches parity and the editor
         // switches over. See Sources/GuavaKit/Architecture.md.
         .library(name: "GuavaKit", targets: ["GuavaKit"]),
+        // Bridge: translates GuavaKit → legacy DrawList, hosts SDL/wgpu loop.
+        .library(name: "GuavaKitHost", targets: ["GuavaKitHost"]),
     ],
     dependencies: [
         .package(path: "../Engine"),

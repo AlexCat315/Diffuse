@@ -58,6 +58,12 @@ public extension View {
         _ModifiedView(wrapping: self, adding: _PaddingModifier(edges: edges))
     }
     func padding(_ all: Float) -> _ModifiedView { padding(.all(all)) }
+    func foregroundColor(_ color: Color) -> _ModifiedView {
+        _ModifiedView(wrapping: self, adding: _ForegroundColorModifier(color: color))
+    }
+    func fontSize(_ size: Float) -> _ModifiedView {
+        _ModifiedView(wrapping: self, adding: _FontSizeModifier(size: size))
+    }
 }
 
 struct _FrameModifier: NodeModifier {
@@ -76,4 +82,12 @@ struct _BackgroundModifier: NodeModifier {
 struct _PaddingModifier: NodeModifier {
     let edges: Edges
     func apply(_ node: UINode) { node.modifyLayout { $0.padding = edges } }
+}
+struct _ForegroundColorModifier: NodeModifier {
+    let color: Color
+    func apply(_ node: UINode) { node.modifyTextColor(color) }
+}
+struct _FontSizeModifier: NodeModifier {
+    let size: Float
+    func apply(_ node: UINode) { node.modifyTextSize(size) }
 }
