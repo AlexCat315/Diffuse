@@ -103,6 +103,19 @@ public final class UIContext {
         return true
     }
 
+    // MARK: - Paint
+
+    /// Rebuild the display list only when the tree is `.paint`-dirty (geometry
+    /// moves, paint edits, and hierarchy changes all raise `.paint` through the
+    /// same funnel). Returns `nil` when nothing needs repainting.
+    @discardableResult
+    public func renderIfNeeded(painter: Painter = Painter()) -> DisplayList? {
+        guard pendingDirty.contains(.paint) else { return nil }
+        pendingDirty.subtract(.paint)
+        guard let root else { return DisplayList() }
+        return painter.paint(root: root)
+    }
+
     // MARK: - Convenience
 
     public func hitTest(_ point: Point) -> HitTest.Result? {
