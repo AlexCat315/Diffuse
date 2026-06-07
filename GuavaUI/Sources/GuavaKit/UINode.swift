@@ -131,6 +131,15 @@ public final class UINode {
         if let context { resource.mount(node: self, context: context) }
     }
 
+    /// Reorder existing children to match `ordered` (which must be a permutation
+    /// of the current children — used by the reconciler after reuse). Parent
+    /// links are unchanged; only paint/hit/layout order is affected.
+    func reorderChildren(_ ordered: [UINode]) {
+        guard ordered.count == children.count else { return }
+        children = ordered
+        context?.invalidate(self, [.hierarchy, .layout, .paint])
+    }
+
     // Called by UIContext during attach/detach — not part of the public surface.
     func mountResources(_ context: UIContext) {
         for r in resources { r.mount(node: self, context: context) }
