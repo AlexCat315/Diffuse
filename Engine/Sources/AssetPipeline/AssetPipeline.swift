@@ -1,4 +1,4 @@
-﻿import Foundation
+import Foundation
 import SIMDCompat
 
 public struct AssetPipeline {
@@ -95,7 +95,7 @@ public struct MeshNode: Sendable, Equatable {
         self.localScale = localScale
     }
 
-    /// Compose the node's local TRS into a 4脳4 matrix.
+    /// Compose the node's local TRS into a 4×4 matrix.
     public var localMatrix: simd_float4x4 {
         let t = simd_float4x4(rows: [
             SIMD4<Float>(1, 0, 0, localTranslation.x),
@@ -309,7 +309,7 @@ public struct MeshAsset: Sendable {
     }
 
     /// Local-space axis-aligned bounding box of all vertex positions.
-    /// 绌?mesh 閫€鍖栦负 (.zero, .zero)銆?
+    /// 空 mesh 退化为 (.zero, .zero)。
     public var localBounds: (min: SIMD3<Float>, max: SIMD3<Float>) {
         let stride = MeshAsset.vertexFloatCount
         var lo = SIMD3<Float>(repeating: .infinity)
@@ -353,8 +353,8 @@ public struct MeshAsset: Sendable {
     }
 }
 
-/// 瀛愮綉鏍兼嫇鎵戝垏鐗囷細鍙敤浜?wireframe銆佽皟璇曟覆鏌撴垨鍚庣画瀛愮綉鏍奸噸寤恒€?
-/// `indexRemap` 鍏佽鎶婂眬閮?primitive 绱㈠紩鏄犲皠鍒板叡浜《鐐规睜銆?
+/// 子网格拓扑切片：可用于 wireframe、调试渲染或后续子网格重建。
+/// `indexRemap` 允许把局部 primitive 索引映射到共享顶点池。
 public struct MeshTopologySlice: Sendable {
     public var positions: [SIMD3<Float>]
     public var triangleIndices: [UInt32]

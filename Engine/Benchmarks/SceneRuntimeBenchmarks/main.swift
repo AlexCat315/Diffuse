@@ -1,4 +1,4 @@
-﻿import Foundation
+import Foundation
 import SceneRuntime
 import SIMDCompat
 
@@ -82,7 +82,7 @@ private func benchmarkRaycast(runtime: SceneRuntime, queryCount: Int) {
 }
 
 private func benchmarkOverlap(runtime: SceneRuntime, queryCount: Int, maxResults: Int = .max) {
-    let scratch = SpatialQueryScratch()  // reused across all queries 鈥?no per-query allocation
+    let scratch = SpatialQueryScratch()  // reused across all queries — no per-query allocation
     var nodeVisits = 0
     var leafTests = 0
     var narrowPhaseTests = 0
