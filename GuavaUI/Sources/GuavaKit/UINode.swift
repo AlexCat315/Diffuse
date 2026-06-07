@@ -38,6 +38,9 @@ public final class UINode {
     /// Text to draw for this node, if any (string + colour + size). Set by `Text`.
     public private(set) var textContent: (string: String, color: Color, size: Float)?
 
+    /// Maximum number of visible lines for the text content. `nil` = unlimited.
+    public private(set) var textLineLimit: Int?
+
     /// The context (per-tree) this node is currently attached to, if any.
     public internal(set) weak var context: UIContext?
 
@@ -134,6 +137,13 @@ public final class UINode {
     public func modifyTextSize(_ size: Float) {
         guard let t = textContent, t.size != size else { return }
         textContent = (t.string, t.color, size)
+        context?.invalidate(self, [.paint])
+    }
+
+    /// Set the maximum visible line count for text (modifier path).  `nil` = unlimited.
+    public func setTextLineLimit(_ limit: Int?) {
+        guard limit != textLineLimit else { return }
+        textLineLimit = limit
         context?.invalidate(self, [.paint])
     }
 

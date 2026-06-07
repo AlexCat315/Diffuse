@@ -53,6 +53,8 @@ public struct LayoutStyle: Equatable, Sendable {
     public var height: Dimension = .auto
     /// Share of leftover main-axis space this child claims (0 = inflexible).
     public var flexGrow: Float = 0
+    /// Shrink ratio when the container overflows (0 = no shrinking).
+    public var flexShrink: Float = 0
     public var padding: Edges = Edges()
     /// Gap inserted between consecutive children along the main axis.
     public var spacing: Float = 0

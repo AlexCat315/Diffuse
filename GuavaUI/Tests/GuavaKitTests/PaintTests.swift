@@ -103,4 +103,24 @@ struct PaintTests {
         #expect(list != nil)
         #expect(list!.commands.contains(.fillRect(Rect(x: 0, y: 0, width: 20, height: 20), blue)) == false)
     }
+
+    // MARK: - EdgeInsets
+
+    @Test("EdgeInsets zero is all zeros")
+    func edgeInsetsZero() {
+        #expect(EdgeInsets.zero == EdgeInsets(top: 0, left: 0, bottom: 0, right: 0))
+    }
+
+    @Test("EdgeInsets.all sets all sides")
+    func edgeInsetsAll() {
+        let insets = EdgeInsets.all(5)
+        #expect(insets.top == 5 && insets.left == 5 && insets.bottom == 5 && insets.right == 5)
+    }
+
+    @Test("EdgeInsets horizontal and vertical computed properties")
+    func edgeInsetsHV() {
+        let insets = EdgeInsets(top: 1, left: 2, bottom: 3, right: 4)
+        #expect(insets.horizontal == 6)
+        #expect(insets.vertical == 4)
+    }
 }

@@ -41,7 +41,7 @@ public struct Painter {
             let tc = p.opacity < 1
                 ? Color(r: t.color.r, g: t.color.g, b: t.color.b, a: t.color.a * p.opacity)
                 : t.color
-            list.text(t.string, absFrame, tc, size: t.size)
+            list.text(t.string, absFrame, tc, size: t.size, lineLimit: node.textLineLimit)
         }
 
         if g.clipsToBounds { list.pushClip(absFrame) }
