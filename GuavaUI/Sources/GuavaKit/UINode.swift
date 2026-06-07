@@ -15,8 +15,13 @@ public final class UINode {
     public private(set) weak var parent: UINode?
     public private(set) var children: [UINode] = []
 
-    /// Visual + interaction geometry. Read freely; mutate only via `setGeometry`.
+    /// Visual + interaction geometry (layout *output*). Read freely; mutate only
+    /// via `setGeometry` — typically the layout engine does this for you.
     public private(set) var geometry: Geometry
+
+    /// Layout *input*. Changing it marks the tree `.layout`-dirty so the next
+    /// `UIContext.layoutIfNeeded` recomputes frames.
+    public private(set) var layoutStyle = LayoutStyle()
 
     /// The context (per-tree) this node is currently attached to, if any.
     public internal(set) weak var context: UIContext?
@@ -62,6 +67,21 @@ public final class UINode {
     }
     @discardableResult public func setClipsToBounds(_ on: Bool) -> DirtyFlags {
         var g = geometry; g.clipsToBounds = on; return setGeometry(g)
+    }
+
+    /// Update layout inputs. Marks the tree `.layout`-dirty (does not lay out
+    /// immediately — the host drives that via `UIContext.layoutIfNeeded`).
+    public func setLayoutStyle(_ style: LayoutStyle) {
+        guard style != layoutStyle else { return }
+        layoutStyle = style
+        context?.invalidate(self, [.layout])
+    }
+
+    /// In-place edit convenience: `node.modifyLayout { $0.flexGrow = 1 }`.
+    public func modifyLayout(_ edit: (inout LayoutStyle) -> Void) {
+        var s = layoutStyle
+        edit(&s)
+        setLayoutStyle(s)
     }
 
     // MARK: - Hierarchy
