@@ -1,10 +1,9 @@
 import CinematicRenderer
 import EditorCore
-import GuavaUICompose
-import GuavaUIRuntime
+import GuavaKit
 import Foundation
 
-struct RenderPipelinePanel: View {
+struct RenderPipelinePanel: GuavaKit.View, @unchecked Sendable {
     @State var isRendering: Bool = false
     @State var progressFraction: Float = 0
     @State var completeSamples: Int = 0
@@ -15,32 +14,31 @@ struct RenderPipelinePanel: View {
     @State var height: String = "480"
     @State var samples: String = "64"
 
-    var body: some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 8) {
+    var body: some GuavaKit.View {
+        Column(alignment: .stretch, spacing: 8) {
+            // TODO: TextField needs GuavaKit TextField widget (batch 4)
+            // For now, show the configured values as labels.
             Row(alignment: .center, spacing: 8) {
                 Text("W").font(.caption).foregroundColor(.onSurfaceMuted)
-                TextField(text: $width).frame(width: 50)
+                Text(width).font(.caption).foregroundColor(.onSurface).frame(width: 50)
                 Text("H").font(.caption).foregroundColor(.onSurfaceMuted)
-                TextField(text: $height).frame(width: 50)
+                Text(height).font(.caption).foregroundColor(.onSurface).frame(width: 50)
                 Text("SPP").font(.caption).foregroundColor(.onSurfaceMuted)
-                TextField(text: $samples).frame(width: 50)
+                Text(samples).font(.caption).foregroundColor(.onSurface).frame(width: 50)
             }
 
-            Button(role: .normal, isEnabled: !isRendering) {
-                startRender()
-            } label: {
+            Button(action: { startRender() }) {
                 Text(isRendering ? "Rendering..." : "Render")
                     .font(.body)
             }
-            .buttonStyle(.primary)
 
             if isRendering || progressFraction > 0 {
-                Box(direction: .column, alignItems: .stretch, spacing: 4) {
+                Column(alignment: .stretch, spacing: 4) {
                     Row(alignment: .center, spacing: 0) {
-                        Box(direction: .row, alignItems: .center, spacing: 0) {}
+                        Element()
                             .frame(width: 240 * progressFraction, height: 4)
                             .background(.accent)
-                        Box(direction: .row, alignItems: .center, spacing: 0) {}
+                        Element()
                             .frame(width: 240 * (1 - progressFraction), height: 4)
                             .background(.surfaceVariant)
                     }

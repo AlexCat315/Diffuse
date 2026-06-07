@@ -88,8 +88,13 @@ public extension View {
     func foregroundColor(_ color: Color) -> _ModifiedView {
         _ModifiedView(wrapping: self, adding: _ForegroundColorModifier(color: color))
     }
-    func frame(width: Float? = nil, height: Float? = nil) -> _ModifiedView {
-        _ModifiedView(wrapping: self, adding: _FrameModifier(width: width, height: height))
+    func frame(width: Float? = nil, height: Float? = nil,
+               minWidth: Float? = nil, maxWidth: Float? = nil,
+               minHeight: Float? = nil, maxHeight: Float? = nil) -> _ModifiedView {
+        _ModifiedView(wrapping: self, adding: _FrameModifier(
+            width: width, height: height,
+            minWidth: minWidth, maxWidth: maxWidth,
+            minHeight: minHeight, maxHeight: maxHeight))
     }
     func lineLimit(_ limit: Int?) -> _ModifiedView {
         _ModifiedView(wrapping: self, adding: _LineLimitModifier(limit: limit))
@@ -124,10 +129,16 @@ public extension View {
 
 struct _FrameModifier: NodeModifier {
     let width: Float?; let height: Float?
+    let minWidth: Float?; let maxWidth: Float?
+    let minHeight: Float?; let maxHeight: Float?
     func apply(_ node: UINode) {
         node.modifyLayout {
             if let width { $0.width = .points(width) }
             if let height { $0.height = .points(height) }
+            $0.minWidth = minWidth
+            $0.maxWidth = maxWidth
+            $0.minHeight = minHeight
+            $0.maxHeight = maxHeight
         }
     }
 }

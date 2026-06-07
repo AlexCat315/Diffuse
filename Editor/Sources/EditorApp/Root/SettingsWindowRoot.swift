@@ -24,7 +24,7 @@ struct EditorSettingsWindowRoot: View {
 
                         Divider()
 
-                        SettingsPanel(app: app)
+                        // TODO batch 6: SettingsPanel(app: app) — migrated to GuavaKit.View
                             .flex()
                     }
                     .background(.background)

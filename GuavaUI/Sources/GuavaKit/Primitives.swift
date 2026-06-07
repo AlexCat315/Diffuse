@@ -189,3 +189,58 @@ public struct HScroll<Content: View>: _PrimitiveView {
     public func updateNode(_ node: UINode) { inner.updateNode(node) }
     public var childViews: [any View] { inner.childViews }
 }
+
+// MARK: - Box
+
+/// A transparent container that wraps a single child. Useful for applying
+/// modifiers (`.frame`, `.background`, `.clipped`) to a structural wrapper
+/// without the child itself needing to carry layout constraints.
+public struct Box<Content: View>: _PrimitiveView {
+    let content: Content
+    public init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+    public func makeNode() -> UINode { UINode() }
+    public func updateNode(_ node: UINode) {}
+    public var childViews: [any View] { [content] }
+}
+
+// MARK: - Row / Column
+
+/// Horizontal stack. Convenience wrapper around `Stack(.row, ...)`.
+public struct Row<Content: View>: _PrimitiveView {
+    public var alignment: CrossAlign
+    public var spacing: Float
+    let content: Content
+
+    public init(alignment: CrossAlign = .center, spacing: Float = 0,
+                @ViewBuilder content: () -> Content) {
+        self.alignment = alignment
+        self.spacing = spacing
+        self.content = content()
+    }
+    public func makeNode() -> UINode { UINode() }
+    public func updateNode(_ node: UINode) {
+        node.modifyLayout { $0.direction = .row; $0.alignItems = alignment; $0.spacing = spacing }
+    }
+    public var childViews: [any View] { [content] }
+}
+
+/// Vertical stack. Convenience wrapper around `Stack(.column, ...)`.
+public struct Column<Content: View>: _PrimitiveView {
+    public var alignment: CrossAlign
+    public var spacing: Float
+    let content: Content
+
+    public init(alignment: CrossAlign = .start, spacing: Float = 0,
+                @ViewBuilder content: () -> Content) {
+        self.alignment = alignment
+        self.spacing = spacing
+        self.content = content()
+    }
+    public func makeNode() -> UINode { UINode() }
+    public func updateNode(_ node: UINode) {
+        node.modifyLayout { $0.direction = .column; $0.alignItems = alignment; $0.spacing = spacing }
+    }
+    public var childViews: [any View] { [content] }
+}

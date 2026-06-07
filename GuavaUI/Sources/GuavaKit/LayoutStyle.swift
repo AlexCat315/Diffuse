@@ -55,6 +55,14 @@ public struct LayoutStyle: Equatable, Sendable {
     public var flexGrow: Float = 0
     /// Shrink ratio when the container overflows (0 = no shrinking).
     public var flexShrink: Float = 0
+    /// Minimum width constraint (points). `nil` = no constraint.
+    public var minWidth: Float?
+    /// Maximum width constraint (points). `nil` = no constraint.
+    public var maxWidth: Float?
+    /// Minimum height constraint (points). `nil` = no constraint.
+    public var minHeight: Float?
+    /// Maximum height constraint (points). `nil` = no constraint.
+    public var maxHeight: Float?
     public var padding: Edges = Edges()
     /// Gap inserted between consecutive children along the main axis.
     public var spacing: Float = 0
