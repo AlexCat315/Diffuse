@@ -35,8 +35,8 @@ public final class UINode {
     /// uses it when a leaf's dimension is `.auto`.
     public private(set) var intrinsicSize: Size?
 
-    /// Text to draw for this node, if any (string + colour). Set by `Text`.
-    public private(set) var textContent: (string: String, color: Color)?
+    /// Text to draw for this node, if any (string + colour + size). Set by `Text`.
+    public private(set) var textContent: (string: String, color: Color, size: Float)?
 
     /// The context (per-tree) this node is currently attached to, if any.
     public internal(set) weak var context: UIContext?
@@ -117,9 +117,9 @@ public final class UINode {
         context?.invalidate(self, [.layout, .paint])
     }
 
-    public func setText(_ string: String, color: Color) {
-        if let t = textContent, t.string == string, t.color == color { return }
-        textContent = (string, color)
+    public func setText(_ string: String, color: Color, size: Float) {
+        if let t = textContent, t.string == string, t.color == color, t.size == size { return }
+        textContent = (string, color, size)
         context?.invalidate(self, [.paint])
     }
 
