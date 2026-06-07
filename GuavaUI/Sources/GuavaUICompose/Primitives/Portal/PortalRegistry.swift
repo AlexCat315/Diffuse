@@ -3,6 +3,13 @@ import CoreGraphics
 #endif
 import Foundation
 
+/// Attachment key under which a `Popover` stores its `PortalRegistry` entry id
+/// on both the overlay-host node and its trigger box. Every cleanup path —
+/// `_PopoverFrontmostModifier` on close, and `ViewGraph` teardown when the
+/// subtree is removed while open — reads this key to unregister the entry, so
+/// it must stay a single shared constant rather than scattered literals.
+let popoverPortalEntryAttachmentKey = "__popover_entry_id"
+
 public struct PortalEntry: Identifiable {
     public let id: String
     public var position: CGPoint
@@ -59,6 +66,12 @@ public enum PortalRegistry {
         entry.content = content
         storage[id] = entry
         notifyChanged()
+    }
+
+    /// Whether a live entry with `id` is currently registered. Used by the
+    /// Popover overlay host to detect a stale id carried by a reused node.
+    public static func contains(_ id: String) -> Bool {
+        storage[id] != nil
     }
 
     public static func unregister(_ id: String) {

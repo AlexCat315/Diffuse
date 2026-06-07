@@ -111,6 +111,29 @@ struct InputSceneHitCacheTests {
         #expect(t.scene.hitCacheHits == 0)
     }
 
+    @Test("frame change (layout move) invalidates hit cache")
+    func frameChangeInvalidatesCache() {
+        let t = Tree()
+        let p = CGPoint(x: 20, y: 20) // hits b (child of a)
+
+        // Prime the cache for this point: first walk (miss), second served hit.
+        let first = HitTester.hitTest(scene: t.scene, point: p)
+        #expect(first?.node === t.b)
+        let primed = HitTester.hitTest(scene: t.scene, point: p)
+        #expect(primed?.node === t.b)
+        #expect(t.scene.hitCacheHits == 1)
+
+        // Layout moves `b` out from under `p` — a pure geometry change with no
+        // structural reconcile (exactly what the layout pass does every frame).
+        t.b.frame = CGRect(x: 100, y: 100, width: 30, height: 30)
+
+        // The cache must NOT serve the stale `b`; `a` now claims the point.
+        let after = HitTester.hitTest(scene: t.scene, point: p)
+        #expect(after?.node === t.a)
+        #expect(t.scene.hitCacheMisses == 2)
+        #expect(t.scene.hitCacheHits == 1)
+    }
+
     @Test("contentOffset change invalidates hit cache")
     func contentOffsetInvalidatesCache() {
         let t = Tree()
