@@ -22,7 +22,7 @@ public struct Painter {
         // Self paint (background under border, then text on top).
         if let bg = node.paint.background { list.fill(absFrame, bg) }
         if let border = node.paint.border { list.stroke(absFrame, border.color, width: border.width) }
-        if let t = node.textContent { list.text(t.string, absFrame, t.color) }
+        if let t = node.textContent { list.text(t.string, absFrame, t.color, size: t.size) }
 
         if g.clipsToBounds { list.pushClip(absFrame) }
 

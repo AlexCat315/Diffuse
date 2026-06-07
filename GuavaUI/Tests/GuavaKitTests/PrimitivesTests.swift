@@ -50,7 +50,7 @@ struct PrimitivesTests {
 
         // And paint emits the text command.
         let list = Painter().paint(root: graph.root)
-        #expect(list.commands.contains { if case .text("hi", _, _) = $0 { return true }; return false })
+        #expect(list.commands.contains { if case .text("hi", _, _, _) = $0 { return true }; return false })
     }
 
     @Test("Text uses the context's injected font measurer")
