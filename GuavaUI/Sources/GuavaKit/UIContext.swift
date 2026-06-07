@@ -1,0 +1,84 @@
+/// Per-tree (per-window) runtime context.
+///
+/// `UIContext` is the spine of GuavaKit. It owns:
+///   * the **single invalidation funnel** every geometry/hierarchy change flows
+///     through (`invalidate`), and the caches that subscribe to it;
+///   * the **attach/detach lifecycle** that mounts and — critically — releases
+///     node resources;
+///   * the per-tree **registries** (hit index now; portals/focus/capture as the
+///     rewrite grows) that in the legacy stack were process-global singletons.
+///
+/// Because it is per-tree and explicitly passed (never a global), one window's
+/// state can never corrupt another's.
+public final class UIContext {
+
+    public private(set) var root: UINode?
+
+    /// Hit-test cache, invalidated automatically below. Scoped to this tree.
+    public let hitIndex = HitTestIndex()
+
+    /// Accumulated dirty flags for the current frame (drained by the host's
+    /// layout/paint pass). Exposed read-only for diagnostics/tests.
+    public private(set) var pendingDirty: DirtyFlags = []
+
+    public init() {}
+
+    // MARK: - Install / teardown
+
+    /// Make `node` the root and mount its whole subtree.
+    public func install(root node: UINode) {
+        if let old = root { detach(old) }
+        root = node
+        attach(node)
+    }
+
+    // MARK: - The invalidation funnel
+
+    /// Every geometry/hierarchy mutation in the tree ends up here. This is the
+    /// ONE place that maps changes to cache invalidation — add a cache, add one
+    /// line here; no hook to thread through `UINode` or its `didSet`s.
+    public func invalidate(_ node: UINode, _ flags: DirtyFlags) {
+        pendingDirty.formUnion(flags)
+
+        // A geometry or hierarchy change can move/insert/remove hittable area,
+        // so the hit cache is no longer valid. (This is the invariant the legacy
+        // `frame.didSet` forgot — here it is impossible to bypass.)
+        if !flags.isDisjoint(with: [.geometry, .hierarchy]) {
+            hitIndex.invalidate()
+        }
+    }
+
+    /// Drain the accumulated dirty flags (host calls this after a layout/paint
+    /// pass). Returns what was pending.
+    @discardableResult
+    public func takeDirty() -> DirtyFlags {
+        defer { pendingDirty = [] }
+        return pendingDirty
+    }
+
+    // MARK: - Lifecycle (mount / unmount resources)
+
+    /// Attach `node` and its subtree to this context, mounting every resource.
+    func attach(_ node: UINode) {
+        node.context = self
+        node.mountResources(self)
+        for child in node.children { attach(child) }
+        invalidate(node, [.hierarchy, .geometry, .layout, .paint])
+    }
+
+    /// Detach `node` and its subtree, releasing every resource. Children are
+    /// torn down first (leaf → root) so parents observe a fully-released subtree.
+    func detach(_ node: UINode) {
+        for child in node.children { detach(child) }
+        node.unmountResources(self)
+        node.context = nil
+        hitIndex.invalidate()
+        if root === node { root = nil }
+    }
+
+    // MARK: - Convenience
+
+    public func hitTest(_ point: Point) -> HitTest.Result? {
+        hitIndex.hitTest(point, in: root)
+    }
+}

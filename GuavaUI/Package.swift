@@ -12,6 +12,10 @@ let package = Package(
         .library(name: "GuavaUIWorkspace", targets: ["GuavaUIWorkspace"]),
         .library(name: "GuavaUIApp", targets: ["GuavaUIApp"]),
         .library(name: "GuavaUIDevTools", targets: ["GuavaUIDevTools"]),
+        // v2 runtime, rebuilt from scratch. Pure Swift, no deps, coexists with
+        // the legacy GuavaUI targets until it reaches parity and the editor
+        // switches over. See Sources/GuavaKit/Architecture.md.
+        .library(name: "GuavaKit", targets: ["GuavaKit"]),
     ],
     dependencies: [
         .package(path: "../Engine"),
@@ -141,7 +145,21 @@ let package = Package(
             ]
         ),
 
+        // MARK: - GuavaKit (v2 runtime, rebuilt from scratch)
+        // Pure Swift, zero external dependencies — so it builds fast, is easy to
+        // reason about, and can be developed/tested in isolation from the legacy
+        // stack. The whole point of the rewrite lives here.
+        .target(
+            name: "GuavaKit",
+            path: "Sources/GuavaKit",
+            exclude: ["Architecture.md"]
+        ),
+
         // MARK: - Tests
+        .testTarget(
+            name: "GuavaKitTests",
+            dependencies: ["GuavaKit"]
+        ),
         .testTarget(
             name: "GuavaUIRuntimeTests",
             dependencies: [
