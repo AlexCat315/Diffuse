@@ -36,9 +36,10 @@ public struct DisplayListRenderer {
             case .strokeRect(let rect, let color, let width):
                 strokeRect(uiRect(rect), color: uiColor(color), width: width, into: draw)
 
-            case .text(let string, let rect, let color, let size):
+            case .text(let string, let rect, let color, let size, let lineLimit):
                 if let tr = textRenderer {
-                    tr.render(text: string, rect: rect, color: uiColor(color), size: size, into: draw)
+                    tr.render(text: string, rect: rect, color: uiColor(color), size: size,
+                              lineLimit: lineLimit, into: draw)
                 }
 
             case .pushClip(let rect):
@@ -75,12 +76,14 @@ private struct TextRenderer {
 
     func render(
         text: String, rect: GuavaKit.Rect, color: RuntimeColor, size: Float,
+        lineLimit: Int?,
         into draw: DrawList
     ) {
         // The rect's width is the max width for line wrapping; the rect's
         // origin is the top-left where text should start.
         let maxWidth = rect.size.width > 0 ? rect.size.width : Float.infinity
         let origin = (x: rect.minX, y: rect.minY)
+        // TODO: pass lineLimit through to FontBridge.layout when it supports it.
         bridge.render(
             text: text,
             maxWidth: maxWidth,

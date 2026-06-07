@@ -29,6 +29,71 @@ struct PrimitivesTests {
         #expect(node.layoutStyle.padding == .all(8))
     }
 
+    @Test("flex modifier sets flexGrow and flexShrink on layout")
+    func flexModifier() {
+        struct App: View {
+            var body: some View { Element().flex(2, shrink: 0) }
+        }
+        let ctx = UIContext(); let graph = ViewGraph(context: ctx)
+        graph.install(root: App())
+        let node = graph.root.children[0]
+        #expect(node.layoutStyle.flexGrow == 2)
+        #expect(node.layoutStyle.flexShrink == 0)
+    }
+
+    @Test("border modifier sets border on paint")
+    func borderModifier() {
+        struct App: View {
+            var body: some View { Element().border(Color(r: 0, g: 0, b: 1), width: 2) }
+        }
+        let ctx = UIContext(); let graph = ViewGraph(context: ctx)
+        graph.install(root: App())
+        let node = graph.root.children[0]
+        #expect(node.paint.border?.color == Color(r: 0, g: 0, b: 1))
+        #expect(node.paint.border?.width == 2)
+    }
+
+    @Test("EdgeInsets padding applies correctly")
+    func edgeInsetsPadding() {
+        struct App: View {
+            var body: some View {
+                Element().padding(EdgeInsets(top: 1, left: 2, bottom: 3, right: 4))
+            }
+        }
+        let ctx = UIContext(); let graph = ViewGraph(context: ctx)
+        graph.install(root: App())
+        let node = graph.root.children[0]
+        #expect(node.layoutStyle.padding.top == 1)
+        #expect(node.layoutStyle.padding.left == 2)
+        #expect(node.layoutStyle.padding.bottom == 3)
+        #expect(node.layoutStyle.padding.right == 4)
+    }
+
+    @Test("EdgeInsets padding(horizontal:vertical:) applies symmetrically")
+    func edgeInsetsPaddingHorizontalVertical() {
+        struct App: View {
+            var body: some View { Element().padding(horizontal: 6, vertical: 4) }
+        }
+        let ctx = UIContext(); let graph = ViewGraph(context: ctx)
+        graph.install(root: App())
+        let node = graph.root.children[0]
+        #expect(node.layoutStyle.padding.top == 4)
+        #expect(node.layoutStyle.padding.left == 6)
+        #expect(node.layoutStyle.padding.bottom == 4)
+        #expect(node.layoutStyle.padding.right == 6)
+    }
+
+    @Test("Unlimited lineLimit (nil) leaves node unchanged")
+    func lineLimitNil() {
+        struct App: View {
+            var body: some View { Text("hi").lineLimit(nil) }
+        }
+        let ctx = UIContext(); let graph = ViewGraph(context: ctx)
+        graph.install(root: App())
+        let node = graph.root.children[0]
+        #expect(node.textLineLimit == nil)
+    }
+
     // MARK: - Text
 
     private struct TextApp: View {
@@ -50,7 +115,37 @@ struct PrimitivesTests {
 
         // And paint emits the text command.
         let list = Painter().paint(root: graph.root)
-        #expect(list.commands.contains { if case .text("hi", _, _, _) = $0 { return true }; return false })
+        #expect(list.commands.contains { if case .text("hi", _, _, _, _) = $0 { return true }; return false })
+    }
+
+    @Test("Text with lineLimit stores it on the node and forwards to display list")
+    func textLineLimit() {
+        struct TextLimitApp: View {
+            var body: some View { Text("hello world", lineLimit: 1).frame(width: 100, height: 20) }
+        }
+        let ctx = UIContext(); let graph = ViewGraph(context: ctx)
+        graph.install(root: TextLimitApp())
+        let node = graph.root.children[0]
+        #expect(node.textLineLimit == 1)
+
+        let list = Painter().paint(root: graph.root)
+        // The text command carries lineLimit.
+        let found = list.commands.contains {
+            if case .text(_, _, _, _, let ll) = $0, ll == 1 { return true }
+            return false
+        }
+        #expect(found)
+    }
+
+    @Test(".lineLimit modifier sets textLineLimit on the node")
+    func lineLimitModifier() {
+        struct App: View {
+            var body: some View { Text("hi").lineLimit(2) }
+        }
+        let ctx = UIContext(); let graph = ViewGraph(context: ctx)
+        graph.install(root: App())
+        let node = graph.root.children[0]
+        #expect(node.textLineLimit == 2)
     }
 
     @Test("Text uses the context's injected font measurer")

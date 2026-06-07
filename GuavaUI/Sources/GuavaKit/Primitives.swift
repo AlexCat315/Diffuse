@@ -27,14 +27,18 @@ public struct Text: _PrimitiveView {
     public var string: String
     public var color: Color
     public var fontSize: Float
-    public init(_ string: String, color: Color = Color(r: 0, g: 0, b: 0), fontSize: Float = 16) {
+    public var lineLimit: Int?
+    public init(_ string: String, color: Color = Color(r: 0, g: 0, b: 0), fontSize: Float = 16,
+                lineLimit: Int? = nil) {
         self.string = string
         self.color = color
         self.fontSize = fontSize
+        self.lineLimit = lineLimit
     }
     public func makeNode() -> UINode { UINode() }
     public func updateNode(_ node: UINode) {
         node.setText(string, color: color, size: fontSize)
+        if let lineLimit { node.setTextLineLimit(lineLimit) }
         let measurer = node.context?.textMeasurer ?? ApproxTextMeasurer()
         node.setIntrinsicSize(measurer.measure(string, fontSize: fontSize))
     }

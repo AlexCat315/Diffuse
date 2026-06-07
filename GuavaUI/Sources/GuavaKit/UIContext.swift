@@ -28,6 +28,10 @@ public final class UIContext {
     /// editor host swaps in real font metrics.
     public var textMeasurer: TextMeasuring = ApproxTextMeasurer()
 
+    /// Active theme for this context. Semantic modifiers resolve colours and
+    /// fonts against this theme at apply time.
+    public var theme: Theme = .dark
+
     /// Accumulated dirty flags for the current frame (drained by the host's
     /// layout/paint pass). Exposed read-only for diagnostics/tests.
     public private(set) var pendingDirty: DirtyFlags = []
