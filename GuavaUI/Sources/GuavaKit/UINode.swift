@@ -140,6 +140,12 @@ public final class UINode {
         context?.invalidate(self, [.hierarchy, .layout, .paint])
     }
 
+    /// First attached resource of the given type, if any.
+    public func firstResource<R: NodeResource>(_ type: R.Type) -> R? {
+        for r in resources { if let match = r as? R { return match } }
+        return nil
+    }
+
     // Called by UIContext during attach/detach — not part of the public surface.
     func mountResources(_ context: UIContext) {
         for r in resources { r.mount(node: self, context: context) }

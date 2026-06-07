@@ -31,6 +31,13 @@ public struct Edges: Equatable, Sendable {
 /// Main-axis direction of a container's children.
 public enum Axis: Sendable { case row, column }
 
+/// Whether a node participates in its parent's flow, or is placed at a fixed
+/// parent-local rect (used by overlays/portals).
+public enum LayoutPosition: Equatable, Sendable {
+    case flow
+    case absolute(Rect)
+}
+
 /// Cross-axis alignment of children.
 public enum CrossAlign: Sendable { case start, center, end, stretch }
 
@@ -51,6 +58,8 @@ public struct LayoutStyle: Equatable, Sendable {
     public var spacing: Float = 0
     public var alignItems: CrossAlign = .start
     public var justifyContent: MainAlign = .start
+    /// Flow (default) or pinned to a fixed parent-local rect.
+    public var position: LayoutPosition = .flow
 
     public init() {}
 }

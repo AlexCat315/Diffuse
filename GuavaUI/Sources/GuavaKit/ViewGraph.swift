@@ -29,6 +29,8 @@ public final class ViewGraph {
     public func install(root view: any View) {
         rootView = view
         context.install(root: rootNode)
+        // A portal change schedules a recompose so the PortalHost re-renders.
+        context.portals.onChange = { [weak self] in self?.recomposer.markDirty(.root) }
         reconcile()
     }
 
@@ -89,7 +91,12 @@ public final class ViewGraph {
         for (i, slot) in slots.enumerated() {
             let node = ordered[i]
             slot.view.updateNode(node)
-            reconcileChildren(parent: node, path: slot.path, newViews: slot.view.childViews)
+            // The PortalHost's children come from the (scoped) portal store, not
+            // from the view value — so overlays render on top via this one host.
+            let childViews: [any View] = (slot.view is _PortalHostMarker)
+                ? context.portals.orderedEntries.map { _PortalSlot(entry: $0) }
+                : slot.view.childViews
+            reconcileChildren(parent: node, path: slot.path, newViews: childViews)
         }
     }
 

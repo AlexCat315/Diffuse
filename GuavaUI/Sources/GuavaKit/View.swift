@@ -37,9 +37,17 @@ public struct EmptyView: View, _StructuralView {
     var _expanded: [any View] { [] }
 }
 
-/// Structural views (TupleView / Optional / Conditional / EmptyView) are
-/// transparent: they expand into the parent's child list rather than producing
-/// a node of their own. The reconciler flattens them away.
+/// Type-erased view. Transparent — expands to the wrapped view.
+public struct AnyView: View, _StructuralView {
+    let wrapped: any View
+    public init(_ view: any View) { self.wrapped = view }
+    public var body: Never { fatalError("AnyView has no body") }
+    var _expanded: [any View] { [wrapped] }
+}
+
+/// Structural views (TupleView / Optional / Conditional / EmptyView / AnyView)
+/// are transparent: they expand into the parent's child list rather than
+/// producing a node of their own. The reconciler flattens them away.
 protocol _StructuralView {
     var _expanded: [any View] { get }
 }
