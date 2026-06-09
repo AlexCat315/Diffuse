@@ -459,18 +459,10 @@ public final class ViewGraph {
         let id = ObjectIdentifier(node)
         InteractionRegistryHolder.current?.remove(node)
         TooltipOverlayRegistry.unregister(node)
-        // A Popover overlay registers into the process-wide PortalRegistry but
-        // relies on a modifier side-effect (`_PopoverFrontmostModifier`) to clean
-        // up when `isPresented` flips false. If the popover subtree is torn down
-        // while still open — panel relayout, a store-driven structural recompose,
-        // a conditional that removes the trigger — that modifier never runs and
-        // the entry leaks a phantom menu into the shared portal layer, whose
-        // hit region then silently blocks later clicks (e.g. other dropdowns
-        // "stop opening"). Teardown must be authoritative, like the registries
-        // above. The key mirrors `_PopoverOverlayHost` in Select.swift.
-        if let portalEntryID = node.attachments[popoverPortalEntryAttachmentKey] as? String {
-            PortalRegistry.unregister(portalEntryID)
-        }
+        // Portal/overlay entries are released by the node lifecycle itself: a
+        // `PortalResource` attached to the overlay-host node is unmounted by
+        // `Node.removeChild` when the subtree leaves the tree (坏味 #4). No
+        // attachment-key cleanup is needed here.
         if let myLN = layoutOf.removeValue(forKey: id) {
             parentLayout?.removeChild(myLN)
         }

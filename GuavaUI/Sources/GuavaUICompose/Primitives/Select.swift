@@ -496,23 +496,6 @@ public struct Popover<Label: View, Content: View>: View {
             }
         }
         .zIndex(isPresented.wrappedValue ? 10_000 : 0)
-        .modifier(_PopoverFrontmostModifier(isPresented: isPresented.wrappedValue))
-    }
-}
-
-private struct _PopoverFrontmostModifier: ViewModifier {
-    let isPresented: Bool
-
-    func apply(node: Node) {
-        // When the popover closes, clean up the portal entry that
-        // _PopoverOverlayHost registered. Visual ordering is already
-        // handled by _PortalLayer's elevated zIndex — reordering the
-        // node tree is unnecessary and inverts hit-test priority.
-        guard !isPresented else { return }
-        if let entryID = node.attachments[popoverPortalEntryAttachmentKey] as? String {
-            PortalRegistry.unregister(entryID)
-            node.attachments.removeValue(forKey: popoverPortalEntryAttachmentKey)
-        }
     }
 }
 
@@ -532,6 +515,10 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
     func _makeNode() -> Node {
         let node = Node()
         node.isHitTestable = false
+        // The portal entry is owned by this node's lifetime: when the popover
+        // closes or its subtree is torn down, `Node.removeChild` unmounts the
+        // resource and the entry is unregistered — no modifier cleanup needed.
+        node.addResource(PortalResource())
         return node
     }
 
@@ -549,24 +536,11 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
         let overlayY = absY + (boxNode?.frame.height ?? 0)
         let position = CGPoint(x: absX, y: overlayY)
 
-        // Register / update the portal overlay entry. Re-verify the entry still
-        // exists: if this node is reused after its entry was unregistered
-        // (teardown/close cleanup), `updatePosition`/`updateContent` would
-        // silently no-op and the menu would never re-appear — so re-register.
-        if let entryID = node.attachments[popoverPortalEntryAttachmentKey] as? String,
-           PortalRegistry.contains(entryID) {
-            PortalRegistry.updatePosition(entryID, position: position)
-            PortalRegistry.updateContent(entryID, content: AnyView(content))
-        } else {
-            let entryID = PortalRegistry.register(
-                position: position,
-                width: width,
-                content: AnyView(content)
-            )
-            node.attachments[popoverPortalEntryAttachmentKey] = entryID
-            // Also store on parent so _PopoverFrontmostModifier can clean up
-            boxNode?.attachments[popoverPortalEntryAttachmentKey] = entryID
-        }
+        // Register / update the overlay entry through the node-owned resource.
+        // `present` re-registers if a prior entry was cleaned up, so a reused
+        // node reliably re-shows the menu.
+        node.firstResource(PortalResource.self)?
+            .present(position: position, width: width, content: AnyView(content))
 
         // Keyboard handler
         node.isFocusable = keyHandler != nil
