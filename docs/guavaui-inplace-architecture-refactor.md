@@ -190,7 +190,8 @@ GuavaKit 已经验证这几条规则能让上述 bug **在架构上无法表达*
 | Phase 2 | `7bd9e323` | `NodeResource`(mount/unmount)+ `Node` 资源数组;`removeChild` 递归 unmount 整棵子树。Popover 改为节点持有的 `PortalResource`;删 `_PopoverFrontmostModifier` 与 ViewGraph 里的 attachment-key 清理。 | `NodeResourceTests` + 既有 `PopoverTests`(泄漏/churn/reopen) |
 | Phase 3 | `e350e8d5` | Portal/Tooltip 存储下沉到每窗口实例(`PortalStore`/`TooltipStore`);`PortalRegistry`/`TooltipOverlayRegistry` 变转发垫片;`PlatformInputContext` 加 `ScopedAmbient` 钩子,`AppRuntime` 给每个窗口挂独立 `PortalStore`。 | `PortalScopeTests`(多 scope 隔离 + 嵌套 save/restore) |
 | Phase 4 | `1d8f7002` | `Node.reorderChildren` 只重排 Node.children(唯一真源);渲染/输入镜像只由 reconciler 的 `reconcileChildren` 重建,删掉重复的手写镜像重排。 | `FourTreeConsistencyTests`(reorder/remove/insert 压力下三树不漂移) |
-| Phase 5 | (本提交) | 验证全套(Runtime 174 / Compose 306+5 / Kit 蓝图 101 / App+Workspace XCTest 全绿;Editor 包编译通过);补 `@unchecked Sendable` / 每窗口 ambient 的不变量注释。 | 全套绿 |
+| Phase 5 | `d808a63b` | 验证全套(Runtime 174 / Compose 306+5 / Kit 蓝图 101 / App+Workspace XCTest 全绿;Editor 包编译通过);补 `@unchecked Sendable` / 每窗口 ambient 的不变量注释。 | 全套绿 |
+| Phase 6 | `7b327530` | 把 §6.2"外部注册只由节点生命周期释放"补全:交互处理器 / tooltip 改为注册时挂的节点资源(`InteractionCleanupResource`/`TooltipCleanupResource`);指针捕获 / 焦点在 `Node.releaseFromTree` 集中释放(顺带修了 `PointerCapture.target` 强引用导致的捕获泄漏/卡死);`ViewGraph.tearDownSubtreeBookkeeping` 不再做任何外部注册清理。 | `NodeLifecycleCleanupTests`(含捕获泄漏修复) |
 
 **已知遗留**(非本次回归):GuavaUI 整包 `swift test`(swift-testing 侧)在并行下偶发 signal 11/5,崩在 image-decode / DevServer-socket 等无关用例,`--no-parallel` 仍现;HEAD 基线(改动全 stash)同样复现。用 `--filter <Suite>` 跑各套件稳定全绿。详见 memory `project-test-gotchas`。
 
