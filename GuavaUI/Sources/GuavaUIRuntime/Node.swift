@@ -70,23 +70,15 @@ public final class Node: @unchecked Sendable {
     /// Phase 4b's cache lands.
     public weak var renderObject: RenderObject?
 
-    /// Phase 5a back-pointer to the paired `InputNode`. The `InputScene`
-    /// owns the strong reference. Set by `InputNode.init`. Phase 5b will
-    /// drive hit-test / focus traversal off this mirror so dispatch can
-    /// avoid re-walking the full Node graph each event.
-    public weak var inputNode: InputNode?
-
     // MARK: - Interaction (Phase 6.1)
 
     /// When false, hit-testing skips this node (children are still visited
     /// unless `clipsToBounds` excludes them by frame). Routes through the
-    /// geometry funnel so toggling it at runtime refreshes the input mirror
-    /// and drops the hit cache.
+    /// geometry funnel so toggling it at runtime drops the hit cache.
     public var isHitTestable: Bool = true {
         didSet {
             if oldValue != isHitTestable {
-                invalidateGeometry(reason: .styleSet(field: "isHitTestable"),
-                                   classificationChanged: true)
+                invalidateGeometry(reason: .styleSet(field: "isHitTestable"))
             }
         }
     }
@@ -99,8 +91,7 @@ public final class Node: @unchecked Sendable {
     public var clipsToBounds: Bool = false {
         didSet {
             if oldValue != clipsToBounds {
-                invalidateGeometry(reason: .styleSet(field: "clipsToBounds"),
-                                   classificationChanged: true)
+                invalidateGeometry(reason: .styleSet(field: "clipsToBounds"))
             }
         }
     }
@@ -392,15 +383,12 @@ public final class Node: @unchecked Sendable {
         if children.elementsEqual(ordered, by: { $0 === $1 }) {
             return
         }
-        // Reorder only the source of truth. The render / input mirrors are
-        // re-synced exclusively by the reconciler's
-        // `RenderTree.reconcileChildren` / `InputScene.reconcileChildren`,
-        // which rebuild their child lists in this `children` order right after
-        // every `reorderChildren` call. Keeping a second, hand-written mirror
-        // reorder here was 坏味 #2 — two sync paths that can silently drift
-        // (render reordered, input not). There is now one path.
+        // Reorder only the source of truth. The render mirror is re-synced
+        // exclusively by the reconciler's `RenderTree.reconcileChildren`, which
+        // rebuilds its child list in this `children` order right after every
+        // `reorderChildren` call (坏味 #2: one sync path, no hand-written
+        // second one that can drift). Hit-testing reads this order live.
         children = ordered
-        inputNode?.scene?.invalidateHitCache()
         markRenderDirty(reason: .structuralChange)
     }
 
@@ -413,19 +401,14 @@ public final class Node: @unchecked Sendable {
     /// without invalidation — the structural cause of the "control responds
     /// once then goes dead after a resize / reflow / scroll" bug is removed.
     ///
-    /// - `reason`: forwarded to render bookkeeping / the invalidation log.
-    /// - `classificationChanged`: pass `true` only for fields the `InputScene`
-    ///   mirror snapshots (`isHitTestable`, `clipsToBounds`). Those need the
-    ///   mirror refreshed so the next hit walk reads fresh values; pure-motion
-    ///   fields (`frame`, `contentOffset`, `zIndex`) are read off the live node
-    ///   during the walk, so they skip the refresh to stay cheap per frame.
-    private func invalidateGeometry(reason: InvalidationSource,
-                                    classificationChanged: Bool = false) {
+    /// `reason` is forwarded to render bookkeeping / the invalidation log.
+    /// Hit-testing walks the live `Node` tree every time (Phase 7 removed the
+    /// input mirror and its cache), so a geometry / hit-classification change is
+    /// reflected on the next hit-test with nothing to invalidate — the stale-hit
+    /// bug class (坏味 #1) is structurally impossible. The funnel remains the one
+    /// place that maps a geometry change to render invalidation.
+    private func invalidateGeometry(reason: InvalidationSource) {
         markRenderDirty(reason: reason)
-        if classificationChanged {
-            inputNode?.refreshFromNode()
-        }
-        inputNode?.scene?.invalidateHitCache()
     }
 
     // MARK: - Dirty propagation

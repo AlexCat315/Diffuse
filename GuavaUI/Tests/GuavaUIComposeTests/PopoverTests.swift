@@ -187,7 +187,6 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
                                          interactions: registry,
                                          capture: capture,
                                          focusChain: focus)
-        dispatcher.inputScene = graph.inputScene
 
         func settle() { while recomposer.commitAll() {}; graph.computeLayout(width: 240, height: 180) }
 
@@ -324,7 +323,6 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
                                          interactions: registry,
                                          capture: capture,
                                          focusChain: focus)
-        dispatcher.inputScene = graph.inputScene
 
         click(dispatcher, x: 10, y: 10)
         _ = recomposer.commitAll()
@@ -372,7 +370,6 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
                                          interactions: registry,
                                          capture: capture,
                                          focusChain: focus)
-        dispatcher.inputScene = graph.inputScene
 
         // 1. Open.
         click(dispatcher, x: 10, y: 10)
@@ -432,7 +429,6 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
                                          interactions: registry,
                                          capture: capture,
                                          focusChain: focus)
-        dispatcher.inputScene = graph.inputScene
 
         func settle() {
             // Drain like the runtime loop: keep committing while work remains.
@@ -481,7 +477,6 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
                                          interactions: registry,
                                          capture: capture,
                                          focusChain: focus)
-        dispatcher.inputScene = graph.inputScene
 
         click(dispatcher, x: 10, y: 10)
         _ = recomposer.commitAll()

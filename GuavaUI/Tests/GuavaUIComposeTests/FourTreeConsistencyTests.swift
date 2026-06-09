@@ -7,14 +7,15 @@ import Foundation
 import GuavaUIRuntime
 @testable import GuavaUICompose
 
-/// Phase 4 acceptance: the Node tree and its Render / Input mirrors stay in
-/// lockstep across add / remove / reorder, because the reconciler is the single
-/// path that syncs them (坏味 #2). After the convergence, `Node.reorderChildren`
-/// reorders only the source of truth; the mirrors are rebuilt solely by
-/// `RenderTree.reconcileChildren` / `InputScene.reconcileChildren`. This stress
-/// test permutes, removes, and re-inserts keyed children and asserts the three
-/// trees never drift.
-@Suite("Four-tree consistency (Phase 4)")
+/// Phase 4 acceptance: the Node tree and its Render mirror stay in lockstep
+/// across add / remove / reorder, because the reconciler is the single path
+/// that syncs them (坏味 #2). After the convergence, `Node.reorderChildren`
+/// reorders only the source of truth; the render mirror is rebuilt solely by
+/// `RenderTree.reconcileChildren`. (Phase 7 removed the input mirror — hit
+/// order now reads the live Node tree, so there is no input tree to assert.)
+/// This stress test permutes, removes, and re-inserts keyed children and
+/// asserts the two trees never drift.
+@Suite("Tree consistency (Phase 4/7)")
 struct FourTreeConsistencyTests {
 
     private struct _Leaf: _PrimitiveView {
@@ -39,11 +40,10 @@ struct FourTreeConsistencyTests {
         ids.map { _Leaf(tag: $0).id(AnyHashable($0)) as any View }
     }
 
-    /// Recursively assert every node has both mirrors and that the mirror child
-    /// lists are exactly the Node child list (same objects, same order).
+    /// Recursively assert every node has a RenderObject mirror whose child list
+    /// is exactly the Node child list (same objects, same order).
     private func assertConsistent(_ node: Node, sourceLocation: SourceLocation = #_sourceLocation) {
         #expect(node.renderObject != nil, "missing RenderObject", sourceLocation: sourceLocation)
-        #expect(node.inputNode != nil, "missing InputNode", sourceLocation: sourceLocation)
 
         if let ro = node.renderObject {
             let renderChildNodes = ro.children.compactMap { $0.node }
@@ -51,13 +51,6 @@ struct FourTreeConsistencyTests {
                     "render child count drift", sourceLocation: sourceLocation)
             #expect(renderChildNodes.elementsEqual(node.children, by: { $0 === $1 }),
                     "render child order drift", sourceLocation: sourceLocation)
-        }
-        if let inp = node.inputNode {
-            let inputChildNodes = inp.children.compactMap { $0.node }
-            #expect(inputChildNodes.count == node.children.count,
-                    "input child count drift", sourceLocation: sourceLocation)
-            #expect(inputChildNodes.elementsEqual(node.children, by: { $0 === $1 }),
-                    "input child order drift", sourceLocation: sourceLocation)
         }
         for child in node.children { assertConsistent(child, sourceLocation: sourceLocation) }
     }
@@ -112,16 +105,13 @@ struct FourTreeConsistencyTests {
         reconcile(graph, anchor: anchor, to: [2, 0, 1])
         assertConsistent(tree.root!)
 
-        // Node tree, render mirror and input mirror present the leaves in the
-        // identical sequence — so paint order (render array) and hit-test order
-        // (input array, then z within it) are computed off the same ordering.
+        // Node tree and render mirror present the leaves in the identical
+        // sequence — so paint order (render array) and hit-test order (live
+        // Node array, then z within it) are computed off the same ordering.
         let nodeTags = anchor.children.compactMap { $0.attachments["tag"] as? Int }
         let renderTags = anchor.renderObject!.children
             .compactMap { $0.node?.attachments["tag"] as? Int }
-        let inputTags = anchor.inputNode!.children
-            .compactMap { $0.node?.attachments["tag"] as? Int }
         #expect(nodeTags == [2, 0, 1])
         #expect(renderTags == nodeTags)
-        #expect(inputTags == nodeTags)
     }
 }

@@ -15,18 +15,13 @@ public final class SceneInspector: @unchecked Sendable {
     /// Optional render-side mirror, surfaced as `renderInventory` in the
     /// snapshot. Populated by the host once the ViewGraph is created.
     public var renderTree: RenderTree?
-    /// Optional input-side mirror, surfaced as `inputInventory` in the
-    /// snapshot.
-    public var inputScene: InputScene?
 
     public init(tree: NodeTree,
                 invalidationLog: InvalidationLog? = nil,
-                renderTree: RenderTree? = nil,
-                inputScene: InputScene? = nil) {
+                renderTree: RenderTree? = nil) {
         self.tree = tree
         self.invalidationLog = invalidationLog
         self.renderTree = renderTree
-        self.inputScene = inputScene
     }
 
     /// Capture a snapshot of the current scene. Must run on the same actor
@@ -39,12 +34,22 @@ public final class SceneInspector: @unchecked Sendable {
                 layerRoots: tree.layerRoots().map { String($0.elementID.rawValue) }
             )
         }
-        let inputInventoryPayload = inputScene.map { scene -> InputInventoryPayload in
-            InputInventoryPayload(
-                nodeCount: scene.nodeCount,
-                focusables: scene.focusables().map { String($0.elementID.rawValue) },
-                hitTestables: scene.hitTestables().map { String($0.elementID.rawValue) }
-            )
+        // Phase 7: the input mirror was removed; compute the inventory from the
+        // live Node tree (hit-test / focus classification lives on Node).
+        let inputInventoryPayload: InputInventoryPayload? = tree.root.map { root in
+            var nodeCount = 0
+            var focusables: [String] = []
+            var hitTestables: [String] = []
+            func walk(_ n: Node) {
+                nodeCount += 1
+                if n.isFocusable { focusables.append(String(n.id.rawValue)) }
+                if n.isHitTestable { hitTestables.append(String(n.id.rawValue)) }
+                for c in n.children { walk(c) }
+            }
+            walk(root)
+            return InputInventoryPayload(nodeCount: nodeCount,
+                                         focusables: focusables,
+                                         hitTestables: hitTestables)
         }
         guard let root = tree.root else {
             return TreeSnapshotPayload(root: nil,
