@@ -159,8 +159,7 @@ public final class AppRuntime {
         if let devConfig = config.devTools {
             let dev = DevTools(config: devConfig,
                                tree: tree,
-                               renderTree: graph.renderTree,
-                               inputScene: graph.inputScene)
+                               renderTree: graph.renderTree)
             // Install the log tap before any DevTools-related Logger fires
             // so the first records also reach the client.
             LogTapInstaller.bootstrapIfNeeded(sink: dev.logSink)
@@ -347,10 +346,6 @@ public final class AppRuntime {
             }
             graph.computeLayout(width: Float(logicalW), height: Float(logicalH))
             syncMainWindowChromeHitTest()
-            // Phase 5b: hand the input mirror to the session's dispatcher
-            // so subsequent events hit-test through `InputScene` rather
-            // than re-walking the live Node tree.
-            host.mainSession?.attachInputScene(graph.inputScene)
             didInstallRoot = true
         }
 
@@ -856,7 +851,6 @@ private final class AuxiliaryAppWindow {
                 }
                 graph.computeLayout(width: Float(logicalW), height: Float(logicalH))
                 syncWindowChromeHitTest()
-                session.attachInputScene(graph.inputScene)
                 didInstallRoot = true
             }
             try uploadAtlasIfNeeded(false)

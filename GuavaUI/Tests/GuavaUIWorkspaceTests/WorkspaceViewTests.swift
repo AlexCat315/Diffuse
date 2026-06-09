@@ -662,7 +662,6 @@ private final class WorkspaceViewRig {
         PointerCaptureHolder.current = capture
         FocusChainHolder.current = focus
         graph.install(root: root)
-        dispatcher.inputScene = graph.inputScene
         graph.computeLayout(width: width, height: height)
     }
 

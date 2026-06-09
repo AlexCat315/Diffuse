@@ -3,23 +3,11 @@ import Foundation
 /// Tracks the currently focused node and provides tab-order traversal.
 ///
 /// Focus chain order = depth-first, in tree order, including only nodes with
-/// `isFocusable == true`. Recomputed lazily when callers ask for next/previous.
-///
-/// Phase 5b: when `inputScene` is wired, focusable enumeration reuses the
-/// pre-built `InputScene` mirror and is memoised against
-/// `InputScene.version`. A bumped version means the mirror's structure or
-/// classification changed, which forces a re-collection on the next traversal.
+/// `isFocusable == true`. Recomputed lazily when callers ask for next/previous
+/// by walking the live `Node` tree (Phase 7: the input mirror was removed).
 public final class FocusChain {
 
     public private(set) weak var focused: Node?
-
-    /// Optional hook to the input mirror. When set, focusable enumeration
-    /// reads from `InputScene.focusables()` and is cached against
-    /// `InputScene.version`.
-    public weak var inputScene: InputScene?
-
-    private var cachedFocusables: [Node] = []
-    private var cachedFocusablesVersion: Int = -1
 
     public init() {}
 
@@ -76,15 +64,6 @@ public final class FocusChain {
     // MARK: - Internal
 
     private func focusables(in root: Node) -> [Node] {
-        // Fast path: InputScene mirror is wired and unchanged since last call.
-        if let scene = inputScene {
-            if scene.version != cachedFocusablesVersion {
-                cachedFocusables = scene.focusables().compactMap { $0.node }
-                cachedFocusablesVersion = scene.version
-            }
-            return cachedFocusables
-        }
-        // Fallback: walk the Node tree directly.
         var out: [Node] = []
         collect(node: root, into: &out)
         return out
