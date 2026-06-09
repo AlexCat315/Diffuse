@@ -192,10 +192,11 @@ GuavaKit 已经验证这几条规则能让上述 bug **在架构上无法表达*
 | Phase 4 | `1d8f7002` | `Node.reorderChildren` 只重排 Node.children(唯一真源);渲染/输入镜像只由 reconciler 的 `reconcileChildren` 重建,删掉重复的手写镜像重排。 | `FourTreeConsistencyTests`(reorder/remove/insert 压力下三树不漂移) |
 | Phase 5 | `d808a63b` | 验证全套(Runtime 174 / Compose 306+5 / Kit 蓝图 101 / App+Workspace XCTest 全绿;Editor 包编译通过);补 `@unchecked Sendable` / 每窗口 ambient 的不变量注释。 | 全套绿 |
 | Phase 6 | `7b327530` | 把 §6.2"外部注册只由节点生命周期释放"补全:交互处理器 / tooltip 改为注册时挂的节点资源(`InteractionCleanupResource`/`TooltipCleanupResource`);指针捕获 / 焦点在 `Node.releaseFromTree` 集中释放(顺带修了 `PointerCapture.target` 强引用导致的捕获泄漏/卡死);`ViewGraph.tearDownSubtreeBookkeeping` 不再做任何外部注册清理。 | `NodeLifecycleCleanupTests`(含捕获泄漏修复) |
+| Phase 7 | `e84e2e97` | **收掉 InputNode 镜像(四树→三树)**:删 `InputScene`/`InputNode` + `Node.inputNode` + ViewGraph 的镜像维护;命中测试只走活的 Node 树(`HitTester.hitTest(rootNode:)`),`EventDispatcher`/`FocusChain` 直接读 Node 的分类字段;DevTools 从活树算 inventory。命中缓存:不再引入进程级 ambient 缓存(那是 core path 上的坏味 #3、且并行测试互相打架),直接**去掉缓存**——每次命中重走 Node 树(O(节点) 的廉价矩形判定),于是 stale-hit(坏味 #1)在结构上无法发生(没有可失效的东西)。 | `GeometryFunnelReproTests` / `FourTreeConsistencyTests`(改为活 Node 模型) |
 
 **已知遗留**(非本次回归):GuavaUI 整包 `swift test`(swift-testing 侧)在并行下偶发 signal 11/5,崩在 image-decode / DevServer-socket 等无关用例,`--no-parallel` 仍现;HEAD 基线(改动全 stash)同样复现。用 `--filter <Suite>` 跑各套件稳定全绿。详见 memory `project-test-gotchas`。
 
-**镜像未收掉**:Phase 4 取"只收敛同步路径"(文档允许的较稳方案),`InputNode` 镜像仍在(FocusChain/EventDispatcher/命中缓存都挂在上面);彻底收掉镜像是后续可选项。
+**镜像已收掉**(Phase 7):`InputNode` 镜像已删除,四树收敛为三树(Node / Layout / Render)。命中测试直接走活的 Node 树。命中缓存被一并去掉(见 Phase 7 行)——若日后实测命中是热点,可加一个真正按窗口、由帧驱动失效的缓存(别用进程级 ambient)。
 
 **全局垫片仍在**:`PortalRegistry`/`TooltipOverlayRegistry`/`*Holder.current` 作为转发垫片保留(调用点零改动);存储已是每窗口实例,隔离已成立。彻底删全局、改为显式传 scope 是后续长尾。
 
