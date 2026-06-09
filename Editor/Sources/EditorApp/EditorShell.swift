@@ -13,6 +13,8 @@ public struct EditorShell: GuavaKit.View {
     @GuavaKit.State var rightWidth: Float = 300
     @GuavaKit.State var bottomHeight: Float = 200
     @GuavaKit.State var activeBottomTab: String = "Console"
+    @GuavaKit.State var selectedEntity: Int? = 2
+    @GuavaKit.State var expandedEntities: Set<Int> = [1, 3, 6]
 
     public init() {}
 
@@ -34,7 +36,7 @@ public struct EditorShell: GuavaKit.View {
         GuavaKit.Row(alignment: .stretch, spacing: 0) {
             // ── Left sidebar ──
             panelGroup(title: "HIERARCHY") {
-                placeholderContent("Scene Hierarchy", icon: "🌳")
+                hierarchyTree
             }
             .frame(width: leftWidth)
 
@@ -53,6 +55,18 @@ public struct EditorShell: GuavaKit.View {
                 .flex(1)
             }
             .frame(width: rightWidth)
+        }
+    }
+
+    // MARK: - Hierarchy tree
+
+    @GuavaKit.ViewBuilder
+    private var hierarchyTree: some GuavaKit.View {
+        GuavaKit.Tree(Self.scene, id: \.id, children: \.children,
+                      selection: $selectedEntity, expanded: $expandedEntities,
+                      rowHeight: 22) { node, isSelected, _ in
+            GuavaKit.Text(node.name, fontSize: 12)
+                .foregroundColor(isSelected ? Palette.text : Palette.textMuted)
         }
     }
 
@@ -195,6 +209,31 @@ public struct EditorShell: GuavaKit.View {
         }
         return GuavaKit.Text(text, color: color, fontSize: 12)
     }
+}
+
+// MARK: - Sample scene (placeholder hierarchy data)
+
+private struct SceneNode {
+    let id: Int
+    let name: String
+    let children: [SceneNode]
+}
+
+private extension EditorShell {
+    static let scene: [SceneNode] = [
+        SceneNode(id: 1, name: "Scene", children: [
+            SceneNode(id: 2, name: "Main Camera", children: []),
+            SceneNode(id: 3, name: "Lights", children: [
+                SceneNode(id: 4, name: "Directional Light", children: []),
+                SceneNode(id: 5, name: "Fill Light", children: []),
+            ]),
+            SceneNode(id: 6, name: "Props", children: [
+                SceneNode(id: 7, name: "Crate_A", children: []),
+                SceneNode(id: 8, name: "MonitorWall", children: []),
+                SceneNode(id: 9, name: "ConsoleDesk", children: []),
+            ]),
+        ])
+    ]
 }
 
 // MARK: - Palette (masterplan dark theme)

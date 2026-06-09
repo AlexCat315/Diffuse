@@ -190,4 +190,28 @@ struct PrimitivesTests {
         #expect(fired == 1)
         #expect(ctx.pointerCapture.target == nil) // released after
     }
+
+    @Test("Button fires when its label (the laid-out hit target) is clicked")
+    func buttonFiresThroughLabel() {
+        struct App: View {
+            let onTap: () -> Void
+            var body: some View {
+                Button(action: onTap) { Text("Click").padding(8) }
+            }
+        }
+        var fired = 0
+        let ctx = UIContext(); let graph = ViewGraph(context: ctx)
+        graph.install(root: App(onTap: { fired += 1 }))
+        ctx.layoutIfNeeded(engine: StackLayoutEngine(), available: Size(width: 200, height: 80))
+
+        // Click the centre of the laid-out button — i.e. over the Text label,
+        // which (being hit-testable) is the deepest hit, not the Button node.
+        let button = graph.root.children[0]
+        let f = button.geometry.frame
+        let p = Point(x: f.minX + f.size.width / 2, y: f.minY + f.size.height / 2)
+        let disp = EventDispatcher(context: ctx)
+        disp.pointerDown(PointerEvent(position: p, action: .down))
+        disp.pointerUp(PointerEvent(position: p, action: .up))
+        #expect(fired == 1)
+    }
 }
