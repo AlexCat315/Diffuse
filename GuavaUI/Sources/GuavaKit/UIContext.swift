@@ -21,6 +21,15 @@ public final class UIContext {
     /// released automatically when the captured node detaches — see `detach`.
     public let pointerCapture = PointerCapture()
 
+    /// The node that currently has keyboard focus. Only one per context.
+    /// Set to nil when the focused node detaches.
+    public weak var focusedNode: UINode?
+
+    /// The node hosting the portal layer (set by `ViewGraph` while reconciling
+    /// the `PortalHost`). Lets event dispatch distinguish a press *inside* an
+    /// overlay from one *outside* it, for press-to-dismiss.
+    public weak var portalHostNode: UINode?
+
     /// Overlay registry (popovers/menus). Scoped to this tree — never global.
     public let portals = PortalStore()
 
@@ -92,6 +101,9 @@ public final class UIContext {
         // A node leaving the tree must not keep the pointer captured — otherwise
         // every later click routes to a dead node (the legacy stuck-capture bug).
         if pointerCapture.target === node { pointerCapture.release() }
+        // Release focus if the focused node leaves the tree.
+        if focusedNode === node { focusedNode = nil }
+        if portalHostNode === node { portalHostNode = nil }
         node.context = nil
         hitIndex.invalidate()
         if root === node { root = nil }

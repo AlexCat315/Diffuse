@@ -18,8 +18,28 @@ public final class EventDispatcher {
     /// `context.pointerCapture.acquire(node)` to capture subsequent move/up.
     @discardableResult
     public func pointerDown(_ event: PointerEvent) -> EventResult {
-        guard let hit = context.hitTest(event.position) else { return .ignored }
-        return deliver(path: hit.path, event: event)
+        let priorFocus = context.focusedNode
+        let priorPortals = context.portals.count
+        let hit = context.hitTest(event.position)
+        let result = hit.map { deliver(path: $0.path, event: event) } ?? .ignored
+        settleOutsidePress(hitPath: hit?.path ?? [], priorFocus: priorFocus, priorPortals: priorPortals)
+        return result
+    }
+
+    /// A press that lands outside the focused field / open overlays clears them.
+    /// Runs *after* delivery, so a press that moved focus or opened an overlay is
+    /// preserved: such a node is on the hit path, or it changed `focusedNode` /
+    /// the portal count, which the guards below detect.
+    private func settleOutsidePress(hitPath: [UINode], priorFocus: UINode?, priorPortals: Int) {
+        if let priorFocus, context.focusedNode === priorFocus,
+           !hitPath.contains(where: { $0 === priorFocus }) {
+            context.focusedNode = nil
+        }
+        if priorPortals > 0, context.portals.count == priorPortals {
+            let host = context.portalHostNode
+            let insidePortal = host.map { h in hitPath.contains { $0 === h } } ?? false
+            if !insidePortal { context.portals.dismissAll() }
+        }
     }
 
     /// Up goes to the capture target if one is active (skipping hit-test, so a
@@ -123,6 +143,24 @@ public final class EventDispatcher {
             if let handler = node.interaction.onWheel {
                 if handler(event) == .handled { return .handled }
             }
+        }
+        return .ignored
+    }
+
+    // MARK: - Keyboard
+
+    @discardableResult
+    public func dispatchKeyDown(_ event: KeyboardEvent) -> EventResult {
+        if let node = context.focusedNode,
+           node.interaction.onKeyDown?(event) == .handled {
+            return .handled
+        }
+        // Unconsumed Escape is a global "dismiss": drop focus and any overlays.
+        if event.key == "Escape" {
+            let acted = context.focusedNode != nil || context.portals.count > 0
+            context.focusedNode = nil
+            context.portals.dismissAll()
+            return acted ? .handled : .ignored
         }
         return .ignored
     }
