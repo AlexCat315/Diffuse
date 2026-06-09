@@ -48,9 +48,14 @@ public struct Interaction {
     public var onWheel: ((WheelEvent) -> EventResult)?
     public var onHoverEnter: (() -> Void)?
     public var onHoverLeave: (() -> Void)?
+    /// Keyboard handler. Only the focused node receives key events.
+    public var onKeyDown: ((KeyboardEvent) -> EventResult)?
     public init() {}
 
-    var isEmpty: Bool { onPointer == nil && onWheel == nil && onHoverEnter == nil && onHoverLeave == nil }
+    var isEmpty: Bool {
+        onPointer == nil && onWheel == nil && onHoverEnter == nil
+        && onHoverLeave == nil && onKeyDown == nil
+    }
 }
 
 /// Tracks the node that has captured the pointer (e.g. an in-progress drag).
@@ -63,4 +68,31 @@ public final class PointerCapture {
 
     public func acquire(_ node: UINode) { target = node }
     public func release() { target = nil }
+}
+
+// MARK: - Keyboard
+
+public struct KeyboardEvent: Sendable {
+    /// Platform-independent key name (e.g. "a", "Enter", "Backspace", "Escape").
+    public var key: String
+    /// Insertable character, nil for non-printable keys.
+    public var character: String?
+    /// True on key-down repeat.
+    public var isRepeat: Bool
+    public var modifiers: KeyModifiers
+
+    public init(key: String, character: String? = nil,
+                isRepeat: Bool = false, modifiers: KeyModifiers = []) {
+        self.key = key; self.character = character
+        self.isRepeat = isRepeat; self.modifiers = modifiers
+    }
+}
+
+public struct KeyModifiers: OptionSet, Sendable {
+    public let rawValue: UInt8
+    public init(rawValue: UInt8) { self.rawValue = rawValue }
+    public static let shift   = KeyModifiers(rawValue: 1 << 0)
+    public static let control = KeyModifiers(rawValue: 1 << 1)
+    public static let alt     = KeyModifiers(rawValue: 1 << 2)
+    public static let command = KeyModifiers(rawValue: 1 << 3)
 }

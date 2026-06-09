@@ -44,6 +44,14 @@ public final class PortalStore {
     func unregister(_ id: Int) {
         if entries.removeValue(forKey: id) != nil { onChange() }
     }
+    /// Clear every entry at once (press-outside / Escape). Owning
+    /// `PortalResource`s self-heal: a stale `entryID` fails the `contains` guard
+    /// in `present`, so the next open re-registers cleanly.
+    func dismissAll() {
+        guard !entries.isEmpty else { return }
+        entries.removeAll()
+        onChange()
+    }
 }
 
 /// Marks the node that hosts the portal layer. Place one near the root, after

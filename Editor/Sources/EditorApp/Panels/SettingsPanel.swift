@@ -28,8 +28,21 @@ struct SettingsPanel: GuavaKit.View {
                     }
                 }
 
-                // TODO: Toggle needs GuavaKit Toggle widget (batch 4)
-                // SettingsSection(title: L("Vertical Sync")) { ... }
+                SettingsSection(title: L("Vertical Sync")) {
+                    Row(alignment: .center, spacing: 10) {
+                        Toggle(isOn: store.vsyncMode.isEnabled) { enabled in
+                            let mode: EditorVSyncMode = enabled ? .enabled : .disabled
+                            guard store.vsyncMode != mode else { return }
+                            store.dispatch(.setVSyncMode(mode))
+                            app.applyVSyncMode(mode)
+                            applySettingsChange()
+                        }
+
+                        Text(store.vsyncMode.isEnabled ? L("On") : L("Off"))
+                            .font(.caption)
+                            .foregroundColor(.onSurface)
+                    }
+                }
 
                 SettingsSection(title: L("Language")) {
                     Row(alignment: .center, spacing: 8) {

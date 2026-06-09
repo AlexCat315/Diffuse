@@ -28,6 +28,7 @@ public final class GuavaKitHostApp {
 
     private let atlasTextureID: TextureID = 1
     private var isRunning = false
+    private var textInputActive = false
 
     // MARK: - Init
 
@@ -57,8 +58,10 @@ public final class GuavaKitHostApp {
         // 3. Create GPU surface from the native window.
         try createGPUSurface()
 
-        // 4. Configure renderer pipeline.
-        try gpuRenderer.configure(format: .bgra8UnormSrgb)
+        // 4. Configure renderer pipeline. Must match the surface format
+        // (`.bgra8Unorm`, set in createGPUSurface/renderDrawList) or wgpu rejects
+        // the command buffer — the colour attachment formats have to be identical.
+        try gpuRenderer.configure(format: .bgra8Unorm)
 
         // 5. Prime the atlas texture slot.
         try primeAtlasTexture()
@@ -75,6 +78,7 @@ public final class GuavaKitHostApp {
 
         // 8. Frame loop.
         isRunning = true
+        var lastDrawList: DrawList?
         while isRunning && shell.isRunning {
             // 8a. Feed platform events into GuavaKit.
             for routed in shell.pollWindowEvents() {
@@ -86,12 +90,30 @@ public final class GuavaKitHostApp {
             let logical = window.logicalSize
             let available = Size(width: Float(logical.width), height: Float(logical.height))
 
-            if let drawList = session.tick(available: available) {
-                try uploadAtlasIfNeeded()
-                try renderDrawList(drawList)
-            } else {
-                try uploadAtlasIfNeeded()
+            // The installed app fills the window: pin the root container to the
+            // viewport and stretch its child across the cross axis. (The root view
+            // fills the main axis itself via `.flex`.) `modifyLayout` no-ops when
+            // unchanged, so this only re-lays-out on resize.
+            session.viewGraph.root.modifyLayout {
+                $0.width = .points(available.width)
+                $0.height = .points(available.height)
+                $0.alignItems = .stretch
             }
+
+            // The CPU pipeline (recompose/layout/paint) only re-runs when state is
+            // dirty — but the GPU must present *every* frame, otherwise the
+            // swapchain rotates to buffers we never drew and the window goes black.
+            // Cache the latest list and re-present it on otherwise-clean frames.
+            if let drawList = session.tick(available: available) {
+                lastDrawList = drawList
+            }
+            try uploadAtlasIfNeeded()
+            if let drawList = lastDrawList {
+                try renderDrawList(drawList)
+            }
+
+            // 8c. Keep SDL text input (IME) in sync with keyboard focus.
+            syncTextInputArea()
         }
     }
 
@@ -222,6 +244,16 @@ public final class GuavaKitHostApp {
             )
         case .mouseMotion(let e):
             session.eventAdapter.pointerMove(to: Point(x: e.x, y: e.y))
+        case .keyDown(let e):
+            // Control/navigation keys. Printable input arrives via `.textInput`.
+            session.eventAdapter.keyDown(KeyboardEvent(
+                key: Self.keyName(for: e.keycode),
+                isRepeat: e.isRepeat,
+                modifiers: Self.mapModifiers(e)
+            ))
+        case .textInput(let text):
+            // IME-composed text (printable characters, CJK, pasted runs).
+            session.eventAdapter.keyDown(KeyboardEvent(key: "", character: text))
         default:
             break
         }
@@ -233,6 +265,66 @@ public final class GuavaKitHostApp {
         case .right:  return .secondary
         case .middle: return .middle
         default:      return .primary
+        }
+    }
+
+    // MARK: - Keyboard translation
+
+    /// Maps an SDL3 keycode to GuavaKit's platform-independent key name. Only the
+    /// control/navigation keys need names — printable characters arrive separately
+    /// via `.textInput` (already IME-composed), so they're not mapped here.
+    private static func keyName(for keycode: UInt32) -> String {
+        switch keycode {
+        case 13, 0x4000_0058: return "Enter"        // Return / keypad Enter
+        case 27:              return "Escape"
+        case 8:               return "Backspace"
+        case 127:             return "Delete"
+        case 9:               return "Tab"
+        case 0x4000_004F:     return "ArrowRight"
+        case 0x4000_0050:     return "ArrowLeft"
+        case 0x4000_0051:     return "ArrowDown"
+        case 0x4000_0052:     return "ArrowUp"
+        case 0x4000_004A:     return "Home"
+        case 0x4000_004D:     return "End"
+        default:              return ""
+        }
+    }
+
+    /// `KeyEvent.modifiers` is `EngineKernel.KeyModifiers`; we read it via the
+    /// event so its type is inferred (the module name `EngineKernel` collides
+    /// with the protocol of the same name and can't be used as a qualifier).
+    private static func mapModifiers(_ event: KeyEvent) -> GuavaKit.KeyModifiers {
+        let m = event.modifiers
+        var out: GuavaKit.KeyModifiers = []
+        if m.contains(.lshift) || m.contains(.rshift) { out.insert(.shift) }
+        if m.contains(.lctrl)  || m.contains(.rctrl)  { out.insert(.control) }
+        if m.contains(.lalt)   || m.contains(.ralt)   { out.insert(.alt) }
+        if m.contains(.lgui)   || m.contains(.rgui)   { out.insert(.command) }
+        return out
+    }
+
+    // MARK: - Text input (IME) follows keyboard focus
+
+    /// Drives SDL text input from GuavaKit's focus state: enabled while a node
+    /// holds keyboard focus (so `.textInput` events flow and the IME candidate
+    /// window anchors to the field), disabled when focus clears.
+    private func syncTextInputArea() {
+        if let node = session.context.focusedNode {
+            var x = node.geometry.frame.minX
+            var y = node.geometry.frame.minY
+            var ancestor = node.parent
+            while let p = ancestor {
+                x += p.geometry.frame.minX
+                y += p.geometry.frame.minY
+                ancestor = p.parent
+            }
+            let size = node.geometry.frame.size
+            shell.setTextInputArea(windowID: window.id, TextInputArea(
+                x: x, y: y, width: size.width, height: size.height, cursorX: x))
+            textInputActive = true
+        } else if textInputActive {
+            shell.setTextInputArea(windowID: window.id, nil)
+            textInputActive = false
         }
     }
 }
