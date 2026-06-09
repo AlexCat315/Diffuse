@@ -18,6 +18,11 @@ public final class TooltipStore {
         let id = ObjectIdentifier(node)
         draws.removeAll(where: { $0.0 == id })
         draws.append((id, draw))
+        // Bind the entry to the node's lifetime (规则 2): when the node leaves
+        // the tree, the resource unregisters it — no ViewGraph teardown hook.
+        if node.firstResource(TooltipCleanupResource.self) == nil {
+            node.addResource(TooltipCleanupResource(store: self))
+        }
     }
 
     public func unregister(_ node: Node) {
@@ -39,6 +44,16 @@ public final class TooltipStore {
             draw(list)
         }
     }
+}
+
+/// Node-owned cleanup for a tooltip draw (规则 2). Attached when the node first
+/// registers a tooltip; `unmount` (via `Node.removeChild`) drops the draw. The
+/// store is held weakly so the resource never keeps a torn-down window alive.
+final class TooltipCleanupResource: NodeResource {
+    private weak var store: TooltipStore?
+    init(store: TooltipStore) { self.store = store }
+    func mount(node: Node) {}
+    func unmount(node: Node) { store?.unregister(node) }
 }
 
 /// Holds the tooltip store made "current" by `PlatformInputContext.withCurrent`.
