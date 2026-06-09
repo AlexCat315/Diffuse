@@ -373,37 +373,15 @@ public final class Node: @unchecked Sendable {
         if children.elementsEqual(ordered, by: { $0 === $1 }) {
             return
         }
+        // Reorder only the source of truth. The render / input mirrors are
+        // re-synced exclusively by the reconciler's
+        // `RenderTree.reconcileChildren` / `InputScene.reconcileChildren`,
+        // which rebuild their child lists in this `children` order right after
+        // every `reorderChildren` call. Keeping a second, hand-written mirror
+        // reorder here was 坏味 #2 — two sync paths that can silently drift
+        // (render reordered, input not). There is now one path.
         children = ordered
-        if let renderObject {
-            var renderByNode: [ObjectIdentifier: RenderObject] = [:]
-            for child in renderObject.children {
-                if let node = child.node {
-                    renderByNode[ObjectIdentifier(node)] = child
-                }
-            }
-            let reorderedRenderChildren = ordered.compactMap {
-                renderByNode[ObjectIdentifier($0)]
-            }
-            if reorderedRenderChildren.count == renderObject.children.count {
-                renderObject.children = reorderedRenderChildren
-                renderObject.cacheInvalid = true
-            }
-        }
-        if let inputNode {
-            var inputByNode: [ObjectIdentifier: InputNode] = [:]
-            for child in inputNode.children {
-                if let node = child.node {
-                    inputByNode[ObjectIdentifier(node)] = child
-                }
-            }
-            let reorderedInputChildren = ordered.compactMap {
-                inputByNode[ObjectIdentifier($0)]
-            }
-            if reorderedInputChildren.count == inputNode.children.count {
-                inputNode.children = reorderedInputChildren
-                inputNode.scene?.invalidateHitCache()
-            }
-        }
+        inputNode?.scene?.invalidateHitCache()
         markRenderDirty(reason: .structuralChange)
     }
 
