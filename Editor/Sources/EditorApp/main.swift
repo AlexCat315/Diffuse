@@ -4,25 +4,18 @@ import EditorCore
 import GuavaUIApp
 import GuavaUIRuntime
 import GuavaUIWorkspace
-import GuavaKit
-import GuavaKitHost
 import RHIWGPU
 import CardBattleRuntime
 
 @MainActor
 private func runEditor() throws {
     let launchOptions = try EditorAppLaunchOptions.load()
-
-    // --legacy flag switches the entire UI pipeline from legacy
-    // GuavaUICompose + AppRuntime to the v2 GuavaKit runtime.
-    if !launchOptions.useLegacy {
-        try runGuavaKitEditor(launchOptions: launchOptions)
-    } else {
-        try runLegacyEditor(launchOptions: launchOptions)
-    }
+    // The real editor runs on the legacy GuavaUICompose + AppRuntime stack.
+    // The GuavaKit v2 runtime remains only as an architecture blueprint
+    // (see docs/guavaui-inplace-architecture-refactor.md) and is not wired
+    // into the editor entry point.
+    try runLegacyEditor(launchOptions: launchOptions)
 }
-
-// MARK: - Legacy path (unchanged)
 
 @MainActor
 private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
@@ -78,20 +71,6 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
     ) {
         EditorLaunchRoot(context: context)
     }
-}
-
-// MARK: - GuavaKit path
-
-/// Comprehensive GuavaKit component showcase. Demonstrates every primitive
-/// and modifier built so far in a layout that mimics a typical Editor panel.
-
-@MainActor
-private func runGuavaKitEditor(launchOptions: EditorAppLaunchOptions) throws {
-    let app = GuavaKitHostApp(
-        title: "GuavaNext Editor [GuavaKit]",
-        width: 1280, height: 720
-    )
-    try app.run(root: EditorShell())
 }
 
 // MARK: - Entry
