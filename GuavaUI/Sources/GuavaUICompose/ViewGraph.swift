@@ -454,15 +454,14 @@ public final class ViewGraph {
         node.removeFromParent()
     }
 
-    /// Per-node bookkeeping cleanup, recursive.
+    /// Per-node bookkeeping cleanup, recursive. Only the graph's own side tables
+    /// (layout mirror, observable scopes) are torn down here. External
+    /// registrations — interaction handlers, tooltip draws, portal entries,
+    /// pointer capture, focus — are released by the node lifecycle itself
+    /// (`Node.removeChild` → `releaseFromTree`), so there is no side-effect
+    /// cleanup to thread through this walk (坏味 #4 / 规则 2).
     private func tearDownSubtreeBookkeeping(_ node: Node, parentLayout: LayoutNode?) {
         let id = ObjectIdentifier(node)
-        InteractionRegistryHolder.current?.remove(node)
-        TooltipOverlayRegistry.unregister(node)
-        // Portal/overlay entries are released by the node lifecycle itself: a
-        // `PortalResource` attached to the overlay-host node is unmounted by
-        // `Node.removeChild` when the subtree leaves the tree (坏味 #4). No
-        // attachment-key cleanup is needed here.
         if let myLN = layoutOf.removeValue(forKey: id) {
             parentLayout?.removeChild(myLN)
         }
