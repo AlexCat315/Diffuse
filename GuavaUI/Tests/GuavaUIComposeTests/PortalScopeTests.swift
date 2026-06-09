@@ -25,13 +25,13 @@ struct PortalScopeTests: GuavaUIComposeSerializedSuite {
         let b = PortalStore()
 
         PortalStoreHolder.current = a
-        PortalRegistry.register(position: .zero, content: entry())
+        PortalStoreHolder.current.register(position: .zero, content: entry())
         #expect(a.entries.count == 1)
         #expect(b.entries.isEmpty)
 
         PortalStoreHolder.current = b
-        #expect(PortalRegistry.entries.isEmpty) // shim reads b now
-        PortalRegistry.register(position: .zero, content: entry())
+        #expect(PortalStoreHolder.current.entries.isEmpty) // shim reads b now
+        PortalStoreHolder.current.register(position: .zero, content: entry())
         #expect(b.entries.count == 1)
         #expect(a.entries.count == 1) // a untouched
     } }
@@ -50,12 +50,12 @@ struct PortalScopeTests: GuavaUIComposeSerializedSuite {
         ctxB.addScopedAmbient(PortalStoreAmbient(storeB))
 
         ctxA.withCurrent {
-            PortalRegistry.register(position: .zero, content: entry())
+            PortalStoreHolder.current.register(position: .zero, content: entry())
         }
         ctxB.withCurrent {
             // B's scope starts empty — A's entry did not leak in.
-            #expect(PortalRegistry.entries.isEmpty)
-            PortalRegistry.register(position: .zero, content: entry())
+            #expect(PortalStoreHolder.current.entries.isEmpty)
+            PortalStoreHolder.current.register(position: .zero, content: entry())
         }
 
         #expect(storeA.entries.count == 1)

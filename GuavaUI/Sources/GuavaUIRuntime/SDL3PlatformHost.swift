@@ -152,6 +152,7 @@ public final class SDL3PlatformHost: PlatformHost {
     public var interactions: InteractionRegistry { mainInputContext.interactions }
     public var pointerCapture: PointerCapture { mainInputContext.pointerCapture }
     public var focusChain: FocusChain { mainInputContext.focusChain }
+    public var tooltips: TooltipStore { mainInputContext.tooltips }
 
     public private(set) var drawableSize: (width: UInt32, height: UInt32) = (1, 1)
     public private(set) var logicalSize: (width: UInt32, height: UInt32) = (1, 1)
