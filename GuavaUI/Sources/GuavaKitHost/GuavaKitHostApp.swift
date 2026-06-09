@@ -254,10 +254,21 @@ public final class GuavaKitHostApp {
         case .textInput(let text):
             // IME-composed text (printable characters, CJK, pasted runs).
             session.eventAdapter.keyDown(KeyboardEvent(key: "", character: text))
+        case .mouseWheel(let e):
+            // SDL reports `y > 0` for scroll-up; a ScrollView reveals upper content
+            // as its contentOffset *decreases*, so negate. Position is already in
+            // logical points (SDL3Shell divides by the content scale).
+            session.eventAdapter.wheelScroll(
+                deltaX: -e.x * Self.scrollSpeed,
+                deltaY: -e.y * Self.scrollSpeed,
+                at: Point(x: e.mouseX ?? 0, y: e.mouseY ?? 0))
         default:
             break
         }
     }
+
+    /// Pixels of scroll per wheel notch (SDL reports ~±1 per detent).
+    private static let scrollSpeed: Float = 40
 
     private func mapButton(_ b: MouseButton) -> PointerButton {
         switch b {

@@ -57,7 +57,11 @@ public struct Button<Label: View>: _PrimitiveView {
     public func updateNode(_ node: UINode) {
         let action = self.action
         node.interaction.onPointer = { [weak node] event, phase, ctx in
-            guard let node, phase == .target else { return .ignored }
+            // Accept the press on the target *or* on bubble: a laid-out label
+            // (Text/Image) is itself hit-testable and becomes the target, so the
+            // button only sees the event bubbling up. A nested button consumes its
+            // own bubble first, so the outer button still won't fire for it.
+            guard let node, phase == .target || phase == .bubble else { return .ignored }
             switch event.action {
             case .down:
                 ctx.pointerCapture.acquire(node)
