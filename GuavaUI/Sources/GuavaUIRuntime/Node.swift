@@ -35,20 +35,18 @@ public final class Node: @unchecked Sendable {
 
     /// The rectangle assigned by the layout engine (Phase 3).
     /// Coordinates are local to the parent node.
+    ///
+    /// Geometry single funnel (坏味 #1): `frame` and the other geometry /
+    /// hit-classification fields below (`contentOffset`, `zIndex`,
+    /// `clipsToBounds`, `isHitTestable`) all route their `didSet` through
+    /// `invalidateGeometry` — the one place that drops the hit cache. There is
+    /// no second invalidation path, so a moving property cannot be added that
+    /// silently forgets to invalidate (the "works once then stops responding
+    /// after a reflow" bug class).
     public var frame: CGRect = .zero {
         didSet {
             if oldValue != frame {
-                markRenderDirty(reason: .layoutChange)
-                // A frame change moves the node, so any cached hit-test answer
-                // for a point is now stale. The hit cache is keyed on the
-                // structural `version` + point, and a layout-only move does NOT
-                // bump that version (no add/remove) — so without this the cache
-                // keeps returning a hit computed against the OLD geometry until
-                // the next structural change, silently misrouting clicks (a
-                // control "works once then stops responding" after any resize /
-                // reflow). Mirrors `contentOffset` and `zIndex`, which already
-                // invalidate here.
-                inputNode?.scene?.invalidateHitCache()
+                invalidateGeometry(reason: .layoutChange)
             }
         }
     }
@@ -75,8 +73,17 @@ public final class Node: @unchecked Sendable {
     // MARK: - Interaction (Phase 6.1)
 
     /// When false, hit-testing skips this node (children are still visited
-    /// unless `clipsToBounds` excludes them by frame).
-    public var isHitTestable: Bool = true
+    /// unless `clipsToBounds` excludes them by frame). Routes through the
+    /// geometry funnel so toggling it at runtime refreshes the input mirror
+    /// and drops the hit cache.
+    public var isHitTestable: Bool = true {
+        didSet {
+            if oldValue != isHitTestable {
+                invalidateGeometry(reason: .styleSet(field: "isHitTestable"),
+                                   classificationChanged: true)
+            }
+        }
+    }
 
     /// When true, this node may receive keyboard focus (FocusChain consideration).
     public var isFocusable: Bool = false
@@ -86,7 +93,8 @@ public final class Node: @unchecked Sendable {
     public var clipsToBounds: Bool = false {
         didSet {
             if oldValue != clipsToBounds {
-                markRenderDirty(reason: .styleSet(field: "clipsToBounds"))
+                invalidateGeometry(reason: .styleSet(field: "clipsToBounds"),
+                                   classificationChanged: true)
             }
         }
     }
@@ -193,8 +201,11 @@ public final class Node: @unchecked Sendable {
     public var zIndex: Float = 0 {
         didSet {
             if oldValue != zIndex {
-                markRenderDirty(reason: .styleSet(field: "zIndex"))
-                parent?.inputNode?.scene?.invalidateHitCache()
+                // z-order reorders hit/paint among siblings. The InputScene is
+                // shared across the whole tree (one per tree), so invalidating
+                // via this node's own scene is equivalent to the parent's and
+                // also covers the root.
+                invalidateGeometry(reason: .styleSet(field: "zIndex"))
             }
         }
     }
@@ -224,8 +235,7 @@ public final class Node: @unchecked Sendable {
     public var contentOffset: CGPoint = .zero {
         didSet {
             if oldValue != contentOffset {
-                markRenderDirty(reason: .styleSet(field: "contentOffset"))
-                inputNode?.scene?.invalidateHitCache()
+                invalidateGeometry(reason: .styleSet(field: "contentOffset"))
             }
         }
     }
@@ -356,6 +366,30 @@ public final class Node: @unchecked Sendable {
             }
         }
         markRenderDirty(reason: .structuralChange)
+    }
+
+    // MARK: - Geometry single funnel (坏味 #1)
+
+    /// The one and only path a geometry / hit-classification mutation takes to
+    /// notify caches. Every such property's `didSet` calls this after a cheap
+    /// value diff; nothing else invalidates the hit cache. Because there is a
+    /// single site, a newly added moving / hit-affecting property cannot ship
+    /// without invalidation — the structural cause of the "control responds
+    /// once then goes dead after a resize / reflow / scroll" bug is removed.
+    ///
+    /// - `reason`: forwarded to render bookkeeping / the invalidation log.
+    /// - `classificationChanged`: pass `true` only for fields the `InputScene`
+    ///   mirror snapshots (`isHitTestable`, `clipsToBounds`). Those need the
+    ///   mirror refreshed so the next hit walk reads fresh values; pure-motion
+    ///   fields (`frame`, `contentOffset`, `zIndex`) are read off the live node
+    ///   during the walk, so they skip the refresh to stay cheap per frame.
+    private func invalidateGeometry(reason: InvalidationSource,
+                                    classificationChanged: Bool = false) {
+        markRenderDirty(reason: reason)
+        if classificationChanged {
+            inputNode?.refreshFromNode()
+        }
+        inputNode?.scene?.invalidateHitCache()
     }
 
     // MARK: - Dirty propagation
