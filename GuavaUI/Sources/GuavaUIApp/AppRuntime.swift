@@ -445,7 +445,13 @@ public final class AppRuntime {
         } else {
             layerRenderer.render(tree: graph.renderTree, into: drawList)
         }
-        TooltipOverlayRegistry.drawAll(into: drawList)
+        // Explicitly this window's tooltip store. This frame hook runs OUTSIDE
+        // `session.withCurrent`, so the ambient `TooltipStoreHolder.current`
+        // would resolve to the shared default here — while Button registers
+        // tooltips during recompose (inside withCurrent) into the per-window
+        // store. Reading the store explicitly keeps register/draw on the same
+        // instance.
+        host.tooltips.drawAll(into: drawList)
         let drawEnd = TimingTrace.now()
 
         do {
@@ -942,7 +948,9 @@ private final class AuxiliaryAppWindow {
                 layerRenderer.render(tree: graph.renderTree, into: drawList)
             }
         }
-        TooltipOverlayRegistry.drawAll(into: drawList)
+        // Explicitly this window's store (we are outside withCurrent here —
+        // see the main-window handleFrame for the full invariant).
+        session.inputContext.tooltips.drawAll(into: drawList)
 
         do {
             try uploadAtlasIfNeeded(false)
