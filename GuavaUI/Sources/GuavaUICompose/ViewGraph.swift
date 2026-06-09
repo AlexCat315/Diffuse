@@ -59,12 +59,6 @@ public final class ViewGraph {
     /// every install / reconcile / tearDown.
     public let renderTree: RenderTree
 
-    /// Phase 5a: input-side mirror of the Node tree. Captures hit-test /
-    /// focus / cursor classification per node. Phase 5b will pivot
-    /// `EventDispatcher` to consume this mirror so dispatch no longer
-    /// re-walks the full Node graph each event.
-    public let inputScene: InputScene
-
     /// Root layout node mirroring `tree.root`. All layout nodes from primitive
     /// views become its descendants (skipping anchor nodes that have no layout
     /// representation).
@@ -84,7 +78,6 @@ public final class ViewGraph {
         self.recomposer = recomposer
         self.layoutTree = LayoutTree()
         self.renderTree = RenderTree()
-        self.inputScene = InputScene()
     }
 
     // MARK: - Install
@@ -96,7 +89,6 @@ public final class ViewGraph {
         layoutOf[ObjectIdentifier(rootNode)] = layoutRoot
         _ = materialise(root, into: rootNode, layoutParent: layoutRoot)
         renderTree.install(rootNode: rootNode)
-        inputScene.install(rootNode: rootNode)
     }
 
     // MARK: - Layout
@@ -160,7 +152,6 @@ public final class ViewGraph {
         } else {
             node.attachments.removeValue(forKey: TextInputAttachmentKey.area)
         }
-        inputScene.refresh(node: node)
     }
 
     /// Layout node paired with `node`, if any.
@@ -391,8 +382,6 @@ public final class ViewGraph {
 
         // Phase 4a: keep the RenderTree mirror in sync with the new child list.
         renderTree.reconcileChildren(of: parent)
-        // Phase 5a: keep the InputScene mirror in sync as well.
-        inputScene.reconcileChildren(of: parent)
     }
 
     /// Refresh the properties of an already-materialised node from `view`,
@@ -411,9 +400,6 @@ public final class ViewGraph {
 
         if let prim = view as? any _PrimitiveView {
             prim._updateNode(node)
-            // Phase 5a: re-read input classification after primitive may
-            // have toggled isHitTestable / isFocusable / cursor.
-            inputScene.refresh(node: node)
             let myLayout = layoutOf[ObjectIdentifier(node)]
             if let ln = myLayout { prim._updateLayout(ln) }
             reconcileChildren(parent: node,
@@ -449,8 +435,6 @@ public final class ViewGraph {
         // Phase 4a: drop RenderObject mirror BEFORE removing from parent so
         // we still know the parent linkage.
         renderTree.tearDown(node: node)
-        // Phase 5a: drop InputNode mirror as well.
-        inputScene.tearDown(node: node)
         node.removeFromParent()
     }
 
