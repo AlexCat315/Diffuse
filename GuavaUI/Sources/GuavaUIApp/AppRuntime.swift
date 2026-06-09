@@ -138,9 +138,15 @@ public final class AppRuntime {
         self.renderer = DrawListRenderer(backend: resolvedBackend)
         self.imageAssets = ImageAssetRegistry(renderer: renderer)
         self.viewportTextures = ViewportTextureRegistry(renderer: renderer)
+        // Each window gets its own portal store (规则 3): an open overlay in one
+        // window can never paint into or swallow clicks for another. The store is
+        // swapped in lockstep with the window's input registries via withCurrent.
+        let mainInputContext = PlatformInputContext()
+        mainInputContext.addScopedAmbient(PortalStoreAmbient(PortalStore()))
         self.host = SDL3PlatformHost(
             title: config.title,
-            mainWindowOptions: WindowOptions(titleBarStyle: config.titleBarStyle.platformStyle)
+            mainWindowOptions: WindowOptions(titleBarStyle: config.titleBarStyle.platformStyle),
+            inputContext: mainInputContext
         )
         self.host.setTargetFrameRate(config.targetFrameRate)
         self.graph = ViewGraph(tree: tree, recomposer: host.recomposer)
@@ -667,6 +673,7 @@ public final class AppRuntime {
             let tree = NodeTree()
             let recomposer = Recomposer()
             let inputContext = PlatformInputContext()
+            inputContext.addScopedAmbient(PortalStoreAmbient(PortalStore()))
             let session = try host.openWindow(
                 title: request.title,
                 tree: tree,
