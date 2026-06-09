@@ -21,33 +21,38 @@ public struct PortalEntry: Identifiable {
     }
 }
 
-public enum PortalRegistry {
-    nonisolated(unsafe) private static var storage: [String: PortalEntry] = [:]
-    nonisolated(unsafe) private static var observers: [UUID: (Int) -> Void] = [:]
-    nonisolated(unsafe) private static var currentRevision: Int = 0
+/// Per-window store of overlay (popover/menu/tooltip) entries.
+///
+/// Phase 3 (坏味 #3): the storage moved off `PortalRegistry`'s process-global
+/// `enum` statics into this instance so each window owns its own overlay layer —
+/// one window's open dropdown can never paint into, or swallow clicks for,
+/// another's. The legacy `PortalRegistry` static API is kept as a thin shim
+/// forwarding to the current scope's store (see `PortalStoreHolder`), so every
+/// existing call site is unchanged.
+public final class PortalStore {
+    private var storage: [String: PortalEntry] = [:]
+    private var observers: [UUID: (Int) -> Void] = [:]
+    private var currentRevision: Int = 0
 
-    public static var entries: [PortalEntry] {
+    public init() {}
+
+    public var entries: [PortalEntry] {
         storage.values.sorted { $0.id < $1.id }
     }
 
-    public static var revision: Int {
-        currentRevision
-    }
+    public var revision: Int { currentRevision }
 
     @discardableResult
-    public static func register(id: String = UUID().uuidString,
-                                position: CGPoint,
-                                width: Float? = nil,
-                                content: AnyView) -> String {
-        storage[id] = PortalEntry(id: id,
-                                  position: position,
-                                  width: width,
-                                  content: content)
+    public func register(id: String = UUID().uuidString,
+                         position: CGPoint,
+                         width: Float? = nil,
+                         content: AnyView) -> String {
+        storage[id] = PortalEntry(id: id, position: position, width: width, content: content)
         notifyChanged()
         return id
     }
 
-    public static func updatePosition(_ id: String, position: CGPoint) {
+    public func updatePosition(_ id: String, position: CGPoint) {
         guard var entry = storage[id] else { return }
         guard entry.position != position else { return }
         entry.position = position
@@ -55,47 +60,105 @@ public enum PortalRegistry {
         notifyChanged()
     }
 
-    public static func updateContent(_ id: String, content: AnyView) {
+    public func updateContent(_ id: String, content: AnyView) {
         guard var entry = storage[id] else { return }
         entry.content = content
         storage[id] = entry
         notifyChanged()
     }
 
-    /// Whether a live entry with `id` is currently registered. Used by the
-    /// Popover overlay host to detect a stale id carried by a reused node.
-    public static func contains(_ id: String) -> Bool {
-        storage[id] != nil
-    }
+    public func contains(_ id: String) -> Bool { storage[id] != nil }
 
-    public static func unregister(_ id: String) {
+    public func unregister(_ id: String) {
         guard storage.removeValue(forKey: id) != nil else { return }
         notifyChanged()
     }
 
-    public static func clear() {
+    public func clear() {
         guard !storage.isEmpty else { return }
         storage.removeAll()
         notifyChanged()
     }
 
     @discardableResult
-    static func addObserver(_ observer: @escaping (Int) -> Void) -> UUID {
+    func addObserver(_ observer: @escaping (Int) -> Void) -> UUID {
         let id = UUID()
         observers[id] = observer
         return id
     }
 
-    static func removeObserver(_ id: UUID) {
+    func removeObserver(_ id: UUID) {
         observers.removeValue(forKey: id)
     }
 
-    private static func notifyChanged() {
+    private func notifyChanged() {
         currentRevision &+= 1
         let revision = currentRevision
         for observer in observers.values {
             observer(revision)
         }
+    }
+}
+
+/// Holds the portal store made "current" by the active window's
+/// `PlatformInputContext` (via `PortalStoreAmbient`). Defaults to a shared
+/// instance so single-window hosts and tests that never install a scope keep
+/// working unchanged.
+public enum PortalStoreHolder {
+    nonisolated(unsafe) public static let shared = PortalStore()
+    /// Main-thread-only ambient: overlays are mutated only on the main thread,
+    /// and the active store is swapped only inside `withCurrent`.
+    nonisolated(unsafe) public static var current: PortalStore = shared
+}
+
+/// Adapts a per-window `PortalStore` to the runtime's `ScopedAmbient` hook so it
+/// is swapped in lockstep with that window's input registries. Attach one to a
+/// window's `PlatformInputContext` via `addScopedAmbient`.
+public final class PortalStoreAmbient: ScopedAmbient {
+    public let store: PortalStore
+    public init(_ store: PortalStore) { self.store = store }
+    public func activate() -> () -> Void {
+        let previous = PortalStoreHolder.current
+        PortalStoreHolder.current = store
+        return { PortalStoreHolder.current = previous }
+    }
+}
+
+/// Compatibility shim: forwards the legacy static API to the current scope's
+/// `PortalStore`. Call sites (PortalHost, PortalResource) are unchanged; the
+/// storage is now per-window.
+public enum PortalRegistry {
+    public static var entries: [PortalEntry] { PortalStoreHolder.current.entries }
+    public static var revision: Int { PortalStoreHolder.current.revision }
+
+    @discardableResult
+    public static func register(id: String = UUID().uuidString,
+                                position: CGPoint,
+                                width: Float? = nil,
+                                content: AnyView) -> String {
+        PortalStoreHolder.current.register(id: id, position: position, width: width, content: content)
+    }
+    public static func updatePosition(_ id: String, position: CGPoint) {
+        PortalStoreHolder.current.updatePosition(id, position: position)
+    }
+    public static func updateContent(_ id: String, content: AnyView) {
+        PortalStoreHolder.current.updateContent(id, content: content)
+    }
+    public static func contains(_ id: String) -> Bool {
+        PortalStoreHolder.current.contains(id)
+    }
+    public static func unregister(_ id: String) {
+        PortalStoreHolder.current.unregister(id)
+    }
+    public static func clear() {
+        PortalStoreHolder.current.clear()
+    }
+    @discardableResult
+    static func addObserver(_ observer: @escaping (Int) -> Void) -> UUID {
+        PortalStoreHolder.current.addObserver(observer)
+    }
+    static func removeObserver(_ id: UUID) {
+        PortalStoreHolder.current.removeObserver(id)
     }
 }
 
