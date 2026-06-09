@@ -1,16 +1,10 @@
-// TODO: Full migration blocked by TextField widget (batch 4).
-// Structure migrated to GuavaKit.View; TextField and button style calls commented out.
-// See original in git history for the GuavaUICompose version.
-
 import EditorCore
 import GuavaKit
 
 struct CommandPaletteOverlay: GuavaKit.View {
     let app: EditorApplication
     @Observed var store: EditorStore
-
-    // TODO: Restore when TextField is available
-    // @State private var text: String = ""
+    @State var inputText: String = ""
 
     init(app: EditorApplication) {
         self.app = app
@@ -18,8 +12,6 @@ struct CommandPaletteOverlay: GuavaKit.View {
     }
 
     var body: some GuavaKit.View {
-        let isResolving = store.aiStatusMessage == "Resolving…"
-
         // Full-screen backdrop
         Column(alignment: .center, spacing: 0) {
 
@@ -32,12 +24,6 @@ struct CommandPaletteOverlay: GuavaKit.View {
                         .foregroundColor(.onSurface)
                         .flex(1, shrink: 1)
 
-                    if isResolving {
-                        Text(L("Resolving…"))
-                            .font(.caption)
-                            .foregroundColor(.onSurfaceMuted)
-                    }
-
                     Button(action: { dismiss() }) {
                         Text("✕")
                             .font(.caption)
@@ -48,30 +34,23 @@ struct CommandPaletteOverlay: GuavaKit.View {
 
                 Divider()
 
-                // TODO: TextField — batch 4
-                Text(L("Describe what you want to do…"))
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
-                    .padding(horizontal: 14, vertical: 10)
+                // Text input
+                TextField(
+                    text: inputText,
+                    placeholder: L("Describe what you want to do…"),
+                    onChange: { inputText = $0 },
+                    onSubmit: { submitAndClose() }
+                )
+                .padding(horizontal: 14, vertical: 10)
 
                 Divider()
 
                 // Hint row
                 Row(alignment: .center, spacing: 6) {
-                    Text(L("Enter to submit · Escape to close · Cmd+K to reopen"))
+                    Text(L("Enter to submit · Escape to close"))
                         .font(.caption)
                         .foregroundColor(.onSurfaceMuted)
                         .flex(1, shrink: 1)
-
-                    let providerLabel = store.aiSettings.provider == .none
-                        ? L("keyword only")
-                        : store.aiSettings.provider.displayName
-                    Text(providerLabel)
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
-                        .padding(horizontal: 6, vertical: 2)
-                        .background(.surfaceSunken)
-                        .cornerRadius(2)
                 }
                 .padding(horizontal: 14, vertical: 8)
             }
@@ -80,11 +59,18 @@ struct CommandPaletteOverlay: GuavaKit.View {
             .cornerRadius(6)
             .padding(horizontal: 0, vertical: 80)
         }
-        .frame(width: nil, height: nil) // will be % when percent support lands
         .background(.overlay)
+    }
+
+    private func submitAndClose() {
+        let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        app.submitNaturalLanguageIntent(trimmed)
+        dismiss()
     }
 
     private func dismiss() {
         app.store.dispatch(.setCommandPaletteVisible(false))
+        inputText = ""
     }
 }

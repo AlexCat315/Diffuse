@@ -93,9 +93,13 @@ public final class ViewGraph {
             slot.view.updateNode(node)
             // The PortalHost's children come from the (scoped) portal store, not
             // from the view value — so overlays render on top via this one host.
-            let childViews: [any View] = (slot.view is _PortalHostMarker)
-                ? context.portals.orderedEntries.map { _PortalSlot(entry: $0) }
-                : slot.view.childViews
+            let childViews: [any View]
+            if slot.view is _PortalHostMarker {
+                context.portalHostNode = node
+                childViews = context.portals.orderedEntries.map { _PortalSlot(entry: $0) }
+            } else {
+                childViews = slot.view.childViews
+            }
             reconcileChildren(parent: node, path: slot.path, newViews: childViews)
         }
     }

@@ -4,7 +4,8 @@ import GuavaKitHost
 // MARK: - Editor Shell
 
 /// Main editor dock layout: sidebar (left) | content (center) | inspector (right)
-/// with a console panel spanning the bottom.
+/// with a console panel spanning the bottom. Fills the window: every region uses
+/// `.flex`/stretch so it scales with the viewport instead of shrinking to content.
 ///
 /// Replaces the legacy `WorkspaceView` dock system.
 public struct EditorShell: GuavaKit.View {
@@ -16,37 +17,42 @@ public struct EditorShell: GuavaKit.View {
     public init() {}
 
     public var body: some GuavaKit.View {
-        GuavaKit.Stack(.column) {
-            // ── Top: left | center | right ──
-            editorTopRow
-
-            // ── Bottom: console / output ──
+        GuavaKit.Column(alignment: .stretch, spacing: 0) {
+            // ── Top: left | center | right (fills the space above the dock) ──
+            editorTopRow.flex(1)
+            // ── Bottom: console / output (fixed height) ──
             bottomPanel
         }
+        .flex(1)
+        .background(Palette.background)
     }
 
     // MARK: - Top row (three-column layout)
 
     @GuavaKit.ViewBuilder
     private var editorTopRow: some GuavaKit.View {
-        GuavaKit.Stack(.row) {
+        GuavaKit.Row(alignment: .stretch, spacing: 0) {
             // ── Left sidebar ──
-            panelGroup(title: "Hierarchy", width: leftWidth) {
+            panelGroup(title: "HIERARCHY") {
                 placeholderContent("Scene Hierarchy", icon: "🌳")
             }
+            .frame(width: leftWidth)
 
             // ── Center (viewport + toolbar) ──
-            centerArea
+            centerArea.flex(1)
 
             // ── Right sidebar ──
-            GuavaKit.Stack(.column) {
-                panelGroup(title: "Inspector", width: rightWidth) {
+            GuavaKit.Column(alignment: .stretch, spacing: 0) {
+                panelGroup(title: "INSPECTOR") {
                     placeholderContent("Inspector", icon: "🔍")
                 }
-                panelGroup(title: "Assets", width: rightWidth) {
+                .flex(1)
+                panelGroup(title: "ASSETS") {
                     placeholderContent("Asset Browser", icon: "📦")
                 }
+                .flex(1)
             }
+            .frame(width: rightWidth)
         }
     }
 
@@ -54,11 +60,17 @@ public struct EditorShell: GuavaKit.View {
 
     @GuavaKit.ViewBuilder
     private var centerArea: some GuavaKit.View {
-        GuavaKit.Stack(.column) {
-            // Toolbar
+        GuavaKit.Column(alignment: .stretch, spacing: 0) {
             editorToolbar
-            // Viewport placeholder
-            placeholderContent("3D Viewport", icon: "🎮").background(GuavaKit.Color(r: 0.06, g: 0.06, b: 0.08))
+            // Viewport placeholder — fills the remaining center space.
+            GuavaKit.Column(alignment: .center, spacing: 8) {
+                GuavaKit.Spacer()
+                GuavaKit.Text("🎮", fontSize: 40)
+                GuavaKit.Text("3D Viewport", color: Palette.textMuted, fontSize: 13)
+                GuavaKit.Spacer()
+            }
+            .flex(1)
+            .background(Palette.viewport)
         }
     }
 
@@ -66,123 +78,135 @@ public struct EditorShell: GuavaKit.View {
 
     @GuavaKit.ViewBuilder
     private var editorToolbar: some GuavaKit.View {
-        GuavaKit.Stack(.row, spacing: 4) {
+        GuavaKit.Row(alignment: .center, spacing: 4) {
             toolbarButton("▶")
             toolbarButton("⏸")
             toolbarButton("⏹")
             GuavaKit.Spacer()
-            GuavaKit.Text("GuavaNext Editor", color: GuavaKit.Color(r: 0.5, g: 0.5, b: 0.6), fontSize: 11)
+            GuavaKit.Text("GuavaNext Editor", color: Palette.textMuted, fontSize: 11)
             GuavaKit.Spacer()
             toolbarButton("⚙")
         }
+        .padding(GuavaKit.Edges.all(6))
+        .background(Palette.surfaceVariant)
     }
 
     // MARK: - Bottom panel
 
     @GuavaKit.ViewBuilder
     private var bottomPanel: some GuavaKit.View {
-        GuavaKit.Stack(.column) {
-            GuavaKit.Divider(color: GuavaKit.Color(r: 0.2, g: 0.2, b: 0.25))
-            // Tab bar
+        GuavaKit.Column(alignment: .stretch, spacing: 0) {
+            GuavaKit.Divider(color: Palette.border)
             bottomTabBar
-            // Content
-            bottomContent
-        }.frame(height: bottomHeight)
+            bottomContent.flex(1)
+        }
+        .frame(height: bottomHeight)
+        .background(Palette.surface)
     }
 
     @GuavaKit.ViewBuilder
     private var bottomTabBar: some GuavaKit.View {
-        GuavaKit.Stack(.row, spacing: 0) {
+        GuavaKit.Row(alignment: .center, spacing: 0) {
             bottomTab("Console")
             bottomTab("Output")
             GuavaKit.Spacer()
         }
-        .background(GuavaKit.Color(r: 0.12, g: 0.12, b: 0.16))
+        .background(Palette.surfaceSunken)
     }
 
     private func bottomTab(_ name: String) -> some GuavaKit.View {
         let isActive = name == activeBottomTab
         return GuavaKit.Button(action: { activeBottomTab = name }) {
             GuavaKit.Text(name, fontSize: 12)
-                .foregroundColor(isActive ? GuavaKit.Color(r: 1, g: 1, b: 1) : GuavaKit.Color(r: 0.4, g: 0.4, b: 0.5))
-                .padding(Edges.all(8))
-                .background(isActive ? GuavaKit.Color(r: 0.16, g: 0.16, b: 0.20) : GuavaKit.Color(r: 0, g: 0, b: 0, a: 0))
+                .foregroundColor(isActive ? Palette.text : Palette.textMuted)
+                .padding(GuavaKit.Edges.all(8))
+                .background(isActive ? Palette.surfaceVariant : Palette.clear)
         }
     }
 
     @GuavaKit.ViewBuilder
     private var bottomContent: some GuavaKit.View {
         GuavaKit.ScrollView(.column) {
-            consoleOutput
+            consoleOutput.padding(GuavaKit.Edges.all(8))
         }
+        .background(Palette.surfaceSunken)
     }
 
     // MARK: - Helpers
 
-    private func panelGroup<Content: GuavaKit.View>(title: String, width: Float,
-                                                      @GuavaKit.ViewBuilder content: () -> Content) -> some GuavaKit.View {
-        GuavaKit.Stack(.column) {
+    private func panelGroup<Content: GuavaKit.View>(title: String,
+                                                    @GuavaKit.ViewBuilder content: () -> Content) -> some GuavaKit.View {
+        GuavaKit.Column(alignment: .stretch, spacing: 0) {
             // Panel header
-            GuavaKit.Stack(.row, spacing: 4) {
-                GuavaKit.Text(title, color: GuavaKit.Color(r: 0.6, g: 0.6, b: 0.7), fontSize: 11)
+            GuavaKit.Row(alignment: .center, spacing: 4) {
+                GuavaKit.Text(title, color: Palette.textMuted, fontSize: 11)
                 GuavaKit.Spacer()
             }
-            GuavaKit.Divider(color: GuavaKit.Color(r: 0.18, g: 0.18, b: 0.22))
-            // Panel body
-            content()
-                .background(GuavaKit.Color(r: 0.10, g: 0.10, b: 0.13))
+            .padding(GuavaKit.Edges.all(8))
+            GuavaKit.Divider(color: Palette.border)
+            // Panel body — fills the rest of the panel.
+            content().flex(1)
         }
-        .frame(width: width)
-        .background(GuavaKit.Color(r: 0.10, g: 0.10, b: 0.13))
+        .background(Palette.surface)
     }
 
     private func toolbarButton(_ label: String) -> some GuavaKit.View {
         GuavaKit.Button(action: {}) {
             GuavaKit.Text(label, fontSize: 14)
-                .foregroundColor(GuavaKit.Color(r: 0.7, g: 0.7, b: 0.8))
-                .padding(Edges.all(4))
+                .foregroundColor(Palette.text)
+                .padding(GuavaKit.Edges.all(6))
         }
     }
 
     private func placeholderContent(_ title: String, icon: String) -> some GuavaKit.View {
-        GuavaKit.Stack(.column, spacing: 8) {
-            GuavaKit.Text(icon, fontSize: 32)
-            GuavaKit.Text(title, color: GuavaKit.Color(r: 0.4, g: 0.4, b: 0.5), fontSize: 13)
+        GuavaKit.Column(alignment: .center, spacing: 8) {
+            GuavaKit.Spacer()
+            GuavaKit.Text(icon, fontSize: 28)
+            GuavaKit.Text(title, color: Palette.textMuted, fontSize: 12)
+            GuavaKit.Spacer()
         }
     }
 
     // Placeholder console output.
     @GuavaKit.ViewBuilder
     private var consoleOutput: some GuavaKit.View {
-        GuavaKit.Stack(.column, spacing: 1) {
-            consoleLine("[GuavaKit] EditorShell initialized", type: .info)
-            consoleLine("[GuavaKit] Dock layout: left(260) | center(flex) | right(300)", type: .info)
-            consoleLine("[GuavaKit] Bottom panel: Console + Output tabs", type: .info)
-            consoleLine("", type: .info)
-            consoleLine("// Welcome to GuavaKit v2 Editor", type: .info)
-            consoleLine("// Architecture:", type: .info)
-            consoleLine("//   SDL3 → EventAdapter → ViewGraph → Painter → DisplayListRenderer → wgpu", type: .muted)
-            consoleLine("", type: .info)
-            consoleLine("// Single funnel: setGeometry() → DirtyFlags → invalidate", type: .muted)
-            consoleLine("// Scoped context: UIContext per window, no globals", type: .muted)
-            consoleLine("// Lifecycle: NodeResource mounts/detaches with node tree", type: .muted)
-            consoleLine("", type: .info)
-            for i in 1...15 {
-                consoleLine("log line \(i): all systems nominal", type: .info)
+        GuavaKit.Column(alignment: .start, spacing: 2) {
+            consoleLine("[GuavaKit] EditorShell initialized", .info)
+            consoleLine("[GuavaKit] Dock: left(260) | center(flex) | right(300)", .info)
+            consoleLine("// Welcome to GuavaKit v2 Editor", .muted)
+            consoleLine("// SDL3 → EventAdapter → ViewGraph → Painter → wgpu", .muted)
+            consoleLine("// Single funnel: setGeometry() → DirtyFlags → invalidate", .muted)
+            consoleLine("// Lifecycle: NodeResource mounts/detaches with the tree", .muted)
+            for i in 1...12 {
+                consoleLine("log line \(i): all systems nominal", .info)
             }
         }
     }
 
     private enum ConsoleLineType { case info, warn, error, muted }
 
-    private func consoleLine(_ text: String, type: ConsoleLineType = .info) -> some GuavaKit.View {
+    private func consoleLine(_ text: String, _ type: ConsoleLineType = .info) -> some GuavaKit.View {
         let color: GuavaKit.Color
         switch type {
-        case .info:  color = GuavaKit.Color(r: 0.7, g: 0.7, b: 0.7)
+        case .info:  color = Palette.text
         case .warn:  color = GuavaKit.Color(r: 1, g: 0.8, b: 0.2)
         case .error: color = GuavaKit.Color(r: 1, g: 0.25, b: 0.25)
-        case .muted: color = GuavaKit.Color(r: 0.35, g: 0.35, b: 0.40)
+        case .muted: color = Palette.textMuted
         }
         return GuavaKit.Text(text, color: color, fontSize: 12)
     }
+}
+
+// MARK: - Palette (masterplan dark theme)
+
+private enum Palette {
+    static let background     = GuavaKit.Color(r: 0.075, g: 0.082, b: 0.102) // #13151A
+    static let surface        = GuavaKit.Color(r: 0.106, g: 0.118, b: 0.141) // #1B1E24
+    static let surfaceVariant = GuavaKit.Color(r: 0.137, g: 0.153, b: 0.184) // #23272F
+    static let surfaceSunken  = GuavaKit.Color(r: 0.086, g: 0.094, b: 0.118) // #16181E
+    static let viewport       = GuavaKit.Color(r: 0.055, g: 0.060, b: 0.075)
+    static let border         = GuavaKit.Color(r: 0.165, g: 0.184, b: 0.220) // #2A2F38
+    static let text           = GuavaKit.Color(r: 0.906, g: 0.922, b: 0.949) // #E7EBF2
+    static let textMuted      = GuavaKit.Color(r: 0.529, g: 0.569, b: 0.627) // #8791A0
+    static let clear          = GuavaKit.Color(r: 0, g: 0, b: 0, a: 0)
 }

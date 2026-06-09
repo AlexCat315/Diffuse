@@ -60,4 +60,11 @@ public final class EventAdapter {
                             at position: Point) -> EventResult {
         dispatcher.dispatchWheel(WheelEvent(deltaX: deltaX, deltaY: deltaY, position: position))
     }
+
+    // MARK: - Keyboard
+
+    @discardableResult
+    public func keyDown(_ event: KeyboardEvent) -> EventResult {
+        dispatcher.dispatchKeyDown(event)
+    }
 }
