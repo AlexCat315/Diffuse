@@ -305,9 +305,9 @@ struct ButtonHost: _PrimitiveView {
                              atlas: env.atlas)
             }
 
-            TooltipOverlayRegistry.register(node, draw: draw)
+            TooltipStoreHolder.current.register(node, draw: draw)
         } else {
-            TooltipOverlayRegistry.unregister(node)
+            TooltipStoreHolder.current.unregister(node)
         }
 
         // Default cursor for buttons: `.pointer` when interactive,

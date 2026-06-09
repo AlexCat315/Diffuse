@@ -12,8 +12,8 @@ struct PortalLayoutTests: GuavaUIComposeSerializedSuite {
     @Test("PortalHost does not participate in LayerRoot content flex")
     func portalHostDoesNotAffectContentFlex() {
         GlobalTestLock.locked {
-            PortalRegistry.clear()
-            PortalRegistry.register(id: "test-popover",
+            PortalStoreHolder.current.clear()
+            PortalStoreHolder.current.register(id: "test-popover",
                                     position: CGPoint(x: 24, y: 32),
                                     width: 120,
                                     content: AnyView(
@@ -21,7 +21,7 @@ struct PortalLayoutTests: GuavaUIComposeSerializedSuite {
                                             .frame(height: 96)
                                             .debugName("portal-content")
                                     ))
-            defer { PortalRegistry.clear() }
+            defer { PortalStoreHolder.current.clear() }
 
             let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
             graph.install(root:

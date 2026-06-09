@@ -5,7 +5,7 @@ public struct PortalHost: View {
     @State private var revision: Int
 
     public init() {
-        _revision = State(wrappedValue: PortalRegistry.revision)
+        _revision = State(wrappedValue: PortalStoreHolder.current.revision)
     }
 
     public var body: some View {
@@ -34,7 +34,12 @@ private struct _PortalHostPrimitive: _PrimitiveView {
             observer.onRevisionChanged = onRevisionChanged
         } else {
             let observer = PortalHostObserver(onRevisionChanged: onRevisionChanged)
-            observer.token = PortalRegistry.addObserver { [weak observer] revision in
+            // Observe THIS window's store (the scoped ambient during recompose)
+            // and remember it, so removal in `deinit` targets the same store —
+            // not whichever window's store happens to be ambient at that time.
+            let store = PortalStoreHolder.current
+            observer.store = store
+            observer.token = store.addObserver { [weak observer] revision in
                 observer?.notify(revision)
             }
             node.attachments[PortalHostObserver.attachmentKey] = observer
@@ -47,7 +52,7 @@ private struct _PortalHostPrimitive: _PrimitiveView {
 
     var _children: [any View] {
         _ = revision
-        return PortalRegistry.entries.map { entry in
+        return PortalStoreHolder.current.entries.map { entry in
             _PortalEntrySlot(entry: entry)
                 .id(entry.id)
         }
@@ -59,6 +64,9 @@ private final class PortalHostObserver {
 
     var onRevisionChanged: (Int) -> Void
     var token: UUID?
+    /// The store this observer registered with. Weak: the store belongs to the
+    /// window's input context; a lingering observer must not keep it alive.
+    weak var store: PortalStore?
 
     init(onRevisionChanged: @escaping (Int) -> Void) {
         self.onRevisionChanged = onRevisionChanged
@@ -66,7 +74,7 @@ private final class PortalHostObserver {
 
     deinit {
         if let token {
-            PortalRegistry.removeObserver(token)
+            store?.removeObserver(token)
         }
     }
 

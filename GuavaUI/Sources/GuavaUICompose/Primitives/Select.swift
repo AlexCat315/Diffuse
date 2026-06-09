@@ -569,7 +569,7 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
     }
 
     var _children: [any View] {
-        // Content is portal-rendered via PortalRegistry + PortalHost
+        // Content is portal-rendered via the window-scoped PortalStore + PortalHost
         []
     }
 }
