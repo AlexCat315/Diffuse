@@ -5,6 +5,12 @@ import PlatformShell
 ///
 /// Nodes are reference types — identity is by pointer.
 /// Dirty flags propagate upward so the root always knows when a flush is needed.
+///
+/// Invariant: the scene tree is owned and mutated only on the main thread (the
+/// host run loop drives compose / layout / dispatch there). `@unchecked
+/// Sendable` records that contract — nodes are never mutated concurrently — so
+/// they can cross the `Sendable` boundaries the runtime API imposes without
+/// per-field synchronisation.
 public final class Node: @unchecked Sendable {
 
     // MARK: - Identity

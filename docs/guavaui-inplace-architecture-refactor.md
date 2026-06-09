@@ -173,7 +173,29 @@ GuavaKit 已经验证这几条规则能让上述 bug **在架构上无法表达*
 ## 8. 执行顺序(按你定的)
 
 1. ✅ 本文档(重构计划)
-2. 移除走偏代码(§5 删除项 + 默认切回 legacy)
-3. 原地重构 GuavaUIRuntime 架构(Phase 0 → 5)
-4. **你验证**:原编辑器依赖的 GuavaUI 组件 bug 是否解决 + 代码是否生产级
+2. ✅ 移除走偏代码(§5 删除项 + 默认切回 legacy)
+3. ✅ 原地重构 GuavaUIRuntime 架构(Phase 0 → 5)
+4. **你验证**:原编辑器依赖的 GuavaUI 组件 bug 是否解决 + 代码是否生产级 ← 当前在这里
 5. 架构验收通过后:做新组件 + 对着 mockup 重设计编辑器 UI
+
+---
+
+## 9. 执行记录(2026-06-09 完成 step 2–3)
+
+| 阶段 | 提交 | 内容 | 验收测试 |
+|---|---|---|---|
+| Step 2 | `4060202a` | 编辑器默认切回 legacy;删 `runGuavaKitEditor`/`EditorShell`/`Tree.swift`+`TreeTests`;`EditorApp` 去掉 `GuavaKitHost` 依赖。GuavaKit/GuavaKitHost 作蓝图保留。batch-6 面板按你的决定保留。 | — |
+| Phase 0 | `4060202a` | `GeometryFunnelReproTests` 钉死"点一次就卡死":`clipsToBounds`/`isHitTestable` 运行时改动后命中缓存+输入镜像不失效(red)。 | red→green |
+| Phase 1 | `4060202a` | `Node.invalidateGeometry` 单一入口,收敛 frame/contentOffset/zIndex/clipsToBounds/isHitTestable 的失效;公开 API 不变。 | 上面的 repro 转绿 |
+| Phase 2 | `7bd9e323` | `NodeResource`(mount/unmount)+ `Node` 资源数组;`removeChild` 递归 unmount 整棵子树。Popover 改为节点持有的 `PortalResource`;删 `_PopoverFrontmostModifier` 与 ViewGraph 里的 attachment-key 清理。 | `NodeResourceTests` + 既有 `PopoverTests`(泄漏/churn/reopen) |
+| Phase 3 | `e350e8d5` | Portal/Tooltip 存储下沉到每窗口实例(`PortalStore`/`TooltipStore`);`PortalRegistry`/`TooltipOverlayRegistry` 变转发垫片;`PlatformInputContext` 加 `ScopedAmbient` 钩子,`AppRuntime` 给每个窗口挂独立 `PortalStore`。 | `PortalScopeTests`(多 scope 隔离 + 嵌套 save/restore) |
+| Phase 4 | `1d8f7002` | `Node.reorderChildren` 只重排 Node.children(唯一真源);渲染/输入镜像只由 reconciler 的 `reconcileChildren` 重建,删掉重复的手写镜像重排。 | `FourTreeConsistencyTests`(reorder/remove/insert 压力下三树不漂移) |
+| Phase 5 | (本提交) | 验证全套(Runtime 174 / Compose 306+5 / Kit 蓝图 101 / App+Workspace XCTest 全绿;Editor 包编译通过);补 `@unchecked Sendable` / 每窗口 ambient 的不变量注释。 | 全套绿 |
+
+**已知遗留**(非本次回归):GuavaUI 整包 `swift test`(swift-testing 侧)在并行下偶发 signal 11/5,崩在 image-decode / DevServer-socket 等无关用例,`--no-parallel` 仍现;HEAD 基线(改动全 stash)同样复现。用 `--filter <Suite>` 跑各套件稳定全绿。详见 memory `project-test-gotchas`。
+
+**镜像未收掉**:Phase 4 取"只收敛同步路径"(文档允许的较稳方案),`InputNode` 镜像仍在(FocusChain/EventDispatcher/命中缓存都挂在上面);彻底收掉镜像是后续可选项。
+
+**全局垫片仍在**:`PortalRegistry`/`TooltipOverlayRegistry`/`*Holder.current` 作为转发垫片保留(调用点零改动);存储已是每窗口实例,隔离已成立。彻底删全局、改为显式传 scope 是后续长尾。
+
+> 待你 step 4 验收通过后:按 §5 末尾删除整个 GuavaKit/GuavaKitHost target,再进 step 5(新组件 + 重设计编辑器 UI)。
