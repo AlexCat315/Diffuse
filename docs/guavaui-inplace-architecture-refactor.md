@@ -193,11 +193,13 @@ GuavaKit 已经验证这几条规则能让上述 bug **在架构上无法表达*
 | Phase 5 | `d808a63b` | 验证全套(Runtime 174 / Compose 306+5 / Kit 蓝图 101 / App+Workspace XCTest 全绿;Editor 包编译通过);补 `@unchecked Sendable` / 每窗口 ambient 的不变量注释。 | 全套绿 |
 | Phase 6 | `7b327530` | 把 §6.2"外部注册只由节点生命周期释放"补全:交互处理器 / tooltip 改为注册时挂的节点资源(`InteractionCleanupResource`/`TooltipCleanupResource`);指针捕获 / 焦点在 `Node.releaseFromTree` 集中释放(顺带修了 `PointerCapture.target` 强引用导致的捕获泄漏/卡死);`ViewGraph.tearDownSubtreeBookkeeping` 不再做任何外部注册清理。 | `NodeLifecycleCleanupTests`(含捕获泄漏修复) |
 | Phase 7 | `e84e2e97` | **收掉 InputNode 镜像(四树→三树)**:删 `InputScene`/`InputNode` + `Node.inputNode` + ViewGraph 的镜像维护;命中测试只走活的 Node 树(`HitTester.hitTest(rootNode:)`),`EventDispatcher`/`FocusChain` 直接读 Node 的分类字段;DevTools 从活树算 inventory。命中缓存:不再引入进程级 ambient 缓存(那是 core path 上的坏味 #3、且并行测试互相打架),直接**去掉缓存**——每次命中重走 Node 树(O(节点) 的廉价矩形判定),于是 stale-hit(坏味 #1)在结构上无法发生(没有可失效的东西)。 | `GeometryFunnelReproTests` / `FourTreeConsistencyTests`(改为活 Node 模型) |
+| Phase 8 | `597dd6de` | **删掉 `PortalRegistry`/`TooltipOverlayRegistry` 转发垫片**(Phase 3 的"最后删全局"):primitive 走 scoped ambient(`PortalStoreHolder`/`TooltipStoreHolder.current`),帧钩子显式读窗口 store(`host.tooltips` / `session.inputContext.tooltips`)。顺带修了垫片掩盖的两个跨 scope 隐患:① tooltip 的 `drawAll` 在 `withCurrent` 外跑、读的是 shared 默认 store,而 Button 注册进的是每窗口 store(注册/绘制不同实例→tooltip 不显示);② `PortalHostObserver`/`PortalResource` 注销走的是 deinit/unmount 时刻的 ambient,可能是别的窗口的 store——现在两者都(弱)记住注册时的 store 并在那里清理。 | 既有 portal/tooltip 套件全绿 |
+| §5 final | `0b841955` | **删除 GuavaKit/GuavaKitHost 蓝图**(sources/tests/products/targets),Editor 去掉 GuavaKit 依赖 + 删孤儿 batch-6 面板(从未接进 legacy 编辑器);过时 "batch 6" TODO 改写为 TODO(editor-redesign)。蓝图使命完成,代码库回到单一 UI 栈。 | Runtime 168 / Compose 307 / App+Workspace+DevTools 绿;Editor 编译 |
 
 **已知遗留**(非本次回归):GuavaUI 整包 `swift test`(swift-testing 侧)在并行下偶发 signal 11/5,崩在 image-decode / DevServer-socket 等无关用例,`--no-parallel` 仍现;HEAD 基线(改动全 stash)同样复现。用 `--filter <Suite>` 跑各套件稳定全绿。详见 memory `project-test-gotchas`。
 
 **镜像已收掉**(Phase 7):`InputNode` 镜像已删除,四树收敛为三树(Node / Layout / Render)。命中测试直接走活的 Node 树。命中缓存被一并去掉(见 Phase 7 行)——若日后实测命中是热点,可加一个真正按窗口、由帧驱动失效的缓存(别用进程级 ambient)。
 
-**全局垫片仍在**:`PortalRegistry`/`TooltipOverlayRegistry`/`*Holder.current` 作为转发垫片保留(调用点零改动);存储已是每窗口实例,隔离已成立。彻底删全局、改为显式传 scope 是后续长尾。
+**`*Holder.current` ambient 保留**(有意为之,非垫片):它就是"每窗口 scope"的取用机制——存储按窗口,`withCurrent` 成对换入换出,不变量见 Phase 5 注释。把组件库 ~100 处调用改成显式传参会破坏公开 API(§7 约束 3)。
 
-> 待你 step 4 验收通过后:按 §5 末尾删除整个 GuavaKit/GuavaKitHost target,再进 step 5(新组件 + 重设计编辑器 UI)。
+> step 2–3 + §5 全部完成。下一步:**你验收**(step 4)——跑真编辑器确认下拉/resize/捕获/hover/tooltip;通过后进 step 5(新组件 + 对着 mockup 重设计编辑器 UI)。
