@@ -374,6 +374,9 @@ public extension SemanticColorRef {
     static let focusRing        = SemanticColorRef { $0.focusRing }
     static let selection        = SemanticColorRef { $0.selection }
     static let overlay          = SemanticColorRef { $0.overlay }
+
+    /// Fully transparent — for conditional fills (e.g. an unselected row).
+    static let clear            = SemanticColorRef { _ in Color(r: 0, g: 0, b: 0, a: 0) }
 }
 
 // MARK: - SemanticFontRef
