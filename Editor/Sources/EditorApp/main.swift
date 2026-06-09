@@ -10,10 +10,10 @@ import CardBattleRuntime
 @MainActor
 private func runEditor() throws {
     let launchOptions = try EditorAppLaunchOptions.load()
-    // The real editor runs on the legacy GuavaUICompose + AppRuntime stack.
-    // The GuavaKit v2 runtime remains only as an architecture blueprint
-    // (see docs/guavaui-inplace-architecture-refactor.md) and is not wired
-    // into the editor entry point.
+    // The editor runs on the GuavaUICompose + AppRuntime stack. The GuavaKit
+    // from-scratch rewrite served as the architecture blueprint for the
+    // in-place runtime refactor and has been deleted
+    // (docs/guavaui-inplace-architecture-refactor.md §5).
     try runLegacyEditor(launchOptions: launchOptions)
 }
 
