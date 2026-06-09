@@ -1,23 +1,32 @@
 import EngineKernel
 
-/// Process-wide interaction registry holder. The active window context swaps
-/// this before compose/materialise work and before event dispatch.
+// MARK: - Per-window ambients
+//
+// These hold the *current window's* registry, made current only for the
+// duration of `PlatformInputContext.withCurrent` (compose / materialise /
+// dispatch) and restored on exit. They are not process-global state: each
+// window owns its own registries (规则 3); the holder is just the ambient
+// pointer the call sites read. `nonisolated(unsafe)` is sound because the UI
+// tree is single-threaded — the pointer is only ever read/swapped on the main
+// thread inside `withCurrent`.
+
+/// Holds the active window's interaction registry.
 public enum InteractionRegistryHolder {
     nonisolated(unsafe) public static var current: InteractionRegistry?
 }
 
-/// Process-wide focus chain holder used by focus-aware primitives.
+/// Holds the active window's focus chain (focus-aware primitives read it).
 public enum FocusChainHolder {
     nonisolated(unsafe) public static var current: FocusChain?
 }
 
-/// Process-wide clipboard bridge.
+/// Process-wide clipboard bridge (genuinely global: one system pasteboard).
 public enum ClipboardHolder {
     nonisolated(unsafe) public static var read: (() -> String?)?
     nonisolated(unsafe) public static var write: ((String) -> Void)?
 }
 
-/// Process-wide pointer-capture holder used by drag-driven primitives.
+/// Holds the active window's pointer-capture target (drag-driven primitives).
 public enum PointerCaptureHolder {
     nonisolated(unsafe) public static var current: PointerCapture?
 }
