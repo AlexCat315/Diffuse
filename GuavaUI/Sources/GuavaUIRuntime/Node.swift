@@ -322,15 +322,27 @@ public final class Node: @unchecked Sendable {
         return nil
     }
 
-    /// Unmount this node's resources and every descendant's, leaf → root, so a
-    /// parent observes a fully-released subtree. Idempotent.
-    private func unmountResourcesRecursively() {
+    /// Release this node and every descendant from the live tree, leaf → root,
+    /// so a parent observes a fully-released subtree (规则 2). Unmounts node-owned
+    /// resources and releases the per-window singletons keyed by this exact node
+    /// (pointer capture, focus). Idempotent.
+    private func releaseFromTree() {
         for child in children {
-            child.unmountResourcesRecursively()
+            child.releaseFromTree()
         }
-        guard !resources.isEmpty else { return }
         for resource in resources {
             resource.unmount(node: self)
+        }
+        // A node leaving the tree must not remain the capture target — otherwise
+        // every later event routes to a detached node (the stuck-capture bug) —
+        // nor keep focus. Mirrors GuavaKit's `UIContext.detach`. The holders are
+        // nil outside a window scope (e.g. raw-Node tests), so this is a no-op
+        // there.
+        if PointerCaptureHolder.current?.target === self {
+            PointerCaptureHolder.current?.release()
+        }
+        if FocusChainHolder.current?.focused === self {
+            FocusChainHolder.current?.clear()
         }
     }
 
@@ -352,9 +364,10 @@ public final class Node: @unchecked Sendable {
         child.parent = nil
         if children.count != previousCount {
             // The child (and its whole subtree) is leaving the tree — release
-            // every resource it registered. This is the single authoritative
-            // cleanup path; no modifier side-effect is needed (坏味 #4).
-            child.unmountResourcesRecursively()
+            // every resource it registered plus the singletons it held (capture,
+            // focus). This is the single authoritative cleanup path; no modifier
+            // or ViewGraph side-effect is needed (坏味 #4).
+            child.releaseFromTree()
             markRenderDirty(reason: .structuralChange)
         }
     }

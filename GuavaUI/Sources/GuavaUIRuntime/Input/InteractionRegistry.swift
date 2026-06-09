@@ -180,6 +180,16 @@ public final class InteractionRegistry {
         return body()
     }
 
+    /// Bind this node's handler entry to its lifetime (规则 2): the first time a
+    /// node registers a handler, attach a resource that removes the entry when
+    /// the node leaves the tree. Cleanup is then owned by the node lifecycle —
+    /// no `ViewGraph` teardown side-effect required.
+    private func bindCleanup(to node: Node) {
+        if node.firstResource(InteractionCleanupResource.self) == nil {
+            node.addResource(InteractionCleanupResource(registry: self))
+        }
+    }
+
     // MARK: - Registration
 
     public func handlers(for node: Node) -> Handlers {
@@ -195,6 +205,7 @@ public final class InteractionRegistry {
             h.pointerRoute = route
             table[ObjectIdentifier(node)] = h
         }
+        bindCleanup(to: node)
     }
 
     public func setHover(_ node: Node,
@@ -203,6 +214,7 @@ public final class InteractionRegistry {
             var h = table[ObjectIdentifier(node)] ?? Handlers(); h.hover = handler
             table[ObjectIdentifier(node)] = h
         }
+        bindCleanup(to: node)
     }
 
     public func setMotion(_ node: Node,
@@ -214,6 +226,7 @@ public final class InteractionRegistry {
             h.motionRoute = route
             table[ObjectIdentifier(node)] = h
         }
+        bindCleanup(to: node)
     }
 
     public func setWheel(_ node: Node,
@@ -225,6 +238,7 @@ public final class InteractionRegistry {
             h.wheelRoute = route
             table[ObjectIdentifier(node)] = h
         }
+        bindCleanup(to: node)
     }
 
     public func setKey(_ node: Node,
@@ -236,6 +250,7 @@ public final class InteractionRegistry {
             h.keyRoute = route
             table[ObjectIdentifier(node)] = h
         }
+        bindCleanup(to: node)
     }
 
     public func setKeyUp(_ node: Node,
@@ -247,6 +262,7 @@ public final class InteractionRegistry {
             h.keyUpRoute = route
             table[ObjectIdentifier(node)] = h
         }
+        bindCleanup(to: node)
     }
 
     public func setEditing(_ node: Node,
@@ -258,6 +274,7 @@ public final class InteractionRegistry {
             h.editingRoute = route
             table[ObjectIdentifier(node)] = h
         }
+        bindCleanup(to: node)
     }
 
     public func setText(_ node: Node,
@@ -269,6 +286,7 @@ public final class InteractionRegistry {
             h.textRoute = route
             table[ObjectIdentifier(node)] = h
         }
+        bindCleanup(to: node)
     }
 
     public func remove(_ node: Node) {
@@ -276,4 +294,15 @@ public final class InteractionRegistry {
     }
 
     public var count: Int { withLock { table.count } }
+}
+
+/// Node-owned cleanup for interaction handlers (坏味 #4 / 规则 2). Attached to a
+/// node the first time it registers a handler; `unmount` (driven by
+/// `Node.removeChild`) removes the node's entry from the registry. The registry
+/// is held weakly so the resource never keeps a torn-down window alive.
+final class InteractionCleanupResource: NodeResource {
+    private weak var registry: InteractionRegistry?
+    init(registry: InteractionRegistry) { self.registry = registry }
+    func mount(node: Node) {}
+    func unmount(node: Node) { registry?.remove(node) }
 }
