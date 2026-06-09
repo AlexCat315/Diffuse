@@ -162,9 +162,10 @@ enum EditorRootViewFactory {
             PanelDescriptor(id: "console",
                             title: localizedPanelTitle(for: "console"),
                             preferredSlot: .bottom) {
-                // TODO batch 6: ConsolePanel(  — migrated to GuavaKit.View
+                // TODO(editor-redesign): rebuild ConsolePanel on GuavaUICompose — the GuavaKit
+                // migration was abandoned (see docs/guavaui-inplace-architecture-refactor.md §0).
 
-                EmptyView() // placeholderstore: app.store)
+                EmptyView()
             },
             PanelDescriptor(id: "assets",
                             title: localizedPanelTitle(for: "assets"),
@@ -174,23 +175,26 @@ enum EditorRootViewFactory {
             PanelDescriptor(id: "intent-input",
                             title: localizedPanelTitle(for: "intent-input"),
                             preferredSlot: .trailing) {
-                // TODO batch 6: IntentInputPanel(  — migrated to GuavaKit.View
+                // TODO(editor-redesign): rebuild IntentInputPanel on GuavaUICompose — the GuavaKit
+                // migration was abandoned (see docs/guavaui-inplace-architecture-refactor.md §0).
 
-                EmptyView() // placeholderapp: app)
+                EmptyView()
             },
             PanelDescriptor(id: "confirmation-host",
                             title: localizedPanelTitle(for: "confirmation-host"),
                             preferredSlot: .bottom) {
-                // TODO batch 6: ConfirmationHostPanel(  — migrated to GuavaKit.View
+                // TODO(editor-redesign): rebuild ConfirmationHostPanel on GuavaUICompose — the GuavaKit
+                // migration was abandoned (see docs/guavaui-inplace-architecture-refactor.md §0).
 
-                EmptyView() // placeholderapp: app)
+                EmptyView()
             },
             PanelDescriptor(id: "render-pipeline",
                             title: localizedPanelTitle(for: "render-pipeline"),
                             preferredSlot: .bottom) {
-                // TODO batch 6: RenderPipelinePanel(  — migrated to GuavaKit.View
+                // TODO(editor-redesign): rebuild RenderPipelinePanel on GuavaUICompose — the GuavaKit
+                // migration was abandoned (see docs/guavaui-inplace-architecture-refactor.md §0).
 
-                EmptyView() // placeholder)
+                EmptyView()
             },
         ])
     }
