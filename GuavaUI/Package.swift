@@ -12,12 +12,6 @@ let package = Package(
         .library(name: "GuavaUIWorkspace", targets: ["GuavaUIWorkspace"]),
         .library(name: "GuavaUIApp", targets: ["GuavaUIApp"]),
         .library(name: "GuavaUIDevTools", targets: ["GuavaUIDevTools"]),
-        // v2 runtime, rebuilt from scratch. Pure Swift, no deps, coexists with
-        // the legacy GuavaUI targets until it reaches parity and the editor
-        // switches over. See Sources/GuavaKit/Architecture.md.
-        .library(name: "GuavaKit", targets: ["GuavaKit"]),
-        // Bridge: translates GuavaKit → legacy DrawList, hosts SDL/wgpu loop.
-        .library(name: "GuavaKitHost", targets: ["GuavaKitHost"]),
     ],
     dependencies: [
         .package(path: "../Engine"),
@@ -147,34 +141,7 @@ let package = Package(
             ]
         ),
 
-        // MARK: - GuavaKit (v2 runtime, rebuilt from scratch)
-        // Pure Swift, zero external dependencies — so it builds fast, is easy to
-        // reason about, and can be developed/tested in isolation from the legacy
-        // stack. The whole point of the rewrite lives here.
-        .target(
-            name: "GuavaKit",
-            path: "Sources/GuavaKit",
-            exclude: ["Architecture.md"]
-        ),
-
-        // Bridge: translates GuavaKit's backend-agnostic DisplayList into the
-        // existing GuavaUIRuntime DrawList (reusing the whole wgpu pipeline), and
-        // will host the run loop / event adapter for the editor switchover.
-        .target(
-            name: "GuavaKitHost",
-            dependencies: ["GuavaKit", "GuavaUIRuntime"],
-            path: "Sources/GuavaKitHost"
-        ),
-
         // MARK: - Tests
-        .testTarget(
-            name: "GuavaKitTests",
-            dependencies: ["GuavaKit"]
-        ),
-        .testTarget(
-            name: "GuavaKitHostTests",
-            dependencies: ["GuavaKitHost", "GuavaKit", "GuavaUIRuntime"]
-        ),
         .testTarget(
             name: "GuavaUIRuntimeTests",
             dependencies: [
