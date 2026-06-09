@@ -2,13 +2,7 @@
 import CoreGraphics
 #endif
 import Foundation
-
-/// Attachment key under which a `Popover` stores its `PortalRegistry` entry id
-/// on both the overlay-host node and its trigger box. Every cleanup path —
-/// `_PopoverFrontmostModifier` on close, and `ViewGraph` teardown when the
-/// subtree is removed while open — reads this key to unregister the entry, so
-/// it must stay a single shared constant rather than scattered literals.
-let popoverPortalEntryAttachmentKey = "__popover_entry_id"
+import GuavaUIRuntime
 
 public struct PortalEntry: Identifiable {
     public let id: String
@@ -101,6 +95,40 @@ public enum PortalRegistry {
         let revision = currentRevision
         for observer in observers.values {
             observer(revision)
+        }
+    }
+}
+
+/// A `PortalRegistry` entry owned by the lifetime of the node that presents it
+/// (坏味 #4). The overlay host attaches one in `_makeNode`; `present` registers
+/// or updates the entry, and `unmount` — invoked by `Node.removeChild` when the
+/// popover's subtree leaves the tree for ANY reason — unregisters it. Cleanup
+/// no longer depends on a modifier side-effect running, so a torn-down-while-open
+/// popover cannot leak a phantom overlay that swallows later clicks.
+final class PortalResource: NodeResource {
+    private(set) var entryID: String?
+
+    func mount(node: Node) {}
+
+    /// Idempotent: safe to call more than once during teardown.
+    func unmount(node: Node) {
+        if let id = entryID {
+            PortalRegistry.unregister(id)
+        }
+        entryID = nil
+    }
+
+    /// Register the overlay entry, or update it in place if already live. Re-
+    /// registers if a prior entry was unregistered (e.g. this resource's node
+    /// was reused after a close), so the overlay reliably reappears.
+    func present(position: CGPoint, width: Float?, content: AnyView) {
+        if let id = entryID, PortalRegistry.contains(id) {
+            PortalRegistry.updatePosition(id, position: position)
+            PortalRegistry.updateContent(id, content: content)
+        } else {
+            entryID = PortalRegistry.register(position: position,
+                                              width: width,
+                                              content: content)
         }
     }
 }

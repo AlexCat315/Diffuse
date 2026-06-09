@@ -293,6 +293,41 @@ public final class Node: @unchecked Sendable {
         return local.defaultValue
     }
 
+    // MARK: - Resources (坏味 #4)
+
+    /// External registrations tied to this node's lifetime. Released when the
+    /// node leaves the tree — see `removeChild` / `unmountResourcesRecursively`.
+    private var resources: [NodeResource] = []
+
+    /// Tie an external registration (e.g. a portal/overlay entry) to this
+    /// node's lifetime. Mounts immediately; `unmount` runs automatically when
+    /// the node is removed from its parent for any reason.
+    public func addResource(_ resource: NodeResource) {
+        resources.append(resource)
+        resource.mount(node: self)
+    }
+
+    /// First attached resource of the given type, if any. Primitives use this
+    /// on reuse (`_updateNode`) to reach the resource created in `_makeNode`.
+    public func firstResource<R: NodeResource>(_ type: R.Type) -> R? {
+        for resource in resources {
+            if let match = resource as? R { return match }
+        }
+        return nil
+    }
+
+    /// Unmount this node's resources and every descendant's, leaf → root, so a
+    /// parent observes a fully-released subtree. Idempotent.
+    private func unmountResourcesRecursively() {
+        for child in children {
+            child.unmountResourcesRecursively()
+        }
+        guard !resources.isEmpty else { return }
+        for resource in resources {
+            resource.unmount(node: self)
+        }
+    }
+
     public init() {
         self.id = IdentityAllocator.shared.allocate()
     }
@@ -310,6 +345,10 @@ public final class Node: @unchecked Sendable {
         children.removeAll { $0 === child }
         child.parent = nil
         if children.count != previousCount {
+            // The child (and its whole subtree) is leaving the tree — release
+            // every resource it registered. This is the single authoritative
+            // cleanup path; no modifier side-effect is needed (坏味 #4).
+            child.unmountResourcesRecursively()
             markRenderDirty(reason: .structuralChange)
         }
     }
