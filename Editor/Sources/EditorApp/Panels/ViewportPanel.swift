@@ -1196,8 +1196,8 @@ private struct ViewCubeControl: _PrimitiveView {
         var origin = node.frame.origin
         var current = node.parent
         while let parent = current {
-            origin.x += parent.frame.origin.x
-            origin.y += parent.frame.origin.y
+            origin.x += parent.frame.origin.x - parent.contentOffset.x
+            origin.y += parent.frame.origin.y - parent.contentOffset.y
             current = parent.parent
         }
         return origin

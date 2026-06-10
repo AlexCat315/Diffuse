@@ -204,12 +204,13 @@ struct SliderHost: _PrimitiveView {
 
     private func absoluteOriginX(of node: Node) -> Float {
         // Frames are parent-local (set by `LayoutPass` from Yoga output). Walk
-        // up the chain to compose the window-space origin x.
-        var x: CGFloat = 0
-        var cursor: Node? = node
-        while let n = cursor {
-            x += n.frame.origin.x
-            cursor = n.parent
+        // up the chain to compose the window-space origin x, applying every
+        // ancestor's scroll offset (children render at -contentOffset).
+        var x = node.frame.origin.x
+        var cursor = node.parent
+        while let parent = cursor {
+            x += parent.frame.origin.x - parent.contentOffset.x
+            cursor = parent.parent
         }
         return Float(x)
     }

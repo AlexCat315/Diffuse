@@ -1625,8 +1625,8 @@ private func absoluteFrame(of node: Node) -> CGRect {
     var frame = node.frame
     var cursor = node.parent
     while let current = cursor {
-        frame.origin.x += current.frame.origin.x
-        frame.origin.y += current.frame.origin.y
+        frame.origin.x += current.frame.origin.x - current.contentOffset.x
+        frame.origin.y += current.frame.origin.y - current.contentOffset.y
         cursor = current.parent
     }
     return frame
