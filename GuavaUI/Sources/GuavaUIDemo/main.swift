@@ -552,9 +552,7 @@ struct RootView: View {
                                 Text("Tools")
                                     .font(.bodyStrong)
                                     .foregroundColor(.onSurface)
-                                Text(showToolsMenu ? "▲" : "▼")
-                                    .font(.caption)
-                                    .foregroundColor(.onSurfaceMuted)
+                                Icon(showToolsMenu ? UICommonIcons.chevronUp : UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
                             }
                             .padding(horizontal: 10, vertical: 8)
                             .background(.surface)

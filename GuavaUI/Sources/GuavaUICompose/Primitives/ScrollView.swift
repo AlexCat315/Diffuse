@@ -287,45 +287,23 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     public var _children: [any View] { [content] }
 
     private func localPoint(x: Float, y: Float, in node: Node) -> CGPoint {
-        var origin = node.frame.origin
-        var current = node.parent
-        while let parent = current {
-            origin.x += parent.frame.origin.x - parent.contentOffset.x
-            origin.y += parent.frame.origin.y - parent.contentOffset.y
-            current = parent.parent
-        }
-        return CGPoint(x: CGFloat(x) - origin.x,
-                       y: CGFloat(y) - origin.y)
+        node.convertFromWindow(CGPoint(x: CGFloat(x), y: CGFloat(y)))
     }
 
     private func visibleViewportRect(for node: Node) -> CGRect {
-        let nodeOrigin = absoluteOrigin(of: node)
+        let nodeOrigin = node.absoluteOrigin
         var visible = CGRect(origin: nodeOrigin, size: node.frame.size)
         var current = node.parent
 
         while let ancestor = current {
             if ancestor.clipsToBounds {
-                let ancestorOrigin = absoluteOrigin(of: ancestor)
-                let ancestorFrame = CGRect(origin: ancestorOrigin,
-                                           size: ancestor.frame.size)
-                visible = visible.intersection(ancestorFrame)
+                visible = visible.intersection(ancestor.absoluteFrame)
                 if visible.isNull { return .zero }
             }
             current = ancestor.parent
         }
 
         return visible.offsetBy(dx: -nodeOrigin.x, dy: -nodeOrigin.y)
-    }
-
-    private func absoluteOrigin(of node: Node) -> CGPoint {
-        var origin = node.frame.origin
-        var current = node.parent
-        while let parent = current {
-            origin.x += parent.frame.origin.x - parent.contentOffset.x
-            origin.y += parent.frame.origin.y - parent.contentOffset.y
-            current = parent.parent
-        }
-        return origin
     }
 
     private func scrollableContentSize(for node: Node) -> CGSize {

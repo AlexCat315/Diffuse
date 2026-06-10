@@ -934,9 +934,7 @@ private struct _TreeDisclosureSlotHost: View {
                         disclosureContent(isExpanded)
                             .frame(width: width, height: rowHeight)
                     } else {
-                        Text(isExpanded ? "▾" : "▸")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.onSurfaceVariant)
+                        Icon(isExpanded ? UICommonIcons.chevronDown : UICommonIcons.chevronRight, size: 10, color: .onSurfaceVariant)
                             .frame(width: width, height: rowHeight)
                     }
                 }
@@ -1234,19 +1232,19 @@ private struct _TreeRowHost: _PrimitiveView {
                 return .handled
             }
             switch event.scancode {
-            case 82: // SDL_SCANCODE_UP
+            case Scancode.arrowUp:
                 onMoveSelection(-1)
                 return .handled
-            case 81: // SDL_SCANCODE_DOWN
+            case Scancode.arrowDown:
                 onMoveSelection(1)
                 return .handled
-            case 80: // SDL_SCANCODE_LEFT
+            case Scancode.arrowLeft:
                 onCollapseOrParent()
                 return .handled
-            case 79: // SDL_SCANCODE_RIGHT
+            case Scancode.arrowRight:
                 onExpandOrChild()
                 return .handled
-            case 40, 44, 88: // RETURN, SPACE, KP_ENTER
+            case Scancode.return, Scancode.space, Scancode.keypadEnter:
                 captured(event.modifiers)
                 return .handled
             default:
@@ -1401,14 +1399,7 @@ private func addTreeDropBorder(rect: UIRect,
 }
 
 private func treeAbsoluteFrame(of node: Node) -> CGRect {
-    var origin = node.frame.origin
-    var parent = node.parent
-    while let current = parent {
-        origin.x += current.frame.origin.x - current.contentOffset.x
-        origin.y += current.frame.origin.y - current.contentOffset.y
-        parent = current.parent
-    }
-    return CGRect(origin: origin, size: node.frame.size)
+    node.absoluteFrame
 }
 
 private extension CGRect {

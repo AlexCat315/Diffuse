@@ -21,11 +21,11 @@ struct EditorStatusBar: View {
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
 
-            Text("Revision \(store.sceneRevision)")
+            Text("\(L("Revision")) \(store.sceneRevision)")
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
 
-            Text("Selection \(store.selectedEntityIDsCount)")
+            Text("\(L("Selection")) \(store.selectedEntityIDsCount)")
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
 

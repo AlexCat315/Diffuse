@@ -1193,14 +1193,7 @@ private struct ViewCubeControl: _PrimitiveView {
     }
 
     private static func absoluteOrigin(of node: Node) -> CGPoint {
-        var origin = node.frame.origin
-        var current = node.parent
-        while let parent = current {
-            origin.x += parent.frame.origin.x - parent.contentOffset.x
-            origin.y += parent.frame.origin.y - parent.contentOffset.y
-            current = parent.parent
-        }
-        return origin
+        node.absoluteOrigin
     }
 }
 
@@ -1271,21 +1264,21 @@ private struct ViewportInfoBar: View {
                 Button(isEnabled: playbackState != .playing,
                        tooltip: L("Play physics simulation"),
                        action: onPlay) {
-                    Text("Play").font(SemanticFontRef.label)
+                    Text(L("Play")).font(SemanticFontRef.label)
                 }
                 .toggleButtonStyle(playbackState == .playing)
 
                 Button(isEnabled: playbackState != .stopped,
                        tooltip: L("Pause physics simulation"),
                        action: onPause) {
-                    Text("Pause").font(SemanticFontRef.label)
+                    Text(L("Pause")).font(SemanticFontRef.label)
                 }
                 .toggleButtonStyle(playbackState == .paused)
 
                 Button(isEnabled: playbackState != .stopped,
                        tooltip: L("Stop physics simulation"),
                        action: onStop) {
-                    Text("Stop").font(SemanticFontRef.label)
+                    Text(L("Stop")).font(SemanticFontRef.label)
                 }
                 .toggleButtonStyle(false)
             }
@@ -1375,7 +1368,7 @@ private struct GizmoHUD: View {
 
     var body: some View {
         Box(direction: .column, alignItems: .center, spacing: 6) {
-            Text("Selected: \(entity.name)")
+            Text("\(L("Selected:")) \(entity.name)")
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
 
@@ -1388,7 +1381,7 @@ private struct GizmoHUD: View {
                               color: Color(r: 0.34, g: 0.58, b: 0.95, a: 1))
             }
 
-            Text("Mode: \(modeLabel(mode))  路  Q/W/E/R to switch")
+            Text("\(L("Mode:")) \(modeLabel(mode))  ·  \(L("Q/W/E/R to switch"))")
                 .font(.caption)
                 .foregroundColor(.onSurfaceVariant)
         }
@@ -1400,10 +1393,10 @@ private struct GizmoHUD: View {
 
     private func modeLabel(_ mode: EditorGizmoMode) -> String {
         switch mode {
-        case .none: return "Pick"
-        case .translate: return "Move"
-        case .rotate: return "Rotate"
-        case .scale: return "Scale"
+        case .none: return L("Pick")
+        case .translate: return L("Move")
+        case .rotate: return L("Rotate")
+        case .scale: return L("Scale")
         }
     }
 
@@ -1442,9 +1435,7 @@ private struct ViewModeSelector: View {
                 Text(Self.label(for: shadingMode), lineLimit: 1)
                     .font(.caption)
                     .foregroundColor(.onSurface)
-                Text("\u{25BC}")
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
+                Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
             }
             .padding(horizontal: 8, vertical: 4)
             .background(.surfaceSunken)

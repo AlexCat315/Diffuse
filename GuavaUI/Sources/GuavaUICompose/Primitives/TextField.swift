@@ -328,23 +328,23 @@ public struct TextField: View {
         // Primary shortcuts take priority over plain bindings.
         if primaryModifier {
             switch event.scancode {
-            case 4:  // A
+            case Scancode.a:
                 state.selectionAnchor = 0
                 state.cursorIndex = count
                 recordCaretActivity(state)
                 return true
-            case 6:  // C
+            case Scancode.c:
                 if let r = selectionRange(state) {
                     ClipboardHolder.write?(substring(text.wrappedValue, r))
                 }
                 return true
-            case 25: // V
+            case Scancode.v:
                 guard !blockMutations else { return true }
                 if let s = ClipboardHolder.read?(), !s.isEmpty {
                     insertReplacingSelection(s, state: state)
                 }
                 return true
-            case 27: // X
+            case Scancode.x:
                 guard !blockMutations else { return true }
                 if let r = selectionRange(state) {
                     ClipboardHolder.write?(substring(text.wrappedValue, r))
@@ -357,7 +357,7 @@ public struct TextField: View {
         }
 
         switch event.scancode {
-        case 42: // BACKSPACE
+        case Scancode.backspace:
             guard !blockMutations else { return true }
             if !deleteSelection(state: state) {
                 guard state.cursorIndex > 0 else { return true }
@@ -379,7 +379,7 @@ public struct TextField: View {
                 onChange?(s)
             }
             return true
-        case 76: // DELETE
+        case Scancode.delete:
             guard !blockMutations else { return true }
             if !deleteSelection(state: state) {
                 guard state.cursorIndex < count else { return true }
@@ -391,7 +391,7 @@ public struct TextField: View {
                 onChange?(s)
             }
             return true
-        case 80: // LEFT
+        case Scancode.arrowLeft:
             if command {
                 moveCursor(to: 0, extendSelection: shift, state: state)
             } else if option {
@@ -406,7 +406,7 @@ public struct TextField: View {
                 moveCursor(to: state.cursorIndex - 1, extendSelection: shift, state: state)
             }
             return true
-        case 79: // RIGHT
+        case Scancode.arrowRight:
             if command {
                 moveCursor(to: count, extendSelection: shift, state: state)
             } else if option {
@@ -421,19 +421,19 @@ public struct TextField: View {
                 moveCursor(to: state.cursorIndex + 1, extendSelection: shift, state: state)
             }
             return true
-        case 74: // HOME
+        case Scancode.home:
             moveCursor(to: 0, extendSelection: shift, state: state)
             return true
-        case 77: // END
+        case Scancode.end:
             moveCursor(to: count, extendSelection: shift, state: state)
             return true
-        case 82: // UP
+        case Scancode.arrowUp:
             moveCursorVertically(lineDelta: -1, extendSelection: shift, state: state, node: node)
             return true
-        case 81: // DOWN
+        case Scancode.arrowDown:
             moveCursorVertically(lineDelta: 1, extendSelection: shift, state: state, node: node)
             return true
-        case 40, 88: // RETURN, KP_ENTER
+        case Scancode.return, Scancode.keypadEnter:
             if !primaryModifier, !blockMutations, (axis == .vertical || shift) {
                 insertReplacingSelection("\n", state: state)
             } else {
@@ -966,29 +966,27 @@ public struct TextField: View {
         max(4, (minimumFieldHeightDefault - lineHeight) * 0.5)
     }
 
-    /// Render a small "✕" affordance at `(x, y)` using the active text
-    /// environment so the glyph stays consistent with the input typography.
-    /// Falls back silently when no environment is available.
+    /// Render the clear affordance at `(x, y)` using the bundled close SVG so
+    /// it matches every other icon. Falls back silently when no registry or
+    /// resource is available (headless tests).
     private func drawClearGlyph(at x: Float,
                                 y: Float,
                                 size: Float,
                                 list: DrawList,
                                 color: Color) {
-        guard let env = TextEnvironmentHolder.current else { return }
-        let glyphFont = Font.system(size: size * 0.75)
-        let layout = env.cachedLayout(text: "✕",
-                                      font: glyphFont,
-                                      lineHeight: size,
-                                      maxWidth: .infinity,
-                                      alignment: .leading)
-        // Centre the glyph horizontally inside its reserved square so the
-        // visual matches Element Plus' suffix-icon padding.
-        let glyphX = x + max(0, (size - layout.totalWidth) * 0.5)
-        list.addText(layout,
-                     origin: (glyphX, y),
-                     color: color,
-                     textureID: env.atlasTextureID,
-                     atlas: env.atlas)
+        guard let url = UICommonIcons.close.url,
+              let registry = ImageAssetRegistryHolder.current else { return }
+        let scale = max(1, ContentScaleHolder.current)
+        let side = size * 0.7
+        let px = max(1, Int((side * scale).rounded()))
+        guard let asset = try? registry.texture(url: url, size: (px, px)) else { return }
+        let inset = (size - side) * 0.5
+        list.addImageMaskQuad(rect: UIRect(x: x + inset,
+                                           y: y + inset,
+                                           width: side,
+                                           height: side),
+                              textureID: asset.textureID,
+                              tint: color)
     }
 
     private static func installMeasureFunc(on layout: LayoutNode, snapshot: TextField) {

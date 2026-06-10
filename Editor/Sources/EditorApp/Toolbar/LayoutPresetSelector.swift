@@ -30,9 +30,7 @@ struct LayoutPresetSelector: View {
                     .font(.caption)
                     .foregroundColor(.onSurface)
 
-                Text("▼")
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
+                Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
             }
             .padding(horizontal: 8, vertical: 6)
             .background(.surfaceSunken)

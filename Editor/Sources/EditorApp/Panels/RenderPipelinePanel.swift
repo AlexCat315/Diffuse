@@ -13,9 +13,9 @@ struct RenderPipelinePanel: View, @unchecked Sendable {
     @State var totalSamples: Int = 0
     @State var lastOutputPath: String = ""
     @State var statusMessage: String = ""
-    @State var width: String = "640"
-    @State var height: String = "480"
-    @State var samples: String = "64"
+    @AppStorage("renderPipeline.width") var width: String = "640"
+    @AppStorage("renderPipeline.height") var height: String = "480"
+    @AppStorage("renderPipeline.samples") var samples: String = "64"
 
     var body: some View {
         Column(alignment: .leading, spacing: 8) {
@@ -29,7 +29,7 @@ struct RenderPipelinePanel: View, @unchecked Sendable {
             }
 
             Button(isEnabled: !isRendering, action: { startRender() }) {
-                Text(isRendering ? "Rendering..." : "Render")
+                Text(isRendering ? L("Rendering…") : L("Render"))
             }
 
             if isRendering || progressFraction > 0 {
@@ -92,7 +92,7 @@ struct RenderPipelinePanel: View, @unchecked Sendable {
                     case .success(let path):
                         lastOutputPath = path
                     case .failure(let error):
-                        statusMessage = "Error: \(error.localizedDescription)"
+                        statusMessage = "\(L("Error:")) \(error.localizedDescription)"
                     }
                 }
             }

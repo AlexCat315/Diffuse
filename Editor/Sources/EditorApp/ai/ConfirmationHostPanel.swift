@@ -44,9 +44,9 @@ private struct ConfirmationBatchView: View {
     var body: some View {
         Column(alignment: .leading, spacing: 10) {
             Column(alignment: .leading, spacing: 4) {
-                Text("\(request.questions.count) item requires confirmation")
+                Text("\(request.questions.count) \(L("item(s) require confirmation"))")
                     .font(.bodyStrong)
-                Text("origin: \(request.origin)")
+                Text("\(L("Origin:")) \(request.origin)")
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
             }
