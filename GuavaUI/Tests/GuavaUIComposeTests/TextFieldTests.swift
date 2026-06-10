@@ -736,4 +736,60 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         let evt = MouseMotionEvent(x: 100, y: 5, deltaX: 1, deltaY: 0)
         #expect(motion(evt, .target) == .ignored)
     } }
+
+    @Test("Option+arrows jump by word; Option+Backspace deletes a word")
+    func optionWordNavigation() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = "hello brave world"
+        rig.graph.install(root: TextField(text: makeBinding(rig.store)))
+
+        let node = fieldNode(in: rig.tree.root)
+        let h = rig.registry.handlers(for: node)
+        let optLeft  = KeyEvent(scancode: 80, keycode: 0, modifiers: [.lalt], isRepeat: false)
+        let optRight = KeyEvent(scancode: 79, keycode: 0, modifiers: [.lalt], isRepeat: false)
+
+        // Cursor starts at the end (17). Option+Left → start of "world" (12).
+        _ = h.key!(optLeft, .target)
+        _ = h.text!("X", .target)
+        #expect(rig.store.value == "hello brave Xworld")
+
+        // Undo the insert, then check Option+Right from the start jumps past
+        // the first word: caret 0 → 5, so an insert lands after "hello".
+        rig.store.value = "hello brave world"
+        let cmdLeft = KeyEvent(scancode: 80, keycode: 0, modifiers: [.lgui], isRepeat: false)
+        _ = h.key!(cmdLeft, .target)
+        _ = h.key!(optRight, .target)
+        _ = h.text!("Y", .target)
+        #expect(rig.store.value == "helloY brave world")
+
+        // Option+Backspace from the end deletes the trailing word.
+        rig.store.value = "hello brave world"
+        let cmdRight = KeyEvent(scancode: 79, keycode: 0, modifiers: [.lgui], isRepeat: false)
+        _ = h.key!(cmdRight, .target)
+        let optBackspace = KeyEvent(scancode: 42, keycode: 0, modifiers: [.lalt], isRepeat: false)
+        _ = h.key!(optBackspace, .target)
+        #expect(rig.store.value == "hello brave ")
+    } }
+
+    @Test("Command+arrows move to line ends (Mac has no Home/End keys)")
+    func commandLineNavigation() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = "hello"
+        rig.graph.install(root: TextField(text: makeBinding(rig.store)))
+
+        let node = fieldNode(in: rig.tree.root)
+        let h = rig.registry.handlers(for: node)
+        let cmdLeft = KeyEvent(scancode: 80, keycode: 0, modifiers: [.lgui], isRepeat: false)
+
+        _ = h.key!(cmdLeft, .target)
+        _ = h.text!("X", .target)
+        #expect(rig.store.value == "Xhello")
+
+        // Command+Backspace deletes to the start of the field.
+        let cmdRight = KeyEvent(scancode: 79, keycode: 0, modifiers: [.lgui], isRepeat: false)
+        _ = h.key!(cmdRight, .target)
+        let cmdBackspace = KeyEvent(scancode: 42, keycode: 0, modifiers: [.lgui], isRepeat: false)
+        _ = h.key!(cmdBackspace, .target)
+        #expect(rig.store.value == "")
+    } }
 }
