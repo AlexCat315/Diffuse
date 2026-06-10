@@ -32,6 +32,7 @@ public extension SemanticColorRef {
     static let accentPressed    = SemanticColorRef { $0.colors.accentPressed }
     static let onAccent         = SemanticColorRef { $0.colors.onAccent }
     static let accentMuted      = SemanticColorRef { $0.colors.accentMuted }
+    static let accentSecondary  = SemanticColorRef { $0.colors.accentSecondary }
 
     static let stateLayerHover    = SemanticColorRef { $0.colors.stateLayerHover }
     static let stateLayerPressed  = SemanticColorRef { $0.colors.stateLayerPressed }

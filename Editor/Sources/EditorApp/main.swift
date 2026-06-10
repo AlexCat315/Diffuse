@@ -2,6 +2,7 @@ import Foundation
 import EngineKernel
 import EditorCore
 import GuavaUIApp
+import GuavaUICompose
 import GuavaUIRuntime
 import GuavaUIWorkspace
 import RHIWGPU
@@ -19,6 +20,11 @@ private func runEditor() throws {
 
 @MainActor
 private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
+    // UI preferences (@AppStorage) live next to the shell-state/layout JSONs
+    // in Application Support/Guava.
+    AppStorageDefaults.store = FileAppStorageStore(
+        url: FileAppStorageStore.defaultURL(appName: "Guava")
+    )
     let backend = WGPUBackend(config: launchOptions.backendConfig)
     let events = PlatformEventBridge()
     let shellState = EditorRootViewFactory.loadShellState()
@@ -53,6 +59,10 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
 
     try AppRuntime.run(
         config: AppConfig(title: "GuavaNext Editor",
+                          // Surface clear = the theme canvas, so resize
+                          // flicker and any uncovered sliver show the canvas
+                          // instead of an off-palette dark blue.
+                          clearColor: GPUColor(r: 0x1E / 255, g: 0x1F / 255, b: 0x22 / 255, a: 1),
                           backendConfig: launchOptions.backendConfig,
                           titleBarStyle: .hiddenInset),
         backend: backend,

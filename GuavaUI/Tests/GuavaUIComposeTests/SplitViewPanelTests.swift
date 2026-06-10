@@ -41,7 +41,7 @@ struct SplitViewPanelTests {
         #expect(second.frame.height == 120)
     }
 
-    @Test("Panel creates header, divider, and content regions")
+    @Test("Panel creates header and content regions (floating-island chrome)")
     func panelShellLayout() {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
@@ -57,23 +57,21 @@ struct SplitViewPanelTests {
 
         graph.computeLayout(width: 240, height: 160)
 
-        // Panel is now a composite: root → frame box → PanelHost → style body
-        // (Column with header + divider + content). Walk one extra layer to
-        // reach the body and its three regions.
+        // Panel is a composite: root → frame box → PanelHost → style body.
+        // The floating-island chrome is a Column with a 34px header row and
+        // the content region — no divider, separation comes from the rounded
+        // surfaceSunken slab itself.
         let panelHost = materialisedRoot(in: tree)
         let body = panelHost.children.first!
-        #expect(body.children.count == 3)
+        #expect(body.children.count == 2)
         // Background lives on the style body, not the host shell.
         #expect(body.backgroundColor != nil)
 
         let header = body.children[0]
-        let divider = body.children[1]
-        let content = body.children[2]
+        let content = body.children[1]
 
-        #expect(header.frame.height == 36)
-        #expect(header.backgroundColor != nil)
-        #expect(divider.frame.height == 1)
-        #expect(content.frame.origin.y == 37)
+        #expect(header.frame.height == 34)
+        #expect(content.frame.origin.y == 34)
     }
 
     private func materialisedRoot(in tree: NodeTree) -> Node {
