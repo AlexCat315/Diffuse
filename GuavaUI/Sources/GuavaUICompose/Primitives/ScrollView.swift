@@ -208,6 +208,20 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             let contentW = Float(contentSize.width)
             let contentH = Float(contentSize.height)
             guard contentW > 0 || contentH > 0 else { return }
+
+            // A layout/content change can shrink the scrollable range while
+            // the offset still points past the new end (cleared console,
+            // filtered list, enlarged viewport) — stranding the viewport on
+            // blank space until the user scrolls. The interaction handlers
+            // only clamp during wheel/drag, so re-clamp here: this hook runs
+            // after every layout with fresh geometry, and the conditional
+            // write converges in one frame.
+            let maxOffsetX = CGFloat(max(0, contentW - viewW))
+            let maxOffsetY = CGFloat(max(0, contentH - viewH))
+            if node.contentOffset.x > maxOffsetX || node.contentOffset.y > maxOffsetY {
+                node.contentOffset = CGPoint(x: min(node.contentOffset.x, maxOffsetX),
+                                             y: min(node.contentOffset.y, maxOffsetY))
+            }
             let opacity = node.attachments[_ScrollViewAttachmentKeys.chromeOpacity] as? Float ?? 0
             guard opacity > 0.001 else { return }
             let offX = Float(node.contentOffset.x)
