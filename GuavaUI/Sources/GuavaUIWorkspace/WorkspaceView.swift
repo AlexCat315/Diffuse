@@ -119,7 +119,7 @@ private struct _WorkspaceShell: View {
                     .id("workspace-chrome-\(slot.id.rawValue)"))
             }
         }
-        .background(.surfaceSunken)
+        .background(.background)
         .flex()
         .frame(minWidth: 0, minHeight: 0)
     }
@@ -193,7 +193,7 @@ private struct _WorkspaceMainRow: View {
                     .id("workspace-rail-trailing")
             }
         }
-        .background(.surfaceSunken)
+        .background(.background)
         .flex()
         .frame(minWidth: 0, minHeight: 0)
     }
@@ -547,7 +547,7 @@ private struct _WorkspaceChromeSlot: View {
                            controller: controller)
                 .id("workspace-rail-\(slot.id.rawValue)")
         }
-        .background(.surfaceSunken)
+        .background(.background)
         .frame(width: horizontal ? nil : slot.thickness,
                height: horizontal ? slot.thickness : nil)
         .layoutRole("workspace-chrome-slot")
@@ -599,7 +599,6 @@ private struct _WorkspaceSlotView: View {
                     .flex()
             }
         }
-        .background(.surface)
         .frame(minWidth: 0, minHeight: 0)
         .layoutRole("workspace-region")
         .semanticRole("workspace.slot.\(slotID.rawValue)")
@@ -631,7 +630,7 @@ private struct _WorkspaceLayoutNodeView: View {
         case .split(let axis, let fraction, let first, let second):
             Box(direction: axis == .horizontal ? .row : .column,
                 alignItems: .stretch,
-                spacing: 1) {
+                spacing: 8) {
                 _WorkspaceLayoutNodeView(node: first,
                                          document: document,
                                          controller: controller,
@@ -645,7 +644,6 @@ private struct _WorkspaceLayoutNodeView: View {
                     .flex(1 - fraction, shrink: 1, basis: 0)
                     .frame(minWidth: 0, minHeight: 0)
             }
-            .background(.border)
             .frame(minWidth: 0, minHeight: 0)
             .layoutRole("workspace-split")
             .semanticRole("workspace.split.\(axis.rawValue)")
@@ -681,7 +679,9 @@ private struct _WorkspaceTabGroupView: View {
                     .flex()
             }
         }
-        .background(.surface)
+        .background(.surfaceSunken)
+        .cornerRadius(12)
+        .clipped()
         .frame(minWidth: 0, minHeight: 0)
         .layoutRole("workspace-tab-group")
         .semanticRole("workspace.group")
@@ -1072,7 +1072,9 @@ private struct _WorkspaceSplitDividerLine: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         let theme = resolveWorkspaceTheme(on: node)
-        node.animatableSet(\.backgroundColor, to: node.theme.colors.divider)
+        // Floating-island chrome: the gutter shows the window canvas; no
+        // painted line. The parent divider node keeps the resize hit area.
+        node.animatableSet(\.backgroundColor, to: nil)
         let thickness = max(1, theme.splitDividerThickness)
         switch axis {
         case .vertical:
@@ -1136,7 +1138,7 @@ private struct _WorkspaceRail: View {
                 railButtons
             }
             .padding(horizontal: 4, vertical: 4)
-            .background(.surfaceSunken)
+            .background(.background)
             .frame(width: .percent(100),
                    height: .points(thickness))
             .layoutRole("workspace-rail")
