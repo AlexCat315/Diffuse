@@ -1,15 +1,17 @@
 import GuavaUIRuntime
 
-/// Panel default: compact tool chrome with a recessed inactive header, a
-/// clearer active header, and a border that separates the panel from its
-/// neighbors without introducing card-like softness.
+/// Panel default — the "floating island" idiom: the panel body is a
+/// rounded (radius.xl) slab of `surfaceSunken`, *darker* than the window
+/// canvas, with NO border and no header fill. Separation between neighbouring
+/// panels comes from the canvas showing through the gutters, not from lines.
+/// The header is a 34px row with a muted 12px title; active panels brighten
+/// the title rather than repainting the header.
 public struct DefaultPanelStyle: PanelStyle {
     public init() {}
 
     public func makeBody(configuration: PanelStyleConfiguration) -> some View {
         let t = configuration.theme
-        let headerBg = configuration.isActive ? t.colors.surfaceVariant : t.colors.surfaceSunken
-        let titleColor: SemanticColorRef = configuration.isActive ? .onSurface : .onSurfaceVariant
+        let titleColor: SemanticColorRef = configuration.isActive ? .onSurface : .onSurfaceMuted
 
         return Column(alignment: .leading, spacing: 0) {
             Row(alignment: .center, spacing: t.spacing.sm) {
@@ -19,25 +21,21 @@ public struct DefaultPanelStyle: PanelStyle {
                 Spacer(minLength: 0)
                 configuration.accessory
             }
-            .padding(horizontal: t.spacing.md)
-            .frame(height: 36)
-            .background(headerBg)
-
-            Divider()
+            .padding(horizontal: t.spacing.lg)
+            .frame(height: 34)
 
             Box(direction: .column, alignItems: .stretch) {
                 configuration.content
                     .flex()
             }
             .flex()
-            .padding(EdgeInsets(top: t.spacing.md,
+            .padding(EdgeInsets(top: 0,
                                 leading: t.spacing.md,
                                 bottom: t.spacing.md,
                                 trailing: t.spacing.md))
         }
-        .background(SemanticColorRef.surface)
-        .cornerRadius(t.radius.none)
-        .border(t.colors.border, width: 1)
+        .background(SemanticColorRef.surfaceSunken)
+        .cornerRadius(t.radius.xl)
         .clipped()
     }
 }

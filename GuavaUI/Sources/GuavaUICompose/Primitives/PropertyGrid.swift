@@ -218,8 +218,7 @@ private struct _StatefulPropertyGrid: View {
                         rowViews(section.rows)
                     }
                 }
-                .padding(1)
-                .background(.divider)
+                .padding(horizontal: 1, vertical: 2)
             }
         }
     }
@@ -227,16 +226,15 @@ private struct _StatefulPropertyGrid: View {
     private func rowView(_ row: PropertyGridRow) -> some View {
         let rowHeight = row.rowHeight ?? grid.rowHeight
         let alignment: VerticalAlignment = rowHeight > grid.rowHeight ? .top : .center
-        return Row(alignment: alignment, spacing: 1) {
+        return Row(alignment: alignment, spacing: 4) {
             Box(direction: .row, alignItems: .center, justifyContent: .flexStart) {
                 Text(row.label)
                     .lineLimit(1)
                     .font(.caption)
-                    .foregroundColor(.onSurfaceVariant)
+                    .foregroundColor(.onSurfaceMuted)
             }
             .padding(horizontal: 7)
             .frame(width: grid.labelWidth, height: rowHeight)
-            .background(.surfaceVariant)
 
             Box(direction: .row, alignItems: .center, justifyContent: .flexStart) {
                 row.value
@@ -244,11 +242,9 @@ private struct _StatefulPropertyGrid: View {
                     .flex(1, shrink: 1, basis: 0)
             }
             .frame(height: rowHeight)
-            .padding(horizontal: 5, vertical: 2)
-            .background(.surfaceSunken)
+            .padding(horizontal: 0, vertical: 2)
             .flex(1, shrink: 1, basis: 0)
         }
-        .background(.divider)
         .frame(height: rowHeight)
         .flex()
     }

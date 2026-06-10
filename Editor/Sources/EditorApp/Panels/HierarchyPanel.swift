@@ -60,16 +60,11 @@ struct HierarchyPanel: View {
                     .padding(horizontal: 10, vertical: 7)
 
                 Box(direction: .row, alignItems: .center, spacing: 6) {
-                    Text(L("Search"))
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
-
-                    TextField(text: $searchQuery)
+                    TextField(L("Search"), text: $searchQuery, size: .small)
                         .font(.caption)
                         .flex()
                 }
-                .padding(horizontal: 8, vertical: 5)
-                .background(.surfaceSunken)
+                .padding(horizontal: 8, vertical: 4)
 
                 Divider()
 
@@ -301,16 +296,11 @@ private struct HierarchyDropDestination {
 
 private struct HierarchyTreeRowStyle: TreeRowStyle {
     func makeBody(configuration: TreeRowStyleConfiguration) -> some View {
+        let t = configuration.theme
         let bg: Color = {
-            if configuration.isSelected {
-                return Color(red: 56, green: 82, blue: 136)
-            }
-            if configuration.isSearchHit {
-                return Color(r: 73.0 / 255.0, g: 89.0 / 255.0, b: 42.0 / 255.0, a: 0.72)
-            }
-            if configuration.isHovered {
-                return Color(r: 52.0 / 255.0, g: 59.0 / 255.0, b: 71.0 / 255.0, a: 0.96)
-            }
+            if configuration.isSelected { return t.colors.selection }
+            if configuration.isSearchHit { return t.colors.stateLayerSelected }
+            if configuration.isHovered { return t.colors.stateLayerHover }
             return Color(r: 0, g: 0, b: 0, a: 0)
         }()
 
@@ -322,7 +312,7 @@ private struct HierarchyTreeRowStyle: TreeRowStyle {
         .frame(height: 26)
         .clipped()
         .background(bg)
-        .cornerRadius(configuration.isSelected || configuration.isHovered ? 3 : 0)
+        .cornerRadius(t.radius.sm)
         .opacity(configuration.isEnabled ? 1 : 0.55)
     }
 }
