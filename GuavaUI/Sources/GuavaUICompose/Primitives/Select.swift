@@ -192,7 +192,7 @@ public struct Menu: View {
     }
 
     public var body: some View {
-        let rowHeight: Float = 34
+        let rowHeight: Float = 28
         let shouldScroll = entries.count > maxVisibleRows
         let listHeight = Float(maxVisibleRows) * rowHeight
         Box(direction: .column, alignItems: .stretch, spacing: 1) {
@@ -208,7 +208,7 @@ public struct Menu: View {
             }
         }
         .background(.surfaceFloating)
-        .cornerRadius(6)
+        .cornerRadius(7)
         .border(.border, width: 1)
         .ifLet(width) { view, width in
             view.frame(width: width)
@@ -404,9 +404,9 @@ private struct _MenuItemRowHost: _PrimitiveView {
             }
         }
         .padding(horizontal: 12, vertical: 0)
-        .frame(height: 30)
+        .frame(height: 26)
         .background(background)
-        .cornerRadius(4)
+        .cornerRadius(5)
         .padding(horizontal: 4, vertical: 2)
 
         return [row]
@@ -673,7 +673,7 @@ private struct _StatefulSelect<Value: Hashable>: View {
             }
             .padding(horizontal: 10, vertical: 8)
             .background(.surface)
-            .cornerRadius(6)
+            .cornerRadius(7)
             .border(.border, width: 1)
         }, content: {
             Menu(menuEntries,
