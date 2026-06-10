@@ -162,10 +162,7 @@ enum EditorRootViewFactory {
             PanelDescriptor(id: "console",
                             title: localizedPanelTitle(for: "console"),
                             preferredSlot: .bottom) {
-                // TODO(editor-redesign): rebuild ConsolePanel on GuavaUICompose — the GuavaKit
-                // migration was abandoned (see docs/guavaui-inplace-architecture-refactor.md §0).
-
-                EmptyView()
+                ConsolePanel(store: app.store)
             },
             PanelDescriptor(id: "assets",
                             title: localizedPanelTitle(for: "assets"),
