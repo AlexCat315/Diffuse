@@ -29,12 +29,15 @@ struct EditorRootView: View {
                             )
                         }
 
-                        Divider()
-
+                        // Floating-island chrome: no full-width divider — the
+                        // canvas margin separates the title bar from the
+                        // workspace, and the rounded panel slabs carry the
+                        // structure.
                         PanelWorkspace(controller: controller,
                                        registry: registry)
                             .flex()
                             .frame(minWidth: 0, minHeight: 0)
+                            .padding(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
                             .layoutRole("editor-workspace")
                             .debugName("editor-workspace")
 
