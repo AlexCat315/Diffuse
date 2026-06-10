@@ -10,7 +10,7 @@ public struct WorkspaceTheme: Sendable {
 
     public init(sideRailWidth: Float = 40,
                 bottomRailHeight: Float = 40,
-                tabBarHeight: Float = 30,
+                tabBarHeight: Float = 34,
                 splitDividerThickness: Float = 1,
                 splitDividerHitSlop: Float = 4) {
         self.sideRailWidth = sideRailWidth
