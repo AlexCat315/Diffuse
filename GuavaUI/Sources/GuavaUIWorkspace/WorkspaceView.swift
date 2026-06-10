@@ -930,8 +930,7 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
         let titleColor = node.theme.colors.onSurface
         let config = ButtonStyleConfiguration(label: AnyView(Row(alignment: .center, spacing: 4) {
                                                   if isPinned {
-                                                      Text("•", color: titleColor)
-                                                          .font(.label)
+                                                      Icon(WorkspaceIcons.pinDot, size: 6, color: titleColor)
                                                   }
                                                   Text(title, color: titleColor).font(.label)
                                               }),
@@ -1171,12 +1170,7 @@ private struct _WorkspaceRailButton: View {
                 _ = controller.dispatch(.expand(groupID))
             } label: {
                 Row(alignment: .center, spacing: 6) {
-                    Image(resource: WorkspaceIcons.expandDown,
-                          width: 10,
-                          height: 10,
-                          tint: .white,
-                          contentMode: .fit,
-                          renderingMode: .alphaMask)
+                    Icon(WorkspaceIcons.expandDown, size: 10, color: .white)
                     Text(title)
                         .font(.label)
                 }
@@ -1622,14 +1616,7 @@ private func firstNode(rootedAt root: Node, debugName: String) -> Node? {
 }
 
 private func absoluteFrame(of node: Node) -> CGRect {
-    var frame = node.frame
-    var cursor = node.parent
-    while let current = cursor {
-        frame.origin.x += current.frame.origin.x - current.contentOffset.x
-        frame.origin.y += current.frame.origin.y - current.contentOffset.y
-        cursor = current.parent
-    }
-    return frame
+    node.absoluteFrame
 }
 
 private enum WorkspaceIcons {
@@ -1645,4 +1632,7 @@ private enum WorkspaceIcons {
     static let close = BundleImageResource.svg(named: "close",
                                                in: .module,
                                                subdirectory: "WorkspaceIcons")
+    static let pinDot = BundleImageResource.svg(named: "pin-dot",
+                                                in: .module,
+                                                subdirectory: "WorkspaceIcons")
 }

@@ -22,9 +22,9 @@ struct CommandPaletteOverlay: View {
                         .foregroundColor(.onSurface)
                         .flex(1, shrink: 1)
 
-                    Button(action: { dismiss() }) {
-                        Text("✕")
-                    }
+                    Button(icon: .resource(UICommonIcons.close),
+                           size: 12,
+                           action: { dismiss() })
                     .buttonStyle(GhostButtonStyle())
                 }
                 .padding(horizontal: 14, vertical: 10)

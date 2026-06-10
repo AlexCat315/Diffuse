@@ -91,18 +91,11 @@ public final class AssetDropRegistry: @unchecked Sendable {
     }
 
     private func absoluteRect(for node: Node) -> UIRect {
-        var x = Float(node.frame.origin.x)
-        var y = Float(node.frame.origin.y)
-        var parent = node.parent
-        while let p = parent {
-            x += Float(p.frame.origin.x) - Float(p.contentOffset.x)
-            y += Float(p.frame.origin.y) - Float(p.contentOffset.y)
-            parent = p.parent
-        }
-        return UIRect(x: x,
-                      y: y,
-                      width: Float(node.frame.width),
-                      height: Float(node.frame.height))
+        let frame = node.absoluteFrame
+        return UIRect(x: Float(frame.minX),
+                      y: Float(frame.minY),
+                      width: Float(frame.width),
+                      height: Float(frame.height))
     }
 }
 

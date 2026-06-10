@@ -80,10 +80,11 @@ struct EditorApplicationMenuBar: View {
             case .action(let action):
                 return .item(MenuItem(
                     id: "action-\(index)",
-                    title: action.isSelected ? "[x] \(action.title)" : action.title,
+                    title: action.title,
                     shortcut: shortcutLabel(key: action.keyEquivalent,
                                             modifiers: action.keyModifiers),
                     isEnabled: action.isEnabled,
+                    isSelected: action.isSelected,
                     action: {
                         onCommand(action.command)
                     }

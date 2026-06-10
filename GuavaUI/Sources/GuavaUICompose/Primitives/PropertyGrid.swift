@@ -178,13 +178,7 @@ private struct _StatefulPropertyGrid: View {
             }) {
                 Row(alignment: .center, spacing: 6) {
                     if section.isCollapsible {
-                        Image(resource: isCollapsed ? PropertyGridIcons.chevronRight : PropertyGridIcons.chevronDown,
-                              width: 12,
-                              height: 12,
-                              tint: .white,
-                              contentMode: .fit,
-                              renderingMode: .alphaMask)
-                            .foregroundColor(.onSurfaceVariant)
+                        Icon(isCollapsed ? PropertyGridIcons.chevronRight : PropertyGridIcons.chevronDown, size: 12, color: .onSurfaceVariant)
                     }
                     Text(section.title)
                         .font(.label)
