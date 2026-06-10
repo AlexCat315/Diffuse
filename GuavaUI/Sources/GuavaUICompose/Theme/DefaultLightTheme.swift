@@ -1,46 +1,46 @@
 import GuavaUIRuntime
 
-/// Default light theme. Mirrors `DefaultDarkTheme`'s slot taxonomy with the
-/// surface ramp inverted onto **Zinc 50 → Zinc 200** and the same Indigo
-/// accent ramp. Numbers may evolve, but the slot contracts and token
-/// shapes stay locked in step with the dark theme.
+/// Default light theme. The same modern-IDE language as `DefaultDarkTheme`
+/// with the floating-island relationship inverted: white panel slabs float on
+/// a cool light-gray canvas. Accent stays the same cool blue so dark/light
+/// share one brand hue; status colors are darkened for contrast on white.
 public enum DefaultLightTheme {
     public static let value: Theme = Theme(
         colors: ColorScheme(
-            // 5-layer surface ramp.
-            background:       Color(red: 0xFA, green: 0xFA, blue: 0xFA), // zinc 50
-            surface:          Color(red: 0xFF, green: 0xFF, blue: 0xFF),
-            surfaceVariant:   Color(red: 0xF4, green: 0xF4, blue: 0xF5), // zinc 100
-            surfaceSunken:    Color(red: 0xE4, green: 0xE4, blue: 0xE7), // zinc 200
+            background:       Color(red: 0xF2, green: 0xF3, blue: 0xF5), // canvas
+            surface:          Color(red: 0xF7, green: 0xF8, blue: 0xFA), // tab strips / chips
+            surfaceVariant:   Color(red: 0xEB, green: 0xEC, blue: 0xF0), // wells / badges
+            surfaceSunken:    Color(red: 0xFF, green: 0xFF, blue: 0xFF), // island bodies
             surfaceRaised:    Color(red: 0xFF, green: 0xFF, blue: 0xFF),
             surfaceFloating:  Color(red: 0xFF, green: 0xFF, blue: 0xFF),
             surfaceOverlay:   Color(red: 0xFF, green: 0xFF, blue: 0xFF),
 
-            onBackground:     Color(red: 0x09, green: 0x09, blue: 0x0B), // zinc 950
-            onSurface:        Color(red: 0x18, green: 0x18, blue: 0x1B), // zinc 900
-            onSurfaceVariant: Color(red: 0x52, green: 0x52, blue: 0x5B), // zinc 600
-            onSurfaceMuted:   Color(red: 0xA1, green: 0xA1, blue: 0xAA), // zinc 400
+            onBackground:     Color(red: 0x1E, green: 0x1F, blue: 0x22),
+            onSurface:        Color(red: 0x2B, green: 0x2D, blue: 0x30),
+            onSurfaceVariant: Color(red: 0x5A, green: 0x5D, blue: 0x63),
+            onSurfaceMuted:   Color(red: 0x81, green: 0x85, blue: 0x94),
 
-            accent:           Color(red: 0x4F, green: 0x46, blue: 0xE5), // indigo 600
-            accentHover:      Color(red: 0x63, green: 0x66, blue: 0xF1), // indigo 500
-            accentPressed:    Color(red: 0x43, green: 0x38, blue: 0xCA), // indigo 700
+            accent:           Color(red: 0x35, green: 0x74, blue: 0xF0),
+            accentHover:      Color(red: 0x2A, green: 0x62, blue: 0xD8),
+            accentPressed:    Color(red: 0x24, green: 0x53, blue: 0xB8),
             onAccent:         Color(red: 0xFF, green: 0xFF, blue: 0xFF),
-            accentMuted:      Color(red: 0x4F, green: 0x46, blue: 0xE5, alpha: 0x22),
+            accentMuted:      Color(red: 0x35, green: 0x74, blue: 0xF0, alpha: 0x24),
+            accentSecondary:  Color(red: 0x9B, green: 0x51, blue: 0xE0),
 
-            stateLayerHover:    Color(red: 0x09, green: 0x09, blue: 0x0B, alpha: 0x0F), // 6%
-            stateLayerPressed:  Color(red: 0x09, green: 0x09, blue: 0x0B, alpha: 0x1F), // 12%
-            stateLayerSelected: Color(red: 0x4F, green: 0x46, blue: 0xE5, alpha: 0x29), // 16%
+            stateLayerHover:    Color(red: 0x1E, green: 0x1F, blue: 0x22, alpha: 0x0F), // 6%
+            stateLayerPressed:  Color(red: 0x1E, green: 0x1F, blue: 0x22, alpha: 0x1F), // 12%
+            stateLayerSelected: Color(red: 0x35, green: 0x74, blue: 0xF0, alpha: 0x29), // 16%
 
-            success:          Color(red: 0x05, green: 0x96, blue: 0x69), // emerald 600
-            warning:          Color(red: 0xD9, green: 0x77, blue: 0x06), // amber 600
-            error:            Color(red: 0xDC, green: 0x26, blue: 0x26), // red 600
-            info:             Color(red: 0x25, green: 0x63, blue: 0xEB), // blue 600
+            success:          Color(red: 0x2E, green: 0x9E, blue: 0x5B),
+            warning:          Color(red: 0xB8, green: 0x86, blue: 0x0B),
+            error:            Color(red: 0xD6, green: 0x45, blue: 0x41),
+            info:             Color(red: 0x2E, green: 0x70, blue: 0xD6),
 
-            border:           Color(red: 0xE4, green: 0xE4, blue: 0xE7), // zinc 200
-            borderStrong:     Color(red: 0xD4, green: 0xD4, blue: 0xD8), // zinc 300
-            divider:          Color(red: 0xE4, green: 0xE4, blue: 0xE7),
-            focusRing:        Color(red: 0x4F, green: 0x46, blue: 0xE5, alpha: 0x99),
-            selection:        Color(red: 0x4F, green: 0x46, blue: 0xE5, alpha: 0x29),
+            border:           Color(red: 0xC9, green: 0xCD, blue: 0xD4),
+            borderStrong:     Color(red: 0xB4, green: 0xBA, blue: 0xC2),
+            divider:          Color(red: 0xC9, green: 0xCD, blue: 0xD4, alpha: 0x7A),
+            focusRing:        Color(red: 0x35, green: 0x74, blue: 0xF0, alpha: 0xAA),
+            selection:        Color(red: 0x35, green: 0x74, blue: 0xF0, alpha: 0x30),
             overlay:          Color(red: 0x00, green: 0x00, blue: 0x00, alpha: 0x55)
         ),
         typography: DefaultDarkTheme.value.typography,
