@@ -523,14 +523,16 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
-        // Compute absolute position from the trigger container (parent Box)
+        // Compute absolute position from the trigger container (parent Box).
+        // Ancestor contentOffset must be applied so a popover inside a
+        // scrolled ScrollView opens at the trigger's on-screen position.
         let boxNode = node.parent
-        var absX: CGFloat = 0
-        var absY: CGFloat = 0
-        var current = boxNode
+        var absX: CGFloat = boxNode?.frame.origin.x ?? 0
+        var absY: CGFloat = boxNode?.frame.origin.y ?? 0
+        var current = boxNode?.parent
         while let n = current {
-            absX += n.frame.origin.x
-            absY += n.frame.origin.y
+            absX += n.frame.origin.x - n.contentOffset.x
+            absY += n.frame.origin.y - n.contentOffset.y
             current = n.parent
         }
         let overlayY = absY + (boxNode?.frame.height ?? 0)
@@ -622,11 +624,16 @@ private struct _StatefulSelect<Value: Hashable>: View {
     @State var popoverWasPresented: Bool = false
 
     var body: some View {
+        // Only write state on an actual transition: @State writes invalidate
+        // the owning scope unconditionally, so an unguarded write here would
+        // recompose this Select on every commit, forever.
         let _ = {
-            if isPresented, !popoverWasPresented {
-                highlightedIndex = 0
+            if isPresented != popoverWasPresented {
+                if isPresented, highlightedIndex != 0 {
+                    highlightedIndex = 0
+                }
+                popoverWasPresented = isPresented
             }
-            popoverWasPresented = isPresented
         }()
 
         let itemCount = select.options.count

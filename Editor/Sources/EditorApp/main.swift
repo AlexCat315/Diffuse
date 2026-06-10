@@ -2,6 +2,7 @@ import Foundation
 import EngineKernel
 import EditorCore
 import GuavaUIApp
+import GuavaUICompose
 import GuavaUIRuntime
 import GuavaUIWorkspace
 import RHIWGPU
@@ -19,6 +20,11 @@ private func runEditor() throws {
 
 @MainActor
 private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
+    // UI preferences (@AppStorage) live next to the shell-state/layout JSONs
+    // in Application Support/Guava.
+    AppStorageDefaults.store = FileAppStorageStore(
+        url: FileAppStorageStore.defaultURL(appName: "Guava")
+    )
     let backend = WGPUBackend(config: launchOptions.backendConfig)
     let events = PlatformEventBridge()
     let shellState = EditorRootViewFactory.loadShellState()

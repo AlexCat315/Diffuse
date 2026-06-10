@@ -420,15 +420,18 @@ private final class ActiveButtonPress {
 }
 
 private func absoluteOrigin(of node: Node) -> CGPoint {
-    var x: Float = 0
-    var y: Float = 0
-    var current: Node? = node
-    while let n = current {
-        x += Float(n.frame.origin.x)
-        y += Float(n.frame.origin.y)
-        current = n.parent
+    // Children render translated by the parent's -contentOffset, so every
+    // ancestor's scroll offset must be applied or a button inside a scrolled
+    // ScrollView reports its unscrolled position — and the release-inside
+    // check below silently cancels every click.
+    var origin = node.frame.origin
+    var current = node.parent
+    while let parent = current {
+        origin.x += parent.frame.origin.x - parent.contentOffset.x
+        origin.y += parent.frame.origin.y - parent.contentOffset.y
+        current = parent.parent
     }
-    return CGPoint(x: Double(x), y: Double(y))
+    return origin
 }
 
 private func isPointInsideButton(_ x: Float, _ y: Float, node: Node) -> Bool {
