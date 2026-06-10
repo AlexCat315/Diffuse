@@ -55,7 +55,7 @@ struct StyleIntegrationTests {
         // `.background(.surface)`. Walk the tree and look for the dark theme's
         // surface color.
         let nodes = allNodes(in: tree)
-        let surfaceHits = nodes.filter { $0.backgroundColor == Theme.defaultDark.colors.surface }
+        let surfaceHits = nodes.filter { $0.backgroundColor == Theme.defaultDark.colors.surfaceSunken }
         #expect(!surfaceHits.isEmpty)
     }
 
@@ -66,7 +66,7 @@ struct StyleIntegrationTests {
         let darkGraph = ViewGraph(tree: darkTree, recomposer: Recomposer())
         darkGraph.install(root: Panel("X") { Text("hi") }.appearance(.dark))
         darkGraph.computeLayout(width: 200, height: 100)
-        let darkHit = allNodes(in: darkTree).first { $0.backgroundColor == Theme.defaultDark.colors.surface }
+        let darkHit = allNodes(in: darkTree).first { $0.backgroundColor == Theme.defaultDark.colors.surfaceSunken }
         #expect(darkHit != nil)
 
         // Light panel: same node should now carry the light theme's `surface`.
@@ -74,12 +74,12 @@ struct StyleIntegrationTests {
         let lightGraph = ViewGraph(tree: lightTree, recomposer: Recomposer())
         lightGraph.install(root: Panel("X") { Text("hi") }.appearance(.light))
         lightGraph.computeLayout(width: 200, height: 100)
-        let lightHit = allNodes(in: lightTree).first { $0.backgroundColor == Theme.defaultLight.colors.surface }
+        let lightHit = allNodes(in: lightTree).first { $0.backgroundColor == Theme.defaultLight.colors.surfaceSunken }
         #expect(lightHit != nil)
 
         // Sanity: the two themes have different surface colors so the test
         // actually distinguishes them.
-        #expect(Theme.defaultDark.colors.surface != Theme.defaultLight.colors.surface)
+        #expect(Theme.defaultDark.colors.surfaceSunken != Theme.defaultLight.colors.surfaceSunken)
     }
 
     // MARK: - List row
@@ -126,7 +126,7 @@ struct StyleIntegrationTests {
         let nodes = allNodes(in: tree)
         let hit = nodes.first { $0.backgroundColor == Theme.defaultDark.colors.surfaceSunken }
         #expect(hit != nil)
-        #expect(hit?.cornerRadius == Theme.defaultDark.radius.sm)
+        #expect(hit?.cornerRadius == Theme.defaultDark.radius.md)
     }
 
     @Test("TextField chrome flips with appearance")
@@ -198,8 +198,8 @@ struct StyleIntegrationTests {
         )
         graph.computeLayout(width: 240, height: 240)
 
-        let darkSurface = Theme.defaultDark.colors.surface
-        let lightSurface = Theme.defaultLight.colors.surface
+        let darkSurface = Theme.defaultDark.colors.surfaceSunken
+        let lightSurface = Theme.defaultLight.colors.surfaceSunken
         let nodes = allNodes(in: tree)
         // Both surface colors should appear somewhere — outer panel uses
         // dark, inner panel uses light.
