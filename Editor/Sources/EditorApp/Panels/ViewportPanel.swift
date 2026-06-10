@@ -1196,8 +1196,8 @@ private struct ViewCubeControl: _PrimitiveView {
         var origin = node.frame.origin
         var current = node.parent
         while let parent = current {
-            origin.x += parent.frame.origin.x
-            origin.y += parent.frame.origin.y
+            origin.x += parent.frame.origin.x - parent.contentOffset.x
+            origin.y += parent.frame.origin.y - parent.contentOffset.y
             current = parent.parent
         }
         return origin
@@ -1291,9 +1291,9 @@ private struct ViewportInfoBar: View {
             }
         }
         .padding(3)
-        .background(.surfaceVariant)
-        .cornerRadius(2)
-        .border(Color(r: 0, g: 0, b: 0, a: 0.55), width: 1)
+        .background(.surfaceFloating)
+        .cornerRadius(10)
+        .border(.divider, width: 1)
     }
 }
 
@@ -1338,9 +1338,9 @@ private struct ViewportIdleCard: View {
                 .foregroundColor(.onSurfaceVariant)
         }
         .padding(EdgeInsets(top: 16, leading: 18, bottom: 16, trailing: 18))
-        .background(.surfaceRaised)
-        .cornerRadius(2)
-        .border(Color(r: 1, g: 1, b: 1, a: 0.08), width: 1)
+        .background(.surfaceFloating)
+        .cornerRadius(10)
+        .border(.divider, width: 1)
     }
 }
 
@@ -1363,9 +1363,9 @@ private struct DropTargetCard: View {
                 .foregroundColor(.onSurfaceMuted)
         }
         .padding(EdgeInsets(top: 14, leading: 20, bottom: 14, trailing: 20))
-        .background(.surfaceRaised)
-        .cornerRadius(2)
-        .border(Color(r: 0.54, g: 0.71, b: 0.98, a: 0.7), width: 2)
+        .background(.surfaceFloating)
+        .cornerRadius(10)
+        .border(.focusRing, width: 2)
     }
 }
 

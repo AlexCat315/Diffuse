@@ -54,6 +54,10 @@ public struct ColorScheme: Sendable {
     public var accentPressed: Color
     public var onAccent: Color
     public var accentMuted: Color
+    /// Secondary accent for content classification (scene / audio assets,
+    /// special syntax, badges) — the purple of the editor palette. Not part
+    /// of the interactive accent ramp; never used for hover/press states.
+    public var accentSecondary: Color
 
     // MARK: State layers (translucent overlays)
     public var stateLayerHover: Color
@@ -90,6 +94,7 @@ public struct ColorScheme: Sendable {
                 accentPressed: Color,
                 onAccent: Color,
                 accentMuted: Color,
+                accentSecondary: Color? = nil,
                 stateLayerHover: Color,
                 stateLayerPressed: Color,
                 stateLayerSelected: Color,
@@ -119,6 +124,7 @@ public struct ColorScheme: Sendable {
         self.accentPressed = accentPressed
         self.onAccent = onAccent
         self.accentMuted = accentMuted
+        self.accentSecondary = accentSecondary ?? accent
         self.stateLayerHover = stateLayerHover
         self.stateLayerPressed = stateLayerPressed
         self.stateLayerSelected = stateLayerSelected

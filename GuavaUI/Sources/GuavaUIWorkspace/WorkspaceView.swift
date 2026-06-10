@@ -119,7 +119,7 @@ private struct _WorkspaceShell: View {
                     .id("workspace-chrome-\(slot.id.rawValue)"))
             }
         }
-        .background(.surfaceSunken)
+        .background(.background)
         .flex()
         .frame(minWidth: 0, minHeight: 0)
     }
@@ -193,7 +193,7 @@ private struct _WorkspaceMainRow: View {
                     .id("workspace-rail-trailing")
             }
         }
-        .background(.surfaceSunken)
+        .background(.background)
         .flex()
         .frame(minWidth: 0, minHeight: 0)
     }
@@ -547,7 +547,7 @@ private struct _WorkspaceChromeSlot: View {
                            controller: controller)
                 .id("workspace-rail-\(slot.id.rawValue)")
         }
-        .background(.surfaceSunken)
+        .background(.background)
         .frame(width: horizontal ? nil : slot.thickness,
                height: horizontal ? slot.thickness : nil)
         .layoutRole("workspace-chrome-slot")
@@ -599,7 +599,6 @@ private struct _WorkspaceSlotView: View {
                     .flex()
             }
         }
-        .background(.surface)
         .frame(minWidth: 0, minHeight: 0)
         .layoutRole("workspace-region")
         .semanticRole("workspace.slot.\(slotID.rawValue)")
@@ -631,7 +630,7 @@ private struct _WorkspaceLayoutNodeView: View {
         case .split(let axis, let fraction, let first, let second):
             Box(direction: axis == .horizontal ? .row : .column,
                 alignItems: .stretch,
-                spacing: 1) {
+                spacing: 8) {
                 _WorkspaceLayoutNodeView(node: first,
                                          document: document,
                                          controller: controller,
@@ -645,7 +644,6 @@ private struct _WorkspaceLayoutNodeView: View {
                     .flex(1 - fraction, shrink: 1, basis: 0)
                     .frame(minWidth: 0, minHeight: 0)
             }
-            .background(.border)
             .frame(minWidth: 0, minHeight: 0)
             .layoutRole("workspace-split")
             .semanticRole("workspace.split.\(axis.rawValue)")
@@ -681,7 +679,9 @@ private struct _WorkspaceTabGroupView: View {
                     .flex()
             }
         }
-        .background(.surface)
+        .background(.surfaceSunken)
+        .cornerRadius(12)
+        .clipped()
         .frame(minWidth: 0, minHeight: 0)
         .layoutRole("workspace-tab-group")
         .semanticRole("workspace.group")
@@ -1072,7 +1072,9 @@ private struct _WorkspaceSplitDividerLine: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         let theme = resolveWorkspaceTheme(on: node)
-        node.animatableSet(\.backgroundColor, to: node.theme.colors.divider)
+        // Floating-island chrome: the gutter shows the window canvas; no
+        // painted line. The parent divider node keeps the resize hit area.
+        node.animatableSet(\.backgroundColor, to: nil)
         let thickness = max(1, theme.splitDividerThickness)
         switch axis {
         case .vertical:
@@ -1136,7 +1138,7 @@ private struct _WorkspaceRail: View {
                 railButtons
             }
             .padding(horizontal: 4, vertical: 4)
-            .background(.surfaceSunken)
+            .background(.background)
             .frame(width: .percent(100),
                    height: .points(thickness))
             .layoutRole("workspace-rail")
@@ -1147,7 +1149,7 @@ private struct _WorkspaceRail: View {
                 railButtons
             }
             .padding(horizontal: 4, vertical: 6)
-            .background(.surfaceVariant)
+            .background(.background)
             .frame(width: thickness)
             .layoutRole("workspace-rail")
             .semanticRole("workspace.rail.\(edge.rawValue)")
@@ -1180,7 +1182,7 @@ private struct _WorkspaceRailButton: View {
                 }
                 .padding(horizontal: 8, vertical: 4)
             }
-            .buttonStyle(.secondary)
+            .buttonStyle(_WorkspaceRailRestoreStyle())
             .semanticRole("workspace.rail.restore")
             .debugName("workspace-restore-\(groupID.rawValue)")
         } else {
@@ -1189,39 +1191,41 @@ private struct _WorkspaceRailButton: View {
             } label: {
                 _WorkspaceVerticalTitle(title: title)
             }
-            .buttonStyle(_WorkspaceSideRailButtonStyle())
+            .buttonStyle(_WorkspaceRailRestoreStyle())
             .semanticRole("workspace.rail.restore")
             .debugName("workspace-restore-\(groupID.rawValue)")
         }
     }
 }
 
-private struct _WorkspaceSideRailButtonStyle: ButtonStyle {
+/// Collapsed-panel restore button — the tool-strip idiom shared by every rail
+/// orientation: transparent at rest on the canvas, a state-layer wash on
+/// hover/press, muted label that brightens on hover, no border.
+private struct _WorkspaceRailRestoreStyle: ButtonStyle {
     func makeBody(configuration: ButtonStyleConfiguration) -> some View {
         let theme = configuration.theme
+        let clear = Color(r: 0, g: 0, b: 0, a: 0)
         let bg: Color = {
-            if !configuration.isEnabled { return theme.colors.surfaceSunken }
-            let base = theme.colors.surfaceRaised
-            if configuration.isPressed { return base.composited(over: theme.colors.stateLayerPressed) }
-            if configuration.isHovered { return base.composited(over: theme.colors.stateLayerHover) }
-            return base
+            if !configuration.isEnabled { return clear }
+            if configuration.isPressed { return theme.colors.stateLayerPressed }
+            if configuration.isHovered { return theme.colors.stateLayerHover }
+            return clear
         }()
-        let border = configuration.isFocused ? theme.colors.focusRing : theme.colors.border
-        let borderWidth: Float = configuration.isFocused ? 2 : 1
+        let fg: SemanticColorRef = configuration.isHovered ? .onSurface : .onSurfaceMuted
 
         return Box(direction: .column,
                    alignItems: .center,
                    justifyContent: .center,
                    spacing: 0) {
             AnyView(configuration.label)
-                .font(SemanticFontRef.bodyStrong)
-                .foregroundColor(SemanticColorRef.onSurface)
+                .font(SemanticFontRef.label)
+                .foregroundColor(fg)
         }
-        .frame(width: 32)
-        .padding(horizontal: 4, vertical: 0)
+        .padding(horizontal: 4, vertical: 4)
         .background(bg)
-        .cornerRadius(theme.radius.sm)
-        .border(border, width: borderWidth)
+        .cornerRadius(6)
+        .border(configuration.isFocused ? theme.colors.focusRing : clear,
+                width: configuration.isFocused ? 2 : 0)
         .opacity(configuration.isEnabled ? 1 : 0.55)
         .animation(.semantic(.snappy, in: theme), value: configuration.interactionKey)
     }
@@ -1231,23 +1235,38 @@ private struct _WorkspaceVerticalTitle: View {
     let title: String
 
     var body: some View {
-        let glyphs = characters.map { char in
-            AnyView(Text(char)
+        // Stacking one character per line is idiomatic vertical CJK, but
+        // short Latin runs ("AI") read as broken text — keep those横排.
+        if isShortLatin {
+            Text(cleanTitle)
                 .font(Font.system(size: 11, weight: .medium))
-                .lineHeight(12)
-                .frame(width: 24, height: 12))
+                .frame(minHeight: 28)
+        } else {
+            Box(direction: .column, alignItems: .center, justifyContent: .center, spacing: 1) {
+                characters.map { char in
+                    AnyView(Text(char)
+                        .font(Font.system(size: 11, weight: .medium))
+                        .lineHeight(12)
+                        .frame(width: 24, height: 12))
+                }
+            }
+            .frame(width: 24, minHeight: max(48, Float(characters.count) * 13 + 12))
         }
-        Box(direction: .column, alignItems: .center, justifyContent: .center, spacing: 1) {
-            glyphs
-        }
-        .frame(width: 24, minHeight: max(72, Float(characters.count) * 13 + 16))
     }
 
-    private var characters: [String] {
+    private var cleanTitle: String {
         let clean = title
             .replacingOccurrences(of: "\n", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        return (clean.isEmpty ? "Panel" : clean).map { String($0) }
+        return clean.isEmpty ? "Panel" : clean
+    }
+
+    private var isShortLatin: Bool {
+        cleanTitle.count <= 3 && cleanTitle.allSatisfy { $0.isASCII }
+    }
+
+    private var characters: [String] {
+        cleanTitle.map { String($0) }
     }
 }
 
@@ -1606,8 +1625,8 @@ private func absoluteFrame(of node: Node) -> CGRect {
     var frame = node.frame
     var cursor = node.parent
     while let current = cursor {
-        frame.origin.x += current.frame.origin.x
-        frame.origin.y += current.frame.origin.y
+        frame.origin.x += current.frame.origin.x - current.contentOffset.x
+        frame.origin.y += current.frame.origin.y - current.contentOffset.y
         cursor = current.parent
     }
     return frame

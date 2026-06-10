@@ -45,7 +45,7 @@ public struct Theme: Sendable {
             addonBackground:    colors.surfaceVariant,
             addonForeground:    colors.onSurfaceMuted,
             dividerColor:       colors.border,
-            radius:             radius.sm
+            radius:             radius.md
         )
     }
 }

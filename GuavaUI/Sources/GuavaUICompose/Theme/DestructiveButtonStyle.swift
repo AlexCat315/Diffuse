@@ -24,10 +24,10 @@ public struct DestructiveButtonStyle: ButtonStyle {
 
         return Box(direction: .row, alignItems: .center, justifyContent: .center) {
             AnyView(configuration.label)
-                .font(SemanticFontRef.bodyStrong)
+                .font(SemanticFontRef.label)
                 .foregroundColor(SemanticColorRef.onAccent)
         }
-            .frame(height: 32)
+            .frame(height: 28)
             .padding(horizontal: theme.spacing.md, vertical: 0)
             .background(bg)
             .cornerRadius(theme.radius.md)

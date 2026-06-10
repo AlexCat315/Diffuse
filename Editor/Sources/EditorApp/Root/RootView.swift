@@ -29,21 +29,20 @@ struct EditorRootView: View {
                             )
                         }
 
-                        Divider()
-
+                        // Floating-island chrome: no full-width divider — the
+                        // canvas margin separates the title bar from the
+                        // workspace, and the rounded panel slabs carry the
+                        // structure.
                         PanelWorkspace(controller: controller,
                                        registry: registry)
                             .flex()
                             .frame(minWidth: 0, minHeight: 0)
+                            .padding(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
                             .layoutRole("editor-workspace")
                             .debugName("editor-workspace")
 
-                        Divider()
-
-                        // TODO(editor-redesign): rebuild the status bar on GuavaUICompose —
-                        // the GuavaKit migration was abandoned (see
-                        // docs/guavaui-inplace-architecture-refactor.md §0).
-                        // Was: EditorStatusBar(store: app.store, getTiming: { app.currentFrameTiming() })
+                        EditorStatusBar(store: store,
+                                        getTiming: { app.currentFrameTiming() })
                     }
                     .background(.background)
                     .flex()
@@ -54,8 +53,7 @@ struct EditorRootView: View {
                 } portals: {
                     PortalHost()
                     if store.commandPaletteVisible {
-                        // TODO(editor-redesign): rebuild CommandPaletteOverlay on
-                        // GuavaUICompose — the GuavaKit migration was abandoned.
+                        CommandPaletteOverlay(app: app)
                     }
                 }
             }

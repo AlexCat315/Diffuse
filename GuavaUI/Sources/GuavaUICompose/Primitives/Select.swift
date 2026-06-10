@@ -192,7 +192,7 @@ public struct Menu: View {
     }
 
     public var body: some View {
-        let rowHeight: Float = 34
+        let rowHeight: Float = 28
         let shouldScroll = entries.count > maxVisibleRows
         let listHeight = Float(maxVisibleRows) * rowHeight
         Box(direction: .column, alignItems: .stretch, spacing: 1) {
@@ -208,7 +208,7 @@ public struct Menu: View {
             }
         }
         .background(.surfaceFloating)
-        .cornerRadius(6)
+        .cornerRadius(7)
         .border(.border, width: 1)
         .ifLet(width) { view, width in
             view.frame(width: width)
@@ -404,9 +404,9 @@ private struct _MenuItemRowHost: _PrimitiveView {
             }
         }
         .padding(horizontal: 12, vertical: 0)
-        .frame(height: 30)
+        .frame(height: 26)
         .background(background)
-        .cornerRadius(4)
+        .cornerRadius(5)
         .padding(horizontal: 4, vertical: 2)
 
         return [row]
@@ -523,14 +523,16 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
-        // Compute absolute position from the trigger container (parent Box)
+        // Compute absolute position from the trigger container (parent Box).
+        // Ancestor contentOffset must be applied so a popover inside a
+        // scrolled ScrollView opens at the trigger's on-screen position.
         let boxNode = node.parent
-        var absX: CGFloat = 0
-        var absY: CGFloat = 0
-        var current = boxNode
+        var absX: CGFloat = boxNode?.frame.origin.x ?? 0
+        var absY: CGFloat = boxNode?.frame.origin.y ?? 0
+        var current = boxNode?.parent
         while let n = current {
-            absX += n.frame.origin.x
-            absY += n.frame.origin.y
+            absX += n.frame.origin.x - n.contentOffset.x
+            absY += n.frame.origin.y - n.contentOffset.y
             current = n.parent
         }
         let overlayY = absY + (boxNode?.frame.height ?? 0)
@@ -622,11 +624,16 @@ private struct _StatefulSelect<Value: Hashable>: View {
     @State var popoverWasPresented: Bool = false
 
     var body: some View {
+        // Only write state on an actual transition: @State writes invalidate
+        // the owning scope unconditionally, so an unguarded write here would
+        // recompose this Select on every commit, forever.
         let _ = {
-            if isPresented, !popoverWasPresented {
-                highlightedIndex = 0
+            if isPresented != popoverWasPresented {
+                if isPresented, highlightedIndex != 0 {
+                    highlightedIndex = 0
+                }
+                popoverWasPresented = isPresented
             }
-            popoverWasPresented = isPresented
         }()
 
         let itemCount = select.options.count
@@ -673,7 +680,7 @@ private struct _StatefulSelect<Value: Hashable>: View {
             }
             .padding(horizontal: 10, vertical: 8)
             .background(.surface)
-            .cornerRadius(6)
+            .cornerRadius(7)
             .border(.border, width: 1)
         }, content: {
             Menu(menuEntries,
