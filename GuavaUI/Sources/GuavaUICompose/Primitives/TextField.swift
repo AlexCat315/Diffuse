@@ -313,6 +313,11 @@ public struct TextField: View {
         let mods = event.modifiers
         let shift = !mods.isDisjoint(with: .shift)
         let primaryModifier = !mods.isDisjoint(with: .gui) || !mods.isDisjoint(with: .ctrl)
+        // macOS text-navigation idioms: Option = word-wise, Command = line-wise.
+        // (Command+arrow reuses the Home/End paths since Mac keyboards have no
+        // physical Home/End keys.)
+        let option = !mods.isDisjoint(with: [.lalt, .ralt])
+        let command = !mods.isDisjoint(with: .gui)
         let count = text.wrappedValue.count
         // In read-only mode the field still accepts caret motion, selection,
         // and primary select/copy shortcuts so users can copy the value, but every mutation
@@ -356,11 +361,20 @@ public struct TextField: View {
             guard !blockMutations else { return true }
             if !deleteSelection(state: state) {
                 guard state.cursorIndex > 0 else { return true }
+                // Option deletes to the previous word boundary, Command to the
+                // start of the field; plain Backspace removes one character.
+                let deleteTo: Int = {
+                    if command { return 0 }
+                    if option { return wordBoundaryBefore(in: text.wrappedValue,
+                                                          offset: state.cursorIndex) }
+                    return state.cursorIndex - 1
+                }()
                 var s = text.wrappedValue
-                let removeAt = s.index(s.startIndex, offsetBy: state.cursorIndex - 1)
-                s.remove(at: removeAt)
+                let lo = s.index(s.startIndex, offsetBy: deleteTo)
+                let hi = s.index(s.startIndex, offsetBy: state.cursorIndex)
+                s.removeSubrange(lo..<hi)
                 text.wrappedValue = s
-                state.cursorIndex -= 1
+                state.cursorIndex = deleteTo
                 recordCaretActivity(state)
                 onChange?(s)
             }
@@ -378,7 +392,13 @@ public struct TextField: View {
             }
             return true
         case 80: // LEFT
-            if !shift, let r = selectionRange(state) {
+            if command {
+                moveCursor(to: 0, extendSelection: shift, state: state)
+            } else if option {
+                moveCursor(to: wordBoundaryBefore(in: text.wrappedValue,
+                                                  offset: state.cursorIndex),
+                           extendSelection: shift, state: state)
+            } else if !shift, let r = selectionRange(state) {
                 state.selectionAnchor = nil
                 state.cursorIndex = r.lowerBound
                 recordCaretActivity(state)
@@ -387,7 +407,13 @@ public struct TextField: View {
             }
             return true
         case 79: // RIGHT
-            if !shift, let r = selectionRange(state) {
+            if command {
+                moveCursor(to: count, extendSelection: shift, state: state)
+            } else if option {
+                moveCursor(to: wordBoundaryAfter(in: text.wrappedValue,
+                                                 offset: state.cursorIndex),
+                           extendSelection: shift, state: state)
+            } else if !shift, let r = selectionRange(state) {
                 state.selectionAnchor = nil
                 state.cursorIndex = r.upperBound
                 recordCaretActivity(state)
@@ -1090,6 +1116,30 @@ public struct TextField: View {
         if c.isLetter || c.isNumber || c == "_" { return .word }
         if c.isWhitespace { return .space }
         return .other
+    }
+
+    /// Option+Left / Option+Backspace target: skip any whitespace immediately
+    /// before the caret, then the run of same-kind characters before it.
+    func wordBoundaryBefore(in s: String, offset: Int) -> Int {
+        let chars = Array(s)
+        var i = clamp(offset, 0, chars.count)
+        while i > 0 && wordKind(chars[i - 1]) == .space { i -= 1 }
+        guard i > 0 else { return 0 }
+        let kind = wordKind(chars[i - 1])
+        while i > 0 && wordKind(chars[i - 1]) == kind { i -= 1 }
+        return i
+    }
+
+    /// Option+Right target: skip whitespace at the caret, then the run of
+    /// same-kind characters after it.
+    func wordBoundaryAfter(in s: String, offset: Int) -> Int {
+        let chars = Array(s)
+        var i = clamp(offset, 0, chars.count)
+        while i < chars.count && wordKind(chars[i]) == .space { i += 1 }
+        guard i < chars.count else { return chars.count }
+        let kind = wordKind(chars[i])
+        while i < chars.count && wordKind(chars[i]) == kind { i += 1 }
+        return i
     }
 }
 
