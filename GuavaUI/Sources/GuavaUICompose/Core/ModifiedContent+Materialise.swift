@@ -75,11 +75,16 @@ extension ModifiedContent: _AnyModifiedContent {
         // synthetic anchor whose single child carries the wrapped content.
         if let scopeApply = modifier as? _ScopeApplyingModifier {
             node.viewTag = ViewGraph.slotTag(self)
-            if scopeApply._applyScope(node: node) {
-                graph.reconcileChildren(parent: node,
-                                        layoutParent: layoutParent,
-                                        newViews: [content])
-            }
+            // The content must reconcile even when the provided value is
+            // unchanged: this slot was handed a NEW content value (fresh
+            // closures and bindings into the owning scope's current @State
+            // storage). Skipping the recursion strands descendants on
+            // captures of storage that `ViewScope.replaceView` has already
+            // swapped out — controls keep writing into dead state.
+            _ = scopeApply._applyScope(node: node)
+            graph.reconcileChildren(parent: node,
+                                    layoutParent: layoutParent,
+                                    newViews: [content])
             return
         }
 

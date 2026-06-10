@@ -132,8 +132,12 @@ public final class ViewGraph {
         let absoluteOrigin = CGPoint(x: parentOrigin.x + node.frame.origin.x,
                                      y: parentOrigin.y + node.frame.origin.y)
         syncTextInputArea(for: node, absoluteOrigin: absoluteOrigin)
+        // Children render translated by -contentOffset; keep the IME anchor
+        // geometry in the same space as what is actually on screen.
+        let childOrigin = CGPoint(x: absoluteOrigin.x - node.contentOffset.x,
+                                  y: absoluteOrigin.y - node.contentOffset.y)
         for child in node.children {
-            writeLayoutBack(node: child, parentOrigin: absoluteOrigin)
+            writeLayoutBack(node: child, parentOrigin: childOrigin)
         }
     }
 
@@ -172,6 +176,8 @@ public final class ViewGraph {
         let absoluteOrigin = CGPoint(x: parentOrigin.x + node.frame.origin.x,
                                      y: parentOrigin.y + node.frame.origin.y)
         let absoluteFrame = CGRect(origin: absoluteOrigin, size: node.frame.size)
+        let childOrigin = CGPoint(x: absoluteOrigin.x - node.contentOffset.x,
+                                  y: absoluteOrigin.y - node.contentOffset.y)
         let debugName = node.attachments[LayoutDebugAttachmentKey.debugName] as? String
         let layoutRole = node.attachments[LayoutDebugAttachmentKey.layoutRole] as? String
         let semanticRole = node.attachments[LayoutDebugAttachmentKey.semanticRole] as? String
@@ -184,7 +190,7 @@ public final class ViewGraph {
         }
         for child in node.children {
             collectLayoutSnapshot(node: child,
-                                  parentOrigin: absoluteOrigin,
+                                  parentOrigin: childOrigin,
                                   into: &result)
         }
     }
