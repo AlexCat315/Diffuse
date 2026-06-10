@@ -133,3 +133,7 @@
 "Delete the current selection through IntentRuntime confirmation flow." = "通过 IntentRuntime 确认流程删除当前选择。";
 "Delete Selection" = "删除选择";
 "No active warnings" = "无活动警告";
+
+/* Panel titles — confirmations / offline render */
+"Confirmations" = "确认";
+"Render Pipeline" = "渲染管线";

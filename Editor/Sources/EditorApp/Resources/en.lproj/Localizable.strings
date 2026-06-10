@@ -133,3 +133,7 @@
 "Delete the current selection through IntentRuntime confirmation flow." = "Delete the current selection through IntentRuntime confirmation flow.";
 "Delete Selection" = "Delete Selection";
 "No active warnings" = "No active warnings";
+
+/* Panel titles — confirmations / offline render */
+"Confirmations" = "Confirmations";
+"Render Pipeline" = "Render Pipeline";
