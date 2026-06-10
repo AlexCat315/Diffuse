@@ -49,14 +49,12 @@ public final class DevTools {
     public init(config: DevToolsConfig,
                 tree: NodeTree,
                 invalidationLog: InvalidationLog? = nil,
-                renderTree: RenderTree? = nil,
-                inputScene: InputScene? = nil) {
+                renderTree: RenderTree? = nil) {
         self.config = config
         self.server = DevServer(config: config)
         self.scene = SceneInspector(tree: tree,
                                     invalidationLog: invalidationLog,
-                                    renderTree: renderTree,
-                                    inputScene: inputScene)
+                                    renderTree: renderTree)
 
         let scene = self.scene
         server.snapshotProvider = { @MainActor in scene.snapshot() }

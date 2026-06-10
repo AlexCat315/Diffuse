@@ -10,6 +10,15 @@ import CardBattleRuntime
 @MainActor
 private func runEditor() throws {
     let launchOptions = try EditorAppLaunchOptions.load()
+    // The editor runs on the GuavaUICompose + AppRuntime stack. The GuavaKit
+    // from-scratch rewrite served as the architecture blueprint for the
+    // in-place runtime refactor and has been deleted
+    // (docs/guavaui-inplace-architecture-refactor.md §5).
+    try runLegacyEditor(launchOptions: launchOptions)
+}
+
+@MainActor
+private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
     let backend = WGPUBackend(config: launchOptions.backendConfig)
     let events = PlatformEventBridge()
     let shellState = EditorRootViewFactory.loadShellState()
@@ -63,6 +72,8 @@ private func runEditor() throws {
         EditorLaunchRoot(context: context)
     }
 }
+
+// MARK: - Entry
 
 do {
     try runEditor()

@@ -256,8 +256,8 @@ struct MultiWindowSmokeTests {
     }
 
     @MainActor
-    @Test("Focused text input area is read from the input mirror")
-    func focusedTextInputAreaUsesInputMirror() throws {
+    @Test("Focused text input area syncs to the shell from the live node")
+    func focusedTextInputAreaSyncsToShell() throws {
         let shell = MockShell(eventBatches: [[], []])
         let host = SDL3PlatformHost(shellFactory: { shell })
 
@@ -273,10 +273,8 @@ struct MultiWindowSmokeTests {
         root.addChild(field)
         tree.root = root
 
-        let scene = InputScene()
-        scene.install(rootNode: root)
-        field.attachments.removeValue(forKey: TextInputAttachmentKey.area)
-        session.attachInputScene(scene)
+        // Phase 7: the host reads the focused node's text-input area live from
+        // its attachments (the input mirror was removed).
         session.focusChain.focus(field)
         session.onFrame = { _ in true }
 
