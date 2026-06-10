@@ -50,8 +50,7 @@ struct EditorRootView: View {
                 } portals: {
                     PortalHost()
                     if store.commandPaletteVisible {
-                        // TODO(editor-redesign): rebuild CommandPaletteOverlay on
-                        // GuavaUICompose — the GuavaKit migration was abandoned.
+                        CommandPaletteOverlay(app: app)
                     }
                 }
             }
