@@ -40,9 +40,10 @@ struct EditorRootView: View {
 
                         Divider()
 
-                        EditorStatusBar(store: app.store, getTiming: { app.currentFrameTiming() })
-                            .layoutRole("editor-status-bar")
-                            .debugName("editor-status-bar")
+                        // TODO(editor-redesign): rebuild the status bar on GuavaUICompose —
+                        // the GuavaKit migration was abandoned (see
+                        // docs/guavaui-inplace-architecture-refactor.md §0).
+                        // Was: EditorStatusBar(store: app.store, getTiming: { app.currentFrameTiming() })
                     }
                     .background(.background)
                     .flex()
@@ -53,7 +54,8 @@ struct EditorRootView: View {
                 } portals: {
                     PortalHost()
                     if store.commandPaletteVisible {
-                        CommandPaletteOverlay(app: app)
+                        // TODO(editor-redesign): rebuild CommandPaletteOverlay on
+                        // GuavaUICompose — the GuavaKit migration was abandoned.
                     }
                 }
             }

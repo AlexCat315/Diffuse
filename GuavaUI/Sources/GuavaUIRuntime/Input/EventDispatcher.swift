@@ -25,14 +25,6 @@ public final class EventDispatcher {
     public let focusChain: FocusChain
     public let windowID: WindowID
 
-    /// Phase 5b: optional input mirror. When set, hit-test consults the
-    /// `InputScene` (cached classification + version-keyed focus chain) and
-    /// the cursor walk reads `InputNode.cursor`. When `nil`, dispatch falls
-    /// back to walking the live `Node` tree.
-    public weak var inputScene: InputScene? {
-        didSet { focusChain.inputScene = inputScene }
-    }
-
     /// Invoked whenever the resolved hover cursor changes. The dispatcher
     /// computes the cursor by walking the hover path leaf → root and using
     /// the deepest non-nil `Node.cursor`. `nil` resolves to `.arrow`.
@@ -195,12 +187,9 @@ public final class EventDispatcher {
         _ = deliverWheel(path: [root], event: event)
     }
 
-    /// Hit-test entry point. Routes through the `InputScene` mirror when
-    /// wired (Phase 5b), otherwise walks the live `Node` tree.
+    /// Hit-test entry point. Walks the live `Node` tree (Phase 7: the input
+    /// mirror was removed; classification is read fresh off each `Node`).
     private func hitTest(point: CGPoint) -> HitResult? {
-        if let scene = inputScene {
-            return HitTester.hitTest(scene: scene, point: point)
-        }
         guard let root = tree.root else { return nil }
         return HitTester.hitTest(rootNode: root, point: point)
     }
@@ -518,12 +507,8 @@ public final class EventDispatcher {
 
     private func updateCursor(for path: [Node]) {
         var resolved: SystemCursor = .arrow
-        // Prefer the cached InputNode.cursor when the mirror is wired so
-        // dispatch never reads back into the live Node graph for cursor
-        // resolution.
         for node in path.reversed() {
-            let c = node.inputNode?.cursor ?? node.cursor
-            if let c {
+            if let c = node.cursor {
                 resolved = c
                 break
             }

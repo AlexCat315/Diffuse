@@ -38,7 +38,6 @@ final class WindowChromeInteractionTests: XCTestCase {
                                          interactions: registry,
                                          capture: capture,
                                          focusChain: focus)
-        dispatcher.inputScene = graph.inputScene
 
         let snapshots = graph.layoutSnapshot()
         let buildFrame = try XCTUnwrap(snapshots.first { $0.debugName == "menu-Build" }?.absoluteFrame)
@@ -63,7 +62,7 @@ final class WindowChromeInteractionTests: XCTestCase {
 
         for button in controlFrames {
             let point = CGPoint(x: button.midX, y: button.midY)
-            let hit = HitTester.hitTest(scene: graph.inputScene, point: point)
+            let hit = HitTester.hitTest(rootNode: graph.tree.root!, point: point)
             XCTAssertNotNil(hit)
             XCTAssertNotNil(registry.handlers(for: hit!.node).pointer)
             XCTAssertEqual(hit!.node.cursor, .pointer)

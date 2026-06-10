@@ -1,33 +1,68 @@
-﻿#if canImport(CoreGraphics)
+#if canImport(CoreGraphics)
 import CoreGraphics
 #endif
 
-public enum TooltipOverlayRegistry {
-    nonisolated(unsafe) private static var draws: [(ObjectIdentifier, (DrawList) -> Void)] = []
+/// Per-window store of tooltip/overlay draws, keyed by the owning node.
+///
+/// Phase 3 (坏味 #3): the storage moved off a process-global `enum` static into
+/// this instance so each window's `PlatformInputContext` owns its own — one
+/// window's hovering tooltip can never paint into another's. Phase 8 deleted
+/// the legacy `TooltipOverlayRegistry` static shim: primitives register through
+/// `TooltipStoreHolder.current` (the scoped ambient, swapped by `withCurrent`),
+/// and frame hooks draw via the window's `inputContext.tooltips` explicitly.
+public final class TooltipStore {
+    private var draws: [(ObjectIdentifier, (DrawList) -> Void)] = []
 
-    public static func register(_ node: Node, draw: @escaping (DrawList) -> Void) {
+    public init() {}
+
+    public func register(_ node: Node, draw: @escaping (DrawList) -> Void) {
         let id = ObjectIdentifier(node)
         draws.removeAll(where: { $0.0 == id })
         draws.append((id, draw))
+        // Bind the entry to the node's lifetime (规则 2): when the node leaves
+        // the tree, the resource unregisters it — no ViewGraph teardown hook.
+        if node.firstResource(TooltipCleanupResource.self) == nil {
+            node.addResource(TooltipCleanupResource(store: self))
+        }
     }
 
-    public static func unregister(_ node: Node) {
+    public func unregister(_ node: Node) {
         let id = ObjectIdentifier(node)
         draws.removeAll(where: { $0.0 == id })
     }
 
-    public static func contains(_ node: Node) -> Bool {
+    public func contains(_ node: Node) -> Bool {
         let id = ObjectIdentifier(node)
         return draws.contains(where: { $0.0 == id })
     }
 
-    public static func unregisterAll() {
+    public func unregisterAll() {
         draws.removeAll()
     }
 
-    public static func drawAll(into list: DrawList) {
+    public func drawAll(into list: DrawList) {
         for (_, draw) in draws {
             draw(list)
         }
     }
+}
+
+/// Node-owned cleanup for a tooltip draw (规则 2). Attached when the node first
+/// registers a tooltip; `unmount` (via `Node.removeChild`) drops the draw. The
+/// store is held weakly so the resource never keeps a torn-down window alive.
+final class TooltipCleanupResource: NodeResource {
+    private weak var store: TooltipStore?
+    init(store: TooltipStore) { self.store = store }
+    func mount(node: Node) {}
+    func unmount(node: Node) { store?.unregister(node) }
+}
+
+/// Holds the tooltip store made "current" by `PlatformInputContext.withCurrent`.
+/// Defaults to a shared instance so single-window hosts and tests that never
+/// install a context keep working unchanged.
+public enum TooltipStoreHolder {
+    nonisolated(unsafe) public static let shared = TooltipStore()
+    /// Main-thread-only ambient: the UI tree is single-threaded, so the active
+    /// store is swapped only on the main thread inside `withCurrent`.
+    nonisolated(unsafe) public static var current: TooltipStore = shared
 }

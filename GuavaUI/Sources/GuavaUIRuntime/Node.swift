@@ -5,6 +5,12 @@ import PlatformShell
 ///
 /// Nodes are reference types — identity is by pointer.
 /// Dirty flags propagate upward so the root always knows when a flush is needed.
+///
+/// Invariant: the scene tree is owned and mutated only on the main thread (the
+/// host run loop drives compose / layout / dispatch there). `@unchecked
+/// Sendable` records that contract — nodes are never mutated concurrently — so
+/// they can cross the `Sendable` boundaries the runtime API imposes without
+/// per-field synchronisation.
 public final class Node: @unchecked Sendable {
 
     // MARK: - Identity
@@ -35,20 +41,18 @@ public final class Node: @unchecked Sendable {
 
     /// The rectangle assigned by the layout engine (Phase 3).
     /// Coordinates are local to the parent node.
+    ///
+    /// Geometry single funnel (坏味 #1): `frame` and the other geometry /
+    /// hit-classification fields below (`contentOffset`, `zIndex`,
+    /// `clipsToBounds`, `isHitTestable`) all route their `didSet` through
+    /// `invalidateGeometry` — the one place that drops the hit cache. There is
+    /// no second invalidation path, so a moving property cannot be added that
+    /// silently forgets to invalidate (the "works once then stops responding
+    /// after a reflow" bug class).
     public var frame: CGRect = .zero {
         didSet {
             if oldValue != frame {
-                markRenderDirty(reason: .layoutChange)
-                // A frame change moves the node, so any cached hit-test answer
-                // for a point is now stale. The hit cache is keyed on the
-                // structural `version` + point, and a layout-only move does NOT
-                // bump that version (no add/remove) — so without this the cache
-                // keeps returning a hit computed against the OLD geometry until
-                // the next structural change, silently misrouting clicks (a
-                // control "works once then stops responding" after any resize /
-                // reflow). Mirrors `contentOffset` and `zIndex`, which already
-                // invalidate here.
-                inputNode?.scene?.invalidateHitCache()
+                invalidateGeometry(reason: .layoutChange)
             }
         }
     }
@@ -66,17 +70,18 @@ public final class Node: @unchecked Sendable {
     /// Phase 4b's cache lands.
     public weak var renderObject: RenderObject?
 
-    /// Phase 5a back-pointer to the paired `InputNode`. The `InputScene`
-    /// owns the strong reference. Set by `InputNode.init`. Phase 5b will
-    /// drive hit-test / focus traversal off this mirror so dispatch can
-    /// avoid re-walking the full Node graph each event.
-    public weak var inputNode: InputNode?
-
     // MARK: - Interaction (Phase 6.1)
 
     /// When false, hit-testing skips this node (children are still visited
-    /// unless `clipsToBounds` excludes them by frame).
-    public var isHitTestable: Bool = true
+    /// unless `clipsToBounds` excludes them by frame). Routes through the
+    /// geometry funnel so toggling it at runtime drops the hit cache.
+    public var isHitTestable: Bool = true {
+        didSet {
+            if oldValue != isHitTestable {
+                invalidateGeometry(reason: .styleSet(field: "isHitTestable"))
+            }
+        }
+    }
 
     /// When true, this node may receive keyboard focus (FocusChain consideration).
     public var isFocusable: Bool = false
@@ -86,7 +91,7 @@ public final class Node: @unchecked Sendable {
     public var clipsToBounds: Bool = false {
         didSet {
             if oldValue != clipsToBounds {
-                markRenderDirty(reason: .styleSet(field: "clipsToBounds"))
+                invalidateGeometry(reason: .styleSet(field: "clipsToBounds"))
             }
         }
     }
@@ -193,8 +198,11 @@ public final class Node: @unchecked Sendable {
     public var zIndex: Float = 0 {
         didSet {
             if oldValue != zIndex {
-                markRenderDirty(reason: .styleSet(field: "zIndex"))
-                parent?.inputNode?.scene?.invalidateHitCache()
+                // z-order reorders hit/paint among siblings. The InputScene is
+                // shared across the whole tree (one per tree), so invalidating
+                // via this node's own scene is equivalent to the parent's and
+                // also covers the root.
+                invalidateGeometry(reason: .styleSet(field: "zIndex"))
             }
         }
     }
@@ -224,8 +232,7 @@ public final class Node: @unchecked Sendable {
     public var contentOffset: CGPoint = .zero {
         didSet {
             if oldValue != contentOffset {
-                markRenderDirty(reason: .styleSet(field: "contentOffset"))
-                inputNode?.scene?.invalidateHitCache()
+                invalidateGeometry(reason: .styleSet(field: "contentOffset"))
             }
         }
     }
@@ -283,6 +290,53 @@ public final class Node: @unchecked Sendable {
         return local.defaultValue
     }
 
+    // MARK: - Resources (坏味 #4)
+
+    /// External registrations tied to this node's lifetime. Released when the
+    /// node leaves the tree — see `removeChild` / `unmountResourcesRecursively`.
+    private var resources: [NodeResource] = []
+
+    /// Tie an external registration (e.g. a portal/overlay entry) to this
+    /// node's lifetime. Mounts immediately; `unmount` runs automatically when
+    /// the node is removed from its parent for any reason.
+    public func addResource(_ resource: NodeResource) {
+        resources.append(resource)
+        resource.mount(node: self)
+    }
+
+    /// First attached resource of the given type, if any. Primitives use this
+    /// on reuse (`_updateNode`) to reach the resource created in `_makeNode`.
+    public func firstResource<R: NodeResource>(_ type: R.Type) -> R? {
+        for resource in resources {
+            if let match = resource as? R { return match }
+        }
+        return nil
+    }
+
+    /// Release this node and every descendant from the live tree, leaf → root,
+    /// so a parent observes a fully-released subtree (规则 2). Unmounts node-owned
+    /// resources and releases the per-window singletons keyed by this exact node
+    /// (pointer capture, focus). Idempotent.
+    private func releaseFromTree() {
+        for child in children {
+            child.releaseFromTree()
+        }
+        for resource in resources {
+            resource.unmount(node: self)
+        }
+        // A node leaving the tree must not remain the capture target — otherwise
+        // every later event routes to a detached node (the stuck-capture bug) —
+        // nor keep focus. Mirrors GuavaKit's `UIContext.detach`. The holders are
+        // nil outside a window scope (e.g. raw-Node tests), so this is a no-op
+        // there.
+        if PointerCaptureHolder.current?.target === self {
+            PointerCaptureHolder.current?.release()
+        }
+        if FocusChainHolder.current?.focused === self {
+            FocusChainHolder.current?.clear()
+        }
+    }
+
     public init() {
         self.id = IdentityAllocator.shared.allocate()
     }
@@ -300,6 +354,11 @@ public final class Node: @unchecked Sendable {
         children.removeAll { $0 === child }
         child.parent = nil
         if children.count != previousCount {
+            // The child (and its whole subtree) is leaving the tree — release
+            // every resource it registered plus the singletons it held (capture,
+            // focus). This is the single authoritative cleanup path; no modifier
+            // or ViewGraph side-effect is needed (坏味 #4).
+            child.releaseFromTree()
             markRenderDirty(reason: .structuralChange)
         }
     }
@@ -324,38 +383,32 @@ public final class Node: @unchecked Sendable {
         if children.elementsEqual(ordered, by: { $0 === $1 }) {
             return
         }
+        // Reorder only the source of truth. The render mirror is re-synced
+        // exclusively by the reconciler's `RenderTree.reconcileChildren`, which
+        // rebuilds its child list in this `children` order right after every
+        // `reorderChildren` call (坏味 #2: one sync path, no hand-written
+        // second one that can drift). Hit-testing reads this order live.
         children = ordered
-        if let renderObject {
-            var renderByNode: [ObjectIdentifier: RenderObject] = [:]
-            for child in renderObject.children {
-                if let node = child.node {
-                    renderByNode[ObjectIdentifier(node)] = child
-                }
-            }
-            let reorderedRenderChildren = ordered.compactMap {
-                renderByNode[ObjectIdentifier($0)]
-            }
-            if reorderedRenderChildren.count == renderObject.children.count {
-                renderObject.children = reorderedRenderChildren
-                renderObject.cacheInvalid = true
-            }
-        }
-        if let inputNode {
-            var inputByNode: [ObjectIdentifier: InputNode] = [:]
-            for child in inputNode.children {
-                if let node = child.node {
-                    inputByNode[ObjectIdentifier(node)] = child
-                }
-            }
-            let reorderedInputChildren = ordered.compactMap {
-                inputByNode[ObjectIdentifier($0)]
-            }
-            if reorderedInputChildren.count == inputNode.children.count {
-                inputNode.children = reorderedInputChildren
-                inputNode.scene?.invalidateHitCache()
-            }
-        }
         markRenderDirty(reason: .structuralChange)
+    }
+
+    // MARK: - Geometry single funnel (坏味 #1)
+
+    /// The one and only path a geometry / hit-classification mutation takes to
+    /// notify caches. Every such property's `didSet` calls this after a cheap
+    /// value diff; nothing else invalidates the hit cache. Because there is a
+    /// single site, a newly added moving / hit-affecting property cannot ship
+    /// without invalidation — the structural cause of the "control responds
+    /// once then goes dead after a resize / reflow / scroll" bug is removed.
+    ///
+    /// `reason` is forwarded to render bookkeeping / the invalidation log.
+    /// Hit-testing walks the live `Node` tree every time (Phase 7 removed the
+    /// input mirror and its cache), so a geometry / hit-classification change is
+    /// reflected on the next hit-test with nothing to invalidate — the stale-hit
+    /// bug class (坏味 #1) is structurally impossible. The funnel remains the one
+    /// place that maps a geometry change to render invalidation.
+    private func invalidateGeometry(reason: InvalidationSource) {
+        markRenderDirty(reason: reason)
     }
 
     // MARK: - Dirty propagation
