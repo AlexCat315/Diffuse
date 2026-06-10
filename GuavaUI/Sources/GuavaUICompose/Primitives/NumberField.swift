@@ -104,6 +104,7 @@ private struct _StatefulNumberField: View {
                        action: { decrement() }) {
                     Text("-")
                         .font(.label)
+                        .foregroundColor(.onSurfaceMuted)
                         .frame(width: 12)
                 }
                 .buttonStyle(.ghost)
@@ -114,6 +115,7 @@ private struct _StatefulNumberField: View {
                        action: { increment() }) {
                     Text("+")
                         .font(.label)
+                        .foregroundColor(.onSurfaceMuted)
                         .frame(width: 12)
                 }
                 .buttonStyle(.ghost)

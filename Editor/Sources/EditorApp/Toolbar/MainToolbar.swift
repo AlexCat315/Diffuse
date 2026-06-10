@@ -14,25 +14,24 @@ private struct EditorViewportToolbarButtonStyle: ButtonStyle, Hashable {
 
     func makeBody(configuration: ButtonStyleConfiguration) -> some View {
         let theme = configuration.theme
-        let base = theme.colors.surfaceSunken
+        let clear = Color(r: 0, g: 0, b: 0, a: 0)
+        // Chips live inside the floating viewport bar: transparent at rest,
+        // state-layer washes on hover/press, an accent tint when active —
+        // no per-chip borders (the bar carries the chrome).
         let bg: Color = {
-            if !configuration.isEnabled { return theme.colors.surfaceSunken }
+            if !configuration.isEnabled { return clear }
             if isActive {
-                let selected = base.composited(over: theme.colors.stateLayerSelected)
+                let selected = theme.colors.accentMuted
                 if configuration.isPressed { return selected.composited(over: theme.colors.stateLayerPressed) }
                 if configuration.isHovered { return selected.composited(over: theme.colors.stateLayerHover) }
                 return selected
             }
-            if configuration.isPressed { return base.composited(over: theme.colors.stateLayerPressed) }
-            if configuration.isHovered { return base.composited(over: theme.colors.stateLayerHover) }
-            return base
+            if configuration.isPressed { return theme.colors.stateLayerPressed }
+            if configuration.isHovered { return theme.colors.stateLayerHover }
+            return clear
         }()
-        let border: Color = {
-            if configuration.isFocused { return theme.colors.focusRing }
-            if isActive { return theme.colors.accentMuted }
-            return theme.colors.border
-        }()
-        let borderWidth: Float = configuration.isFocused ? 2 : 1
+        let border: Color = configuration.isFocused ? theme.colors.focusRing : clear
+        let borderWidth: Float = configuration.isFocused ? 2 : 0
         let foreground: SemanticColorRef = isActive ? .accent : .onSurfaceVariant
 
         return Box(direction: .row, alignItems: .center, justifyContent: .center) {
@@ -43,7 +42,7 @@ private struct EditorViewportToolbarButtonStyle: ButtonStyle, Hashable {
         .frame(height: 26, minWidth: 28)
         .padding(horizontal: 7, vertical: 0)
         .background(bg)
-        .cornerRadius(3)
+        .cornerRadius(6)
         .border(border, width: borderWidth)
         .opacity(configuration.isEnabled ? 1 : 0.55)
         .animation(.semantic(.snappy, in: theme), value: configuration.interactionKey)

@@ -53,6 +53,10 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
 
     try AppRuntime.run(
         config: AppConfig(title: "GuavaNext Editor",
+                          // Surface clear = the theme canvas, so resize
+                          // flicker and any uncovered sliver show the canvas
+                          // instead of an off-palette dark blue.
+                          clearColor: GPUColor(r: 0x1E / 255, g: 0x1F / 255, b: 0x22 / 255, a: 1),
                           backendConfig: launchOptions.backendConfig,
                           titleBarStyle: .hiddenInset),
         backend: backend,

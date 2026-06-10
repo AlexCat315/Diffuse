@@ -31,10 +31,14 @@ struct EditorStatusBar: View {
 
             Spacer(minLength: 0)
 
-            Text(String(format: "%.0f fps  %.1f ms",
-                        timing.framesPerSecond, timing.frameMilliseconds))
-                .font(.mono)
-                .foregroundColor(.onSurfaceMuted)
+            // Frame-on-demand rendering reports zero while idle; "0 fps" reads
+            // like a failure, so only show timing while frames are flowing.
+            if timing.framesPerSecond > 0 {
+                Text(String(format: "%.0f fps  %.1f ms",
+                            timing.framesPerSecond, timing.frameMilliseconds))
+                    .font(.mono)
+                    .foregroundColor(.onSurfaceMuted)
+            }
 
             // Status message can be long (AI output, console entries); cap
             // width and clip so it never pushes other items off screen.
@@ -52,11 +56,15 @@ struct EditorStatusBar: View {
         .frame(height: 24)
     }
 
+    // Info-level console traffic stays in the console panel; the footer only
+    // echoes AI status and warnings/errors. (Info echo also duplicated the
+    // left-side connection indicator whenever the latest log was
+    // "connected".)
     private var statusText: String {
         if let message = store.aiStatusMessage {
             return message
         }
-        if let latest = store.latestConsoleEntry {
+        if let latest = store.latestConsoleEntry, latest.severity != .info {
             return latest.message
         }
         return L("Ready")
@@ -64,7 +72,8 @@ struct EditorStatusBar: View {
 
     private var statusColor: SemanticColorRef {
         guard store.aiStatusMessage == nil,
-              let latest = store.latestConsoleEntry else {
+              let latest = store.latestConsoleEntry,
+              latest.severity != .info else {
             return .onSurfaceMuted
         }
         switch latest.severity {
