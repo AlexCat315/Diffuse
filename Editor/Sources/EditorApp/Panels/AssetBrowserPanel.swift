@@ -17,7 +17,7 @@ struct AssetBrowserPanel: View {
     let app: EditorApplication
 
     @State private var searchText: String = ""
-    @State private var viewMode: AssetViewMode = .grid
+    @AppStorage("assetBrowser.viewMode") private var viewMode: AssetViewMode = .grid
     @State private var selectedAssetID: String? = nil
     /// Relative folder path currently shown ("" == project root). Uses "/" as
     /// separator, matching `AssetRegistryEntry.relativePath`.
@@ -237,7 +237,7 @@ struct AssetBrowserPanel: View {
     }
 }
 
-private enum AssetViewMode: Sendable, Equatable {
+private enum AssetViewMode: String, Sendable, AppStorageConvertible {
     case grid, list
 }
 
@@ -330,12 +330,7 @@ private struct AssetBreadcrumbBar: View {
 
     var body: some View {
         Row(alignment: .center, spacing: 4) {
-            Image(resource: .svg(named: "folder", in: .module, subdirectory: "ToolbarIcons"),
-                  width: 13, height: 13,
-                  tint: .white,
-                  contentMode: .fit,
-                  renderingMode: .alphaMask)
-                .foregroundColor(.onSurfaceVariant)
+            Icon(.svg(named: "folder", in: .module, subdirectory: "ToolbarIcons"), size: 13, color: .onSurfaceVariant)
                 .frame(width: 15, height: 15)
 
             if isSearching {
@@ -372,9 +367,7 @@ private struct AssetBreadcrumbSegment: View {
     var body: some View {
         Row(alignment: .center, spacing: 4) {
             if showSeparator {
-                Text("›")
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
+                Icon(UICommonIcons.chevronRight, size: 8, color: .onSurfaceMuted)
             }
             Button(action: action) {
                 Text(label, lineLimit: 1)
@@ -414,12 +407,7 @@ private struct AssetFolderTile: View {
         Button(action: onOpen) {
             Box(direction: .column, alignItems: .center, spacing: 6) {
                 Box(direction: .column, alignItems: .center, justifyContent: .center) {
-                    Image(resource: .svg(named: "folder", in: .module, subdirectory: "ToolbarIcons"),
-                          width: 38, height: 38,
-                          tint: .white,
-                          contentMode: .fit,
-                          renderingMode: .alphaMask)
-                        .foregroundColor(.accent)
+                    Icon(.svg(named: "folder", in: .module, subdirectory: "ToolbarIcons"), size: 38, color: .accent)
                         .frame(width: 38, height: 38)
                 }
                 .frame(width: 76, height: 72)
@@ -448,12 +436,7 @@ private struct AssetFolderListRow: View {
         Button(action: onOpen) {
             Row(alignment: .center, spacing: 9) {
                 Box(direction: .column, alignItems: .center, justifyContent: .center) {
-                    Image(resource: .svg(named: "folder", in: .module, subdirectory: "ToolbarIcons"),
-                          width: 18, height: 18,
-                          tint: .white,
-                          contentMode: .fit,
-                          renderingMode: .alphaMask)
-                        .foregroundColor(.accent)
+                    Icon(.svg(named: "folder", in: .module, subdirectory: "ToolbarIcons"), size: 18, color: .accent)
                         .frame(width: 18, height: 18)
                 }
                 .frame(width: 26, height: 26)
@@ -539,12 +522,7 @@ private struct AssetListRow: View {
         AssetDragSource(asset: asset, app: app, onSelect: onSelect) {
             Row(alignment: .center, spacing: 9) {
                 Box(direction: .column, alignItems: .center, justifyContent: .center) {
-                    Image(resource: .svg(named: "cube", in: .module, subdirectory: "HierarchyIcons"),
-                          width: 18, height: 18,
-                          tint: .white,
-                          contentMode: .fit,
-                          renderingMode: .alphaMask)
-                        .foregroundColor(asset.kind.tint)
+                    Icon(.svg(named: "cube", in: .module, subdirectory: "HierarchyIcons"), size: 18, color: asset.kind.tint)
                         .frame(width: 18, height: 18)
                 }
                 .frame(width: 26, height: 26)

@@ -110,9 +110,12 @@ private struct ChatBubble: View {
                         .font(.caption)
                         .foregroundColor(.warning)
                 case .applied:
-                    Text(L("✓ Applied"))
-                        .font(.caption)
-                        .foregroundColor(.success)
+                    Row(alignment: .center, spacing: 4) {
+                        Icon(UICommonIcons.checkmark, size: 10, color: .success)
+                        Text(L("Applied"))
+                            .font(.caption)
+                            .foregroundColor(.success)
+                    }
                 case .discarded:
                     Text(L("Discarded"))
                         .font(.caption)

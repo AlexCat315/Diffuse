@@ -15,7 +15,7 @@ struct ConsolePanel: View {
 
                 Spacer(minLength: 0)
 
-                Text("revision \(store.sceneRevision)")
+                Text("\(L("Revision")) \(store.sceneRevision)")
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
 

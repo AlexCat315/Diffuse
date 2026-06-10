@@ -150,11 +150,6 @@ struct _StatefulButton: View {
     @State var isPressed: Bool = false
     @State var isHovered: Bool = false
 
-    // SDL scancodes used across compose controls.
-    private static let returnScancode: UInt32 = 40
-    private static let spaceScancode: UInt32 = 44
-    private static let keypadEnterScancode: UInt32 = 88
-
     var body: some View {
         ButtonHost(
             role: role,
@@ -186,9 +181,7 @@ struct _StatefulButton: View {
             onKey: { [action] scancode, isRepeat in
                 guard !isRepeat else { return EventResult.ignored }
                 switch scancode {
-                case Self.returnScancode,
-                    Self.spaceScancode,
-                    Self.keypadEnterScancode:
+                case Scancode.return, Scancode.space, Scancode.keypadEnter:
                     action()
                     return EventResult.handled
                 default:
@@ -238,7 +231,7 @@ struct ButtonHost: _PrimitiveView {
                 guard isHovered || isFocused else { return }
                 guard let env = TextEnvironmentHolder.current else { return }
 
-                let origin = absoluteOrigin(of: node)
+                let origin = node.absoluteOrigin
 
                 let theme = node.theme
                 let tooltipFont = theme.typography.caption.font
@@ -419,27 +412,6 @@ private final class ActiveButtonPress {
     }
 }
 
-private func absoluteOrigin(of node: Node) -> CGPoint {
-    // Children render translated by the parent's -contentOffset, so every
-    // ancestor's scroll offset must be applied or a button inside a scrolled
-    // ScrollView reports its unscrolled position — and the release-inside
-    // check below silently cancels every click.
-    var origin = node.frame.origin
-    var current = node.parent
-    while let parent = current {
-        origin.x += parent.frame.origin.x - parent.contentOffset.x
-        origin.y += parent.frame.origin.y - parent.contentOffset.y
-        current = parent.parent
-    }
-    return origin
-}
-
 private func isPointInsideButton(_ x: Float, _ y: Float, node: Node) -> Bool {
-    let origin = absoluteOrigin(of: node)
-    let px = CGFloat(x)
-    let py = CGFloat(y)
-    return px >= origin.x
-        && py >= origin.y
-        && px < origin.x + node.frame.width
-        && py < origin.y + node.frame.height
+    node.absoluteFrame.contains(CGPoint(x: CGFloat(x), y: CGFloat(y)))
 }
