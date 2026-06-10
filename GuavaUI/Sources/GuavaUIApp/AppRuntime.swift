@@ -138,9 +138,15 @@ public final class AppRuntime {
         self.renderer = DrawListRenderer(backend: resolvedBackend)
         self.imageAssets = ImageAssetRegistry(renderer: renderer)
         self.viewportTextures = ViewportTextureRegistry(renderer: renderer)
+        // Each window gets its own portal store (规则 3): an open overlay in one
+        // window can never paint into or swallow clicks for another. The store is
+        // swapped in lockstep with the window's input registries via withCurrent.
+        let mainInputContext = PlatformInputContext()
+        mainInputContext.addScopedAmbient(PortalStoreAmbient(PortalStore()))
         self.host = SDL3PlatformHost(
             title: config.title,
-            mainWindowOptions: WindowOptions(titleBarStyle: config.titleBarStyle.platformStyle)
+            mainWindowOptions: WindowOptions(titleBarStyle: config.titleBarStyle.platformStyle),
+            inputContext: mainInputContext
         )
         self.host.setTargetFrameRate(config.targetFrameRate)
         self.graph = ViewGraph(tree: tree, recomposer: host.recomposer)
@@ -153,8 +159,7 @@ public final class AppRuntime {
         if let devConfig = config.devTools {
             let dev = DevTools(config: devConfig,
                                tree: tree,
-                               renderTree: graph.renderTree,
-                               inputScene: graph.inputScene)
+                               renderTree: graph.renderTree)
             // Install the log tap before any DevTools-related Logger fires
             // so the first records also reach the client.
             LogTapInstaller.bootstrapIfNeeded(sink: dev.logSink)
@@ -341,10 +346,6 @@ public final class AppRuntime {
             }
             graph.computeLayout(width: Float(logicalW), height: Float(logicalH))
             syncMainWindowChromeHitTest()
-            // Phase 5b: hand the input mirror to the session's dispatcher
-            // so subsequent events hit-test through `InputScene` rather
-            // than re-walking the live Node tree.
-            host.mainSession?.attachInputScene(graph.inputScene)
             didInstallRoot = true
         }
 
@@ -444,7 +445,13 @@ public final class AppRuntime {
         } else {
             layerRenderer.render(tree: graph.renderTree, into: drawList)
         }
-        TooltipOverlayRegistry.drawAll(into: drawList)
+        // Explicitly this window's tooltip store. This frame hook runs OUTSIDE
+        // `session.withCurrent`, so the ambient `TooltipStoreHolder.current`
+        // would resolve to the shared default here — while Button registers
+        // tooltips during recompose (inside withCurrent) into the per-window
+        // store. Reading the store explicitly keeps register/draw on the same
+        // instance.
+        host.tooltips.drawAll(into: drawList)
         let drawEnd = TimingTrace.now()
 
         do {
@@ -667,6 +674,7 @@ public final class AppRuntime {
             let tree = NodeTree()
             let recomposer = Recomposer()
             let inputContext = PlatformInputContext()
+            inputContext.addScopedAmbient(PortalStoreAmbient(PortalStore()))
             let session = try host.openWindow(
                 title: request.title,
                 tree: tree,
@@ -849,7 +857,6 @@ private final class AuxiliaryAppWindow {
                 }
                 graph.computeLayout(width: Float(logicalW), height: Float(logicalH))
                 syncWindowChromeHitTest()
-                session.attachInputScene(graph.inputScene)
                 didInstallRoot = true
             }
             try uploadAtlasIfNeeded(false)
@@ -941,7 +948,9 @@ private final class AuxiliaryAppWindow {
                 layerRenderer.render(tree: graph.renderTree, into: drawList)
             }
         }
-        TooltipOverlayRegistry.drawAll(into: drawList)
+        // Explicitly this window's store (we are outside withCurrent here —
+        // see the main-window handleFrame for the full invariant).
+        session.inputContext.tooltips.drawAll(into: drawList)
 
         do {
             try uploadAtlasIfNeeded(false)

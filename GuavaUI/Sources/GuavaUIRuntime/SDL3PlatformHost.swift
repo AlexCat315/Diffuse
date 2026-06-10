@@ -75,14 +75,6 @@ public final class PlatformWindowSession {
         needsDisplay = true
     }
 
-    /// Phase 5b: attach the input mirror produced by `ViewGraph` so this
-    /// session's `EventDispatcher` (and its `FocusChain`) can hit-test /
-    /// enumerate focusables off the cached classification rather than
-    /// re-walking the live `Node` tree each event.
-    public func attachInputScene(_ scene: InputScene) {
-        dispatcher.inputScene = scene
-    }
-
     fileprivate func updateMetrics(from handle: any WindowHandle) -> Bool {
         let nextDrawable = handle.drawableSize
         let nextLogical = handle.logicalSize
@@ -160,6 +152,7 @@ public final class SDL3PlatformHost: PlatformHost {
     public var interactions: InteractionRegistry { mainInputContext.interactions }
     public var pointerCapture: PointerCapture { mainInputContext.pointerCapture }
     public var focusChain: FocusChain { mainInputContext.focusChain }
+    public var tooltips: TooltipStore { mainInputContext.tooltips }
 
     public private(set) var drawableSize: (width: UInt32, height: UInt32) = (1, 1)
     public private(set) var logicalSize: (width: UInt32, height: UInt32) = (1, 1)
@@ -673,9 +666,14 @@ public final class SDL3PlatformHost: PlatformHost {
         }
     }
 
+    private func focusedTextInputArea(for session: PlatformWindowSession) -> TextInputArea? {
+        session.focusChain.focused?
+            .attachments[TextInputAttachmentKey.area] as? TextInputArea
+    }
+
     private func syncTextInputArea(for session: PlatformWindowSession,
                                    shell: any Shell) {
-        let area = session.focusChain.focused?.inputNode?.textInputArea
+        let area = focusedTextInputArea(for: session)
         guard area != session.lastTextInputArea else { return }
 
         shell.setTextInputArea(windowID: session.id, area)
@@ -683,7 +681,7 @@ public final class SDL3PlatformHost: PlatformHost {
     }
 
     private func scheduleFocusedTextRefresh(for session: PlatformWindowSession) {
-        guard session.focusChain.focused?.inputNode?.textInputArea != nil else {
+        guard focusedTextInputArea(for: session) != nil else {
             session.lastTextCursorAnimationTick = 0
             return
         }

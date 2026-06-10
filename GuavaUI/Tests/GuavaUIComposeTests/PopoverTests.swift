@@ -58,11 +58,11 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
 
     @Test("Opening Popover does not move following siblings")
     func openingPopoverDoesNotAffectSiblingLayout() { GlobalTestLock.locked {
-        // Presenting the popover registers into the process-wide PortalRegistry,
+        // Presenting the popover registers into the window-scoped PortalStore,
         // so this case must hold the lock and clear it like the others —
         // otherwise it races the other Popover/Portal tests.
-        PortalRegistry.clear()
-        defer { PortalRegistry.clear() }
+        PortalStoreHolder.current.clear()
+        defer { PortalStoreHolder.current.clear() }
 
         let tree = NodeTree()
         let recomposer = Recomposer()
@@ -160,8 +160,8 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
 
     @Test("Popover survives frequent parent recomposition while open")
     func popoverSurvivesParentChurn() { GlobalTestLock.locked {
-        PortalRegistry.clear()
-        defer { PortalRegistry.clear() }
+        PortalStoreHolder.current.clear()
+        defer { PortalStoreHolder.current.clear() }
 
         let registry = InteractionRegistry()
         let capture = PointerCapture()
@@ -187,13 +187,12 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
                                          interactions: registry,
                                          capture: capture,
                                          focusChain: focus)
-        dispatcher.inputScene = graph.inputScene
 
         func settle() { while recomposer.commitAll() {}; graph.computeLayout(width: 240, height: 180) }
 
         // Open.
         click(dispatcher, x: 10, y: 10); settle()
-        #expect(PortalRegistry.entries.count == 1)
+        #expect(PortalStoreHolder.current.entries.count == 1)
         #expect(!menuItemRows(in: tree.root, id: AnyHashable("churn-item")).isEmpty)
 
         // Churn the parent many times while the popover stays open.
@@ -202,14 +201,14 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
             settle()
         }
         // The menu must still be present after the churn.
-        #expect(PortalRegistry.entries.count == 1)
+        #expect(PortalStoreHolder.current.entries.count == 1)
         #expect(!menuItemRows(in: tree.root, id: AnyHashable("churn-item")).isEmpty)
 
         // And the trigger must still toggle it closed, then reopen.
         click(dispatcher, x: 10, y: 10); settle()
-        #expect(PortalRegistry.entries.count == 0)
+        #expect(PortalStoreHolder.current.entries.count == 0)
         click(dispatcher, x: 10, y: 10); settle()
-        #expect(PortalRegistry.entries.count == 1)
+        #expect(PortalStoreHolder.current.entries.count == 1)
         #expect(!menuItemRows(in: tree.root, id: AnyHashable("churn-item")).isEmpty)
     } }
 
@@ -242,8 +241,8 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
 
     @Test("Tearing down an open Popover does not leak its portal entry")
     func teardownOpenPopoverDoesNotLeak() { GlobalTestLock.locked {
-        PortalRegistry.clear()
-        defer { PortalRegistry.clear() }
+        PortalStoreHolder.current.clear()
+        defer { PortalStoreHolder.current.clear() }
 
         let tree = NodeTree()
         let recomposer = Recomposer()
@@ -254,7 +253,7 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
         graph.computeLayout(width: 240, height: 200)
 
         // Open popover materialised its overlay → one portal entry.
-        #expect(PortalRegistry.entries.count == 1)
+        #expect(PortalStoreHolder.current.entries.count == 1)
 
         // Remove the whole Popover from the tree while it is still "open".
         root.$showPopover.wrappedValue = false
@@ -263,7 +262,7 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
 
         // The entry must be gone — a leaked entry leaves a phantom menu in the
         // shared portal layer that can intercept later clicks.
-        #expect(PortalRegistry.entries.count == 0)
+        #expect(PortalStoreHolder.current.entries.count == 0)
     } }
 
     private struct NestedPortalRootHarness: View {
@@ -298,8 +297,8 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
 
     @Test("Popover menu item receives pointer activation through portal layer")
     func popoverMenuItemReceivesPointerActivation() { GlobalTestLock.locked {
-        PortalRegistry.clear()
-        defer { PortalRegistry.clear() }
+        PortalStoreHolder.current.clear()
+        defer { PortalStoreHolder.current.clear() }
 
         let registry = InteractionRegistry()
         let capture = PointerCapture()
@@ -324,7 +323,6 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
                                          interactions: registry,
                                          capture: capture,
                                          focusChain: focus)
-        dispatcher.inputScene = graph.inputScene
 
         click(dispatcher, x: 10, y: 10)
         _ = recomposer.commitAll()
@@ -346,8 +344,8 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
 
     @Test("Popover reopens after closing via a menu item")
     func popoverReopensAfterClose() { GlobalTestLock.locked {
-        PortalRegistry.clear()
-        defer { PortalRegistry.clear() }
+        PortalStoreHolder.current.clear()
+        defer { PortalStoreHolder.current.clear() }
 
         let registry = InteractionRegistry()
         let capture = PointerCapture()
@@ -372,13 +370,12 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
                                          interactions: registry,
                                          capture: capture,
                                          focusChain: focus)
-        dispatcher.inputScene = graph.inputScene
 
         // 1. Open.
         click(dispatcher, x: 10, y: 10)
         _ = recomposer.commitAll()
         graph.computeLayout(width: 240, height: 180)
-        #expect(PortalRegistry.entries.count == 1)
+        #expect(PortalStoreHolder.current.entries.count == 1)
 
         // 2. Close by activating the item.
         guard let item = menuItemRows(in: tree.root, id: AnyHashable("reopen-item")).first else {
@@ -391,7 +388,7 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
         _ = recomposer.commitAll()
         graph.computeLayout(width: 240, height: 180)
         #expect(box.fired == 1)
-        #expect(PortalRegistry.entries.count == 0)
+        #expect(PortalStoreHolder.current.entries.count == 0)
 
         // 3. Reopen — the regression: a portal entry must register again AND
         //    the menu must actually re-materialize in the node tree (a registry
@@ -399,15 +396,15 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
         click(dispatcher, x: 10, y: 10)
         _ = recomposer.commitAll()
         graph.computeLayout(width: 240, height: 180)
-        #expect(PortalRegistry.entries.count == 1)
+        #expect(PortalStoreHolder.current.entries.count == 1)
         #expect(!menuItemRows(in: tree.root, id: AnyHashable("reopen-item")).isEmpty)
         #expect(PointerCaptureHolder.current?.target == nil)
     } }
 
     @Test("Popover reopens after closing via the trigger toggle")
     func popoverReopensAfterTriggerToggle() { GlobalTestLock.locked {
-        PortalRegistry.clear()
-        defer { PortalRegistry.clear() }
+        PortalStoreHolder.current.clear()
+        defer { PortalStoreHolder.current.clear() }
 
         let registry = InteractionRegistry()
         let capture = PointerCapture()
@@ -432,7 +429,6 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
                                          interactions: registry,
                                          capture: capture,
                                          focusChain: focus)
-        dispatcher.inputScene = graph.inputScene
 
         func settle() {
             // Drain like the runtime loop: keep committing while work remains.
@@ -442,21 +438,21 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
 
         // Open → close (toggle the trigger again) → reopen, all via the trigger.
         click(dispatcher, x: 10, y: 10); settle()
-        #expect(PortalRegistry.entries.count == 1)
+        #expect(PortalStoreHolder.current.entries.count == 1)
 
         click(dispatcher, x: 10, y: 10); settle()
-        #expect(PortalRegistry.entries.count == 0)
+        #expect(PortalStoreHolder.current.entries.count == 0)
         #expect(PointerCaptureHolder.current?.target == nil)
 
         click(dispatcher, x: 10, y: 10); settle()
-        #expect(PortalRegistry.entries.count == 1)
+        #expect(PortalStoreHolder.current.entries.count == 1)
         #expect(!menuItemRows(in: tree.root, id: AnyHashable("reopen-item")).isEmpty)
     } }
 
     @Test("Nested popover refreshes a parent PortalHost when opened")
     func nestedPopoverRefreshesParentPortalHost() { GlobalTestLock.locked {
-        PortalRegistry.clear()
-        defer { PortalRegistry.clear() }
+        PortalStoreHolder.current.clear()
+        defer { PortalStoreHolder.current.clear() }
 
         let registry = InteractionRegistry()
         let capture = PointerCapture()
@@ -481,7 +477,6 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
                                          interactions: registry,
                                          capture: capture,
                                          focusChain: focus)
-        dispatcher.inputScene = graph.inputScene
 
         click(dispatcher, x: 10, y: 10)
         _ = recomposer.commitAll()
