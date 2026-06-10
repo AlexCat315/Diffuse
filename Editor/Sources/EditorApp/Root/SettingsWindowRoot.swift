@@ -23,10 +23,9 @@ struct EditorSettingsWindowRoot: View {
                         }
 
                         Divider()
-                            .flex()
 
-                        // TODO(editor-redesign): rebuild SettingsPanel on GuavaUICompose —
-                        // the GuavaKit migration was abandoned.
+                        SettingsPanel(app: app)
+                            .flex()
                     }
                     .background(.background)
                     .flex()
