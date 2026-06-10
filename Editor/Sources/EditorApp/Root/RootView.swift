@@ -38,12 +38,8 @@ struct EditorRootView: View {
                             .layoutRole("editor-workspace")
                             .debugName("editor-workspace")
 
-                        Divider()
-
-                        // TODO(editor-redesign): rebuild the status bar on GuavaUICompose —
-                        // the GuavaKit migration was abandoned (see
-                        // docs/guavaui-inplace-architecture-refactor.md §0).
-                        // Was: EditorStatusBar(store: app.store, getTiming: { app.currentFrameTiming() })
+                        EditorStatusBar(store: store,
+                                        getTiming: { app.currentFrameTiming() })
                     }
                     .background(.background)
                     .flex()
