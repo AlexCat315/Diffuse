@@ -1,5 +1,6 @@
 import EditorCore
 import EngineKernel
+import GuavaUICompose
 import GuavaUIRuntime
 
 enum EditorShortcutHandler {
@@ -10,6 +11,7 @@ enum EditorShortcutHandler {
                        setWorkspaceMode: (EditorWorkspaceMode) -> Void,
                        resetLayout: () -> Void,
                        newScene: () -> Void,
+                       saveScene: () -> Void,
                        openSettings: () -> Void,
                        openCommandPalette: () -> Void,
                        closeCommandPalette: () -> Void,
@@ -17,8 +19,8 @@ enum EditorShortcutHandler {
                        redo: () -> Void) -> Bool {
         guard !key.isRepeat else { return false }
 
-        // Escape — highest priority: dismiss any overlay first
-        if key.scancode == 41 {
+        // Escape — highest priority: dismiss any overlay first.
+        if key.scancode == Scancode.escape {
             if commandPaletteVisible {
                 closeCommandPalette()
                 return true
@@ -26,55 +28,49 @@ enum EditorShortcutHandler {
             return false
         }
 
-        let commandLike = key.modifiers.contains(.gui) || key.modifiers.contains(.ctrl)
+        let commandLike = key.modifiers.hasGui || key.modifiers.hasCtrl
         guard commandLike else { return false }
 
-        // Undo / Redo — Cmd+Z / Cmd+Shift+Z
-        if key.keycode == 0x7A {  // z
-            if key.modifiers.contains(.shift) {
-                redo()
-            } else {
-                undo()
-            }
+        // Scancodes (physical key) rather than keycodes: layout-independent and
+        // consistent with the rest of the compose controls.
+        switch key.scancode {
+        case Scancode.z:
+            if key.modifiers.hasShift { redo() } else { undo() }
             return true
-        }
-
-        switch key.keycode {
-        case 0x6B:  // k
+        case Scancode.s:
+            saveScene()
+            return true
+        case Scancode.k:
             openCommandPalette()
             return true
-        case 0x6E:
+        case Scancode.n:
             newScene()
             return true
-        case 0x2C:
+        case Scancode.comma:
             openSettings()
             return true
-        case 0x30:
+        case Scancode.digit0:
             resetLayout()
             return true
-        case 0x31:
+        case Scancode.digit1:
             setWorkspaceMode(.level)
             return true
-        case 0x32:
+        case Scancode.digit2:
             setWorkspaceMode(.modeling)
             return true
-        case 0x33:
+        case Scancode.digit3:
             setWorkspaceMode(.animation)
             return true
-        default:
-            break
-        }
-
-        if key.scancode == 40 || key.scancode == 88 {
+        case Scancode.return, Scancode.keypadEnter:
+            // Enter belongs to the palette's text field while it is open.
+            guard !commandPaletteVisible else { return false }
             switch playbackState {
-            case .playing:
-                setPlaybackState(.paused)
-            case .paused, .stopped:
-                setPlaybackState(.playing)
+            case .playing: setPlaybackState(.paused)
+            case .paused, .stopped: setPlaybackState(.playing)
             }
             return true
+        default:
+            return false
         }
-
-        return false
     }
 }

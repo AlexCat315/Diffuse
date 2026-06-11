@@ -21,17 +21,22 @@ import EngineKernel
 public struct Button<Label: View>: View {
     public let role: ButtonRole
     public let isEnabled: Bool
+    /// On/off state surfaced to the active style via
+    /// `ButtonStyleConfiguration.isSelected` (used by `.toggle` and friends).
+    public let isSelected: Bool
     public let tooltip: String?
     public let action: () -> Void
     public let label: Label
 
     public init(role: ButtonRole = .normal,
                 isEnabled: Bool = true,
+                isSelected: Bool = false,
                 tooltip: String? = nil,
                 action: @escaping () -> Void,
                 @ViewBuilder label: () -> Label) {
         self.role = role
         self.isEnabled = isEnabled
+        self.isSelected = isSelected
         self.tooltip = tooltip
         self.action = action
         self.label = label()
@@ -40,6 +45,7 @@ public struct Button<Label: View>: View {
     public var body: some View {
         _StatefulButton(role: role,
                         isEnabled: isEnabled,
+                        isSelected: isSelected,
                         tooltip: tooltip,
                         action: action,
                         label: AnyView(label))
@@ -99,9 +105,11 @@ public extension Button where Label == Text {
     init(_ title: String,
          role: ButtonRole = .normal,
          isEnabled: Bool = true,
+         isSelected: Bool = false,
          tooltip: String? = nil,
          action: @escaping () -> Void) {
-        self.init(role: role, isEnabled: isEnabled, tooltip: tooltip, action: action) {
+        self.init(role: role, isEnabled: isEnabled, isSelected: isSelected,
+                  tooltip: tooltip, action: action) {
             Text(title)
         }
     }
@@ -110,9 +118,11 @@ public extension Button where Label == Text {
     init(_ key: LocalizedStringKey,
          role: ButtonRole = .normal,
          isEnabled: Bool = true,
+         isSelected: Bool = false,
          tooltip: String? = nil,
          action: @escaping () -> Void) {
-        self.init(role: role, isEnabled: isEnabled, tooltip: tooltip, action: action) {
+        self.init(role: role, isEnabled: isEnabled, isSelected: isSelected,
+                  tooltip: tooltip, action: action) {
             Text(key)
         }
     }
@@ -125,10 +135,12 @@ public extension Button where Label == ButtonIcon {
          size: Float = 16,
          role: ButtonRole = .normal,
          isEnabled: Bool = true,
+         isSelected: Bool = false,
          tooltip: String? = nil,
          tint: Color? = nil,
          action: @escaping () -> Void) {
-        self.init(role: role, isEnabled: isEnabled, tooltip: tooltip, action: action) {
+        self.init(role: role, isEnabled: isEnabled, isSelected: isSelected,
+                  tooltip: tooltip, action: action) {
             ButtonIcon(source, size: size, tint: tint)
         }
     }
@@ -143,6 +155,7 @@ public extension Button where Label == ButtonIcon {
 struct _StatefulButton: View {
     let role: ButtonRole
     let isEnabled: Bool
+    let isSelected: Bool
     let tooltip: String?
     let action: () -> Void
     let label: AnyView
@@ -150,15 +163,11 @@ struct _StatefulButton: View {
     @State var isPressed: Bool = false
     @State var isHovered: Bool = false
 
-    // SDL scancodes used across compose controls.
-    private static let returnScancode: UInt32 = 40
-    private static let spaceScancode: UInt32 = 44
-    private static let keypadEnterScancode: UInt32 = 88
-
     var body: some View {
         ButtonHost(
             role: role,
             isEnabled: isEnabled,
+            isSelected: isSelected,
             tooltip: tooltip,
             isPressed: isEnabled ? isPressed : false,
             isHovered: isEnabled ? isHovered : false,
@@ -186,9 +195,7 @@ struct _StatefulButton: View {
             onKey: { [action] scancode, isRepeat in
                 guard !isRepeat else { return EventResult.ignored }
                 switch scancode {
-                case Self.returnScancode,
-                    Self.spaceScancode,
-                    Self.keypadEnterScancode:
+                case Scancode.return, Scancode.space, Scancode.keypadEnter:
                     action()
                     return EventResult.handled
                 default:
@@ -208,6 +215,7 @@ struct _StatefulButton: View {
 struct ButtonHost: _PrimitiveView {
     let role: ButtonRole
     let isEnabled: Bool
+    let isSelected: Bool
     let tooltip: String?
     let isPressed: Bool
     let isHovered: Bool
@@ -234,11 +242,12 @@ struct ButtonHost: _PrimitiveView {
         if isEnabled, let resolvedTooltip, !resolvedTooltip.isEmpty {
             let draw: (DrawList) -> Void = { [weak node] list in
                 guard let node else { return }
-                let isFocused = (FocusChainHolder.current?.focused === node)
-                guard isHovered || isFocused else { return }
+                // Hover only. Clicking focuses the button, and a focus-driven
+                // tooltip would outlive the pointer leaving the control.
+                guard isHovered else { return }
                 guard let env = TextEnvironmentHolder.current else { return }
 
-                let origin = absoluteOrigin(of: node)
+                let origin = node.absoluteOrigin
 
                 let theme = node.theme
                 let tooltipFont = theme.typography.caption.font
@@ -400,6 +409,7 @@ struct ButtonHost: _PrimitiveView {
             isHovered:  isHovered,
             isFocused:  isFocused,
             isEnabled:  isEnabled,
+            isSelected: isSelected,
             theme:      theme
         )
         return [style.makeBody(config)]
@@ -419,27 +429,6 @@ private final class ActiveButtonPress {
     }
 }
 
-private func absoluteOrigin(of node: Node) -> CGPoint {
-    // Children render translated by the parent's -contentOffset, so every
-    // ancestor's scroll offset must be applied or a button inside a scrolled
-    // ScrollView reports its unscrolled position — and the release-inside
-    // check below silently cancels every click.
-    var origin = node.frame.origin
-    var current = node.parent
-    while let parent = current {
-        origin.x += parent.frame.origin.x - parent.contentOffset.x
-        origin.y += parent.frame.origin.y - parent.contentOffset.y
-        current = parent.parent
-    }
-    return origin
-}
-
 private func isPointInsideButton(_ x: Float, _ y: Float, node: Node) -> Bool {
-    let origin = absoluteOrigin(of: node)
-    let px = CGFloat(x)
-    let py = CGFloat(y)
-    return px >= origin.x
-        && py >= origin.y
-        && px < origin.x + node.frame.width
-        && py < origin.y + node.frame.height
+    node.absoluteFrame.contains(CGPoint(x: CGFloat(x), y: CGFloat(y)))
 }

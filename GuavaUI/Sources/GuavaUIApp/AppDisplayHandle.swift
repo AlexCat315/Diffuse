@@ -52,6 +52,9 @@ public final class AppDisplayHandle: @unchecked Sendable {
     private var closeWindowByIDAction: (@MainActor (WindowID) -> Void)?
     private var windowMaximizedByIDQuery: (@MainActor (WindowID) -> Bool)?
     private var showWindowSystemMenuAction: (@MainActor (WindowID, Float, Float) -> Void)?
+    private var setCloseInterceptorAction: (@MainActor (((WindowID?) -> Bool)?) -> Void)?
+    private var quitAction: (@MainActor () -> Void)?
+    private var mainWindowIDQuery: (@MainActor () -> WindowID?)?
     private var openFolderDialogAction: (@MainActor (String?, @escaping (String?) -> Void) -> Void)?
     private var openFileDialogAction: (@MainActor (String?, [FileDialogFilter], Bool, @escaping ([String]) -> Void) -> Void)?
 
@@ -213,6 +216,33 @@ public final class AppDisplayHandle: @unchecked Sendable {
 
     func drainDisplayRequest() -> Bool {
         signal.drain()
+    }
+
+    @MainActor
+    func installCloseControls(setCloseInterceptor: @escaping @MainActor (((WindowID?) -> Bool)?) -> Void,
+                              quit: @escaping @MainActor () -> Void,
+                              mainWindowID: @escaping @MainActor () -> WindowID?) {
+        setCloseInterceptorAction = setCloseInterceptor
+        quitAction = quit
+        mainWindowIDQuery = mainWindowID
+    }
+
+    /// Veto OS-initiated window closes / app quit (`nil` window = quit).
+    /// Programmatic `closeWindow` / `quit()` bypass the interceptor, so a
+    /// confirmation flow can re-issue the close it previously vetoed.
+    @MainActor
+    public func setWindowCloseInterceptor(_ handler: ((WindowID?) -> Bool)?) {
+        setCloseInterceptorAction?(handler)
+    }
+
+    @MainActor
+    public func quit() {
+        quitAction?()
+    }
+
+    @MainActor
+    public var mainWindowID: WindowID? {
+        mainWindowIDQuery?()
     }
 
     @MainActor

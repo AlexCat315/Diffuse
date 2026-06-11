@@ -137,3 +137,27 @@
 /* Panel titles — confirmations / offline render */
 "Confirmations" = "Confirmations";
 "Render Pipeline" = "Render Pipeline";
+
+/* Status bar / console / viewport overlays */
+"Revision" = "Revision";
+"Selected:" = "Selected:";
+"Mode:" = "Mode:";
+"Q/W/E/R to switch" = "Q/W/E/R to switch";
+"Scale" = "Scale";
+"Origin:" = "Origin:";
+"item(s) require confirmation" = "item(s) require confirmation";
+"Applied" = "Applied";
+"Select or create a project to get started." = "Select or create a project to get started.";
+
+/* Render pipeline */
+"Render" = "Render";
+"Rendering…" = "Rendering…";
+"Error:" = "Error:";
+
+/* Unsaved-changes chrome */
+"Unsaved" = "Unsaved";
+"Unsaved Changes" = "Unsaved Changes";
+"The scene has unsaved changes. Save before closing?" = "The scene has unsaved changes. Save before closing?";
+"Save and Close" = "Save and Close";
+"Close Without Saving" = "Close Without Saving";
+"Cancel" = "Cancel";

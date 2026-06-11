@@ -402,20 +402,19 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertEqual(rig.controller.document.groups["bottom"]?.activePanelID, "console")
     }
 
-    func testClickingTabCloseButtonRemovesPanelWithoutMovingSlots() {
+    func testTabsRenderWithoutCloseButtons() {
+        // Tabs are plain title buttons — panels hide via collapse, and the
+        // per-tab close affordance was removed deliberately (modern tab strips
+        // don't carry resting close icons).
         let controller = WorkspaceController(document: Self.makeMultiTabDocument())
         let rig = WorkspaceViewRig(controller: controller,
                                    width: 1000,
                                    height: 640,
                                    root: Self.makeWorkspaceRoot(controller: controller))
 
-        rig.click(rig.frame(named: "workspace-tab-close-console").center)
-
-        XCTAssertEqual(rig.controller.document.groups["bottom"]?.panels, ["assets"])
-        XCTAssertEqual(rig.controller.document.groups["bottom"]?.activePanelID, "assets")
-        XCTAssertEqual(rig.controller.document.slot(.bottom).layout?.leafGroupIDs ?? [], ["bottom"])
-        XCTAssertNil(rig.optionalFrame(named: "workspace-tab-console"))
-        XCTAssertNotNil(rig.optionalFrame(named: "workspace-region-bottom"))
+        XCTAssertNotNil(rig.optionalFrame(named: "workspace-tab-console"))
+        XCTAssertNil(rig.optionalFrame(named: "workspace-tab-close-console"))
+        XCTAssertNil(rig.optionalFrame(named: "workspace-tab-close-assets"))
     }
 
     func testDraggingWorkspaceSplitDividersUpdatesFractions() {

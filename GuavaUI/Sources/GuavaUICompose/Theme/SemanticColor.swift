@@ -11,6 +11,13 @@ public struct SemanticColorRef: Sendable {
     public init(_ resolve: @escaping @Sendable (Theme) -> Color) {
         self.resolve = resolve
     }
+
+    /// A translucent variant of this token — e.g. `.warning.opacity(0.16)` for
+    /// a tinted icon chip. Resolves the base color from the active theme, then
+    /// scales its alpha.
+    public func opacity(_ opacity: Float) -> SemanticColorRef {
+        SemanticColorRef { resolve($0).multipliedAlpha(opacity) }
+    }
 }
 
 public extension SemanticColorRef {

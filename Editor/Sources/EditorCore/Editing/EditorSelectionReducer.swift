@@ -6,10 +6,10 @@ public enum EditorSelectionReducer {
                              picked: Set<UInt64>,
                              modifiers: KeyModifiers,
                              primaryModifierBehavior: SelectionPrimaryModifierBehavior) -> Set<UInt64> {
-        if modifiers.contains(.shift) {
+        if modifiers.hasShift {
             return base.union(picked)
         }
-        if modifiers.contains(.ctrl) || modifiers.contains(.gui) {
+        if modifiers.hasCtrl || modifiers.hasGui {
             switch primaryModifierBehavior {
             case .subtract:
                 return base.subtracting(picked)
@@ -33,7 +33,7 @@ public enum EditorSelectionReducer {
                                    modifiers: KeyModifiers,
                                    primaryModifierBehavior: SelectionPrimaryModifierBehavior) -> Set<UInt64> {
         guard let picked else {
-            if modifiers.contains(.shift) || modifiers.contains(.ctrl) || modifiers.contains(.gui) {
+            if modifiers.hasShift || modifiers.hasCtrl || modifiers.hasGui {
                 return base
             }
             return []

@@ -86,11 +86,11 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
             }
             registry.setKey(node, route: .viewport) { event, _ in
                 snap.onInputEvent?(.keyDown(event))
-                return .handled
+                return Self.consumesKey(event) ? .handled : .ignored
             }
             registry.setKeyUp(node, route: .viewport) { event, _ in
                 snap.onInputEvent?(.keyUp(event))
-                return .handled
+                return Self.consumesKey(event) ? .handled : .ignored
             }
             registry.setText(node, route: .viewport) { text, _ in
                 snap.onInputEvent?(.textInput(text))
@@ -142,6 +142,13 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
 
             snap.onDrawOverlay?(list, screenFrame)
         }
+    }
+
+    /// The viewport owns raw keys (camera, game input) while focused, but
+    /// Cmd/Ctrl chords stay with app-level shortcuts. Events are forwarded to
+    /// `onInputEvent` either way so pressed-key bookkeeping stays complete.
+    private static func consumesKey(_ event: KeyEvent) -> Bool {
+        !event.modifiers.hasGui && !event.modifiers.hasCtrl
     }
 
     public func _makeLayoutNode() -> LayoutNode? {
