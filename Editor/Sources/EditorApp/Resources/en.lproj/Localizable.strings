@@ -153,3 +153,11 @@
 "Render" = "Render";
 "Rendering…" = "Rendering…";
 "Error:" = "Error:";
+
+/* Unsaved-changes chrome */
+"Unsaved" = "Unsaved";
+"Unsaved Changes" = "Unsaved Changes";
+"The scene has unsaved changes. Save before closing?" = "The scene has unsaved changes. Save before closing?";
+"Save and Close" = "Save and Close";
+"Close Without Saving" = "Close Without Saving";
+"Cancel" = "Cancel";

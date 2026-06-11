@@ -308,6 +308,11 @@ public final class SDL3PlatformHost: PlatformHost {
         runLoop()
     }
 
+    /// Consulted before an OS-initiated window close or app quit (`nil` =
+    /// quit). Return `false` to veto; programmatic `closeWindow`/`stop` are
+    /// never intercepted.
+    public var windowCloseInterceptor: ((WindowID?) -> Bool)?
+
     public func stop() {
         _isRunning = false
     }
@@ -587,6 +592,9 @@ public final class SDL3PlatformHost: PlatformHost {
             return shell
         }
         let created = try shellFactory()
+        created.closeInterceptor = { [weak self] windowID in
+            self?.windowCloseInterceptor?(windowID) ?? true
+        }
         shell = created
         return created
     }

@@ -385,15 +385,10 @@ private struct AssetViewModeButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.caption)
-                .foregroundColor(isActive ? .accent : .onSurfaceMuted)
-                .padding(horizontal: 7, vertical: 3)
-                .background(isActive ? AssetTilePalette.selectionFill : AssetTilePalette.transparent)
-                .cornerRadius(4)
+        Button(isSelected: isActive, action: action) {
+            Text(title, lineLimit: 1)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(ToggleButtonStyle(height: 22))
     }
 }
 

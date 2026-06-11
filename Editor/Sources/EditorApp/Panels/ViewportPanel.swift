@@ -1218,28 +1218,32 @@ private struct ViewportInfoBar: View {
             Row(alignment: .center, spacing: 5) {
                 Button(icon: .resource(ViewportToolbarIcon.cursor.resource),
                            size: 15,
+                           isSelected: gizmoMode == .none,
                            tooltip: L("Pick")) {
                     onSelectGizmoMode(.none)
                 }
-                .toggleButtonStyle(gizmoMode == .none)
+                .buttonStyle(.toggle)
                 Button(icon: .resource(ViewportToolbarIcon.translate.resource),
                            size: 15,
+                           isSelected: gizmoMode == .translate,
                            tooltip: L("Move")) {
                     onSelectGizmoMode(.translate)
                 }
-                .toggleButtonStyle(gizmoMode == .translate)
+                .buttonStyle(.toggle)
                 Button(icon: .resource(ViewportToolbarIcon.rotate.resource),
                            size: 15,
+                           isSelected: gizmoMode == .rotate,
                            tooltip: L("Rotate")) {
                     onSelectGizmoMode(.rotate)
                 }
-                .toggleButtonStyle(gizmoMode == .rotate)
+                .buttonStyle(.toggle)
                 Button(icon: .resource(ViewportToolbarIcon.scale.resource),
                            size: 15,
+                           isSelected: gizmoMode == .scale,
                            tooltip: L("Scale")) {
                     onSelectGizmoMode(.scale)
                 }
-                .toggleButtonStyle(gizmoMode == .scale)
+                .buttonStyle(.toggle)
 
                 ToggleChip(label: L("Local"), isActive: gizmoSpace == .local) {
                     onSelectGizmoSpace(.local)
@@ -1252,35 +1256,39 @@ private struct ViewportInfoBar: View {
                                  onSelect: onSelectShadingMode)
                 Button(icon: .resource(ViewportToolbarIcon.shadows.resource),
                            size: 15,
+                           isSelected: shadowsEnabled,
                            tooltip: L("Shadows")) {
                     onToggleShadows()
                 }
-                .toggleButtonStyle(shadowsEnabled)
+                .buttonStyle(.toggle)
 
                 Divider()
                     .frame(width: 1, height: 16)
                     .foregroundColor(Color(r: 0, g: 0, b: 0, a: 0.4))
 
                 Button(isEnabled: playbackState != .playing,
+                       isSelected: playbackState == .playing,
                        tooltip: L("Play physics simulation"),
                        action: onPlay) {
                     Text(L("Play")).font(SemanticFontRef.label)
                 }
-                .toggleButtonStyle(playbackState == .playing)
+                .buttonStyle(.toggle)
 
                 Button(isEnabled: playbackState != .stopped,
+                       isSelected: playbackState == .paused,
                        tooltip: L("Pause physics simulation"),
                        action: onPause) {
                     Text(L("Pause")).font(SemanticFontRef.label)
                 }
-                .toggleButtonStyle(playbackState == .paused)
+                .buttonStyle(.toggle)
 
                 Button(isEnabled: playbackState != .stopped,
+                       isSelected: false,
                        tooltip: L("Stop physics simulation"),
                        action: onStop) {
                     Text(L("Stop")).font(SemanticFontRef.label)
                 }
-                .toggleButtonStyle(false)
+                .buttonStyle(.toggle)
             }
         }
         .padding(3)
@@ -1296,10 +1304,10 @@ private struct ToggleChip: View {
     let onTap: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
+        Button(isSelected: isActive, action: onTap) {
             Text(label, lineLimit: 1)
         }
-        .toggleButtonStyle(isActive)
+        .buttonStyle(.toggle)
     }
 }
 

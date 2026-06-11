@@ -716,6 +716,7 @@ public final class EditorApplication: @unchecked Sendable {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(scene.manifest(selectedEntityID: store.state.selectedEntityID))
             try data.write(to: url, options: [.atomic])
+            store.dispatch(.markSceneSaved(store.state.sceneRevision))
             logConsole("Saved scene manifest", detail: url.path)
             return url
         } catch {
@@ -735,6 +736,7 @@ public final class EditorApplication: @unchecked Sendable {
             let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
             let result = scene.load(manifest: manifest)
             store.dispatch(.setSelectedEntity(result.selectedEntityID))
+            store.dispatch(.markSceneSaved(store.state.sceneRevision))
             logConsole("Opened scene manifest",
                        detail: "\(result.entityCount) entities restored from revision \(manifest.revision)")
             return manifest

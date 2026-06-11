@@ -906,7 +906,7 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
     }
 
     func _children(for node: Node) -> [any View] {
-        let style = isActive ? AnyButtonStyle(SecondaryButtonStyle()) : AnyButtonStyle(GhostButtonStyle())
+        let style = AnyButtonStyle(_WorkspaceTabButtonStyle())
         // Resolve the title color eagerly from this (parented) host node's theme
         // and pass it to `Text` directly. The button style's deferred
         // `.foregroundColor(.onSurface)` resolves against the *label* node's
@@ -926,11 +926,25 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
                                               isHovered: isHovered,
                                               isFocused: FocusChainHolder.current?.focused === node,
                                               isEnabled: true,
+                                              isSelected: isActive,
                                               theme: node.theme)
         return [style.makeBody(config)]
     }
 
     static let pressKey = "__workspace_tab_press"
+}
+
+/// Tab look as one style keyed off `configuration.isSelected` (raised
+/// secondary chrome when active, ghost otherwise) instead of swapping whole
+/// styles around the state.
+private struct _WorkspaceTabButtonStyle: ButtonStyle {
+    func makeBody(configuration: ButtonStyleConfiguration) -> some View {
+        if configuration.isSelected {
+            AnyView(SecondaryButtonStyle().makeBody(configuration: configuration))
+        } else {
+            AnyView(GhostButtonStyle().makeBody(configuration: configuration))
+        }
+    }
 }
 
 private final class _WorkspaceTabPressState {

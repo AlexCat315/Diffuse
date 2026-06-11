@@ -11,6 +11,9 @@ public enum EditorAction: Sendable {
     case setWorkspaceMode(EditorWorkspaceMode)
     case setActiveLayoutPreset(EditorLayoutPreset)
     case setSceneRevision(UInt64)
+    case markSceneSaved(UInt64)
+    case requestClose(EditorPendingCloseRequest)
+    case dismissCloseRequest
     case setWindowFocused(Bool)
     case setWindowMinimized(Bool)
     case setWindowOccluded(Bool)
@@ -89,6 +92,12 @@ public enum EditorReducer {
             }
         case let .setSceneRevision(value):
             state.sceneRevision = value
+        case let .markSceneSaved(revision):
+            state.lastSavedSceneRevision = revision
+        case let .requestClose(request):
+            state.pendingCloseRequest = request
+        case .dismissCloseRequest:
+            state.pendingCloseRequest = nil
         case let .tickFrame(n):
             state.frameIndex = n
         case let .setWindowFocused(value):

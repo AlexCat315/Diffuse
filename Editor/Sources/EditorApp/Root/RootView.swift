@@ -55,6 +55,9 @@ struct EditorRootView: View {
                     if store.commandPaletteVisible {
                         CommandPaletteOverlay(app: app)
                     }
+                    if let pendingClose = store.pendingCloseRequest {
+                        UnsavedChangesDialog(app: app, request: pendingClose)
+                    }
                 }
             }
         }

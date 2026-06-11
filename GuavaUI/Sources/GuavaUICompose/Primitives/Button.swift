@@ -21,17 +21,22 @@ import EngineKernel
 public struct Button<Label: View>: View {
     public let role: ButtonRole
     public let isEnabled: Bool
+    /// On/off state surfaced to the active style via
+    /// `ButtonStyleConfiguration.isSelected` (used by `.toggle` and friends).
+    public let isSelected: Bool
     public let tooltip: String?
     public let action: () -> Void
     public let label: Label
 
     public init(role: ButtonRole = .normal,
                 isEnabled: Bool = true,
+                isSelected: Bool = false,
                 tooltip: String? = nil,
                 action: @escaping () -> Void,
                 @ViewBuilder label: () -> Label) {
         self.role = role
         self.isEnabled = isEnabled
+        self.isSelected = isSelected
         self.tooltip = tooltip
         self.action = action
         self.label = label()
@@ -40,6 +45,7 @@ public struct Button<Label: View>: View {
     public var body: some View {
         _StatefulButton(role: role,
                         isEnabled: isEnabled,
+                        isSelected: isSelected,
                         tooltip: tooltip,
                         action: action,
                         label: AnyView(label))
@@ -99,9 +105,11 @@ public extension Button where Label == Text {
     init(_ title: String,
          role: ButtonRole = .normal,
          isEnabled: Bool = true,
+         isSelected: Bool = false,
          tooltip: String? = nil,
          action: @escaping () -> Void) {
-        self.init(role: role, isEnabled: isEnabled, tooltip: tooltip, action: action) {
+        self.init(role: role, isEnabled: isEnabled, isSelected: isSelected,
+                  tooltip: tooltip, action: action) {
             Text(title)
         }
     }
@@ -110,9 +118,11 @@ public extension Button where Label == Text {
     init(_ key: LocalizedStringKey,
          role: ButtonRole = .normal,
          isEnabled: Bool = true,
+         isSelected: Bool = false,
          tooltip: String? = nil,
          action: @escaping () -> Void) {
-        self.init(role: role, isEnabled: isEnabled, tooltip: tooltip, action: action) {
+        self.init(role: role, isEnabled: isEnabled, isSelected: isSelected,
+                  tooltip: tooltip, action: action) {
             Text(key)
         }
     }
@@ -125,10 +135,12 @@ public extension Button where Label == ButtonIcon {
          size: Float = 16,
          role: ButtonRole = .normal,
          isEnabled: Bool = true,
+         isSelected: Bool = false,
          tooltip: String? = nil,
          tint: Color? = nil,
          action: @escaping () -> Void) {
-        self.init(role: role, isEnabled: isEnabled, tooltip: tooltip, action: action) {
+        self.init(role: role, isEnabled: isEnabled, isSelected: isSelected,
+                  tooltip: tooltip, action: action) {
             ButtonIcon(source, size: size, tint: tint)
         }
     }
@@ -143,6 +155,7 @@ public extension Button where Label == ButtonIcon {
 struct _StatefulButton: View {
     let role: ButtonRole
     let isEnabled: Bool
+    let isSelected: Bool
     let tooltip: String?
     let action: () -> Void
     let label: AnyView
@@ -154,6 +167,7 @@ struct _StatefulButton: View {
         ButtonHost(
             role: role,
             isEnabled: isEnabled,
+            isSelected: isSelected,
             tooltip: tooltip,
             isPressed: isEnabled ? isPressed : false,
             isHovered: isEnabled ? isHovered : false,
@@ -201,6 +215,7 @@ struct _StatefulButton: View {
 struct ButtonHost: _PrimitiveView {
     let role: ButtonRole
     let isEnabled: Bool
+    let isSelected: Bool
     let tooltip: String?
     let isPressed: Bool
     let isHovered: Bool
@@ -394,6 +409,7 @@ struct ButtonHost: _PrimitiveView {
             isHovered:  isHovered,
             isFocused:  isFocused,
             isEnabled:  isEnabled,
+            isSelected: isSelected,
             theme:      theme
         )
         return [style.makeBody(config)]

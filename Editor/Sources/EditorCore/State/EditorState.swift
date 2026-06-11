@@ -229,6 +229,12 @@ public struct EditorState: Codable, Sendable {
     public var workspaceMode: EditorWorkspaceMode
     public var activeLayoutPreset: EditorLayoutPreset
     public var sceneRevision: UInt64
+    /// `sceneRevision` captured at the last manifest save/load. The scene is
+    /// "dirty" (unsaved edits) whenever the two diverge.
+    public var lastSavedSceneRevision: UInt64
+    /// A vetoed OS close/quit waiting on the user's save decision. Non-nil
+    /// shows the unsaved-changes dialog; `windowID == nil` means app quit.
+    public var pendingCloseRequest: EditorPendingCloseRequest?
     public var frameIndex: UInt64
     public var frameTimingRevision: UInt64
     public var viewportSurfaceRevision: UInt64
@@ -270,6 +276,8 @@ public struct EditorState: Codable, Sendable {
         workspaceMode: EditorWorkspaceMode = .level,
         activeLayoutPreset: EditorLayoutPreset = .levelDefault,
         sceneRevision: UInt64 = 0,
+        lastSavedSceneRevision: UInt64 = 0,
+        pendingCloseRequest: EditorPendingCloseRequest? = nil,
         frameIndex: UInt64 = 0,
         frameTimingRevision: UInt64 = 0,
         viewportSurfaceRevision: UInt64 = 0,
@@ -312,6 +320,8 @@ public struct EditorState: Codable, Sendable {
         self.workspaceMode = workspaceMode
         self.activeLayoutPreset = activeLayoutPreset
         self.sceneRevision = sceneRevision
+        self.lastSavedSceneRevision = lastSavedSceneRevision
+        self.pendingCloseRequest = pendingCloseRequest
         self.frameTimingRevision = frameTimingRevision
         self.viewportSurfaceRevision = viewportSurfaceRevision
         self.windowFocused = windowFocused
@@ -526,5 +536,14 @@ public struct EditorState: Codable, Sendable {
 
     public static func sanitizedDirectionalCascadeSplitLambda(_ value: Float) -> Float {
         min(max(value, 0), 1)
+    }
+}
+
+public struct EditorPendingCloseRequest: Equatable, Sendable {
+    /// Window the OS asked to close; `nil` when the whole app is quitting.
+    public var windowID: UInt32?
+
+    public init(windowID: UInt32?) {
+        self.windowID = windowID
     }
 }

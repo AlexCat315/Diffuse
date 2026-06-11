@@ -153,3 +153,11 @@
 "Render" = "渲染";
 "Rendering…" = "渲染中…";
 "Error:" = "错误:";
+
+/* Unsaved-changes chrome */
+"Unsaved" = "未保存";
+"Unsaved Changes" = "未保存的更改";
+"The scene has unsaved changes. Save before closing?" = "场景有未保存的更改。关闭前要保存吗？";
+"Save and Close" = "保存并关闭";
+"Close Without Saving" = "不保存关闭";
+"Cancel" = "取消";
