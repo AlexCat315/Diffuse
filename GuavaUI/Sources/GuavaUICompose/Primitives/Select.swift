@@ -692,8 +692,10 @@ private struct _StatefulSelect<Value: Hashable>: View {
                 width: select.width,
                 onKey: keyHandler,
                 label: {
-            // Compact trigger: text-field height so it sits flush inside
-            // property-grid rows instead of overlapping its neighbours.
+            // Trigger reads as a text input: same sunken fill, border, and
+            // radius the TextField/NumberField use (theme.inputs), so a Select
+            // sits flush with the fields around it in a property grid instead
+            // of looking like a lighter pill from an older style.
             Row(alignment: .center, spacing: 8) {
                 Text(selectedLabel)
                     .font(.body)
@@ -701,10 +703,10 @@ private struct _StatefulSelect<Value: Hashable>: View {
                     .flex()
                 Icon(isPresented ? UICommonIcons.chevronUp : UICommonIcons.chevronDown, size: 10, color: .onSurfaceMuted)
             }
-            .padding(horizontal: 8, vertical: 3)
-            .background(.surface)
-            .cornerRadius(6)
-            .border(isPresented ? .focusRing : .border, width: 1)
+            .padding(horizontal: 8, vertical: 5)
+            .background(.surfaceSunken)
+            .cornerRadius(7)
+            .border(isPresented ? .focusRing : .border, width: isPresented ? 2 : 1)
         }, content: {
             Menu(menuEntries,
                  width: select.width,

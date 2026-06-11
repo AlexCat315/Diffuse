@@ -19,6 +19,14 @@ public struct KeyModifiers: OptionSet, Sendable, Hashable {
     public static let ctrl:  KeyModifiers = [.lctrl, .rctrl]
     public static let alt:   KeyModifiers = [.lalt, .ralt]
     public static let gui:   KeyModifiers = [.lgui, .rgui]
+
+    /// "Either side held" checks. `contains(.gui)` is a superset test on the
+    /// two-bit group — it only matches when BOTH left and right keys are
+    /// down — so chord handling must use these instead.
+    public var hasShift: Bool { !isDisjoint(with: .shift) }
+    public var hasCtrl:  Bool { !isDisjoint(with: .ctrl) }
+    public var hasAlt:   Bool { !isDisjoint(with: .alt) }
+    public var hasGui:   Bool { !isDisjoint(with: .gui) }
 }
 
 public struct KeyEvent: Sendable {

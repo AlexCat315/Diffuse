@@ -117,7 +117,7 @@ struct ViewportPanel: View {
             }
             viewport.modifiers = button.modifiers
             viewport.gizmoGroupTargets.removeAll(keepingCapacity: false)
-            if button.modifiers.contains(.alt) {
+            if button.modifiers.hasAlt {
                 viewport.begin(.camera(.orbit, button: .left),
                                at: (button.x, button.y),
                                modifiers: button.modifiers)
@@ -149,7 +149,7 @@ struct ViewportPanel: View {
                 viewport.endPointerSession()
                 return
             }
-            let drag: EditorViewportInputController.CameraDrag = button.modifiers.contains(.alt) ? .dolly : .freelook
+            let drag: EditorViewportInputController.CameraDrag = button.modifiers.hasAlt ? .dolly : .freelook
             viewport.begin(.camera(drag, button: .right),
                            at: (button.x, button.y),
                            modifiers: button.modifiers)
@@ -369,9 +369,7 @@ struct ViewportPanel: View {
             return true
         case 0x64 /* d */:
             let mods = key.modifiers
-            let primaryModifier = mods.contains(.lgui) || mods.contains(.rgui)
-                               || mods.contains(.lctrl) || mods.contains(.rctrl)
-            guard primaryModifier, let id = selected else { return false }
+            guard mods.hasGui || mods.hasCtrl, let id = selected else { return false }
             if let new = scene.duplicateEntity(id) {
                 app.store.dispatch(.setSelectedEntity(new))
             }
