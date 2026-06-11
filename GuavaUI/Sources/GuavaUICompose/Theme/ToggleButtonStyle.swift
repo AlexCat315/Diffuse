@@ -1,28 +1,29 @@
-import EditorCore
-import GuavaUICompose
 import GuavaUIRuntime
 
-extension View {
-    func toggleButtonStyle(_ isActive: Bool) -> some View {
-        compositionLocal(ButtonStyleEnvironment.key,
-                         AnyButtonStyle(EditorViewportToolbarButtonStyle(isActive: isActive)))
+/// On/off chip for toolbars, segmented choices, and view-mode switches.
+/// Reads `configuration.isSelected` (set via `Button(isSelected:)`): solid
+/// accent with `onAccent` foreground when on — the theme guarantees that
+/// pairing's contrast — transparent with state-layer washes when off.
+///
+/// ```swift
+/// Button(isSelected: mode == .grid, action: { mode = .grid }) { Text("Grid") }
+///     .buttonStyle(.toggle)
+/// ```
+public struct ToggleButtonStyle: ButtonStyle, Hashable {
+    public var minWidth: Float
+    public var height: Float
+
+    public init(minWidth: Float = 28, height: Float = 26) {
+        self.minWidth = minWidth
+        self.height = height
     }
-}
 
-private struct EditorViewportToolbarButtonStyle: ButtonStyle, Hashable {
-    let isActive: Bool
-
-    func makeBody(configuration: ButtonStyleConfiguration) -> some View {
+    public func makeBody(configuration: ButtonStyleConfiguration) -> some View {
         let theme = configuration.theme
         let clear = Color(r: 0, g: 0, b: 0, a: 0)
-        // Chips live inside the floating viewport bar: transparent at rest,
-        // state-layer washes on hover/press, an accent tint when active —
-        // no per-chip borders (the bar carries the chrome).
         let bg: Color = {
             if !configuration.isEnabled { return clear }
-            if isActive {
-                // Solid accent + onAccent foreground: accent-on-accentMuted
-                // reads as a blue-on-blue smudge.
+            if configuration.isSelected {
                 if configuration.isPressed { return theme.colors.accentPressed }
                 if configuration.isHovered { return theme.colors.accentHover }
                 return theme.colors.accent
@@ -33,14 +34,14 @@ private struct EditorViewportToolbarButtonStyle: ButtonStyle, Hashable {
         }()
         let border: Color = configuration.isFocused ? theme.colors.focusRing : clear
         let borderWidth: Float = configuration.isFocused ? 2 : 0
-        let foreground: SemanticColorRef = isActive ? .onAccent : .onSurfaceVariant
+        let foreground: SemanticColorRef = configuration.isSelected ? .onAccent : .onSurfaceVariant
 
         return Box(direction: .row, alignItems: .center, justifyContent: .center) {
             AnyView(configuration.label)
                 .font(SemanticFontRef.label)
                 .foregroundColor(foreground)
         }
-        .frame(height: 26, minWidth: 28)
+        .frame(height: height, minWidth: minWidth)
         .padding(horizontal: 7, vertical: 0)
         .background(bg)
         .cornerRadius(6)

@@ -144,6 +144,11 @@ public extension WindowHandle {
 
 @MainActor
 public protocol Shell: AnyObject {
+    /// Consulted before honouring a window-close request or app quit
+    /// (`nil` window = whole-app quit). Return `false` to veto so the app can
+    /// run an "unsaved changes" flow and re-issue the close itself.
+    var closeInterceptor: ((WindowID?) -> Bool)? { get set }
+
     var mainWindowID: WindowID? { get }
     var windowIDs: [WindowID] { get }
     var renderSurface: NativeRenderSurface? { get }
@@ -301,6 +306,7 @@ public func makeDefaultShell() throws -> any Shell {
 #if os(macOS)
 @MainActor
 public final class AppKitShell: Shell {
+    public var closeInterceptor: ((WindowID?) -> Bool)?
     private var window: NSWindow?
     private var contentView: NSView?
     private var metalLayer: CAMetalLayer?

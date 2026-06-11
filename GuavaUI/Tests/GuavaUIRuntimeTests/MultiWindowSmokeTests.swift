@@ -375,6 +375,7 @@ private final class MockWindowHandle: WindowHandle {
 
 @MainActor
 private final class MockShell: Shell {
+    var closeInterceptor: ((WindowID?) -> Bool)?
     struct CursorRequest: Equatable {
         let windowID: WindowID
         let cursor: SystemCursor

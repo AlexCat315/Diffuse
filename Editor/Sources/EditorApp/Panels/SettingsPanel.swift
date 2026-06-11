@@ -150,20 +150,9 @@ private struct SettingsChoiceButton: View {
     let onClick: () -> Void
 
     var body: some View {
-        Button(action: onClick) {
-            Row(alignment: .center, spacing: 0) {
-                Text(title)
-                    .lineLimit(1)
-                    .font(.label)
-                    .foregroundColor(isActive ? .accent : .onSurface)
-            }
-            .frame(height: 28, minWidth: 86)
-            .padding(horizontal: 10, vertical: 0)
-            .background(isActive ? SemanticColorRef.accentMuted : .surfaceSunken)
-            .cornerRadius(7)
-            .border(isActive ? SemanticColorRef.accent : .border, width: 1)
-            .clipped()
+        Button(isSelected: isActive, action: onClick) {
+            Text(title, lineLimit: 1)
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(ToggleButtonStyle(minWidth: 86, height: 28))
     }
 }
