@@ -1,6 +1,7 @@
 import EditorCore
 import GuavaUIApp
 import GuavaUICompose
+import GuavaUIRuntime
 import GuavaUIWorkspace
 import Foundation
 
@@ -142,49 +143,72 @@ enum EditorRootViewFactory {
     }
 
     static func makeRegistry(app: EditorApplication) -> PanelRegistry {
-        PanelRegistry([
+        registerPanelIcons()
+        return PanelRegistry([
             PanelDescriptor(id: "hierarchy",
                             title: localizedPanelTitle(for: "hierarchy"),
-                            preferredSlot: .leading) {
+                            preferredSlot: .leading,
+                            iconAssetKey: "panel.hierarchy") {
                 HierarchyPanel(store: app.store, scene: app.scene)
             },
             PanelDescriptor(id: "inspector",
                             title: localizedPanelTitle(for: "inspector"),
-                            preferredSlot: .trailing) {
+                            preferredSlot: .trailing,
+                            iconAssetKey: "panel.inspector") {
                 InspectorPanel(store: app.store, scene: app.scene)
             },
             PanelDescriptor(id: "viewport",
                             title: localizedPanelTitle(for: "viewport"),
                             closable: false,
-                            preferredSlot: .center) {
+                            preferredSlot: .center,
+                            iconAssetKey: "panel.viewport") {
                 ViewportPanel(app: app, scene: app.scene)
             },
             PanelDescriptor(id: "console",
                             title: localizedPanelTitle(for: "console"),
-                            preferredSlot: .bottom) {
+                            preferredSlot: .bottom,
+                            iconAssetKey: "panel.console") {
                 ConsolePanel(store: app.store)
             },
             PanelDescriptor(id: "assets",
                             title: localizedPanelTitle(for: "assets"),
-                            preferredSlot: .bottom) {
+                            preferredSlot: .bottom,
+                            iconAssetKey: "panel.assets") {
                 AssetBrowserPanel(app: app)
             },
             PanelDescriptor(id: "intent-input",
                             title: localizedPanelTitle(for: "intent-input"),
-                            preferredSlot: .trailing) {
+                            preferredSlot: .trailing,
+                            iconAssetKey: "panel.intent-input") {
                 IntentInputPanel(app: app)
             },
             PanelDescriptor(id: "confirmation-host",
                             title: localizedPanelTitle(for: "confirmation-host"),
-                            preferredSlot: .bottom) {
+                            preferredSlot: .bottom,
+                            iconAssetKey: "panel.confirmation-host") {
                 ConfirmationHostPanel(app: app)
             },
             PanelDescriptor(id: "render-pipeline",
                             title: localizedPanelTitle(for: "render-pipeline"),
-                            preferredSlot: .bottom) {
+                            preferredSlot: .bottom,
+                            iconAssetKey: "panel.render-pipeline") {
                 RenderPipelinePanel()
             },
         ])
+    }
+
+    private static func registerPanelIcons() {
+        func panelIcon(_ name: String, subdirectory: String = "PanelIcons") -> BundleImageResource {
+            .svg(named: name, in: .module, subdirectory: subdirectory)
+        }
+        WorkspacePanelIconCatalog.register("panel.hierarchy", panelIcon("hierarchy"))
+        WorkspacePanelIconCatalog.register("panel.inspector", panelIcon("inspector"))
+        WorkspacePanelIconCatalog.register("panel.viewport", panelIcon("globe", subdirectory: "ToolbarIcons"))
+        WorkspacePanelIconCatalog.register("panel.console", panelIcon("console"))
+        WorkspacePanelIconCatalog.register("panel.assets", panelIcon("folder", subdirectory: "ToolbarIcons"))
+        WorkspacePanelIconCatalog.register("panel.intent-input", panelIcon("ai-intent"))
+        WorkspacePanelIconCatalog.register("panel.confirmation-host", panelIcon("confirmations"))
+        WorkspacePanelIconCatalog.register("panel.render-pipeline", panelIcon("render"))
     }
 
     static func saveWorkspaceLayout(_ controller: WorkspaceController,
