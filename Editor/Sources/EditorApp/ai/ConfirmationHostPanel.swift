@@ -14,7 +14,7 @@ struct ConfirmationHostPanel: View {
     }
 
     var body: some View {
-        ScrollView(.vertical) {
+        ScrollView(.vertical, scrollbarGutter: .stable) {
             Column(alignment: .leading, spacing: 10) {
                 if let request = store.pendingConfirmationRequest {
                     ConfirmationBatchView(app: app, request: request)

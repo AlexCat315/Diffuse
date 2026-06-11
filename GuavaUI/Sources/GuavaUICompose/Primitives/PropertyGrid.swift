@@ -67,7 +67,6 @@ public struct PropertyGrid: View {
     public let sectionSpacing: Float
     public let contentPadding: Float
     public let scrollAxes: PropertyGridScrollAxes
-    public let showsSectionRowCount: Bool
     public let emptyText: String
     public let onSectionCollapseChanged: ((String, Bool) -> Void)?
 
@@ -79,7 +78,6 @@ public struct PropertyGrid: View {
                 sectionSpacing: Float = 10,
                 contentPadding: Float = 8,
                 scrollAxes: PropertyGridScrollAxes = .both,
-                showsSectionRowCount: Bool = true,
                 emptyText: String = "No properties",
                 onSectionCollapseChanged: ((String, Bool) -> Void)? = nil) {
         self.sections = sections
@@ -90,7 +88,6 @@ public struct PropertyGrid: View {
         self.sectionSpacing = sectionSpacing
         self.contentPadding = contentPadding
         self.scrollAxes = scrollAxes
-        self.showsSectionRowCount = showsSectionRowCount
         self.emptyText = emptyText
         self.onSectionCollapseChanged = onSectionCollapseChanged
     }
@@ -116,13 +113,15 @@ private struct _StatefulPropertyGrid: View {
     }
 
     private func scrollContainer<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        // Form surface: reserve the scrollbar lane so trailing controls
+        // (steppers, selects) are never covered by the bar or its grab area.
         switch grid.scrollAxes {
         case .vertical:
-            ScrollView(.vertical) { content() }
+            ScrollView(.vertical, scrollbarGutter: .stable) { content() }
         case .horizontal:
             ScrollView(.horizontal) { content() }
         case .both:
-            ScrollView(.both) { content() }
+            ScrollView(.both, scrollbarGutter: .stable) { content() }
         }
     }
 
@@ -184,14 +183,6 @@ private struct _StatefulPropertyGrid: View {
                         .font(.label)
                         .foregroundColor(.onSurface)
                         .flex()
-                    if grid.showsSectionRowCount {
-                        Text("\(section.rows.count)")
-                            .font(.caption)
-                            .foregroundColor(.onSurfaceVariant)
-                            .padding(horizontal: 6, vertical: 1)
-                            .background(.surfaceVariant)
-                            .cornerRadius(3)
-                    }
                 }
                 .padding(horizontal: 7, vertical: 3)
                 .frame(height: 26)
