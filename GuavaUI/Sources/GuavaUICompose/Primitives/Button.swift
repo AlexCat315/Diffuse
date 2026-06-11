@@ -227,8 +227,9 @@ struct ButtonHost: _PrimitiveView {
         if isEnabled, let resolvedTooltip, !resolvedTooltip.isEmpty {
             let draw: (DrawList) -> Void = { [weak node] list in
                 guard let node else { return }
-                let isFocused = (FocusChainHolder.current?.focused === node)
-                guard isHovered || isFocused else { return }
+                // Hover only. Clicking focuses the button, and a focus-driven
+                // tooltip would outlive the pointer leaving the control.
+                guard isHovered else { return }
                 guard let env = TextEnvironmentHolder.current else { return }
 
                 let origin = node.absoluteOrigin

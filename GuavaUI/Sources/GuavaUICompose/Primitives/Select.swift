@@ -417,15 +417,17 @@ private struct _MenuItemRowHost: _PrimitiveView {
         let textOpacity: Float = item.isEnabled ? 1 : 0.55
 
         let checkmarkSize: Float = 10
-        let row = Row(alignment: .center, spacing: 12) {
+        let row = Row(alignment: .center, spacing: 8) {
             if showsSelectionColumn {
-                if item.isSelected {
-                    Icon(UICommonIcons.checkmark, size: checkmarkSize, color: titleColor)
-                        .opacity(textOpacity)
-                } else {
-                    Spacer(minLength: checkmarkSize)
-                        .frame(width: checkmarkSize)
+                // Fixed-width slot — a grow-able Spacer here pushes every
+                // unchecked title toward the centre of the menu.
+                Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                    if item.isSelected {
+                        Icon(UICommonIcons.checkmark, size: checkmarkSize, color: titleColor)
+                            .opacity(textOpacity)
+                    }
                 }
+                .frame(width: checkmarkSize)
             }
             Text(item.title)
                 .font(.body)
@@ -690,6 +692,8 @@ private struct _StatefulSelect<Value: Hashable>: View {
                 width: select.width,
                 onKey: keyHandler,
                 label: {
+            // Compact trigger: text-field height so it sits flush inside
+            // property-grid rows instead of overlapping its neighbours.
             Row(alignment: .center, spacing: 8) {
                 Text(selectedLabel)
                     .font(.body)
@@ -697,10 +701,10 @@ private struct _StatefulSelect<Value: Hashable>: View {
                     .flex()
                 Icon(isPresented ? UICommonIcons.chevronUp : UICommonIcons.chevronDown, size: 10, color: .onSurfaceMuted)
             }
-            .padding(horizontal: 10, vertical: 8)
+            .padding(horizontal: 8, vertical: 3)
             .background(.surface)
-            .cornerRadius(7)
-            .border(.border, width: 1)
+            .cornerRadius(6)
+            .border(isPresented ? .focusRing : .border, width: 1)
         }, content: {
             Menu(menuEntries,
                  width: select.width,

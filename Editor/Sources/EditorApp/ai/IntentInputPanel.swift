@@ -31,7 +31,7 @@ struct IntentInputPanel: View {
                 .flex(1, shrink: 1)
             } else {
                 Column(alignment: .leading, spacing: 8) {
-                    ScrollView(.vertical) {
+                    ScrollView(.vertical, scrollbarGutter: .stable) {
                         Column(alignment: .leading, spacing: 4) {
                             if store.chatMessages.isEmpty {
                                 Text(L("Type a message to start."))

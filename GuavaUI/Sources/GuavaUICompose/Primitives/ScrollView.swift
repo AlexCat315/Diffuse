@@ -44,18 +44,31 @@ private struct _ScrollViewScrollbarGeometry {
 public struct ScrollView<Content: View>: _PrimitiveView {
     public enum Axis: Sendable { case vertical, horizontal, both }
 
+    /// How the vertical scrollbar relates to the content area.
+    /// `.overlay` floats the bar over the content (default; canvas-style
+    /// surfaces). `.stable` reserves a fixed lane on the trailing edge — form
+    /// surfaces use it so trailing controls (steppers, toggles) are never
+    /// covered by the bar or its grab area.
+    public enum ScrollbarGutter: Sendable { case overlay, stable }
+
     public let axes: Axis
     public let content: Content
 
     /// Pixels scrolled per wheel notch. SDL3 reports wheel deltas in lines.
     public var wheelStep: Float = 30
     public let consumePolicy: ScrollConsumePolicy
+    public let scrollbarGutter: ScrollbarGutter
+
+    /// Width of the reserved lane under `.stable`: track + inset each side.
+    static var scrollbarGutterWidth: Float { 12 }
 
     public init(_ axes: Axis = .vertical,
                 consumePolicy: ScrollConsumePolicy = .whenOffsetChanged,
+                scrollbarGutter: ScrollbarGutter = .overlay,
                 @ViewBuilder content: () -> Content) {
         self.axes = axes
         self.consumePolicy = consumePolicy
+        self.scrollbarGutter = scrollbarGutter
         self.content = content()
     }
 
@@ -282,6 +295,11 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         layout.overflow = .hidden
         layout.minWidth = 0
         layout.minHeight = 0
+        if scrollbarGutter == .stable, axes != .horizontal {
+            layout.setPadding(Self.scrollbarGutterWidth, edge: .right)
+        } else {
+            layout.setPadding(0, edge: .right)
+        }
     }
 
     public var _children: [any View] { [content] }
