@@ -238,6 +238,17 @@ public final class AppRuntime {
                                          allowsMultiple: allowsMultiple,
                                          accept: accept)
         }
+        displayHandle.installCloseControls(
+            setCloseInterceptor: { [weak self] handler in
+                self?.host.windowCloseInterceptor = handler
+            },
+            quit: { [weak self] in
+                self?.host.stop()
+            },
+            mainWindowID: { [weak self] in
+                self?.host.mainSession?.id
+            }
+        )
         displayHandle.installAuxiliaryWindowControls(
             open: { [weak self] request in
                 self?.openAuxiliaryWindow(request)

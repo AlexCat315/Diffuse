@@ -22,6 +22,10 @@ public struct ButtonStyleConfiguration {
     public let isHovered: Bool
     public let isFocused: Bool
     public let isEnabled: Bool
+    /// On/off state for toggle-shaped buttons (tool chips, segmented choices,
+    /// tabs). A first-class style input: styles decide the selected look once,
+    /// instead of every call site hand-mixing accent tokens around the label.
+    public let isSelected: Bool
     public let theme: Theme
 
     public init(label: any View,
@@ -30,6 +34,7 @@ public struct ButtonStyleConfiguration {
                 isHovered: Bool,
                 isFocused: Bool,
                 isEnabled: Bool,
+                isSelected: Bool = false,
                 theme: Theme) {
         self.label = label
         self.role = role
@@ -37,6 +42,7 @@ public struct ButtonStyleConfiguration {
         self.isHovered = isHovered
         self.isFocused = isFocused
         self.isEnabled = isEnabled
+        self.isSelected = isSelected
         self.theme = theme
     }
 }
@@ -51,6 +57,7 @@ public struct _ButtonInteractionKey: Equatable, Sendable {
     public let isHovered: Bool
     public let isFocused: Bool
     public let isEnabled: Bool
+    public let isSelected: Bool
 }
 
 public extension ButtonStyleConfiguration {
@@ -61,7 +68,8 @@ public extension ButtonStyleConfiguration {
             isPressed: isPressed,
             isHovered: isHovered,
             isFocused: isFocused,
-            isEnabled: isEnabled
+            isEnabled: isEnabled,
+            isSelected: isSelected
         )
     }
 }
@@ -150,4 +158,7 @@ public extension ButtonStyle where Self == GhostButtonStyle {
 }
 public extension ButtonStyle where Self == DestructiveButtonStyle {
     static var destructive: DestructiveButtonStyle { DestructiveButtonStyle() }
+}
+public extension ButtonStyle where Self == ToggleButtonStyle {
+    static var toggle: ToggleButtonStyle { ToggleButtonStyle() }
 }

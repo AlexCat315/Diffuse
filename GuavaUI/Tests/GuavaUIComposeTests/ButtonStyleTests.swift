@@ -238,4 +238,36 @@ struct ButtonStyleTests: GuavaUIComposeSerializedSuite {
 
         #expect(findFilled(tree.root!)?.backgroundColor == Color(r: 0, g: 1, b: 0))
     } }
+    private struct ToggleHarness: View {
+        let isSelected: Bool
+
+        var body: some View {
+            Button(isSelected: isSelected, action: {}) {
+                Text("Chip")
+            }
+            .buttonStyle(.toggle)
+        }
+    }
+
+    @Test("ToggleButtonStyle pairs accent background with onAccent foreground when selected")
+    func toggleStyleSelectedContrast() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        defer { InteractionRegistryHolder.current = nil }
+
+        func filledColor(selected: Bool) -> Color? {
+            let tree = NodeTree()
+            let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+            graph.install(root: ToggleHarness(isSelected: selected))
+            graph.computeLayout(width: 200, height: 60)
+            return tree.root.flatMap(findFilled).flatMap(\.backgroundColor)
+        }
+
+        let theme = Theme.defaultDark
+        // Selected: solid accent fill (the theme guarantees onAccent contrast
+        // against it). Unselected at rest: no fill at all.
+        #expect(filledColor(selected: true) == theme.colors.accent)
+        #expect(filledColor(selected: false) == nil)
+    } }
+
 }
