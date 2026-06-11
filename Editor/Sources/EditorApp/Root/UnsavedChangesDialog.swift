@@ -68,7 +68,6 @@ struct UnsavedChangesDialog: View {
             .background(.surfaceFloating)
             .cornerRadius(14)
             .border(.border, width: 1)
-            .shadow(color: Color(r: 0, g: 0, b: 0, a: 0.45), offsetY: 18, blur: 48)
         }
     }
 
