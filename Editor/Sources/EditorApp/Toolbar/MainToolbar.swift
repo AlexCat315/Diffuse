@@ -21,10 +21,11 @@ private struct EditorViewportToolbarButtonStyle: ButtonStyle, Hashable {
         let bg: Color = {
             if !configuration.isEnabled { return clear }
             if isActive {
-                let selected = theme.colors.accentMuted
-                if configuration.isPressed { return selected.composited(over: theme.colors.stateLayerPressed) }
-                if configuration.isHovered { return selected.composited(over: theme.colors.stateLayerHover) }
-                return selected
+                // Solid accent + onAccent foreground: accent-on-accentMuted
+                // reads as a blue-on-blue smudge.
+                if configuration.isPressed { return theme.colors.accentPressed }
+                if configuration.isHovered { return theme.colors.accentHover }
+                return theme.colors.accent
             }
             if configuration.isPressed { return theme.colors.stateLayerPressed }
             if configuration.isHovered { return theme.colors.stateLayerHover }
@@ -32,7 +33,7 @@ private struct EditorViewportToolbarButtonStyle: ButtonStyle, Hashable {
         }()
         let border: Color = configuration.isFocused ? theme.colors.focusRing : clear
         let borderWidth: Float = configuration.isFocused ? 2 : 0
-        let foreground: SemanticColorRef = isActive ? .accent : .onSurfaceVariant
+        let foreground: SemanticColorRef = isActive ? .onAccent : .onSurfaceVariant
 
         return Box(direction: .row, alignItems: .center, justifyContent: .center) {
             AnyView(configuration.label)

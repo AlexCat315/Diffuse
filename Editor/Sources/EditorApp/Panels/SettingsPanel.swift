@@ -13,7 +13,7 @@ struct SettingsPanel: View {
     }
 
     var body: some View {
-        ScrollView(.vertical) {
+        ScrollView(.vertical, scrollbarGutter: .stable) {
             Column(alignment: .leading, spacing: 14) {
                 SettingsSection(title: L("Appearance")) {
                     Row(alignment: .center, spacing: 8) {

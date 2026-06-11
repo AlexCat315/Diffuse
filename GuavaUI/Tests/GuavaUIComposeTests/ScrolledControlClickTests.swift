@@ -203,6 +203,34 @@ struct ScrolledControlClickTests: GuavaUIComposeSerializedSuite {
         #expect(abs(entry.position.y - expected.y) < 0.5)
     } }
 
+    @Test("Stable scrollbar gutter reserves the trailing lane for content")
+    func stableGutterReservesLane() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        defer { InteractionRegistryHolder.current = nil }
+
+        func contentWidth(_ gutter: ScrollView<AnyView>.ScrollbarGutter) -> CGFloat {
+            let tree = NodeTree()
+            let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+            graph.install(root:
+                ScrollView(.vertical, scrollbarGutter: gutter) {
+                    AnyView(Column(alignment: .leading, spacing: 0) {
+                        Text("row").frame(height: 30)
+                    })
+                }
+                .frame(width: 200, height: 100)
+            )
+            graph.computeLayout(width: 200, height: 100)
+            let scroll = firstNode(in: tree.root, where: { $0.clipsToBounds })!
+            return scroll.children.first!.frame.width
+        }
+
+        let overlay = contentWidth(.overlay)
+        let stable = contentWidth(.stable)
+        #expect(overlay == 200)
+        #expect(stable == 200 - CGFloat(ScrollView<AnyView>.scrollbarGutterWidth))
+    } }
+
     // MARK: - Editor-inspector integration
 
     private final class InspectorModel {

@@ -200,7 +200,7 @@ struct AssetBrowserPanel: View {
                     .flex()
             }
         } else {
-            ScrollView(.vertical) {
+            ScrollView(.vertical, scrollbarGutter: .stable) {
                 switch viewMode {
                 case .grid:
                     Box(direction: .row, alignItems: .flexStart, wrap: .wrap, spacing: 10) {
