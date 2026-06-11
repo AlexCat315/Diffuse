@@ -3,17 +3,14 @@ import GuavaUIRuntime
 
 /// Invisible full-window modal barrier: swallows pointer / wheel / hover so
 /// everything behind stays inert (no visual dimming, per design preference),
-/// and lays its content out along the vertical axis. Lives in the portal
-/// layer, which is absolutely positioned over the whole window.
+/// and centers its content. Lives in the portal layer, which is absolutely
+/// positioned over the whole window.
 struct ModalBarrier<Content: View>: _PrimitiveView {
-    let justifyContent: Justify
     let onBackgroundTap: (() -> Void)?
     let content: Content
 
-    init(justifyContent: Justify = .center,
-         onBackgroundTap: (() -> Void)? = nil,
+    init(onBackgroundTap: (() -> Void)? = nil,
          @ViewBuilder content: () -> Content) {
-        self.justifyContent = justifyContent
         self.onBackgroundTap = onBackgroundTap
         self.content = content()
     }
@@ -68,12 +65,8 @@ struct ModalBarrier<Content: View>: _PrimitiveView {
         layout.setPosition(0, edge: .bottom)
         layout.flexDirection = .column
         layout.alignItems = .center
-        layout.justifyContent = justifyContent
+        layout.justifyContent = .center
         return layout
-    }
-
-    func _updateLayout(_ layout: LayoutNode) {
-        layout.justifyContent = justifyContent
     }
 
     var _children: [any View] { [content] }
