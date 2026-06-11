@@ -137,3 +137,27 @@
 /* Panel titles — confirmations / offline render */
 "Confirmations" = "确认";
 "Render Pipeline" = "渲染管线";
+
+/* Status bar / console / viewport overlays */
+"Revision" = "修订";
+"Selected:" = "已选:";
+"Mode:" = "模式:";
+"Q/W/E/R to switch" = "Q/W/E/R 切换";
+"Scale" = "缩放";
+"Origin:" = "来源:";
+"item(s) require confirmation" = "项需要确认";
+"Applied" = "已应用";
+"Select or create a project to get started." = "选择或创建一个项目以开始。";
+
+/* Render pipeline */
+"Render" = "渲染";
+"Rendering…" = "渲染中…";
+"Error:" = "错误:";
+
+/* Unsaved-changes chrome */
+"Unsaved" = "未保存";
+"Unsaved Changes" = "未保存的更改";
+"The scene has unsaved changes. Save before closing?" = "场景有未保存的更改。关闭前要保存吗？";
+"Save and Close" = "保存并关闭";
+"Close Without Saving" = "不保存关闭";
+"Cancel" = "取消";

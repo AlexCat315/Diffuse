@@ -26,7 +26,7 @@ struct WelcomeView: View {
                     Text("GuavaNext Editor")
                         .font(.title)
                         .foregroundColor(.onSurface)
-                    Text("Select or create a project to get started.")
+                    Text(L("Select or create a project to get started."))
                         .font(.caption)
                         .foregroundColor(.onSurfaceMuted)
                 }
@@ -85,10 +85,10 @@ struct WelcomeView: View {
                 .frame(minWidth: 0)
                 .flex()
 
-                Button("✕") {
+                Button(icon: .resource(UICommonIcons.close), size: 12, action: {
                     RecentProjectsStore.remove(path)
                     recentProjects = RecentProjectsStore.all()
-                }
+                })
                 .frame(width: 28)
             }
             .padding(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 4))

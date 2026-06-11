@@ -420,13 +420,7 @@ private struct HierarchyRowTrailingSlots: View {
         Row(alignment: .center, spacing: 0) {
             Box(direction: .row, alignItems: .center, justifyContent: .center) {
                 Button(action: onToggleVisibility) {
-                    Image(resource: HierarchyIconCatalog.visibilityResource(isVisible: isVisible),
-                          width: 13,
-                          height: 13,
-                          tint: .white,
-                          contentMode: .fit,
-                          renderingMode: .alphaMask)
-                        .foregroundColor(isSelected ? .onSurface : .onSurfaceVariant)
+                    Icon(HierarchyIconCatalog.visibilityResource(isVisible: isVisible), size: 13, color: isSelected ? .onSurface : .onSurfaceVariant)
                         .frame(width: 16, height: 16)
                 }
                 .buttonStyle(.plain)
@@ -435,13 +429,7 @@ private struct HierarchyRowTrailingSlots: View {
 
             Box(direction: .row, alignItems: .center, justifyContent: .center) {
                 Button(action: onToggleLock) {
-                    Image(resource: HierarchyIconCatalog.lockResource(isLocked: isLocked),
-                          width: 13,
-                          height: 13,
-                          tint: .white,
-                          contentMode: .fit,
-                          renderingMode: .alphaMask)
-                        .foregroundColor(isSelected ? .onSurface : .onSurfaceVariant)
+                    Icon(HierarchyIconCatalog.lockResource(isLocked: isLocked), size: 13, color: isSelected ? .onSurface : .onSurfaceVariant)
                         .frame(width: 16, height: 16)
                 }
                 .buttonStyle(.plain)
@@ -462,13 +450,7 @@ private struct HierarchyDisclosureIcon: View {
     let isExpanded: Bool
 
     var body: some View {
-        Image(resource: HierarchyIconCatalog.disclosureResource(expanded: isExpanded),
-              width: 12,
-              height: 12,
-                            tint: .white,
-                            contentMode: .fit,
-                            renderingMode: .alphaMask)
-            .foregroundColor(.onSurfaceVariant)
+        Icon(HierarchyIconCatalog.disclosureResource(expanded: isExpanded), size: 12, color: .onSurfaceVariant)
     }
 }
 
@@ -476,12 +458,7 @@ private struct HierarchyEntityIcon: View {
     let kind: String
 
     var body: some View {
-        Image(resource: HierarchyIconCatalog.entityResource(for: kind),
-              width: 18,
-              height: 18,
-              tint: .white,
-              contentMode: .fit,
-              renderingMode: .alphaMask)
+        Icon(HierarchyIconCatalog.entityResource(for: kind), size: 18, color: .white)
     }
 }
 

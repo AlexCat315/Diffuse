@@ -117,7 +117,7 @@ struct ViewportPanel: View {
             }
             viewport.modifiers = button.modifiers
             viewport.gizmoGroupTargets.removeAll(keepingCapacity: false)
-            if button.modifiers.contains(.alt) {
+            if button.modifiers.hasAlt {
                 viewport.begin(.camera(.orbit, button: .left),
                                at: (button.x, button.y),
                                modifiers: button.modifiers)
@@ -149,7 +149,7 @@ struct ViewportPanel: View {
                 viewport.endPointerSession()
                 return
             }
-            let drag: EditorViewportInputController.CameraDrag = button.modifiers.contains(.alt) ? .dolly : .freelook
+            let drag: EditorViewportInputController.CameraDrag = button.modifiers.hasAlt ? .dolly : .freelook
             viewport.begin(.camera(drag, button: .right),
                            at: (button.x, button.y),
                            modifiers: button.modifiers)
@@ -369,9 +369,7 @@ struct ViewportPanel: View {
             return true
         case 0x64 /* d */:
             let mods = key.modifiers
-            let primaryModifier = mods.contains(.lgui) || mods.contains(.rgui)
-                               || mods.contains(.lctrl) || mods.contains(.rctrl)
-            guard primaryModifier, let id = selected else { return false }
+            guard mods.hasGui || mods.hasCtrl, let id = selected else { return false }
             if let new = scene.duplicateEntity(id) {
                 app.store.dispatch(.setSelectedEntity(new))
             }
@@ -1193,14 +1191,7 @@ private struct ViewCubeControl: _PrimitiveView {
     }
 
     private static func absoluteOrigin(of node: Node) -> CGPoint {
-        var origin = node.frame.origin
-        var current = node.parent
-        while let parent = current {
-            origin.x += parent.frame.origin.x - parent.contentOffset.x
-            origin.y += parent.frame.origin.y - parent.contentOffset.y
-            current = parent.parent
-        }
-        return origin
+        node.absoluteOrigin
     }
 }
 
@@ -1225,28 +1216,32 @@ private struct ViewportInfoBar: View {
             Row(alignment: .center, spacing: 5) {
                 Button(icon: .resource(ViewportToolbarIcon.cursor.resource),
                            size: 15,
+                           isSelected: gizmoMode == .none,
                            tooltip: L("Pick")) {
                     onSelectGizmoMode(.none)
                 }
-                .toggleButtonStyle(gizmoMode == .none)
+                .buttonStyle(.toggle)
                 Button(icon: .resource(ViewportToolbarIcon.translate.resource),
                            size: 15,
+                           isSelected: gizmoMode == .translate,
                            tooltip: L("Move")) {
                     onSelectGizmoMode(.translate)
                 }
-                .toggleButtonStyle(gizmoMode == .translate)
+                .buttonStyle(.toggle)
                 Button(icon: .resource(ViewportToolbarIcon.rotate.resource),
                            size: 15,
+                           isSelected: gizmoMode == .rotate,
                            tooltip: L("Rotate")) {
                     onSelectGizmoMode(.rotate)
                 }
-                .toggleButtonStyle(gizmoMode == .rotate)
+                .buttonStyle(.toggle)
                 Button(icon: .resource(ViewportToolbarIcon.scale.resource),
                            size: 15,
+                           isSelected: gizmoMode == .scale,
                            tooltip: L("Scale")) {
                     onSelectGizmoMode(.scale)
                 }
-                .toggleButtonStyle(gizmoMode == .scale)
+                .buttonStyle(.toggle)
 
                 ToggleChip(label: L("Local"), isActive: gizmoSpace == .local) {
                     onSelectGizmoSpace(.local)
@@ -1259,35 +1254,39 @@ private struct ViewportInfoBar: View {
                                  onSelect: onSelectShadingMode)
                 Button(icon: .resource(ViewportToolbarIcon.shadows.resource),
                            size: 15,
+                           isSelected: shadowsEnabled,
                            tooltip: L("Shadows")) {
                     onToggleShadows()
                 }
-                .toggleButtonStyle(shadowsEnabled)
+                .buttonStyle(.toggle)
 
                 Divider()
                     .frame(width: 1, height: 16)
                     .foregroundColor(Color(r: 0, g: 0, b: 0, a: 0.4))
 
                 Button(isEnabled: playbackState != .playing,
+                       isSelected: playbackState == .playing,
                        tooltip: L("Play physics simulation"),
                        action: onPlay) {
-                    Text("Play").font(SemanticFontRef.label)
+                    Text(L("Play")).font(SemanticFontRef.label)
                 }
-                .toggleButtonStyle(playbackState == .playing)
+                .buttonStyle(.toggle)
 
                 Button(isEnabled: playbackState != .stopped,
+                       isSelected: playbackState == .paused,
                        tooltip: L("Pause physics simulation"),
                        action: onPause) {
-                    Text("Pause").font(SemanticFontRef.label)
+                    Text(L("Pause")).font(SemanticFontRef.label)
                 }
-                .toggleButtonStyle(playbackState == .paused)
+                .buttonStyle(.toggle)
 
                 Button(isEnabled: playbackState != .stopped,
+                       isSelected: false,
                        tooltip: L("Stop physics simulation"),
                        action: onStop) {
-                    Text("Stop").font(SemanticFontRef.label)
+                    Text(L("Stop")).font(SemanticFontRef.label)
                 }
-                .toggleButtonStyle(false)
+                .buttonStyle(.toggle)
             }
         }
         .padding(3)
@@ -1303,10 +1302,10 @@ private struct ToggleChip: View {
     let onTap: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
+        Button(isSelected: isActive, action: onTap) {
             Text(label, lineLimit: 1)
         }
-        .toggleButtonStyle(isActive)
+        .buttonStyle(.toggle)
     }
 }
 
@@ -1375,7 +1374,7 @@ private struct GizmoHUD: View {
 
     var body: some View {
         Box(direction: .column, alignItems: .center, spacing: 6) {
-            Text("Selected: \(entity.name)")
+            Text("\(L("Selected:")) \(entity.name)")
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
 
@@ -1388,7 +1387,7 @@ private struct GizmoHUD: View {
                               color: Color(r: 0.34, g: 0.58, b: 0.95, a: 1))
             }
 
-            Text("Mode: \(modeLabel(mode))  路  Q/W/E/R to switch")
+            Text("\(L("Mode:")) \(modeLabel(mode))  ·  \(L("Q/W/E/R to switch"))")
                 .font(.caption)
                 .foregroundColor(.onSurfaceVariant)
         }
@@ -1400,10 +1399,10 @@ private struct GizmoHUD: View {
 
     private func modeLabel(_ mode: EditorGizmoMode) -> String {
         switch mode {
-        case .none: return "Pick"
-        case .translate: return "Move"
-        case .rotate: return "Rotate"
-        case .scale: return "Scale"
+        case .none: return L("Pick")
+        case .translate: return L("Move")
+        case .rotate: return L("Rotate")
+        case .scale: return L("Scale")
         }
     }
 
@@ -1442,9 +1441,7 @@ private struct ViewModeSelector: View {
                 Text(Self.label(for: shadingMode), lineLimit: 1)
                     .font(.caption)
                     .foregroundColor(.onSurface)
-                Text("\u{25BC}")
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
+                Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
             }
             .padding(horizontal: 8, vertical: 4)
             .background(.surfaceSunken)

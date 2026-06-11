@@ -31,7 +31,7 @@ struct IntentInputPanel: View {
                 .flex(1, shrink: 1)
             } else {
                 Column(alignment: .leading, spacing: 8) {
-                    ScrollView(.vertical) {
+                    ScrollView(.vertical, scrollbarGutter: .stable) {
                         Column(alignment: .leading, spacing: 4) {
                             if store.chatMessages.isEmpty {
                                 Text(L("Type a message to start."))
@@ -110,9 +110,12 @@ private struct ChatBubble: View {
                         .font(.caption)
                         .foregroundColor(.warning)
                 case .applied:
-                    Text(L("✓ Applied"))
-                        .font(.caption)
-                        .foregroundColor(.success)
+                    Row(alignment: .center, spacing: 4) {
+                        Icon(UICommonIcons.checkmark, size: 10, color: .success)
+                        Text(L("Applied"))
+                            .font(.caption)
+                            .foregroundColor(.success)
+                    }
                 case .discarded:
                     Text(L("Discarded"))
                         .font(.caption)

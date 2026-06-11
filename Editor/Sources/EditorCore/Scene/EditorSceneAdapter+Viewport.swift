@@ -363,7 +363,7 @@ extension EditorSceneAdapter {
         if pressedScancodes.contains(4)  { move -= right }       // A
         if pressedScancodes.contains(8)  { move += up }          // E
         if pressedScancodes.contains(20) { move -= up }          // Q
-        let boost: Float = modifiers.contains(.shift) ? 3.5 : 1
+        let boost: Float = modifiers.hasShift ? 3.5 : 1
         let speed: Float = 6.0 * boost * max(deltaTime, 1.0 / 240.0)
         let translation = simd_length(move) > 1e-5 ? simd_normalize(move) * speed : .zero
 

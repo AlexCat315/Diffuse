@@ -54,6 +54,12 @@ final class EditorLaunchContext: @unchecked Sendable {
             EditorLocalizationPreferences.language = s.language
         }
 
+        // Restore the project's saved scene (File → Save Scene writes
+        // .guava/editor-scene-manifest.json). Without this, saved edits only
+        // come back via a manual File → Open Scene — a relaunch always showed
+        // the seeded preview scene.
+        _ = app.openSceneManifest()
+
         let registry = EditorRootViewFactory.makeRegistry(app: app)
         let controller = EditorRootViewFactory.makeController(
             for: app.store.state.workspaceMode,
@@ -118,6 +124,17 @@ final class EditorLaunchContext: @unchecked Sendable {
         }
         app.setViewportRenderCompletionHandler { _ in
             display.requestDisplay()
+        }
+        display.setWindowCloseInterceptor { [weak app, weak display] windowID in
+            guard let app else { return true }
+            // Auxiliary windows (settings) close freely; only the main window
+            // and whole-app quit guard the scene.
+            if let windowID, windowID != display?.mainWindowID { return true }
+            guard app.store.state.sceneRevision != app.store.state.lastSavedSceneRevision else {
+                return true
+            }
+            app.store.dispatch(.requestClose(EditorPendingCloseRequest(windowID: windowID)))
+            return false
         }
         app.setOpenSettingsWindowHandler { [weak self] in
             guard let self else { return }
