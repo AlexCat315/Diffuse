@@ -715,7 +715,7 @@ private struct _WorkspaceTabBar: View {
             tabButtons
             Spacer(minLength: 0)
             if canCollapse {
-                Button(icon: .resource(WorkspaceIcons.collapse),
+                Button(icon: .resource(WorkspaceIcons.collapse(for: slotID)),
                            size: 12,
                            tooltip: "Collapse") {
                     _ = controller.dispatch(.collapse(group.id))
@@ -1641,6 +1641,30 @@ private enum WorkspaceIcons {
     static let collapse = BundleImageResource.svg(named: "collapse",
                                                   in: .module,
                                                   subdirectory: "WorkspaceIcons")
+    static let panelLeading = BundleImageResource.svg(named: "panel-leading",
+                                                      in: .module,
+                                                      subdirectory: "WorkspaceIcons")
+    static let panelTrailing = BundleImageResource.svg(named: "panel-trailing",
+                                                       in: .module,
+                                                       subdirectory: "WorkspaceIcons")
+    static let panelTop = BundleImageResource.svg(named: "panel-top",
+                                                  in: .module,
+                                                  subdirectory: "WorkspaceIcons")
+    static let panelBottom = BundleImageResource.svg(named: "panel-bottom",
+                                                     in: .module,
+                                                     subdirectory: "WorkspaceIcons")
+
+    /// Slot-aware collapse glyph: a panel frame with the docked side filled
+    /// (VS Code-style), falling back to the plain dash for exotic slots.
+    static func collapse(for slot: WorkspaceSlotID?) -> BundleImageResource {
+        switch slot {
+        case .some(.leading):  return panelLeading
+        case .some(.trailing): return panelTrailing
+        case .some(.top):      return panelTop
+        case .some(.bottom):   return panelBottom
+        default:               return collapse
+        }
+    }
     static let expandRight = BundleImageResource.svg(named: "expand-right",
                                                      in: .module,
                                                      subdirectory: "WorkspaceIcons")
