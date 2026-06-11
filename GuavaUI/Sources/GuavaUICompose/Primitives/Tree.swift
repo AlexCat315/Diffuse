@@ -357,12 +357,12 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
         if let multiSelectionKeys {
             var next = multiSelectionKeys.wrappedValue
             var nextPrimary: TreeNodeKey<ID>? = targetKey
-            if modifiers.contains(.shift),
+            if modifiers.hasShift,
                let anchor = rangeAnchorKey ?? selectionKey.wrappedValue {
                 let keys = keysBetween(anchor, targetKey)
                 next = keys.isEmpty ? [targetKey] : keys
                 nextPrimary = targetKey
-            } else if modifiers.contains(.gui) || modifiers.contains(.ctrl) {
+            } else if modifiers.hasGui || modifiers.hasCtrl {
                 if next.contains(targetKey) {
                     next.remove(targetKey)
                 } else {
@@ -393,7 +393,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
         if let multiSelection {
             var next = multiSelection.wrappedValue
             var nextPrimary: ID? = targetID
-            if modifiers.contains(.shift),
+            if modifiers.hasShift,
                let anchor = rangeAnchorID ?? selection.wrappedValue {
                 let ids = idsBetween(anchor, targetID)
                 if !ids.isEmpty {
@@ -402,7 +402,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                     next = [targetID]
                 }
                 nextPrimary = targetID
-            } else if modifiers.contains(.gui) || modifiers.contains(.ctrl) {
+            } else if modifiers.hasGui || modifiers.hasCtrl {
                 if next.contains(targetID) {
                     next.remove(targetID)
                 } else {
