@@ -14,7 +14,7 @@ struct CommandPaletteOverlay: View {
     }
 
     var body: some View {
-        ModalBarrier(justifyContent: .flexStart, onBackgroundTap: { dismiss() }) {
+        ModalBarrier(onBackgroundTap: { dismiss() }) {
             Column(alignment: .leading, spacing: 0) {
                 Row(alignment: .center, spacing: 8) {
                     Text(L("AI Command"))
@@ -50,8 +50,6 @@ struct CommandPaletteOverlay: View {
             .background(.surfaceFloating)
             .cornerRadius(12)
             .border(.border, width: 1)
-            .shadow(color: Color(r: 0, g: 0, b: 0, a: 0.45), offsetY: 18, blur: 48)
-            .padding(EdgeInsets(top: 80, leading: 0, bottom: 0, trailing: 0))
         }
     }
 

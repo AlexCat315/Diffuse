@@ -160,7 +160,7 @@ struct HierarchyPanel: View {
     }
 
     private func handleBatchKey(event: KeyEvent, selectedIDs: Set<UInt64>) -> Bool {
-        guard !selectedIDs.isEmpty else { return false }
+        guard event.modifiers.isEmpty, !selectedIDs.isEmpty else { return false }
         switch event.scancode {
         case 25: // SDL_SCANCODE_V
             let allHidden = selectedIDs.allSatisfy { hiddenEntityIDs.contains($0) }
