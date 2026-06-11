@@ -2,16 +2,24 @@ import EngineKernel
 import Foundation
 import GuavaUIRuntime
 
-private enum SelectIcons {
-    static let chevronDown = BundleImageResource.svg(named: "chevron-down",
+/// Built-in SVG icons bundled with GuavaUICompose. Public so hosts reuse the
+/// same glyphs instead of approximating them with text characters.
+public enum UICommonIcons {
+    public static let chevronDown = BundleImageResource.svg(named: "chevron-down",
+                                                            in: .module,
+                                                            subdirectory: "UIIcons")
+    public static let chevronUp = BundleImageResource.svg(named: "chevron-up",
+                                                          in: .module,
+                                                          subdirectory: "UIIcons")
+    public static let chevronRight = BundleImageResource.svg(named: "chevron-right",
+                                                             in: .module,
+                                                             subdirectory: "UIIcons")
+    public static let checkmark = BundleImageResource.svg(named: "checkmark",
+                                                          in: .module,
+                                                          subdirectory: "UIIcons")
+    public static let close = BundleImageResource.svg(named: "close",
                                                       in: .module,
                                                       subdirectory: "UIIcons")
-    static let chevronUp = BundleImageResource.svg(named: "chevron-up",
-                                                    in: .module,
-                                                    subdirectory: "UIIcons")
-    static let checkmark = BundleImageResource.svg(named: "checkmark",
-                                                    in: .module,
-                                                    subdirectory: "UIIcons")
 }
 
 public enum KeyboardShortcutPlatform: Sendable, Equatable {
@@ -119,6 +127,9 @@ public struct MenuItem {
     public let title: String
     public let shortcut: String?
     public let isEnabled: Bool
+    /// Rendered as a leading checkmark glyph (e.g. the current value in a
+    /// Select menu or a toggled menu-bar action).
+    public let isSelected: Bool
     public let role: MenuItemRole
     public let action: () -> Void
 
@@ -126,12 +137,14 @@ public struct MenuItem {
                               title: String,
                               shortcut: String? = nil,
                               isEnabled: Bool = true,
+                              isSelected: Bool = false,
                               role: MenuItemRole = .normal,
                               action: @escaping () -> Void) {
         self.id = AnyHashable(id)
         self.title = title
         self.shortcut = shortcut
         self.isEnabled = isEnabled
+        self.isSelected = isSelected
         self.role = role
         self.action = action
     }
@@ -139,12 +152,14 @@ public struct MenuItem {
     public init(title: String,
                 shortcut: String? = nil,
                 isEnabled: Bool = true,
+                isSelected: Bool = false,
                 role: MenuItemRole = .normal,
                 action: @escaping () -> Void) {
         self.id = AnyHashable(UUID().uuidString)
         self.title = title
         self.shortcut = shortcut
         self.isEnabled = isEnabled
+        self.isSelected = isSelected
         self.role = role
         self.action = action
     }
@@ -216,6 +231,12 @@ public struct Menu: View {
     }
 
     private func rows() -> [AnyView] {
+        // Reserve a leading checkmark column for every row as soon as any
+        // sibling is selected, so titles stay aligned.
+        let showsSelectionColumn = entries.contains {
+            if case .item(let item) = $0 { return item.isSelected }
+            return false
+        }
         var itemIndex = 0
         return entries.map { entry in
             let isHighlighted: Bool = {
@@ -225,11 +246,16 @@ public struct Menu: View {
                 }
                 return false
             }()
-            return AnyView(menuEntry(entry, isHighlighted: isHighlighted).id(entry.id))
+            return AnyView(menuEntry(entry,
+                                     isHighlighted: isHighlighted,
+                                     showsSelectionColumn: showsSelectionColumn)
+                .id(entry.id))
         }
     }
 
-    private func menuEntry(_ entry: MenuEntry, isHighlighted: Bool) -> some View {
+    private func menuEntry(_ entry: MenuEntry,
+                           isHighlighted: Bool,
+                           showsSelectionColumn: Bool) -> some View {
         switch entry {
         case .separator:
             return AnyView(
@@ -240,6 +266,7 @@ public struct Menu: View {
             return AnyView(
                 _MenuItemRow(item: item,
                              isHighlighted: isHighlighted,
+                             showsSelectionColumn: showsSelectionColumn,
                              onActivate: {
                                  item.action()
                                  onItemActivated?()
@@ -252,6 +279,7 @@ public struct Menu: View {
 private struct _MenuItemRow: View {
     let item: MenuItem
     let isHighlighted: Bool
+    let showsSelectionColumn: Bool
     let onActivate: () -> Void
     @State var isHovered: Bool = false
     @State var isPressed: Bool = false
@@ -259,6 +287,7 @@ private struct _MenuItemRow: View {
     var body: some View {
         _MenuItemRowHost(item: item,
                          isHighlighted: isHighlighted,
+                         showsSelectionColumn: showsSelectionColumn,
                          isHovered: isHovered,
                          isPressed: isPressed,
                          onHoverChange: { hovered in
@@ -287,16 +316,13 @@ private struct _MenuItemRow: View {
 private struct _MenuItemRowHost: _PrimitiveView {
     let item: MenuItem
     let isHighlighted: Bool
+    let showsSelectionColumn: Bool
     let isHovered: Bool
     let isPressed: Bool
     let onHoverChange: (Bool) -> Void
     let onDown: () -> Void
     let onUp: () -> Bool
     let onCancel: () -> Void
-
-    private static let returnScancode: UInt32 = 40
-    private static let spaceScancode: UInt32 = 44
-    private static let keypadEnterScancode: UInt32 = 88
 
     func _makeNode() -> Node {
         let node = Node()
@@ -352,7 +378,7 @@ private struct _MenuItemRowHost: _PrimitiveView {
         registry.setKey(node) { event, _ in
             guard !event.isRepeat else { return .ignored }
             switch event.scancode {
-            case Self.returnScancode, Self.spaceScancode, Self.keypadEnterScancode:
+            case Scancode.return, Scancode.space, Scancode.keypadEnter:
                 _ = onUp()
                 return .handled
             default:
@@ -390,7 +416,19 @@ private struct _MenuItemRowHost: _PrimitiveView {
             : theme.colors.onSurface
         let textOpacity: Float = item.isEnabled ? 1 : 0.55
 
-        let row = Row(alignment: .center, spacing: 12) {
+        let checkmarkSize: Float = 10
+        let row = Row(alignment: .center, spacing: 8) {
+            if showsSelectionColumn {
+                // Fixed-width slot — a grow-able Spacer here pushes every
+                // unchecked title toward the centre of the menu.
+                Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                    if item.isSelected {
+                        Icon(UICommonIcons.checkmark, size: checkmarkSize, color: titleColor)
+                            .opacity(textOpacity)
+                    }
+                }
+                .frame(width: checkmarkSize)
+            }
             Text(item.title)
                 .font(.body)
                 .foregroundColor(titleColor)
@@ -523,20 +561,9 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
-        // Compute absolute position from the trigger container (parent Box).
-        // Ancestor contentOffset must be applied so a popover inside a
-        // scrolled ScrollView opens at the trigger's on-screen position.
-        let boxNode = node.parent
-        var absX: CGFloat = boxNode?.frame.origin.x ?? 0
-        var absY: CGFloat = boxNode?.frame.origin.y ?? 0
-        var current = boxNode?.parent
-        while let n = current {
-            absX += n.frame.origin.x - n.contentOffset.x
-            absY += n.frame.origin.y - n.contentOffset.y
-            current = n.parent
-        }
-        let overlayY = absY + (boxNode?.frame.height ?? 0)
-        let position = CGPoint(x: absX, y: overlayY)
+        // Anchor below the trigger container (parent Box), in window space.
+        let boxFrame = node.parent?.absoluteFrame ?? .zero
+        let position = CGPoint(x: boxFrame.minX, y: boxFrame.maxY)
 
         // Register / update the overlay entry through the node-owned resource.
         // `present` re-registers if a prior entry was cleaned up, so a reused
@@ -640,19 +667,19 @@ private struct _StatefulSelect<Value: Hashable>: View {
         let keyHandler: (KeyEvent, EventPhase) -> EventResult = { event, phase in
             guard phase == .target || phase == .bubble else { return .ignored }
             switch event.scancode {
-            case 81: // Arrow Down
+            case Scancode.arrowDown:
                 if highlightedIndex + 1 < itemCount { highlightedIndex += 1 }
                 return .handled
-            case 82: // Arrow Up
+            case Scancode.arrowUp:
                 if highlightedIndex > 0 { highlightedIndex -= 1 }
                 return .handled
-            case 40, 88: // Return, KP Enter
+            case Scancode.return, Scancode.keypadEnter:
                 if highlightedIndex < itemCount {
                     select.selection.wrappedValue = select.options[highlightedIndex].value
                 }
                 isPresented = false
                 return .handled
-            case 41: // Escape
+            case Scancode.escape:
                 isPresented = false
                 return .handled
             default:
@@ -665,23 +692,21 @@ private struct _StatefulSelect<Value: Hashable>: View {
                 width: select.width,
                 onKey: keyHandler,
                 label: {
+            // Trigger reads as a text input: same sunken fill, border, and
+            // radius the TextField/NumberField use (theme.inputs), so a Select
+            // sits flush with the fields around it in a property grid instead
+            // of looking like a lighter pill from an older style.
             Row(alignment: .center, spacing: 8) {
                 Text(selectedLabel)
                     .font(.body)
                     .foregroundColor(select.isEnabled ? .onSurface : .onSurfaceMuted)
                     .flex()
-                Image(resource: isPresented ? SelectIcons.chevronUp : SelectIcons.chevronDown,
-                      width: 10,
-                      height: 10,
-                      tint: .white,
-                      contentMode: .fit,
-                      renderingMode: .alphaMask)
-                    .foregroundColor(.onSurfaceMuted)
+                Icon(isPresented ? UICommonIcons.chevronUp : UICommonIcons.chevronDown, size: 10, color: .onSurfaceMuted)
             }
-            .padding(horizontal: 10, vertical: 8)
-            .background(.surface)
+            .padding(horizontal: 8, vertical: 5)
+            .background(.surfaceSunken)
             .cornerRadius(7)
-            .border(.border, width: 1)
+            .border(isPresented ? .focusRing : .border, width: isPresented ? 2 : 1)
         }, content: {
             Menu(menuEntries,
                  width: select.width,
@@ -701,12 +726,11 @@ private struct _StatefulSelect<Value: Hashable>: View {
 
     private var menuEntries: [MenuEntry] {
         select.options.map { option in
-            let selected = option.value == select.selection.wrappedValue
-            let title = selected ? "✓ \(option.label)" : option.label
-            return .item(MenuItem(
+            .item(MenuItem(
                 id: option.id,
-                title: title,
+                title: option.label,
                 isEnabled: option.isEnabled,
+                isSelected: option.value == select.selection.wrappedValue,
                 role: .normal,
                 action: {
                     select.selection.wrappedValue = option.value

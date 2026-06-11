@@ -700,29 +700,16 @@ private struct _WorkspaceTabBar: View {
             document.panels[panelID]?.isCollapsible == true
         }
         let tabButtons = group.panels.compactMap { panelID -> AnyView? in
-            guard let panel = document.panels[panelID] else { return nil }
-            return AnyView(Row(alignment: .center, spacing: 0) {
-                _WorkspaceTabButton(groupID: group.id,
-                                    panelID: panelID,
-                                    title: panel.title,
-                                    isActive: panelID == group.activePanelID,
-                                    isPinned: group.isPinned(panelID),
-                                    document: document,
-                                    controller: controller)
-                    .semanticRole("workspace.tab")
-                    .debugName("workspace-tab-\(panelID.rawValue)")
-                if panel.isClosable {
-                    Button(icon: .resource(WorkspaceIcons.close),
-                               size: 10,
-                               tooltip: "Close") {
-                        _ = controller.dispatch(.closePanel(panelID))
-                    }
-                    .buttonStyle(.ghost)
-                    .frame(width: 20, height: 24)
-                    .semanticRole("workspace.tab.close")
-                    .debugName("workspace-tab-close-\(panelID.rawValue)")
-                }
-            })
+            guard document.panels[panelID] != nil else { return nil }
+            return AnyView(_WorkspaceTabButton(groupID: group.id,
+                                               panelID: panelID,
+                                               title: document.panels[panelID]!.title,
+                                               isActive: panelID == group.activePanelID,
+                                               isPinned: group.isPinned(panelID),
+                                               document: document,
+                                               controller: controller)
+                .semanticRole("workspace.tab")
+                .debugName("workspace-tab-\(panelID.rawValue)"))
         }
         Row(alignment: .center, spacing: 0) {
             tabButtons
@@ -919,7 +906,7 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
     }
 
     func _children(for node: Node) -> [any View] {
-        let style = isActive ? AnyButtonStyle(SecondaryButtonStyle()) : AnyButtonStyle(GhostButtonStyle())
+        let style = AnyButtonStyle(_WorkspaceTabButtonStyle())
         // Resolve the title color eagerly from this (parented) host node's theme
         // and pass it to `Text` directly. The button style's deferred
         // `.foregroundColor(.onSurface)` resolves against the *label* node's
@@ -930,8 +917,7 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
         let titleColor = node.theme.colors.onSurface
         let config = ButtonStyleConfiguration(label: AnyView(Row(alignment: .center, spacing: 4) {
                                                   if isPinned {
-                                                      Text("•", color: titleColor)
-                                                          .font(.label)
+                                                      Icon(WorkspaceIcons.pinDot, size: 6, color: titleColor)
                                                   }
                                                   Text(title, color: titleColor).font(.label)
                                               }),
@@ -940,11 +926,25 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
                                               isHovered: isHovered,
                                               isFocused: FocusChainHolder.current?.focused === node,
                                               isEnabled: true,
+                                              isSelected: isActive,
                                               theme: node.theme)
         return [style.makeBody(config)]
     }
 
     static let pressKey = "__workspace_tab_press"
+}
+
+/// Tab look as one style keyed off `configuration.isSelected` (raised
+/// secondary chrome when active, ghost otherwise) instead of swapping whole
+/// styles around the state.
+private struct _WorkspaceTabButtonStyle: ButtonStyle {
+    func makeBody(configuration: ButtonStyleConfiguration) -> some View {
+        if configuration.isSelected {
+            AnyView(SecondaryButtonStyle().makeBody(configuration: configuration))
+        } else {
+            AnyView(GhostButtonStyle().makeBody(configuration: configuration))
+        }
+    }
 }
 
 private final class _WorkspaceTabPressState {
@@ -1127,6 +1127,7 @@ private struct _WorkspaceRail: View {
                                              isHorizontal: horizontal,
                                              groupID: group.id,
                                              title: item.title,
+                                             icon: WorkspacePanelIconCatalog.resolve(item.iconAssetKey),
                                              controller: controller)
                     .id("workspace-restore-\(slotID.rawValue)-\(group.id.rawValue)-\(item.panelID.rawValue)"))
             }
@@ -1163,20 +1164,28 @@ private struct _WorkspaceRailButton: View {
     let isHorizontal: Bool
     let groupID: WorkspaceTabGroupID
     let title: String
+    let icon: BundleImageResource?
     let controller: WorkspaceController
 
     var body: some View {
-        if isHorizontal {
+        // Activity-bar idiom: a collapsed panel is a square icon button whose
+        // tooltip carries the title. Text pills are the no-icon fallback only.
+        if let icon {
+            Button(tooltip: title) {
+                _ = controller.dispatch(.expand(groupID))
+            } label: {
+                Icon(icon, size: 16, color: .white)
+                    .padding(horizontal: 6, vertical: 6)
+            }
+            .buttonStyle(_WorkspaceRailRestoreStyle())
+            .semanticRole("workspace.rail.restore")
+            .debugName("workspace-restore-\(groupID.rawValue)")
+        } else if isHorizontal {
             Button(tooltip: title) {
                 _ = controller.dispatch(.expand(groupID))
             } label: {
                 Row(alignment: .center, spacing: 6) {
-                    Image(resource: WorkspaceIcons.expandDown,
-                          width: 10,
-                          height: 10,
-                          tint: .white,
-                          contentMode: .fit,
-                          renderingMode: .alphaMask)
+                    Icon(WorkspaceIcons.expandDown, size: 10, color: .white)
                     Text(title)
                         .font(.label)
                 }
@@ -1273,6 +1282,7 @@ private struct _WorkspaceVerticalTitle: View {
 private struct RailItem {
     var panelID: WorkspacePanelID
     var title: String
+    var iconAssetKey: String?
 }
 
 private func visibleGroups(in slotID: WorkspaceSlotID,
@@ -1348,7 +1358,9 @@ private func railItems(group: WorkspaceTabGroup,
                        document: WorkspaceDocument) -> [RailItem] {
     group.panels.compactMap { panelID in
         guard let panel = document.panels[panelID] else { return nil }
-        return RailItem(panelID: panelID, title: panel.title)
+        return RailItem(panelID: panelID,
+                        title: panel.title,
+                        iconAssetKey: panel.iconAssetKey)
     }
 }
 
@@ -1622,14 +1634,7 @@ private func firstNode(rootedAt root: Node, debugName: String) -> Node? {
 }
 
 private func absoluteFrame(of node: Node) -> CGRect {
-    var frame = node.frame
-    var cursor = node.parent
-    while let current = cursor {
-        frame.origin.x += current.frame.origin.x - current.contentOffset.x
-        frame.origin.y += current.frame.origin.y - current.contentOffset.y
-        cursor = current.parent
-    }
-    return frame
+    node.absoluteFrame
 }
 
 private enum WorkspaceIcons {
@@ -1645,4 +1650,7 @@ private enum WorkspaceIcons {
     static let close = BundleImageResource.svg(named: "close",
                                                in: .module,
                                                subdirectory: "WorkspaceIcons")
+    static let pinDot = BundleImageResource.svg(named: "pin-dot",
+                                                in: .module,
+                                                subdirectory: "WorkspaceIcons")
 }

@@ -95,33 +95,29 @@ private struct _StatefulNumberField: View {
             return AnyView(input)
         }
 
+        // Stacked chevron spinner flush against the field — the modern
+        // inspector idiom — instead of detached "-" / "+" text buttons.
         return AnyView(
-            Row(alignment: .center, spacing: 4) {
+            Row(alignment: .center, spacing: 2) {
                 input
                     .flex()
-                Button(role: .normal,
-                       isEnabled: field.isEnabled,
-                       action: { decrement() }) {
-                    Text("-")
-                        .font(.label)
-                        .foregroundColor(.onSurfaceMuted)
-                        .frame(width: 12)
+                Box(direction: .column, alignItems: .stretch, spacing: 1) {
+                    stepButton(UICommonIcons.chevronUp) { increment() }
+                    stepButton(UICommonIcons.chevronDown) { decrement() }
                 }
-                .buttonStyle(.ghost)
-                .frame(width: 18, height: 18)
-
-                Button(role: .normal,
-                       isEnabled: field.isEnabled,
-                       action: { increment() }) {
-                    Text("+")
-                        .font(.label)
-                        .foregroundColor(.onSurfaceMuted)
-                        .frame(width: 12)
-                }
-                .buttonStyle(.ghost)
-                .frame(width: 18, height: 18)
             }
         )
+    }
+
+    private func stepButton(_ icon: BundleImageResource,
+                            action: @escaping () -> Void) -> some View {
+        Button(role: .normal,
+               isEnabled: field.isEnabled,
+               action: action) {
+            Icon(icon, size: 7, color: .onSurfaceMuted)
+        }
+        .buttonStyle(.ghost)
+        .frame(width: 16, height: 11)
     }
 
     private func commitDraft() {

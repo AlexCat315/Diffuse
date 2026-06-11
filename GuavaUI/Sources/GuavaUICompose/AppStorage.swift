@@ -250,6 +250,10 @@ public struct AppStorage<Value: AppStorageConvertible>: DynamicProperty {
     }
 }
 
+// Same contract as `State`: the box is only touched on the main thread (the
+// recomposer/dispatch loop), so the wrapper can cross Sendable boundaries.
+extension AppStorage: @unchecked Sendable where Value: Sendable {}
+
 extension AppStorage: _StateErased {
     public func _wire(invalidate: @escaping () -> Void) {
         box.setObserver(invalidate, for: tokenHolder.token)

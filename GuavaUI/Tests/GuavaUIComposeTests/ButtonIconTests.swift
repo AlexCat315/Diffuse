@@ -153,6 +153,7 @@ struct ButtonIconTests: GuavaUIComposeSerializedSuite {
 
         let host = ButtonHost(role: .normal,
                               isEnabled: true,
+                              isSelected: false,
                               tooltip: "Open Scene...",
                               isPressed: false,
                               isHovered: true,

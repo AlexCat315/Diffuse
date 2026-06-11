@@ -160,7 +160,7 @@ struct BoolControlHost: _PrimitiveView {
         registry.setKey(node) { event, _ in
             guard !event.isRepeat else { return .ignored }
             switch event.scancode {
-            case 40, 44, 88: // RETURN, SPACE, KP_ENTER
+            case Scancode.return, Scancode.space, Scancode.keypadEnter:
                 activate()
                 return .handled
             default:

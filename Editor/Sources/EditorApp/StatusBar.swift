@@ -21,11 +21,17 @@ struct EditorStatusBar: View {
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
 
-            Text("Revision \(store.sceneRevision)")
+            Text("\(L("Revision")) \(store.sceneRevision)")
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
 
-            Text("Selection \(store.selectedEntityIDsCount)")
+            if store.sceneDirty {
+                Text("• \(L("Unsaved"))")
+                    .font(.caption)
+                    .foregroundColor(.warning)
+            }
+
+            Text("\(L("Selection")) \(store.selectedEntityIDsCount)")
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
 

@@ -10,6 +10,13 @@ import QuartzCore
 
 @MainActor
 public final class SDL3Shell: Shell {
+    /// Consulted before honouring a window-close request or an app quit
+    /// (Cmd+Q / last window). Return `false` to veto — the host keeps running
+    /// and the app can show an "unsaved changes" flow before re-issuing the
+    /// close. `nil` window means the whole app is quitting. Destroyed-window
+    /// notifications are not vetoable.
+    public var closeInterceptor: ((WindowID?) -> Bool)?
+
     private final class SDL3WindowHandle: WindowHandle {
         let id: WindowID
         let window: OpaquePointer
@@ -558,10 +565,17 @@ public final class SDL3Shell: Shell {
 
             switch eventType {
             case UInt32(GUAVA_SDL_EVENT_QUIT):
-                isQuitting = true
+                if closeInterceptor?(nil) ?? true {
+                    isQuitting = true
+                }
 
-            case UInt32(GUAVA_SDL_EVENT_WINDOW_CLOSE_REQUESTED),
-                 UInt32(GUAVA_SDL_EVENT_WINDOW_DESTROYED):
+            case UInt32(GUAVA_SDL_EVENT_WINDOW_CLOSE_REQUESTED):
+                let windowID = WindowID(event.window.windowID)
+                if closeInterceptor?(windowID) ?? true {
+                    destroyWindow(windowID)
+                }
+
+            case UInt32(GUAVA_SDL_EVENT_WINDOW_DESTROYED):
                 destroyWindow(WindowID(event.window.windowID))
 
             case UInt32(GUAVA_SDL_EVENT_WINDOW_RESIZED),

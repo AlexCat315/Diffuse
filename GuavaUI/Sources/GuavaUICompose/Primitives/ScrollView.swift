@@ -44,18 +44,31 @@ private struct _ScrollViewScrollbarGeometry {
 public struct ScrollView<Content: View>: _PrimitiveView {
     public enum Axis: Sendable { case vertical, horizontal, both }
 
+    /// How the vertical scrollbar relates to the content area.
+    /// `.overlay` floats the bar over the content (default; canvas-style
+    /// surfaces). `.stable` reserves a fixed lane on the trailing edge — form
+    /// surfaces use it so trailing controls (steppers, toggles) are never
+    /// covered by the bar or its grab area.
+    public enum ScrollbarGutter: Sendable { case overlay, stable }
+
     public let axes: Axis
     public let content: Content
 
     /// Pixels scrolled per wheel notch. SDL3 reports wheel deltas in lines.
     public var wheelStep: Float = 30
     public let consumePolicy: ScrollConsumePolicy
+    public let scrollbarGutter: ScrollbarGutter
+
+    /// Width of the reserved lane under `.stable`: track + inset each side.
+    static var scrollbarGutterWidth: Float { 12 }
 
     public init(_ axes: Axis = .vertical,
                 consumePolicy: ScrollConsumePolicy = .whenOffsetChanged,
+                scrollbarGutter: ScrollbarGutter = .overlay,
                 @ViewBuilder content: () -> Content) {
         self.axes = axes
         self.consumePolicy = consumePolicy
+        self.scrollbarGutter = scrollbarGutter
         self.content = content()
     }
 
@@ -282,50 +295,33 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         layout.overflow = .hidden
         layout.minWidth = 0
         layout.minHeight = 0
+        if scrollbarGutter == .stable, axes != .horizontal {
+            layout.setPadding(Self.scrollbarGutterWidth, edge: .right)
+        } else {
+            layout.setPadding(0, edge: .right)
+        }
     }
 
     public var _children: [any View] { [content] }
 
     private func localPoint(x: Float, y: Float, in node: Node) -> CGPoint {
-        var origin = node.frame.origin
-        var current = node.parent
-        while let parent = current {
-            origin.x += parent.frame.origin.x - parent.contentOffset.x
-            origin.y += parent.frame.origin.y - parent.contentOffset.y
-            current = parent.parent
-        }
-        return CGPoint(x: CGFloat(x) - origin.x,
-                       y: CGFloat(y) - origin.y)
+        node.convertFromWindow(CGPoint(x: CGFloat(x), y: CGFloat(y)))
     }
 
     private func visibleViewportRect(for node: Node) -> CGRect {
-        let nodeOrigin = absoluteOrigin(of: node)
+        let nodeOrigin = node.absoluteOrigin
         var visible = CGRect(origin: nodeOrigin, size: node.frame.size)
         var current = node.parent
 
         while let ancestor = current {
             if ancestor.clipsToBounds {
-                let ancestorOrigin = absoluteOrigin(of: ancestor)
-                let ancestorFrame = CGRect(origin: ancestorOrigin,
-                                           size: ancestor.frame.size)
-                visible = visible.intersection(ancestorFrame)
+                visible = visible.intersection(ancestor.absoluteFrame)
                 if visible.isNull { return .zero }
             }
             current = ancestor.parent
         }
 
         return visible.offsetBy(dx: -nodeOrigin.x, dy: -nodeOrigin.y)
-    }
-
-    private func absoluteOrigin(of node: Node) -> CGPoint {
-        var origin = node.frame.origin
-        var current = node.parent
-        while let parent = current {
-            origin.x += parent.frame.origin.x - parent.contentOffset.x
-            origin.y += parent.frame.origin.y - parent.contentOffset.y
-            current = parent.parent
-        }
-        return origin
     }
 
     private func scrollableContentSize(for node: Node) -> CGSize {
