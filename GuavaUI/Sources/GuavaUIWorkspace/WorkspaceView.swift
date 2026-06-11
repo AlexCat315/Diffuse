@@ -700,29 +700,16 @@ private struct _WorkspaceTabBar: View {
             document.panels[panelID]?.isCollapsible == true
         }
         let tabButtons = group.panels.compactMap { panelID -> AnyView? in
-            guard let panel = document.panels[panelID] else { return nil }
-            return AnyView(Row(alignment: .center, spacing: 0) {
-                _WorkspaceTabButton(groupID: group.id,
-                                    panelID: panelID,
-                                    title: panel.title,
-                                    isActive: panelID == group.activePanelID,
-                                    isPinned: group.isPinned(panelID),
-                                    document: document,
-                                    controller: controller)
-                    .semanticRole("workspace.tab")
-                    .debugName("workspace-tab-\(panelID.rawValue)")
-                if panel.isClosable {
-                    Button(icon: .resource(WorkspaceIcons.close),
-                               size: 10,
-                               tooltip: "Close") {
-                        _ = controller.dispatch(.closePanel(panelID))
-                    }
-                    .buttonStyle(.ghost)
-                    .frame(width: 20, height: 24)
-                    .semanticRole("workspace.tab.close")
-                    .debugName("workspace-tab-close-\(panelID.rawValue)")
-                }
-            })
+            guard document.panels[panelID] != nil else { return nil }
+            return AnyView(_WorkspaceTabButton(groupID: group.id,
+                                               panelID: panelID,
+                                               title: document.panels[panelID]!.title,
+                                               isActive: panelID == group.activePanelID,
+                                               isPinned: group.isPinned(panelID),
+                                               document: document,
+                                               controller: controller)
+                .semanticRole("workspace.tab")
+                .debugName("workspace-tab-\(panelID.rawValue)"))
         }
         Row(alignment: .center, spacing: 0) {
             tabButtons
@@ -1126,6 +1113,7 @@ private struct _WorkspaceRail: View {
                                              isHorizontal: horizontal,
                                              groupID: group.id,
                                              title: item.title,
+                                             icon: WorkspacePanelIconCatalog.resolve(item.iconAssetKey),
                                              controller: controller)
                     .id("workspace-restore-\(slotID.rawValue)-\(group.id.rawValue)-\(item.panelID.rawValue)"))
             }
@@ -1162,10 +1150,23 @@ private struct _WorkspaceRailButton: View {
     let isHorizontal: Bool
     let groupID: WorkspaceTabGroupID
     let title: String
+    let icon: BundleImageResource?
     let controller: WorkspaceController
 
     var body: some View {
-        if isHorizontal {
+        // Activity-bar idiom: a collapsed panel is a square icon button whose
+        // tooltip carries the title. Text pills are the no-icon fallback only.
+        if let icon {
+            Button(tooltip: title) {
+                _ = controller.dispatch(.expand(groupID))
+            } label: {
+                Icon(icon, size: 16, color: .white)
+                    .padding(horizontal: 6, vertical: 6)
+            }
+            .buttonStyle(_WorkspaceRailRestoreStyle())
+            .semanticRole("workspace.rail.restore")
+            .debugName("workspace-restore-\(groupID.rawValue)")
+        } else if isHorizontal {
             Button(tooltip: title) {
                 _ = controller.dispatch(.expand(groupID))
             } label: {
@@ -1267,6 +1268,7 @@ private struct _WorkspaceVerticalTitle: View {
 private struct RailItem {
     var panelID: WorkspacePanelID
     var title: String
+    var iconAssetKey: String?
 }
 
 private func visibleGroups(in slotID: WorkspaceSlotID,
@@ -1342,7 +1344,9 @@ private func railItems(group: WorkspaceTabGroup,
                        document: WorkspaceDocument) -> [RailItem] {
     group.panels.compactMap { panelID in
         guard let panel = document.panels[panelID] else { return nil }
-        return RailItem(panelID: panelID, title: panel.title)
+        return RailItem(panelID: panelID,
+                        title: panel.title,
+                        iconAssetKey: panel.iconAssetKey)
     }
 }
 
