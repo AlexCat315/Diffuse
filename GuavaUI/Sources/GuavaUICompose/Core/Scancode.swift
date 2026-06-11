@@ -3,8 +3,17 @@
 public enum Scancode {
     public static let a: UInt32 = 4
     public static let c: UInt32 = 6
+    public static let k: UInt32 = 14
+    public static let n: UInt32 = 17
+    public static let s: UInt32 = 22
     public static let v: UInt32 = 25
     public static let x: UInt32 = 27
+    public static let z: UInt32 = 29
+    public static let digit0: UInt32 = 39
+    public static let digit1: UInt32 = 30
+    public static let digit2: UInt32 = 31
+    public static let digit3: UInt32 = 32
+    public static let comma: UInt32 = 54
     public static let `return`: UInt32 = 40
     public static let escape: UInt32 = 41
     public static let backspace: UInt32 = 42

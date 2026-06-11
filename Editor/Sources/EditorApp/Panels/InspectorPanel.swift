@@ -99,9 +99,10 @@ struct InspectorPanel: View {
                     .foregroundColor(.onSurfaceVariant)
                     .flex()
             }
-            .padding(horizontal: 8, vertical: 4)
-            .background(.surface)
-            .cornerRadius(3)
+            .padding(horizontal: 8, vertical: 5)
+            .background(.surfaceSunken)
+            .cornerRadius(7)
+            .border(.border, width: 1)
             .clipped()
         }
     }
