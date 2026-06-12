@@ -199,6 +199,8 @@ public struct TextField: View {
             state.cursorIndex = text.wrappedValue.count
             node.attachments["__textfield_state"] = state
         }
+        state.hostNode = node
+        normalizeIndices(state)
         let snapshot = self
 
         updateInteractionHandlers(for: node, state: state)
@@ -310,6 +312,9 @@ public struct TextField: View {
     // MARK: - Editing
 
     func handleKey(_ event: KeyEvent, state: FieldState, node: Node) -> Bool {
+        // The bound text may have been rewritten since the last interaction;
+        // re-anchor stale indices before any String.index arithmetic.
+        normalizeIndices(state)
         let mods = event.modifiers
         let shift = !mods.isDisjoint(with: .shift)
         let primaryModifier = !mods.isDisjoint(with: .gui) || !mods.isDisjoint(with: .ctrl)

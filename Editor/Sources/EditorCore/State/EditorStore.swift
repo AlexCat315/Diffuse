@@ -36,6 +36,7 @@ public final class EditorStore: @unchecked Sendable {
         case viewportShadowsEnabled
         case viewportRenderScalePercent
         case viewportInteractionDownscaleEnabled
+        case viewportRealtimeEnabled
         case translateSnapEnabled
         case rotateSnapEnabled
         case scaleSnapEnabled
@@ -165,6 +166,8 @@ public final class EditorStore: @unchecked Sendable {
             mark(.viewportInteractionDownscaleEnabled,
                  old.viewportInteractionDownscaleEnabled,
                  new.viewportInteractionDownscaleEnabled)
+        case .setViewportRealtime:
+            mark(.viewportRealtimeEnabled, old.viewportRealtimeEnabled, new.viewportRealtimeEnabled)
         case .setTranslateSnapEnabled:
             mark(.translateSnapEnabled, old.translateSnapEnabled, new.translateSnapEnabled)
         case .setRotateSnapEnabled:
@@ -273,6 +276,9 @@ extension EditorStore {
     public var viewportRenderScalePercent: Int { read(.viewportRenderScalePercent, storage.viewportRenderScalePercent) }
     public var viewportInteractionDownscaleEnabled: Bool {
         read(.viewportInteractionDownscaleEnabled, storage.viewportInteractionDownscaleEnabled)
+    }
+    public var viewportRealtimeEnabled: Bool {
+        read(.viewportRealtimeEnabled, storage.viewportRealtimeEnabled)
     }
     public var translateSnapEnabled: Bool { read(.translateSnapEnabled, storage.translateSnapEnabled) }
     public var rotateSnapEnabled: Bool { read(.rotateSnapEnabled, storage.rotateSnapEnabled) }
