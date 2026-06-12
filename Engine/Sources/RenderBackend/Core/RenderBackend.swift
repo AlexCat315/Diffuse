@@ -11,7 +11,12 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     let backend: WGPUBackend
     private let renderSurface: RenderSurfaceDescriptor?
     var surface: GPUSurface?
+    /// Rendered (used) extent of the current frame.
     private var configuredSize: RenderDrawableSize = .init(width: 0, height: 0)
+    /// Backing extent of frame-graph targets. Offscreen path: grow-only and
+    /// quantized so panel resizes don't recreate textures every frame.
+    /// Surface path: equal to the swapchain size.
+    private var allocatedTargetSize: RenderDrawableSize = .init(width: 0, height: 0)
     let format: GPUTextureFormat = .bgra8Unorm
     let hdrFormat: GPUTextureFormat = .rgba16Float
     let depthFormat: GPUTextureFormat = .depth32Float
@@ -81,6 +86,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var ssrUniformBuffer: GPUBuffer?
     private var taaUniformBuffer: GPUBuffer?
     private var ssaoUniformBuffer: GPUBuffer?
+    private var postFrameUniformBuffer: GPUBuffer?
     var stylizedCharacterUniformBuffer: GPUBuffer?
     var fallbackJointPaletteBuffer: GPUBuffer?
     var jointPaletteBuffers: [EntityID: GPUBuffer] = [:]
@@ -156,7 +162,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             }
 
             if usesHDRFrameGraph {
-                try ensureFrameGraphResources(size: packet.drawableSize)
+                try ensureFrameGraphResources(size: allocatedTargetSize,
+                                              needsTAAHistory: framePlan.passes.contains(.taa))
             }
 
             let cameraMatrices = RenderCameraMatrices.make(
@@ -218,6 +225,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 _ = try ensureOutlinePipeline(hdr: usesHDRFrameGraph)
             }
             try ensureFullscreenResources()
+            writePostFrameUniforms()
 
             let prepareDoneNS = DispatchTime.now().uptimeNanoseconds
 
@@ -405,8 +413,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             encoder.copyTextureToTexture(
                                 source: input.texture,
                                 destination: historyTarget.texture,
-                                width: packet.drawableSize.width,
-                                height: packet.drawableSize.height
+                                width: configuredSize.width,
+                                height: configuredSize.height
                             )
                             historyValid = true
                         } else {
@@ -426,7 +434,9 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                         passDrawCallCount = 1
 
                     case .viewportResolve:
-                        registerViewportSurface(texture: colorTarget.texture, size: packet.drawableSize)
+                        registerViewportSurface(texture: colorTarget.texture,
+                                                size: configuredSize,
+                                                textureSize: allocatedTargetSize)
                         viewportResolved = true
                 }
 
@@ -467,8 +477,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                     commandEncoder: encoder,
                     colorView: colorTarget.view,
                     formatHint: formatHint,
-                    width: Int(packet.drawableSize.width),
-                    height: Int(packet.drawableSize.height),
+                    width: Int(configuredSize.width),
+                    height: Int(configuredSize.height),
                     deltaTime: packet.deltaTime
                 )
             }
@@ -996,62 +1006,79 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
 
     private func ensureConfigured(size: RenderDrawableSize) throws {
         guard backend.rawDevice != nil else { return }
-        let width = max(size.width, 1)
-        let height = max(size.height, 1)
-        if width == configuredSize.width && height == configuredSize.height
-            && configuredSize.width > 0
-        {
-            return
-        }
-        if let surface, let device = backend.rawDevice {
-            try surface.configure(
-                device: device,
-                format: format,
-                width: width,
-                height: height,
-                presentMode: .fifo
-            )
-            offscreenColorView = nil
-            offscreenColorTexture = nil
-        } else {
-            let color = try backend.createTexture(
-                width: width,
-                height: height,
-                format: format,
-                usage: [.renderAttachment, .textureBinding, .copySrc]
-            )
-            offscreenColorView = try color.createView()
-            offscreenColorTexture = color
-        }
-        configuredSize = .init(width: width, height: height)
-        sceneColorTarget = nil
-        postProcessTargetA = nil
-        postProcessTargetB = nil
-        ldrPostProcessTarget = nil
-        historyTarget = nil
-        historyValid = false
+        let used = ViewportTargetAllocation.clampedUsed(size)
+        // Swapchains can't over-allocate, so the surface path stays exact and
+        // reallocates on resize as before; only the offscreen path grows.
+        let capacity = surface == nil
+            ? ViewportTargetAllocation.grownCapacity(current: allocatedTargetSize, used: used)
+            : used
+        let allocationChanged = capacity != allocatedTargetSize
+        let usedChanged = used != configuredSize
+        guard allocationChanged || usedChanged else { return }
 
-        depthView = nil
-        depthTexture = nil
-        let depth = try backend.createTexture(
-            width: width,
-            height: height,
-            format: depthFormat,
-            usage: [.renderAttachment, .textureBinding]
-        )
-        depthView = try depth.createView()
-        depthTexture = depth
+        if allocationChanged {
+            if let surface, let device = backend.rawDevice {
+                try surface.configure(
+                    device: device,
+                    format: format,
+                    width: capacity.width,
+                    height: capacity.height,
+                    presentMode: .fifo
+                )
+                offscreenColorView = nil
+                offscreenColorTexture = nil
+            } else {
+                let color = try backend.createTexture(
+                    width: capacity.width,
+                    height: capacity.height,
+                    format: format,
+                    usage: [.renderAttachment, .textureBinding, .copySrc]
+                )
+                offscreenColorView = try color.createView()
+                offscreenColorTexture = color
+            }
+            allocatedTargetSize = capacity
+            sceneColorTarget = nil
+            postProcessTargetA = nil
+            postProcessTargetB = nil
+            ldrPostProcessTarget = nil
+            historyTarget = nil
+
+            depthView = nil
+            depthTexture = nil
+            let depth = try backend.createTexture(
+                width: capacity.width,
+                height: capacity.height,
+                format: depthFormat,
+                usage: [.renderAttachment, .textureBinding]
+            )
+            depthView = try depth.createView()
+            depthTexture = depth
+        }
+
+        configuredSize = used
+        // The history texture's used sub-region no longer lines up after any
+        // extent change, so TAA must rebuild from the next frame.
+        historyValid = false
     }
 
-    private func ensureFrameGraphResources(size: RenderDrawableSize) throws {
-        guard sceneColorTarget == nil || postProcessTargetA == nil || postProcessTargetB == nil || historyTarget == nil else {
-            return
+    private func ensureFrameGraphResources(size: RenderDrawableSize, needsTAAHistory: Bool) throws {
+        if sceneColorTarget == nil {
+            sceneColorTarget = try makeRenderTarget(width: size.width, height: size.height, format: hdrFormat)
         }
-        sceneColorTarget = try makeRenderTarget(width: size.width, height: size.height, format: hdrFormat)
-        postProcessTargetA = try makeRenderTarget(width: size.width, height: size.height, format: hdrFormat)
-        postProcessTargetB = try makeRenderTarget(width: size.width, height: size.height, format: hdrFormat)
-        ldrPostProcessTarget = try makeRenderTarget(width: size.width, height: size.height, format: format)
-        historyTarget = try makeRenderTarget(width: size.width, height: size.height, format: hdrFormat)
+        if postProcessTargetA == nil {
+            postProcessTargetA = try makeRenderTarget(width: size.width, height: size.height, format: hdrFormat)
+        }
+        if postProcessTargetB == nil {
+            postProcessTargetB = try makeRenderTarget(width: size.width, height: size.height, format: hdrFormat)
+        }
+        if ldrPostProcessTarget == nil {
+            ldrPostProcessTarget = try makeRenderTarget(width: size.width, height: size.height, format: format)
+        }
+        if needsTAAHistory, historyTarget == nil {
+            historyTarget = try makeRenderTarget(width: size.width, height: size.height, format: hdrFormat)
+            historyValid = false
+        }
     }
 
     private func ensureFullscreenResources() throws {
@@ -1095,6 +1122,36 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         if ssaoUniformBuffer == nil {
             ssaoUniformBuffer = try backend.createBuffer(size: 512, usage: [.uniform, .copyDst])
         }
+        if postFrameUniformBuffer == nil {
+            postFrameUniformBuffer = try backend.createBuffer(size: 256, usage: [.uniform, .copyDst])
+        }
+    }
+
+    /// Restrict rasterization to the used sub-region of the (potentially
+    /// larger) frame-graph targets. Call right after `beginRenderPass` on
+    /// every frame-sized pass.
+    private func applyUsedRegion(_ pass: GPURenderPassEncoder) {
+        pass.setViewport(x: 0, y: 0,
+                         width: Float(configuredSize.width),
+                         height: Float(configuredSize.height))
+        pass.setScissorRect(x: 0, y: 0,
+                            width: configuredSize.width,
+                            height: configuredSize.height)
+    }
+
+    private func writePostFrameUniforms() {
+        guard let postFrameUniformBuffer else { return }
+        let allocW = Float(max(allocatedTargetSize.width, 1))
+        let allocH = Float(max(allocatedTargetSize.height, 1))
+        let usedW = Float(configuredSize.width)
+        let usedH = Float(configuredSize.height)
+        var uniforms = PostFrameUniforms(uvScaleMax: SIMD4<Float>(
+            usedW / allocW,
+            usedH / allocH,
+            max(usedW - 0.5, 0.5) / allocW,
+            max(usedH - 0.5, 0.5) / allocH
+        ))
+        writeUniform(&uniforms, buffer: postFrameUniformBuffer)
     }
 
     private func encodeSkyboxPass(
@@ -1128,6 +1185,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             depthStoreOp: .store,
             depthClearValue: 1.0
         )
+        applyUsedRegion(pass)
         pass.setPipeline(pipeline)
         pass.setBindGroup(bindGroup, index: 0)
         pass.draw(vertexCount: 3)
@@ -1152,6 +1210,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             depthStoreOp: .store,
             depthClearValue: 1.0
         )
+        applyUsedRegion(pass)
         pass.setPipeline(pipeline)
         let drawCallCount = encodeInstanceDraws(
             pass: pass,
@@ -1363,6 +1422,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             depthClearValue: 1.0
         )
 
+        applyUsedRegion(pass)
         pass.setPipeline(pipeline)
         var drawCallCount = 0
         if let dyn = dynamicInstanceResources {
@@ -1435,6 +1495,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             depthStoreOp: .store,
             depthClearValue: 1.0
         )
+        applyUsedRegion(pass)
         pass.setPipeline(pipeline)
         var drawCallCount = 0
         if let dyn = dynamicInstanceResources {
@@ -1639,6 +1700,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             depthStoreOp: .store,
             depthClearValue: 1.0
         )
+        applyUsedRegion(pass)
         pass.executeBundles(compactBundles)
         pass.end()
 
@@ -1676,9 +1738,13 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         output: RenderTextureTarget,
         pipeline: GPURenderPipeline
     ) throws {
-        guard let linearSampler, let bloomUniformBuffer else { return }
+        guard let linearSampler, let bloomUniformBuffer, let postFrameUniformBuffer else { return }
+        // Texel offsets step in texture space, so they derive from the
+        // allocated extent, not the used sub-region.
         var uniforms = BloomUniforms(
-            params: SIMD4<Float>(1.05, 0.75, 1.0 / Float(configuredSize.width), 1.0 / Float(configuredSize.height))
+            params: SIMD4<Float>(1.05, 0.75,
+                                 1.0 / Float(max(allocatedTargetSize.width, 1)),
+                                 1.0 / Float(max(allocatedTargetSize.height, 1)))
         )
         writeUniform(&uniforms, buffer: bloomUniformBuffer)
         let bindGroup = try makeBindGroup(
@@ -1687,9 +1753,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 GPUBindGroupEntry(binding: 0, sampler: linearSampler),
                 GPUBindGroupEntry(binding: 1, textureView: input.view),
                 GPUBindGroupEntry(binding: 2, buffer: bloomUniformBuffer, offset: 0, size: UInt64(MemoryLayout<BloomUniforms>.stride)),
+                GPUBindGroupEntry(binding: 3, buffer: postFrameUniformBuffer, offset: 0, size: UInt64(MemoryLayout<PostFrameUniforms>.stride)),
             ]
         )
         let pass = try encoder.beginRenderPass(colorView: output.view, loadOp: .clear, storeOp: .store, clearColor: .clear)
+        applyUsedRegion(pass)
         pass.setPipeline(pipeline)
         pass.setBindGroup(bindGroup, index: 0)
         pass.draw(vertexCount: 3)
@@ -1702,16 +1770,18 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         output: RenderTextureTarget,
         pipeline: GPURenderPipeline
     ) throws {
-        guard let linearSampler, let stylizedCharacterUniformBuffer else { return }
+        guard let linearSampler, let stylizedCharacterUniformBuffer, let postFrameUniformBuffer else { return }
         let bindGroup = try makeBindGroup(
             pipeline: pipeline,
             entries: [
                 GPUBindGroupEntry(binding: 0, sampler: linearSampler),
                 GPUBindGroupEntry(binding: 1, textureView: input.view),
                 GPUBindGroupEntry(binding: 2, buffer: stylizedCharacterUniformBuffer, offset: 0, size: UInt64(MemoryLayout<StylizedCharacterUniforms>.stride)),
+                GPUBindGroupEntry(binding: 3, buffer: postFrameUniformBuffer, offset: 0, size: UInt64(MemoryLayout<PostFrameUniforms>.stride)),
             ]
         )
         let pass = try encoder.beginRenderPass(colorView: output.view, loadOp: .clear, storeOp: .store, clearColor: .clear)
+        applyUsedRegion(pass)
         pass.setPipeline(pipeline)
         pass.setBindGroup(bindGroup, index: 0)
         pass.draw(vertexCount: 3)
@@ -1726,7 +1796,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         pipeline: GPURenderPipeline,
         projection: simd_float4x4
     ) throws {
-        guard let linearSampler, let ssrUniformBuffer else { return }
+        guard let linearSampler, let ssrUniformBuffer, let postFrameUniformBuffer else { return }
         var uniforms = SSRUniforms(
             projection: projection,
             invProjection: simd_inverse(projection),
@@ -1742,9 +1812,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 GPUBindGroupEntry(binding: 1, textureView: input.view),
                 GPUBindGroupEntry(binding: 2, textureView: depthView),
                 GPUBindGroupEntry(binding: 3, buffer: ssrUniformBuffer, offset: 0, size: UInt64(MemoryLayout<SSRUniforms>.stride)),
+                GPUBindGroupEntry(binding: 4, buffer: postFrameUniformBuffer, offset: 0, size: UInt64(MemoryLayout<PostFrameUniforms>.stride)),
             ]
         )
         let pass = try encoder.beginRenderPass(colorView: output.view, loadOp: .clear, storeOp: .store, clearColor: .clear)
+        applyUsedRegion(pass)
         pass.setPipeline(pipeline)
         pass.setBindGroup(bindGroup, index: 0)
         pass.draw(vertexCount: 3)
@@ -1758,9 +1830,12 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         output: RenderTextureTarget,
         pipeline: GPURenderPipeline
     ) throws {
-        guard let linearSampler, let taaUniformBuffer else { return }
+        guard let linearSampler, let taaUniformBuffer, let postFrameUniformBuffer else { return }
         var uniforms = TAAUniforms(
-            params: SIMD4<Float>(0.12, 1.0 / Float(configuredSize.width), 1.0 / Float(configuredSize.height), historyValid ? 1.0 : 0.0)
+            params: SIMD4<Float>(0.12,
+                                 1.0 / Float(max(allocatedTargetSize.width, 1)),
+                                 1.0 / Float(max(allocatedTargetSize.height, 1)),
+                                 historyValid ? 1.0 : 0.0)
         )
         writeUniform(&uniforms, buffer: taaUniformBuffer)
         let bindGroup = try makeBindGroup(
@@ -1770,9 +1845,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 GPUBindGroupEntry(binding: 1, textureView: input.view),
                 GPUBindGroupEntry(binding: 2, textureView: history.view),
                 GPUBindGroupEntry(binding: 3, buffer: taaUniformBuffer, offset: 0, size: UInt64(MemoryLayout<TAAUniforms>.stride)),
+                GPUBindGroupEntry(binding: 4, buffer: postFrameUniformBuffer, offset: 0, size: UInt64(MemoryLayout<PostFrameUniforms>.stride)),
             ]
         )
         let pass = try encoder.beginRenderPass(colorView: output.view, loadOp: .clear, storeOp: .store, clearColor: .clear)
+        applyUsedRegion(pass)
         pass.setPipeline(pipeline)
         pass.setBindGroup(bindGroup, index: 0)
         pass.draw(vertexCount: 3)
@@ -1787,7 +1864,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         pipeline: GPURenderPipeline,
         projection: simd_float4x4
     ) throws {
-        guard let linearSampler, let ssaoUniformBuffer else { return }
+        guard let linearSampler, let ssaoUniformBuffer, let postFrameUniformBuffer else { return }
         var uniforms = SSAOUniforms(
             projection: projection,
             invProjection: simd_inverse(projection),
@@ -1803,9 +1880,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 GPUBindGroupEntry(binding: 1, textureView: input.view),
                 GPUBindGroupEntry(binding: 2, textureView: depthView),
                 GPUBindGroupEntry(binding: 3, buffer: ssaoUniformBuffer, offset: 0, size: UInt64(MemoryLayout<SSAOUniforms>.stride)),
+                GPUBindGroupEntry(binding: 4, buffer: postFrameUniformBuffer, offset: 0, size: UInt64(MemoryLayout<PostFrameUniforms>.stride)),
             ]
         )
         let pass = try encoder.beginRenderPass(colorView: output.view, loadOp: .clear, storeOp: .store, clearColor: .clear)
+        applyUsedRegion(pass)
         pass.setPipeline(pipeline)
         pass.setBindGroup(bindGroup, index: 0)
         pass.draw(vertexCount: 3)
@@ -1819,7 +1898,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         outputView: GPUTextureView,
         pipeline: GPURenderPipeline
     ) throws {
-        guard let linearSampler, let tonemapUniformBuffer else { return }
+        guard let linearSampler, let tonemapUniformBuffer, let postFrameUniformBuffer else { return }
         var uniforms = TonemapUniforms(
             params: SIMD4<Float>(1.0, 0.85, activeRenderSettings.enableBloom ? 1.0 : 0.0, 1.0)
         )
@@ -1831,9 +1910,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 GPUBindGroupEntry(binding: 1, textureView: input.view),
                 GPUBindGroupEntry(binding: 2, textureView: bloom.view),
                 GPUBindGroupEntry(binding: 3, buffer: tonemapUniformBuffer, offset: 0, size: UInt64(MemoryLayout<TonemapUniforms>.stride)),
+                GPUBindGroupEntry(binding: 4, buffer: postFrameUniformBuffer, offset: 0, size: UInt64(MemoryLayout<PostFrameUniforms>.stride)),
             ]
         )
         let pass = try encoder.beginRenderPass(colorView: outputView, loadOp: .clear, storeOp: .store, clearColor: .black)
+        applyUsedRegion(pass)
         pass.setPipeline(pipeline)
         pass.setBindGroup(bindGroup, index: 0)
         pass.draw(vertexCount: 3)
@@ -1846,15 +1927,17 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         output: FrameColorTarget,
         pipeline: GPURenderPipeline
     ) throws {
-        guard let linearSampler else { return }
+        guard let linearSampler, let postFrameUniformBuffer else { return }
         let bindGroup = try makeBindGroup(
             pipeline: pipeline,
             entries: [
                 GPUBindGroupEntry(binding: 0, sampler: linearSampler),
                 GPUBindGroupEntry(binding: 1, textureView: input.view),
+                GPUBindGroupEntry(binding: 2, buffer: postFrameUniformBuffer, offset: 0, size: UInt64(MemoryLayout<PostFrameUniforms>.stride)),
             ]
         )
         let pass = try encoder.beginRenderPass(colorView: output.view, loadOp: .clear, storeOp: .store, clearColor: .black)
+        applyUsedRegion(pass)
         pass.setPipeline(pipeline)
         pass.setBindGroup(bindGroup, index: 0)
         pass.draw(vertexCount: 3)

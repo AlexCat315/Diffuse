@@ -27,13 +27,14 @@ struct ViewportPanel: View {
             let gizmoSpace = store.gizmoSpace
             let shadingMode = store.viewportShadingMode
             let shadowsEnabled = store.viewportShadowsEnabled
+            let renderScalePercent = store.viewportRenderScalePercent
+            let interactionDownscaleEnabled = store.viewportInteractionDownscaleEnabled
             let playbackState = store.playbackState
 
             // 推送 gizmo 控制器所需的快照（摄像机 / 视口矩形 / 实体世界坐标）。
             let _: Void = updateGizmoSnapshot(selectedID: selectedEntityID,
                                               gizmoMode: gizmoMode,
-                                              gizmoSpace: gizmoSpace,
-                                              surface: surface)
+                                              gizmoSpace: gizmoSpace)
 
             ViewportHost(surface: surface,
                          onInputEvent: { event in
@@ -71,6 +72,8 @@ struct ViewportPanel: View {
                                         gizmoSpace: gizmoSpace,
                                         shadingMode: shadingMode,
                                         shadowsEnabled: shadowsEnabled,
+                                        renderScalePercent: renderScalePercent,
+                                        interactionDownscaleEnabled: interactionDownscaleEnabled,
                                         playbackState: playbackState,
                                         onSelectGizmoMode: { mode in
                                             if gizmoMode != mode {
@@ -87,6 +90,12 @@ struct ViewportPanel: View {
                                         },
                                         onToggleShadows: {
                                             app.setViewportShadowsEnabled(!shadowsEnabled)
+                                        },
+                                        onSelectRenderScale: { percent in
+                                            app.setViewportRenderScalePercent(percent)
+                                        },
+                                        onToggleInteractionDownscale: {
+                                            app.setViewportInteractionDownscaleEnabled(!interactionDownscaleEnabled)
                                         },
                                         onPlay: { app.applyPlaybackState(.playing) },
                                         onPause: { app.applyPlaybackState(.paused) },
@@ -381,8 +390,7 @@ struct ViewportPanel: View {
 
     private func updateGizmoSnapshot(selectedID: UInt64?,
                                      gizmoMode: EditorGizmoMode,
-                                     gizmoSpace: EditorGizmoSpace,
-                                     surface: ViewportSurfaceState) {
+                                     gizmoSpace: EditorGizmoSpace) {
         guard let mode = controllerMode(for: gizmoMode),
               let id = selectedID,
               let world = scene.entityWorldPosition(id),
@@ -405,8 +413,6 @@ struct ViewportPanel: View {
                 space: gizmoSpace == .local ? .local : .world,
                 camera: camera,
                 frame: frame,
-                drawableWidth: Float(surface.width),
-                drawableHeight: Float(surface.height),
                 entityID: id,
                 entityWorldPosition: world,
                 entityWorldMatrix: worldMatrix,
@@ -1202,11 +1208,15 @@ private struct ViewportInfoBar: View {
     let gizmoSpace: EditorGizmoSpace
     let shadingMode: EditorViewportShadingMode
     let shadowsEnabled: Bool
+    let renderScalePercent: Int
+    let interactionDownscaleEnabled: Bool
     let playbackState: PlaybackState
     let onSelectGizmoMode: (EditorGizmoMode) -> Void
     let onSelectGizmoSpace: (EditorGizmoSpace) -> Void
     let onSelectShadingMode: (EditorViewportShadingMode) -> Void
     let onToggleShadows: () -> Void
+    let onSelectRenderScale: (Int) -> Void
+    let onToggleInteractionDownscale: () -> Void
     let onPlay: () -> Void
     let onPause: () -> Void
     let onStop: () -> Void
@@ -1259,6 +1269,11 @@ private struct ViewportInfoBar: View {
                     onToggleShadows()
                 }
                 .buttonStyle(.toggle)
+
+                RenderScaleSelector(percent: renderScalePercent,
+                                    interactionDownscaleEnabled: interactionDownscaleEnabled,
+                                    onSelect: onSelectRenderScale,
+                                    onToggleInteractionDownscale: onToggleInteractionDownscale)
 
                 Divider()
                     .frame(width: 1, height: 16)
@@ -1427,6 +1442,51 @@ private struct GizmoAxisChip: View {
             .padding(horizontal: 8, vertical: 3)
             .background(color)
             .cornerRadius(2)
+    }
+}
+
+/// Unreal-style screen percentage for the 3D viewport: presentation size is
+/// fixed, the engine renders `percent` of it and the composite upscales.
+private struct RenderScaleSelector: View {
+    let percent: Int
+    let interactionDownscaleEnabled: Bool
+    let onSelect: (Int) -> Void
+    let onToggleInteractionDownscale: () -> Void
+    @State private var isPresented: Bool = false
+
+    private static let presets = [50, 75, 100, 150, 200]
+
+    var body: some View {
+        Popover(isPresented: $isPresented, width: 168) {
+            Row(alignment: .center, spacing: 5) {
+                Text("\(percent)%", lineLimit: 1)
+                    .font(.caption)
+                    .foregroundColor(.onSurface)
+                Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
+            }
+            .padding(horizontal: 8, vertical: 4)
+            .background(.surfaceSunken)
+            .cornerRadius(3)
+        } content: {
+            Menu(menuEntries, width: 168, maxVisibleRows: 8, onItemActivated: {
+                isPresented = false
+            })
+        }
+    }
+
+    private var menuEntries: [MenuEntry] {
+        var entries: [MenuEntry] = Self.presets.map { preset in
+            .item(MenuItem(id: "renderscale-\(preset)",
+                           title: "\(preset)%",
+                           isSelected: preset == percent,
+                           action: { onSelect(preset) }))
+        }
+        entries.append(.separator(id: "renderscale-sep"))
+        entries.append(.item(MenuItem(id: "renderscale-interaction",
+                                      title: L("Downscale while navigating"),
+                                      isSelected: interactionDownscaleEnabled,
+                                      action: { onToggleInteractionDownscale() })))
+        return entries
     }
 }
 

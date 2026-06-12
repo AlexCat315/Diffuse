@@ -5,10 +5,16 @@ struct TAAUniforms {
     history_valid : f32,
 };
 
+struct PostFrame {
+    uv_scale : vec2<f32>,
+    uv_max : vec2<f32>,
+};
+
 @group(0) @binding(0) var taa_sampler : sampler;
 @group(0) @binding(1) var current_texture : texture_2d<f32>;
 @group(0) @binding(2) var history_texture : texture_2d<f32>;
 @group(0) @binding(3) var<uniform> u : TAAUniforms;
+@group(0) @binding(4) var<uniform> frame_u : PostFrame;
 
 struct VsOut {
     @builtin(position) position : vec4<f32>,
@@ -45,19 +51,20 @@ fn vs_main(@builtin(vertex_index) vertex_index : u32) -> VsOut {
 
 @fragment
 fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
-    let current = textureSample(current_texture, taa_sampler, in.uv).rgb;
+    let base_uv = min(in.uv * frame_u.uv_scale, frame_u.uv_max);
+    let current = textureSample(current_texture, taa_sampler, base_uv).rgb;
     if (u.history_valid < 0.5) {
         return vec4<f32>(current, 1.0);
     }
 
-    let history = textureSample(history_texture, taa_sampler, in.uv).rgb;
+    let history = textureSample(history_texture, taa_sampler, base_uv).rgb;
     let texel = vec2<f32>(u.texel_size_x, u.texel_size_y);
 
     var min_color = current;
     var max_color = current;
     for (var y : i32 = -1; y <= 1; y += 1) {
         for (var x : i32 = -1; x <= 1; x += 1) {
-            let sample_uv = clamp(in.uv + vec2<f32>(f32(x), f32(y)) * texel, vec2<f32>(0.0), vec2<f32>(1.0));
+            let sample_uv = clamp(base_uv + vec2<f32>(f32(x), f32(y)) * texel, vec2<f32>(0.0), frame_u.uv_max);
             let sample_color = textureSample(current_texture, taa_sampler, sample_uv).rgb;
             min_color = min(min_color, sample_color);
             max_color = max(max_color, sample_color);

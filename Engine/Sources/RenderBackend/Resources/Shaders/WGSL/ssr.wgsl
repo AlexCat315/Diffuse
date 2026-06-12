@@ -5,15 +5,28 @@ struct SSRUniforms {
     tracing : vec4<f32>,
 };
 
+struct PostFrame {
+    uv_scale : vec2<f32>,
+    uv_max : vec2<f32>,
+};
+
 @group(0) @binding(0) var ssr_sampler : sampler;
 @group(0) @binding(1) var scene_texture : texture_2d<f32>;
 @group(0) @binding(2) var depth_texture : texture_depth_2d;
 @group(0) @binding(3) var<uniform> u : SSRUniforms;
+@group(0) @binding(4) var<uniform> frame_u : PostFrame;
 
 struct VsOut {
     @builtin(position) position : vec4<f32>,
     @location(0) uv : vec2<f32>,
 };
+
+// `uv` arguments below stay in logical viewport space (0..1 across the
+// rendered region); `tex_uv` maps them into the used sub-region of the
+// grow-only allocated textures for sampling.
+fn tex_uv(uv : vec2<f32>) -> vec2<f32> {
+    return min(uv * frame_u.uv_scale, frame_u.uv_max);
+}
 
 fn get_view_pos(uv : vec2<f32>, depth : f32) -> vec3<f32> {
     let clip = vec4<f32>(uv * 2.0 - 1.0, depth, 1.0);
@@ -22,11 +35,11 @@ fn get_view_pos(uv : vec2<f32>, depth : f32) -> vec3<f32> {
 }
 
 fn reconstruct_normal(uv : vec2<f32>, view_pos : vec3<f32>) -> vec3<f32> {
-    let texel = 1.0 / u.resolution;
+    let texel = 1.0 / u.resolution_intensity.xy;
     let uv_x = clamp(uv + vec2<f32>(texel.x, 0.0), vec2<f32>(0.0), vec2<f32>(1.0));
     let uv_y = clamp(uv + vec2<f32>(0.0, texel.y), vec2<f32>(0.0), vec2<f32>(1.0));
-    let view_x = get_view_pos(uv_x, textureSample(depth_texture, ssr_sampler, uv_x));
-    let view_y = get_view_pos(uv_y, textureSample(depth_texture, ssr_sampler, uv_y));
+    let view_x = get_view_pos(uv_x, textureSample(depth_texture, ssr_sampler, tex_uv(uv_x)));
+    let view_y = get_view_pos(uv_y, textureSample(depth_texture, ssr_sampler, tex_uv(uv_y)));
     return normalize(cross(view_x - view_pos, view_y - view_pos));
 }
 
@@ -57,9 +70,9 @@ fn vs_main(@builtin(vertex_index) vertex_index : u32) -> VsOut {
 
 @fragment
 fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
-    let depth = textureSample(depth_texture, ssr_sampler, in.uv);
+    let depth = textureSample(depth_texture, ssr_sampler, tex_uv(in.uv));
     if (depth >= 0.9999) {
-        return vec4<f32>(textureSample(scene_texture, ssr_sampler, in.uv).rgb, 1.0);
+        return vec4<f32>(textureSample(scene_texture, ssr_sampler, tex_uv(in.uv)).rgb, 1.0);
     }
 
     let view_pos = get_view_pos(in.uv, depth);
@@ -67,7 +80,7 @@ fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
     let view_dir = normalize(-view_pos);
     let reflect_dir = reflect(-view_dir, normal);
     if (reflect_dir.z > 0.0) {
-        return vec4<f32>(textureSample(scene_texture, ssr_sampler, in.uv).rgb, 1.0);
+        return vec4<f32>(textureSample(scene_texture, ssr_sampler, tex_uv(in.uv)).rgb, 1.0);
     }
 
     let max_steps = i32(max(u.tracing.y, 8.0));
@@ -82,7 +95,7 @@ fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
             break;
         }
 
-        let sample_depth = textureSample(depth_texture, ssr_sampler, screen_uv);
+        let sample_depth = textureSample(depth_texture, ssr_sampler, tex_uv(screen_uv));
         let surface_pos = get_view_pos(screen_uv, sample_depth);
         if (surface_pos.z >= sample_pos.z && surface_pos.z - sample_pos.z < u.tracing.z) {
             hit_uv = screen_uv;
@@ -91,12 +104,12 @@ fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
         }
     }
 
-    let scene = textureSample(scene_texture, ssr_sampler, in.uv).rgb;
+    let scene = textureSample(scene_texture, ssr_sampler, tex_uv(in.uv)).rgb;
     if (!hit) {
         return vec4<f32>(scene, 1.0);
     }
 
-    let reflection = textureSample(scene_texture, ssr_sampler, hit_uv).rgb;
+    let reflection = textureSample(scene_texture, ssr_sampler, tex_uv(hit_uv)).rgb;
     let edge_fade = u.tracing.w;
     let fade_x = smoothstep(0.0, edge_fade, hit_uv.x) * smoothstep(0.0, edge_fade, 1.0 - hit_uv.x);
     let fade_y = smoothstep(0.0, edge_fade, hit_uv.y) * smoothstep(0.0, edge_fade, 1.0 - hit_uv.y);

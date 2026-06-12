@@ -5,9 +5,15 @@ struct BloomUniforms {
     texel_size_y : f32,
 };
 
+struct PostFrame {
+    uv_scale : vec2<f32>,
+    uv_max : vec2<f32>,
+};
+
 @group(0) @binding(0) var bloom_sampler : sampler;
 @group(0) @binding(1) var hdr_texture : texture_2d<f32>;
 @group(0) @binding(2) var<uniform> u : BloomUniforms;
+@group(0) @binding(3) var<uniform> frame_u : PostFrame;
 
 struct VsOut {
     @builtin(position) position : vec4<f32>,
@@ -49,8 +55,9 @@ fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
 
     var bloom = vec3<f32>(0.0);
     var total = 0.0;
+    let base_uv = in.uv * frame_u.uv_scale;
     for (var i : u32 = 0u; i < 9u; i += 1u) {
-        let sample_uv = in.uv + offsets[i] * texel * 2.0;
+        let sample_uv = clamp(base_uv + offsets[i] * texel * 2.0, vec2<f32>(0.0), frame_u.uv_max);
         let sample_color = textureSample(hdr_texture, bloom_sampler, sample_uv).rgb;
         let bright = max(luminance(sample_color) - u.threshold, 0.0);
         bloom += sample_color * bright * weights[i];

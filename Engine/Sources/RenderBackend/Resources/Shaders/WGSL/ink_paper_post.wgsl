@@ -5,9 +5,15 @@ struct StylizedStyle {
     params : vec4<f32>,
 };
 
+struct PostFrame {
+    uv_scale : vec2<f32>,
+    uv_max : vec2<f32>,
+};
+
 @group(0) @binding(0) var post_sampler : sampler;
 @group(0) @binding(1) var color_texture : texture_2d<f32>;
 @group(0) @binding(2) var<uniform> style : StylizedStyle;
+@group(0) @binding(3) var<uniform> frame_u : PostFrame;
 
 struct VsOut {
     @builtin(position) position : vec4<f32>,
@@ -46,9 +52,10 @@ fn paper_hash(uv : vec2<f32>) -> f32 {
 @fragment
 fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
     let texel = 1.0 / vec2<f32>(vec2<u32>(textureDimensions(color_texture)));
-    let center = textureSample(color_texture, post_sampler, in.uv).rgb;
-    let north = textureSample(color_texture, post_sampler, in.uv + vec2<f32>(0.0, -texel.y)).rgb;
-    let east = textureSample(color_texture, post_sampler, in.uv + vec2<f32>(texel.x, 0.0)).rgb;
+    let base_uv = in.uv * frame_u.uv_scale;
+    let center = textureSample(color_texture, post_sampler, base_uv).rgb;
+    let north = textureSample(color_texture, post_sampler, clamp(base_uv + vec2<f32>(0.0, -texel.y), vec2<f32>(0.0), frame_u.uv_max)).rgb;
+    let east = textureSample(color_texture, post_sampler, clamp(base_uv + vec2<f32>(texel.x, 0.0), vec2<f32>(0.0), frame_u.uv_max)).rgb;
 
     let contrast = abs(luminance(center) - luminance(north)) + abs(luminance(center) - luminance(east));
     let ink_edge = clamp(contrast * 1.8, 0.0, 0.22);
