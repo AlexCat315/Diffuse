@@ -146,7 +146,9 @@ jobs:
   build-editor-windows:
     name: Editor Windows
     needs: prepare-release
-    runs-on: windows-latest
+    # Pinned: windows-latest now resolves to windows-2025-vs2026, whose MSVC
+    # (VS 18) intermittently ICEs compiling plutovg (CL.exe 0xE06D7363).
+    runs-on: windows-2025
     steps:
       - uses: actions/checkout@v4
         with:

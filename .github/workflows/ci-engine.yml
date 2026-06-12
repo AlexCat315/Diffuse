@@ -30,7 +30,9 @@ jobs:
             runs-on: ubuntu-latest
             experimental: true
           - name: Windows
-            runs-on: windows-latest
+            # Pinned: windows-latest now resolves to windows-2025-vs2026, whose
+            # MSVC (VS 18) intermittently ICEs compiling plutovg.
+            runs-on: windows-2025
             experimental: true
     steps:
       - uses: actions/checkout@v4
