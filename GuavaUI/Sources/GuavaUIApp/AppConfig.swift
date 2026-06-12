@@ -7,6 +7,19 @@ public enum AppWindowTitleBarStyle: Sendable, Equatable {
     case hiddenInset
 }
 
+/// How the main window schedules frames after a successful present.
+public enum AppFrameDrivePolicy: Sendable, Equatable {
+    /// Request the next frame unconditionally — the window re-renders at
+    /// display rate forever. Right for games whose content animates every
+    /// frame (e.g. a `ViewportHost` compositing an engine texture that is
+    /// re-rendered in place without its surface state changing).
+    case continuous
+    /// Render only when something asks for a frame: input events, recompose,
+    /// `markRenderDirty`, animations, or an explicit `requestDisplay()`
+    /// (e.g. an engine render-completion handler). Idle windows do no work.
+    case eventDriven
+}
+
 /// 启动一个 GuavaUI 应用窗口时所需的最小参数。所有字段都有默认值，
 /// 调用方通常只需要传 `title` 加 root view。
 public struct AppConfig: Sendable {
@@ -29,6 +42,8 @@ public struct AppConfig: Sendable {
     public var titleBarStyle: AppWindowTitleBarStyle
     /// Optional UI frame-rate cap. `nil` preserves the event-driven default.
     public var targetFrameRate: Double?
+    /// Frame scheduling after present. `.continuous` keeps legacy behavior.
+    public var frameDrivePolicy: AppFrameDrivePolicy
     /// DevTools 配置。`nil` 关闭。默认从 `GUAVA_DEVTOOLS=1` env var 读取，
     /// 这样 release 构建不会意外开启服务端。
     public var devTools: DevToolsConfig?
@@ -42,6 +57,7 @@ public struct AppConfig: Sendable {
                 msaaSampleCount: UInt32 = 4,
                 titleBarStyle: AppWindowTitleBarStyle = .standard,
                 targetFrameRate: Double? = nil,
+                frameDrivePolicy: AppFrameDrivePolicy = .continuous,
                 devTools: DevToolsConfig? = nil) {
         self.title = title
         self.primaryFontName = primaryFontName
@@ -56,6 +72,7 @@ public struct AppConfig: Sendable {
         } else {
             self.targetFrameRate = nil
         }
+        self.frameDrivePolicy = frameDrivePolicy
         self.devTools = devTools ?? DevToolsConfig.fromEnvironment(appTitle: title)
     }
 }
