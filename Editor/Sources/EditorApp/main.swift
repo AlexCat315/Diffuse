@@ -64,7 +64,10 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
                           // instead of an off-palette dark blue.
                           clearColor: GPUColor(r: 0x1E / 255, g: 0x1F / 255, b: 0x22 / 255, a: 1),
                           backendConfig: launchOptions.backendConfig,
-                          titleBarStyle: .hiddenInset),
+                          titleBarStyle: .hiddenInset,
+                          // 编辑器走事件驱动：空闲时 UI 与 3D 都不渲染（场景按需
+                          // 渲染见 EditorViewportRenderGate），输入延迟与 GPU 负载解耦。
+                          frameDrivePolicy: .eventDriven),
         backend: backend,
         events: events,
         onTick: { dt in

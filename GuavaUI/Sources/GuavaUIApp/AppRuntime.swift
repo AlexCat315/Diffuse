@@ -510,7 +510,13 @@ public final class AppRuntime {
             let buffer = try encoder.finish()
             backend.submit(buffer)
             surface.present()
-            host.requestDisplay()
+            if config.frameDrivePolicy == .continuous {
+                // Legacy behavior: keep re-rendering at display rate. Under
+                // `.eventDriven` the loop's needsDisplay machinery (input,
+                // recompose, markRenderDirty, animations, requestDisplay)
+                // schedules the next frame instead.
+                host.requestDisplay()
+            }
             let presentEnd = TimingTrace.now()
 
             if Self.fpsLogEnabled {

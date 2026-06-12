@@ -29,6 +29,7 @@ struct ViewportPanel: View {
             let shadowsEnabled = store.viewportShadowsEnabled
             let renderScalePercent = store.viewportRenderScalePercent
             let interactionDownscaleEnabled = store.viewportInteractionDownscaleEnabled
+            let realtimeEnabled = store.viewportRealtimeEnabled
             let playbackState = store.playbackState
 
             // 推送 gizmo 控制器所需的快照（摄像机 / 视口矩形 / 实体世界坐标）。
@@ -74,6 +75,7 @@ struct ViewportPanel: View {
                                         shadowsEnabled: shadowsEnabled,
                                         renderScalePercent: renderScalePercent,
                                         interactionDownscaleEnabled: interactionDownscaleEnabled,
+                                        realtimeEnabled: realtimeEnabled,
                                         playbackState: playbackState,
                                         onSelectGizmoMode: { mode in
                                             if gizmoMode != mode {
@@ -96,6 +98,9 @@ struct ViewportPanel: View {
                                         },
                                         onToggleInteractionDownscale: {
                                             app.setViewportInteractionDownscaleEnabled(!interactionDownscaleEnabled)
+                                        },
+                                        onToggleRealtime: {
+                                            app.setViewportRealtimeEnabled(!realtimeEnabled)
                                         },
                                         onPlay: { app.applyPlaybackState(.playing) },
                                         onPause: { app.applyPlaybackState(.paused) },
@@ -1210,6 +1215,7 @@ private struct ViewportInfoBar: View {
     let shadowsEnabled: Bool
     let renderScalePercent: Int
     let interactionDownscaleEnabled: Bool
+    let realtimeEnabled: Bool
     let playbackState: PlaybackState
     let onSelectGizmoMode: (EditorGizmoMode) -> Void
     let onSelectGizmoSpace: (EditorGizmoSpace) -> Void
@@ -1217,6 +1223,7 @@ private struct ViewportInfoBar: View {
     let onToggleShadows: () -> Void
     let onSelectRenderScale: (Int) -> Void
     let onToggleInteractionDownscale: () -> Void
+    let onToggleRealtime: () -> Void
     let onPlay: () -> Void
     let onPause: () -> Void
     let onStop: () -> Void
@@ -1272,8 +1279,10 @@ private struct ViewportInfoBar: View {
 
                 RenderScaleSelector(percent: renderScalePercent,
                                     interactionDownscaleEnabled: interactionDownscaleEnabled,
+                                    realtimeEnabled: realtimeEnabled,
                                     onSelect: onSelectRenderScale,
-                                    onToggleInteractionDownscale: onToggleInteractionDownscale)
+                                    onToggleInteractionDownscale: onToggleInteractionDownscale,
+                                    onToggleRealtime: onToggleRealtime)
 
                 Divider()
                     .frame(width: 1, height: 16)
@@ -1450,8 +1459,10 @@ private struct GizmoAxisChip: View {
 private struct RenderScaleSelector: View {
     let percent: Int
     let interactionDownscaleEnabled: Bool
+    let realtimeEnabled: Bool
     let onSelect: (Int) -> Void
     let onToggleInteractionDownscale: () -> Void
+    let onToggleRealtime: () -> Void
     @State private var isPresented: Bool = false
 
     private static let presets = [50, 75, 100, 150, 200]
@@ -1486,6 +1497,10 @@ private struct RenderScaleSelector: View {
                                       title: L("Downscale while navigating"),
                                       isSelected: interactionDownscaleEnabled,
                                       action: { onToggleInteractionDownscale() })))
+        entries.append(.item(MenuItem(id: "renderscale-realtime",
+                                      title: L("Realtime"),
+                                      isSelected: realtimeEnabled,
+                                      action: { onToggleRealtime() })))
         return entries
     }
 }

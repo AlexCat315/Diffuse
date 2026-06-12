@@ -792,4 +792,58 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         _ = h.key!(cmdBackspace, .target)
         #expect(rig.store.value == "")
     } }
+
+    @Test("Caret movement invalidates the field's render so cached layers re-record")
+    func caretMoveMarksRenderDirty() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = "hello"
+        rig.graph.install(root: TextField(text: makeBinding(rig.store)))
+
+        let node = fieldNode(in: rig.tree.root)
+        let h = rig.registry.handlers(for: node)
+
+        // Drain install-time dirt: a caret-only change must re-dirty the tree
+        // by itself (frames can be event-driven and layers cache their slices).
+        rig.tree.flush()
+        #expect(!rig.tree.hasRenderUpdates)
+
+        let left = KeyEvent(scancode: 80, keycode: 0, modifiers: [], isRepeat: false)
+        let handled = h.key!(left, .target)
+        #expect(handled == .handled)
+        #expect(rig.tree.hasRenderUpdates)
+
+        // Selection drag (pointer motion) must invalidate the same way.
+        rig.tree.flush()
+        #expect(!rig.tree.hasRenderUpdates)
+        let state = node.attachments["__textfield_state"] as? TextField.FieldState
+        state?.isDragging = true
+        let motion = MouseMotionEvent(x: 40, y: 10, deltaX: 4, deltaY: 0)
+        _ = h.motion!(motion, .target)
+        #expect(rig.tree.hasRenderUpdates)
+    } }
+
+    @Test("Stale indices from external text rewrites are clamped, not crashed on")
+    func staleIndicesAreClamped() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = "hello world"
+        rig.graph.install(root: TextField(text: makeBinding(rig.store)))
+
+        let node = fieldNode(in: rig.tree.root)
+        let h = rig.registry.handlers(for: node)
+
+        // Cursor seeds at the end (11). Shrink the bound text behind the
+        // field's back — entity switch / formatter rewrite in the editor.
+        rig.store.value = "hi"
+        let backspace = KeyEvent(scancode: 42, keycode: 0, modifiers: [], isRepeat: false)
+        _ = h.key!(backspace, .target)
+        #expect(rig.store.value == "h")
+
+        // Stale selection: select all of "h", externally empty the text, then
+        // type — the dead range must collapse instead of indexing past end.
+        let cmdA = KeyEvent(scancode: Scancode.a, keycode: 0, modifiers: [.lgui], isRepeat: false)
+        _ = h.key!(cmdA, .target)
+        rig.store.value = ""
+        _ = h.text!("x", .target)
+        #expect(rig.store.value == "x")
+    } }
 }
