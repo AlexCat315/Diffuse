@@ -16,6 +16,10 @@ private final class GamePlayerState: @unchecked Sendable {
     private let registrar = ObservableStateRegistrar()
     private var _viewportSurface: ViewportSurfaceState = .init()
 
+    /// Logical (point) size of the viewport, for HUD layout. Written from
+    /// `onScreenFrameChange`; no recompose dependency needed.
+    var logicalSize: (width: Float, height: Float) = (1280, 720)
+
     /// Reading this property inside a view body registers a recompose dependency.
     var viewportSurface: ViewportSurfaceState {
         registrar.access("viewportSurface")
@@ -40,7 +44,10 @@ private struct GamePlayerRootView: View {
         ViewportHost(
             surface: state.viewportSurface,
             onInputEvent: { app.enqueueInput($0) },
-            onDrawableSizeChange: { app.setViewportDrawableSize($0) }
+            onDrawableSizeChange: { app.setViewportDrawableSize($0) },
+            onScreenFrameChange: { frame in
+                state.logicalSize = (frame.width, frame.height)
+            }
         ) {
             EmptyView()
         }
@@ -87,8 +94,10 @@ private func runPlayer() throws {
         backend: backend,
         onTick: { dt in
             app.tick(deltaTime: dt)
-            let size = app.viewportDrawableSize
-            inGameUIHost.tick(width: Int(size.width), height: Int(size.height))
+            let logical = playerState.logicalSize
+            inGameUIHost.tick(width: Int(logical.width.rounded()),
+                              height: Int(logical.height.rounded()),
+                              contentScale: max(1, ContentScaleHolder.current))
         }
     ) {
         GamePlayerRootView(app: app, state: playerState)

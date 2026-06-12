@@ -103,8 +103,12 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
         }
 
         node.draw = { list, origin in
-            let width = UInt32(max(Int(node.frame.width.rounded()), 1))
-            let height = UInt32(max(Int(node.frame.height.rounded()), 1))
+            // Report the drawable in physical pixels: the layout frame is in
+            // logical points, so honor the window's content scale or the
+            // scene renders at 1/scale² resolution and gets upscaled blurry.
+            let scale = CGFloat(max(1, ContentScaleHolder.current))
+            let width = UInt32(max(Int((node.frame.width * scale).rounded()), 1))
+            let height = UInt32(max(Int((node.frame.height * scale).rounded()), 1))
             let drawableSize = RenderDrawableSize(width: width, height: height)
             let key = "__viewport_host_drawable_size"
             let previous = node.attachments[key] as? RenderDrawableSize
@@ -128,8 +132,8 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
             guard let bridge = ViewportTextureBridgeHolder.current,
                   let textureID = bridge.textureID(surfaceID: snap.surface.surfaceID,
                                                   handle: snap.surface.handle,
-                                                  width: snap.surface.width,
-                                                  height: snap.surface.height)
+                                                  width: snap.surface.textureWidth,
+                                                  height: snap.surface.textureHeight)
             else {
                 return
             }
@@ -138,7 +142,15 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
                               y: Float(origin.y),
                               width: Float(frame.width),
                               height: Float(frame.height))
-            list.addImageQuad(rect: rect, textureID: textureID, tint: .white)
+            // The engine renders into the top-left sub-region of a grow-only
+            // allocated texture; crop to the used extent.
+            let uvMax: (x: Float, y: Float) = (
+                snap.surface.textureWidth > 0
+                    ? Float(snap.surface.width) / Float(snap.surface.textureWidth) : 1,
+                snap.surface.textureHeight > 0
+                    ? Float(snap.surface.height) / Float(snap.surface.textureHeight) : 1
+            )
+            list.addImageQuad(rect: rect, textureID: textureID, tint: .white, uvMax: uvMax)
 
             snap.onDrawOverlay?(list, screenFrame)
         }

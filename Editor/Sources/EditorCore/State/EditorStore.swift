@@ -34,6 +34,8 @@ public final class EditorStore: @unchecked Sendable {
         case gizmoSpace
         case viewportShadingMode
         case viewportShadowsEnabled
+        case viewportRenderScalePercent
+        case viewportInteractionDownscaleEnabled
         case translateSnapEnabled
         case rotateSnapEnabled
         case scaleSnapEnabled
@@ -157,6 +159,12 @@ public final class EditorStore: @unchecked Sendable {
             mark(.viewportShadingMode, old.viewportShadingMode, new.viewportShadingMode)
         case .setViewportShadowsEnabled:
             mark(.viewportShadowsEnabled, old.viewportShadowsEnabled, new.viewportShadowsEnabled)
+        case .setViewportRenderScalePercent:
+            mark(.viewportRenderScalePercent, old.viewportRenderScalePercent, new.viewportRenderScalePercent)
+        case .setViewportInteractionDownscale:
+            mark(.viewportInteractionDownscaleEnabled,
+                 old.viewportInteractionDownscaleEnabled,
+                 new.viewportInteractionDownscaleEnabled)
         case .setTranslateSnapEnabled:
             mark(.translateSnapEnabled, old.translateSnapEnabled, new.translateSnapEnabled)
         case .setRotateSnapEnabled:
@@ -262,6 +270,10 @@ extension EditorStore {
     public var gizmoSpace: EditorGizmoSpace { read(.gizmoSpace, storage.gizmoSpace) }
     public var viewportShadingMode: EditorViewportShadingMode { read(.viewportShadingMode, storage.viewportShadingMode) }
     public var viewportShadowsEnabled: Bool { read(.viewportShadowsEnabled, storage.viewportShadowsEnabled) }
+    public var viewportRenderScalePercent: Int { read(.viewportRenderScalePercent, storage.viewportRenderScalePercent) }
+    public var viewportInteractionDownscaleEnabled: Bool {
+        read(.viewportInteractionDownscaleEnabled, storage.viewportInteractionDownscaleEnabled)
+    }
     public var translateSnapEnabled: Bool { read(.translateSnapEnabled, storage.translateSnapEnabled) }
     public var rotateSnapEnabled: Bool { read(.rotateSnapEnabled, storage.rotateSnapEnabled) }
     public var scaleSnapEnabled: Bool { read(.scaleSnapEnabled, storage.scaleSnapEnabled) }

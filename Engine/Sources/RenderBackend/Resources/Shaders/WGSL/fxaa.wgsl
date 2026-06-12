@@ -1,5 +1,11 @@
+struct PostFrame {
+    uv_scale : vec2<f32>,
+    uv_max : vec2<f32>,
+};
+
 @group(0) @binding(0) var fxaa_sampler : sampler;
 @group(0) @binding(1) var color_texture : texture_2d<f32>;
+@group(0) @binding(2) var<uniform> frame_u : PostFrame;
 
 struct VsOut {
     @builtin(position) position : vec4<f32>,
@@ -8,6 +14,10 @@ struct VsOut {
 
 fn luminance(color : vec3<f32>) -> f32 {
     return dot(color, vec3<f32>(0.299, 0.587, 0.114));
+}
+
+fn sample_color(uv : vec2<f32>) -> vec3<f32> {
+    return textureSample(color_texture, fxaa_sampler, clamp(uv, vec2<f32>(0.0), frame_u.uv_max)).rgb;
 }
 
 @vertex
@@ -32,12 +42,13 @@ fn vs_main(@builtin(vertex_index) vertex_index : u32) -> VsOut {
 @fragment
 fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
     let texel = 1.0 / vec2<f32>(vec2<u32>(textureDimensions(color_texture)));
+    let base_uv = in.uv * frame_u.uv_scale;
 
-    let rgb_m = textureSample(color_texture, fxaa_sampler, in.uv).rgb;
-    let rgb_n = textureSample(color_texture, fxaa_sampler, in.uv + vec2<f32>(0.0, -texel.y)).rgb;
-    let rgb_s = textureSample(color_texture, fxaa_sampler, in.uv + vec2<f32>(0.0, texel.y)).rgb;
-    let rgb_w = textureSample(color_texture, fxaa_sampler, in.uv + vec2<f32>(-texel.x, 0.0)).rgb;
-    let rgb_e = textureSample(color_texture, fxaa_sampler, in.uv + vec2<f32>(texel.x, 0.0)).rgb;
+    let rgb_m = sample_color(base_uv);
+    let rgb_n = sample_color(base_uv + vec2<f32>(0.0, -texel.y));
+    let rgb_s = sample_color(base_uv + vec2<f32>(0.0, texel.y));
+    let rgb_w = sample_color(base_uv + vec2<f32>(-texel.x, 0.0));
+    let rgb_e = sample_color(base_uv + vec2<f32>(texel.x, 0.0));
 
     let luma_m = luminance(rgb_m);
     let luma_n = luminance(rgb_n);
@@ -62,12 +73,12 @@ fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
     dir = clamp(dir * rcp_dir_min, vec2<f32>(-8.0), vec2<f32>(8.0)) * texel;
 
     let rgb_a = 0.5 * (
-        textureSample(color_texture, fxaa_sampler, in.uv + dir * (1.0 / 3.0 - 0.5)).rgb +
-        textureSample(color_texture, fxaa_sampler, in.uv + dir * (2.0 / 3.0 - 0.5)).rgb
+        sample_color(base_uv + dir * (1.0 / 3.0 - 0.5)) +
+        sample_color(base_uv + dir * (2.0 / 3.0 - 0.5))
     );
     let rgb_b = rgb_a * 0.5 + 0.25 * (
-        textureSample(color_texture, fxaa_sampler, in.uv - dir * 0.5).rgb +
-        textureSample(color_texture, fxaa_sampler, in.uv + dir * 0.5).rgb
+        sample_color(base_uv - dir * 0.5) +
+        sample_color(base_uv + dir * 0.5)
     );
 
     let luma_b = luminance(rgb_b);

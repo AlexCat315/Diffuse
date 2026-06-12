@@ -51,9 +51,9 @@ public final class InGameViewGraphBridge {
     ///
     /// Recomposes dirty scopes, runs Yoga layout, renders the node tree into a
     /// `DrawList`, snapshots the result, and publishes it to the render thread.
-    public func tick(width: Int, height: Int) {
+    public func tick(width: Int, height: Int, contentScale: Float = 1) {
         guard width > 0, height > 0, didInstallRoot else { return }
-        ensureTextEnvironment(scale: 1)
+        ensureTextEnvironment(scale: contentScale)
 
         withTextEnvInstalled {
             _ = recomposer.commitAll()
