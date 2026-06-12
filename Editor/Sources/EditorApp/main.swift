@@ -69,9 +69,13 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
         events: events,
         onTick: { dt in
             context.tick(deltaTime: dt)
-            if let bundle = context.bundle {
-                let size = bundle.app.viewportDrawableSize
-                inGameUIHost.tick(width: Int(size.width), height: Int(size.height))
+            if context.bundle != nil {
+                // HUD 布局用视口的逻辑尺寸；光栅化按窗口 content scale。
+                let scale = max(1, ContentScaleHolder.current)
+                let frame = EditorViewportDropTarget.frame
+                let logicalW = Int((frame?.width ?? 1280).rounded())
+                let logicalH = Int((frame?.height ?? 720).rounded())
+                inGameUIHost.tick(width: logicalW, height: logicalH, contentScale: scale)
             }
         },
         onDisplayReady: { display in

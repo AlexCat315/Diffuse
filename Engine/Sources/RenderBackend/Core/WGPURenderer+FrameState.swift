@@ -55,7 +55,7 @@ extension WGPURenderer {
         frameIndex == 0 || frameIndex % 120 == 0
     }
 
-    func registerViewportSurface(texture: GPUTexture, size: RenderDrawableSize) {
+    func registerViewportSurface(texture: GPUTexture, size: RenderDrawableSize, textureSize: RenderDrawableSize) {
         // Keep old texture retainers briefly because UI snapshots can outlive
         // the frame that published them.
         if let publishedTextureRetainer,
@@ -65,6 +65,8 @@ extension WGPURenderer {
                 handle: publishedSurfaceHandle,
                 width: size.width,
                 height: size.height,
+                textureWidth: textureSize.width,
+                textureHeight: textureSize.height,
                 zeroCopy: true
             )
             return
@@ -87,6 +89,8 @@ extension WGPURenderer {
             handle: publishedSurfaceHandle,
             width: size.width,
             height: size.height,
+            textureWidth: textureSize.width,
+            textureHeight: textureSize.height,
             zeroCopy: true
         )
     }

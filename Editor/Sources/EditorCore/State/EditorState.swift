@@ -250,6 +250,12 @@ public struct EditorState: Codable, Sendable {
     public var viewportDirectionalCascadeCount: Int
     public var viewportDirectionalCascadeSplitLambda: Float
     public var viewportShadowDebugMode: EditorViewportShadowDebugMode
+    /// Screen-percentage style render scale for the 3D viewport (100 = native
+    /// pixels). The presentation size stays fixed; the engine renders
+    /// `presentation × percent/100` and the composite quad rescales.
+    public var viewportRenderScalePercent: Int
+    /// Temporarily halve the render resolution during camera / gizmo drags.
+    public var viewportInteractionDownscaleEnabled: Bool
     public var translateSnapEnabled: Bool
     public var rotateSnapEnabled: Bool
     public var scaleSnapEnabled: Bool
@@ -293,6 +299,8 @@ public struct EditorState: Codable, Sendable {
         viewportDirectionalCascadeCount: Int = 1,
         viewportDirectionalCascadeSplitLambda: Float = 0.55,
         viewportShadowDebugMode: EditorViewportShadowDebugMode = .off,
+        viewportRenderScalePercent: Int = 100,
+        viewportInteractionDownscaleEnabled: Bool = false,
         translateSnapEnabled: Bool = false,
         rotateSnapEnabled: Bool = false,
         scaleSnapEnabled: Bool = false,
@@ -336,6 +344,8 @@ public struct EditorState: Codable, Sendable {
         self.viewportDirectionalCascadeCount = Self.sanitizedDirectionalCascadeCount(viewportDirectionalCascadeCount)
         self.viewportDirectionalCascadeSplitLambda = Self.sanitizedDirectionalCascadeSplitLambda(viewportDirectionalCascadeSplitLambda)
         self.viewportShadowDebugMode = viewportShadowDebugMode
+        self.viewportRenderScalePercent = Self.sanitizedRenderScalePercent(viewportRenderScalePercent)
+        self.viewportInteractionDownscaleEnabled = viewportInteractionDownscaleEnabled
         self.translateSnapEnabled = translateSnapEnabled
         self.rotateSnapEnabled = rotateSnapEnabled
         self.scaleSnapEnabled = scaleSnapEnabled
@@ -397,6 +407,8 @@ public struct EditorState: Codable, Sendable {
         case viewportDirectionalCascadeCount
         case viewportDirectionalCascadeSplitLambda
         case viewportShadowDebugMode
+        case viewportRenderScalePercent
+        case viewportInteractionDownscaleEnabled
         case translateSnapEnabled
         case rotateSnapEnabled
         case scaleSnapEnabled
@@ -459,6 +471,8 @@ public struct EditorState: Codable, Sendable {
             viewportDirectionalCascadeCount: try c.decodeIfPresent(Int.self, forKey: .viewportDirectionalCascadeCount) ?? 1,
             viewportDirectionalCascadeSplitLambda: try c.decodeIfPresent(Float.self, forKey: .viewportDirectionalCascadeSplitLambda) ?? 0.55,
             viewportShadowDebugMode: try c.decodeIfPresent(EditorViewportShadowDebugMode.self, forKey: .viewportShadowDebugMode) ?? .off,
+            viewportRenderScalePercent: try c.decodeIfPresent(Int.self, forKey: .viewportRenderScalePercent) ?? 100,
+            viewportInteractionDownscaleEnabled: try c.decodeIfPresent(Bool.self, forKey: .viewportInteractionDownscaleEnabled) ?? false,
             translateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .translateSnapEnabled) ?? false,
             rotateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .rotateSnapEnabled) ?? false,
             scaleSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .scaleSnapEnabled) ?? false,
@@ -503,6 +517,8 @@ public struct EditorState: Codable, Sendable {
         try c.encode(viewportDirectionalCascadeCount, forKey: .viewportDirectionalCascadeCount)
         try c.encode(viewportDirectionalCascadeSplitLambda, forKey: .viewportDirectionalCascadeSplitLambda)
         try c.encode(viewportShadowDebugMode, forKey: .viewportShadowDebugMode)
+        try c.encode(viewportRenderScalePercent, forKey: .viewportRenderScalePercent)
+        try c.encode(viewportInteractionDownscaleEnabled, forKey: .viewportInteractionDownscaleEnabled)
         try c.encode(translateSnapEnabled, forKey: .translateSnapEnabled)
         try c.encode(rotateSnapEnabled, forKey: .rotateSnapEnabled)
         try c.encode(scaleSnapEnabled, forKey: .scaleSnapEnabled)
@@ -536,6 +552,10 @@ public struct EditorState: Codable, Sendable {
 
     public static func sanitizedDirectionalCascadeSplitLambda(_ value: Float) -> Float {
         min(max(value, 0), 1)
+    }
+
+    public static func sanitizedRenderScalePercent(_ value: Int) -> Int {
+        min(max(value, 25), 200)
     }
 }
 

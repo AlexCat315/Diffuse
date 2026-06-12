@@ -91,13 +91,13 @@ public final class EditorGizmoController: @unchecked Sendable {
         }
     }
 
+    /// All screen-space math runs in the logical `frame` coordinates; the
+    /// engine's pixel resolution (render scale, HiDPI) never enters here.
     public struct Snapshot {
         public var mode: Mode
         public var space: GizmoSpace
         public var camera: RenderCamera
         public var frame: ViewportScreenFrame
-        public var drawableWidth: Float
-        public var drawableHeight: Float
         public var entityID: UInt64
         public var entityWorldPosition: SIMD3<Float>
         public var entityWorldMatrix: simd_float4x4
@@ -109,8 +109,6 @@ public final class EditorGizmoController: @unchecked Sendable {
                     space: GizmoSpace = .local,
                     camera: RenderCamera,
                     frame: ViewportScreenFrame,
-                    drawableWidth: Float,
-                    drawableHeight: Float,
                     entityID: UInt64,
                     entityWorldPosition: SIMD3<Float>,
                     entityWorldMatrix: simd_float4x4,
@@ -121,8 +119,6 @@ public final class EditorGizmoController: @unchecked Sendable {
             self.space = space
             self.camera = camera
             self.frame = frame
-            self.drawableWidth = drawableWidth
-            self.drawableHeight = drawableHeight
             self.entityID = entityID
             self.entityWorldPosition = entityWorldPosition
             self.entityWorldMatrix = entityWorldMatrix
