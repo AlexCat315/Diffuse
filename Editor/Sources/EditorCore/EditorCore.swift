@@ -44,6 +44,9 @@ public final class EditorApplication: @unchecked Sendable {
     private var pendingViewportEvents: [InputEvent] = []
     private var _viewportDrawableSize: RenderDrawableSize = .init(width: 1280, height: 720)
     private var lastViewportSurfaceState = ViewportSurfaceState()
+    private var renderGate = EditorViewportRenderGate()
+    private var renderSettingsGeneration: UInt64 = 0
+    private var lastQueuedRenderSettings = RenderSettings()
     private var openSettingsWindowHandler: (() -> Void)?
     private var displayInvalidationHandler: (() -> Void)?
     private var vsyncModeHandler: ((EditorVSyncMode) -> Void)?
@@ -163,7 +166,7 @@ public final class EditorApplication: @unchecked Sendable {
         engine.start(renderSurface: nil, enableViewportSurface: true)
         // 默认启用离屏渲染，让引擎渲染到一个 viewport 纹理交给编辑器显示。
         // 不开启 viewportResolve 时 UI 会一直停在 "Waiting for first render packet"。
-        engine.queueRenderSettings(makeViewportRenderSettings(
+        queueTrackedRenderSettings(makeViewportRenderSettings(
             shadowsEnabled: store.state.viewportShadowsEnabled,
             shadingMode: store.state.viewportShadingMode))
         store.dispatch(.setConnected(true))
@@ -171,19 +174,38 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     public func tick(deltaTime: Double) {
+        // Under the event-driven frame policy the loop can sleep for seconds;
+        // the wake-up tick must not step simulation/animation by the whole gap.
+        let deltaTime = min(max(deltaTime, 0), 0.25)
         let didUpdateFrameTiming = recordFrameTiming(deltaTime)
         store.dispatch(.tickFrame(store.state.frameIndex &+ 1))
         let inputEvents = pendingViewportEvents
         pendingViewportEvents.removeAll(keepingCapacity: true)
         inputState.process(inputEvents)
         scene.tickScene(deltaTime: deltaTime)
+        let drawableSize = effectiveViewportDrawableSize()
+        let jointPalettes = scene.currentJointPaletteMap()
+        let state = store.state
+        let renderViewport = renderGate.shouldRender(
+            signature: EditorViewportRenderGate.Signature(
+                sceneRevision: scene.revision,
+                camera: scene.currentRenderCamera(),
+                drawableSize: drawableSize,
+                settingsGeneration: renderSettingsGeneration,
+                jointPalettes: jointPalettes
+            ),
+            forceContinuous: state.viewportRealtimeEnabled || state.playbackState == .playing,
+            hasViewportInput: !inputEvents.isEmpty,
+            temporalEffectsActive: lastQueuedRenderSettings.enableTAA,
+            now: monotonicNow()
+        )
         engine.tick(
             deltaTime: deltaTime,
             inputEvents: inputEvents,
-            drawableSize: effectiveViewportDrawableSize(),
-            shouldRender: store.state.shouldRender,
+            drawableSize: drawableSize,
+            shouldRender: state.shouldRender && renderViewport,
             renderSceneOverride: scene.currentRenderScene(),
-            jointPaletteOverride: scene.currentJointPaletteMap()
+            jointPaletteOverride: jointPalettes
         )
 
         let surface = engine.currentViewportSurfaceState()
@@ -246,6 +268,17 @@ public final class EditorApplication: @unchecked Sendable {
         store.dispatch(.setViewportInteractionDownscale(enabled))
         logConsole(enabled ? "Viewport interaction downscale enabled"
                            : "Viewport interaction downscale disabled")
+    }
+
+    public func setViewportRealtimeEnabled(_ enabled: Bool) {
+        guard store.state.viewportRealtimeEnabled != enabled else { return }
+        store.dispatch(.setViewportRealtime(enabled))
+        logConsole(enabled ? "Viewport realtime rendering enabled"
+                           : "Viewport renders on demand")
+    }
+
+    private func monotonicNow() -> Double {
+        Double(DispatchTime.now().uptimeNanoseconds) / 1_000_000_000
     }
 
     public func setViewportRenderCompletionHandler(_ handler: (@Sendable (ViewportSurfaceState) -> Void)?) {
@@ -517,6 +550,14 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     public func queueViewportRenderSettings(_ settings: RenderSettings) {
+        queueTrackedRenderSettings(settings)
+    }
+
+    /// Single funnel for render-settings changes: bumps the generation the
+    /// viewport render gate folds into its dirty signature.
+    private func queueTrackedRenderSettings(_ settings: RenderSettings) {
+        renderSettingsGeneration &+= 1
+        lastQueuedRenderSettings = settings
         engine.queueRenderSettings(settings)
     }
 
@@ -524,7 +565,7 @@ public final class EditorApplication: @unchecked Sendable {
         if store.state.viewportShadowsEnabled != enabled {
             store.dispatch(.setViewportShadowsEnabled(enabled))
         }
-        engine.queueRenderSettings(makeViewportRenderSettings(
+        queueTrackedRenderSettings(makeViewportRenderSettings(
             shadowsEnabled: enabled,
             shadingMode: store.state.viewportShadingMode))
         logConsole(enabled ? "Viewport shadows enabled" : "Viewport shadows disabled")
@@ -536,7 +577,7 @@ public final class EditorApplication: @unchecked Sendable {
         if store.state.viewportShadingMode != mode {
             store.dispatch(.setViewportShadingMode(mode))
         }
-        engine.queueRenderSettings(makeViewportRenderSettings(
+        queueTrackedRenderSettings(makeViewportRenderSettings(
             shadowsEnabled: store.state.viewportShadowsEnabled,
             shadingMode: mode))
     }
