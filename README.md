@@ -1,8 +1,16 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-# FlowNoteMauiApp
+
 # Guava Engine
 
-Guava Engine 是基于 Swift 构建的 AI-Native 3D 游戏和影视引擎。
+> 基于 Swift 构建的 AI-Native 3D 游戏与影视引擎。
+
+Guava 的核心命题是：**创作意图、世界状态、运行时执行、AI 理解——不是四层，是同一件事的四个视角。** 人类作者与 AI 共用完全相同的世界变更原语；每一次交互本身就是训练信号；世界是持续维护的语义图，而不是按需序列化的快照。
+
+- 🇬🇧 **English version**: [README.en.md](README.en.md)
+- 📖 **架构设计文档（中文）**：[`docs/architecture.md`](docs/architecture.md)
+- 🗺 **路线图（中文）**：[`docs/roadmap.md`](docs/roadmap.md)
+
+---
 
 ## 构建
 
@@ -28,11 +36,26 @@ swift build --package-path Editor
 
 `bootstrap.py` 跨平台统一：编译 Engine + GuavaUI 的 C/C++ 原生依赖（CMake），Windows 下自动初始化 MSVC 工具链。
 
-后续日常开发只需要 `swift build --package-path Editor`。
+后续日常开发只需要：
+
+```bash
+swift build --package-path Editor
+```
 
 > **强制重编译原生依赖**：`python bootstrap.py --force`
 
-### 第三方依赖
+### 按包独立构建
+
+```bash
+swift build --package-path Engine    # 引擎核心
+swift build --package-path GuavaUI   # UI 框架（运行示例: swift run GuavaUIDemo）
+swift build --package-path Editor    # 编辑器（运行: swift run GuavaEditor）
+swift build --package-path guava-mcp # MCP 服务（运行: swift run GuavaMCP）
+```
+
+---
+
+## 第三方依赖
 
 | 库 | 形式 | 来源 |
 |----|------|------|
@@ -45,7 +68,23 @@ swift build --package-path Editor
 | JoltPhysics | CMake 源码编译 → `.artifactbundle` | submodule `Engine/third-party/jolt` |
 | wgpu-native | 配置时从 gfx-rs 公开 release 下载 | 无 submodule（Rust 项目，CMake 无法源码编译） |
 
-构建模式：每个 SPM 包的 native 依赖都在自己的 `<package>/third-party/` 下，CMake 编译产物落到 `<package>/vendor/`（gitignored），SPM 通过 `.binaryTarget(path:)` 消费。统一模式，跨平台一致。
+构建模式：每个 SPM 包的 native 依赖都在自己的 `<package>/third-party/` 下，CMake 编译产物落到 `<package>/vendor/`（gitignored），SPM 通过 `.binaryTarget(path:)` 消费。
+
+---
+
+## 项目结构
+
+```
+Guava-Engine/
+├── Engine/Sources/       渲染 / 场景 / 物理 / 资产 / AI 运行时 / 观察总线 / 影视管线
+├── GuavaUI/Sources/      声明式 UI 框架（Compose API + wgpu 渲染器）
+├── Editor/Sources/       桌面编辑器（状态机、面板、AI 宿主）
+├── guava-mcp/Sources/    MCP 服务器（暴露 Guava 能力给 LLM agent）
+├── docs/                 架构、路线图、组件与蓝图文档
+└── .github/workflows/    CI 矩阵与 release
+```
+
+---
 
 ## 许可证
 
