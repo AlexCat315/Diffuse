@@ -2,7 +2,7 @@
 # FlowNoteMauiApp
 # Guava Engine
 
-Guava Engine 是基于 Swift 构建的 AI-Native 游戏引擎与影视创作编辑器。
+Guava Engine 是基于 Swift 构建的 AI-Native 3D 游戏和影视引擎。
 
 ## 构建
 
