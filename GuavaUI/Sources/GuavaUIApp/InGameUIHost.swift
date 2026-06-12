@@ -47,8 +47,10 @@ public final class InGameUIHost: InGameUIProviding, @unchecked Sendable {
 
     /// Advance the in-game UI one frame. Call on the **main thread** every
     /// frame — typically inside the `onTick` callback passed to `AppRuntime.run`.
-    public func tick(width: Int, height: Int) {
-        bridge.tick(width: width, height: height)
+    /// `width`/`height` are logical points; pass the window's content scale so
+    /// HUD text rasterizes at physical-pixel resolution.
+    public func tick(width: Int, height: Int, contentScale: Float = 1) {
+        bridge.tick(width: width, height: height, contentScale: contentScale)
     }
 
     // MARK: - InGameUIProviding (render thread)

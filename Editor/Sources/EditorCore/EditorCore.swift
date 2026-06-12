@@ -180,7 +180,7 @@ public final class EditorApplication: @unchecked Sendable {
         engine.tick(
             deltaTime: deltaTime,
             inputEvents: inputEvents,
-            drawableSize: _viewportDrawableSize,
+            drawableSize: effectiveViewportDrawableSize(),
             shouldRender: store.state.shouldRender,
             renderSceneOverride: scene.currentRenderScene(),
             jointPaletteOverride: scene.currentJointPaletteMap()
@@ -213,11 +213,39 @@ public final class EditorApplication: @unchecked Sendable {
         pendingViewportEvents.append(event)
     }
 
+    /// Presentation size of the viewport in physical pixels (reported by
+    /// `ViewportHost`). The engine renders this scaled by the render-scale
+    /// settings — see `effectiveViewportDrawableSize()`.
     public var viewportDrawableSize: RenderDrawableSize { _viewportDrawableSize }
 
     public func setViewportDrawableSize(_ size: RenderDrawableSize) {
         guard _viewportDrawableSize != size else { return }
         _viewportDrawableSize = size
+    }
+
+    private func effectiveViewportDrawableSize() -> RenderDrawableSize {
+        let state = store.state
+        let interacting = state.viewportInteractionDownscaleEnabled
+            && EditorViewportInputController.shared.isContinuousSceneInteractionActive
+        return EditorViewportResolution.effectiveSize(
+            presentation: _viewportDrawableSize,
+            renderScalePercent: state.viewportRenderScalePercent,
+            interactionDownscaleActive: interacting
+        )
+    }
+
+    public func setViewportRenderScalePercent(_ percent: Int) {
+        let sanitized = EditorState.sanitizedRenderScalePercent(percent)
+        guard store.state.viewportRenderScalePercent != sanitized else { return }
+        store.dispatch(.setViewportRenderScalePercent(sanitized))
+        logConsole("Viewport render scale \(sanitized)%")
+    }
+
+    public func setViewportInteractionDownscaleEnabled(_ enabled: Bool) {
+        guard store.state.viewportInteractionDownscaleEnabled != enabled else { return }
+        store.dispatch(.setViewportInteractionDownscale(enabled))
+        logConsole(enabled ? "Viewport interaction downscale enabled"
+                           : "Viewport interaction downscale disabled")
     }
 
     public func setViewportRenderCompletionHandler(_ handler: (@Sendable (ViewportSurfaceState) -> Void)?) {

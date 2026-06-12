@@ -80,10 +80,14 @@ public final class InGameUIRenderer: InGameUIProviding, @unchecked Sendable {
                 storeOp: .store,
                 clearColor: .clear
             )
+            // The scene occupies the top-left `width`×`height` sub-region of a
+            // grow-only allocated target; pin the HUD to the same region.
+            pass.setViewport(x: 0, y: 0, width: Float(width), height: Float(height))
+            pass.setScissorRect(x: 0, y: 0, width: UInt32(width), height: UInt32(height))
             try renderer.render(
                 list: renderThreadList,
                 pass: pass,
-                viewportPx: (snapshot.viewportWidth, snapshot.viewportHeight),
+                viewportPx: (UInt32(width), UInt32(height)),
                 coordinateSpace: (snapshot.logicalWidth, snapshot.logicalHeight)
             )
             pass.end()
