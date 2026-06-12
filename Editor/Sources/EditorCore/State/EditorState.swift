@@ -256,6 +256,9 @@ public struct EditorState: Codable, Sendable {
     public var viewportRenderScalePercent: Int
     /// Temporarily halve the render resolution during camera / gizmo drags.
     public var viewportInteractionDownscaleEnabled: Bool
+    /// Escape hatch for on-demand viewport rendering: render every tick even
+    /// when no packet input changed (Unreal's per-viewport "Realtime").
+    public var viewportRealtimeEnabled: Bool
     public var translateSnapEnabled: Bool
     public var rotateSnapEnabled: Bool
     public var scaleSnapEnabled: Bool
@@ -301,6 +304,7 @@ public struct EditorState: Codable, Sendable {
         viewportShadowDebugMode: EditorViewportShadowDebugMode = .off,
         viewportRenderScalePercent: Int = 100,
         viewportInteractionDownscaleEnabled: Bool = false,
+        viewportRealtimeEnabled: Bool = false,
         translateSnapEnabled: Bool = false,
         rotateSnapEnabled: Bool = false,
         scaleSnapEnabled: Bool = false,
@@ -346,6 +350,7 @@ public struct EditorState: Codable, Sendable {
         self.viewportShadowDebugMode = viewportShadowDebugMode
         self.viewportRenderScalePercent = Self.sanitizedRenderScalePercent(viewportRenderScalePercent)
         self.viewportInteractionDownscaleEnabled = viewportInteractionDownscaleEnabled
+        self.viewportRealtimeEnabled = viewportRealtimeEnabled
         self.translateSnapEnabled = translateSnapEnabled
         self.rotateSnapEnabled = rotateSnapEnabled
         self.scaleSnapEnabled = scaleSnapEnabled
@@ -409,6 +414,7 @@ public struct EditorState: Codable, Sendable {
         case viewportShadowDebugMode
         case viewportRenderScalePercent
         case viewportInteractionDownscaleEnabled
+        case viewportRealtimeEnabled
         case translateSnapEnabled
         case rotateSnapEnabled
         case scaleSnapEnabled
@@ -473,6 +479,7 @@ public struct EditorState: Codable, Sendable {
             viewportShadowDebugMode: try c.decodeIfPresent(EditorViewportShadowDebugMode.self, forKey: .viewportShadowDebugMode) ?? .off,
             viewportRenderScalePercent: try c.decodeIfPresent(Int.self, forKey: .viewportRenderScalePercent) ?? 100,
             viewportInteractionDownscaleEnabled: try c.decodeIfPresent(Bool.self, forKey: .viewportInteractionDownscaleEnabled) ?? false,
+            viewportRealtimeEnabled: try c.decodeIfPresent(Bool.self, forKey: .viewportRealtimeEnabled) ?? false,
             translateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .translateSnapEnabled) ?? false,
             rotateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .rotateSnapEnabled) ?? false,
             scaleSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .scaleSnapEnabled) ?? false,
@@ -519,6 +526,7 @@ public struct EditorState: Codable, Sendable {
         try c.encode(viewportShadowDebugMode, forKey: .viewportShadowDebugMode)
         try c.encode(viewportRenderScalePercent, forKey: .viewportRenderScalePercent)
         try c.encode(viewportInteractionDownscaleEnabled, forKey: .viewportInteractionDownscaleEnabled)
+        try c.encode(viewportRealtimeEnabled, forKey: .viewportRealtimeEnabled)
         try c.encode(translateSnapEnabled, forKey: .translateSnapEnabled)
         try c.encode(rotateSnapEnabled, forKey: .rotateSnapEnabled)
         try c.encode(scaleSnapEnabled, forKey: .scaleSnapEnabled)
