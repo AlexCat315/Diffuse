@@ -5,10 +5,16 @@ struct TonemapUniforms {
     output_srgb : f32,
 };
 
+struct PostFrame {
+    uv_scale : vec2<f32>,
+    uv_max : vec2<f32>,
+};
+
 @group(0) @binding(0) var tone_sampler : sampler;
 @group(0) @binding(1) var hdr_texture : texture_2d<f32>;
 @group(0) @binding(2) var bloom_texture : texture_2d<f32>;
 @group(0) @binding(3) var<uniform> u : TonemapUniforms;
+@group(0) @binding(4) var<uniform> frame_u : PostFrame;
 
 struct VsOut {
     @builtin(position) position : vec4<f32>,
@@ -51,9 +57,10 @@ fn vs_main(@builtin(vertex_index) vertex_index : u32) -> VsOut {
 
 @fragment
 fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
-    var hdr = textureSample(hdr_texture, tone_sampler, in.uv).rgb * max(u.exposure, 0.001);
+    let tex_uv = min(in.uv * frame_u.uv_scale, frame_u.uv_max);
+    var hdr = textureSample(hdr_texture, tone_sampler, tex_uv).rgb * max(u.exposure, 0.001);
     if (u.use_bloom > 0.5) {
-        hdr += textureSample(bloom_texture, tone_sampler, in.uv).rgb * max(u.bloom_mix, 0.0);
+        hdr += textureSample(bloom_texture, tone_sampler, tex_uv).rgb * max(u.bloom_mix, 0.0);
     }
 
     var ldr = aces_film(hdr);

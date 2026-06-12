@@ -49,6 +49,16 @@ public final class EditorViewportInputController: @unchecked Sendable {
         activeInteraction != nil
     }
 
+    /// True while the scene re-renders continuously (camera or gizmo drags) —
+    /// the window where interaction downscale pays off. Clicks and marquee
+    /// selection leave the camera static, so they stay full-res.
+    public var isContinuousSceneInteractionActive: Bool {
+        switch activeInteraction {
+        case .camera, .gizmo: return true
+        case .pendingClick, .marquee, nil: return false
+        }
+    }
+
     public func begin(_ interaction: ActiveInteraction,
                       at point: (x: Float, y: Float),
                       modifiers: KeyModifiers) {

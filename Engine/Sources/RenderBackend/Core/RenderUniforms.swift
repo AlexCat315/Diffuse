@@ -39,3 +39,12 @@ struct StylizedCharacterUniforms {
     var inkWashColor: SIMD4<Float>
     var params: SIMD4<Float>
 }
+
+/// Shared per-frame uniforms for fullscreen post passes. Targets are
+/// allocated grow-only, so the rendered image occupies the `uv_scale`
+/// sub-region of each texture; `uv_max` is the half-texel-inset clamp bound
+/// neighbor taps must not exceed.
+struct PostFrameUniforms {
+    /// xy = used / allocated, zw = (used - 0.5) / allocated.
+    var uvScaleMax: SIMD4<Float>
+}
