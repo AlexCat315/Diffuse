@@ -136,7 +136,7 @@ public struct RenderInstance: Sendable {
     }
 }
 
-public struct RenderCamera: Sendable {
+public struct RenderCamera: Sendable, Equatable {
     public var eye: SIMD3<Float>
     public var target: SIMD3<Float>
     public var up: SIMD3<Float>

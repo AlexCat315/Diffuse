@@ -8,6 +8,10 @@ extension TextField {
     /// Per-instance editing state. Lives on the captured closures so it
     /// persists across redraws without recompose.
     final class FieldState {
+        /// Surface node owning this state. Caret/selection changes happen
+        /// outside recompose, so they must invalidate the node's cached layer
+        /// themselves (`LayerAwareNodeRenderer` replays clean layers verbatim).
+        weak var hostNode: Node?
         /// Cursor index measured in `Character` units from the start of `text`.
         var cursorIndex: Int = 0
         /// Selection anchor in `Character` units; `nil` means no selection.
@@ -49,11 +53,29 @@ extension TextField {
         var isComposing: Bool { !compositionText.isEmpty }
     }
 
+    /// Clamp persisted indices into the current text. `FieldState` outlives
+    /// recompose while the bound text can be rewritten underneath it (entity
+    /// switch, formatter, programmatic set); a stale `cursorIndex` past the
+    /// new end must never reach `String.index(_:offsetBy:)` math.
+    func normalizeIndices(_ state: FieldState) {
+        let count = text.wrappedValue.count
+        state.cursorIndex = clamp(state.cursorIndex, 0, count)
+        if let anchor = state.selectionAnchor {
+            let bounded = clamp(anchor, 0, count)
+            state.selectionAnchor = bounded == state.cursorIndex ? nil : bounded
+        }
+    }
+
     /// Returns the active selection range as a half-open `[low, high)` in
-    /// `Character` units, or nil when there is no selection.
+    /// `Character` units, or nil when there is no selection. Bounds are
+    /// clamped to the current text so stale state can't index out of range.
     func selectionRange(_ state: FieldState) -> Range<Int>? {
         guard let anchor = state.selectionAnchor, anchor != state.cursorIndex else { return nil }
-        return min(anchor, state.cursorIndex)..<max(anchor, state.cursorIndex)
+        let count = text.wrappedValue.count
+        let lower = clamp(min(anchor, state.cursorIndex), 0, count)
+        let upper = clamp(max(anchor, state.cursorIndex), 0, count)
+        guard lower != upper else { return nil }
+        return lower..<upper
     }
 
     func substring(_ text: String, _ range: Range<Int>) -> String {
@@ -157,7 +179,11 @@ extension TextField {
         recordCaretActivity(state)
     }
 
+    /// Every caret/selection mutation funnels through here: reset the blink
+    /// phase and invalidate the field's cached render layer so the change is
+    /// visible on the very next frame (frames may be event-driven).
     func recordCaretActivity(_ state: FieldState) {
         state.lastCaretActivity = TimingTrace.now()
+        state.hostNode?.markRenderDirty(reason: .styleSet(field: "textFieldCaret"))
     }
 }

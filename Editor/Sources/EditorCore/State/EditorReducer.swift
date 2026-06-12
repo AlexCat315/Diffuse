@@ -23,6 +23,7 @@ public enum EditorAction: Sendable {
     case setViewportShadowsEnabled(Bool)
     case setViewportRenderScalePercent(Int)
     case setViewportInteractionDownscale(Bool)
+    case setViewportRealtime(Bool)
     case setTranslateSnapEnabled(Bool)
     case setRotateSnapEnabled(Bool)
     case setScaleSnapEnabled(Bool)
@@ -125,6 +126,9 @@ public enum EditorReducer {
 
         case let .setViewportInteractionDownscale(enabled):
             state.viewportInteractionDownscaleEnabled = enabled
+
+        case let .setViewportRealtime(enabled):
+            state.viewportRealtimeEnabled = enabled
 
         case let .setTranslateSnapEnabled(enabled):
             state.translateSnapEnabled = enabled

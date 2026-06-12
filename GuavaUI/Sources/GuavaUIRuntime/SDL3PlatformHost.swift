@@ -705,6 +705,9 @@ public final class SDL3PlatformHost: PlatformHost {
 
         session.lastTextCursorAnimationTick = now
         session.needsDisplay = true
+        // The caret blink phase is computed inside the field's draw closure;
+        // invalidate its cached layer or the composite replays the old slice.
+        session.focusChain.focused?.markRenderDirty(reason: .styleSet(field: "textFieldCaretBlink"))
     }
 
 }

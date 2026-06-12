@@ -64,6 +64,7 @@ extension TextField {
                     state.selectionAnchor = state.cursorIndex
                 }
                 state.cursorIndex = target
+                textField.recordCaretActivity(state)
                 return .handled
             }
             registry.setHover(node) { phase in

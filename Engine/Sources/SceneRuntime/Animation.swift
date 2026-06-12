@@ -29,7 +29,7 @@ public struct AnimationPlayer: RuntimeComponent, Sendable, Equatable {
 /// Per-entity skinning matrix palette ready for the GPU vertex shader.
 ///
 /// Index i = joint_palette[i] = nodeWorldMatrix[jointNodeIndex[i]] × inverseBindMatrix[i]
-public struct JointPalette: Sendable {
+public struct JointPalette: Sendable, Equatable {
     public var matrices: [simd_float4x4]
 
     public init(matrices: [simd_float4x4] = []) {
@@ -45,7 +45,7 @@ public struct JointPalette: Sendable {
 ///
 /// Written by `AnimationRuntime` each frame; read by the render backend when
 /// building per-instance bind groups for skinned meshes.
-public struct JointPaletteMap: Sendable {
+public struct JointPaletteMap: Sendable, Equatable {
     public var palettes: [EntityID: JointPalette]
 
     public init(palettes: [EntityID: JointPalette] = [:]) {
