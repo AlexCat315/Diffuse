@@ -1,3 +1,5 @@
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+# FlowNoteMauiApp
 # Guava Engine
 
 Guava Engine 是基于 Swift 构建的 AI-Native 游戏引擎与影视创作编辑器。
