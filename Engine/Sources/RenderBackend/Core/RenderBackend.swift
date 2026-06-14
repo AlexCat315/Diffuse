@@ -99,6 +99,16 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     var particleStorageBuffer: GPUBuffer?
     var particleStorageCapacity: Int = 0
 
+    // Opaque-render cache (see WGPURenderer+OpaqueCache): when only the
+    // transparent particles change between frames, the expensive opaque passes
+    // (depth/shadow/base/ssao/ssr) are skipped and this lit-opaque HDR snapshot
+    // is reused, re-running only the particle overlay + bloom/tonemap.
+    var opaqueSnapshotTarget: RenderTextureTarget?
+    var opaqueCacheHash: Int?
+    var opaqueCacheValid = false
+    /// Set each frame: whether the opaque passes were served from the cache.
+    public private(set) var lastFrameUsedOpaqueCache = false
+
     let dynamicOffsetThreshold = 64
     let dynamicUniformStride: UInt64 = 256
 
@@ -255,7 +265,23 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             var bloomTarget = sceneColorTarget
             let encoder = try backend.createCommandEncoder()
 
+            // Opaque-render cache: when the opaque inputs (camera, geometry,
+            // lights, settings, skinning) are unchanged from the last frame, the
+            // lit-opaque HDR can be reused and every opaque pass skipped — only
+            // the transparent particle overlay + bloom/tonemap re-run. Disabled
+            // for TAA (cross-frame history) and non-HDR stages.
+            let opaqueHash = computeOpaqueHash(packet: packet)
+            let canUseOpaqueCache = usesHDRFrameGraph
+                && !activeRenderSettings.enableTAA
+                && opaqueSnapshotTarget != nil
+                && sceneColorTarget != nil
+            let opaqueCacheHit = canUseOpaqueCache && opaqueCacheValid && opaqueCacheHash == opaqueHash
+            lastFrameUsedOpaqueCache = opaqueCacheHit
+
             for passKind in framePlan.passes {
+                if opaqueCacheHit, RenderPassKind.opaquePasses.contains(passKind) {
+                    continue
+                }
                 let passStartNS = DispatchTime.now().uptimeNanoseconds
                 var passDrawCallCount = 0
                 switch passKind {
@@ -316,6 +342,26 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                         bundleRecordNS &+= report.bundleRecordNS
 
                     case .particles:
+                        // Opaque-cache boundary: the image up to here is pure
+                        // lit-opaque. On a hit, restore the snapshot into the
+                        // scene target (opaque passes were skipped); on a miss,
+                        // snapshot it so the next static frame can reuse it.
+                        if canUseOpaqueCache, let snapshot = opaqueSnapshotTarget {
+                            if opaqueCacheHit, let scene = sceneColorTarget {
+                                encoder.copyTextureToTexture(source: snapshot.texture,
+                                                             destination: scene.texture,
+                                                             width: configuredSize.width,
+                                                             height: configuredSize.height)
+                                hdrCurrent = scene
+                            } else if let current = hdrCurrent {
+                                encoder.copyTextureToTexture(source: current.texture,
+                                                             destination: snapshot.texture,
+                                                             width: configuredSize.width,
+                                                             height: configuredSize.height)
+                                opaqueCacheHash = opaqueHash
+                                opaqueCacheValid = true
+                            }
+                        }
                         let particlePipeline = try ensureParticlePipeline(hdr: usesHDRFrameGraph)
                         passDrawCallCount = try encodeParticlePass(
                             encoder: encoder,
@@ -1064,6 +1110,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             postProcessTargetB = nil
             ldrPostProcessTarget = nil
             historyTarget = nil
+            opaqueSnapshotTarget = nil
+            opaqueCacheValid = false
 
             depthView = nil
             depthTexture = nil
@@ -1099,6 +1147,10 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         if needsTAAHistory, historyTarget == nil {
             historyTarget = try makeRenderTarget(width: size.width, height: size.height, format: hdrFormat)
             historyValid = false
+        }
+        if opaqueSnapshotTarget == nil {
+            opaqueSnapshotTarget = try makeRenderTarget(width: size.width, height: size.height, format: hdrFormat)
+            opaqueCacheValid = false
         }
     }
 
