@@ -136,6 +136,22 @@ public struct RenderInstance: Sendable {
     }
 }
 
+/// One camera-facing billboard particle, already transformed to world space and
+/// ready for the render backend. Built each frame from live `ParticleEmitter`
+/// pools; the renderer uploads these into a storage buffer and draws them as
+/// instanced quads.
+public struct RenderParticle: Sendable, Equatable {
+    public var position: SIMD3<Float>
+    public var size: Float
+    public var color: SIMD4<Float>
+
+    public init(position: SIMD3<Float>, size: Float, color: SIMD4<Float>) {
+        self.position = position
+        self.size = size
+        self.color = color
+    }
+}
+
 public struct RenderCamera: Sendable, Equatable {
     public var eye: SIMD3<Float>
     public var target: SIMD3<Float>
@@ -164,14 +180,18 @@ public struct RenderScene: Sendable {
     public var instances: [RenderInstance]
     public var lights: [RenderLight]
     public var environment: RenderEnvironment
+    /// World-space billboard particles, pre-sorted back-to-front for the camera.
+    public var particles: [RenderParticle]
 
     public init(camera: RenderCamera,
                 instances: [RenderInstance] = [],
                 lights: [RenderLight] = [],
-                environment: RenderEnvironment = .fallback) {
+                environment: RenderEnvironment = .fallback,
+                particles: [RenderParticle] = []) {
         self.camera = camera
         self.instances = instances
         self.lights = lights
         self.environment = environment
+        self.particles = particles
     }
 }

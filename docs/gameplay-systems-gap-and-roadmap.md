@@ -16,7 +16,7 @@
 | 脚本 | ~35% | 运行时绑定可用,但无编辑器 / LSP / 热重载 / 外部脚本文件 |
 | 音频 | ~25% | 能放 WAV + 粗距离衰减;无真 3D、无流式、无多通道 |
 | 动画 | ~15% | 只有单 clip 蒙皮播放;混合 / 事件 / IK / morph 全无 |
-| 粒子 | ~10% | 仅 CPU 模拟原型,**未接渲染**,屏幕上不可见 |
+| 粒子 | ~25% | **G1 已完成**:CPU 模拟每帧推进 + billboard 渲染(alpha 混合、按相机排序);仍缺 GPU / 多发射器形状 / 碰撞 / 矢量场 |
 
 ---
 
@@ -79,20 +79,21 @@
 - [ ] **分屏多监听器** — `resolveListener` 只取第一个 listener
 - [ ] 真实距离模型(线性 / 对数 / 自定义曲线)、衰减半径可配
 
-## 4. 粒子系统 — ~10%
+## 4. 粒子系统 — ~25%
 
-**相关文件**:[Particles.swift](../Engine/Sources/SceneRuntime/Particles.swift)
+**相关文件**:[Particles.swift](../Engine/Sources/SceneRuntime/Particles.swift)、[WGPURenderer+ParticleResources.swift](../Engine/Sources/RenderBackend/Core/WGPURenderer+ParticleResources.swift)、[particles.wgsl](../Engine/Sources/RenderBackend/Resources/Shaders/WGSL/particles.wgsl)
 
 已实现(CPU 模拟原型):
 - `ParticleEmitter` 组件:重力积分、生命周期老化 / 剔除、连续 + 突发发射、确定性 PRNG
+- **(G1)** 每帧推进(schedule `animationAndScripts` 阶段)→ 提取为世界空间 `RenderParticle`(按相机 back-to-front 排序)→ billboard 渲染(instanced quad + 软圆形 sprite + alpha 混合,深度只读)
 
 缺失:
-- [ ] **未接渲染管线** — `ParticleEmitter` 不被任何 RenderBackend / RenderExtraction 消费,**屏幕上看不到粒子**(最关键)
+- [x] ~~未接渲染管线~~ — **G1 已完成**:billboard 实例化渲染
 - [ ] **GPU 模拟、多线程 CPU 模拟**
 - [ ] **发射器类型** — 仅球形 spawn,无 box / cone / static mesh / skinned mesh
 - [ ] **属性分布** — 仅 start→end 线性 lerp,无曲线 / 随机范围
 - [ ] **碰撞**(world / plane / depth buffer)
-- [ ] **渲染特性**:billboard / 3D 粒子 / 软粒子 / 纹理动画 / 排序
+- [ ] **渲染特性**:✅ billboard / ✅ 软粒子 / ✅ 排序;仍缺 3D 网格粒子 / 纹理动画 / 加法混合开关
 - [ ] **矢量场**
 
 > 当前是孤立的模拟原型,作为可见功能 ≈ 0。
@@ -119,17 +120,21 @@
 
 按投入产出排序(G = Gameplay,区别于 roadmap.md 的 M 里程碑)。
 
-### G1 — 粒子接渲染 ✦ 最划算
+### G1 — 粒子接渲染 ✦ 最划算 ✅ 已完成(2026-06-14)
 
 模拟已写好,只差出图。完成后 10% → 可用。
 
-任务:
-- `RenderExtraction` 收集 `ParticleEmitter.particles` → 新增 `ParticleBatch` 进 `RenderPacket`
-- `RenderBackend` 新增 billboard 管线(instanced quad + `particles.wgsl`):面向相机、按 size/color 着色、alpha blend
-- SimulationThread tick 调用 `advanceParticles(deltaTime:)`(已存在)
-- 排序:按到相机距离做 back-to-front(透明正确性)
+任务(全部完成):
+- [x] schedule `animationAndScripts` 阶段每帧推进所有 `ParticleEmitter`
+- [x] `extractRenderScene` 收集 alive 粒子 → 世界空间 `RenderScene.particles`(随 `RenderPacket` 下发)
+- [x] `RenderBackend` 新增 `.particles` pass + billboard 管线(`particles.wgsl`:instanced quad、相机对齐、软圆形 sprite、alpha 混合、深度只读)
+- [x] 排序:提取时按到相机距离 back-to-front
+- [x] 编辑器集成:编辑器是事件驱动帧(空闲不渲染),粒子是连续动画会被冻结。`EditorSceneAdapter.hasActiveParticles()`(发射中或有存活粒子)接入 `EditorCore.tick` 的 `forceContinuous`,有存活粒子时自动连续帧,粒子播完/发射器关闭后回到空闲省电
+- [x] 检查器「添加组件」按钮(`InspectorPanel` 的 `AddComponentButton` → 复用既有 `addComponent`/`addableComponentKinds`):此前 `addComponent` API 存在却从未接 UI,导致已保存场景无法添加任何组件;现在选中实体即可加 Particle Emitter(及全部其它组件)
 
-验收:场景里放一个 emitter,运行模式下看到喷射并随生命周期淡出;FPS 不掉。
+验收:`swift build` 通过;`ParticleTests` / `ShaderCatalog` / `RenderExtraction`(含新增粒子提取+排序+ bootstrap 端到端用例)全绿;GPU smoke 的 scene-contract / stylized / 新增 particle 像素读回用例在真实 Metal 设备上通过;Editor `EditorSceneAdapter` 的 `hasActiveParticles` 用例绿。预览场景已植入 "Sparks" 发射器(Hero 头顶),编辑器空闲也会自动播放。
+
+> 后续(非 G1):GPU 模拟、多发射器形状、碰撞、矢量场、加法混合开关、3D 网格粒子。
 
 ### G2 — 动画混合 + 状态机
 
