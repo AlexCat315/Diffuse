@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <algorithm>
 
 static int channelCount(const Imf::ChannelList& channels) {
     int n = 0;
