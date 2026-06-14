@@ -15,6 +15,15 @@ public enum RenderPassKind: String, Sendable, CaseIterable {
     case fxaa
     case tonemap
     case viewportResolve
+
+    /// Passes whose output is a pure function of the opaque scene inputs
+    /// (geometry, lights, camera, settings) — i.e. everything before the
+    /// transparent `particles` overlay. The opaque-render cache may skip these
+    /// and reuse a snapshot when those inputs are unchanged.
+    public static let opaquePasses: Set<RenderPassKind> = [
+        .depthPrepass, .shadowPass, .skybox, .basePass,
+        .outline, .inkPaperPost, .ssao, .ssr, .taa
+    ]
 }
 
 public struct RenderFramePlan: Sendable, Equatable {
@@ -85,11 +94,12 @@ enum RenderFramePlanner {
                 }
         }
 
-        // Transparent billboard particles composite on top of opaque + stylized
-        // output, before any screen-space post (ssao/ssr/taa/bloom/tonemap).
-        if let lastOpaque = passes.lastIndex(where: {
-            $0 == .basePass || $0 == .outline || $0 == .inkPaperPost
-        }) {
+        // Transparent billboard particles composite after every opaque and
+        // opaque-screen-space pass (so they sit on the lit, AO'd, reflected
+        // image) but before bloom/tonemap. This also marks the "lit opaque"
+        // boundary that the opaque-render cache snapshots: everything up to
+        // (and excluding) particles is a pure function of the opaque inputs.
+        if let lastOpaque = passes.lastIndex(where: { RenderPassKind.opaquePasses.contains($0) }) {
             passes.insert(.particles, at: passes.index(after: lastOpaque))
         }
 
