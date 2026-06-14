@@ -159,6 +159,77 @@ struct RenderBackendGPUSmokeTests {
         #expect(coveredPixels > Int(width * height) / 32)
     }
 
+    @Test("opaque-cache overlay frame matches a full render and camera change invalidates it",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU opaque-cache smoke test"))
+    func opaqueCacheOverlayMatchesFullRender() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+        renderer.initialize()
+
+        let width: UInt32 = 64
+        let height: UInt32 = 64
+        // r5 HDR path with bloom, TAA off → opaque cache is eligible.
+        let settings = RenderSettings(stage: .r5PostProcess,
+                                      enableBloom: true,
+                                      enableOffscreenViewport: true)
+        func packet(eye: SIMD3<Float>) -> RenderPacket {
+            RenderPacket(
+                frameIndex: 0,
+                deltaTime: 1.0 / 60.0,
+                drawableSize: RenderDrawableSize(width: width, height: height),
+                scene: Self.makeOpaqueCacheScene(cameraEye: eye),
+                sceneSnapshot: SceneRuntimeSnapshot(entityCount: 1, revision: 1),
+                renderSettings: settings,
+                simulationTimeSeconds: 0
+            )
+        }
+
+        // Frame 0: cache miss → full render, populates the opaque snapshot.
+        renderer.render(packet: packet(eye: SIMD3<Float>(0, 0, 3.2)))
+        #expect(renderer.lastFrameUsedOpaqueCache == false)
+        guard let tex0 = renderer.offscreenColorTexture else {
+            Issue.record("expected offscreen color texture")
+            return
+        }
+        let full = try readbackBGRA8(texture: tex0, width: width, height: height, backend: backend)
+
+        // Frame 1: identical inputs → cache hit, opaque passes skipped.
+        renderer.render(packet: packet(eye: SIMD3<Float>(0, 0, 3.2)))
+        #expect(renderer.lastFrameUsedOpaqueCache == true)
+        guard let tex1 = renderer.offscreenColorTexture else {
+            Issue.record("expected offscreen color texture")
+            return
+        }
+        let cached = try readbackBGRA8(texture: tex1, width: width, height: height, backend: backend)
+
+        // The overlay path must reproduce the full render (allow tiny rounding).
+        #expect(full.count == cached.count)
+        var maxDiff = 0
+        for i in full.indices where i < cached.count {
+            maxDiff = max(maxDiff, full[i].distance(from: cached[i]))
+        }
+        #expect(maxDiff <= 2)
+
+        // Moving the camera changes the opaque inputs → cache must invalidate.
+        renderer.render(packet: packet(eye: SIMD3<Float>(1.6, 0.5, 3.0)))
+        #expect(renderer.lastFrameUsedOpaqueCache == false)
+    }
+
     @Test("stylized outline pass compiles and renders through the HDR viewport path",
           .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU stylized outline smoke test"))
     func stylizedOutlinePassCompilesAndRenders() throws {
@@ -557,6 +628,39 @@ struct RenderBackendGPUSmokeTests {
                     size: 1.2,
                     color: SIMD4<Float>(1.0, 0.5, 0.1, 1.0)
                 )
+            ]
+        )
+    }
+
+    private static func makeOpaqueCacheScene(cameraEye: SIMD3<Float>) -> RenderScene {
+        RenderScene(
+            camera: RenderCamera(
+                eye: cameraEye,
+                target: .zero,
+                up: SIMD3<Float>(0, 1, 0),
+                fovYRadians: .pi / 4,
+                near: 0.1,
+                far: 20
+            ),
+            instances: [
+                RenderInstance(
+                    meshIndex: 0,
+                    transform: matrix_identity_float4x4,
+                    colorTint: SIMD3<Float>(0.70, 0.72, 0.80),
+                    material: RenderMaterial(baseColorFactor: SIMD4<Float>(0.70, 0.72, 0.80, 1))
+                )
+            ],
+            lights: [
+                RenderLight(
+                    type: .directional,
+                    direction: SIMD3<Float>(0, 0, -1),
+                    color: SIMD3<Float>(1, 0.96, 0.9),
+                    intensity: 1.2
+                )
+            ],
+            particles: [
+                RenderParticle(position: SIMD3<Float>(0, 0.6, 0), size: 0.8,
+                               color: SIMD4<Float>(1.0, 0.45, 0.12, 1.0))
             ]
         )
     }
