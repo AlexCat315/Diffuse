@@ -172,6 +172,16 @@ let package = Package(
             publicHeadersPath: "include",
             cxxSettings: [
                 .define("LUNASVG_BUILD_STATIC"),
+            ],
+            // GNU ld resolves static archives in a single left-to-right pass and
+            // does not re-scan an archive once passed. lunasvg references plutovg
+            // symbols, so on Linux the two archives must be wrapped in a group to
+            // resolve the cross-references. macOS ld64 re-scans automatically.
+            linkerSettings: [
+                .unsafeFlags(
+                    ["-Xlinker", "--start-group", "-llunasvg", "-lplutovg", "-Xlinker", "--end-group"],
+                    .when(platforms: [.linux])
+                ),
             ]
         ),
 
