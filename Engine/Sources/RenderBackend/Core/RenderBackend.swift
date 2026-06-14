@@ -92,6 +92,13 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     var jointPaletteBuffers: [EntityID: GPUBuffer] = [:]
     var historyValid = false
 
+    // Particle billboard pass (see WGPURenderer+ParticleResources)
+    var particlePipelineLDR: GPURenderPipeline?
+    var particlePipelineHDR: GPURenderPipeline?
+    var particleUniformBuffer: GPUBuffer?
+    var particleStorageBuffer: GPUBuffer?
+    var particleStorageCapacity: Int = 0
+
     let dynamicOffsetThreshold = 64
     let dynamicUniformStride: UInt64 = 256
 
@@ -224,6 +231,9 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             if framePlan.passes.contains(.outline) {
                 _ = try ensureOutlinePipeline(hdr: usesHDRFrameGraph)
             }
+            if framePlan.passes.contains(.particles) {
+                _ = try ensureParticlePipeline(hdr: usesHDRFrameGraph)
+            }
             try ensureFullscreenResources()
             writePostFrameUniforms()
 
@@ -304,6 +314,17 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                         renderBundleCount += report.renderBundleCount
                         renderBundleParallelJobs += report.parallelJobCount
                         bundleRecordNS &+= report.bundleRecordNS
+
+                    case .particles:
+                        let particlePipeline = try ensureParticlePipeline(hdr: usesHDRFrameGraph)
+                        passDrawCallCount = try encodeParticlePass(
+                            encoder: encoder,
+                            colorView: usesHDRFrameGraph ? hdrCurrent?.view ?? colorTarget.view : colorTarget.view,
+                            depthView: depthView,
+                            pipeline: particlePipeline,
+                            scene: packet.scene,
+                            viewProj: cameraMatrices.viewProjection
+                        )
 
                     case .outline:
                         let outlinePipeline = try ensureOutlinePipeline(hdr: usesHDRFrameGraph)
@@ -453,7 +474,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                     cpuBaseEncodeNS &+= passElapsedNS
                 case .inkPaperPost, .ssao, .ssr, .taa, .bloom, .tonemap, .fxaa:
                     cpuPostProcessEncodeNS &+= passElapsedNS
-                case .outline, .depthPrepass, .shadowPass, .viewportResolve:
+                case .particles, .outline, .depthPrepass, .shadowPass, .viewportResolve:
                     break
                 }
             }
@@ -472,7 +493,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 case .rgba8Unorm:  formatHint = "rgba8Unorm"
                 default:           formatHint = "bgra8Unorm"
                 }
-                try uiProvider.renderInGameUI(
+                uiProvider.renderInGameUI(
                     canvas: packet.inGameCanvas,
                     commandEncoder: encoder,
                     colorView: colorTarget.view,
@@ -1130,7 +1151,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     /// Restrict rasterization to the used sub-region of the (potentially
     /// larger) frame-graph targets. Call right after `beginRenderPass` on
     /// every frame-sized pass.
-    private func applyUsedRegion(_ pass: GPURenderPassEncoder) {
+    func applyUsedRegion(_ pass: GPURenderPassEncoder) {
         pass.setViewport(x: 0, y: 0,
                          width: Float(configuredSize.width),
                          height: Float(configuredSize.height))

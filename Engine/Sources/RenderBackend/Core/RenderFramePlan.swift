@@ -5,6 +5,7 @@ public enum RenderPassKind: String, Sendable, CaseIterable {
     case shadowPass
     case skybox
     case basePass
+    case particles
     case outline
     case inkPaperPost
     case ssao
@@ -82,6 +83,14 @@ enum RenderFramePlanner {
                 if settings.enableOffscreenViewport {
                     passes.append(.viewportResolve)
                 }
+        }
+
+        // Transparent billboard particles composite on top of opaque + stylized
+        // output, before any screen-space post (ssao/ssr/taa/bloom/tonemap).
+        if let lastOpaque = passes.lastIndex(where: {
+            $0 == .basePass || $0 == .outline || $0 == .inkPaperPost
+        }) {
+            passes.insert(.particles, at: passes.index(after: lastOpaque))
         }
 
         return RenderFramePlan(passes: passes)

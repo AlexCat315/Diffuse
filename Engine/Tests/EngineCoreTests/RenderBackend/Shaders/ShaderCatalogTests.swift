@@ -95,8 +95,8 @@ struct ShaderCatalogTests {
             )
         )
 
-        let expectedR4: [RenderPassKind] = [.depthPrepass, .shadowPass, .skybox, .basePass, .tonemap, .viewportResolve]
-        let expectedR5: [RenderPassKind] = [.depthPrepass, .skybox, .basePass, .ssao, .ssr, .taa, .bloom, .tonemap, .fxaa, .viewportResolve]
+        let expectedR4: [RenderPassKind] = [.depthPrepass, .shadowPass, .skybox, .basePass, .particles, .tonemap, .viewportResolve]
+        let expectedR5: [RenderPassKind] = [.depthPrepass, .skybox, .basePass, .particles, .ssao, .ssr, .taa, .bloom, .tonemap, .fxaa, .viewportResolve]
 
         #expect(r4.passes == expectedR4)
         #expect(r5.passes == expectedR5)
@@ -129,7 +129,7 @@ struct ShaderCatalogTests {
         #expect(renderSettings.enableShadows)
         renderSettings.enableShadows = false
         #expect(!renderSettings.shadowSettings.enabled)
-        #expect(RenderFramePlanner.makePlan(settings: renderSettings).passes == [.depthPrepass, .skybox, .basePass, .tonemap])
+        #expect(RenderFramePlanner.makePlan(settings: renderSettings).passes == [.depthPrepass, .skybox, .basePass, .particles, .tonemap])
     }
 
     @Test("stylized character shading schedules outline after base pass")
@@ -142,7 +142,7 @@ struct ShaderCatalogTests {
             )
         )
 
-        #expect(plan.passes == [.depthPrepass, .skybox, .basePass, .outline, .inkPaperPost, .bloom, .tonemap])
+        #expect(plan.passes == [.depthPrepass, .skybox, .basePass, .outline, .inkPaperPost, .particles, .bloom, .tonemap])
     }
 
     @Test("stylized character settings carry card ink style parameters")

@@ -90,6 +90,75 @@ struct RenderBackendGPUSmokeTests {
         #expect(coveredPixels > Int(width * height) / 32)
     }
 
+    @Test("particle billboard pass paints the framebuffer",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU particle smoke test"))
+    func particlePassPaintsFramebuffer() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+
+        renderer.initialize()
+
+        let width: UInt32 = 64
+        let height: UInt32 = 64
+        let packet = RenderPacket(
+            frameIndex: 0,
+            deltaTime: 1.0 / 60.0,
+            drawableSize: RenderDrawableSize(width: width, height: height),
+            scene: Self.makeParticleScene(),
+            sceneSnapshot: SceneRuntimeSnapshot(entityCount: 1, revision: 1),
+            renderSettings: RenderSettings(
+                stage: .r3ViewportInterop,
+                enableOffscreenViewport: true
+            ),
+            simulationTimeSeconds: 0
+        )
+
+        renderer.render(packet: packet)
+
+        let stats = renderer.currentFrameStats()
+        #expect(stats.activePasses.contains(.particles))
+        #expect(stats.passDrawCallCounts[.particles] == 1)
+
+        guard let texture = renderer.offscreenColorTexture else {
+            Issue.record("expected renderer to retain an offscreen color texture")
+            return
+        }
+
+        let pixels = try readbackBGRA8(texture: texture, width: width, height: height, backend: backend)
+        try writeDebugPPMIfRequested(pixels: pixels, width: width, height: height)
+
+        // Bluish clear color; the billboard is bright orange and covers the center.
+        let background = BGRAPixel(
+            r: UInt8(0.05 * 255.0),
+            g: UInt8(0.06 * 255.0),
+            b: UInt8(0.08 * 255.0),
+            a: 255
+        )
+        let center = pixels[Int(height / 2) * Int(width) + Int(width / 2)]
+        #expect(center.distance(from: background) > 64)
+        #expect(center.r > 150)
+        #expect(center.r > center.b)
+
+        let coveredPixels = pixels.count { $0.distance(from: background) > 48 }
+        #expect(coveredPixels > Int(width * height) / 32)
+    }
+
     @Test("stylized outline pass compiles and renders through the HDR viewport path",
           .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU stylized outline smoke test"))
     func stylizedOutlinePassCompilesAndRenders() throws {
@@ -469,6 +538,26 @@ struct RenderBackendGPUSmokeTests {
                 ambientIntensity: 0.18,
                 exposure: 1
             )
+        )
+    }
+
+    private static func makeParticleScene() -> RenderScene {
+        RenderScene(
+            camera: RenderCamera(
+                eye: SIMD3<Float>(0, 0, 3.2),
+                target: .zero,
+                up: SIMD3<Float>(0, 1, 0),
+                fovYRadians: .pi / 4,
+                near: 0.1,
+                far: 20
+            ),
+            particles: [
+                RenderParticle(
+                    position: .zero,
+                    size: 1.2,
+                    color: SIMD4<Float>(1.0, 0.5, 0.1, 1.0)
+                )
+            ]
         )
     }
 

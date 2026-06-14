@@ -194,7 +194,8 @@ public final class EditorApplication: @unchecked Sendable {
                 settingsGeneration: renderSettingsGeneration,
                 jointPalettes: jointPalettes
             ),
-            forceContinuous: state.viewportRealtimeEnabled || state.playbackState == .playing,
+            forceContinuous: state.viewportRealtimeEnabled || state.playbackState == .playing
+                || scene.hasActiveParticles(),
             hasViewportInput: !inputEvents.isEmpty,
             temporalEffectsActive: lastQueuedRenderSettings.enableTAA,
             now: monotonicNow()
