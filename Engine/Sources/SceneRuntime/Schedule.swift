@@ -360,6 +360,11 @@ public struct RuntimeWorldSchedule {
                         }
                     }
                 }
+                if deltaTimeSeconds > 0 {
+                    world.updateComponents(ParticleEmitter.self) { _, emitter in
+                        emitter.advance(deltaTime: deltaTimeSeconds)
+                    }
+                }
                 if world.hierarchyNeedsPropagation() {
                     let report = world.propagateTransforms(using: jobSystem)
                     recordJobReport(report, for: .animationAndScripts)
@@ -518,12 +523,14 @@ public struct RuntimeWorldSchedule {
         let lightCollection = collectRenderLights(from: view)
         let instances = instanceCollection.instances
         let lights = lightCollection.lights
+        let particles = collectRenderParticles(in: world, cameraEye: cameraSelection.camera.eye)
         return (
             ExtractedRenderSceneResource(
                 scene: RenderScene(
                     camera: cameraSelection.camera,
                     instances: instances.map(\.instance),
-                    lights: lights.map(\.light)
+                    lights: lights.map(\.light),
+                    particles: particles
                 ),
                 activeCameraEntity: cameraSelection.entity,
                 instanceEntities: instances.map(\.entity),
@@ -532,6 +539,38 @@ public struct RuntimeWorldSchedule {
             ),
             mergeDispatchReports([cameraSelection.report, instanceCollection.report, lightCollection.report])
         )
+    }
+
+    /// Flattens every live `ParticleEmitter` pool into world-space billboard
+    /// particles for the render backend. Emitter-local positions are transformed
+    /// by the entity's world matrix; the result is sorted back-to-front for the
+    /// camera so alpha blending composites correctly.
+    private func collectRenderParticles(
+        in world: RuntimeWorld,
+        cameraEye: SIMD3<Float>
+    ) -> [RenderParticle] {
+        var result: [RenderParticle] = []
+        for entity in world.entities(with: ParticleEmitter.self) {
+            guard let emitter = world.component(ParticleEmitter.self, for: entity),
+                  !emitter.particles.isEmpty
+            else { continue }
+            let toWorld = world.worldTransform(for: entity)?.matrix ?? matrix_identity_float4x4
+            result.reserveCapacity(result.count + emitter.particles.count)
+            for particle in emitter.particles {
+                let worldPosition = toWorld * SIMD4<Float>(particle.position, 1)
+                result.append(
+                    RenderParticle(
+                        position: SIMD3<Float>(worldPosition.x, worldPosition.y, worldPosition.z),
+                        size: particle.size,
+                        color: particle.color
+                    )
+                )
+            }
+        }
+        result.sort {
+            simd_length_squared($0.position - cameraEye) > simd_length_squared($1.position - cameraEye)
+        }
+        return result
     }
 
     private func selectRenderCamera(

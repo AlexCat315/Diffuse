@@ -141,6 +141,77 @@ struct RenderExtractionTests {
         #expect(extracted.scene.environment == .fallback)
         #expect(translation(of: extracted.scene.instances[0].transform) == .zero)
     }
+
+    @Test("editor preview tick emits and extracts Sparks particles end-to-end")
+    func bootstrapSceneEmitsAndExtractsParticles() {
+        var runtime = SceneRuntime()
+        runtime.bootstrapEditorPreviewScene()
+
+        // Mimic the editor's per-frame tick (~60fps) — exercises the real
+        // seed → advance (continuous emission) → extract chain.
+        for _ in 0..<30 {
+            _ = runtime.tick(deltaTime: 1.0 / 60.0)
+        }
+
+        guard let extracted = runtime.extractedRenderScene else {
+            Issue.record("expected extracted render scene resource")
+            return
+        }
+
+        #expect(!extracted.scene.particles.isEmpty)
+        // The Sparks emitter sits at (0, 2.2, 0); particles spawn there and rise.
+        if let nearest = extracted.scene.particles.last {
+            #expect(nearest.position.y > 1.5)
+        }
+    }
+
+    @Test("renderExtract flattens emitters into sorted world-space particles")
+    func renderExtractCollectsParticles() {
+        var runtime = SceneRuntime()
+
+        let camera = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+        _ = runtime.setComponent(CameraComponent(isActive: true), for: camera)
+
+        func makeEmitter(z: Float) -> EntityID {
+            let entity = runtime.createEntity()
+            _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, z)), for: entity)
+            // No motion / no continuous emission: the manually emitted particle
+            // stays at the emitter origin so the world transform is the only thing
+            // moving it (deterministic with tick deltaTime == 0).
+            var emitter = ParticleEmitter(
+                isEmitting: false,
+                emissionRate: 0,
+                maxParticles: 16,
+                lifetime: 100,
+                spawnRadius: 0,
+                startVelocity: .zero,
+                velocityRandomness: .zero,
+                gravity: .zero,
+                startSize: 0.5
+            )
+            emitter.emit(1)
+            _ = runtime.setComponent(emitter, for: entity)
+            return entity
+        }
+
+        _ = makeEmitter(z: -5)
+        _ = makeEmitter(z: -20)
+
+        _ = runtime.tick()
+
+        guard let extracted = runtime.extractedRenderScene else {
+            Issue.record("expected extracted render scene resource")
+            return
+        }
+
+        #expect(extracted.scene.particles.count == 2)
+        // Particles are emitter-local at the origin, so each lands at its entity's
+        // world position; back-to-front means the farther one (z = -20) comes first.
+        #expect(isClose(extracted.scene.particles[0].position.z, -20))
+        #expect(isClose(extracted.scene.particles[1].position.z, -5))
+        #expect(isClose(extracted.scene.particles[0].size, 0.5))
+    }
 }
 
 private func translation(of matrix: simd_float4x4) -> SIMD3<Float> {
