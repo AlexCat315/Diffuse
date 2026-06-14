@@ -214,6 +214,9 @@ public final class AppRuntime {
         host.onFrame = { [weak self] _ in
             self?.handleFrame() ?? false
         }
+        host.onTeardown = { [weak self] in
+            self?.releaseGPUSurfaces()
+        }
 
         let displayHandle = AppDisplayHandle()
         let previousDisplayHandle = AppDisplayHandleHolder.current
@@ -325,6 +328,24 @@ public final class AppRuntime {
     }
 
     // MARK: - Lifecycle callbacks
+
+    /// Release every GPU surface (main window + auxiliary windows) before the host
+    /// shell destroys its windows and quits SDL. A `GPUSurface` built from a
+    /// Wayland window holds the `wl_display`/`wl_surface`; releasing it after
+    /// `SDL_Quit` has disconnected Wayland dereferences freed proxies and crashes
+    /// in libwayland-client. Wired to `host.onTeardown`, which fires after the run
+    /// loop exits but before `shell.shutdown()`.
+    private func releaseGPUSurfaces() {
+        configuredSurface = false
+        msaaColorView = nil
+        msaaColorTexture = nil
+        msaaColorWidth = 0
+        msaaColorHeight = 0
+        surface = nil
+        for window in auxiliaryWindows.values {
+            window.releaseGPUSurface()
+        }
+    }
 
     private func handleInit<Root: View>(native: NativeRenderSurface,
                                         widthPx: UInt32,
@@ -881,6 +902,17 @@ private final class AuxiliaryAppWindow {
 
         configuredSurface = true
         session.requestDisplay()
+    }
+
+    /// Release this window's GPU surface (and MSAA target) before the shell
+    /// destroys its SDL/Wayland window. See `AppRuntime.releaseGPUSurfaces()`.
+    func releaseGPUSurface() {
+        configuredSurface = false
+        msaaColorView = nil
+        msaaColorTexture = nil
+        msaaColorWidth = 0
+        msaaColorHeight = 0
+        surface = nil
     }
 
     func handleResize(widthPx: UInt32,

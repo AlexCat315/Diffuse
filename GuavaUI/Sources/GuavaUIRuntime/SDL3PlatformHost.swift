@@ -165,6 +165,14 @@ public final class SDL3PlatformHost: PlatformHost {
     public var onResize: (@MainActor (UInt32, UInt32) -> Void)?
     public var onEvent: (@MainActor (InputEvent) -> Void)?
     public var onBeforeCommit: (@MainActor (_ deltaTime: Double) -> Void)?
+    /// Fires once when the run loop has exited, *before* the shell tears down its
+    /// windows and quits SDL. The symmetric counterpart to `onInit`: consumers
+    /// must release any GPU surfaces created from a window handle here, while the
+    /// native windowing system (e.g. the Wayland display) is still alive.
+    /// Releasing a wgpu/Vulkan surface after `SDL_Quit` has disconnected the
+    /// Wayland display dereferences freed Wayland proxies and crashes in
+    /// libwayland-client.
+    public var onTeardown: (@MainActor () -> Void)?
     public var externalDisplayRequestDrain: (() -> Bool)?
 
     private var frameRateMode: PlatformFrameRateMode = .eventDriven
@@ -553,6 +561,10 @@ public final class SDL3PlatformHost: PlatformHost {
         }
 
         _isRunning = false
+        // Release consumer GPU surfaces (which hold Wayland display/surface
+        // references) before the shell destroys windows and quits SDL — otherwise
+        // the surfaces outlive the Wayland display and crash on release.
+        onTeardown?()
         shell.shutdown()
         self.shell = nil
         sessions.removeAll()
