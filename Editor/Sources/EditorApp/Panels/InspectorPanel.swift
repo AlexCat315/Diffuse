@@ -20,7 +20,9 @@ struct InspectorPanel: View {
                     InspectorSelectionSummary(entity: entity,
                                               componentCount: max(0, sections.count - 2))
 
-                    PropertyGrid(propertySections(sections, collapsedIDs: collapsedIDs),
+                    PropertyGrid(propertySections(sections,
+                                                  collapsedIDs: collapsedIDs,
+                                                  entityID: selectedEntityID),
                                  labelWidth: 108,
                                  minValueWidth: 132,
                                  rowHeight: 26,
@@ -142,10 +144,13 @@ struct InspectorPanel: View {
     }
 
     private struct InspectorTextValue: View {
+        let identity: String
         let binding: Binding<String>
 
         var body: some View {
-            TextField(text: binding, size: .small)
+            // Draft-while-editing: model normalization (empty entity name →
+            // fallback, clip lookups) must not rewrite the text mid-edit.
+            CommitOnBlurTextField(identity: identity, text: binding, size: .small)
                 .flex()
                 .clipped()
         }
@@ -220,7 +225,8 @@ struct InspectorPanel: View {
     }
 
     private func propertySections(_ sections: [EditorInspectorSection],
-                                  collapsedIDs: Set<String>) -> [PropertyGridSection] {
+                                  collapsedIDs: Set<String>,
+                                  entityID: UInt64?) -> [PropertyGridSection] {
         sections.map { section in
             let startsCollapsed = collapsedIDs.contains(section.id)
             return PropertyGridSection(
@@ -230,7 +236,8 @@ struct InspectorPanel: View {
                     PropertyGridRow(id: field.id,
                                     label: field.label,
                                     rowHeight: field.value.preferredRowHeight(defaultHeight: 28)) {
-                        fieldView(field.value)
+                        fieldView(field.value,
+                                  identity: "\(entityID.map(String.init) ?? "none")/\(section.id)/\(field.id)")
                     }
                 },
                 isCollapsible: true,
@@ -239,12 +246,12 @@ struct InspectorPanel: View {
         }
     }
 
-    private func fieldView(_ value: EditorInspectorFieldValue) -> some View {
+    private func fieldView(_ value: EditorInspectorFieldValue, identity: String) -> some View {
         switch value {
         case let .readOnly(text):
             return AnyView(InspectorReadOnlyValue(text: text))
         case let .text(binding):
-            return AnyView(InspectorTextValue(binding: binding))
+            return AnyView(InspectorTextValue(identity: identity, binding: binding))
         case let .bool(binding):
             return AnyView(InspectorBooleanValue(binding: binding))
         case let .number(binding):
