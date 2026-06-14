@@ -95,6 +95,6 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
 do {
     try runEditor()
 } catch {
-    fputs("[EditorApp] startup failed: \(error)\n", stderr)
+    FileHandle.standardError.write(Data("[EditorApp] startup failed: \(error)\n".utf8))
     exit(1)
 }

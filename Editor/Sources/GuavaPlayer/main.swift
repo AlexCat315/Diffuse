@@ -107,6 +107,6 @@ private func runPlayer() throws {
 do {
     try runPlayer()
 } catch {
-    fputs("[GuavaPlayer] startup failed: \(error)\n", stderr)
+    FileHandle.standardError.write(Data("[GuavaPlayer] startup failed: \(error)\n".utf8))
     exit(1)
 }

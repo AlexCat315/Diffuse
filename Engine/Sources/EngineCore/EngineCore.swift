@@ -133,7 +133,7 @@ public final class EngineHost: @unchecked Sendable {
         do {
             try wgpuBackend.initialize()
         } catch {
-            fputs("[EngineHost] WGPU backend initialization failed: \(error)\n", stderr)
+            FileHandle.standardError.write(Data("[EngineHost] WGPU backend initialization failed: \(error)\n".utf8))
         }
 
         let ringBuffer = RingBuffer<RenderPacket>()

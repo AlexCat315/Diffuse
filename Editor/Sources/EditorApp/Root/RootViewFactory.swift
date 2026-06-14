@@ -247,7 +247,7 @@ enum EditorRootViewFactory {
             let path = layoutDir.appendingPathComponent(shellStatePersistenceKey + ".json")
             try data.write(to: path)
         } catch {
-            fputs("[EditorRootViewFactory] failed to save shell state: \(error)\n", stderr)
+            FileHandle.standardError.write(Data("[EditorRootViewFactory] failed to save shell state: \(error)\n".utf8))
         }
     }
 
@@ -265,7 +265,7 @@ enum EditorRootViewFactory {
             }
             return shell
         } catch {
-            fputs("[EditorRootViewFactory] failed to load shell state: \(error)\n", stderr)
+            FileHandle.standardError.write(Data("[EditorRootViewFactory] failed to load shell state: \(error)\n".utf8))
             return nil
         }
     }
@@ -395,13 +395,13 @@ enum EditorRootViewFactory {
             let document = try JSONDecoder().decode(WorkspaceDocument.self, from: data)
             guard document.hasValidLayoutReferences else {
                 try? FileManager.default.removeItem(at: layoutPath)
-                fputs("[EditorRootViewFactory] discarded obsolete workspace layout: missing layout tree references\n", stderr)
+                FileHandle.standardError.write(Data("[EditorRootViewFactory] discarded obsolete workspace layout: missing layout tree references\n".utf8))
                 return nil
             }
             return document
         } catch {
             try? FileManager.default.removeItem(at: layoutPath)
-            fputs("[EditorRootViewFactory] discarded invalid workspace layout: \(error)\n", stderr)
+            FileHandle.standardError.write(Data("[EditorRootViewFactory] discarded invalid workspace layout: \(error)\n".utf8))
             return nil
         }
     }
@@ -420,7 +420,7 @@ enum EditorRootViewFactory {
             )
             try data.write(to: path)
         } catch {
-            fputs("[EditorRootViewFactory] failed to save workspace layout: \(error)\n", stderr)
+            FileHandle.standardError.write(Data("[EditorRootViewFactory] failed to save workspace layout: \(error)\n".utf8))
         }
     }
 
