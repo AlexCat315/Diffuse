@@ -102,6 +102,29 @@ public extension SceneRuntime {
             matrix: previewTranslationMatrix(SIMD3<Float>(0.55, 1.2, 0.15))
         )
 
+        let sparks = makePreviewEntity(
+            name: "Sparks",
+            kind: "Particle Emitter",
+            matrix: previewTranslationMatrix(SIMD3<Float>(0, 2.2, 0))
+        )
+        _ = setComponent(
+            ParticleEmitter(
+                emissionRate: 60,
+                maxParticles: 512,
+                lifetime: 1.6,
+                lifetimeRandomness: 0.4,
+                spawnRadius: 0.15,
+                startVelocity: SIMD3<Float>(0, 1.6, 0),
+                velocityRandomness: SIMD3<Float>(0.8, 0.4, 0.8),
+                gravity: SIMD3<Float>(0, -1.2, 0),
+                startSize: 0.18,
+                endSize: 0.0,
+                startColor: SIMD4<Float>(1.0, 0.7, 0.25, 1.0),
+                endColor: SIMD4<Float>(0.9, 0.1, 0.0, 0.0)
+            ),
+            for: sparks
+        )
+
         let ground = makePreviewEntity(
             name: "Ground",
             kind: "Static Mesh",

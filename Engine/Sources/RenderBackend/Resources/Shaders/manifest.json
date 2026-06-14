@@ -1,6 +1,11 @@
 {
   "programs": [
     {
+      "name": "particles",
+      "vertex": "WGSL/particles.wgsl",
+      "fragment": "WGSL/particles.wgsl"
+    },
+    {
       "name": "terrain",
       "vertex": "WGSL/terrain.wgsl",
       "fragment": "WGSL/terrain.wgsl"

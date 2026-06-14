@@ -24,6 +24,15 @@ struct EditorSceneAdapterTests {
         #expect(manifest.roots.contains { $0.camera != nil })
     }
 
+    @Test("Preview scene reports active particles so the viewport keeps driving frames")
+    func previewSceneHasActiveParticles() {
+        let scene = EditorSceneAdapter()
+        // The preview scene seeds an always-emitting "Sparks" emitter; under the
+        // event-driven frame policy this is what keeps the viewport rendering so
+        // particles animate instead of freezing.
+        #expect(scene.hasActiveParticles())
+    }
+
     @Test("Scene manifest restores preview hierarchy and runtime components")
     func sceneManifestRestoresPreviewHierarchyAndComponents() {
         let source = EditorSceneAdapter()

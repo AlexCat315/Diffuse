@@ -20,6 +20,8 @@ struct InspectorPanel: View {
                     InspectorSelectionSummary(entity: entity,
                                               componentCount: max(0, sections.count - 2))
 
+                    AddComponentButton(scene: scene, entityID: entity.id)
+
                     PropertyGrid(propertySections(sections,
                                                   collapsedIDs: collapsedIDs,
                                                   entityID: selectedEntityID),
@@ -293,5 +295,44 @@ private extension EditorInspectorFieldValue {
         default:
             return nil
         }
+    }
+}
+
+/// Inspector affordance that surfaces `EditorSceneAdapter.addComponent`, so any
+/// supported component (Particle Emitter, Rigid Body, Audio Source, …) can be
+/// added to the selected entity. Hidden when every kind is already present.
+private struct AddComponentButton: View {
+    let scene: EditorSceneAdapter
+    let entityID: UInt64
+    @State private var isPresented: Bool = false
+
+    var body: some View {
+        let kinds = scene.addableComponentKinds(on: entityID)
+        return Box(direction: .column, alignItems: .flexStart) {
+            if !kinds.isEmpty {
+                Popover(isPresented: $isPresented, width: 200) {
+                    Row(alignment: .center, spacing: 6) {
+                        Text("+", lineLimit: 1)
+                            .font(.bodyStrong)
+                            .foregroundColor(.accent)
+                        Text(L("Add Component"), lineLimit: 1)
+                            .font(.caption)
+                            .foregroundColor(.onSurface)
+                    }
+                    .padding(horizontal: 10, vertical: 6)
+                    .background(.surfaceSunken)
+                    .cornerRadius(4)
+                } content: {
+                    Menu(kinds.map { kind in
+                        MenuEntry.item(MenuItem(id: "add-component-\(kind.rawValue)",
+                                                title: L(kind.displayName),
+                                                action: { scene.addComponent(kind, to: entityID) }))
+                    }, width: 200, maxVisibleRows: 10, onItemActivated: {
+                        isPresented = false
+                    })
+                }
+            }
+        }
+        .padding(horizontal: 6, vertical: 4)
     }
 }
