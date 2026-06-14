@@ -96,7 +96,7 @@ struct ShaderCatalogTests {
         )
 
         let expectedR4: [RenderPassKind] = [.depthPrepass, .shadowPass, .skybox, .basePass, .particles, .tonemap, .viewportResolve]
-        let expectedR5: [RenderPassKind] = [.depthPrepass, .skybox, .basePass, .particles, .ssao, .ssr, .taa, .bloom, .tonemap, .fxaa, .viewportResolve]
+        let expectedR5: [RenderPassKind] = [.depthPrepass, .skybox, .basePass, .ssao, .ssr, .taa, .particles, .bloom, .tonemap, .fxaa, .viewportResolve]
 
         #expect(r4.passes == expectedR4)
         #expect(r5.passes == expectedR5)
