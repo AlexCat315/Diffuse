@@ -102,6 +102,22 @@ struct ShaderCatalogTests {
         #expect(r5.passes == expectedR5)
     }
 
+    @Test("progressive refinement drops SSR only while the opaque scene is moving")
+    func motionRefinementDropsSSR() {
+        let full: [RenderPassKind] = [.depthPrepass, .skybox, .basePass, .ssao, .ssr, .taa, .particles, .bloom, .tonemap, .viewportResolve]
+
+        // Settled: full quality, SSR present.
+        #expect(RenderFramePlanner.motionRefinedPasses(full, opaqueMoving: false) == full)
+
+        // Moving: SSR dropped for responsiveness; every other pass preserved in order.
+        let moving = RenderFramePlanner.motionRefinedPasses(full, opaqueMoving: true)
+        #expect(!moving.contains(.ssr))
+        #expect(moving == full.filter { $0 != .ssr })
+        // SSAO and TAA are kept (only SSR is dropped).
+        #expect(moving.contains(.ssao))
+        #expect(moving.contains(.taa))
+    }
+
     @Test("shadow settings define the renderer shadow contract")
     func shadowSettingsDefineContract() {
         let settings = RenderShadowSettings(
