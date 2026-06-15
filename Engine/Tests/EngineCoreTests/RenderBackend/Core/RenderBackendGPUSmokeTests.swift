@@ -230,6 +230,83 @@ struct RenderBackendGPUSmokeTests {
         #expect(renderer.lastFrameUsedOpaqueCache == false)
     }
 
+    @Test("opaque cache engages under TAA only after temporal convergence",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU TAA opaque-cache smoke test"))
+    func opaqueCacheConvergesUnderTAA() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+        renderer.initialize()
+
+        let width: UInt32 = 64
+        let height: UInt32 = 64
+        // TAA on: the cache must wait for temporal convergence before trusting
+        // the snapshot.
+        let settings = RenderSettings(stage: .r5PostProcess,
+                                      enableTAA: true,
+                                      enableBloom: true,
+                                      enableOffscreenViewport: true)
+        func packet(eye: SIMD3<Float>, frame: Int) -> RenderPacket {
+            RenderPacket(
+                frameIndex: frame,
+                deltaTime: 1.0 / 60.0,
+                drawableSize: RenderDrawableSize(width: width, height: height),
+                scene: Self.makeOpaqueCacheScene(cameraEye: eye),
+                sceneSnapshot: SceneRuntimeSnapshot(entityCount: 1, revision: 1),
+                renderSettings: settings,
+                simulationTimeSeconds: 0
+            )
+        }
+
+        let warmup = WGPURenderer.taaCacheWarmupFrames
+        var converged: [BGRAPixel] = []
+        // During warmup the cache must NOT engage — TAA history is still settling.
+        for frame in 0...warmup {
+            renderer.render(packet: packet(eye: SIMD3<Float>(0, 0, 3.2), frame: frame))
+            #expect(renderer.lastFrameUsedOpaqueCache == false)
+            guard let tex = renderer.offscreenColorTexture else {
+                Issue.record("expected offscreen color texture")
+                return
+            }
+            converged = try readbackBGRA8(texture: tex, width: width, height: height, backend: backend)
+        }
+
+        // Next steady frame: TAA has converged → cache engages.
+        renderer.render(packet: packet(eye: SIMD3<Float>(0, 0, 3.2), frame: warmup + 1))
+        #expect(renderer.lastFrameUsedOpaqueCache == true)
+        guard let texHit = renderer.offscreenColorTexture else {
+            Issue.record("expected offscreen color texture")
+            return
+        }
+        let cached = try readbackBGRA8(texture: texHit, width: width, height: height, backend: backend)
+
+        // The cached overlay reproduces the converged full render.
+        #expect(converged.count == cached.count)
+        var maxDiff = 0
+        for i in converged.indices where i < cached.count {
+            maxDiff = max(maxDiff, converged[i].distance(from: cached[i]))
+        }
+        #expect(maxDiff <= 2)
+
+        // Moving the camera invalidates the cache → must re-converge.
+        renderer.render(packet: packet(eye: SIMD3<Float>(1.6, 0.5, 3.0), frame: warmup + 2))
+        #expect(renderer.lastFrameUsedOpaqueCache == false)
+    }
+
     @Test("stylized outline pass compiles and renders through the HDR viewport path",
           .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU stylized outline smoke test"))
     func stylizedOutlinePassCompilesAndRenders() throws {

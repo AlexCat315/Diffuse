@@ -131,12 +131,14 @@
 - [x] 排序:提取时按到相机距离 back-to-front
 - [x] 编辑器集成:编辑器是事件驱动帧(空闲不渲染),粒子是连续动画会被冻结。`EditorSceneAdapter.hasActiveParticles()`(发射中或有存活粒子)接入 `EditorCore.tick` 的 `forceContinuous`,有存活粒子时自动连续帧,粒子播完/发射器关闭后回到空闲省电
 - [x] 检查器「添加组件」按钮(`InspectorPanel` 的 `AddComponentButton` → 复用既有 `addComponent`/`addableComponentKinds`):此前 `addComponent` API 存在却从未接 UI,导致已保存场景无法添加任何组件;现在选中实体即可加 Particle Emitter(及全部其它组件)
-- [x] **不透明渲染缓存**(性能正解,非降质):连续帧让重场景每帧重渲整条管线(base PBR/阴影/SSAO/SSR)是卡顿主因。`WGPURenderer` 用 `computeOpaqueHash`(相机/几何/灯光/设置/蒙皮,**不含粒子**,XOR 折叠与顺序无关)判断不透明内容是否变化:未变则跳过全部不透明 pass、复用 `opaqueSnapshotTarget`(lit-opaque HDR 快照)+ 沿用上一帧深度,只重跑粒子叠加 + bloom/tonemap;相机/几何一变即失效重渲。粒子 pass 相应移到所有不透明/屏幕空间 pass 之后(`RenderPassKind.opaquePasses` 边界)。限 HDR stage 且 TAA 关(时域历史另算),否则安全回退整渲
+- [x] **不透明渲染缓存**(性能正解,非降质):连续帧让重场景每帧重渲整条管线(base PBR/阴影/SSAO/SSR)是卡顿主因。`WGPURenderer` 用 `computeOpaqueHash`(相机/几何/灯光/设置/蒙皮,**不含粒子**,XOR 折叠与顺序无关)判断不透明内容是否变化:未变则跳过全部不透明 pass、复用 `opaqueSnapshotTarget`(lit-opaque HDR 快照)+ 沿用上一帧深度,只重跑粒子叠加 + bloom/tonemap;相机/几何一变即失效重渲。粒子 pass 相应移到所有不透明/屏幕空间 pass 之后(`RenderPassKind.opaquePasses` 边界)。限 HDR stage,非 HDR 安全回退整渲
+- [x] **TAA 时域感知缓存**:不再因 TAA 关闭缓存。加 `opaqueStableFrames` 收敛计数器——不透明内容连续不变达 `taaCacheWarmupFrames` 帧(TAA 的历史已收敛到稳定图像)后才信任快照并启用命中;内容一变即清零重渲。本引擎 TAA 是无 jitter 的时域混合,静止场景两帧即位级稳定,故缓存帧与收敛后整渲帧逐像素一致(测试 maxDiff ≤ 2)
+- [x] **渐进式细化(相机移动)**:不透明内容逐帧变化(相机在动)时,`RenderFramePlanner.motionRefinedPasses` 丢掉最贵的屏幕空间 pass(SSR)保响应,settle 后立即恢复全质量并让 TAA/缓存重新收敛;与编辑器既有「交互降分辨率」(`viewportInteractionDownscale`)叠加。这是「动时先糙、停下即精」的正解,非永久降质
 
-验收:`swift build` 通过;`ParticleTests` / `ShaderCatalog` / `RenderExtraction`(含新增粒子提取+排序+ bootstrap 端到端用例)全绿;GPU smoke 的 scene-contract / stylized / particle 像素读回 / **opaque-cache 像素一致性**用例在真实 Metal 设备上通过(缓存帧与整渲帧逐像素一致 maxDiff ≤ 2,且相机变动即失效);Editor `EditorSceneAdapter` 的 `hasActiveParticles` 用例绿。预览场景已植入 "Sparks" 发射器(Hero 头顶),编辑器空闲也会自动播放。
+验收:`swift build` 通过;`ParticleTests` / `ShaderCatalog` / `RenderExtraction`(含新增粒子提取+排序+ bootstrap 端到端用例)全绿;GPU smoke 的 scene-contract / stylized / particle 像素读回 / **opaque-cache 像素一致性** / **TAA 收敛后命中且像素一致** 用例在真实 Metal 设备上通过(缓存帧与整渲帧逐像素一致 maxDiff ≤ 2,且相机变动即失效;TAA 场景在 warmup 帧内不命中、收敛后命中);`motionRefinedPasses` 在 ShaderCatalog 里确定性单测;Editor `EditorSceneAdapter` 的 `hasActiveParticles` 用例绿。预览场景已植入 "Sparks" 发射器(Hero 头顶),编辑器空闲也会自动播放。
 
 > 注:GPU smoke 套件里 3 个**阴影**用例(directional shadow / shadow atlas / cascades)在本机失败,经 `git stash -u` 在干净 HEAD 上验证失败值完全一致 → 预存在环境问题,与粒子/缓存改动无关。
-> 后续(缓存深化):TAA/时域效果的缓存需 motion-vector + history 处理(配合「渐进式细化」),目前 TAA 开启时回退整渲。
+> 后续(缓存深化):当前 SSR 在缓存命中/相机移动时不更新(SSR 反射里看不到粒子、动时无反射);若要进一步可加 motion-vector 重投影做相机移动时的缓存复用(目前相机移动仍整渲,靠降分辨率 + 丢 SSR 保响应)。
 
 > 后续(非 G1):GPU 模拟、多发射器形状、碰撞、矢量场、加法混合开关、3D 网格粒子。
 

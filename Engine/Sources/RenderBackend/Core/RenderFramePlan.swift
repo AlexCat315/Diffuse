@@ -106,6 +106,16 @@ enum RenderFramePlanner {
         return RenderFramePlan(passes: passes)
     }
 
+    /// Progressive refinement: while the opaque scene is moving (camera or
+    /// geometry changing frame-to-frame), drop the most expensive screen-space
+    /// pass (SSR) so interaction stays responsive. Full quality returns the
+    /// moment the scene settles. Stacks with the editor's interaction
+    /// render-scale downscale.
+    static func motionRefinedPasses(_ passes: [RenderPassKind], opaqueMoving: Bool) -> [RenderPassKind] {
+        guard opaqueMoving else { return passes }
+        return passes.filter { $0 != .ssr }
+    }
+
     private static func appendStylizedPassesIfNeeded(settings: RenderSettings,
                                                      passes: inout [RenderPassKind]) {
         if settings.enableStylizedCharacterShading {
