@@ -106,6 +106,14 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     var opaqueSnapshotTarget: RenderTextureTarget?
     var opaqueCacheHash: Int?
     var opaqueCacheValid = false
+    /// Consecutive frames the opaque hash has been unchanged. The snapshot is
+    /// only trusted once this reaches the convergence threshold so TAA's
+    /// temporal history has settled to a stable image first.
+    var opaqueStableFrames = 0
+    /// Frames the opaque content must hold steady before the post-TAA snapshot
+    /// is considered converged. This TAA is a jitter-free temporal blend, so a
+    /// static scene stabilizes within a couple of frames; the margin is safety.
+    static let taaCacheWarmupFrames = 6
     /// Set each frame: whether the opaque passes were served from the cache.
     public private(set) var lastFrameUsedOpaqueCache = false
 
@@ -265,20 +273,40 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             var bloomTarget = sceneColorTarget
             let encoder = try backend.createCommandEncoder()
 
-            // Opaque-render cache: when the opaque inputs (camera, geometry,
-            // lights, settings, skinning) are unchanged from the last frame, the
-            // lit-opaque HDR can be reused and every opaque pass skipped — only
-            // the transparent particle overlay + bloom/tonemap re-run. Disabled
-            // for TAA (cross-frame history) and non-HDR stages.
+            // Opaque-render cache + progressive refinement. The opaque inputs
+            // (camera, geometry, lights, settings, skinning — NOT particles) are
+            // hashed each frame:
+            //   • unchanged for long enough → skip every opaque pass and reuse
+            //     the lit-opaque HDR snapshot, re-running only the particle
+            //     overlay + bloom/tonemap.
+            //   • changing (camera in motion) → drop the most expensive
+            //     screen-space pass (SSR) for responsiveness; full quality
+            //     returns once motion settles and TAA / the cache re-converge.
+            // The snapshot is trusted only after `requiredStableFrames` so TAA's
+            // temporal history has converged to a stable image before capture.
             let opaqueHash = computeOpaqueHash(packet: packet)
+            let opaqueChanged = opaqueCacheHash != opaqueHash
+            if opaqueChanged {
+                opaqueCacheHash = opaqueHash
+                opaqueStableFrames = 0
+                opaqueCacheValid = false
+            } else {
+                opaqueStableFrames += 1
+            }
+            let requiredStableFrames = activeRenderSettings.enableTAA ? Self.taaCacheWarmupFrames : 0
+            let opaqueConverged = opaqueStableFrames >= requiredStableFrames
             let canUseOpaqueCache = usesHDRFrameGraph
-                && !activeRenderSettings.enableTAA
                 && opaqueSnapshotTarget != nil
                 && sceneColorTarget != nil
-            let opaqueCacheHit = canUseOpaqueCache && opaqueCacheValid && opaqueCacheHash == opaqueHash
+            let opaqueCacheHit = canUseOpaqueCache && opaqueCacheValid && !opaqueChanged
             lastFrameUsedOpaqueCache = opaqueCacheHit
 
-            for passKind in framePlan.passes {
+            // Progressive refinement: while the opaque scene is moving, skip SSR
+            // (the costliest screen-space pass). Stacks with the editor's
+            // interaction render-scale downscale.
+            let executedPasses = RenderFramePlanner.motionRefinedPasses(framePlan.passes, opaqueMoving: opaqueChanged)
+
+            for passKind in executedPasses {
                 if opaqueCacheHit, RenderPassKind.opaquePasses.contains(passKind) {
                     continue
                 }
@@ -353,12 +381,13 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                                                              width: configuredSize.width,
                                                              height: configuredSize.height)
                                 hdrCurrent = scene
-                            } else if let current = hdrCurrent {
+                            } else if opaqueConverged, let current = hdrCurrent {
+                                // Converged full render: capture the lit-opaque
+                                // HDR so the next static frame can reuse it.
                                 encoder.copyTextureToTexture(source: current.texture,
                                                              destination: snapshot.texture,
                                                              width: configuredSize.width,
                                                              height: configuredSize.height)
-                                opaqueCacheHash = opaqueHash
                                 opaqueCacheValid = true
                             }
                         }
@@ -564,7 +593,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
 
             lastFrameStats = RenderFrameStats(
                 frameIndex: packet.frameIndex,
-                passCount: framePlan.passes.count,
+                passCount: executedPasses.count,
                 drawCallCount: drawCallCount,
                 passDrawCallCounts: passDrawCallCounts,
                 renderBundleCount: renderBundleCount,
@@ -584,7 +613,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 shadowAtlasResolution: shadowPlan.uniforms.isEnabled
                     ? shadowPlan.atlasSize
                     : 0,
-                activePasses: framePlan.passes,
+                activePasses: executedPasses,
                 settingsGeneration: settingsGeneration,
                 cpuPrepareNS: cpuPrepareNS,
                 cpuEncodeNS: cpuEncodeNS,
@@ -1112,6 +1141,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             historyTarget = nil
             opaqueSnapshotTarget = nil
             opaqueCacheValid = false
+            opaqueCacheHash = nil
+            opaqueStableFrames = 0
 
             depthView = nil
             depthTexture = nil
