@@ -51,6 +51,7 @@ public enum ComponentCatalog {
 
         // Animation
         ComponentTypeID(AnimationPlayer.self),
+        ComponentTypeID(AnimationGraphPlayer.self),
 
         // VFX
         ComponentTypeID(ParticleEmitter.self),
