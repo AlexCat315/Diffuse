@@ -314,6 +314,8 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             return 0
         case .hinge:
             return 1
+        case .fixed:
+            return 4
         case .slider:
             return 2
         case .distance:

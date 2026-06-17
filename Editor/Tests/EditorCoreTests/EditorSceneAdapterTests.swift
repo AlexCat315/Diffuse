@@ -330,6 +330,63 @@ struct GameSaveDocumentTests {
         #expect(restored?.isPlaying == true)
     }
 
+    @Test("AnimationGraphPlayer round-trips through manifest encode/decode")
+    func animationGraphPlayerRoundTrip() {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(SceneNameComponent(value: "Hero"), for: entity)
+        _ = scene.setComponent(SceneKindComponent(value: "Character"), for: entity)
+        _ = scene.setLocalTransform(.identity, for: entity)
+        let graph = AnimationGraph(
+            blendSpaces1D: [
+                AnimationBlendSpace1D(
+                    name: "locomotion",
+                    parameter: "speed",
+                    samples: [
+                        AnimationBlendSample1D(clipName: "idle", threshold: 0),
+                        AnimationBlendSample1D(clipName: "run", threshold: 1),
+                    ]
+                ),
+            ],
+            stateMachine: AnimationStateMachine(
+                initialState: "Idle",
+                states: [
+                    AnimationState(name: "Idle", motion: .clip("idle")),
+                    AnimationState(name: "Run", motion: .blendSpace1D("locomotion")),
+                ],
+                transitions: [
+                    AnimationTransition(from: "Idle",
+                                        to: "Run",
+                                        parameter: "speed",
+                                        comparison: .greaterThan,
+                                        threshold: 0.5,
+                                        duration: 0.25),
+                ]
+            )
+        )
+        _ = scene.setComponent(
+            AnimationGraphPlayer(graph: graph,
+                                 parameters: ["speed": 0.8],
+                                 activeState: "Run",
+                                 previousState: "Idle"),
+            for: entity
+        )
+
+        var adapter = EditorSceneAdapter()
+        adapter.scene = scene
+        let manifest = adapter.manifest()
+
+        var adapter2 = EditorSceneAdapter()
+        _ = adapter2.load(manifest: manifest, notify: false)
+        let restored = adapter2.scene.component(AnimationGraphPlayer.self,
+                                                for: adapter2.scene.entities().first!)
+        #expect(restored?.graph.blendSpaces1D.first?.name == "locomotion")
+        #expect(restored?.graph.stateMachine.transitions.first?.duration == 0.25)
+        #expect(restored?.parameters["speed"] == 0.8)
+        #expect(restored?.activeState == "Run")
+        #expect(restored?.previousState == "Idle")
+    }
+
     @Test("schemaVersion is 4 for new manifests")
     func schemaVersionIs4() {
         let adapter = EditorSceneAdapter()
