@@ -137,6 +137,15 @@
 /* Panel titles — confirmations / offline render */
 "Confirmations" = "Confirmations";
 "Render Pipeline" = "Render Pipeline";
+"Developer Tools" = "Developer Tools";
+
+/* Developer tools */
+"Performance" = "Performance";
+"Render Stats" = "Render Stats";
+"Runtime" = "Runtime";
+"Frame" = "Frame";
+"Editor" = "Editor";
+"Status" = "Status";
 
 /* Status bar / console / viewport overlays */
 "Revision" = "Revision";
