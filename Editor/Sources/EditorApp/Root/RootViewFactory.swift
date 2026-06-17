@@ -194,6 +194,12 @@ enum EditorRootViewFactory {
                             iconAssetKey: "panel.render-pipeline") {
                 RenderPipelinePanel()
             },
+            PanelDescriptor(id: "developer-tools",
+                            title: localizedPanelTitle(for: "developer-tools"),
+                            preferredSlot: .bottom,
+                            iconAssetKey: "panel.developer-tools") {
+                DeveloperToolsPanel(app: app)
+            },
         ])
     }
 
@@ -209,6 +215,7 @@ enum EditorRootViewFactory {
         WorkspacePanelIconCatalog.register("panel.intent-input", panelIcon("ai-intent"))
         WorkspacePanelIconCatalog.register("panel.confirmation-host", panelIcon("confirmations"))
         WorkspacePanelIconCatalog.register("panel.render-pipeline", panelIcon("render"))
+        WorkspacePanelIconCatalog.register("panel.developer-tools", panelIcon("warning"))
     }
 
     static func saveWorkspaceLayout(_ controller: WorkspaceController,
@@ -295,6 +302,8 @@ enum EditorRootViewFactory {
             return L("Confirmations")
         case "render-pipeline":
             return L("Render Pipeline")
+        case "developer-tools":
+            return L("Developer Tools")
         default:
             return id
         }
@@ -473,7 +482,8 @@ enum EditorWorkspaceDefaults {
                                         panels: ["assets",
                                                  "console",
                                                  "confirmation-host",
-                                                 "render-pipeline"],
+                                                 "render-pipeline",
+                                                 "developer-tools"],
                                         activePanelID: defaultBottomPanelID(for: preset))
         ]
         return WorkspaceDocument(

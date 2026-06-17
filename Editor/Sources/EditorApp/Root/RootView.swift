@@ -41,8 +41,7 @@ struct EditorRootView: View {
                             .layoutRole("editor-workspace")
                             .debugName("editor-workspace")
 
-                        EditorStatusBar(store: store,
-                                        getTiming: { app.currentFrameTiming() })
+                        EditorStatusBar(store: store)
                     }
                     .background(.background)
                     .flex()
