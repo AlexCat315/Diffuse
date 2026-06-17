@@ -237,6 +237,7 @@ public struct EditorState: Codable, Sendable {
     public var pendingCloseRequest: EditorPendingCloseRequest?
     public var frameIndex: UInt64
     public var frameTimingRevision: UInt64
+    public var frameStats: EditorFrameStats
     public var viewportSurfaceRevision: UInt64
     public var windowFocused: Bool
     public var windowMinimized: Bool
@@ -289,6 +290,7 @@ public struct EditorState: Codable, Sendable {
         pendingCloseRequest: EditorPendingCloseRequest? = nil,
         frameIndex: UInt64 = 0,
         frameTimingRevision: UInt64 = 0,
+        frameStats: EditorFrameStats = .init(),
         viewportSurfaceRevision: UInt64 = 0,
         windowFocused: Bool = true,
         windowMinimized: Bool = false,
@@ -370,6 +372,7 @@ public struct EditorState: Codable, Sendable {
         self.consoleEntries = consoleEntries
         self.nextConsoleEntryID = max(nextConsoleEntryID, (consoleEntries.map(\.id).max() ?? 0) &+ 1)
         self.frameIndex = frameIndex
+        self.frameStats = frameStats
         self.commandPaletteVisible = commandPaletteVisible
     }
 
@@ -399,6 +402,7 @@ public struct EditorState: Codable, Sendable {
         case sceneRevision
         case frameIndex
         case frameTimingRevision
+        case frameStats
         case viewportSurfaceRevision
         case windowFocused
         case windowMinimized
@@ -464,6 +468,7 @@ public struct EditorState: Codable, Sendable {
             sceneRevision: try c.decodeIfPresent(UInt64.self, forKey: .sceneRevision) ?? 0,
             frameIndex: try c.decodeIfPresent(UInt64.self, forKey: .frameIndex) ?? 0,
             frameTimingRevision: try c.decodeIfPresent(UInt64.self, forKey: .frameTimingRevision) ?? 0,
+            frameStats: try c.decodeIfPresent(EditorFrameStats.self, forKey: .frameStats) ?? .init(),
             viewportSurfaceRevision: try c.decodeIfPresent(UInt64.self, forKey: .viewportSurfaceRevision) ?? 0,
             windowFocused: try c.decodeIfPresent(Bool.self, forKey: .windowFocused) ?? true,
             windowMinimized: try c.decodeIfPresent(Bool.self, forKey: .windowMinimized) ?? false,
@@ -511,6 +516,7 @@ public struct EditorState: Codable, Sendable {
         try c.encode(sceneRevision, forKey: .sceneRevision)
         try c.encode(frameIndex, forKey: .frameIndex)
         try c.encode(frameTimingRevision, forKey: .frameTimingRevision)
+        try c.encode(frameStats, forKey: .frameStats)
         try c.encode(viewportSurfaceRevision, forKey: .viewportSurfaceRevision)
         try c.encode(windowFocused, forKey: .windowFocused)
         try c.encode(windowMinimized, forKey: .windowMinimized)
@@ -573,5 +579,85 @@ public struct EditorPendingCloseRequest: Equatable, Sendable {
 
     public init(windowID: UInt32?) {
         self.windowID = windowID
+    }
+}
+
+/// Frame timing and performance statistics for the Editor viewport.
+///
+/// Mirrors the data shown in Unreal Engine's "stat unit" panel:
+/// - Frame time breakdown (frame rate, ms per frame)
+/// - CPU phase timings (input, simulation, render prepare, render submit)
+/// - GPU timings (submit + present)
+/// - Render statistics (draw calls, pass count, etc.)
+public struct EditorFrameStats: Sendable, Equatable, Codable {
+    /// Total wall-clock time for the last completed frame in seconds.
+    public var frameSeconds: Double
+    /// Frames per second (1 / frameSeconds), 0 if frameSeconds is 0.
+    public var fps: Double
+    /// Total frame time in milliseconds.
+    public var frameMs: Double
+
+    // MARK: - CPU Phase Timings
+    /// Time spent processing input events this frame (seconds).
+    public var inputSeconds: Double
+    /// Time spent in scene simulation this frame (seconds).
+    public var simulationSeconds: Double
+    /// Time spent preparing GPU render data this frame (seconds).
+    public var renderPrepareSeconds: Double
+    /// Time spent encoding and submitting GPU commands this frame (seconds).
+    public var renderSubmitSeconds: Double
+
+    // MARK: - GPU / Present
+    /// Time spent in GPU submit + present this frame (seconds).
+    public var gpuPresentSeconds: Double
+
+    // MARK: - Render Stats
+    public var drawCallCount: Int
+    public var passCount: Int
+    public var renderBundleCount: Int
+    public var shadowedLightCount: Int
+    public var shadowCascadeCount: Int
+    public var shadowMapResolution: UInt32
+    /// Time spent in CPU skybox encoding (nanoseconds).
+    public var cpuSkyboxEncodeNS: UInt64
+    /// Time spent in CPU base pass encoding (nanoseconds).
+    public var cpuBaseEncodeNS: UInt64
+    /// Time spent in CPU post-process encoding (nanoseconds).
+    public var cpuPostProcessEncodeNS: UInt64
+
+    public init(
+        frameSeconds: Double = 0,
+        inputSeconds: Double = 0,
+        simulationSeconds: Double = 0,
+        renderPrepareSeconds: Double = 0,
+        renderSubmitSeconds: Double = 0,
+        gpuPresentSeconds: Double = 0,
+        drawCallCount: Int = 0,
+        passCount: Int = 0,
+        renderBundleCount: Int = 0,
+        shadowedLightCount: Int = 0,
+        shadowCascadeCount: Int = 0,
+        shadowMapResolution: UInt32 = 0,
+        cpuSkyboxEncodeNS: UInt64 = 0,
+        cpuBaseEncodeNS: UInt64 = 0,
+        cpuPostProcessEncodeNS: UInt64 = 0
+    ) {
+        self.frameSeconds = frameSeconds
+        self.fps = frameSeconds > 0 ? 1.0 / frameSeconds : 0
+        self.frameMs = frameSeconds * 1000
+        self.inputSeconds = inputSeconds
+        self.simulationSeconds = simulationSeconds
+        self.renderPrepareSeconds = renderPrepareSeconds
+        self.renderSubmitSeconds = renderSubmitSeconds
+        self.gpuPresentSeconds = gpuPresentSeconds
+        self.drawCallCount = drawCallCount
+        self.passCount = passCount
+        self.renderBundleCount = renderBundleCount
+        self.shadowedLightCount = shadowedLightCount
+        self.shadowCascadeCount = shadowCascadeCount
+        self.shadowMapResolution = shadowMapResolution
+        self.cpuSkyboxEncodeNS = cpuSkyboxEncodeNS
+        self.cpuBaseEncodeNS = cpuBaseEncodeNS
+        self.cpuPostProcessEncodeNS = cpuPostProcessEncodeNS
     }
 }

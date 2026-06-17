@@ -137,6 +137,15 @@
 /* Panel titles — confirmations / offline render */
 "Confirmations" = "确认";
 "Render Pipeline" = "渲染管线";
+"Developer Tools" = "开发者工具";
+
+/* Developer tools */
+"Performance" = "性能";
+"Render Stats" = "渲染统计";
+"Runtime" = "运行时";
+"Frame" = "帧";
+"Editor" = "编辑器";
+"Status" = "状态";
 
 /* Status bar / console / viewport overlays */
 "Revision" = "修订";
