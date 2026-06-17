@@ -4,13 +4,12 @@ import Foundation
 
 /// 24px editor footer in the floating-island language: muted captions on the
 /// bare canvas, no divider. Left: connection + scene revision + selection.
-/// Right: frame timing (mono) + latest status/console message.
+/// Right: latest status/console message.
 struct EditorStatusBar: View {
     let store: EditorStore
-    let getTiming: () -> EditorFrameTiming
 
     var body: some View {
-        let timing = getTiming()
+        let _ = store.viewportSurfaceRevision
         Row(alignment: .center, spacing: 8) {
             Box { EmptyView() }
                 .frame(width: 6, height: 6)
@@ -36,15 +35,6 @@ struct EditorStatusBar: View {
                 .foregroundColor(.onSurfaceMuted)
 
             Spacer(minLength: 0)
-
-            // Frame-on-demand rendering reports zero while idle; "0 fps" reads
-            // like a failure, so only show timing while frames are flowing.
-            if timing.framesPerSecond > 0 {
-                Text(String(format: "%.0f fps  %.1f ms",
-                            timing.framesPerSecond, timing.frameMilliseconds))
-                    .font(.mono)
-                    .foregroundColor(.onSurfaceMuted)
-            }
 
             // Status message can be long (AI output, console entries); cap
             // width and clip so it never pushes other items off screen.

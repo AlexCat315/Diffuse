@@ -51,6 +51,7 @@ public enum EditorAction: Sendable {
     /// Bump the viewport surface revision so only viewport subscribers pull
     /// the newest `currentViewportSurfaceState()`.
     case viewportSurfaceUpdated
+    case updateFrameStats(EditorFrameStats)
 }
 
 public enum EditorReducer {
@@ -202,6 +203,8 @@ public enum EditorReducer {
             state.frameTimingRevision &+= 1
         case .viewportSurfaceUpdated:
             state.viewportSurfaceRevision &+= 1
+        case let .updateFrameStats(stats):
+            state.frameStats = stats
         }
     }
 }

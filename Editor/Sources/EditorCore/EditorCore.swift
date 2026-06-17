@@ -57,9 +57,13 @@ public final class EditorApplication: @unchecked Sendable {
     private let editLog: EditLog
     private let contextMemoryStore: ContextMemoryStore?
     private var physicsPlaySnapshot: SceneRuntime?
+    /// Accumulator for stable FPS averaging (250ms window).
     private var frameTimingAccumulator: Double = 0
     private var frameTimingCount: Int = 0
-    private var frameTiming = EditorFrameTiming()
+    /// GPU submit time from the most recent rendered frame (seconds).
+    private var lastRenderSubmitSeconds: Double = 0
+    /// Render frame stats from the most recent rendered frame.
+    private var lastRenderFrameStats: RenderFrameStats = .init()
 
     public init(projectDirectory: String,
                 backendConfig: WGPUDeviceConfig? = nil,
@@ -176,13 +180,14 @@ public final class EditorApplication: @unchecked Sendable {
     public func tick(deltaTime: Double) {
         // Under the event-driven frame policy the loop can sleep for seconds;
         // the wake-up tick must not step simulation/animation by the whole gap.
-        let deltaTime = min(max(deltaTime, 0), 0.25)
-        let didUpdateFrameTiming = recordFrameTiming(deltaTime)
+        let simulationDelta = min(max(deltaTime, 0), 0.25)
+        let didUpdateStats = recordAndDispatchFrameStats(deltaTime: deltaTime,
+                                                         simulationDelta: simulationDelta)
         store.dispatch(.tickFrame(store.state.frameIndex &+ 1))
         let inputEvents = pendingViewportEvents
         pendingViewportEvents.removeAll(keepingCapacity: true)
         inputState.process(inputEvents)
-        scene.tickScene(deltaTime: deltaTime)
+        scene.tickScene(deltaTime: simulationDelta)
         let drawableSize = effectiveViewportDrawableSize()
         let jointPalettes = scene.currentJointPaletteMap()
         let state = store.state
@@ -201,7 +206,7 @@ public final class EditorApplication: @unchecked Sendable {
             now: monotonicNow()
         )
         engine.tick(
-            deltaTime: deltaTime,
+            deltaTime: simulationDelta,
             inputEvents: inputEvents,
             drawableSize: drawableSize,
             shouldRender: state.shouldRender && renderViewport,
@@ -214,7 +219,7 @@ public final class EditorApplication: @unchecked Sendable {
             lastViewportSurfaceState = surface
             store.dispatch(.viewportSurfaceUpdated)
         }
-        if didUpdateFrameTiming {
+        if didUpdateStats {
             store.dispatch(.frameTimingUpdated)
         }
     }
@@ -283,7 +288,10 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     public func setViewportRenderCompletionHandler(_ handler: (@Sendable (ViewportSurfaceState) -> Void)?) {
-        engine.setRenderCompletionHandler { completion in
+        engine.setRenderCompletionHandler { [weak self] completion in
+            guard let self else { return }
+            self.lastRenderSubmitSeconds = completion.renderSubmitSeconds
+            self.lastRenderFrameStats = completion.stats
             handler?(completion.viewportSurfaceState)
         }
     }
@@ -845,8 +853,8 @@ public final class EditorApplication: @unchecked Sendable {
         engine.currentViewportSurfaceState()
     }
 
-    public func currentFrameTiming() -> EditorFrameTiming {
-        frameTiming
+    public func currentFrameStats() -> EditorFrameStats {
+        store.state.frameStats
     }
 
     public func currentSelectedEntityTranslation() -> SIMD3<Float>? {
@@ -1703,28 +1711,46 @@ public final class EditorApplication: @unchecked Sendable {
         }
     }
 
-    private func recordFrameTiming(_ deltaTime: Double) -> Bool {
+    /// Accumulates raw delta time and dispatches `EditorFrameStats` when the
+    /// 250ms averaging window is full. Combines:
+    ///   - PhaseTimings from EngineHost (input / simulation / renderPrepare / renderSubmit)
+    ///   - GPU present time from the render completion handler
+    ///   - RenderFrameStats from the GPU backend (draw calls, passes, etc.)
+    private func recordAndDispatchFrameStats(deltaTime: Double,
+                                              simulationDelta: Double) -> Bool {
         guard deltaTime.isFinite, deltaTime > 0 else { return false }
         frameTimingAccumulator += deltaTime
         frameTimingCount += 1
         guard frameTimingAccumulator >= 0.25 else { return false }
 
-        let fps = Double(frameTimingCount) / frameTimingAccumulator
-        let frameMs = (frameTimingAccumulator / Double(frameTimingCount)) * 1_000
-        frameTiming = EditorFrameTiming(framesPerSecond: fps, frameMilliseconds: frameMs)
+        let phaseTimings = engine.lastTimings
+        let renderStats = lastRenderFrameStats
+
+        let frameSeconds = frameTimingAccumulator / Double(frameTimingCount)
+
+        let stats = EditorFrameStats(
+            frameSeconds: frameSeconds,
+            inputSeconds: phaseTimings.inputSeconds,
+            simulationSeconds: phaseTimings.simulationSeconds,
+            renderPrepareSeconds: phaseTimings.renderPrepareSeconds,
+            renderSubmitSeconds: phaseTimings.renderSubmitSeconds,
+            gpuPresentSeconds: lastRenderSubmitSeconds,
+            drawCallCount: renderStats.drawCallCount,
+            passCount: renderStats.passCount,
+            renderBundleCount: renderStats.renderBundleCount,
+            shadowedLightCount: renderStats.shadowedLightCount,
+            shadowCascadeCount: renderStats.shadowCascadeCount,
+            shadowMapResolution: renderStats.shadowMapResolution,
+            cpuSkyboxEncodeNS: renderStats.cpuSkyboxEncodeNS,
+            cpuBaseEncodeNS: renderStats.cpuBaseEncodeNS,
+            cpuPostProcessEncodeNS: renderStats.cpuPostProcessEncodeNS
+        )
+
+        store.dispatch(.updateFrameStats(stats))
+
+        // Reset the averaging window.
         frameTimingAccumulator = 0
         frameTimingCount = 0
         return true
-    }
-}
-
-public struct EditorFrameTiming: Sendable, Equatable {
-    public var framesPerSecond: Double
-    public var frameMilliseconds: Double
-
-    public init(framesPerSecond: Double = 0,
-                frameMilliseconds: Double = 0) {
-        self.framesPerSecond = framesPerSecond
-        self.frameMilliseconds = frameMilliseconds
     }
 }
