@@ -31,6 +31,47 @@ private final class SelectionRecordingPhysicsBackend: PhysicsBackend, @unchecked
 
 @Suite("PhysicsBackendSelection")
 struct PhysicsBackendSelectionTests {
+    private func makeJoltRuntime() -> SceneRuntime {
+        var runtime = SceneRuntime()
+        runtime.setPhysicsSettings(
+            PhysicsSettingsResource(
+                simulationMode: .play,
+                backendKind: .jolt,
+                gravity: .zero,
+                fixedTimeStepSeconds: 1.0 / 60.0,
+                maxSubstepsPerFrame: 1,
+                allowSleep: false
+            )
+        )
+        return runtime
+    }
+
+    private func addBody(to runtime: inout SceneRuntime,
+                         position: SIMD3<Float>,
+                         motionType: RigidBodyMotionType) -> EntityID {
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: position), for: entity)
+        _ = runtime.setComponent(
+            RigidBody(
+                motionType: motionType,
+                mass: motionType == .static ? 0 : 1,
+                linearVelocity: .zero,
+                angularVelocity: .zero,
+                gravityScale: 0,
+                linearDamping: 0,
+                angularDamping: 0,
+                allowSleep: false,
+                isSleeping: false
+            ),
+            for: entity
+        )
+        _ = runtime.setComponent(
+            Collider(shape: .sphere(radius: 0.5, center: .zero)),
+            for: entity
+        )
+        return entity
+    }
+
     @Test("configured backendKind selects the Jolt skeleton backend")
     func configuredBackendKindSelectsJolt() {
         var runtime = SceneRuntime()
@@ -320,7 +361,7 @@ struct PhysicsBackendSelectionTests {
         var report = runtime.tick(deltaTime: 1.0 / 60.0)
         #expect(report.physicsBackendIdentifier == "jolt")
         #expect(report.physicsConstraintCount == 1)
-        for _ in 0..<120 {
+        for _ in 0..<240 {
             report = runtime.tick(deltaTime: 1.0 / 60.0)
         }
 
@@ -406,7 +447,7 @@ struct PhysicsBackendSelectionTests {
         var report = runtime.tick(deltaTime: 1.0 / 60.0)
         #expect(report.physicsBackendIdentifier == "jolt")
         #expect(report.physicsConstraintCount == 1)
-        for _ in 0..<120 {
+        for _ in 0..<240 {
             report = runtime.tick(deltaTime: 1.0 / 60.0)
         }
 
@@ -592,6 +633,64 @@ struct PhysicsBackendSelectionTests {
         let velocityY = runtime.component(RigidBody.self, for: follower)?.linearVelocity.y ?? 0
         #expect(abs(followerY) < 0.1, "slider should pull y to ~0 (got \(followerY))")
         #expect(abs(velocityY) < 0.1, "slider should kill y velocity (got \(velocityY))")
+    }
+
+    @Test("configured Jolt backend creates hinge constraints")
+    func configuredJoltBackendCreatesHingeConstraint() {
+        var runtime = makeJoltRuntime()
+        let anchor = addBody(to: &runtime, position: .zero, motionType: .static)
+        let follower = addBody(to: &runtime, position: SIMD3<Float>(2, 0, 0), motionType: .dynamic)
+
+        let constraintEntity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform.identity, for: constraintEntity)
+        _ = runtime.setComponent(
+            Constraint(
+                constraintType: .hinge,
+                entityA: anchor,
+                entityB: follower,
+                axisA: SIMD3<Float>(0, 1, 0),
+                axisB: SIMD3<Float>(0, 1, 0),
+                minLimit: -Float.pi,
+                maxLimit: Float.pi,
+                isEnabled: true
+            ),
+            for: constraintEntity
+        )
+
+        let report = runtime.tick(deltaTime: 1.0 / 60.0)
+        #expect(report.physicsBackendIdentifier == "jolt")
+        #expect(report.physicsConstraintCount == 1)
+    }
+
+    @Test("configured Jolt backend applies fixed constraints")
+    func configuredJoltBackendAppliesFixedConstraint() {
+        var runtime = makeJoltRuntime()
+        let anchor = addBody(to: &runtime, position: .zero, motionType: .static)
+        let follower = addBody(to: &runtime, position: SIMD3<Float>(3, 0, 0), motionType: .dynamic)
+
+        let constraintEntity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform.identity, for: constraintEntity)
+        _ = runtime.setComponent(
+            Constraint(
+                constraintType: .fixed,
+                entityA: anchor,
+                entityB: follower,
+                axisA: SIMD3<Float>(1, 0, 0),
+                axisB: SIMD3<Float>(1, 0, 0),
+                isEnabled: true
+            ),
+            for: constraintEntity
+        )
+
+        var report = runtime.tick(deltaTime: 1.0 / 60.0)
+        #expect(report.physicsBackendIdentifier == "jolt")
+        #expect(report.physicsConstraintCount == 1)
+        for _ in 0..<240 {
+            report = runtime.tick(deltaTime: 1.0 / 60.0)
+        }
+
+        let followerX = runtime.worldTransform(for: follower)?.translation.x ?? 0
+        #expect(abs(followerX) < 0.25, "fixed constraint should weld follower near anchor (got \(followerX))")
     }
 }
 

@@ -1,4 +1,5 @@
 @testable import EditorCore
+import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
 import SceneRuntime
@@ -81,6 +82,47 @@ struct EditorInspectorSectionsTests {
         }
         binding.wrappedValue = 0.25
         #expect(adapter.scene.component(AudioListener.self, for: EntityID(rawValue: id)!)?.masterVolume == 0.25)
+    }
+
+    // MARK: - Animation Graph
+
+    @Test("animation graph definition JSON binding writes back")
+    func animationGraphDefinitionBinding() throws {
+        let adapter = EditorSceneAdapter()
+        let id = makeEntity(in: adapter)
+        let entity = EntityID(rawValue: id)!
+        _ = adapter.addComponent(.animationGraphPlayer, to: id)
+
+        guard case let .json(binding, _) =
+                field(adapter, id, section: "animation-graph-player", field: "anim-graph-definition") else {
+            Issue.record("expected animation graph definition JSON field"); return
+        }
+
+        let graph = AnimationGraph(
+            blendSpaces1D: [
+                AnimationBlendSpace1D(name: "Locomotion",
+                                      parameter: "speed",
+                                      samples: [
+                                        AnimationBlendSample1D(clipName: "idle", threshold: 0),
+                                        AnimationBlendSample1D(clipName: "walk", threshold: 1),
+                                      ]),
+            ],
+            stateMachine: AnimationStateMachine(
+                initialState: "Move",
+                states: [
+                    AnimationState(name: "Move", motion: .blendSpace1D("Locomotion")),
+                ]
+            )
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(graph)
+        binding.wrappedValue = String(decoding: data, as: UTF8.self)
+
+        let player = adapter.scene.component(AnimationGraphPlayer.self, for: entity)
+        #expect(player?.graph == graph)
+        #expect(player?.activeState == "Move")
+        #expect(binding.wrappedValue.contains("\"blendSpace1D\""))
     }
 
     // MARK: - Particle Emitter
