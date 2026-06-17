@@ -39,6 +39,13 @@ public protocol AudioBackend: AnyObject {
     /// Update the gain of a live voice (used for per-tick distance attenuation).
     func setVolume(_ voice: AudioVoiceID, volume: Float)
 
+    /// Update stereo pan for a live voice. `-1` is fully left, `0` centered,
+    /// and `1` fully right. Backends without a pan-capable mixer may ignore it.
+    func setPan(_ voice: AudioVoiceID, pan: Float)
+
+    /// Update playback rate for a live voice. Used by scene-space Doppler.
+    func setPitch(_ voice: AudioVoiceID, pitch: Float)
+
     /// Dedicated single background-music channel (independent of the voice pool).
     func playBGM(clip: String, volume: Float, loop: Bool)
     func stopBGM()
@@ -53,4 +60,6 @@ public protocol AudioBackend: AnyObject {
 
 public extension AudioBackend {
     func pump() {}
+    func setPan(_ voice: AudioVoiceID, pan: Float) {}
+    func setPitch(_ voice: AudioVoiceID, pitch: Float) {}
 }

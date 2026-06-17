@@ -24,6 +24,7 @@ public final class SDL3AudioBackend: AudioBackend, @unchecked Sendable {
         var stream: OpaquePointer
         var clip: String
         var loop: Bool
+        var pan: Float = 0
     }
 
     private var clips: [String: Clip] = [:]
@@ -86,6 +87,19 @@ public final class SDL3AudioBackend: AudioBackend, @unchecked Sendable {
     public func setVolume(_ voice: AudioVoiceID, volume: Float) {
         guard let v = voices[voice.raw] else { return }
         _ = SDL_SetAudioStreamGain(v.stream, volume)
+    }
+
+    public func setPan(_ voice: AudioVoiceID, pan: Float) {
+        guard var v = voices[voice.raw] else { return }
+        // SDL's stream gain is scalar. Keep the voice state wired so the engine
+        // API and tests can evolve independently of the eventual mixer matrix.
+        v.pan = min(1, max(-1, pan))
+        voices[voice.raw] = v
+    }
+
+    public func setPitch(_ voice: AudioVoiceID, pitch: Float) {
+        guard let v = voices[voice.raw] else { return }
+        _ = SDL_SetAudioStreamFrequencyRatio(v.stream, max(0.01, pitch))
     }
 
     public func pump() {
