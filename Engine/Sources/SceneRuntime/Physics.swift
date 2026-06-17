@@ -142,6 +142,7 @@ public struct Collider: RuntimeComponent, Sendable, Equatable {
 public enum ConstraintType: String, Sendable, Equatable {
     case pointToPoint
     case hinge
+    case fixed
     case slider
     case distance
 }

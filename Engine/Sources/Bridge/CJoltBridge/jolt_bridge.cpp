@@ -17,10 +17,13 @@
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
 #include <Jolt/Physics/Constraints/PointConstraint.h>
+#include <Jolt/Physics/Constraints/HingeConstraint.h>
+#include <Jolt/Physics/Constraints/FixedConstraint.h>
 #include <Jolt/Physics/Constraints/SliderConstraint.h>
 #include <Jolt/Physics/Constraints/DistanceConstraint.h>
 
 #include <atomic>
+#include <cmath>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
@@ -42,8 +45,10 @@ constexpr uint32_t kMotionDynamic   = 1u;
 constexpr uint32_t kMotionKinematic = 2u;
 
 constexpr uint8_t kConstraintPointToPoint = 0u;
+constexpr uint8_t kConstraintHinge        = 1u;
 constexpr uint8_t kConstraintSlider       = 2u;
 constexpr uint8_t kConstraintDistance     = 3u;
+constexpr uint8_t kConstraintFixed        = 4u;
 
 // Layer setup — minimal two-layer scheme (non-moving + moving).
 namespace Layers {
@@ -109,6 +114,19 @@ JPH::EMotionType to_motion_type(uint32_t raw) {
 
 JPH::ObjectLayer object_layer_for(JPH::EMotionType m) {
     return (m == JPH::EMotionType::Static) ? Layers::NON_MOVING : Layers::MOVING;
+}
+
+JPH::Vec3 safe_normalized(float x, float y, float z, JPH::Vec3 fallback) {
+    JPH::Vec3 v(x, y, z);
+    float len_sq = v.LengthSq();
+    return len_sq > 1.0e-8f ? v / sqrtf(len_sq) : fallback;
+}
+
+JPH::Vec3 perpendicular_axis(JPH::Vec3 axis) {
+    JPH::Vec3 candidate = fabsf(axis.Dot(JPH::Vec3::sAxisX())) < 0.9f
+        ? JPH::Vec3::sAxisX()
+        : JPH::Vec3::sAxisZ();
+    return axis.Cross(candidate).Normalized();
 }
 
 // Build a Shape from the descriptor's flag+geom fields. Returns null if unsupported.
@@ -388,12 +406,26 @@ struct GuavaJoltContextImpl {
                     s.mPoint2 = JPH::RVec3(c.pivot_b_x, c.pivot_b_y, c.pivot_b_z);
                     s.mSpace = JPH::EConstraintSpace::LocalToBodyCOM;
                     jc = s.Create(*body_a, *body_b);
+                } else if (c.constraint_type == kConstraintHinge) {
+                    JPH::Vec3 axis1 = safe_normalized(c.axis_a_x, c.axis_a_y, c.axis_a_z, JPH::Vec3::sAxisY());
+                    JPH::Vec3 axis2 = safe_normalized(c.axis_b_x, c.axis_b_y, c.axis_b_z, axis1);
+                    JPH::HingeConstraintSettings s;
+                    s.mPoint1 = JPH::RVec3(c.pivot_a_x, c.pivot_a_y, c.pivot_a_z);
+                    s.mPoint2 = JPH::RVec3(c.pivot_b_x, c.pivot_b_y, c.pivot_b_z);
+                    s.mHingeAxis1 = axis1;
+                    s.mHingeAxis2 = axis2;
+                    s.mNormalAxis1 = perpendicular_axis(axis1);
+                    s.mNormalAxis2 = perpendicular_axis(axis2);
+                    s.mLimitsMin = c.min_limit;
+                    s.mLimitsMax = c.max_limit;
+                    s.mSpace = JPH::EConstraintSpace::LocalToBodyCOM;
+                    jc = s.Create(*body_a, *body_b);
                 } else if (c.constraint_type == kConstraintSlider) {
                     JPH::SliderConstraintSettings s;
                     s.mPoint1 = JPH::RVec3(c.pivot_a_x, c.pivot_a_y, c.pivot_a_z);
                     s.mPoint2 = JPH::RVec3(c.pivot_b_x, c.pivot_b_y, c.pivot_b_z);
-                    s.mSliderAxis1 = JPH::Vec3(c.axis_a_x, c.axis_a_y, c.axis_a_z).Normalized();
-                    s.mSliderAxis2 = JPH::Vec3(c.axis_b_x, c.axis_b_y, c.axis_b_z).Normalized();
+                    s.mSliderAxis1 = safe_normalized(c.axis_a_x, c.axis_a_y, c.axis_a_z, JPH::Vec3::sAxisX());
+                    s.mSliderAxis2 = safe_normalized(c.axis_b_x, c.axis_b_y, c.axis_b_z, s.mSliderAxis1);
                     s.mLimitsMin = c.min_limit;
                     s.mLimitsMax = c.max_limit;
                     s.mSpace = JPH::EConstraintSpace::LocalToBodyCOM;
@@ -404,6 +436,18 @@ struct GuavaJoltContextImpl {
                     s.mPoint2 = JPH::RVec3(c.pivot_b_x, c.pivot_b_y, c.pivot_b_z);
                     s.mMinDistance = c.min_limit;
                     s.mMaxDistance = c.max_limit;
+                    s.mSpace = JPH::EConstraintSpace::LocalToBodyCOM;
+                    jc = s.Create(*body_a, *body_b);
+                } else if (c.constraint_type == kConstraintFixed) {
+                    JPH::Vec3 axis1 = safe_normalized(c.axis_a_x, c.axis_a_y, c.axis_a_z, JPH::Vec3::sAxisX());
+                    JPH::Vec3 axis2 = safe_normalized(c.axis_b_x, c.axis_b_y, c.axis_b_z, axis1);
+                    JPH::FixedConstraintSettings s;
+                    s.mPoint1 = JPH::RVec3(c.pivot_a_x, c.pivot_a_y, c.pivot_a_z);
+                    s.mPoint2 = JPH::RVec3(c.pivot_b_x, c.pivot_b_y, c.pivot_b_z);
+                    s.mAxisX1 = axis1;
+                    s.mAxisY1 = perpendicular_axis(axis1);
+                    s.mAxisX2 = axis2;
+                    s.mAxisY2 = perpendicular_axis(axis2);
                     s.mSpace = JPH::EConstraintSpace::LocalToBodyCOM;
                     jc = s.Create(*body_a, *body_b);
                 }

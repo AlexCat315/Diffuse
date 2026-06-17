@@ -243,6 +243,69 @@ struct SceneSerializerTests {
         #expect(listener!.masterVolume == 0.9)
     }
 
+    // MARK: - Animation
+
+    @Test("round-trip: animation graph player")
+    func animationGraphPlayerRoundTrip() throws {
+        var original = SceneRuntime()
+        let entity = original.createEntity()
+        let graph = AnimationGraph(
+            blendSpaces1D: [
+                AnimationBlendSpace1D(
+                    name: "locomotion",
+                    parameter: "speed",
+                    samples: [
+                        AnimationBlendSample1D(clipName: "idle", threshold: 0),
+                        AnimationBlendSample1D(clipName: "run", threshold: 1),
+                    ]
+                ),
+            ],
+            stateMachine: AnimationStateMachine(
+                initialState: "Idle",
+                states: [
+                    AnimationState(name: "Idle", motion: .clip("idle")),
+                    AnimationState(name: "Run", motion: .blendSpace1D("locomotion"), speed: 1.25),
+                ],
+                transitions: [
+                    AnimationTransition(from: "Idle",
+                                        to: "Run",
+                                        parameter: "speed",
+                                        comparison: .greaterThan,
+                                        threshold: 0.5,
+                                        duration: 0.2),
+                ]
+            )
+        )
+        _ = original.setComponent(
+            AnimationGraphPlayer(graph: graph,
+                                 parameters: ["speed": 0.75],
+                                 activeState: "Run",
+                                 previousState: "Idle",
+                                 activeTime: 0.4,
+                                 previousTime: 1.2,
+                                 transitionElapsed: 0.1,
+                                 transitionDuration: 0.2,
+                                 speed: 1.5,
+                                 isPlaying: false),
+            for: entity
+        )
+
+        let data = try SceneSerializer.serialize(original)
+        var restored = SceneRuntime()
+        try SceneSerializer.deserialize(data, into: &restored)
+
+        let entities = restored.entities()
+        let player = restored.component(AnimationGraphPlayer.self, for: entities[0])
+        #expect(player != nil)
+        #expect(player?.graph.blendSpaces1D.first?.samples.count == 2)
+        #expect(player?.graph.stateMachine.transitions.first?.comparison == .greaterThan)
+        #expect(player?.graph.stateMachine.states.last?.motion == .blendSpace1D("locomotion"))
+        #expect(player?.parameters["speed"] == 0.75)
+        #expect(player?.activeState == "Run")
+        #expect(player?.previousState == "Idle")
+        #expect(player?.isPlaying == false)
+    }
+
     // MARK: - Multi-entity
 
     @Test("round-trip: full scene with multiple entity types")
