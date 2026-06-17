@@ -24,6 +24,12 @@ public final class AudioEngine: @unchecked Sendable {
     /// Tracked voices keyed by the entity that owns them.
     private var entityVoices: [EntityID: AudioVoiceID] = [:]
 
+    private struct ResolvedListener {
+        var position: SIMD3<Float>
+        var masterVolume: Float
+        var linearVelocity: SIMD3<Float>
+    }
+
     /// Inject a specific backend (used by tests and embedders).
     public init(backend: AudioBackend) {
         self.backend = backend
@@ -96,11 +102,14 @@ public final class AudioEngine: @unchecked Sendable {
 
             if source.playOnAwake && !awakened.contains(id) {
                 awakened.insert(id)
-                playEntity(id: id, source: source, scene: scene, listenerPosition: resolvedListener)
+                playEntity(id: id, source: source, scene: scene, listener: resolvedListener)
             } else if let voice = entityVoices[id], backend.isActive(voice) {
-                // Re-attenuate live voices so moving sources fade with distance.
-                backend.setVolume(voice, volume: attenuatedVolume(
-                    source: source, entityID: id, scene: scene, listenerPosition: resolvedListener))
+                // Re-mix live voices so moving sources fade and pan with position.
+                let mix = spatialMix(source: source, entityID: id, scene: scene,
+                                     listener: resolvedListener)
+                backend.setVolume(voice, volume: mix.volume)
+                backend.setPan(voice, pan: mix.pan)
+                backend.setPitch(voice, pitch: mix.pitch)
             }
         }
 
@@ -111,16 +120,23 @@ public final class AudioEngine: @unchecked Sendable {
 
     public func playEntity(id: EntityID, source: AudioSource, scene: SceneRuntime,
                            listenerPosition: SIMD3<Float> = .zero) {
+        playEntity(id: id, source: source, scene: scene,
+                   listener: ResolvedListener(position: listenerPosition, masterVolume: 1,
+                                              linearVelocity: .zero))
+    }
+
+    private func playEntity(id: EntityID, source: AudioSource, scene: SceneRuntime,
+                            listener: ResolvedListener) {
         guard preload(source.clipName) else { return }
         if let existing = entityVoices[id] { backend.stop(existing) }
-        let volume = attenuatedVolume(source: source, entityID: id, scene: scene,
-                                      listenerPosition: listenerPosition)
-        guard let voice = backend.play(clip: source.clipName, volume: volume,
-                                       pitch: source.pitch, loop: source.loop) else {
+        let mix = spatialMix(source: source, entityID: id, scene: scene, listener: listener)
+        guard let voice = backend.play(clip: source.clipName, volume: mix.volume,
+                                       pitch: mix.pitch, loop: source.loop) else {
             entityVoices.removeValue(forKey: id)
             return
         }
         entityVoices[id] = voice
+        backend.setPan(voice, pan: mix.pan)
     }
 
     public func stopEntity(id: EntityID) {
@@ -138,25 +154,56 @@ public final class AudioEngine: @unchecked Sendable {
 
     // MARK: - Attenuation (platform-neutral)
 
-    private func resolveListener(scene: SceneRuntime, fallback: SIMD3<Float>) -> SIMD3<Float> {
+    private func resolveListener(scene: SceneRuntime, fallback: SIMD3<Float>) -> ResolvedListener {
         for id in scene.entities(with: AudioListener.self) {
-            if let wt = scene.component(WorldTransform.self, for: id) {
-                return wt.translation
-            }
+            guard let listener = scene.component(AudioListener.self, for: id) else { continue }
+            let position = scene.component(WorldTransform.self, for: id)?.translation ?? fallback
+            let velocity = scene.component(RigidBody.self, for: id)?.linearVelocity ?? .zero
+            return ResolvedListener(position: position, masterVolume: listener.masterVolume,
+                                    linearVelocity: velocity)
         }
-        return fallback
+        return ResolvedListener(position: fallback, masterVolume: 1, linearVelocity: .zero)
     }
 
-    private func attenuatedVolume(source: AudioSource, entityID: EntityID,
-                                  scene: SceneRuntime, listenerPosition: SIMD3<Float>) -> Float {
-        guard source.spatialBlend > 0,
+    private func spatialMix(source: AudioSource, entityID: EntityID,
+                            scene: SceneRuntime,
+                            listener: ResolvedListener) -> (volume: Float, pan: Float, pitch: Float) {
+        let spatialBlend = simd_clamp(source.spatialBlend, 0, 1)
+        guard spatialBlend > 0,
               let wt = scene.component(WorldTransform.self, for: entityID) else {
-            return source.volume
+            return (source.volume * listener.masterVolume, 0, max(0.01, source.pitch))
         }
-        let dist = simd_length(wt.translation - listenerPosition)
+
+        let offset = wt.translation - listener.position
+        let dist = simd_length(offset)
         let falloff = max(0, 1 - dist / 50)
         let spatial = source.volume * falloff
-        let flat = source.volume * (1 - source.spatialBlend)
-        return flat + spatial * source.spatialBlend
+        let flat = source.volume * (1 - spatialBlend)
+        let volume = (flat + spatial * spatialBlend) * listener.masterVolume
+
+        let pitch = dopplerPitch(sourcePitch: source.pitch, sourceVelocity:
+            scene.component(RigidBody.self, for: entityID)?.linearVelocity ?? .zero,
+            listenerVelocity: listener.linearVelocity, offset: offset, spatialBlend: spatialBlend)
+
+        let horizontalDistance = sqrt(offset.x * offset.x + offset.z * offset.z)
+        guard horizontalDistance > 0.0001 else { return (volume, 0, pitch) }
+        let pan = simd_clamp(offset.x / horizontalDistance, -1, 1) * spatialBlend
+        return (volume, pan, pitch)
+    }
+
+    private func dopplerPitch(sourcePitch: Float, sourceVelocity: SIMD3<Float>,
+                              listenerVelocity: SIMD3<Float>, offset: SIMD3<Float>,
+                              spatialBlend: Float) -> Float {
+        let distance = simd_length(offset)
+        guard distance > 0.0001 else { return max(0.01, sourcePitch) }
+        let direction = offset / distance
+        let speedOfSound: Float = 343
+        let maxRadial = speedOfSound * 0.9
+        let sourceRadial = simd_clamp(simd_dot(sourceVelocity, direction), -maxRadial, maxRadial)
+        let listenerRadial = simd_clamp(simd_dot(listenerVelocity, direction), -maxRadial, maxRadial)
+        let doppler = simd_clamp((speedOfSound + listenerRadial) / (speedOfSound + sourceRadial),
+                                 0.5, 2)
+        let blended = 1 + (doppler - 1) * spatialBlend
+        return max(0.01, sourcePitch * blended)
     }
 }

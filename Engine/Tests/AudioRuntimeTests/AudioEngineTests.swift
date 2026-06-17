@@ -8,11 +8,12 @@ import SceneRuntime
 /// (entity tracking, play-on-awake, spatial attenuation, reset) can be asserted
 /// without any real sound device.
 private final class MockAudioBackend: AudioBackend, @unchecked Sendable {
-    struct PlayCall { let clip: String; var volume: Float; let pitch: Float; let loop: Bool }
+    struct PlayCall { let clip: String; var volume: Float; var pitch: Float; let loop: Bool }
 
     private(set) var loaded: Set<String> = []
     private(set) var plays: [AudioVoiceID: PlayCall] = [:]
     private(set) var playOrder: [AudioVoiceID] = []
+    private(set) var pans: [AudioVoiceID: Float] = [:]
     private(set) var stopped: [AudioVoiceID] = []
     private(set) var bgmPlays: [String] = []
     private(set) var stopAllCount = 0
@@ -34,12 +35,15 @@ private final class MockAudioBackend: AudioBackend, @unchecked Sendable {
     func stop(_ voice: AudioVoiceID) { stopped.append(voice); active.remove(voice) }
     func isActive(_ voice: AudioVoiceID) -> Bool { active.contains(voice) }
     func setVolume(_ voice: AudioVoiceID, volume: Float) { plays[voice]?.volume = volume }
+    func setPan(_ voice: AudioVoiceID, pan: Float) { pans[voice] = pan }
+    func setPitch(_ voice: AudioVoiceID, pitch: Float) { plays[voice]?.pitch = pitch }
     func playBGM(clip: String, volume: Float, loop: Bool) { bgmPlays.append(clip) }
     func stopBGM() {}
     func stopAll() { stopAllCount += 1; active.removeAll() }
     func pump() { pumpCount += 1 }
 
     var lastPlay: PlayCall? { playOrder.last.flatMap { plays[$0] } }
+    var lastVoice: AudioVoiceID? { playOrder.last }
 }
 
 @Suite("AudioEngine")
@@ -139,6 +143,81 @@ struct AudioEngineTests {
 
         engine.tick(scene: scene)
         #expect(mock.lastPlay?.volume == 0.8)
+        let voice = try #require(mock.lastVoice)
+        #expect(mock.pans[voice] == 0)
+    }
+
+    @Test("spatial sources pan from listener-relative position and update while moving")
+    func spatialPanningUpdates() throws {
+        let dir = try makeClipDir(["beep"])
+        let mock = MockAudioBackend()
+        let engine = AudioEngine(backend: mock)
+        engine.addSearchURL(dir)
+
+        var scene = SceneRuntime()
+        let listener = scene.createEntity()
+        _ = scene.setComponent(AudioListener(), for: listener)
+        _ = scene.setComponent(worldTransform(.zero), for: listener)
+
+        let source = scene.createEntity()
+        _ = scene.setComponent(AudioSource(clipName: "beep", playOnAwake: true, spatialBlend: 1), for: source)
+        _ = scene.setComponent(worldTransform(SIMD3<Float>(10, 0, 0)), for: source)
+
+        engine.tick(scene: scene)
+        let voice = try #require(mock.lastVoice)
+        #expect(abs((mock.pans[voice] ?? 0) - 1) < 0.001)
+
+        _ = scene.setComponent(worldTransform(SIMD3<Float>(-10, 0, 0)), for: source)
+        engine.tick(scene: scene)
+        #expect(abs((mock.pans[voice] ?? 0) + 1) < 0.001)
+    }
+
+    @Test("spatial sources apply Doppler pitch from rigid body velocity")
+    func spatialDopplerPitchUpdates() throws {
+        let dir = try makeClipDir(["beep"])
+        let mock = MockAudioBackend()
+        let engine = AudioEngine(backend: mock)
+        engine.addSearchURL(dir)
+
+        var scene = SceneRuntime()
+        let listener = scene.createEntity()
+        _ = scene.setComponent(AudioListener(), for: listener)
+        _ = scene.setComponent(worldTransform(.zero), for: listener)
+
+        let source = scene.createEntity()
+        _ = scene.setComponent(AudioSource(clipName: "beep", pitch: 1, playOnAwake: true, spatialBlend: 1), for: source)
+        _ = scene.setComponent(worldTransform(SIMD3<Float>(10, 0, 0)), for: source)
+        _ = scene.setComponent(RigidBody(linearVelocity: SIMD3<Float>(-100, 0, 0)), for: source)
+
+        engine.tick(scene: scene)
+        let voice = try #require(mock.lastVoice)
+        let approachingPitch = try #require(mock.plays[voice]?.pitch)
+        #expect(approachingPitch > 1.3)
+
+        _ = scene.setComponent(RigidBody(linearVelocity: SIMD3<Float>(100, 0, 0)), for: source)
+        engine.tick(scene: scene)
+        let recedingPitch = try #require(mock.plays[voice]?.pitch)
+        #expect(recedingPitch < 0.8)
+    }
+
+    @Test("listener master volume scales scene playback")
+    func listenerMasterVolumeScalesPlayback() throws {
+        let dir = try makeClipDir(["beep"])
+        let mock = MockAudioBackend()
+        let engine = AudioEngine(backend: mock)
+        engine.addSearchURL(dir)
+
+        var scene = SceneRuntime()
+        let listener = scene.createEntity()
+        _ = scene.setComponent(AudioListener(masterVolume: 0.25), for: listener)
+        _ = scene.setComponent(worldTransform(.zero), for: listener)
+
+        let source = scene.createEntity()
+        _ = scene.setComponent(AudioSource(clipName: "beep", volume: 0.8, playOnAwake: true, spatialBlend: 0), for: source)
+
+        engine.tick(scene: scene)
+        let volume = try #require(mock.lastPlay?.volume)
+        #expect(abs(volume - 0.2) < 0.001)
     }
 
     @Test("resetPlaybackState stops everything and re-arms play-on-awake")
