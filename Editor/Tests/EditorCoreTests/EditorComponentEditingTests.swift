@@ -23,6 +23,23 @@ struct EditorComponentEditingTests {
         #expect(!adapter.addableComponentKinds(on: id).contains(.particleEmitter))
     }
 
+    @Test("adding an animation graph creates a default graph player")
+    func addAnimationGraphPlayer() {
+        let adapter = EditorSceneAdapter()
+        let id = makeEntity(in: adapter)
+        let entity = EntityID(rawValue: id)!
+
+        #expect(adapter.addComponent(.animationGraphPlayer, to: id) == true)
+        let player = adapter.scene.component(AnimationGraphPlayer.self, for: entity)
+        #expect(player != nil)
+        #expect(player?.graph.stateMachine.initialState == "Default")
+        #expect(player?.graph.stateMachine.states.count == 1)
+        #expect(adapter.componentKinds(on: id).contains(.animationGraphPlayer))
+
+        #expect(adapter.removeComponent(.animationGraphPlayer, from: id) == true)
+        #expect(adapter.scene.component(AnimationGraphPlayer.self, for: entity) == nil)
+    }
+
     @Test("adding an existing component does not overwrite and returns false")
     func addExistingIsNoOp() {
         let adapter = EditorSceneAdapter()

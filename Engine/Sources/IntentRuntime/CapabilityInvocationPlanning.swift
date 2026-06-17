@@ -430,6 +430,12 @@ private struct CapabilityOperationProjection {
             self.arguments["speed"] = .number(Double(speed))
             self.arguments["loop"] = .bool(loop)
             self.arguments["is_playing"] = .bool(isPlaying)
+        case let .setAnimationGraphPlayer(_, player):
+            self.verb = "scene.set_animation_graph_player"
+            self.arguments["state_count"] = .integer(Int64(player.graph.stateMachine.states.count))
+            self.arguments["blend_space_count"] = .integer(Int64(player.graph.blendSpaces1D.count))
+            self.arguments["speed"] = .number(Double(player.speed))
+            self.arguments["is_playing"] = .bool(player.isPlaying)
         case let .setAudioListener(_, masterVolume):
             self.verb = "scene.set_audio_listener"
             self.arguments["master_volume"] = .number(Double(masterVolume))

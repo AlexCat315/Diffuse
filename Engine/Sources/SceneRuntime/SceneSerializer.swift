@@ -14,11 +14,24 @@ private func jsonToVec4(_ a: [Float]) -> SIMD4<Float>? {
 private func jsonToFloat(_ val: Any?) -> Float? {
     (val as? NSNumber).map { Float(truncating: $0) }
 }
+private func jsonToDouble(_ val: Any?) -> Double? {
+    (val as? NSNumber).map { Double(truncating: $0) }
+}
 private func jsonToBool(_ val: Any?) -> Bool? { val as? Bool }
 private func jsonToString(_ val: Any?) -> String? { val as? String }
 private func jsonToInt(_ val: Any?) -> Int? { (val as? NSNumber).map { Int(truncating: $0) } }
 private func jsonToDict(_ val: Any?) -> [String: Any]? { val as? [String: Any] }
 private func jsonToArray(_ val: Any?) -> [Any]? { val as? [Any] }
+private func jsonToStringFloatDict(_ val: Any?) -> [String: Float]? {
+    guard let dict = val as? [String: Any] else { return nil }
+    var out: [String: Float] = [:]
+    for (key, value) in dict {
+        if let number = value as? NSNumber {
+            out[key] = Float(truncating: number)
+        }
+    }
+    return out
+}
 private func jsonToFloatArray(_ val: Any?) -> [Float]? {
     (val as? [Any])?.compactMap { ($0 as? NSNumber).map { Float(truncating: $0) } }
 }
@@ -96,6 +109,7 @@ public enum SceneSerializer {
         if let c = scene.component(LightComponent.self, for: entity) { comps["light"] = serializeLight(c) }
         if let c = scene.component(AudioSource.self, for: entity) { comps["audioSource"] = serializeAudioSource(c) }
         if let c = scene.component(AnimationPlayer.self, for: entity) { comps["animationPlayer"] = serializeAnimationPlayer(c) }
+        if let c = scene.component(AnimationGraphPlayer.self, for: entity) { comps["animationGraphPlayer"] = serializeAnimationGraphPlayer(c) }
         if let c = scene.component(AudioListener.self, for: entity) { comps["audioListener"] = serializeAudioListener(c) }
         if !comps.isEmpty { obj["components"] = comps }
 
@@ -145,6 +159,7 @@ public enum SceneSerializer {
         if let c = jsonToDict(comps["light"]) { _ = scene.setComponent(deserializeLight(c), for: entity) }
         if let c = jsonToDict(comps["audioSource"]) { _ = scene.setComponent(deserializeAudioSource(c), for: entity) }
         if let c = jsonToDict(comps["animationPlayer"]) { _ = scene.setComponent(deserializeAnimationPlayer(c), for: entity) }
+        if let c = jsonToDict(comps["animationGraphPlayer"]) { _ = scene.setComponent(deserializeAnimationGraphPlayer(c), for: entity) }
         if let c = jsonToDict(comps["audioListener"]) { _ = scene.setComponent(deserializeAudioListener(c), for: entity) }
         return entity
     }
@@ -371,6 +386,167 @@ public enum SceneSerializer {
             loop: jsonToBool(d["loop"]) ?? true,
             isPlaying: jsonToBool(d["isPlaying"]) ?? true,
             time: (d["time"] as? NSNumber)?.doubleValue ?? 0
+        )
+    }
+
+    private static func serializeAnimationGraphPlayer(_ c: AnimationGraphPlayer) -> [String: Any] {
+        var d: [String: Any] = [
+            "graph": serializeAnimationGraph(c.graph),
+            "parameters": c.parameters,
+            "activeTime": c.activeTime,
+            "previousTime": c.previousTime,
+            "transitionElapsed": c.transitionElapsed,
+            "transitionDuration": c.transitionDuration,
+            "speed": c.speed,
+            "isPlaying": c.isPlaying,
+        ]
+        if let activeState = c.activeState { d["activeState"] = activeState }
+        if let previousState = c.previousState { d["previousState"] = previousState }
+        return d
+    }
+
+    private static func deserializeAnimationGraphPlayer(_ d: [String: Any]) -> AnimationGraphPlayer {
+        AnimationGraphPlayer(
+            graph: jsonToDict(d["graph"]).map(deserializeAnimationGraph)
+                ?? AnimationGraph(stateMachine: AnimationStateMachine(initialState: "", states: [])),
+            parameters: jsonToStringFloatDict(d["parameters"]) ?? [:],
+            activeState: jsonToString(d["activeState"]),
+            previousState: jsonToString(d["previousState"]),
+            activeTime: jsonToDouble(d["activeTime"]) ?? 0,
+            previousTime: jsonToDouble(d["previousTime"]) ?? 0,
+            transitionElapsed: jsonToDouble(d["transitionElapsed"]) ?? 0,
+            transitionDuration: jsonToDouble(d["transitionDuration"]) ?? 0,
+            speed: jsonToFloat(d["speed"]) ?? 1,
+            isPlaying: jsonToBool(d["isPlaying"]) ?? true
+        )
+    }
+
+    private static func serializeAnimationGraph(_ graph: AnimationGraph) -> [String: Any] {
+        [
+            "blendSpaces1D": graph.blendSpaces1D.map(serializeAnimationBlendSpace1D),
+            "stateMachine": serializeAnimationStateMachine(graph.stateMachine),
+        ]
+    }
+
+    private static func deserializeAnimationGraph(_ d: [String: Any]) -> AnimationGraph {
+        AnimationGraph(
+            blendSpaces1D: jsonToArray(d["blendSpaces1D"])?.compactMap {
+                jsonToDict($0).map(deserializeAnimationBlendSpace1D)
+            } ?? [],
+            stateMachine: jsonToDict(d["stateMachine"]).map(deserializeAnimationStateMachine)
+                ?? AnimationStateMachine(initialState: "", states: [])
+        )
+    }
+
+    private static func serializeAnimationBlendSpace1D(_ blendSpace: AnimationBlendSpace1D) -> [String: Any] {
+        [
+            "name": blendSpace.name,
+            "parameter": blendSpace.parameter,
+            "samples": blendSpace.samples.map(serializeAnimationBlendSample1D),
+        ]
+    }
+
+    private static func deserializeAnimationBlendSpace1D(_ d: [String: Any]) -> AnimationBlendSpace1D {
+        AnimationBlendSpace1D(
+            name: jsonToString(d["name"]) ?? "",
+            parameter: jsonToString(d["parameter"]) ?? "",
+            samples: jsonToArray(d["samples"])?.compactMap {
+                jsonToDict($0).map(deserializeAnimationBlendSample1D)
+            } ?? []
+        )
+    }
+
+    private static func serializeAnimationBlendSample1D(_ sample: AnimationBlendSample1D) -> [String: Any] {
+        var d: [String: Any] = ["threshold": sample.threshold]
+        if let clipName = sample.clipName { d["clipName"] = clipName }
+        return d
+    }
+
+    private static func deserializeAnimationBlendSample1D(_ d: [String: Any]) -> AnimationBlendSample1D {
+        AnimationBlendSample1D(
+            clipName: jsonToString(d["clipName"]),
+            threshold: jsonToFloat(d["threshold"]) ?? 0
+        )
+    }
+
+    private static func serializeAnimationStateMachine(_ stateMachine: AnimationStateMachine) -> [String: Any] {
+        [
+            "initialState": stateMachine.initialState,
+            "states": stateMachine.states.map(serializeAnimationState),
+            "transitions": stateMachine.transitions.map(serializeAnimationTransition),
+        ]
+    }
+
+    private static func deserializeAnimationStateMachine(_ d: [String: Any]) -> AnimationStateMachine {
+        AnimationStateMachine(
+            initialState: jsonToString(d["initialState"]) ?? "",
+            states: jsonToArray(d["states"])?.compactMap {
+                jsonToDict($0).map(deserializeAnimationState)
+            } ?? [],
+            transitions: jsonToArray(d["transitions"])?.compactMap {
+                jsonToDict($0).map(deserializeAnimationTransition)
+            } ?? []
+        )
+    }
+
+    private static func serializeAnimationState(_ state: AnimationState) -> [String: Any] {
+        [
+            "name": state.name,
+            "motion": serializeAnimationMotion(state.motion),
+            "speed": state.speed,
+            "loop": state.loop,
+        ]
+    }
+
+    private static func deserializeAnimationState(_ d: [String: Any]) -> AnimationState {
+        AnimationState(
+            name: jsonToString(d["name"]) ?? "",
+            motion: jsonToDict(d["motion"]).map(deserializeAnimationMotion) ?? .clip(nil),
+            speed: jsonToFloat(d["speed"]) ?? 1,
+            loop: jsonToBool(d["loop"]) ?? true
+        )
+    }
+
+    private static func serializeAnimationMotion(_ motion: AnimationMotion) -> [String: Any] {
+        switch motion {
+        case let .clip(clipName):
+            var d: [String: Any] = ["type": "clip"]
+            if let clipName { d["clipName"] = clipName }
+            return d
+        case let .blendSpace1D(name):
+            return ["type": "blendSpace1D", "name": name]
+        }
+    }
+
+    private static func deserializeAnimationMotion(_ d: [String: Any]) -> AnimationMotion {
+        switch jsonToString(d["type"]) {
+        case "blendSpace1D":
+            return .blendSpace1D(jsonToString(d["name"]) ?? "")
+        default:
+            return .clip(jsonToString(d["clipName"]))
+        }
+    }
+
+    private static func serializeAnimationTransition(_ transition: AnimationTransition) -> [String: Any] {
+        [
+            "from": transition.from,
+            "to": transition.to,
+            "parameter": transition.parameter,
+            "comparison": transition.comparison.rawValue,
+            "threshold": transition.threshold,
+            "duration": transition.duration,
+        ]
+    }
+
+    private static func deserializeAnimationTransition(_ d: [String: Any]) -> AnimationTransition {
+        AnimationTransition(
+            from: jsonToString(d["from"]) ?? "",
+            to: jsonToString(d["to"]) ?? "",
+            parameter: jsonToString(d["parameter"]) ?? "",
+            comparison: AnimationTransitionComparison(rawValue: jsonToString(d["comparison"]) ?? "")
+                ?? .greaterThan,
+            threshold: jsonToFloat(d["threshold"]) ?? 0,
+            duration: jsonToDouble(d["duration"]) ?? 0
         )
     }
 
