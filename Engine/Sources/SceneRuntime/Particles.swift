@@ -27,6 +27,12 @@ public struct Particle: Sendable, Equatable {
     public var normalizedAge: Float { lifetime > 0 ? simd_clamp(age / lifetime, 0, 1) : 1 }
 }
 
+public enum ParticleEmissionShape: String, CaseIterable, Codable, Sendable, Equatable {
+    case sphere
+    case box
+    case cone
+}
+
 /// CPU particle emitter component. Holds both the emission configuration and the live
 /// particle pool; `advance(deltaTime:)` integrates motion, ages/culls particles, and spawns
 /// new ones from a continuous rate. Spawning is driven by a seeded PRNG so simulations are
@@ -44,6 +50,13 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public var originOffset: SIMD3<Float>
     /// Particles spawn within a sphere of this radius around `originOffset`.
     public var spawnRadius: Float
+    public var emissionShape: ParticleEmissionShape
+    /// Half-size of the spawn box when `emissionShape == .box`.
+    public var boxHalfExtents: SIMD3<Float>
+    /// Base radius of the spawn cone when `emissionShape == .cone`.
+    public var coneRadius: Float
+    /// Height of the spawn cone when `emissionShape == .cone`.
+    public var coneHeight: Float
     public var startVelocity: SIMD3<Float>
     public var velocityRandomness: SIMD3<Float>
     public var gravity: SIMD3<Float>
@@ -67,6 +80,10 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         lifetimeRandomness: Float = 0,
         originOffset: SIMD3<Float> = .zero,
         spawnRadius: Float = 0,
+        emissionShape: ParticleEmissionShape = .sphere,
+        boxHalfExtents: SIMD3<Float> = SIMD3<Float>(0.5, 0.5, 0.5),
+        coneRadius: Float = 0.5,
+        coneHeight: Float = 1,
         startVelocity: SIMD3<Float> = SIMD3<Float>(0, 1, 0),
         velocityRandomness: SIMD3<Float> = .zero,
         gravity: SIMD3<Float> = SIMD3<Float>(0, -9.81, 0),
@@ -84,6 +101,14 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.lifetimeRandomness = max(0, lifetimeRandomness)
         self.originOffset = originOffset
         self.spawnRadius = max(0, spawnRadius)
+        self.emissionShape = emissionShape
+        self.boxHalfExtents = SIMD3<Float>(
+            max(0, boxHalfExtents.x),
+            max(0, boxHalfExtents.y),
+            max(0, boxHalfExtents.z)
+        )
+        self.coneRadius = max(0, coneRadius)
+        self.coneHeight = max(0, coneHeight)
         self.startVelocity = startVelocity
         self.velocityRandomness = velocityRandomness
         self.gravity = gravity
@@ -145,7 +170,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         let room = maxParticles - particles.count
         let n = min(count, max(0, room))
         for _ in 0..<n {
-            let offset = randomInSphere() * spawnRadius
+            let offset = spawnOffset()
             let jitter = SIMD3<Float>(nextSigned() * velocityRandomness.x,
                                       nextSigned() * velocityRandomness.y,
                                       nextSigned() * velocityRandomness.z)
@@ -176,6 +201,17 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
 
     private mutating func nextSigned() -> Float { nextUnit() * 2 - 1 }
 
+    private mutating func spawnOffset() -> SIMD3<Float> {
+        switch emissionShape {
+        case .sphere:
+            return randomInSphere() * spawnRadius
+        case .box:
+            return randomInBox()
+        case .cone:
+            return randomInCone()
+        }
+    }
+
     private mutating func randomInSphere() -> SIMD3<Float> {
         guard spawnRadius > 0 else { return .zero }
         // Rejection sampling keeps the distribution uniform inside the unit sphere.
@@ -184,6 +220,39 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             if simd_length_squared(v) <= 1 { return v }
         }
         return .zero
+    }
+
+    private mutating func randomInBox() -> SIMD3<Float> {
+        SIMD3<Float>(
+            nextSigned() * boxHalfExtents.x,
+            nextSigned() * boxHalfExtents.y,
+            nextSigned() * boxHalfExtents.z
+        )
+    }
+
+    private mutating func randomInCone() -> SIMD3<Float> {
+        guard coneRadius > 0, coneHeight > 0 else { return .zero }
+        let axis = normalizedOrDefault(startVelocity, SIMD3<Float>(0, 1, 0))
+        let basis = coneBasis(axis: axis)
+        let height = coneHeight * cbrt(nextUnit())
+        let diskRadius = coneRadius * (height / coneHeight) * sqrt(nextUnit())
+        let angle = nextUnit() * 2 * Float.pi
+        return axis * height
+            + basis.tangent * (cos(angle) * diskRadius)
+            + basis.bitangent * (sin(angle) * diskRadius)
+    }
+
+    private func normalizedOrDefault(_ v: SIMD3<Float>, _ fallback: SIMD3<Float>) -> SIMD3<Float> {
+        let len = simd_length(v)
+        guard len > 0.0001 else { return fallback }
+        return v / len
+    }
+
+    private func coneBasis(axis: SIMD3<Float>) -> (tangent: SIMD3<Float>, bitangent: SIMD3<Float>) {
+        let reference = abs(axis.y) < 0.99 ? SIMD3<Float>(0, 1, 0) : SIMD3<Float>(1, 0, 0)
+        let tangent = normalizedOrDefault(simd_cross(reference, axis), SIMD3<Float>(1, 0, 0))
+        let bitangent = normalizedOrDefault(simd_cross(axis, tangent), SIMD3<Float>(0, 0, 1))
+        return (tangent, bitangent)
     }
 }
 

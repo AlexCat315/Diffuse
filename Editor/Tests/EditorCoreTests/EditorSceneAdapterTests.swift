@@ -136,7 +136,10 @@ struct EditorSceneAdapterTests {
         }
         _ = source.scene.setComponent(
             ParticleEmitter(emissionRate: 24, maxParticles: 64, lifetime: 1.25,
-                            spawnRadius: 0.3, startVelocity: SIMD3<Float>(0, 2, 0),
+                            spawnRadius: 0.3, emissionShape: .box,
+                            boxHalfExtents: SIMD3<Float>(1, 2, 3),
+                            coneRadius: 0.8, coneHeight: 3.5,
+                            startVelocity: SIMD3<Float>(0, 2, 0),
                             gravity: SIMD3<Float>(0, -3, 0), startSize: 0.4, endSize: 0.05,
                             seed: 777),
             for: entityID(hero.id)
@@ -161,6 +164,10 @@ struct EditorSceneAdapterTests {
         #expect(e!.maxParticles == 64)
         #expect(e!.lifetime == 1.25)
         #expect(e!.spawnRadius == 0.3)
+        #expect(e!.emissionShape == .box)
+        #expect(e!.boxHalfExtents == SIMD3<Float>(1, 2, 3))
+        #expect(e!.coneRadius == 0.8)
+        #expect(e!.coneHeight == 3.5)
         #expect(e!.startVelocity == SIMD3<Float>(0, 2, 0))
         #expect(e!.seed == 777)
     }
