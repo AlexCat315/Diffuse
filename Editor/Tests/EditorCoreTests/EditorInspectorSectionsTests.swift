@@ -159,6 +159,12 @@ struct EditorInspectorSectionsTests {
             emitting.wrappedValue = false
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.isEmitting == false)
         } else { Issue.record("missing emitting field") }
+
+        if case let .particleEmissionShape(shape) =
+            field(adapter, id, section: "particle-emitter", field: "particle-shape") {
+            shape.wrappedValue = .cone
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.emissionShape == .cone)
+        } else { Issue.record("missing shape field") }
     }
 
     @Test("particle gravity vector and color bindings write back")
@@ -175,6 +181,14 @@ struct EditorInspectorSectionsTests {
         gx.wrappedValue = 1; gy.wrappedValue = -20; gz.wrappedValue = 3
         let g = adapter.scene.component(ParticleEmitter.self, for: entity)?.gravity
         #expect(g == SIMD3<Float>(1, -20, 3))
+
+        guard case let .vector3(bx, by, bz) =
+                field(adapter, id, section: "particle-emitter", field: "particle-box-extents") else {
+            Issue.record("expected box extents vector3"); return
+        }
+        bx.wrappedValue = 2; by.wrappedValue = 3; bz.wrappedValue = 4
+        let box = adapter.scene.component(ParticleEmitter.self, for: entity)?.boxHalfExtents
+        #expect(box == SIMD3<Float>(2, 3, 4))
 
         guard case let .color(start) =
                 field(adapter, id, section: "particle-emitter", field: "particle-start-color") else {
