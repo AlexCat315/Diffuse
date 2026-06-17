@@ -51,6 +51,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
     public let script: EditorSceneManifestScript?
     public let audioSource: EditorSceneManifestAudioSource?
     public let animationPlayer: EditorSceneManifestAnimationPlayer?
+    public let animationGraphPlayer: EditorSceneManifestAnimationGraphPlayer?
     public let particleEmitter: EditorSceneManifestParticleEmitter?
     public let children: [EditorSceneManifestNode]
 
@@ -69,6 +70,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
                 script: EditorSceneManifestScript? = nil,
                 audioSource: EditorSceneManifestAudioSource? = nil,
                 animationPlayer: EditorSceneManifestAnimationPlayer? = nil,
+                animationGraphPlayer: EditorSceneManifestAnimationGraphPlayer? = nil,
                 particleEmitter: EditorSceneManifestParticleEmitter? = nil,
                 children: [EditorSceneManifestNode] = []) {
         self.id = id
@@ -86,6 +88,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.script = script
         self.audioSource = audioSource
         self.animationPlayer = animationPlayer
+        self.animationGraphPlayer = animationGraphPlayer
         self.particleEmitter = particleEmitter
         self.children = children
     }
@@ -701,6 +704,45 @@ public struct EditorSceneManifestAnimationPlayer: Codable, Sendable, Equatable {
     }
 }
 
+public struct EditorSceneManifestAnimationGraphPlayer: Codable, Sendable, Equatable {
+    public let graph: AnimationGraph
+    public let parameters: [String: Float]
+    public let activeState: String?
+    public let previousState: String?
+    public let activeTime: Double
+    public let previousTime: Double
+    public let transitionElapsed: Double
+    public let transitionDuration: Double
+    public let speed: Float
+    public let isPlaying: Bool
+
+    public init(_ component: AnimationGraphPlayer) {
+        self.graph = component.graph
+        self.parameters = component.parameters
+        self.activeState = component.activeState
+        self.previousState = component.previousState
+        self.activeTime = component.activeTime
+        self.previousTime = component.previousTime
+        self.transitionElapsed = component.transitionElapsed
+        self.transitionDuration = component.transitionDuration
+        self.speed = component.speed
+        self.isPlaying = component.isPlaying
+    }
+
+    var component: AnimationGraphPlayer {
+        AnimationGraphPlayer(graph: graph,
+                             parameters: parameters,
+                             activeState: activeState,
+                             previousState: previousState,
+                             activeTime: activeTime,
+                             previousTime: previousTime,
+                             transitionElapsed: transitionElapsed,
+                             transitionDuration: transitionDuration,
+                             speed: speed,
+                             isPlaying: isPlaying)
+    }
+}
+
 public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let isEmitting: Bool
     public let looping: Bool
@@ -910,6 +952,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             if let animationPlayer = node.animationPlayer {
                 _ = restoredScene.setComponent(animationPlayer.component, for: entity)
             }
+            if let animationGraphPlayer = node.animationGraphPlayer {
+                _ = restoredScene.setComponent(animationGraphPlayer.component, for: entity)
+            }
             if let particleEmitter = node.particleEmitter {
                 _ = restoredScene.setComponent(particleEmitter.component, for: entity)
             }
@@ -1010,6 +1055,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         if let animationPlayerSection = animationPlayerSection(for: entity) {
             sections.append(animationPlayerSection)
         }
+        if let animationGraphPlayerSection = animationGraphPlayerSection(for: entity) {
+            sections.append(animationGraphPlayerSection)
+        }
         if let audioSourceSection = audioSourceSection(for: entity) {
             sections.append(audioSourceSection)
         }
@@ -1066,6 +1114,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 .map(EditorSceneManifestAudioSource.init),
             animationPlayer: scene.component(AnimationPlayer.self, for: entity)
                 .map(EditorSceneManifestAnimationPlayer.init),
+            animationGraphPlayer: scene.component(AnimationGraphPlayer.self, for: entity)
+                .map(EditorSceneManifestAnimationGraphPlayer.init),
             particleEmitter: scene.component(ParticleEmitter.self, for: entity)
                 .map(EditorSceneManifestParticleEmitter.init),
             children: scene.children(of: entity).map(manifestNode)
@@ -1888,6 +1938,180 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                                                           isPlaying: next)])
             }
         )
+    }
+
+    private func animationGraphPlayerSection(for entity: EntityID) -> EditorInspectorSection? {
+        guard let player = scene.component(AnimationGraphPlayer.self, for: entity) else { return nil }
+        let stateCount = player.graph.stateMachine.states.count
+        let blendSpaceCount = player.graph.blendSpaces1D.count
+        let activeState = player.activeState ?? player.graph.stateMachine.initialState
+        let previousState = player.previousState ?? L("None")
+
+        return EditorInspectorSection(
+            id: "animation-graph-player",
+            title: L("Animation Graph"),
+            fields: [
+                EditorInspectorField(
+                    id: "anim-graph-summary",
+                    label: L("Graph"),
+                    value: .readOnly("\(stateCount) states, \(blendSpaceCount) blend spaces")
+                ),
+                EditorInspectorField(
+                    id: "anim-graph-active",
+                    label: L("Active"),
+                    value: .readOnly(activeState.isEmpty ? L("None") : activeState)
+                ),
+                EditorInspectorField(
+                    id: "anim-graph-previous",
+                    label: L("Previous"),
+                    value: .readOnly(previousState)
+                ),
+                EditorInspectorField(
+                    id: "anim-graph-speed",
+                    label: L("Speed"),
+                    value: .constrainedNumber(animationGraphSpeedBinding(for: entity),
+                                              min: 0, max: 10, step: 0.1, showsStepper: true)
+                ),
+                EditorInspectorField(
+                    id: "anim-graph-playing",
+                    label: L("Playing"),
+                    value: .bool(animationGraphIsPlayingBinding(for: entity))
+                ),
+                EditorInspectorField(
+                    id: "anim-graph-definition",
+                    label: L("Definition"),
+                    value: .json(animationGraphDefinitionBinding(for: entity), minHeight: 160)
+                ),
+                EditorInspectorField(
+                    id: "anim-graph-parameters",
+                    label: L("Parameters"),
+                    value: .json(animationGraphParametersBinding(for: entity), minHeight: 84)
+                ),
+            ]
+        )
+    }
+
+    private func animationGraphDefinitionBinding(for entity: EntityID) -> Binding<String> {
+        Binding(
+            get: { [self] in
+                guard let graph = scene.component(AnimationGraphPlayer.self, for: entity)?.graph else {
+                    return "{}"
+                }
+                return formatAnimationGraph(graph)
+            },
+            set: { [self] next in
+                guard let graph = parseAnimationGraph(next),
+                      var player = scene.component(AnimationGraphPlayer.self, for: entity),
+                      player.graph != graph else { return }
+                player.graph = graph
+                player.activeState = graph.stateMachine.initialState.isEmpty ? nil : graph.stateMachine.initialState
+                player.previousState = nil
+                player.activeTime = 0
+                player.previousTime = 0
+                player.transitionElapsed = 0
+                player.transitionDuration = 0
+                _ = applySceneTransaction(intentVerb: "scene.set_animation_graph_definition",
+                                          summary: "Update animation graph definition",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setAnimationGraphPlayer(entityID: entity.rawValue,
+                                                                               player: player)])
+            }
+        )
+    }
+
+    private func animationGraphSpeedBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(AnimationGraphPlayer.self, for: entity)?.speed ?? 1
+            },
+            set: { [self] next in
+                guard var player = scene.component(AnimationGraphPlayer.self, for: entity),
+                      player.speed != next else { return }
+                player.speed = next
+                _ = applySceneTransaction(intentVerb: "scene.set_animation_graph_speed",
+                                          summary: "Update animation graph speed",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setAnimationGraphPlayer(entityID: entity.rawValue,
+                                                                               player: player)])
+            }
+        )
+    }
+
+    private func animationGraphIsPlayingBinding(for entity: EntityID) -> Binding<Bool> {
+        Binding(
+            get: { [self] in
+                scene.component(AnimationGraphPlayer.self, for: entity)?.isPlaying ?? false
+            },
+            set: { [self] next in
+                guard var player = scene.component(AnimationGraphPlayer.self, for: entity),
+                      player.isPlaying != next else { return }
+                player.isPlaying = next
+                _ = applySceneTransaction(intentVerb: "scene.set_animation_graph_playing",
+                                          summary: "Update animation graph playing state",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setAnimationGraphPlayer(entityID: entity.rawValue,
+                                                                               player: player)])
+            }
+        )
+    }
+
+    private func animationGraphParametersBinding(for entity: EntityID) -> Binding<String> {
+        Binding(
+            get: { [self] in
+                formatAnimationGraphParameters(scene.component(AnimationGraphPlayer.self, for: entity)?.parameters ?? [:])
+            },
+            set: { [self] next in
+                guard let parameters = parseAnimationGraphParameters(next),
+                      var player = scene.component(AnimationGraphPlayer.self, for: entity),
+                      player.parameters != parameters else { return }
+                player.parameters = parameters
+                _ = applySceneTransaction(intentVerb: "scene.set_animation_graph_parameters",
+                                          summary: "Update animation graph parameters",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setAnimationGraphPlayer(entityID: entity.rawValue,
+                                                                               player: player)])
+            }
+        )
+    }
+
+    private func formatAnimationGraph(_ graph: AnimationGraph) -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(graph),
+              let text = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+        return text
+    }
+
+    private func parseAnimationGraph(_ text: String) -> AnimationGraph? {
+        guard let data = text.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(AnimationGraph.self, from: data)
+    }
+
+    private func formatAnimationGraphParameters(_ parameters: [String: Float]) -> String {
+        let object = Dictionary(uniqueKeysWithValues: parameters.keys.sorted().map { key in
+            (key, parameters[key] ?? 0)
+        })
+        guard JSONSerialization.isValidJSONObject(object),
+              let data = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]),
+              let text = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+        return text
+    }
+
+    private func parseAnimationGraphParameters(_ text: String) -> [String: Float]? {
+        guard let data = text.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        var result: [String: Float] = [:]
+        for (key, value) in object {
+            guard let number = value as? NSNumber else { return nil }
+            result[key] = Float(truncating: number)
+        }
+        return result
     }
 
     private func audioSourceSection(for entity: EntityID) -> EditorInspectorSection? {

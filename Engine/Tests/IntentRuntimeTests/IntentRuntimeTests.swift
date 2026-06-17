@@ -1159,6 +1159,55 @@ struct UndoStackTests {
         #expect(animClipEvent != nil, "setAnimationPlayer must emit animationClip authored event")
     }
 
+    @Test("setAnimationGraphPlayer applies component and emits authored world events")
+    func setAnimationGraphPlayerAppliesAndEmitsWorldEvents() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let graph = AnimationGraph(
+            blendSpaces1D: [
+                AnimationBlendSpace1D(name: "Locomotion",
+                                      parameter: "speed",
+                                      samples: [
+                                        AnimationBlendSample1D(clipName: "idle", threshold: 0),
+                                        AnimationBlendSample1D(clipName: "run", threshold: 1),
+                                      ]),
+            ],
+            stateMachine: AnimationStateMachine(
+                initialState: "Move",
+                states: [
+                    AnimationState(name: "Move", motion: .blendSpace1D("Locomotion")),
+                ]
+            )
+        )
+        let player = AnimationGraphPlayer(graph: graph,
+                                          parameters: ["speed": 0.5],
+                                          activeState: "Move",
+                                          speed: 1.25,
+                                          isPlaying: true)
+        let transaction = TransactionIR(
+            summary: "Set animation graph",
+            operations: [.scene(.setAnimationGraphPlayer(entityID: entity.rawValue, player: player))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        let result = try executor.apply(transaction, to: &context)
+
+        let restored = try #require(context.sceneRuntime?.component(AnimationGraphPlayer.self, for: entity))
+        #expect(restored == player)
+        let speedEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "animationGraphSpeed", .float(1.25)) = $0 { return true }
+            return false
+        }
+        let playingEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "animationGraphIsPlaying", .bool(true)) = $0 { return true }
+            return false
+        }
+        #expect(speedEvent != nil, "setAnimationGraphPlayer must emit animationGraphSpeed authored event")
+        #expect(playingEvent != nil, "setAnimationGraphPlayer must emit animationGraphIsPlaying authored event")
+    }
+
     @Test("setLocalTransform with non-uniform scale emits worldScale evaluated event")
     func setLocalTransformNonUniformScaleEmitsWorldScale() throws {
         let executor = TransactionExecutor()

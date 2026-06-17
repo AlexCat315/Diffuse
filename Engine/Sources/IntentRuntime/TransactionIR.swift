@@ -126,6 +126,7 @@ public enum SceneMutation: Sendable, Equatable {
     case setCameraActive(entityID: UInt64, isActive: Bool)
     case setAudioSource(entityID: UInt64, source: AudioSource)
     case setAnimationPlayer(entityID: UInt64, clipName: String?, speed: Float, loop: Bool, isPlaying: Bool)
+    case setAnimationGraphPlayer(entityID: UInt64, player: AnimationGraphPlayer)
     case setAudioListener(entityID: UInt64, masterVolume: Float)
     case setParticleEmitter(entityID: UInt64, emitter: ParticleEmitter)
 
@@ -176,6 +177,7 @@ public enum SceneMutation: Sendable, Equatable {
              let .setCameraActive(id, _),
              let .setAudioSource(id, _),
              let .setAnimationPlayer(id, _, _, _, _),
+             let .setAnimationGraphPlayer(id, _),
              let .setAudioListener(id, _),
              let .setParticleEmitter(id, _):
             return id

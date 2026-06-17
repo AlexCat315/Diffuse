@@ -30,6 +30,33 @@ struct AnimationRuntimeTests {
         )
     }
 
+    private static func makeConstantTranslationClip(name: String, x: Float) -> MeshAnimation {
+        let sampler = MeshAnimationSampler(
+            inputTimes: [0, 1],
+            outputValues: [
+                SIMD4<Float>(x, 0, 0, 0),
+                SIMD4<Float>(x, 0, 0, 0),
+            ]
+        )
+        let channel = MeshAnimationChannel(samplerIndex: 0, targetNodeIndex: 0, path: .translation)
+        return MeshAnimation(name: name, samplers: [sampler], channels: [channel])
+    }
+
+    private static func makeLocomotionMesh() -> MeshAsset {
+        MeshAsset(
+            name: "locomotion",
+            vertices: [],
+            indices: [],
+            nodes: [MeshNode(name: "root")],
+            skins: [MeshSkin(jointNodeIndices: [0],
+                             inverseBindMatrices: [matrix_identity_float4x4])],
+            animations: [
+                makeConstantTranslationClip(name: "idle", x: 0),
+                makeConstantTranslationClip(name: "run", x: 2),
+            ]
+        )
+    }
+
     private static func makeScene(meshIndex: Int) -> (SceneRuntime, EntityID) {
         var runtime = SceneRuntime()
         let entity = runtime.createEntity()
@@ -207,5 +234,106 @@ struct AnimationRuntimeTests {
         runtime.runScriptDriver(AnimationRuntime(), deltaTime: 0.016)
 
         #expect(runtime.resource(JointPaletteMap.self)?.palette(for: entity) != nil)
+    }
+
+    // MARK: - Animation graph
+
+    @Test("1D blend space mixes clips by parameter and writes blended palette")
+    func blendSpace1DMixesClips() {
+        let idx = Self.testMeshBase + 8
+        AssetRegistry.shared.registerForTesting(Self.makeLocomotionMesh(), at: idx)
+        defer { AssetRegistry.shared.reset() }
+
+        var runtime = SceneRuntime()
+        let entity = runtime.createEntity()
+        _ = runtime.setComponent(
+            AssetReferenceComponent(
+                assetID: "test:\(idx)",
+                name: "test",
+                relativePath: "test.gltf",
+                absolutePath: "/test.gltf",
+                kind: "gltf",
+                meshIndex: idx
+            ),
+            for: entity
+        )
+        let graph = AnimationGraph(
+            blendSpaces1D: [
+                AnimationBlendSpace1D(
+                    name: "locomotion",
+                    parameter: "speed",
+                    samples: [
+                        AnimationBlendSample1D(clipName: "idle", threshold: 0),
+                        AnimationBlendSample1D(clipName: "run", threshold: 1),
+                    ]
+                ),
+            ],
+            stateMachine: AnimationStateMachine(
+                initialState: "Locomotion",
+                states: [
+                    AnimationState(name: "Locomotion", motion: .blendSpace1D("locomotion")),
+                ]
+            )
+        )
+        _ = runtime.setComponent(AnimationGraphPlayer(graph: graph, parameters: ["speed": 0.25]),
+                                 for: entity)
+
+        runtime.runScriptDriver(AnimationRuntime(), deltaTime: 0.016)
+
+        let matrix = runtime.resource(JointPaletteMap.self)?.palette(for: entity)?.matrices.first
+        #expect(abs((matrix?.columns.3.x ?? -1) - 0.5) < 0.0001)
+    }
+
+    @Test("state machine transitions crossfade between state motions")
+    func stateMachineTransitionCrossfades() {
+        let idx = Self.testMeshBase + 9
+        AssetRegistry.shared.registerForTesting(Self.makeLocomotionMesh(), at: idx)
+        defer { AssetRegistry.shared.reset() }
+
+        var runtime = SceneRuntime()
+        let entity = runtime.createEntity()
+        _ = runtime.setComponent(
+            AssetReferenceComponent(
+                assetID: "test:\(idx)",
+                name: "test",
+                relativePath: "test.gltf",
+                absolutePath: "/test.gltf",
+                kind: "gltf",
+                meshIndex: idx
+            ),
+            for: entity
+        )
+        let graph = AnimationGraph(
+            stateMachine: AnimationStateMachine(
+                initialState: "Idle",
+                states: [
+                    AnimationState(name: "Idle", motion: .clip("idle")),
+                    AnimationState(name: "Run", motion: .clip("run")),
+                ],
+                transitions: [
+                    AnimationTransition(from: "Idle",
+                                        to: "Run",
+                                        parameter: "speed",
+                                        comparison: .greaterThan,
+                                        threshold: 0.5,
+                                        duration: 1.0),
+                ]
+            )
+        )
+        _ = runtime.setComponent(AnimationGraphPlayer(graph: graph, parameters: ["speed": 1]),
+                                 for: entity)
+
+        runtime.runScriptDriver(AnimationRuntime(), deltaTime: 0.016)
+        var player = runtime.component(AnimationGraphPlayer.self, for: entity)
+        #expect(player?.activeState == "Run")
+        #expect(player?.previousState == "Idle")
+
+        runtime.runScriptDriver(AnimationRuntime(), deltaTime: 0.5)
+
+        player = runtime.component(AnimationGraphPlayer.self, for: entity)
+        let matrix = runtime.resource(JointPaletteMap.self)?.palette(for: entity)?.matrices.first
+        #expect(player?.activeState == "Run")
+        #expect(player?.previousState == "Idle")
+        #expect(abs((matrix?.columns.3.x ?? -1) - 1.0) < 0.0001)
     }
 }
