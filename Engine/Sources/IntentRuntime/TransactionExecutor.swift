@@ -766,6 +766,10 @@ public struct TransactionExecutor {
                                     loop: loop, isPlaying: isPlaying),
                     for: entity)
 
+            case let .setAnimationGraphPlayer(entityID, player):
+                let entity = try requireEntity(entityID, in: scene)
+                _ = scene.setComponent(player, for: entity)
+
             case let .setAudioListener(entityID, masterVolume):
                 let entity = try requireEntity(entityID, in: scene)
                 _ = scene.setComponent(AudioListener(masterVolume: masterVolume), for: entity)
@@ -1115,6 +1119,8 @@ public struct TransactionExecutor {
             return "scene:audio_source:\(id)"
         case let .setAnimationPlayer(id, _, _, _, _):
             return "scene:animation_player:\(id)"
+        case let .setAnimationGraphPlayer(id, _):
+            return "scene:animation_graph_player:\(id)"
         case let .setAudioListener(id, _):
             return "scene:audio_listener:\(id)"
         case let .setParticleEmitter(id, _):
@@ -1425,6 +1431,17 @@ public struct TransactionExecutor {
                     value: .bool(loop)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "animationIsPlaying",
                     value: .bool(isPlaying)))
+
+            case let .setAnimationGraphPlayer(entityID, player):
+                let ref = "scene:\(entityID)"
+                events.append(.entityAuthoredChanged(ref: ref, property: "animationGraphStateCount",
+                    value: .float(Float(player.graph.stateMachine.states.count))))
+                events.append(.entityAuthoredChanged(ref: ref, property: "animationGraphBlendSpaceCount",
+                    value: .float(Float(player.graph.blendSpaces1D.count))))
+                events.append(.entityAuthoredChanged(ref: ref, property: "animationGraphSpeed",
+                    value: .float(player.speed)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "animationGraphIsPlaying",
+                    value: .bool(player.isPlaying)))
 
             case let .setAudioListener(entityID, masterVolume):
                 events.append(.entityAuthoredChanged(ref: "scene:\(entityID)",

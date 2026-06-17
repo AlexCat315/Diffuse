@@ -14,6 +14,7 @@ public enum EditorComponentKind: String, CaseIterable, Sendable {
     case audioSource
     case audioListener
     case animationPlayer
+    case animationGraphPlayer
     case particleEmitter
 
     public var displayName: String {
@@ -27,6 +28,7 @@ public enum EditorComponentKind: String, CaseIterable, Sendable {
         case .audioSource:     return "Audio Source"
         case .audioListener:   return "Audio Listener"
         case .animationPlayer: return "Animation Player"
+        case .animationGraphPlayer: return "Animation Graph"
         case .particleEmitter: return "Particle Emitter"
         }
     }
@@ -46,6 +48,7 @@ extension EditorSceneAdapter {
         case .audioSource:     return scene.hasComponent(AudioSource.self, for: entity)
         case .audioListener:   return scene.hasComponent(AudioListener.self, for: entity)
         case .animationPlayer: return scene.hasComponent(AnimationPlayer.self, for: entity)
+        case .animationGraphPlayer: return scene.hasComponent(AnimationGraphPlayer.self, for: entity)
         case .particleEmitter: return scene.hasComponent(ParticleEmitter.self, for: entity)
         }
     }
@@ -75,6 +78,7 @@ extension EditorSceneAdapter {
         case .audioSource:     _ = scene.setComponent(AudioSource(), for: entity)
         case .audioListener:   _ = scene.setComponent(AudioListener(), for: entity)
         case .animationPlayer: _ = scene.setComponent(AnimationPlayer(), for: entity)
+        case .animationGraphPlayer: _ = scene.setComponent(defaultAnimationGraphPlayer(), for: entity)
         case .particleEmitter: _ = scene.setComponent(ParticleEmitter(), for: entity)
         }
         notifyRevisionChanged()
@@ -96,6 +100,7 @@ extension EditorSceneAdapter {
         case .audioSource:     _ = scene.removeComponent(AudioSource.self, from: entity)
         case .audioListener:   _ = scene.removeComponent(AudioListener.self, from: entity)
         case .animationPlayer: _ = scene.removeComponent(AnimationPlayer.self, from: entity)
+        case .animationGraphPlayer: _ = scene.removeComponent(AnimationGraphPlayer.self, from: entity)
         case .particleEmitter: _ = scene.removeComponent(ParticleEmitter.self, from: entity)
         }
         notifyRevisionChanged()
@@ -105,5 +110,18 @@ extension EditorSceneAdapter {
     private func resolveEntity(_ rawID: UInt64) -> EntityID? {
         let entity = EntityID(index: UInt32(rawID & 0xFFFF_FFFF), generation: UInt32(rawID >> 32))
         return scene.contains(entity) ? entity : nil
+    }
+
+    private func defaultAnimationGraphPlayer() -> AnimationGraphPlayer {
+        AnimationGraphPlayer(
+            graph: AnimationGraph(
+                stateMachine: AnimationStateMachine(
+                    initialState: "Default",
+                    states: [
+                        AnimationState(name: "Default", motion: .clip(nil)),
+                    ]
+                )
+            )
+        )
     }
 }
