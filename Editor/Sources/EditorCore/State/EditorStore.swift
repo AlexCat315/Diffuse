@@ -25,6 +25,7 @@ public final class EditorStore: @unchecked Sendable {
         case pendingCloseRequest
         case frameIndex
         case frameTimingRevision
+        case frameStats
         case viewportSurfaceRevision
         case windowFocused
         case windowMinimized
@@ -219,6 +220,8 @@ public final class EditorStore: @unchecked Sendable {
             mark(.frameTimingRevision, old.frameTimingRevision, new.frameTimingRevision)
         case .viewportSurfaceUpdated:
             mark(.viewportSurfaceRevision, old.viewportSurfaceRevision, new.viewportSurfaceRevision)
+        case .updateFrameStats:
+            mark(.frameStats, old.frameStats, new.frameStats)
         }
 
         if old.shouldRender != new.shouldRender {
