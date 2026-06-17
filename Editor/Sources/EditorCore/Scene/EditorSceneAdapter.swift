@@ -752,6 +752,10 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let lifetimeRandomness: Float
     public let originOffset: EditorSceneManifestVector3
     public let spawnRadius: Float
+    public let emissionShape: ParticleEmissionShape
+    public let boxHalfExtents: EditorSceneManifestVector3
+    public let coneRadius: Float
+    public let coneHeight: Float
     public let startVelocity: EditorSceneManifestVector3
     public let velocityRandomness: EditorSceneManifestVector3
     public let gravity: EditorSceneManifestVector3
@@ -770,6 +774,10 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.lifetimeRandomness = component.lifetimeRandomness
         self.originOffset = EditorSceneManifestVector3(component.originOffset)
         self.spawnRadius = component.spawnRadius
+        self.emissionShape = component.emissionShape
+        self.boxHalfExtents = EditorSceneManifestVector3(component.boxHalfExtents)
+        self.coneRadius = component.coneRadius
+        self.coneHeight = component.coneHeight
         self.startVelocity = EditorSceneManifestVector3(component.startVelocity)
         self.velocityRandomness = EditorSceneManifestVector3(component.velocityRandomness)
         self.gravity = EditorSceneManifestVector3(component.gravity)
@@ -784,10 +792,50 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         ParticleEmitter(isEmitting: isEmitting, looping: looping, emissionRate: emissionRate,
                         maxParticles: maxParticles, lifetime: lifetime,
                         lifetimeRandomness: lifetimeRandomness, originOffset: originOffset.simdValue,
-                        spawnRadius: spawnRadius, startVelocity: startVelocity.simdValue,
+                        spawnRadius: spawnRadius, emissionShape: emissionShape,
+                        boxHalfExtents: boxHalfExtents.simdValue,
+                        coneRadius: coneRadius, coneHeight: coneHeight,
+                        startVelocity: startVelocity.simdValue,
                         velocityRandomness: velocityRandomness.simdValue, gravity: gravity.simdValue,
                         startSize: startSize, endSize: endSize, startColor: startColor.simdValue,
                         endColor: endColor.simdValue, seed: seed)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case isEmitting, looping, emissionRate, maxParticles, lifetime, lifetimeRandomness
+        case originOffset, spawnRadius, emissionShape, boxHalfExtents, coneRadius, coneHeight
+        case startVelocity, velocityRandomness, gravity, startSize, endSize, startColor, endColor, seed
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.isEmitting = try c.decodeIfPresent(Bool.self, forKey: .isEmitting) ?? true
+        self.looping = try c.decodeIfPresent(Bool.self, forKey: .looping) ?? true
+        self.emissionRate = try c.decodeIfPresent(Float.self, forKey: .emissionRate) ?? 10
+        self.maxParticles = try c.decodeIfPresent(Int.self, forKey: .maxParticles) ?? 256
+        self.lifetime = try c.decodeIfPresent(Float.self, forKey: .lifetime) ?? 2
+        self.lifetimeRandomness = try c.decodeIfPresent(Float.self, forKey: .lifetimeRandomness) ?? 0
+        self.originOffset = try c.decodeIfPresent(EditorSceneManifestVector3.self, forKey: .originOffset)
+            ?? EditorSceneManifestVector3(.zero)
+        self.spawnRadius = try c.decodeIfPresent(Float.self, forKey: .spawnRadius) ?? 0
+        self.emissionShape = try c.decodeIfPresent(ParticleEmissionShape.self, forKey: .emissionShape) ?? .sphere
+        self.boxHalfExtents = try c.decodeIfPresent(EditorSceneManifestVector3.self, forKey: .boxHalfExtents)
+            ?? EditorSceneManifestVector3(SIMD3<Float>(0.5, 0.5, 0.5))
+        self.coneRadius = try c.decodeIfPresent(Float.self, forKey: .coneRadius) ?? 0.5
+        self.coneHeight = try c.decodeIfPresent(Float.self, forKey: .coneHeight) ?? 1
+        self.startVelocity = try c.decodeIfPresent(EditorSceneManifestVector3.self, forKey: .startVelocity)
+            ?? EditorSceneManifestVector3(SIMD3<Float>(0, 1, 0))
+        self.velocityRandomness = try c.decodeIfPresent(EditorSceneManifestVector3.self, forKey: .velocityRandomness)
+            ?? EditorSceneManifestVector3(.zero)
+        self.gravity = try c.decodeIfPresent(EditorSceneManifestVector3.self, forKey: .gravity)
+            ?? EditorSceneManifestVector3(SIMD3<Float>(0, -9.81, 0))
+        self.startSize = try c.decodeIfPresent(Float.self, forKey: .startSize) ?? 1
+        self.endSize = try c.decodeIfPresent(Float.self, forKey: .endSize) ?? 0
+        self.startColor = try c.decodeIfPresent(EditorSceneManifestVector4.self, forKey: .startColor)
+            ?? EditorSceneManifestVector4(SIMD4<Float>(1, 1, 1, 1))
+        self.endColor = try c.decodeIfPresent(EditorSceneManifestVector4.self, forKey: .endColor)
+            ?? EditorSceneManifestVector4(SIMD4<Float>(1, 1, 1, 0))
+        self.seed = try c.decodeIfPresent(UInt64.self, forKey: .seed) ?? 0x9E3779B9
     }
 }
 
@@ -827,6 +875,7 @@ public enum EditorInspectorFieldValue {
     case lightType(Binding<LightType>)
     case rigidBodyMotion(Binding<RigidBodyMotionType>)
     case colliderShapeKind(Binding<ColliderShapeKind>)
+    case particleEmissionShape(Binding<ParticleEmissionShape>)
 }
 
 /// 主线程约定的编辑器场景适配层。底层数据来自 Swift `SceneRuntime`；
@@ -1683,9 +1732,23 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.lifetime,
                                                                                     summary: "Update particle lifetime"),
                                                                min: 0, max: 60, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-shape", label: L("Shape"),
+                                     value: .particleEmissionShape(particleShapeBinding(for: entity))),
                 EditorInspectorField(id: "particle-spawn-radius", label: L("Spawn Radius"),
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.spawnRadius,
                                                                                     summary: "Update spawn radius"),
+                                                               min: 0, max: 100, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-box-extents", label: L("Box Extents"),
+                                     value: .vector3(x: particleBoxExtentsBinding(for: entity, axis: 0),
+                                                     y: particleBoxExtentsBinding(for: entity, axis: 1),
+                                                     z: particleBoxExtentsBinding(for: entity, axis: 2))),
+                EditorInspectorField(id: "particle-cone-radius", label: L("Cone Radius"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.coneRadius,
+                                                                                    summary: "Update cone radius"),
+                                                               min: 0, max: 100, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-cone-height", label: L("Cone Height"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.coneHeight,
+                                                                                    summary: "Update cone height"),
                                                                min: 0, max: 100, step: 0.1, showsStepper: true)),
                 EditorInspectorField(id: "particle-start-size", label: L("Start Size"),
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.startSize,
@@ -1749,6 +1812,27 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 let value = max(0, Int(next.rounded()))
                 guard scene.component(ParticleEmitter.self, for: entity)?.maxParticles != value else { return }
                 updateParticleEmitter(entity, summary: "Update max particles") { $0.maxParticles = value }
+            }
+        )
+    }
+
+    private func particleShapeBinding(for entity: EntityID) -> Binding<ParticleEmissionShape> {
+        Binding(
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.emissionShape ?? .sphere },
+            set: { [self] next in
+                guard scene.component(ParticleEmitter.self, for: entity)?.emissionShape != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle emission shape") { $0.emissionShape = next }
+            }
+        )
+    }
+
+    private func particleBoxExtentsBinding(for entity: EntityID, axis: Int) -> Binding<Float> {
+        Binding(
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.boxHalfExtents[axis] ?? 0 },
+            set: { [self] next in
+                let value = max(0, next)
+                guard scene.component(ParticleEmitter.self, for: entity)?.boxHalfExtents[axis] != value else { return }
+                updateParticleEmitter(entity, summary: "Update particle box extents") { $0.boxHalfExtents[axis] = value }
             }
         )
     }
