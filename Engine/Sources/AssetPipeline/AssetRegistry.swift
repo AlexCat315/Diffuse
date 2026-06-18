@@ -17,8 +17,36 @@ public enum ImportableAssetKind: String, Codable, Sendable, Equatable {
     case gltf
     case glb
     case obj
+    case png
+    case jpg
+    case jpeg
+    case webp
+    case tga
+    case bmp
+    case gif
+    case svg
 
-    public var sceneKindLabel: String { "Static Mesh" }
+    public var sceneKindLabel: String {
+        isTexture ? "Texture" : "Static Mesh"
+    }
+
+    public var isMesh: Bool {
+        switch self {
+        case .gltf, .glb, .obj:
+            return true
+        case .png, .jpg, .jpeg, .webp, .tga, .bmp, .gif, .svg:
+            return false
+        }
+    }
+
+    public var isTexture: Bool {
+        switch self {
+        case .png, .jpg, .jpeg, .webp, .tga, .bmp, .gif, .svg:
+            return true
+        case .gltf, .glb, .obj:
+            return false
+        }
+    }
 }
 
 public struct AssetRegistryEntry: Identifiable, Sendable, Equatable {
@@ -104,6 +132,19 @@ public final class AssetRegistry: @unchecked Sendable {
             let assetURL = candidate.url.resolvingSymlinksInPath()
             let rootPathWithSlash = rootURL.path.hasSuffix("/") ? rootURL.path : rootURL.path + "/"
             let relativePath = assetURL.path.replacingOccurrences(of: rootPathWithSlash, with: "")
+            let kind = candidate.kind
+
+            guard kind.isMesh else {
+                loadedEntries.append(AssetRegistryEntry(
+                    id: relativePath,
+                    name: assetURL.deletingPathExtension().lastPathComponent,
+                    relativePath: relativePath,
+                    absolutePath: assetURL.path,
+                    kind: kind,
+                    meshIndex: 0
+                ))
+                continue
+            }
 
             // Reuse existing index for known paths so GPU mesh slots never shift.
             let meshIndex: Int
@@ -127,7 +168,6 @@ public final class AssetRegistry: @unchecked Sendable {
                 currentPathIndex[relativePath] = meshIndex
             }
 
-            let kind = candidate.kind
             let imported: (mesh: MeshAsset, topologySlices: [MeshTopologySlice]?)
             do {
                 imported = try importMesh(at: candidate.url, kind: kind)
@@ -270,6 +310,22 @@ public final class AssetRegistry: @unchecked Sendable {
                 results.append((url, .glb))
             case "obj":
                 results.append((url, .obj))
+            case "png":
+                results.append((url, .png))
+            case "jpg":
+                results.append((url, .jpg))
+            case "jpeg":
+                results.append((url, .jpeg))
+            case "webp":
+                results.append((url, .webp))
+            case "tga":
+                results.append((url, .tga))
+            case "bmp":
+                results.append((url, .bmp))
+            case "gif":
+                results.append((url, .gif))
+            case "svg":
+                results.append((url, .svg))
             default:
                 continue
             }
@@ -285,6 +341,8 @@ public final class AssetRegistry: @unchecked Sendable {
             return (loaded.mesh, loaded.topologies)
         case .obj:
             return (try OBJLoader.load(path: url.path), nil)
+        case .png, .jpg, .jpeg, .webp, .tga, .bmp, .gif, .svg:
+            preconditionFailure("Texture assets are not mesh-importable")
         }
     }
 }

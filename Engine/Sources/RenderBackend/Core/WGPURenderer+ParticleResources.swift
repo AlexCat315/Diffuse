@@ -1,3 +1,6 @@
+import AssetPipeline
+import Foundation
+import Logging
 import RHIWGPU
 import SceneRuntime
 import SIMDCompat
@@ -18,6 +21,17 @@ private struct ParticleUniforms {
 }
 
 extension WGPURenderer {
+    private struct ParticleBatchKey: Hashable {
+        var blendMode: ParticleBlendMode
+        var texturePath: String?
+    }
+
+    private struct ParticleBatch {
+        var key: ParticleBatchKey
+        var start: Int
+        var count: Int
+    }
+
     func ensureParticlePipeline(hdr: Bool,
                                 blendMode: ParticleBlendMode = .alpha) throws -> GPURenderPipeline {
         switch blendMode {
@@ -86,10 +100,25 @@ extension WGPURenderer {
         let up = simd_cross(right, forward)
 
         var instances = [GPUParticleInstance]()
-        var batches: [(mode: ParticleBlendMode, start: Int, count: Int)] = []
+        var batches: [ParticleBatch] = []
         instances.reserveCapacity(scene.particles.count)
-        for blendMode in ParticleBlendMode.allCases {
-            let particles = scene.particles.filter { $0.blendMode == blendMode }
+        let batchKeys = scene.particles.reduce(into: [ParticleBatchKey]()) { keys, particle in
+            let key = ParticleBatchKey(blendMode: particle.blendMode,
+                                       texturePath: normalizedParticleTexturePath(particle.texturePath))
+            if !keys.contains(key) {
+                keys.append(key)
+            }
+        }.sorted { lhs, rhs in
+            if lhs.blendMode != rhs.blendMode {
+                return lhs.blendMode.rawValue < rhs.blendMode.rawValue
+            }
+            return (lhs.texturePath ?? "") < (rhs.texturePath ?? "")
+        }
+        for key in batchKeys {
+            let particles = scene.particles.filter {
+                $0.blendMode == key.blendMode
+                    && normalizedParticleTexturePath($0.texturePath) == key.texturePath
+            }
             guard !particles.isEmpty else { continue }
             let start = instances.count
             for particle in particles {
@@ -101,7 +130,7 @@ extension WGPURenderer {
                     )
                 )
             }
-            batches.append((mode: blendMode, start: start, count: particles.count))
+            batches.append(ParticleBatch(key: key, start: start, count: particles.count))
         }
 
         try ensureParticleStorageCapacity(count: instances.count)
@@ -138,15 +167,19 @@ extension WGPURenderer {
         )
         applyUsedRegion(pass)
         for batch in batches {
-            let modePipeline = batch.mode == .alpha ? pipeline : try ensureParticlePipeline(
+            let modePipeline = batch.key.blendMode == .alpha ? pipeline : try ensureParticlePipeline(
                 hdr: hdr,
-                blendMode: batch.mode
+                blendMode: batch.key.blendMode
             )
+            let textureView = try particleTextureView(for: batch.key.texturePath)
+            let sampler = try particleSampler()
             let bindGroup = try makeBindGroup(
                 pipeline: modePipeline,
                 entries: [
                     GPUBindGroupEntry(binding: 0, buffer: particleUniformBuffer, offset: 0, size: uniformStride),
-                    GPUBindGroupEntry(binding: 1, buffer: particleStorageBuffer, offset: 0, size: storageSize)
+                    GPUBindGroupEntry(binding: 1, buffer: particleStorageBuffer, offset: 0, size: storageSize),
+                    GPUBindGroupEntry(binding: 2, sampler: sampler),
+                    GPUBindGroupEntry(binding: 3, textureView: textureView)
                 ]
             )
             pass.setPipeline(modePipeline)
@@ -169,5 +202,111 @@ extension WGPURenderer {
             usage: [.storage, .copyDst]
         )
         particleStorageCapacity = newCapacity
+    }
+
+    private func particleSampler() throws -> GPUSampler {
+        if let linearSampler {
+            return linearSampler
+        }
+        linearSampler = try backend.createSampler(
+            desc: GPUSamplerDescriptor(
+                addressModeU: .clampToEdge,
+                addressModeV: .clampToEdge,
+                magFilter: .linear,
+                minFilter: .linear,
+                mipmapFilter: .nearest
+            )
+        )
+        return linearSampler!
+    }
+
+    private func normalizedParticleTexturePath(_ path: String?) -> String? {
+        guard let path = path?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !path.isEmpty
+        else { return nil }
+        return path
+    }
+
+    private func particleTextureView(for path: String?) throws -> GPUTextureView {
+        guard let path else {
+            return try ensureFallbackParticleTextureView()
+        }
+        if let resource = particleTextureResources[path] {
+            return resource.view
+        }
+        do {
+            let decoded = try ImageAssetDecoder.decodeRGBA8(path: path)
+            let textureWidth = UInt32(decoded.width)
+            let textureHeight = UInt32(decoded.height)
+            let gpuTexture = try backend.createTexture(
+                width: textureWidth,
+                height: textureHeight,
+                format: .rgba8Unorm,
+                usage: [.textureBinding, .copyDst]
+            )
+            decoded.pixels.withUnsafeBytes { raw in
+                if let base = raw.baseAddress {
+                    backend.writeTexture(
+                        gpuTexture,
+                        data: base,
+                        dataSize: raw.count,
+                        bytesPerRow: textureWidth * 4,
+                        rowsPerImage: textureHeight,
+                        width: textureWidth,
+                        height: textureHeight
+                    )
+                }
+            }
+            let resource = GPUParticleTextureResource(
+                texture: gpuTexture,
+                view: try gpuTexture.createView(),
+                width: textureWidth,
+                height: textureHeight,
+                sourcePath: path
+            )
+            particleTextureResources[path] = resource
+            particleTextureFailures.remove(path)
+            Logger.renderer.debug(
+                "uploaded particle texture: size=\(textureWidth)x\(textureHeight) source=\(path)"
+            )
+            return resource.view
+        } catch {
+            if !particleTextureFailures.contains(path) {
+                particleTextureFailures.insert(path)
+                Logger.renderer.warning(
+                    "particle texture decode failed: source=\(path) reason=\(String(describing: error))"
+                )
+            }
+            return try ensureFallbackParticleTextureView()
+        }
+    }
+
+    private func ensureFallbackParticleTextureView() throws -> GPUTextureView {
+        if let fallbackParticleTextureView {
+            return fallbackParticleTextureView
+        }
+        let texture = try backend.createTexture(
+            width: 1,
+            height: 1,
+            format: .rgba8Unorm,
+            usage: [.textureBinding, .copyDst]
+        )
+        let pixel: [UInt8] = [255, 255, 255, 255]
+        pixel.withUnsafeBytes { raw in
+            if let base = raw.baseAddress {
+                backend.writeTexture(
+                    texture,
+                    data: base,
+                    dataSize: raw.count,
+                    bytesPerRow: 4,
+                    rowsPerImage: 1,
+                    width: 1,
+                    height: 1
+                )
+            }
+        }
+        fallbackParticleTexture = texture
+        fallbackParticleTextureView = try texture.createView()
+        return fallbackParticleTextureView!
     }
 }

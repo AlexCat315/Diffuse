@@ -267,6 +267,20 @@ struct EditorInspectorSectionsTests {
             blendMode.wrappedValue = .additive
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.blendMode == .additive)
         } else { Issue.record("missing blend mode field") }
+
+        if case let .asset(textureAsset, acceptedKinds, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-texture") {
+            #expect(acceptedKinds == ["Texture"])
+            textureAsset.wrappedValue = EditorInspectorAssetRef(id: "Assets/Textures/smoke.png",
+                                                                name: "smoke",
+                                                                subtitle: "/tmp/particle-smoke.png",
+                                                                kind: "Texture")
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.textureAssetID == "Assets/Textures/smoke.png")
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.texturePath == "/tmp/particle-smoke.png")
+            textureAsset.wrappedValue = nil
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.textureAssetID == nil)
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.texturePath == nil)
+        } else { Issue.record("missing particle texture asset field") }
     }
 
     @Test("particle gravity vector and color bindings write back")
