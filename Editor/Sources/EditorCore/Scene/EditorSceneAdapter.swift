@@ -759,6 +759,10 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let startVelocity: EditorSceneManifestVector3
     public let velocityRandomness: EditorSceneManifestVector3
     public let gravity: EditorSceneManifestVector3
+    public let collisionMode: ParticleCollisionMode
+    public let collisionPlaneY: Float
+    public let collisionRestitution: Float
+    public let collisionDamping: Float
     public let startSize: Float
     public let endSize: Float
     public let startColor: EditorSceneManifestVector4
@@ -781,6 +785,10 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.startVelocity = EditorSceneManifestVector3(component.startVelocity)
         self.velocityRandomness = EditorSceneManifestVector3(component.velocityRandomness)
         self.gravity = EditorSceneManifestVector3(component.gravity)
+        self.collisionMode = component.collisionMode
+        self.collisionPlaneY = component.collisionPlaneY
+        self.collisionRestitution = component.collisionRestitution
+        self.collisionDamping = component.collisionDamping
         self.startSize = component.startSize
         self.endSize = component.endSize
         self.startColor = EditorSceneManifestVector4(component.startColor)
@@ -797,6 +805,8 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
                         coneRadius: coneRadius, coneHeight: coneHeight,
                         startVelocity: startVelocity.simdValue,
                         velocityRandomness: velocityRandomness.simdValue, gravity: gravity.simdValue,
+                        collisionMode: collisionMode, collisionPlaneY: collisionPlaneY,
+                        collisionRestitution: collisionRestitution, collisionDamping: collisionDamping,
                         startSize: startSize, endSize: endSize, startColor: startColor.simdValue,
                         endColor: endColor.simdValue, seed: seed)
     }
@@ -804,7 +814,9 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case isEmitting, looping, emissionRate, maxParticles, lifetime, lifetimeRandomness
         case originOffset, spawnRadius, emissionShape, boxHalfExtents, coneRadius, coneHeight
-        case startVelocity, velocityRandomness, gravity, startSize, endSize, startColor, endColor, seed
+        case startVelocity, velocityRandomness, gravity
+        case collisionMode, collisionPlaneY, collisionRestitution, collisionDamping
+        case startSize, endSize, startColor, endColor, seed
     }
 
     public init(from decoder: Decoder) throws {
@@ -829,6 +841,10 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
             ?? EditorSceneManifestVector3(.zero)
         self.gravity = try c.decodeIfPresent(EditorSceneManifestVector3.self, forKey: .gravity)
             ?? EditorSceneManifestVector3(SIMD3<Float>(0, -9.81, 0))
+        self.collisionMode = try c.decodeIfPresent(ParticleCollisionMode.self, forKey: .collisionMode) ?? .none
+        self.collisionPlaneY = try c.decodeIfPresent(Float.self, forKey: .collisionPlaneY) ?? 0
+        self.collisionRestitution = try c.decodeIfPresent(Float.self, forKey: .collisionRestitution) ?? 0.5
+        self.collisionDamping = try c.decodeIfPresent(Float.self, forKey: .collisionDamping) ?? 0
         self.startSize = try c.decodeIfPresent(Float.self, forKey: .startSize) ?? 1
         self.endSize = try c.decodeIfPresent(Float.self, forKey: .endSize) ?? 0
         self.startColor = try c.decodeIfPresent(EditorSceneManifestVector4.self, forKey: .startColor)
@@ -876,6 +892,7 @@ public enum EditorInspectorFieldValue {
     case rigidBodyMotion(Binding<RigidBodyMotionType>)
     case colliderShapeKind(Binding<ColliderShapeKind>)
     case particleEmissionShape(Binding<ParticleEmissionShape>)
+    case particleCollisionMode(Binding<ParticleCollisionMode>)
 }
 
 /// 主线程约定的编辑器场景适配层。底层数据来自 Swift `SceneRuntime`；
@@ -1762,6 +1779,20 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .vector3(x: particleGravityBinding(for: entity, axis: 0),
                                                      y: particleGravityBinding(for: entity, axis: 1),
                                                      z: particleGravityBinding(for: entity, axis: 2))),
+                EditorInspectorField(id: "particle-collision-mode", label: L("Collision"),
+                                     value: .particleCollisionMode(particleCollisionModeBinding(for: entity))),
+                EditorInspectorField(id: "particle-collision-plane-y", label: L("Plane Y"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.collisionPlaneY,
+                                                                                    summary: "Update particle collision plane"),
+                                                               min: -10_000, max: 10_000, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-collision-restitution", label: L("Restitution"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.collisionRestitution,
+                                                                                    summary: "Update particle restitution"),
+                                                               min: 0, max: 1, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "particle-collision-damping", label: L("Damping"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.collisionDamping,
+                                                                                    summary: "Update particle damping"),
+                                                               min: 0, max: 1, step: 0.05, showsStepper: true)),
                 EditorInspectorField(id: "particle-start-color", label: L("Start Color"),
                                      value: .color(particleColorBinding(for: entity, isStart: true))),
                 EditorInspectorField(id: "particle-end-color", label: L("End Color"),
@@ -1833,6 +1864,16 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 let value = max(0, next)
                 guard scene.component(ParticleEmitter.self, for: entity)?.boxHalfExtents[axis] != value else { return }
                 updateParticleEmitter(entity, summary: "Update particle box extents") { $0.boxHalfExtents[axis] = value }
+            }
+        )
+    }
+
+    private func particleCollisionModeBinding(for entity: EntityID) -> Binding<ParticleCollisionMode> {
+        Binding(
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.collisionMode ?? .none },
+            set: { [self] next in
+                guard scene.component(ParticleEmitter.self, for: entity)?.collisionMode != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle collision mode") { $0.collisionMode = next }
             }
         )
     }

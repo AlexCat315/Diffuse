@@ -93,6 +93,24 @@ struct ParticleTests {
         }
     }
 
+    @Test("local plane collision bounces particles and damps tangent velocity")
+    func localPlaneCollision() {
+        var emitter = ParticleEmitter(emissionRate: 0, lifetime: 100,
+                                      startVelocity: SIMD3<Float>(4, 0, 0),
+                                      gravity: SIMD3<Float>(0, -10, 0),
+                                      collisionMode: .localPlane,
+                                      collisionPlaneY: 0,
+                                      collisionRestitution: 0.5,
+                                      collisionDamping: 0.25)
+        emitter.emit(1)
+        emitter.advance(deltaTime: 1)
+
+        let p = emitter.particles[0]
+        #expect(abs(p.position.y) < 1e-4)
+        #expect(abs(p.velocity.y - 5) < 1e-4)
+        #expect(abs(p.velocity.x - 3) < 1e-4)
+    }
+
     @Test("isEmitting=false stops new spawns but still ages live particles")
     func stoppedEmitterStillAges() {
         var emitter = ParticleEmitter(emissionRate: 100, lifetime: 0.5, gravity: .zero)

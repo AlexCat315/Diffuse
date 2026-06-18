@@ -165,6 +165,18 @@ struct EditorInspectorSectionsTests {
             shape.wrappedValue = .cone
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.emissionShape == .cone)
         } else { Issue.record("missing shape field") }
+
+        if case let .particleCollisionMode(mode) =
+            field(adapter, id, section: "particle-emitter", field: "particle-collision-mode") {
+            mode.wrappedValue = .localPlane
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.collisionMode == .localPlane)
+        } else { Issue.record("missing collision mode field") }
+
+        if case let .constrainedNumber(restitution, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-collision-restitution") {
+            restitution.wrappedValue = 0.7
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.collisionRestitution == 0.7)
+        } else { Issue.record("missing restitution field") }
     }
 
     @Test("particle gravity vector and color bindings write back")
