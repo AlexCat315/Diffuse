@@ -231,6 +231,23 @@ struct ParticleTests {
         #expect(abs(p.color.w - 0.125) < 1e-4)
     }
 
+    @Test("ParticleCurve evaluates presets and keyframes")
+    func particleCurveEvaluation() {
+        #expect(ParticleCurve.linear.evaluate(at: -1) == 0)
+        #expect(ParticleCurve.linear.evaluate(at: 2) == 1)
+        #expect(abs(ParticleCurve.easeIn.evaluate(at: 0.5) - 0.25) < 1e-4)
+        #expect(abs(ParticleCurve.easeOut.evaluate(at: 0.5) - 0.75) < 1e-4)
+        #expect(abs(ParticleCurve.easeInOut.evaluate(at: 0.25) - 0.125) < 1e-4)
+
+        let curve = ParticleCurve.keyframes([
+            ParticleCurveKeyframe(time: 1, value: 0),
+            ParticleCurveKeyframe(time: 0, value: 0),
+            ParticleCurveKeyframe(time: 0.5, value: 1),
+        ])
+        #expect(abs(curve.evaluate(at: 0.25) - 0.5) < 1e-4)
+        #expect(abs(curve.evaluate(at: 0.75) - 0.5) < 1e-4)
+    }
+
     @Test("noise force deterministically accelerates particles")
     func noiseForce() {
         var emitter = ParticleEmitter(emissionRate: 0, lifetime: 10,
