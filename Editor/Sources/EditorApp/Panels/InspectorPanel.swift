@@ -261,23 +261,25 @@ struct InspectorPanel: View {
         let binding: Binding<ParticleCurve>
 
         var body: some View {
-            Column(alignment: .leading, spacing: 6) {
-                Select(selection: binding,
-                       options: options,
-                       width: 150)
-                if case .keyframes(let keyframes) = binding.wrappedValue {
-                    ParticleCurvePreview(binding: binding)
-                        .frame(height: 46)
-                    ParticleCurveKeyframeRows(binding: binding, keyframes: keyframes)
-                    Row(alignment: .center, spacing: 6) {
+            Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                Row(alignment: .center, spacing: 8) {
+                    Select(selection: binding,
+                           options: options,
+                           width: 170)
+                    if case .keyframes(let keyframes) = binding.wrappedValue {
                         Button(L("Add")) { appendKeyframe(to: keyframes) }
                             .buttonStyle(.secondary)
-                            .frame(width: 52, height: 22)
+                            .frame(width: 52, height: 24)
                         Button(L("Reset")) { binding.wrappedValue = .keyframes(Self.defaultKeyframes) }
                             .buttonStyle(.ghost)
-                            .frame(width: 56, height: 22)
-                        Spacer(minLength: 0)
+                            .frame(width: 58, height: 24)
                     }
+                    Spacer(minLength: 0)
+                }
+                if case .keyframes(let keyframes) = binding.wrappedValue {
+                    ParticleCurvePreview(binding: binding)
+                        .frame(height: 72)
+                    ParticleCurveKeyframeRows(binding: binding, keyframes: keyframes)
                 }
             }
         }
@@ -355,7 +357,8 @@ struct InspectorPanel: View {
                 rows: section.fields.map { field in
                     PropertyGridRow(id: field.id,
                                     label: field.label,
-                                    rowHeight: field.value.preferredRowHeight(defaultHeight: 28)) {
+                                    rowHeight: field.value.preferredRowHeight(defaultHeight: 28),
+                                    layout: field.value.preferredRowLayout) {
                         fieldView(field.value,
                                   identity: "\(entityID.map(String.init) ?? "none")/\(section.id)/\(field.id)")
                     }
@@ -412,15 +415,24 @@ struct InspectorPanel: View {
 }
 
 private extension EditorInspectorFieldValue {
+    var preferredRowLayout: PropertyGridRowLayout {
+        switch self {
+        case .particleCurve:
+            return .fullWidth
+        default:
+            return .twoColumn
+        }
+    }
+
     func preferredRowHeight(defaultHeight: Float) -> Float? {
         switch self {
         case .vector3:
             return max(defaultHeight, 30)
         case let .particleCurve(binding):
             if case .keyframes(let keyframes) = binding.wrappedValue {
-                return max(defaultHeight, 116 + Float(keyframes.count) * 26)
+                return max(defaultHeight, 184 + Float(keyframes.count) * 32)
             }
-            return max(defaultHeight, 30)
+            return max(defaultHeight, 44)
         case let .json(_, minHeight):
             return max(defaultHeight, minHeight + 34)
         default:
@@ -434,16 +446,16 @@ private struct ParticleCurveKeyframeRows: View {
     let keyframes: [ParticleCurveKeyframe]
 
     var body: some View {
-        Box(direction: .column, alignItems: .flexStart, spacing: 4) {
+        Box(direction: .column, alignItems: .stretch, spacing: 4) {
             Row(alignment: .center, spacing: 6) {
-                Text("T")
+                Text(L("Time"))
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
-                    .frame(width: 50)
-                Text("V")
+                    .frame(width: 74)
+                Text(L("Value"))
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
-                    .frame(width: 50)
+                    .frame(width: 74)
                 Spacer(minLength: 0)
             }
             ParticleCurveKeyframeEntryList(binding: binding, keyframes: keyframes)
@@ -466,14 +478,14 @@ private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
     func _makeLayoutNode() -> LayoutNode? {
         let layout = LayoutNode()
         layout.flexDirection = .column
-        layout.alignItems = .flexStart
+        layout.alignItems = .stretch
         layout.setGap(4, gutter: .all)
         return layout
     }
 
     func _updateLayout(_ layout: LayoutNode) {
         layout.flexDirection = .column
-        layout.alignItems = .flexStart
+        layout.alignItems = .stretch
         layout.setGap(4, gutter: .all)
     }
 
@@ -488,7 +500,7 @@ private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
                                 maxValue: 1,
                                 step: 0.01,
                                 showsStepper: true)
-                    .frame(width: 50)
+                    .frame(width: 74)
                     NumberField(value: keyValueBinding(index: index),
                                 decimals: 2,
                                 size: .small,
@@ -496,7 +508,7 @@ private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
                                 maxValue: 4,
                                 step: 0.05,
                                 showsStepper: true)
-                    .frame(width: 50)
+                    .frame(width: 74)
                     Button("-",
                            isEnabled: keyframes.count > 2,
                            action: { removeKeyframe(at: index) })
