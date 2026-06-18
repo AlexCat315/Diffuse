@@ -10,19 +10,27 @@ private enum PropertyGridIcons {
                                                        subdirectory: "UIIcons")
 }
 
+public enum PropertyGridRowLayout: Sendable {
+    case twoColumn
+    case fullWidth
+}
+
 public struct PropertyGridRow: Identifiable {
     public let id: String
     public let label: String
     public let rowHeight: Float?
+    public let layout: PropertyGridRowLayout
     public let value: AnyView
 
     public init<ValueContent: View>(id: String,
                                     label: String,
                                     rowHeight: Float? = nil,
+                                    layout: PropertyGridRowLayout = .twoColumn,
                                     @ViewBuilder value: () -> ValueContent) {
         self.id = id
         self.label = label
         self.rowHeight = rowHeight
+        self.layout = layout
         self.value = AnyView(value())
     }
 }
@@ -210,6 +218,15 @@ private struct _StatefulPropertyGrid: View {
 
     private func rowView(_ row: PropertyGridRow) -> some View {
         let rowHeight = row.rowHeight ?? grid.rowHeight
+        switch row.layout {
+        case .twoColumn:
+            return AnyView(twoColumnRowView(row, rowHeight: rowHeight))
+        case .fullWidth:
+            return AnyView(fullWidthRowView(row, rowHeight: rowHeight))
+        }
+    }
+
+    private func twoColumnRowView(_ row: PropertyGridRow, rowHeight: Float) -> some View {
         let alignment: VerticalAlignment = rowHeight > grid.rowHeight ? .top : .center
         return Row(alignment: alignment, spacing: 4) {
             Box(direction: .row, alignItems: .center, justifyContent: .flexStart) {
@@ -230,6 +247,30 @@ private struct _StatefulPropertyGrid: View {
             .padding(horizontal: 0, vertical: 2)
             .flex(1, shrink: 1, basis: 0)
         }
+        .frame(height: rowHeight)
+        .flex()
+    }
+
+    private func fullWidthRowView(_ row: PropertyGridRow, rowHeight: Float) -> some View {
+        let labelHeight: Float = 18
+        let verticalPadding: Float = 6
+        let valueHeight = max(grid.rowHeight, rowHeight - labelHeight - verticalPadding * 2)
+        return Box(direction: .column, alignItems: .stretch, spacing: 6) {
+            Text(row.label)
+                .lineLimit(1)
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+                .padding(horizontal: 7)
+                .frame(height: labelHeight)
+            Box(direction: .row, alignItems: .stretch, justifyContent: .flexStart) {
+                row.value
+                    .frame(height: valueHeight)
+                    .flex(1, shrink: 1, basis: 0)
+            }
+            .frame(height: valueHeight)
+            .padding(horizontal: 7, vertical: 0)
+        }
+        .padding(vertical: verticalPadding)
         .frame(height: rowHeight)
         .flex()
     }
