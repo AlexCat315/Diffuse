@@ -203,6 +203,73 @@ struct ParticleTests {
         #expect(abs(p.color.w - 0.75) < 1e-4)
     }
 
+    @Test("size randomness applies stable per-particle scales")
+    func sizeRandomness() {
+        func run() -> [Particle] {
+            var emitter = ParticleEmitter(emissionRate: 0,
+                                          maxParticles: 8,
+                                          lifetime: 1,
+                                          gravity: .zero,
+                                          startSize: 2,
+                                          endSize: 2,
+                                          sizeRandomness: 0.5,
+                                          seed: 99)
+            emitter.emit(4)
+            emitter.advance(deltaTime: 0.25)
+            return emitter.particles
+        }
+
+        let particles = run()
+        #expect(particles == run())
+        #expect(particles.allSatisfy { $0.size >= 1 && $0.size <= 3 })
+        #expect(particles.contains { abs($0.size - 2) > 0.0001 })
+    }
+
+    @Test("keyframe curves linearly interpolate sorted keys")
+    func appearanceKeyframeCurves() {
+        var emitter = ParticleEmitter(
+            emissionRate: 0,
+            lifetime: 1,
+            gravity: .zero,
+            startSize: 0,
+            endSize: 10,
+            sizeCurve: .keyframes([
+                ParticleCurveKeyframe(time: 1, value: 0),
+                ParticleCurveKeyframe(time: 0, value: 0),
+                ParticleCurveKeyframe(time: 0.5, value: 1),
+            ]),
+            startColor: SIMD4<Float>(1, 1, 1, 0),
+            endColor: SIMD4<Float>(1, 1, 1, 1),
+            colorCurve: .keyframes([
+                ParticleCurveKeyframe(time: 0, value: 0),
+                ParticleCurveKeyframe(time: 1, value: 0.5),
+            ])
+        )
+        emitter.emit(1)
+        emitter.advance(deltaTime: 0.25)
+
+        let p = emitter.particles[0]
+        #expect(abs(p.size - 5) < 1e-4)
+        #expect(abs(p.color.w - 0.125) < 1e-4)
+    }
+
+    @Test("ParticleCurve evaluates presets and keyframes")
+    func particleCurveEvaluation() {
+        #expect(ParticleCurve.linear.evaluate(at: -1) == 0)
+        #expect(ParticleCurve.linear.evaluate(at: 2) == 1)
+        #expect(abs(ParticleCurve.easeIn.evaluate(at: 0.5) - 0.25) < 1e-4)
+        #expect(abs(ParticleCurve.easeOut.evaluate(at: 0.5) - 0.75) < 1e-4)
+        #expect(abs(ParticleCurve.easeInOut.evaluate(at: 0.25) - 0.125) < 1e-4)
+
+        let curve = ParticleCurve.keyframes([
+            ParticleCurveKeyframe(time: 1, value: 0),
+            ParticleCurveKeyframe(time: 0, value: 0),
+            ParticleCurveKeyframe(time: 0.5, value: 1),
+        ])
+        #expect(abs(curve.evaluate(at: 0.25) - 0.5) < 1e-4)
+        #expect(abs(curve.evaluate(at: 0.75) - 0.5) < 1e-4)
+    }
+
     @Test("noise force deterministically accelerates particles")
     func noiseForce() {
         var emitter = ParticleEmitter(emissionRate: 0, lifetime: 10,
