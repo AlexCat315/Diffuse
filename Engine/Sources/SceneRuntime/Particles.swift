@@ -38,6 +38,18 @@ public enum ParticleCollisionMode: String, CaseIterable, Codable, Sendable, Equa
     case localPlane
 }
 
+public enum ParticleCurve: String, CaseIterable, Codable, Sendable, Equatable {
+    case linear
+    case easeIn
+    case easeOut
+    case easeInOut
+}
+
+public enum ParticleBlendMode: String, CaseIterable, Codable, Sendable, Equatable {
+    case alpha
+    case additive
+}
+
 /// CPU particle emitter component. Holds both the emission configuration and the live
 /// particle pool; `advance(deltaTime:)` integrates motion, ages/culls particles, and spawns
 /// new ones from a continuous rate. Spawning is driven by a seeded PRNG so simulations are
@@ -74,8 +86,11 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public var collisionDamping: Float
     public var startSize: Float
     public var endSize: Float
+    public var sizeCurve: ParticleCurve
     public var startColor: SIMD4<Float>
     public var endColor: SIMD4<Float>
+    public var colorCurve: ParticleCurve
+    public var blendMode: ParticleBlendMode
     public var seed: UInt64
 
     // Live state
@@ -105,8 +120,11 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         collisionDamping: Float = 0,
         startSize: Float = 1,
         endSize: Float = 0,
+        sizeCurve: ParticleCurve = .linear,
         startColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1),
         endColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 0),
+        colorCurve: ParticleCurve = .linear,
+        blendMode: ParticleBlendMode = .alpha,
         seed: UInt64 = 0x9E3779B9
     ) {
         self.isEmitting = isEmitting
@@ -134,8 +152,11 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.collisionDamping = simd_clamp(collisionDamping, 0, 1)
         self.startSize = startSize
         self.endSize = endSize
+        self.sizeCurve = sizeCurve
         self.startColor = startColor
         self.endColor = endColor
+        self.colorCurve = colorCurve
+        self.blendMode = blendMode
         self.seed = seed
         self.particles = []
         self.emissionAccumulator = 0
@@ -206,8 +227,26 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
 
     private func refreshAppearance(_ p: inout Particle) {
         let t = p.normalizedAge
-        p.size = startSize + (endSize - startSize) * t
-        p.color = startColor + (endColor - startColor) * t
+        let sizeT = evaluateCurve(sizeCurve, at: t)
+        let colorT = evaluateCurve(colorCurve, at: t)
+        p.size = startSize + (endSize - startSize) * sizeT
+        p.color = startColor + (endColor - startColor) * colorT
+    }
+
+    private func evaluateCurve(_ curve: ParticleCurve, at t: Float) -> Float {
+        let x = simd_clamp(t, 0, 1)
+        switch curve {
+        case .linear:
+            return x
+        case .easeIn:
+            return x * x
+        case .easeOut:
+            return 1 - (1 - x) * (1 - x)
+        case .easeInOut:
+            if x < 0.5 { return 2 * x * x }
+            let inverse = 1 - x
+            return 1 - 2 * inverse * inverse
+        }
     }
 
     private func applyCollision(to p: inout Particle) {

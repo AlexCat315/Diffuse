@@ -765,8 +765,11 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let collisionDamping: Float
     public let startSize: Float
     public let endSize: Float
+    public let sizeCurve: ParticleCurve
     public let startColor: EditorSceneManifestVector4
     public let endColor: EditorSceneManifestVector4
+    public let colorCurve: ParticleCurve
+    public let blendMode: ParticleBlendMode
     public let seed: UInt64
 
     public init(_ component: ParticleEmitter) {
@@ -791,8 +794,11 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.collisionDamping = component.collisionDamping
         self.startSize = component.startSize
         self.endSize = component.endSize
+        self.sizeCurve = component.sizeCurve
         self.startColor = EditorSceneManifestVector4(component.startColor)
         self.endColor = EditorSceneManifestVector4(component.endColor)
+        self.colorCurve = component.colorCurve
+        self.blendMode = component.blendMode
         self.seed = component.seed
     }
 
@@ -807,8 +813,9 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
                         velocityRandomness: velocityRandomness.simdValue, gravity: gravity.simdValue,
                         collisionMode: collisionMode, collisionPlaneY: collisionPlaneY,
                         collisionRestitution: collisionRestitution, collisionDamping: collisionDamping,
-                        startSize: startSize, endSize: endSize, startColor: startColor.simdValue,
-                        endColor: endColor.simdValue, seed: seed)
+                        startSize: startSize, endSize: endSize, sizeCurve: sizeCurve,
+                        startColor: startColor.simdValue, endColor: endColor.simdValue,
+                        colorCurve: colorCurve, blendMode: blendMode, seed: seed)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -816,7 +823,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         case originOffset, spawnRadius, emissionShape, boxHalfExtents, coneRadius, coneHeight
         case startVelocity, velocityRandomness, gravity
         case collisionMode, collisionPlaneY, collisionRestitution, collisionDamping
-        case startSize, endSize, startColor, endColor, seed
+        case startSize, endSize, sizeCurve, startColor, endColor, colorCurve, blendMode, seed
     }
 
     public init(from decoder: Decoder) throws {
@@ -847,10 +854,13 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.collisionDamping = try c.decodeIfPresent(Float.self, forKey: .collisionDamping) ?? 0
         self.startSize = try c.decodeIfPresent(Float.self, forKey: .startSize) ?? 1
         self.endSize = try c.decodeIfPresent(Float.self, forKey: .endSize) ?? 0
+        self.sizeCurve = try c.decodeIfPresent(ParticleCurve.self, forKey: .sizeCurve) ?? .linear
         self.startColor = try c.decodeIfPresent(EditorSceneManifestVector4.self, forKey: .startColor)
             ?? EditorSceneManifestVector4(SIMD4<Float>(1, 1, 1, 1))
         self.endColor = try c.decodeIfPresent(EditorSceneManifestVector4.self, forKey: .endColor)
             ?? EditorSceneManifestVector4(SIMD4<Float>(1, 1, 1, 0))
+        self.colorCurve = try c.decodeIfPresent(ParticleCurve.self, forKey: .colorCurve) ?? .linear
+        self.blendMode = try c.decodeIfPresent(ParticleBlendMode.self, forKey: .blendMode) ?? .alpha
         self.seed = try c.decodeIfPresent(UInt64.self, forKey: .seed) ?? 0x9E3779B9
     }
 }
@@ -893,6 +903,8 @@ public enum EditorInspectorFieldValue {
     case colliderShapeKind(Binding<ColliderShapeKind>)
     case particleEmissionShape(Binding<ParticleEmissionShape>)
     case particleCollisionMode(Binding<ParticleCollisionMode>)
+    case particleCurve(Binding<ParticleCurve>)
+    case particleBlendMode(Binding<ParticleBlendMode>)
 }
 
 /// 主线程约定的编辑器场景适配层。底层数据来自 Swift `SceneRuntime`；
@@ -1775,6 +1787,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.endSize,
                                                                                     summary: "Update end size"),
                                                                min: 0, max: 100, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-size-curve", label: L("Size Curve"),
+                                     value: .particleCurve(particleCurveBinding(for: entity, \.sizeCurve,
+                                                                                summary: "Update particle size curve"))),
                 EditorInspectorField(id: "particle-gravity", label: L("Gravity"),
                                      value: .vector3(x: particleGravityBinding(for: entity, axis: 0),
                                                      y: particleGravityBinding(for: entity, axis: 1),
@@ -1797,6 +1812,11 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .color(particleColorBinding(for: entity, isStart: true))),
                 EditorInspectorField(id: "particle-end-color", label: L("End Color"),
                                      value: .color(particleColorBinding(for: entity, isStart: false))),
+                EditorInspectorField(id: "particle-color-curve", label: L("Color Curve"),
+                                     value: .particleCurve(particleCurveBinding(for: entity, \.colorCurve,
+                                                                                summary: "Update particle color curve"))),
+                EditorInspectorField(id: "particle-blend-mode", label: L("Blend"),
+                                     value: .particleBlendMode(particleBlendModeBinding(for: entity))),
             ]
         )
     }
@@ -1874,6 +1894,28 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             set: { [self] next in
                 guard scene.component(ParticleEmitter.self, for: entity)?.collisionMode != next else { return }
                 updateParticleEmitter(entity, summary: "Update particle collision mode") { $0.collisionMode = next }
+            }
+        )
+    }
+
+    private func particleCurveBinding(for entity: EntityID,
+                                      _ keyPath: WritableKeyPath<ParticleEmitter, ParticleCurve>,
+                                      summary: String) -> Binding<ParticleCurve> {
+        Binding(
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?[keyPath: keyPath] ?? .linear },
+            set: { [self] next in
+                guard scene.component(ParticleEmitter.self, for: entity)?[keyPath: keyPath] != next else { return }
+                updateParticleEmitter(entity, summary: summary) { $0[keyPath: keyPath] = next }
+            }
+        )
+    }
+
+    private func particleBlendModeBinding(for entity: EntityID) -> Binding<ParticleBlendMode> {
+        Binding(
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.blendMode ?? .alpha },
+            set: { [self] next in
+                guard scene.component(ParticleEmitter.self, for: entity)?.blendMode != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle blend mode") { $0.blendMode = next }
             }
         )
     }

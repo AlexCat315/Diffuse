@@ -440,6 +440,9 @@ struct SceneSerializerTests {
                             collisionMode: .localPlane, collisionPlaneY: -1,
                             collisionRestitution: 0.7, collisionDamping: 0.2,
                             startSize: 0.5, endSize: 0.1,
+                            sizeCurve: .easeInOut,
+                            colorCurve: .easeOut,
+                            blendMode: .additive,
                             seed: 12345),
             for: entity
         )
@@ -463,6 +466,9 @@ struct SceneSerializerTests {
         #expect(e!.collisionPlaneY == -1)
         #expect(e!.collisionRestitution == 0.7)
         #expect(e!.collisionDamping == 0.2)
+        #expect(e!.sizeCurve == .easeInOut)
+        #expect(e!.colorCurve == .easeOut)
+        #expect(e!.blendMode == .additive)
         #expect(e!.seed == 12345)
         // Deterministic config restored: same seed + same advance ⇒ same particles.
         var a = e!; var b = original.component(ParticleEmitter.self, for: original.entities()[0])!
