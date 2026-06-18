@@ -98,7 +98,21 @@ struct AssetImportResolverTests {
         #expect(AssetImportResolver.isSupported(URL(fileURLWithPath: "a/model.gltf")))
         #expect(AssetImportResolver.isSupported(URL(fileURLWithPath: "a/model.GLB")))
         #expect(AssetImportResolver.isSupported(URL(fileURLWithPath: "a/model.obj")))
+        #expect(AssetImportResolver.isSupported(URL(fileURLWithPath: "a/smoke.png")))
+        #expect(AssetImportResolver.isSupported(URL(fileURLWithPath: "a/smoke.WEBP")))
+        #expect(AssetImportResolver.isSupported(URL(fileURLWithPath: "a/vector.svg")))
         #expect(!AssetImportResolver.isSupported(URL(fileURLWithPath: "a/model.blend")))
         #expect(!AssetImportResolver.isSupported(URL(fileURLWithPath: "a/archive.zip")))
+    }
+
+    @Test("texture import is self-contained")
+    func textureSelfContained() {
+        let dir = makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let texture = dir.appendingPathComponent("smoke.png")
+        write("image", to: texture)
+
+        let resolved = AssetImportResolver.resolve(texture)
+        #expect(resolved.map(\.relativePath) == ["smoke.png"])
     }
 }
