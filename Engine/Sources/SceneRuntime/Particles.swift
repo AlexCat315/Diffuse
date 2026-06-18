@@ -36,6 +36,7 @@ public enum ParticleEmissionShape: String, CaseIterable, Codable, Sendable, Equa
 public enum ParticleCollisionMode: String, CaseIterable, Codable, Sendable, Equatable {
     case none
     case localPlane
+    case worldPlane
 }
 
 public enum ParticleCurve: String, CaseIterable, Codable, Sendable, Equatable {
@@ -90,7 +91,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     /// Lifetime-time scroll speed for procedural noise.
     public var noiseSpeed: Float
     public var collisionMode: ParticleCollisionMode
-    /// Local-space Y position of the collision plane when `collisionMode == .localPlane`.
+    /// Y position of the collision plane. Interpreted in local or world space based on `collisionMode`.
     public var collisionPlaneY: Float
     /// Bounce factor applied to velocity normal to the collision plane.
     public var collisionRestitution: Float
@@ -197,9 +198,10 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     /// Advances the simulation by `deltaTime` seconds: integrates existing particles, culls
     /// expired ones, then spawns from the continuous emission rate and scheduled bursts
     /// (capped at `maxParticles`).
-    public mutating func advance(deltaTime: Double) {
+    public mutating func advance(deltaTime: Double, worldTransform: simd_float4x4? = nil) {
         guard deltaTime > 0 else { return }
         let dt = Float(deltaTime)
+        let collisionContext = makeCollisionContext(worldTransform: worldTransform)
 
         var survivors: [Particle] = []
         survivors.reserveCapacity(particles.count)
@@ -207,7 +209,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             p.velocity += gravity * dt
             p.velocity += noiseForce(position: p.position, age: p.age) * dt
             p.position += p.velocity * dt
-            applyCollision(to: &p)
+            applyCollision(to: &p, context: collisionContext)
             p.age += dt
             if p.age < p.lifetime {
                 refreshAppearance(&p)
@@ -320,7 +322,18 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         Float(sin(Double(x)))
     }
 
-    private func applyCollision(to p: inout Particle) {
+    private struct ParticleCollisionContext {
+        var toWorld: simd_float4x4
+        var toLocal: simd_float4x4
+    }
+
+    private func makeCollisionContext(worldTransform: simd_float4x4?) -> ParticleCollisionContext? {
+        guard collisionMode == .worldPlane else { return nil }
+        let toWorld = worldTransform ?? matrix_identity_float4x4
+        return ParticleCollisionContext(toWorld: toWorld, toLocal: simd_inverse(toWorld))
+    }
+
+    private func applyCollision(to p: inout Particle, context: ParticleCollisionContext?) {
         switch collisionMode {
         case .none:
             return
@@ -332,6 +345,39 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             let tangentScale = 1 - collisionDamping
             p.velocity.x *= tangentScale
             p.velocity.z *= tangentScale
+        case .worldPlane:
+            let context = context ?? ParticleCollisionContext(
+                toWorld: matrix_identity_float4x4,
+                toLocal: matrix_identity_float4x4
+            )
+            let worldPosition4 = context.toWorld * SIMD4<Float>(p.position, 1)
+            guard worldPosition4.y < collisionPlaneY else { return }
+
+            var clampedWorldPosition = worldPosition4
+            clampedWorldPosition.y = collisionPlaneY
+            let localPosition4 = context.toLocal * clampedWorldPosition
+            if abs(localPosition4.w) > 0.0001 {
+                p.position = SIMD3<Float>(
+                    localPosition4.x / localPosition4.w,
+                    localPosition4.y / localPosition4.w,
+                    localPosition4.z / localPosition4.w
+                )
+            } else {
+                p.position = SIMD3<Float>(localPosition4.x, localPosition4.y, localPosition4.z)
+            }
+
+            let worldVelocity4 = context.toWorld * SIMD4<Float>(p.velocity, 0)
+            guard worldVelocity4.y < 0 else { return }
+
+            let tangentScale = 1 - collisionDamping
+            let bouncedWorldVelocity = SIMD4<Float>(
+                worldVelocity4.x * tangentScale,
+                -worldVelocity4.y * collisionRestitution,
+                worldVelocity4.z * tangentScale,
+                0
+            )
+            let localVelocity4 = context.toLocal * bouncedWorldVelocity
+            p.velocity = SIMD3<Float>(localVelocity4.x, localVelocity4.y, localVelocity4.z)
         }
     }
 
@@ -407,8 +453,12 @@ public extension SceneRuntime {
     /// Returns the number of emitters stepped.
     @discardableResult
     mutating func advanceParticles(deltaTime: Double) -> Int {
-        updateComponents(ParticleEmitter.self) { _, emitter in
-            emitter.advance(deltaTime: deltaTime)
+        let particleEntities = entities(with: ParticleEmitter.self)
+        let worldTransforms = Dictionary(uniqueKeysWithValues: particleEntities.map {
+            ($0, worldTransform(for: $0)?.matrix ?? matrix_identity_float4x4)
+        })
+        return updateComponents(ParticleEmitter.self) { entity, emitter in
+            emitter.advance(deltaTime: deltaTime, worldTransform: worldTransforms[entity] ?? matrix_identity_float4x4)
         }
     }
 
