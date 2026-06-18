@@ -28,17 +28,21 @@ public struct AssetRefField: View {
     public let value: Binding<AssetRef?>
     public let activePayload: Binding<AssetDropPayload?>
     public let acceptedKinds: Set<String>
+    public let pickerOptions: [AssetRef]
     public let placeholder: String
     public let isEnabled: Bool
+    @State private var isPickerPresented: Bool = false
 
     public init(value: Binding<AssetRef?>,
                 activePayload: Binding<AssetDropPayload?> = .constant(nil),
                 acceptedKinds: Set<String> = [],
+                pickerOptions: [AssetRef] = [],
                 placeholder: String = "Drop asset",
                 isEnabled: Bool = true) {
         self.value = value
         self.activePayload = activePayload
         self.acceptedKinds = acceptedKinds
+        self.pickerOptions = pickerOptions
         self.placeholder = placeholder
         self.isEnabled = isEnabled
     }
@@ -84,6 +88,26 @@ public struct AssetRefField: View {
                     }
                     .buttonStyle(.ghost)
                 }
+
+                if !pickerOptions.isEmpty {
+                    Popover(isPresented: $isPickerPresented,
+                            isEnabled: isEnabled,
+                            width: 240) {
+                        Icon(UICommonIcons.chevronDown,
+                             size: 10,
+                             color: .onSurfaceMuted)
+                            .frame(width: 22, height: 22)
+                            .background(.surfaceOverlay)
+                            .cornerRadius(3)
+                    } content: {
+                        Menu(pickerMenuEntries,
+                             width: 240,
+                             maxVisibleRows: 9,
+                             onItemActivated: {
+                            isPickerPresented = false
+                        })
+                    }
+                }
             }
             .padding(horizontal: 6, vertical: 4)
             .frame(height: 32)
@@ -96,6 +120,22 @@ public struct AssetRefField: View {
     private var titleColor: SemanticColorRef {
         guard isEnabled else { return .onSurfaceMuted }
         return value.wrappedValue == nil ? .onSurfaceMuted : .onSurface
+    }
+
+    private var pickerMenuEntries: [MenuEntry] {
+        pickerOptions.map { option in
+            .item(MenuItem(id: option.id,
+                           title: menuTitle(for: option),
+                           isSelected: value.wrappedValue?.id == option.id,
+                           action: {
+                value.wrappedValue = option
+            }))
+        }
+    }
+
+    private func menuTitle(for option: AssetRef) -> String {
+        guard let subtitle = option.subtitle, !subtitle.isEmpty else { return option.name }
+        return "\(option.name)  \(subtitle)"
     }
 }
 
