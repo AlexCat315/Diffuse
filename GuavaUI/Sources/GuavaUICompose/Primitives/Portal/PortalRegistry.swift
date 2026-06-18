@@ -31,6 +31,7 @@ public struct PortalEntry: Identifiable {
 /// `withCurrent`) and entry owners remember their store for cleanup.
 public final class PortalStore {
     private var storage: [String: PortalEntry] = [:]
+    private var slotNodes: [String: WeakPortalSlotNode] = [:]
     private var observers: [UUID: (Int) -> Void] = [:]
     private var currentRevision: Int = 0
 
@@ -54,6 +55,13 @@ public final class PortalStore {
 
     public func updatePosition(_ id: String, position: CGPoint) {
         guard var entry = storage[id] else { return }
+        if let slotNode = slotNodes[id]?.node {
+            if slotNode.frame.origin != position {
+                slotNode.frame = CGRect(origin: position, size: slotNode.frame.size)
+            }
+        } else if slotNodes[id] != nil {
+            slotNodes.removeValue(forKey: id)
+        }
         guard entry.position != position else { return }
         entry.position = position
         storage[id] = entry
@@ -91,12 +99,24 @@ public final class PortalStore {
         observers.removeValue(forKey: id)
     }
 
+    func attachSlotNode(_ id: String, node: Node) {
+        slotNodes[id] = WeakPortalSlotNode(node)
+    }
+
     private func notifyChanged() {
         currentRevision &+= 1
         let revision = currentRevision
         for observer in observers.values {
             observer(revision)
         }
+    }
+}
+
+private final class WeakPortalSlotNode {
+    weak var node: Node?
+
+    init(_ node: Node) {
+        self.node = node
     }
 }
 
@@ -172,5 +192,10 @@ final class PortalResource: NodeResource {
                                        width: width,
                                        content: content)
         }
+    }
+
+    func updatePosition(_ position: CGPoint) {
+        guard let id = entryID else { return }
+        store?.updatePosition(id, position: position)
     }
 }
