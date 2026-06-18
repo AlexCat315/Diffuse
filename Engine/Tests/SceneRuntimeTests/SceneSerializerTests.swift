@@ -458,6 +458,8 @@ struct SceneSerializerTests {
                                 ParticleCurveKeyframe(time: 1, value: 0),
                             ]),
                             blendMode: .additive,
+                            textureAssetID: "Assets/Textures/smoke.png",
+                            texturePath: "/tmp/particle-smoke.png",
                             seed: 12345),
             for: entity
         )
@@ -503,6 +505,8 @@ struct SceneSerializerTests {
             ParticleCurveKeyframe(time: 1, value: 0),
         ]))
         #expect(e!.blendMode == .additive)
+        #expect(e!.textureAssetID == "Assets/Textures/smoke.png")
+        #expect(e!.texturePath == "/tmp/particle-smoke.png")
         #expect(e!.seed == 12345)
         // Deterministic config restored: same seed + same advance ⇒ same particles.
         var a = e!; var b = original.component(ParticleEmitter.self, for: original.entities()[0])!

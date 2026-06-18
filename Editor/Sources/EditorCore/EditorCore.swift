@@ -329,6 +329,10 @@ public final class EditorApplication: @unchecked Sendable {
     /// 把资产生成到场景中，并把新实体设为当前选中。
     @discardableResult
     public func spawnAsset(_ asset: EditorAsset, at position: SIMD3<Float> = .zero) -> UInt64? {
+        guard asset.kind.isMesh else {
+            logConsole("Cannot spawn \(asset.name)", severity: .warning, detail: asset.kind.sceneKindLabel)
+            return nil
+        }
         guard let id = scene.spawnEntity(from: asset, at: position) else {
             logConsole("Failed to spawn \(asset.name)", severity: .error)
             return nil
@@ -516,6 +520,12 @@ public final class EditorApplication: @unchecked Sendable {
         }
         guard let asset = EditorAssetCatalog.asset(for: payload.assetID) else {
             logConsole("Missing asset for drop", severity: .error, detail: payload.assetID)
+            return false
+        }
+        guard asset.kind.isMesh else {
+            logConsole("Unsupported viewport asset drop",
+                       severity: .warning,
+                       detail: "\(payload.displayName) is a \(asset.kind.sceneKindLabel)")
             return false
         }
         let position = dropWorldPosition(cursorX: cursorX, cursorY: cursorY, frame: frame)
