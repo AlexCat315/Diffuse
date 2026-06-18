@@ -17,9 +17,16 @@ private struct ParticleUniforms {
 }
 
 extension WGPURenderer {
-    func ensureParticlePipeline(hdr: Bool) throws -> GPURenderPipeline {
-        if hdr, let particlePipelineHDR { return particlePipelineHDR }
-        if !hdr, let particlePipelineLDR { return particlePipelineLDR }
+    func ensureParticlePipeline(hdr: Bool,
+                                blendMode: ParticleBlendMode = .alpha) throws -> GPURenderPipeline {
+        switch blendMode {
+        case .alpha:
+            if hdr, let particlePipelineHDR { return particlePipelineHDR }
+            if !hdr, let particlePipelineLDR { return particlePipelineLDR }
+        case .additive:
+            if hdr, let additiveParticlePipelineHDR { return additiveParticlePipelineHDR }
+            if !hdr, let additiveParticlePipelineLDR { return additiveParticlePipelineLDR }
+        }
         guard backend.rawDevice != nil else {
             throw WGPUBackendError.initFailed("device not ready")
         }
@@ -37,7 +44,7 @@ extension WGPURenderer {
                 pipelineLayout: nil,
                 colorFormat: hdr ? hdrFormat : format,
                 cullMode: .none,
-                blend: .alphaBlending,
+                blend: blendMode == .additive ? .additiveBlending : .alphaBlending,
                 depthStencil: GPUDepthStencilPipelineState(
                     format: depthFormat,
                     depthWriteEnabled: false,
@@ -46,7 +53,12 @@ extension WGPURenderer {
             )
         )
 
-        if hdr { particlePipelineHDR = pipeline } else { particlePipelineLDR = pipeline }
+        switch blendMode {
+        case .alpha:
+            if hdr { particlePipelineHDR = pipeline } else { particlePipelineLDR = pipeline }
+        case .additive:
+            if hdr { additiveParticlePipelineHDR = pipeline } else { additiveParticlePipelineLDR = pipeline }
+        }
         return pipeline
     }
 
@@ -60,10 +72,10 @@ extension WGPURenderer {
         depthView: GPUTextureView,
         pipeline: GPURenderPipeline,
         scene: RenderScene,
-        viewProj: simd_float4x4
+        viewProj: simd_float4x4,
+        hdr: Bool
     ) throws -> Int {
-        let particles = scene.particles
-        guard !particles.isEmpty else { return 0 }
+        guard !scene.particles.isEmpty else { return 0 }
 
         // Camera basis for screen-aligned billboards.
         let forward = simd_normalize(scene.camera.target - scene.camera.eye)
@@ -73,14 +85,21 @@ extension WGPURenderer {
         let up = simd_cross(right, forward)
 
         var instances = [GPUParticleInstance]()
-        instances.reserveCapacity(particles.count)
-        for particle in particles {
-            instances.append(
-                GPUParticleInstance(
-                    positionSize: SIMD4<Float>(particle.position, particle.size),
-                    color: particle.color
+        var batches: [(mode: ParticleBlendMode, start: Int, count: Int)] = []
+        instances.reserveCapacity(scene.particles.count)
+        for blendMode in ParticleBlendMode.allCases {
+            let particles = scene.particles.filter { $0.blendMode == blendMode }
+            guard !particles.isEmpty else { continue }
+            let start = instances.count
+            for particle in particles {
+                instances.append(
+                    GPUParticleInstance(
+                        positionSize: SIMD4<Float>(particle.position, particle.size),
+                        color: particle.color
+                    )
                 )
-            )
+            }
+            batches.append((mode: blendMode, start: start, count: particles.count))
         }
 
         try ensureParticleStorageCapacity(count: instances.count)
@@ -104,15 +123,7 @@ extension WGPURenderer {
         )
         writeUniform(&uniforms, buffer: particleUniformBuffer)
 
-        let bindGroup = try makeBindGroup(
-            pipeline: pipeline,
-            entries: [
-                GPUBindGroupEntry(binding: 0, buffer: particleUniformBuffer, offset: 0, size: uniformStride),
-                GPUBindGroupEntry(binding: 1, buffer: particleStorageBuffer, offset: 0,
-                                  size: UInt64(instances.count * instanceStride))
-            ]
-        )
-
+        let storageSize = UInt64(instances.count * instanceStride)
         let pass = try encoder.beginRenderPass(
             colorView: colorView,
             loadOp: .load,
@@ -124,11 +135,26 @@ extension WGPURenderer {
             depthClearValue: 1.0
         )
         applyUsedRegion(pass)
-        pass.setPipeline(pipeline)
-        pass.setBindGroup(bindGroup, index: 0)
-        pass.draw(vertexCount: 6, instanceCount: UInt32(instances.count))
+        for batch in batches {
+            let modePipeline = batch.mode == .alpha ? pipeline : try ensureParticlePipeline(
+                hdr: hdr,
+                blendMode: batch.mode
+            )
+            let bindGroup = try makeBindGroup(
+                pipeline: modePipeline,
+                entries: [
+                    GPUBindGroupEntry(binding: 0, buffer: particleUniformBuffer, offset: 0, size: uniformStride),
+                    GPUBindGroupEntry(binding: 1, buffer: particleStorageBuffer, offset: 0, size: storageSize)
+                ]
+            )
+            pass.setPipeline(modePipeline)
+            pass.setBindGroup(bindGroup, index: 0)
+            pass.draw(vertexCount: 6,
+                      instanceCount: UInt32(batch.count),
+                      firstInstance: UInt32(batch.start))
+        }
         pass.end()
-        return 1
+        return batches.count
     }
 
     /// Grows the particle storage buffer (doubling, min 256) when more particles

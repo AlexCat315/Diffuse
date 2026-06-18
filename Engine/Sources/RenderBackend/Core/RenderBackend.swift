@@ -95,6 +95,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     // Particle billboard pass (see WGPURenderer+ParticleResources)
     var particlePipelineLDR: GPURenderPipeline?
     var particlePipelineHDR: GPURenderPipeline?
+    var additiveParticlePipelineLDR: GPURenderPipeline?
+    var additiveParticlePipelineHDR: GPURenderPipeline?
     var particleUniformBuffer: GPUBuffer?
     var particleStorageBuffer: GPUBuffer?
     var particleStorageCapacity: Int = 0
@@ -250,7 +252,10 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 _ = try ensureOutlinePipeline(hdr: usesHDRFrameGraph)
             }
             if framePlan.passes.contains(.particles) {
-                _ = try ensureParticlePipeline(hdr: usesHDRFrameGraph)
+                _ = try ensureParticlePipeline(hdr: usesHDRFrameGraph, blendMode: .alpha)
+                if packet.scene.particles.contains(where: { $0.blendMode == .additive }) {
+                    _ = try ensureParticlePipeline(hdr: usesHDRFrameGraph, blendMode: .additive)
+                }
             }
             try ensureFullscreenResources()
             writePostFrameUniforms()
@@ -398,7 +403,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             depthView: depthView,
                             pipeline: particlePipeline,
                             scene: packet.scene,
-                            viewProj: cameraMatrices.viewProjection
+                            viewProj: cameraMatrices.viewProjection,
+                            hdr: usesHDRFrameGraph
                         )
 
                     case .outline:
