@@ -147,6 +147,7 @@ struct EditorSceneAdapterTests {
                             collisionMode: .worldPlane, collisionPlaneY: -0.5,
                             collisionRestitution: 0.6, collisionDamping: 0.15,
                             startSize: 0.4, endSize: 0.05,
+                            sizeRandomness: 0.45,
                             sizeCurve: .keyframes([
                                 ParticleCurveKeyframe(time: 0, value: 0),
                                 ParticleCurveKeyframe(time: 1, value: 1),
@@ -195,6 +196,7 @@ struct EditorSceneAdapterTests {
         #expect(e!.collisionPlaneY == -0.5)
         #expect(e!.collisionRestitution == 0.6)
         #expect(e!.collisionDamping == 0.15)
+        #expect(e!.sizeRandomness == 0.45)
         #expect(e!.sizeCurve == .keyframes([
             ParticleCurveKeyframe(time: 0, value: 0),
             ParticleCurveKeyframe(time: 1, value: 1),

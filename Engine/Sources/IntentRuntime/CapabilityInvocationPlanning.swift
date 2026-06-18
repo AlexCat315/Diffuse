@@ -452,6 +452,7 @@ private struct CapabilityOperationProjection {
             self.arguments["noise_strength"] = .number(Double(emitter.noiseStrength))
             self.arguments["noise_scale"] = .number(Double(emitter.noiseScale))
             self.arguments["noise_speed"] = .number(Double(emitter.noiseSpeed))
+            self.arguments["size_randomness"] = .number(Double(emitter.sizeRandomness))
             self.arguments["size_curve"] = .string(Self.particleCurveSummary(emitter.sizeCurve))
             self.arguments["color_curve"] = .string(Self.particleCurveSummary(emitter.colorCurve))
             self.arguments["blend_mode"] = .string(emitter.blendMode.rawValue)
