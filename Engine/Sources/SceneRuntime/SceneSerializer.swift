@@ -641,6 +641,7 @@ public enum SceneSerializer {
         [
             "isEmitting": c.isEmitting,
             "looping": c.looping,
+            "duration": c.duration,
             "emissionRate": c.emissionRate,
             "burstCount": c.burstCount,
             "burstInterval": c.burstInterval,
@@ -678,6 +679,7 @@ public enum SceneSerializer {
         ParticleEmitter(
             isEmitting: jsonToBool(d["isEmitting"]) ?? true,
             looping: jsonToBool(d["looping"]) ?? true,
+            duration: jsonToFloat(d["duration"]) ?? 0,
             emissionRate: jsonToFloat(d["emissionRate"]) ?? 10,
             burstCount: jsonToInt(d["burstCount"]) ?? 0,
             burstInterval: jsonToFloat(d["burstInterval"]) ?? 0,
