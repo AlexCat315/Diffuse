@@ -146,17 +146,20 @@ public struct RenderParticle: Sendable, Equatable {
     public var rotation: Float
     public var color: SIMD4<Float>
     public var blendMode: ParticleBlendMode
+    public var texturePath: String?
 
     public init(position: SIMD3<Float>,
                 size: Float,
                 rotation: Float = 0,
                 color: SIMD4<Float>,
-                blendMode: ParticleBlendMode = .alpha) {
+                blendMode: ParticleBlendMode = .alpha,
+                texturePath: String? = nil) {
         self.position = position
         self.size = size
         self.rotation = rotation
         self.color = color
         self.blendMode = blendMode
+        self.texturePath = texturePath
     }
 }
 

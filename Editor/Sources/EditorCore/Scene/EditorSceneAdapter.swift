@@ -781,6 +781,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let endColor: EditorSceneManifestVector4
     public let colorCurve: ParticleCurve
     public let blendMode: ParticleBlendMode
+    public let texturePath: String?
     public let seed: UInt64
 
     public init(_ component: ParticleEmitter) {
@@ -821,6 +822,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.endColor = EditorSceneManifestVector4(component.endColor)
         self.colorCurve = component.colorCurve
         self.blendMode = component.blendMode
+        self.texturePath = component.texturePath
         self.seed = component.seed
     }
 
@@ -843,7 +845,8 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
                         angularVelocity: angularVelocity, angularVelocityRandomness: angularVelocityRandomness,
                         sizeCurve: sizeCurve,
                         startColor: startColor.simdValue, endColor: endColor.simdValue,
-                        colorCurve: colorCurve, blendMode: blendMode, seed: seed)
+                        colorCurve: colorCurve, blendMode: blendMode,
+                        texturePath: texturePath, seed: seed)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -855,7 +858,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         case collisionMode, collisionPlaneY, collisionRestitution, collisionDamping
         case startSize, endSize, sizeRandomness
         case startRotation, rotationRandomness, angularVelocity, angularVelocityRandomness
-        case sizeCurve, startColor, endColor, colorCurve, blendMode, seed
+        case sizeCurve, startColor, endColor, colorCurve, blendMode, texturePath, seed
     }
 
     public init(from decoder: Decoder) throws {
@@ -904,6 +907,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
             ?? EditorSceneManifestVector4(SIMD4<Float>(1, 1, 1, 0))
         self.colorCurve = try c.decodeIfPresent(ParticleCurve.self, forKey: .colorCurve) ?? .linear
         self.blendMode = try c.decodeIfPresent(ParticleBlendMode.self, forKey: .blendMode) ?? .alpha
+        self.texturePath = try c.decodeIfPresent(String.self, forKey: .texturePath)
         self.seed = try c.decodeIfPresent(UInt64.self, forKey: .seed) ?? 0x9E3779B9
     }
 }
@@ -1904,6 +1908,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                                                                 summary: "Update particle color curve"))),
                 EditorInspectorField(id: "particle-blend-mode", label: L("Blend"),
                                      value: .particleBlendMode(particleBlendModeBinding(for: entity))),
+                EditorInspectorField(id: "particle-texture-path", label: L("Texture Path"),
+                                     value: .text(particleTexturePathBinding(for: entity))),
             ]
         )
     }
@@ -2016,6 +2022,18 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             set: { [self] next in
                 guard scene.component(ParticleEmitter.self, for: entity)?.blendMode != next else { return }
                 updateParticleEmitter(entity, summary: "Update particle blend mode") { $0.blendMode = next }
+            }
+        )
+    }
+
+    private func particleTexturePathBinding(for entity: EntityID) -> Binding<String> {
+        Binding(
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.texturePath ?? "" },
+            set: { [self] next in
+                let trimmed = next.trimmingCharacters(in: .whitespacesAndNewlines)
+                let value = trimmed.isEmpty ? nil : trimmed
+                guard scene.component(ParticleEmitter.self, for: entity)?.texturePath != value else { return }
+                updateParticleEmitter(entity, summary: "Update particle texture") { $0.texturePath = value }
             }
         )
     }
