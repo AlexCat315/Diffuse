@@ -252,7 +252,9 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public var endColor: SIMD4<Float>
     public var colorCurve: ParticleCurve
     public var blendMode: ParticleBlendMode
-    /// Optional image file path sampled by billboard particles. Nil keeps the
+    /// Optional editor asset identifier for the image sampled by billboard particles.
+    public var textureAssetID: String?
+    /// Optional resolved image file path sampled by billboard particles. Nil keeps the
     /// procedural soft-round sprite fallback.
     public var texturePath: String?
     public var seed: UInt64
@@ -302,6 +304,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         endColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 0),
         colorCurve: ParticleCurve = .linear,
         blendMode: ParticleBlendMode = .alpha,
+        textureAssetID: String? = nil,
         texturePath: String? = nil,
         seed: UInt64 = 0x9E3779B9
     ) {
@@ -346,6 +349,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.endColor = endColor
         self.colorCurve = colorCurve
         self.blendMode = blendMode
+        self.textureAssetID = textureAssetID?.isEmpty == true ? nil : textureAssetID
         self.texturePath = texturePath?.isEmpty == true ? nil : texturePath
         self.seed = seed
         self.particles = []

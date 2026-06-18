@@ -484,9 +484,18 @@ private struct AssetThumbnail: View {
 
     var body: some View {
         Box(direction: .column, alignItems: .stretch) {
-            // Software-rendered shaded preview of the actual mesh, square-fit.
-            MeshThumbnailView(assetID: asset.id, meshIndex: asset.meshIndex)
+            if asset.kind.isMesh {
+                // Software-rendered shaded preview of the actual mesh, square-fit.
+                MeshThumbnailView(assetID: asset.id, meshIndex: asset.meshIndex)
+                    .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
+            } else {
+                Box(direction: .column, alignItems: .center, justifyContent: .center) {
+                    Icon(.svg(named: asset.kind.iconName, in: .module, subdirectory: "HierarchyIcons"),
+                         size: 24,
+                         color: asset.kind.tint)
+                }
                 .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
+            }
 
             // Format badge — a small corner chip over the preview.
             Box(direction: .column, alignItems: .flexStart) {
@@ -517,7 +526,9 @@ private struct AssetListRow: View {
         AssetDragSource(asset: asset, app: app, onSelect: onSelect) {
             Row(alignment: .center, spacing: 9) {
                 Box(direction: .column, alignItems: .center, justifyContent: .center) {
-                    Icon(.svg(named: "cube", in: .module, subdirectory: "HierarchyIcons"), size: 18, color: asset.kind.tint)
+                    Icon(.svg(named: asset.kind.iconName, in: .module, subdirectory: "HierarchyIcons"),
+                         size: 18,
+                         color: asset.kind.tint)
                         .frame(width: 18, height: 18)
                 }
                 .frame(width: 26, height: 26)
@@ -612,6 +623,8 @@ private extension ImportableAssetKind {
         case .gltf: return "glTF"
         case .glb:  return "GLB"
         case .obj:  return "OBJ"
+        case .png, .jpg, .jpeg, .webp, .tga, .bmp, .gif, .svg:
+            return "TEX"
         }
     }
 
@@ -619,7 +632,13 @@ private extension ImportableAssetKind {
         switch self {
         case .gltf, .glb: return .accent
         case .obj:        return .warning
+        case .png, .jpg, .jpeg, .webp, .tga, .bmp, .gif, .svg:
+            return .success
         }
+    }
+
+    var iconName: String {
+        isTexture ? "squares-2x2" : "cube"
     }
 }
 
