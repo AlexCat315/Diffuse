@@ -149,6 +149,12 @@ struct EditorInspectorSectionsTests {
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.emissionRate == 42)
         } else { Issue.record("missing rate field") }
 
+        if case let .constrainedNumber(duration, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-duration") {
+            duration.wrappedValue = 2.5
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.duration == 2.5)
+        } else { Issue.record("missing duration field") }
+
         if case let .constrainedNumber(maxP, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-max") {
             maxP.wrappedValue = 128

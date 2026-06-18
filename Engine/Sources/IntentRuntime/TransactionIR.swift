@@ -128,7 +128,7 @@ public enum SceneMutation: Sendable, Equatable {
     case setAnimationPlayer(entityID: UInt64, clipName: String?, speed: Float, loop: Bool, isPlaying: Bool)
     case setAnimationGraphPlayer(entityID: UInt64, player: AnimationGraphPlayer)
     case setAudioListener(entityID: UInt64, masterVolume: Float)
-    case setParticleEmitter(entityID: UInt64, emitter: ParticleEmitter)
+    indirect case setParticleEmitter(entityID: UInt64, emitter: ParticleEmitter)
 
     /// The primary entity targeted by this mutation, if any.
     /// `spawnImportedMeshEntity` returns `nil` because it creates entities

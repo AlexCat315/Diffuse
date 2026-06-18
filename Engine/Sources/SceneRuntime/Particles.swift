@@ -58,6 +58,8 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     // Emission config
     public var isEmitting: Bool
     public var looping: Bool
+    /// Seconds the emitter can produce particles before a non-looping emitter stops. Zero means infinite.
+    public var duration: Float
     /// Particles spawned per second from the continuous emitter.
     public var emissionRate: Float
     /// Particles spawned each burst tick. Zero disables scheduled bursts.
@@ -105,6 +107,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
 
     // Live state
     public private(set) var particles: [Particle]
+    private var emitterAge: Float
     private var emissionAccumulator: Float
     private var burstAccumulator: Float
     private var rngState: UInt64
@@ -112,6 +115,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public init(
         isEmitting: Bool = true,
         looping: Bool = true,
+        duration: Float = 0,
         emissionRate: Float = 10,
         burstCount: Int = 0,
         burstInterval: Float = 0,
@@ -145,6 +149,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     ) {
         self.isEmitting = isEmitting
         self.looping = looping
+        self.duration = max(0, duration)
         self.emissionRate = max(0, emissionRate)
         self.burstCount = max(0, burstCount)
         self.burstInterval = max(0, burstInterval)
@@ -180,6 +185,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.blendMode = blendMode
         self.seed = seed
         self.particles = []
+        self.emitterAge = 0
         self.emissionAccumulator = 0
         self.burstAccumulator = 0
         self.rngState = seed
@@ -211,8 +217,10 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         particles = survivors
 
         guard isEmitting else { return }
+        let emissionDt = activeEmissionDelta(dt)
+        guard emissionDt > 0 else { return }
         if emissionRate > 0 {
-            emissionAccumulator += emissionRate * dt
+            emissionAccumulator += emissionRate * emissionDt
             let toSpawn = Int(emissionAccumulator)
             if toSpawn > 0 {
                 emissionAccumulator -= Float(toSpawn)
@@ -220,7 +228,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             }
         }
         if burstCount > 0, burstInterval > 0 {
-            burstAccumulator += dt
+            burstAccumulator += emissionDt
             let bursts = Int(burstAccumulator / burstInterval)
             if bursts > 0 {
                 burstAccumulator -= Float(bursts) * burstInterval
@@ -236,11 +244,24 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     /// Removes all live particles and resets emission timing.
     public mutating func clear() {
         particles.removeAll(keepingCapacity: true)
+        emitterAge = 0
         emissionAccumulator = 0
         burstAccumulator = 0
     }
 
     // MARK: - Internals
+
+    private mutating func activeEmissionDelta(_ dt: Float) -> Float {
+        guard duration > 0 else { return dt }
+        if looping {
+            emitterAge = (emitterAge + dt).truncatingRemainder(dividingBy: duration)
+            return dt
+        }
+
+        let remaining = max(0, duration - emitterAge)
+        emitterAge += dt
+        return min(dt, remaining)
+    }
 
     private mutating func spawn(_ count: Int) {
         guard count > 0, maxParticles > 0 else { return }

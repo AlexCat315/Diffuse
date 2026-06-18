@@ -441,6 +441,7 @@ private struct CapabilityOperationProjection {
             self.arguments["master_volume"] = .number(Double(masterVolume))
         case let .setParticleEmitter(_, emitter):
             self.verb = "scene.set_particle_emitter"
+            self.arguments["duration"] = .number(Double(emitter.duration))
             self.arguments["emission_rate"] = .number(Double(emitter.emissionRate))
             self.arguments["burst_count"] = .integer(Int64(emitter.burstCount))
             self.arguments["burst_interval"] = .number(Double(emitter.burstInterval))
