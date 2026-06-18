@@ -186,8 +186,8 @@ struct EditorInspectorSectionsTests {
 
         if case let .particleCollisionMode(mode) =
             field(adapter, id, section: "particle-emitter", field: "particle-collision-mode") {
-            mode.wrappedValue = .localPlane
-            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.collisionMode == .localPlane)
+            mode.wrappedValue = .worldPlane
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.collisionMode == .worldPlane)
         } else { Issue.record("missing collision mode field") }
 
         if case let .constrainedNumber(restitution, _, _, _, _) =

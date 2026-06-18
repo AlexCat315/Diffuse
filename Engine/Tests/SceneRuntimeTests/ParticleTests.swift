@@ -139,6 +139,32 @@ struct ParticleTests {
         #expect(abs(p.velocity.x - 3) < 1e-4)
     }
 
+    @Test("world plane collision uses the entity world transform")
+    func worldPlaneCollision() {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        var worldMatrix = matrix_identity_float4x4
+        worldMatrix.columns.3 = SIMD4<Float>(0, 5, 0, 1)
+        _ = scene.setComponent(WorldTransform(matrix: worldMatrix), for: entity)
+
+        var emitter = ParticleEmitter(emissionRate: 0, lifetime: 100,
+                                      startVelocity: SIMD3<Float>(4, 0, 0),
+                                      gravity: SIMD3<Float>(0, -10, 0),
+                                      collisionMode: .worldPlane,
+                                      collisionPlaneY: 0,
+                                      collisionRestitution: 0.5,
+                                      collisionDamping: 0.25)
+        emitter.emit(1)
+        _ = scene.setComponent(emitter, for: entity)
+
+        #expect(scene.advanceParticles(deltaTime: 1) == 1)
+
+        let p = scene.component(ParticleEmitter.self, for: entity)!.particles[0]
+        #expect(abs(p.position.y + 5) < 1e-4)
+        #expect(abs(p.velocity.y - 5) < 1e-4)
+        #expect(abs(p.velocity.x - 3) < 1e-4)
+    }
+
     @Test("isEmitting=false stops new spawns but still ages live particles")
     func stoppedEmitterStillAges() {
         var emitter = ParticleEmitter(emissionRate: 100, lifetime: 0.5, gravity: .zero)
