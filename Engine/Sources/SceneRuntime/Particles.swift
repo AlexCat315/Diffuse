@@ -128,6 +128,51 @@ public enum ParticleCurve: RawRepresentable, CaseIterable, Codable, Sendable, Eq
             try container.encode(keyframes, forKey: .keyframes)
         }
     }
+
+    public func evaluate(at t: Float) -> Float {
+        let x = simd_clamp(t, 0, 1)
+        switch self {
+        case .linear:
+            return x
+        case .easeIn:
+            return x * x
+        case .easeOut:
+            return 1 - (1 - x) * (1 - x)
+        case .easeInOut:
+            if x < 0.5 { return 2 * x * x }
+            let inverse = 1 - x
+            return 1 - 2 * inverse * inverse
+        case .keyframes(let keyframes):
+            return Self.evaluateKeyframes(keyframes, at: x)
+        }
+    }
+
+    private static func evaluateKeyframes(_ keyframes: [ParticleCurveKeyframe], at t: Float) -> Float {
+        guard !keyframes.isEmpty else { return t }
+        let sorted = keyframes.enumerated()
+            .sorted {
+                if $0.element.time == $1.element.time {
+                    return $0.offset < $1.offset
+                }
+                return $0.element.time < $1.element.time
+            }
+            .map(\.element)
+        guard let first = sorted.first else { return t }
+        guard let last = sorted.last else { return first.value }
+        if t <= first.time { return first.value }
+        if t >= last.time { return last.value }
+
+        for index in 1..<sorted.count {
+            let lower = sorted[index - 1]
+            let upper = sorted[index]
+            guard t <= upper.time else { continue }
+            let span = upper.time - lower.time
+            guard span > 0.0001 else { return upper.value }
+            let localT = (t - lower.time) / span
+            return lower.value + (upper.value - lower.value) * localT
+        }
+        return last.value
+    }
 }
 
 public enum ParticleBlendMode: String, CaseIterable, Codable, Sendable, Equatable {
@@ -369,51 +414,10 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
 
     private func refreshAppearance(_ p: inout Particle) {
         let t = p.normalizedAge
-        let sizeT = evaluateCurve(sizeCurve, at: t)
-        let colorT = evaluateCurve(colorCurve, at: t)
+        let sizeT = sizeCurve.evaluate(at: t)
+        let colorT = colorCurve.evaluate(at: t)
         p.size = startSize + (endSize - startSize) * sizeT
         p.color = startColor + (endColor - startColor) * colorT
-    }
-
-    private func evaluateCurve(_ curve: ParticleCurve, at t: Float) -> Float {
-        let x = simd_clamp(t, 0, 1)
-        switch curve {
-        case .linear:
-            return x
-        case .easeIn:
-            return x * x
-        case .easeOut:
-            return 1 - (1 - x) * (1 - x)
-        case .easeInOut:
-            if x < 0.5 { return 2 * x * x }
-            let inverse = 1 - x
-            return 1 - 2 * inverse * inverse
-        case .keyframes(let keyframes):
-            return evaluateKeyframes(keyframes, at: x)
-        }
-    }
-
-    private func evaluateKeyframes(_ keyframes: [ParticleCurveKeyframe], at t: Float) -> Float {
-        guard !keyframes.isEmpty else { return t }
-        let sorted = keyframes.sorted {
-            if $0.time == $1.time { return $0.value < $1.value }
-            return $0.time < $1.time
-        }
-        guard let first = sorted.first else { return t }
-        guard let last = sorted.last else { return first.value }
-        if t <= first.time { return first.value }
-        if t >= last.time { return last.value }
-
-        for index in 1..<sorted.count {
-            let lower = sorted[index - 1]
-            let upper = sorted[index]
-            guard t <= upper.time else { continue }
-            let span = upper.time - lower.time
-            guard span > 0.0001 else { return upper.value }
-            let localT = (t - lower.time) / span
-            return lower.value + (upper.value - lower.value) * localT
-        }
-        return last.value
     }
 
     private func noiseForce(position: SIMD3<Float>, age: Float) -> SIMD3<Float> {
