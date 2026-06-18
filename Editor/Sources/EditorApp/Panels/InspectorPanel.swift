@@ -266,7 +266,7 @@ struct InspectorPanel: View {
                        options: options,
                        width: 150)
                 if case .keyframes(let keyframes) = binding.wrappedValue {
-                    ParticleCurvePreview(curve: binding.wrappedValue)
+                    ParticleCurvePreview(binding: binding)
                         .frame(height: 46)
                     ParticleCurveKeyframeRows(binding: binding, keyframes: keyframes)
                     Row(alignment: .center, spacing: 6) {
@@ -558,25 +558,68 @@ private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
 }
 
 private struct ParticleCurvePreview: View {
-    let curve: ParticleCurve
+    let binding: Binding<ParticleCurve>
 
     var body: some View {
-        ParticleCurvePreviewHost(curve: curve)
+        ParticleCurvePreviewHost(binding: binding)
             .frame(minWidth: 120, minHeight: 44)
     }
 }
 
 private struct ParticleCurvePreviewHost: _PrimitiveView {
-    let curve: ParticleCurve
+    let binding: Binding<ParticleCurve>
+
+    private static let activeKeyIndex = "__particle_curve_active_key_index"
 
     func _makeNode() -> Node {
-        Node()
+        let node = Node()
+        node.isHitTestable = true
+        return node
     }
 
     func _updateNode(_ node: Node) {
         let snapshot = self
+        node.cursor = .pointer
         node.draw = { list, origin in
             snapshot.render(node: node, origin: origin, list: list)
+        }
+
+        guard let registry = InteractionRegistryHolder.current else {
+            InteractionRegistryHolder.current?.remove(node)
+            return
+        }
+        registry.setPointer(node) { event, phase, _ in
+            guard event.button == .left else { return .ignored }
+            switch phase {
+            case .down:
+                PointerCaptureHolder.current?.acquire(node)
+                let graph = snapshot.graphRect(for: node)
+                let index = snapshot.pickOrInsertKey(windowX: event.x, windowY: event.y, graph: graph)
+                let nextIndex = snapshot.writeKey(at: index,
+                                                  windowX: event.x,
+                                                  windowY: event.y,
+                                                  graph: graph) ?? index
+                node.attachments[Self.activeKeyIndex] = nextIndex
+                return .handled
+            case .up:
+                node.attachments[Self.activeKeyIndex] = nil
+                if PointerCaptureHolder.current?.target === node {
+                    PointerCaptureHolder.current?.release()
+                }
+                return .handled
+            }
+        }
+        registry.setMotion(node) { event, _ in
+            guard PointerCaptureHolder.current?.target === node,
+                  let index = node.attachments[Self.activeKeyIndex] as? Int
+            else { return .ignored }
+            if let nextIndex = snapshot.writeKey(at: index,
+                                                 windowX: event.x,
+                                                 windowY: event.y,
+                                                 graph: snapshot.graphRect(for: node)) {
+                node.attachments[Self.activeKeyIndex] = nextIndex
+            }
+            return .handled
         }
     }
 
@@ -595,6 +638,7 @@ private struct ParticleCurvePreviewHost: _PrimitiveView {
         let height = Float(node.frame.height)
         guard width > 2, height > 2 else { return }
 
+        let curve = binding.wrappedValue
         let colors = node.theme.colors
         let x = Float(origin.x)
         let y = Float(origin.y)
@@ -634,13 +678,84 @@ private struct ParticleCurvePreviewHost: _PrimitiveView {
         }
 
         if case .keyframes(let keyframes) = curve {
-            for key in keyframes {
+            let active = node.attachments[Self.activeKeyIndex] as? Int
+            for (index, key) in keyframes.enumerated() {
                 let px = graph.minX + key.time * graph.width
                 let py = graph.maxY - min(max(key.value, 0), 1) * graph.height
-                let marker = UIRect(x: px - 2.5, y: py - 2.5, width: 5, height: 5)
-                list.addRoundedRect(marker, radius: 2.5, color: colors.accentSecondary)
+                let radius: Float = active == index ? 3.5 : 2.5
+                let marker = UIRect(x: px - radius,
+                                    y: py - radius,
+                                    width: radius * 2,
+                                    height: radius * 2)
+                list.addRoundedRect(marker,
+                                    radius: radius,
+                                    color: active == index ? colors.warning : colors.accentSecondary)
             }
         }
+    }
+
+    private func graphRect(for node: Node) -> UIRect {
+        let inset: Float = 6
+        let x = Float(node.absoluteOrigin.x)
+        let y = Float(node.absoluteOrigin.y)
+        let width = max(1, Float(node.frame.width) - inset * 2)
+        let height = max(1, Float(node.frame.height) - inset * 2)
+        return UIRect(x: x + inset, y: y + inset, width: width, height: height)
+    }
+
+    private func pickOrInsertKey(windowX: Float, windowY: Float, graph: UIRect) -> Int {
+        guard case .keyframes(let keyframes) = binding.wrappedValue else { return 0 }
+        if let index = nearestKeyIndex(windowX: windowX, windowY: windowY, graph: graph, keyframes: keyframes) {
+            return index
+        }
+
+        var next = keyframes
+        let key = keyframe(windowX: windowX, windowY: windowY, graph: graph)
+        next.append(key)
+        let sorted = next.sortedByTimeStable()
+        binding.wrappedValue = .keyframes(sorted)
+        return nearestKeyIndex(windowX: windowX,
+                               windowY: windowY,
+                               graph: graph,
+                               keyframes: sorted) ?? max(0, sorted.count - 1)
+    }
+
+    private func nearestKeyIndex(windowX: Float,
+                                 windowY: Float,
+                                 graph: UIRect,
+                                 keyframes: [ParticleCurveKeyframe]) -> Int? {
+        let thresholdSquared: Float = 64
+        var best: (index: Int, distance: Float)?
+        for (index, key) in keyframes.enumerated() {
+            let px = graph.minX + key.time * graph.width
+            let py = graph.maxY - min(max(key.value, 0), 1) * graph.height
+            let dx = px - windowX
+            let dy = py - windowY
+            let distance = dx * dx + dy * dy
+            if distance <= thresholdSquared, best == nil || distance < best!.distance {
+                best = (index, distance)
+            }
+        }
+        return best?.index
+    }
+
+    private func writeKey(at index: Int, windowX: Float, windowY: Float, graph: UIRect) -> Int? {
+        guard case .keyframes(var keyframes) = binding.wrappedValue,
+              keyframes.indices.contains(index)
+        else { return nil }
+        keyframes[index] = keyframe(windowX: windowX, windowY: windowY, graph: graph)
+        let sorted = keyframes.sortedByTimeStable()
+        binding.wrappedValue = .keyframes(sorted)
+        return nearestKeyIndex(windowX: windowX,
+                               windowY: windowY,
+                               graph: graph,
+                               keyframes: sorted)
+    }
+
+    private func keyframe(windowX: Float, windowY: Float, graph: UIRect) -> ParticleCurveKeyframe {
+        let time = min(max((windowX - graph.minX) / max(1, graph.width), 0), 1)
+        let value = min(max((graph.maxY - windowY) / max(1, graph.height), 0), 1)
+        return ParticleCurveKeyframe(time: time, value: value)
     }
 
     private func drawBorder(rect: UIRect, color: Color, list: DrawList) {

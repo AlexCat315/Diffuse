@@ -9,16 +9,19 @@ public struct Particle: Sendable, Equatable {
     public var velocity: SIMD3<Float>
     public var age: Float
     public var lifetime: Float
+    public var sizeScale: Float
     public var size: Float
     public var color: SIMD4<Float>
 
     public init(position: SIMD3<Float>, velocity: SIMD3<Float>,
                 age: Float = 0, lifetime: Float,
+                sizeScale: Float = 1,
                 size: Float = 1, color: SIMD4<Float> = .init(1, 1, 1, 1)) {
         self.position = position
         self.velocity = velocity
         self.age = age
         self.lifetime = lifetime
+        self.sizeScale = sizeScale
         self.size = size
         self.color = color
     }
@@ -228,6 +231,8 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public var collisionDamping: Float
     public var startSize: Float
     public var endSize: Float
+    /// Fractional random size variation applied once per particle spawn. A value of 0.25 means ±25%.
+    public var sizeRandomness: Float
     public var sizeCurve: ParticleCurve
     public var startColor: SIMD4<Float>
     public var endColor: SIMD4<Float>
@@ -270,6 +275,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         collisionDamping: Float = 0,
         startSize: Float = 1,
         endSize: Float = 0,
+        sizeRandomness: Float = 0,
         sizeCurve: ParticleCurve = .linear,
         startColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1),
         endColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 0),
@@ -308,6 +314,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.collisionDamping = simd_clamp(collisionDamping, 0, 1)
         self.startSize = startSize
         self.endSize = endSize
+        self.sizeRandomness = max(0, sizeRandomness)
         self.sizeCurve = sizeCurve
         self.startColor = startColor
         self.endColor = endColor
@@ -404,9 +411,11 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
                                       nextSigned() * velocityRandomness.y,
                                       nextSigned() * velocityRandomness.z)
             let life = max(0.0001, lifetime + nextSigned() * lifetimeRandomness)
+            let sizeScale = max(0, 1 + nextSigned() * sizeRandomness)
             var p = Particle(position: originOffset + offset,
                              velocity: startVelocity + jitter,
-                             lifetime: life)
+                             lifetime: life,
+                             sizeScale: sizeScale)
             refreshAppearance(&p)
             particles.append(p)
         }
@@ -416,7 +425,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         let t = p.normalizedAge
         let sizeT = sizeCurve.evaluate(at: t)
         let colorT = colorCurve.evaluate(at: t)
-        p.size = startSize + (endSize - startSize) * sizeT
+        p.size = (startSize + (endSize - startSize) * sizeT) * p.sizeScale
         p.color = startColor + (endColor - startColor) * colorT
     }
 

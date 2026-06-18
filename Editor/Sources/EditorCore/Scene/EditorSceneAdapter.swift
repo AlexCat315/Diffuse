@@ -771,6 +771,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let collisionDamping: Float
     public let startSize: Float
     public let endSize: Float
+    public let sizeRandomness: Float
     public let sizeCurve: ParticleCurve
     public let startColor: EditorSceneManifestVector4
     public let endColor: EditorSceneManifestVector4
@@ -806,6 +807,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.collisionDamping = component.collisionDamping
         self.startSize = component.startSize
         self.endSize = component.endSize
+        self.sizeRandomness = component.sizeRandomness
         self.sizeCurve = component.sizeCurve
         self.startColor = EditorSceneManifestVector4(component.startColor)
         self.endColor = EditorSceneManifestVector4(component.endColor)
@@ -828,7 +830,8 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
                         noiseStrength: noiseStrength, noiseScale: noiseScale, noiseSpeed: noiseSpeed,
                         collisionMode: collisionMode, collisionPlaneY: collisionPlaneY,
                         collisionRestitution: collisionRestitution, collisionDamping: collisionDamping,
-                        startSize: startSize, endSize: endSize, sizeCurve: sizeCurve,
+                        startSize: startSize, endSize: endSize, sizeRandomness: sizeRandomness,
+                        sizeCurve: sizeCurve,
                         startColor: startColor.simdValue, endColor: endColor.simdValue,
                         colorCurve: colorCurve, blendMode: blendMode, seed: seed)
     }
@@ -840,7 +843,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         case startVelocity, velocityRandomness, gravity
         case noiseStrength, noiseScale, noiseSpeed
         case collisionMode, collisionPlaneY, collisionRestitution, collisionDamping
-        case startSize, endSize, sizeCurve, startColor, endColor, colorCurve, blendMode, seed
+        case startSize, endSize, sizeRandomness, sizeCurve, startColor, endColor, colorCurve, blendMode, seed
     }
 
     public init(from decoder: Decoder) throws {
@@ -877,6 +880,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.collisionDamping = try c.decodeIfPresent(Float.self, forKey: .collisionDamping) ?? 0
         self.startSize = try c.decodeIfPresent(Float.self, forKey: .startSize) ?? 1
         self.endSize = try c.decodeIfPresent(Float.self, forKey: .endSize) ?? 0
+        self.sizeRandomness = try c.decodeIfPresent(Float.self, forKey: .sizeRandomness) ?? 0
         self.sizeCurve = try c.decodeIfPresent(ParticleCurve.self, forKey: .sizeCurve) ?? .linear
         self.startColor = try c.decodeIfPresent(EditorSceneManifestVector4.self, forKey: .startColor)
             ?? EditorSceneManifestVector4(SIMD4<Float>(1, 1, 1, 1))
@@ -1822,6 +1826,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.endSize,
                                                                                     summary: "Update end size"),
                                                                min: 0, max: 100, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-size-randomness", label: L("Size Random"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.sizeRandomness,
+                                                                                    summary: "Update size randomness"),
+                                                               min: 0, max: 4, step: 0.05, showsStepper: true)),
                 EditorInspectorField(id: "particle-size-curve", label: L("Size Curve"),
                                      value: .particleCurve(particleCurveBinding(for: entity, \.sizeCurve,
                                                                                 summary: "Update particle size curve"))),

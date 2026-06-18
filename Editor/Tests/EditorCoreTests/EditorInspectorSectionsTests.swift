@@ -226,6 +226,12 @@ struct EditorInspectorSectionsTests {
             ]))
         } else { Issue.record("missing size curve field") }
 
+        if case let .constrainedNumber(sizeRandomness, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-size-randomness") {
+            sizeRandomness.wrappedValue = 0.3
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.sizeRandomness == 0.3)
+        } else { Issue.record("missing size randomness field") }
+
         if case let .particleCurve(colorCurve) =
             field(adapter, id, section: "particle-emitter", field: "particle-color-curve") {
             colorCurve.wrappedValue = .easeOut

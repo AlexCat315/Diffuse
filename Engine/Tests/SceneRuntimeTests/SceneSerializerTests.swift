@@ -443,6 +443,7 @@ struct SceneSerializerTests {
                             collisionMode: .worldPlane, collisionPlaneY: -1,
                             collisionRestitution: 0.7, collisionDamping: 0.2,
                             startSize: 0.5, endSize: 0.1,
+                            sizeRandomness: 0.35,
                             sizeCurve: .keyframes([
                                 ParticleCurveKeyframe(time: 0, value: 0),
                                 ParticleCurveKeyframe(time: 0.5, value: 1),
@@ -483,6 +484,7 @@ struct SceneSerializerTests {
         #expect(e!.collisionPlaneY == -1)
         #expect(e!.collisionRestitution == 0.7)
         #expect(e!.collisionDamping == 0.2)
+        #expect(e!.sizeRandomness == 0.35)
         #expect(e!.sizeCurve == .keyframes([
             ParticleCurveKeyframe(time: 0, value: 0),
             ParticleCurveKeyframe(time: 0.5, value: 1),
