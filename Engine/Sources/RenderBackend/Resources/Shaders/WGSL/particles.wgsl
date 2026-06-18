@@ -19,6 +19,8 @@ struct ParticleInstance {
 
 @group(0) @binding(0) var<uniform> u : ParticleUniforms;
 @group(0) @binding(1) var<storage, read> particles : array<ParticleInstance>;
+@group(0) @binding(2) var particle_sampler : sampler;
+@group(0) @binding(3) var particle_texture : texture_2d<f32>;
 
 struct VsOut {
     @builtin(position) position : vec4<f32>,
@@ -61,6 +63,7 @@ fn vs_main(@builtin(vertex_index) vertex_index : u32,
 fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
     let dist = length(in.uv - vec2<f32>(0.5, 0.5)) * 2.0;
     let falloff = smoothstep(1.0, 0.0, dist);
-    let alpha = in.color.a * falloff;
-    return vec4<f32>(in.color.rgb, alpha);
+    let texel = textureSample(particle_texture, particle_sampler, in.uv);
+    let alpha = in.color.a * texel.a * falloff;
+    return vec4<f32>(in.color.rgb * texel.rgb, alpha);
 }
