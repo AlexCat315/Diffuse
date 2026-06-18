@@ -452,9 +452,18 @@ private struct CapabilityOperationProjection {
             self.arguments["noise_strength"] = .number(Double(emitter.noiseStrength))
             self.arguments["noise_scale"] = .number(Double(emitter.noiseScale))
             self.arguments["noise_speed"] = .number(Double(emitter.noiseSpeed))
-            self.arguments["size_curve"] = .string(emitter.sizeCurve.rawValue)
-            self.arguments["color_curve"] = .string(emitter.colorCurve.rawValue)
+            self.arguments["size_curve"] = .string(Self.particleCurveSummary(emitter.sizeCurve))
+            self.arguments["color_curve"] = .string(Self.particleCurveSummary(emitter.colorCurve))
             self.arguments["blend_mode"] = .string(emitter.blendMode.rawValue)
+        }
+    }
+
+    private static func particleCurveSummary(_ curve: ParticleCurve) -> String {
+        switch curve {
+        case .keyframes(let keyframes):
+            return "keyframes:\(keyframes.count)"
+        default:
+            return curve.rawValue
         }
     }
 

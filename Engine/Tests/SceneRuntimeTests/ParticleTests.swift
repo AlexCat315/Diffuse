@@ -203,6 +203,34 @@ struct ParticleTests {
         #expect(abs(p.color.w - 0.75) < 1e-4)
     }
 
+    @Test("keyframe curves linearly interpolate sorted keys")
+    func appearanceKeyframeCurves() {
+        var emitter = ParticleEmitter(
+            emissionRate: 0,
+            lifetime: 1,
+            gravity: .zero,
+            startSize: 0,
+            endSize: 10,
+            sizeCurve: .keyframes([
+                ParticleCurveKeyframe(time: 1, value: 0),
+                ParticleCurveKeyframe(time: 0, value: 0),
+                ParticleCurveKeyframe(time: 0.5, value: 1),
+            ]),
+            startColor: SIMD4<Float>(1, 1, 1, 0),
+            endColor: SIMD4<Float>(1, 1, 1, 1),
+            colorCurve: .keyframes([
+                ParticleCurveKeyframe(time: 0, value: 0),
+                ParticleCurveKeyframe(time: 1, value: 0.5),
+            ])
+        )
+        emitter.emit(1)
+        emitter.advance(deltaTime: 0.25)
+
+        let p = emitter.particles[0]
+        #expect(abs(p.size - 5) < 1e-4)
+        #expect(abs(p.color.w - 0.125) < 1e-4)
+    }
+
     @Test("noise force deterministically accelerates particles")
     func noiseForce() {
         var emitter = ParticleEmitter(emissionRate: 0, lifetime: 10,
