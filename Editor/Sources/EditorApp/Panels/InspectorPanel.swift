@@ -240,6 +240,19 @@ struct InspectorPanel: View {
         }
     }
 
+    private struct InspectorParticleCollisionModeValue: View {
+        let binding: Binding<ParticleCollisionMode>
+
+        var body: some View {
+            EnumField(value: binding, width: 150) { mode in
+                switch mode {
+                case .none: return L("None")
+                case .localPlane: return L("Local Plane")
+                }
+            }
+        }
+    }
+
     private func propertySections(_ sections: [EditorInspectorSection],
                                   collapsedIDs: Set<String>,
                                   entityID: UInt64?) -> [PropertyGridSection] {
@@ -296,6 +309,8 @@ struct InspectorPanel: View {
             return AnyView(InspectorColliderShapeKindValue(binding: binding))
         case let .particleEmissionShape(binding):
             return AnyView(InspectorParticleEmissionShapeValue(binding: binding))
+        case let .particleCollisionMode(binding):
+            return AnyView(InspectorParticleCollisionModeValue(binding: binding))
         }
     }
 

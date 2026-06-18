@@ -445,6 +445,7 @@ private struct CapabilityOperationProjection {
             self.arguments["max_particles"] = .integer(Int64(emitter.maxParticles))
             self.arguments["is_emitting"] = .bool(emitter.isEmitting)
             self.arguments["emission_shape"] = .string(emitter.emissionShape.rawValue)
+            self.arguments["collision_mode"] = .string(emitter.collisionMode.rawValue)
         }
     }
 

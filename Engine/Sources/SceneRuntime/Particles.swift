@@ -33,6 +33,11 @@ public enum ParticleEmissionShape: String, CaseIterable, Codable, Sendable, Equa
     case cone
 }
 
+public enum ParticleCollisionMode: String, CaseIterable, Codable, Sendable, Equatable {
+    case none
+    case localPlane
+}
+
 /// CPU particle emitter component. Holds both the emission configuration and the live
 /// particle pool; `advance(deltaTime:)` integrates motion, ages/culls particles, and spawns
 /// new ones from a continuous rate. Spawning is driven by a seeded PRNG so simulations are
@@ -60,6 +65,13 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public var startVelocity: SIMD3<Float>
     public var velocityRandomness: SIMD3<Float>
     public var gravity: SIMD3<Float>
+    public var collisionMode: ParticleCollisionMode
+    /// Local-space Y position of the collision plane when `collisionMode == .localPlane`.
+    public var collisionPlaneY: Float
+    /// Bounce factor applied to velocity normal to the collision plane.
+    public var collisionRestitution: Float
+    /// Fraction of tangent velocity removed on plane impact.
+    public var collisionDamping: Float
     public var startSize: Float
     public var endSize: Float
     public var startColor: SIMD4<Float>
@@ -87,6 +99,10 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         startVelocity: SIMD3<Float> = SIMD3<Float>(0, 1, 0),
         velocityRandomness: SIMD3<Float> = .zero,
         gravity: SIMD3<Float> = SIMD3<Float>(0, -9.81, 0),
+        collisionMode: ParticleCollisionMode = .none,
+        collisionPlaneY: Float = 0,
+        collisionRestitution: Float = 0.5,
+        collisionDamping: Float = 0,
         startSize: Float = 1,
         endSize: Float = 0,
         startColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1),
@@ -112,6 +128,10 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.startVelocity = startVelocity
         self.velocityRandomness = velocityRandomness
         self.gravity = gravity
+        self.collisionMode = collisionMode
+        self.collisionPlaneY = collisionPlaneY
+        self.collisionRestitution = simd_clamp(collisionRestitution, 0, 1)
+        self.collisionDamping = simd_clamp(collisionDamping, 0, 1)
         self.startSize = startSize
         self.endSize = endSize
         self.startColor = startColor
@@ -136,6 +156,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         for var p in particles {
             p.velocity += gravity * dt
             p.position += p.velocity * dt
+            applyCollision(to: &p)
             p.age += dt
             if p.age < p.lifetime {
                 refreshAppearance(&p)
@@ -187,6 +208,21 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         let t = p.normalizedAge
         p.size = startSize + (endSize - startSize) * t
         p.color = startColor + (endColor - startColor) * t
+    }
+
+    private func applyCollision(to p: inout Particle) {
+        switch collisionMode {
+        case .none:
+            return
+        case .localPlane:
+            guard p.position.y < collisionPlaneY else { return }
+            p.position.y = collisionPlaneY
+            guard p.velocity.y < 0 else { return }
+            p.velocity.y = -p.velocity.y * collisionRestitution
+            let tangentScale = 1 - collisionDamping
+            p.velocity.x *= tangentScale
+            p.velocity.z *= tangentScale
+        }
     }
 
     private mutating func nextUnit() -> Float {
