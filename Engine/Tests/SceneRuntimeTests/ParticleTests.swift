@@ -14,6 +14,19 @@ struct ParticleTests {
         #expect(emitter.aliveCount == 10)
     }
 
+    @Test("scheduled bursts spawn particles at configured intervals")
+    func scheduledBursts() {
+        var emitter = ParticleEmitter(emissionRate: 0, burstCount: 3, burstInterval: 0.5,
+                                      maxParticles: 100, lifetime: 100,
+                                      startVelocity: .zero, gravity: .zero)
+        emitter.advance(deltaTime: 0.49)
+        #expect(emitter.aliveCount == 0)
+        emitter.advance(deltaTime: 0.01)
+        #expect(emitter.aliveCount == 3)
+        emitter.advance(deltaTime: 1.0)
+        #expect(emitter.aliveCount == 9)
+    }
+
     @Test("particles are culled once they exceed their lifetime")
     func lifetimeCulling() {
         var emitter = ParticleEmitter(emissionRate: 0, lifetime: 0.5, gravity: .zero)
@@ -182,5 +195,22 @@ struct ParticleTests {
         #expect(stepped == 2)
         #expect(scene.component(ParticleEmitter.self, for: a)!.aliveCount == 3) // 2 seeded + 1 emitted
         #expect(scene.component(ParticleEmitter.self, for: b)!.aliveCount == 3)
+    }
+
+    @Test("SceneRuntime.emitParticles triggers one emitter")
+    func sceneEmitParticles() {
+        var scene = SceneRuntime()
+        let emitterEntity = scene.createEntity()
+        let emptyEntity = scene.createEntity()
+        _ = scene.setComponent(
+            ParticleEmitter(emissionRate: 0, maxParticles: 5, lifetime: 10, gravity: .zero),
+            for: emitterEntity
+        )
+
+        let emitted = scene.emitParticles(from: emitterEntity, count: 3)
+        #expect(emitted)
+        #expect(scene.component(ParticleEmitter.self, for: emitterEntity)!.aliveCount == 3)
+        let missingEmitterEmitted = scene.emitParticles(from: emptyEntity, count: 3)
+        #expect(!missingEmitterEmitted)
     }
 }

@@ -431,7 +431,8 @@ struct SceneSerializerTests {
         var original = SceneRuntime()
         let entity = original.createEntity()
         _ = original.setComponent(
-            ParticleEmitter(emissionRate: 33, maxParticles: 128, lifetime: 1.5,
+            ParticleEmitter(emissionRate: 33, burstCount: 7, burstInterval: 0.25,
+                            maxParticles: 128, lifetime: 1.5,
                             spawnRadius: 0.25, emissionShape: .cone,
                             boxHalfExtents: SIMD3<Float>(1, 2, 3),
                             coneRadius: 0.75, coneHeight: 2.5,
@@ -455,6 +456,8 @@ struct SceneSerializerTests {
         let e = restored.component(ParticleEmitter.self, for: restored.entities()[0])
         #expect(e != nil)
         #expect(e!.emissionRate == 33)
+        #expect(e!.burstCount == 7)
+        #expect(e!.burstInterval == 0.25)
         #expect(e!.maxParticles == 128)
         #expect(e!.lifetime == 1.5)
         #expect(e!.spawnRadius == 0.25)

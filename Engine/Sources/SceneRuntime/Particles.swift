@@ -60,6 +60,10 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public var looping: Bool
     /// Particles spawned per second from the continuous emitter.
     public var emissionRate: Float
+    /// Particles spawned each burst tick. Zero disables scheduled bursts.
+    public var burstCount: Int
+    /// Seconds between scheduled bursts when `burstCount > 0`.
+    public var burstInterval: Float
     public var maxParticles: Int
     public var lifetime: Float
     public var lifetimeRandomness: Float
@@ -102,12 +106,15 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     // Live state
     public private(set) var particles: [Particle]
     private var emissionAccumulator: Float
+    private var burstAccumulator: Float
     private var rngState: UInt64
 
     public init(
         isEmitting: Bool = true,
         looping: Bool = true,
         emissionRate: Float = 10,
+        burstCount: Int = 0,
+        burstInterval: Float = 0,
         maxParticles: Int = 256,
         lifetime: Float = 2,
         lifetimeRandomness: Float = 0,
@@ -139,6 +146,8 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.isEmitting = isEmitting
         self.looping = looping
         self.emissionRate = max(0, emissionRate)
+        self.burstCount = max(0, burstCount)
+        self.burstInterval = max(0, burstInterval)
         self.maxParticles = max(0, maxParticles)
         self.lifetime = max(0, lifetime)
         self.lifetimeRandomness = max(0, lifetimeRandomness)
@@ -172,6 +181,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.seed = seed
         self.particles = []
         self.emissionAccumulator = 0
+        self.burstAccumulator = 0
         self.rngState = seed
     }
 
@@ -179,7 +189,8 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public var aliveCount: Int { particles.count }
 
     /// Advances the simulation by `deltaTime` seconds: integrates existing particles, culls
-    /// expired ones, then spawns from the continuous emission rate (capped at `maxParticles`).
+    /// expired ones, then spawns from the continuous emission rate and scheduled bursts
+    /// (capped at `maxParticles`).
     public mutating func advance(deltaTime: Double) {
         guard deltaTime > 0 else { return }
         let dt = Float(deltaTime)
@@ -199,12 +210,22 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         }
         particles = survivors
 
-        guard isEmitting, emissionRate > 0 else { return }
-        emissionAccumulator += emissionRate * dt
-        let toSpawn = Int(emissionAccumulator)
-        if toSpawn > 0 {
-            emissionAccumulator -= Float(toSpawn)
-            spawn(toSpawn)
+        guard isEmitting else { return }
+        if emissionRate > 0 {
+            emissionAccumulator += emissionRate * dt
+            let toSpawn = Int(emissionAccumulator)
+            if toSpawn > 0 {
+                emissionAccumulator -= Float(toSpawn)
+                spawn(toSpawn)
+            }
+        }
+        if burstCount > 0, burstInterval > 0 {
+            burstAccumulator += dt
+            let bursts = Int(burstAccumulator / burstInterval)
+            if bursts > 0 {
+                burstAccumulator -= Float(bursts) * burstInterval
+                spawn(bursts * burstCount)
+            }
         }
     }
 
@@ -216,6 +237,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public mutating func clear() {
         particles.removeAll(keepingCapacity: true)
         emissionAccumulator = 0
+        burstAccumulator = 0
     }
 
     // MARK: - Internals
@@ -366,6 +388,15 @@ public extension SceneRuntime {
     mutating func advanceParticles(deltaTime: Double) -> Int {
         updateComponents(ParticleEmitter.self) { _, emitter in
             emitter.advance(deltaTime: deltaTime)
+        }
+    }
+
+    /// Emits particles immediately from one entity's `ParticleEmitter`.
+    /// Returns false when the entity has no particle emitter.
+    @discardableResult
+    mutating func emitParticles(from entity: EntityID, count: Int) -> Bool {
+        updateComponent(ParticleEmitter.self, for: entity) { emitter in
+            emitter.emit(count)
         }
     }
 }

@@ -747,6 +747,8 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let isEmitting: Bool
     public let looping: Bool
     public let emissionRate: Float
+    public let burstCount: Int
+    public let burstInterval: Float
     public let maxParticles: Int
     public let lifetime: Float
     public let lifetimeRandomness: Float
@@ -779,6 +781,8 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.isEmitting = component.isEmitting
         self.looping = component.looping
         self.emissionRate = component.emissionRate
+        self.burstCount = component.burstCount
+        self.burstInterval = component.burstInterval
         self.maxParticles = component.maxParticles
         self.lifetime = component.lifetime
         self.lifetimeRandomness = component.lifetimeRandomness
@@ -810,6 +814,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
 
     var component: ParticleEmitter {
         ParticleEmitter(isEmitting: isEmitting, looping: looping, emissionRate: emissionRate,
+                        burstCount: burstCount, burstInterval: burstInterval,
                         maxParticles: maxParticles, lifetime: lifetime,
                         lifetimeRandomness: lifetimeRandomness, originOffset: originOffset.simdValue,
                         spawnRadius: spawnRadius, emissionShape: emissionShape,
@@ -826,7 +831,8 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case isEmitting, looping, emissionRate, maxParticles, lifetime, lifetimeRandomness
+        case isEmitting, looping, emissionRate, burstCount, burstInterval
+        case maxParticles, lifetime, lifetimeRandomness
         case originOffset, spawnRadius, emissionShape, boxHalfExtents, coneRadius, coneHeight
         case startVelocity, velocityRandomness, gravity
         case noiseStrength, noiseScale, noiseSpeed
@@ -839,6 +845,8 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.isEmitting = try c.decodeIfPresent(Bool.self, forKey: .isEmitting) ?? true
         self.looping = try c.decodeIfPresent(Bool.self, forKey: .looping) ?? true
         self.emissionRate = try c.decodeIfPresent(Float.self, forKey: .emissionRate) ?? 10
+        self.burstCount = try c.decodeIfPresent(Int.self, forKey: .burstCount) ?? 0
+        self.burstInterval = try c.decodeIfPresent(Float.self, forKey: .burstInterval) ?? 0
         self.maxParticles = try c.decodeIfPresent(Int.self, forKey: .maxParticles) ?? 256
         self.lifetime = try c.decodeIfPresent(Float.self, forKey: .lifetime) ?? 2
         self.lifetimeRandomness = try c.decodeIfPresent(Float.self, forKey: .lifetimeRandomness) ?? 0
@@ -1765,6 +1773,14 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.emissionRate,
                                                                                     summary: "Update emission rate"),
                                                                min: 0, max: 1000, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-burst-count", label: L("Burst Count"),
+                                     value: .constrainedNumber(particleIntBinding(for: entity, \.burstCount,
+                                                                                  summary: "Update particle burst count"),
+                                                               min: 0, max: 100_000, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-burst-interval", label: L("Burst Interval"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.burstInterval,
+                                                                                    summary: "Update particle burst interval"),
+                                                               min: 0, max: 60, step: 0.1, showsStepper: true)),
                 EditorInspectorField(id: "particle-max", label: L("Max Particles"),
                                      value: .constrainedNumber(particleMaxBinding(for: entity),
                                                                min: 0, max: 100_000, step: 16, showsStepper: true)),
@@ -1886,6 +1902,19 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 let value = max(0, Int(next.rounded()))
                 guard scene.component(ParticleEmitter.self, for: entity)?.maxParticles != value else { return }
                 updateParticleEmitter(entity, summary: "Update max particles") { $0.maxParticles = value }
+            }
+        )
+    }
+
+    private func particleIntBinding(for entity: EntityID,
+                                    _ keyPath: WritableKeyPath<ParticleEmitter, Int>,
+                                    summary: String) -> Binding<Float> {
+        Binding(
+            get: { [self] in Float(scene.component(ParticleEmitter.self, for: entity)?[keyPath: keyPath] ?? 0) },
+            set: { [self] next in
+                let value = max(0, Int(next.rounded()))
+                guard scene.component(ParticleEmitter.self, for: entity)?[keyPath: keyPath] != value else { return }
+                updateParticleEmitter(entity, summary: summary) { $0[keyPath: keyPath] = value }
             }
         )
     }
