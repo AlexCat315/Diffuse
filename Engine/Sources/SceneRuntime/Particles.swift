@@ -10,18 +10,24 @@ public struct Particle: Sendable, Equatable {
     public var age: Float
     public var lifetime: Float
     public var sizeScale: Float
+    public var rotation: Float
+    public var angularVelocity: Float
     public var size: Float
     public var color: SIMD4<Float>
 
     public init(position: SIMD3<Float>, velocity: SIMD3<Float>,
                 age: Float = 0, lifetime: Float,
                 sizeScale: Float = 1,
+                rotation: Float = 0,
+                angularVelocity: Float = 0,
                 size: Float = 1, color: SIMD4<Float> = .init(1, 1, 1, 1)) {
         self.position = position
         self.velocity = velocity
         self.age = age
         self.lifetime = lifetime
         self.sizeScale = sizeScale
+        self.rotation = rotation
+        self.angularVelocity = angularVelocity
         self.size = size
         self.color = color
     }
@@ -233,6 +239,14 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public var endSize: Float
     /// Fractional random size variation applied once per particle spawn. A value of 0.25 means ±25%.
     public var sizeRandomness: Float
+    /// Billboard rotation in radians assigned at spawn before random variation.
+    public var startRotation: Float
+    /// Random billboard rotation variation in radians applied once per particle spawn.
+    public var rotationRandomness: Float
+    /// Billboard angular velocity in radians per second.
+    public var angularVelocity: Float
+    /// Random angular velocity variation in radians per second applied once per particle spawn.
+    public var angularVelocityRandomness: Float
     public var sizeCurve: ParticleCurve
     public var startColor: SIMD4<Float>
     public var endColor: SIMD4<Float>
@@ -276,6 +290,10 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         startSize: Float = 1,
         endSize: Float = 0,
         sizeRandomness: Float = 0,
+        startRotation: Float = 0,
+        rotationRandomness: Float = 0,
+        angularVelocity: Float = 0,
+        angularVelocityRandomness: Float = 0,
         sizeCurve: ParticleCurve = .linear,
         startColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1),
         endColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 0),
@@ -315,6 +333,10 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.startSize = startSize
         self.endSize = endSize
         self.sizeRandomness = max(0, sizeRandomness)
+        self.startRotation = startRotation
+        self.rotationRandomness = max(0, rotationRandomness)
+        self.angularVelocity = angularVelocity
+        self.angularVelocityRandomness = max(0, angularVelocityRandomness)
         self.sizeCurve = sizeCurve
         self.startColor = startColor
         self.endColor = endColor
@@ -345,6 +367,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             p.velocity += gravity * dt
             p.velocity += noiseForce(position: p.position, age: p.age) * dt
             p.position += p.velocity * dt
+            p.rotation += p.angularVelocity * dt
             applyCollision(to: &p, context: collisionContext)
             p.age += dt
             if p.age < p.lifetime {
@@ -412,10 +435,14 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
                                       nextSigned() * velocityRandomness.z)
             let life = max(0.0001, lifetime + nextSigned() * lifetimeRandomness)
             let sizeScale = max(0, 1 + nextSigned() * sizeRandomness)
+            let rotation = startRotation + nextSigned() * rotationRandomness
+            let angularVelocity = self.angularVelocity + nextSigned() * angularVelocityRandomness
             var p = Particle(position: originOffset + offset,
                              velocity: startVelocity + jitter,
                              lifetime: life,
-                             sizeScale: sizeScale)
+                             sizeScale: sizeScale,
+                             rotation: rotation,
+                             angularVelocity: angularVelocity)
             refreshAppearance(&p)
             particles.append(p)
         }
