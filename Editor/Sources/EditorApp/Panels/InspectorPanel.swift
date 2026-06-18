@@ -253,6 +253,34 @@ struct InspectorPanel: View {
         }
     }
 
+    private struct InspectorParticleCurveValue: View {
+        let binding: Binding<ParticleCurve>
+
+        var body: some View {
+            EnumField(value: binding, width: 150) { curve in
+                switch curve {
+                case .linear: return L("Linear")
+                case .easeIn: return L("Ease In")
+                case .easeOut: return L("Ease Out")
+                case .easeInOut: return L("Ease In-Out")
+                }
+            }
+        }
+    }
+
+    private struct InspectorParticleBlendModeValue: View {
+        let binding: Binding<ParticleBlendMode>
+
+        var body: some View {
+            EnumField(value: binding, width: 150) { mode in
+                switch mode {
+                case .alpha: return L("Alpha")
+                case .additive: return L("Additive")
+                }
+            }
+        }
+    }
+
     private func propertySections(_ sections: [EditorInspectorSection],
                                   collapsedIDs: Set<String>,
                                   entityID: UInt64?) -> [PropertyGridSection] {
@@ -311,6 +339,10 @@ struct InspectorPanel: View {
             return AnyView(InspectorParticleEmissionShapeValue(binding: binding))
         case let .particleCollisionMode(binding):
             return AnyView(InspectorParticleCollisionModeValue(binding: binding))
+        case let .particleCurve(binding):
+            return AnyView(InspectorParticleCurveValue(binding: binding))
+        case let .particleBlendMode(binding):
+            return AnyView(InspectorParticleBlendModeValue(binding: binding))
         }
     }
 

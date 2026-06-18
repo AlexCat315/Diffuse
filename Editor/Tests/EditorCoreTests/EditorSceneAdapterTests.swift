@@ -144,6 +144,9 @@ struct EditorSceneAdapterTests {
                             collisionMode: .localPlane, collisionPlaneY: -0.5,
                             collisionRestitution: 0.6, collisionDamping: 0.15,
                             startSize: 0.4, endSize: 0.05,
+                            sizeCurve: .easeIn,
+                            colorCurve: .easeInOut,
+                            blendMode: .additive,
                             seed: 777),
             for: entityID(hero.id)
         )
@@ -176,6 +179,9 @@ struct EditorSceneAdapterTests {
         #expect(e!.collisionPlaneY == -0.5)
         #expect(e!.collisionRestitution == 0.6)
         #expect(e!.collisionDamping == 0.15)
+        #expect(e!.sizeCurve == .easeIn)
+        #expect(e!.colorCurve == .easeInOut)
+        #expect(e!.blendMode == .additive)
         #expect(e!.seed == 777)
     }
 

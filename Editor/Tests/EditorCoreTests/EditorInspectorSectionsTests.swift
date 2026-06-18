@@ -177,6 +177,24 @@ struct EditorInspectorSectionsTests {
             restitution.wrappedValue = 0.7
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.collisionRestitution == 0.7)
         } else { Issue.record("missing restitution field") }
+
+        if case let .particleCurve(sizeCurve) =
+            field(adapter, id, section: "particle-emitter", field: "particle-size-curve") {
+            sizeCurve.wrappedValue = .easeInOut
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.sizeCurve == .easeInOut)
+        } else { Issue.record("missing size curve field") }
+
+        if case let .particleCurve(colorCurve) =
+            field(adapter, id, section: "particle-emitter", field: "particle-color-curve") {
+            colorCurve.wrappedValue = .easeOut
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.colorCurve == .easeOut)
+        } else { Issue.record("missing color curve field") }
+
+        if case let .particleBlendMode(blendMode) =
+            field(adapter, id, section: "particle-emitter", field: "particle-blend-mode") {
+            blendMode.wrappedValue = .additive
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.blendMode == .additive)
+        } else { Issue.record("missing blend mode field") }
     }
 
     @Test("particle gravity vector and color bindings write back")
