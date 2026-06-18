@@ -425,9 +425,47 @@ struct InspectorPanel: View {
             return AnyView(InspectorParticleCurveValue(binding: binding))
         case let .particleBlendMode(binding):
             return AnyView(InspectorParticleBlendModeValue(binding: binding))
+        case let .asset(binding, acceptedKinds, placeholder):
+            return AnyView(AssetRefField(value: assetRefBinding(binding),
+                                         activePayload: activeAssetDropPayload,
+                                         acceptedKinds: acceptedKinds,
+                                         placeholder: placeholder))
         }
     }
 
+    private var activeAssetDropPayload: Binding<AssetDropPayload?> {
+        Binding(
+            get: { [store] in
+                store.activeAssetDrag.map {
+                    AssetDropPayload(id: $0.assetID,
+                                     name: $0.displayName,
+                                     kind: $0.kindLabel)
+                }
+            },
+            set: { _ in }
+        )
+    }
+
+    private func assetRefBinding(_ binding: Binding<EditorInspectorAssetRef?>) -> Binding<AssetRef?> {
+        Binding(
+            get: {
+                binding.wrappedValue.map {
+                    AssetRef(id: $0.id,
+                             name: $0.name,
+                             subtitle: $0.subtitle,
+                             kind: $0.kind)
+                }
+            },
+            set: { next in
+                binding.wrappedValue = next.map {
+                    EditorInspectorAssetRef(id: $0.id,
+                                            name: $0.name,
+                                            subtitle: $0.subtitle,
+                                            kind: $0.kind)
+                }
+            }
+        )
+    }
 }
 
 private extension EditorInspectorFieldValue {
@@ -444,6 +482,8 @@ private extension EditorInspectorFieldValue {
         switch self {
         case .vector3:
             return max(defaultHeight, 30)
+        case .asset:
+            return max(defaultHeight, 34)
         case let .particleCurve(binding):
             if case .keyframes(let keyframes) = binding.wrappedValue {
                 return max(defaultHeight, 150 + Float(keyframes.count) * 28)

@@ -781,6 +781,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let endColor: EditorSceneManifestVector4
     public let colorCurve: ParticleCurve
     public let blendMode: ParticleBlendMode
+    public let textureAssetID: String?
     public let texturePath: String?
     public let seed: UInt64
 
@@ -822,6 +823,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.endColor = EditorSceneManifestVector4(component.endColor)
         self.colorCurve = component.colorCurve
         self.blendMode = component.blendMode
+        self.textureAssetID = component.textureAssetID
         self.texturePath = component.texturePath
         self.seed = component.seed
     }
@@ -846,7 +848,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
                         sizeCurve: sizeCurve,
                         startColor: startColor.simdValue, endColor: endColor.simdValue,
                         colorCurve: colorCurve, blendMode: blendMode,
-                        texturePath: texturePath, seed: seed)
+                        textureAssetID: textureAssetID, texturePath: texturePath, seed: seed)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -858,7 +860,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         case collisionMode, collisionPlaneY, collisionRestitution, collisionDamping
         case startSize, endSize, sizeRandomness
         case startRotation, rotationRandomness, angularVelocity, angularVelocityRandomness
-        case sizeCurve, startColor, endColor, colorCurve, blendMode, texturePath, seed
+        case sizeCurve, startColor, endColor, colorCurve, blendMode, textureAssetID, texturePath, seed
     }
 
     public init(from decoder: Decoder) throws {
@@ -907,6 +909,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
             ?? EditorSceneManifestVector4(SIMD4<Float>(1, 1, 1, 0))
         self.colorCurve = try c.decodeIfPresent(ParticleCurve.self, forKey: .colorCurve) ?? .linear
         self.blendMode = try c.decodeIfPresent(ParticleBlendMode.self, forKey: .blendMode) ?? .alpha
+        self.textureAssetID = try c.decodeIfPresent(String.self, forKey: .textureAssetID)
         self.texturePath = try c.decodeIfPresent(String.self, forKey: .texturePath)
         self.seed = try c.decodeIfPresent(UInt64.self, forKey: .seed) ?? 0x9E3779B9
     }
@@ -952,6 +955,24 @@ public enum EditorInspectorFieldValue {
     case particleCollisionMode(Binding<ParticleCollisionMode>)
     case particleCurve(Binding<ParticleCurve>)
     case particleBlendMode(Binding<ParticleBlendMode>)
+    case asset(Binding<EditorInspectorAssetRef?>, acceptedKinds: Set<String>, placeholder: String)
+}
+
+public struct EditorInspectorAssetRef: Sendable, Equatable {
+    public let id: String
+    public let name: String
+    public let subtitle: String?
+    public let kind: String
+
+    public init(id: String,
+                name: String,
+                subtitle: String? = nil,
+                kind: String) {
+        self.id = id
+        self.name = name
+        self.subtitle = subtitle
+        self.kind = kind
+    }
 }
 
 /// 主线程约定的编辑器场景适配层。底层数据来自 Swift `SceneRuntime`；
@@ -1908,8 +1929,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                                                                 summary: "Update particle color curve"))),
                 EditorInspectorField(id: "particle-blend-mode", label: L("Blend"),
                                      value: .particleBlendMode(particleBlendModeBinding(for: entity))),
-                EditorInspectorField(id: "particle-texture-path", label: L("Texture Path"),
-                                     value: .text(particleTexturePathBinding(for: entity))),
+                EditorInspectorField(id: "particle-texture", label: L("Texture"),
+                                     value: .asset(particleTextureAssetBinding(for: entity),
+                                                   acceptedKinds: [ImportableAssetKind.png.sceneKindLabel],
+                                                   placeholder: L("Drop texture"))),
             ]
         )
     }
@@ -2026,14 +2049,47 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
-    private func particleTexturePathBinding(for entity: EntityID) -> Binding<String> {
+    private func particleTextureAssetBinding(for entity: EntityID) -> Binding<EditorInspectorAssetRef?> {
         Binding(
-            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.texturePath ?? "" },
+            get: { [self] in
+                guard let emitter = scene.component(ParticleEmitter.self, for: entity) else { return nil }
+                if let assetID = emitter.textureAssetID,
+                   let asset = EditorAssetCatalog.asset(for: assetID) {
+                    return EditorInspectorAssetRef(id: asset.id,
+                                                   name: asset.name,
+                                                   subtitle: asset.relativePath,
+                                                   kind: asset.kind.sceneKindLabel)
+                }
+                if let texturePath = emitter.texturePath, !texturePath.isEmpty {
+                    let url = URL(fileURLWithPath: texturePath)
+                    return EditorInspectorAssetRef(id: emitter.textureAssetID ?? texturePath,
+                                                   name: url.deletingPathExtension().lastPathComponent,
+                                                   subtitle: texturePath,
+                                                   kind: ImportableAssetKind.png.sceneKindLabel)
+                }
+                return nil
+            },
             set: { [self] next in
-                let trimmed = next.trimmingCharacters(in: .whitespacesAndNewlines)
-                let value = trimmed.isEmpty ? nil : trimmed
-                guard scene.component(ParticleEmitter.self, for: entity)?.texturePath != value else { return }
-                updateParticleEmitter(entity, summary: "Update particle texture") { $0.texturePath = value }
+                guard let current = scene.component(ParticleEmitter.self, for: entity) else { return }
+                let resolved: (assetID: String?, path: String?)
+                if let next {
+                    if let asset = EditorAssetCatalog.asset(for: next.id),
+                       asset.kind.isTexture {
+                        resolved = (asset.id, asset.absolutePath)
+                    } else if next.kind == ImportableAssetKind.png.sceneKindLabel {
+                        let path = next.subtitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+                        resolved = (next.id, path?.isEmpty == false ? path : nil)
+                    } else {
+                        return
+                    }
+                } else {
+                    resolved = (nil, nil)
+                }
+                guard current.textureAssetID != resolved.assetID || current.texturePath != resolved.path else { return }
+                updateParticleEmitter(entity, summary: "Update particle texture") {
+                    $0.textureAssetID = resolved.assetID
+                    $0.texturePath = resolved.path
+                }
             }
         )
     }
