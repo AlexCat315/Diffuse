@@ -13,6 +13,7 @@ struct ParticleUniforms {
 
 struct ParticleInstance {
     position_size : vec4<f32>,  // xyz = world position, w = size
+    rotation : vec4<f32>,       // x = billboard rotation in radians
     color : vec4<f32>,
 };
 
@@ -39,7 +40,14 @@ fn vs_main(@builtin(vertex_index) vertex_index : u32,
 
     let particle = particles[instance_index];
     let corner = corners[vertex_index];
-    let offset = (u.camera_right.xyz * corner.x + u.camera_up.xyz * corner.y) * particle.position_size.w;
+    let s = sin(particle.rotation.x);
+    let c = cos(particle.rotation.x);
+    let rotated_corner = vec2<f32>(
+        corner.x * c - corner.y * s,
+        corner.x * s + corner.y * c
+    );
+    let offset = (u.camera_right.xyz * rotated_corner.x + u.camera_up.xyz * rotated_corner.y)
+        * particle.position_size.w;
     let world_position = particle.position_size.xyz + offset;
 
     var out : VsOut;

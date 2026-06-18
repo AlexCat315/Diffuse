@@ -232,6 +232,30 @@ struct EditorInspectorSectionsTests {
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.sizeRandomness == 0.3)
         } else { Issue.record("missing size randomness field") }
 
+        if case let .constrainedNumber(rotation, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-rotation") {
+            rotation.wrappedValue = 0.4
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.startRotation == 0.4)
+        } else { Issue.record("missing rotation field") }
+
+        if case let .constrainedNumber(rotationRandom, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-rotation-randomness") {
+            rotationRandom.wrappedValue = 0.2
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.rotationRandomness == 0.2)
+        } else { Issue.record("missing rotation randomness field") }
+
+        if case let .constrainedNumber(spin, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-angular-velocity") {
+            spin.wrappedValue = 1.5
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.angularVelocity == 1.5)
+        } else { Issue.record("missing angular velocity field") }
+
+        if case let .constrainedNumber(spinRandom, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-angular-velocity-randomness") {
+            spinRandom.wrappedValue = 0.75
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.angularVelocityRandomness == 0.75)
+        } else { Issue.record("missing angular velocity randomness field") }
+
         if case let .particleCurve(colorCurve) =
             field(adapter, id, section: "particle-emitter", field: "particle-color-curve") {
             colorCurve.wrappedValue = .easeOut
