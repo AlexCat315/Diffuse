@@ -16,15 +16,19 @@ struct AssetRegistryTests {
         let meshesDir = tempRoot.appendingPathComponent("Assets/Meshes", isDirectory: true)
         try FileManager.default.createDirectory(at: meshesDir,
                                                 withIntermediateDirectories: true)
+        let texturesDir = tempRoot.appendingPathComponent("Assets/Textures", isDirectory: true)
+        try FileManager.default.createDirectory(at: texturesDir,
+                                                withIntermediateDirectories: true)
 
         try writeTriangleGLTF(into: meshesDir)
+        try Data([0x89, 0x50, 0x4E, 0x47]).write(to: texturesDir.appendingPathComponent("smoke.png"))
         try "# ignore".write(to: meshesDir.appendingPathComponent("notes.txt"),
                               atomically: true,
                               encoding: .utf8)
 
         let entries = try registry.loadProject(at: tempRoot.path)
 
-        #expect(entries.count == 1)
+        #expect(entries.count == 2)
         #expect(entries[0].kind == .gltf)
         #expect(entries[0].meshIndex == AssetRegistry.importedMeshStartIndex)
         #expect(entries[0].relativePath == "Assets/Meshes/triangle.gltf")
@@ -32,6 +36,12 @@ struct AssetRegistryTests {
         #expect(registry.meshAsset(for: entries[0].meshIndex)?.name == "triangle.gltf")
         #expect(registry.registeredMeshes().map(\ .meshIndex) == [AssetRegistry.importedMeshStartIndex])
         #expect(registry.registeredMeshes().first?.sourceDirectory == meshesDir.path)
+        #expect(entries[1].kind == .png)
+        #expect(entries[1].kind.sceneKindLabel == "Texture")
+        #expect(entries[1].kind.isTexture)
+        #expect(entries[1].meshIndex == 0)
+        #expect(entries[1].relativePath == "Assets/Textures/smoke.png")
+        #expect(registry.entry(for: entries[1].id) == entries[1])
     }
 
     private func writeTriangleGLTF(into directory: URL) throws {

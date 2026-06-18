@@ -100,6 +100,10 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     var particleUniformBuffer: GPUBuffer?
     var particleStorageBuffer: GPUBuffer?
     var particleStorageCapacity: Int = 0
+    var particleTextureResources: [String: GPUParticleTextureResource] = [:]
+    var particleTextureFailures: Set<String> = []
+    var fallbackParticleTexture: GPUTexture?
+    var fallbackParticleTextureView: GPUTextureView?
 
     // Opaque-render cache (see WGPURenderer+OpaqueCache): when only the
     // transparent particles change between frames, the expensive opaque passes

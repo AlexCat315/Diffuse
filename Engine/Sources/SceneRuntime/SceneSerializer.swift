@@ -638,7 +638,7 @@ public enum SceneSerializer {
     /// Serializes a particle emitter's configuration only — the live particle pool is
     /// transient runtime state and is not persisted.
     private static func serializeParticleEmitter(_ c: ParticleEmitter) -> [String: Any] {
-        [
+        var d: [String: Any] = [
             "isEmitting": c.isEmitting,
             "looping": c.looping,
             "duration": c.duration,
@@ -678,6 +678,13 @@ public enum SceneSerializer {
             "blendMode": c.blendMode.rawValue,
             "seed": Int(bitPattern: UInt(c.seed)),
         ]
+        if let textureAssetID = c.textureAssetID {
+            d["textureAssetID"] = textureAssetID
+        }
+        if let texturePath = c.texturePath {
+            d["texturePath"] = texturePath
+        }
+        return d
     }
 
     private static func deserializeParticleEmitter(_ d: [String: Any]) -> ParticleEmitter {
@@ -719,6 +726,8 @@ public enum SceneSerializer {
             endColor: jsonToFloatArray(d["endColor"]).flatMap(jsonToVec4) ?? SIMD4<Float>(1, 1, 1, 0),
             colorCurve: deserializeParticleCurve(d["colorCurve"]),
             blendMode: ParticleBlendMode(rawValue: jsonToString(d["blendMode"]) ?? "alpha") ?? .alpha,
+            textureAssetID: jsonToString(d["textureAssetID"]),
+            texturePath: jsonToString(d["texturePath"]),
             seed: UInt64(bitPattern: Int64(jsonToInt(d["seed"]) ?? 0))
         )
     }
