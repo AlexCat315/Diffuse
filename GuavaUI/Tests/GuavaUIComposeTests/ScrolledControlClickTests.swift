@@ -142,6 +142,33 @@ struct ScrolledControlClickTests: GuavaUIComposeSerializedSuite {
         }
     }
 
+    private struct ChurningScrolledSelectHarness: View {
+        let store: SelectionStore
+        @State var tick: Int = 0
+
+        var body: some View {
+            let _ = tick
+            LayerRoot {
+                ScrollView(.vertical) {
+                    Column(alignment: .leading, spacing: 0) {
+                        Text("header").frame(width: 200, height: 100)
+                        Select(selection: Binding(get: { store.value },
+                                                  set: { store.value = $0 }),
+                               options: (0..<20).map {
+                                   SelectOption(value: "\($0)", label: "Option \($0)")
+                               },
+                               width: 160,
+                               maxVisibleRows: 4)
+                        Text("tail").frame(width: 200, height: 300)
+                    }
+                }
+                .frame(width: 240, height: 160)
+            } portals: {
+                PortalHost()
+            }
+        }
+    }
+
     @Test("Select inside a scrolled ScrollView opens its menu at the trigger")
     func scrolledSelectOpensAtTrigger() { GlobalTestLock.locked {
         PortalStoreHolder.current.clear()
@@ -201,6 +228,96 @@ struct ScrolledControlClickTests: GuavaUIComposeSerializedSuite {
         let expected = CGPoint(x: boxOrigin.x, y: boxOrigin.y + popoverBox.frame.height)
         #expect(abs(entry.position.x - expected.x) < 0.5)
         #expect(abs(entry.position.y - expected.y) < 0.5)
+    } }
+
+    @Test("Open Select keeps a capped internal menu and follows its trigger while parent scrolls")
+    func openSelectKeepsCappedMenuAndFollowsTriggerWhileParentScrolls() { GlobalTestLock.locked {
+        PortalStoreHolder.current.clear()
+        defer { PortalStoreHolder.current.clear() }
+
+        let registry = InteractionRegistry()
+        let capture = PointerCapture()
+        let focus = FocusChain()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = capture
+        FocusChainHolder.current = focus
+        defer {
+            InteractionRegistryHolder.current = nil
+            PointerCaptureHolder.current = nil
+            FocusChainHolder.current = nil
+        }
+
+        let tree = NodeTree()
+        let recomposer = Recomposer()
+        let graph = ViewGraph(tree: tree, recomposer: recomposer)
+        let store = SelectionStore()
+        let root = ChurningScrolledSelectHarness(store: store)
+        graph.install(root: root)
+
+        func settle() {
+            while recomposer.commitAll() {}
+            graph.computeLayout(width: 240, height: 200)
+        }
+        settle()
+
+        let scrollView = firstNode(in: tree.root, where: { $0.clipsToBounds })!
+        scrollView.contentOffset = CGPoint(x: 0, y: 90)
+
+        let trigger = firstNode(in: tree.root, where: {
+            $0.attachments[ButtonHost.pressedKey] != nil
+        })!
+        let triggerOrigin = visualOrigin(of: trigger)
+
+        let dispatcher = EventDispatcher(tree: tree,
+                                         interactions: registry,
+                                         capture: capture,
+                                         focusChain: focus)
+        click(dispatcher,
+              x: triggerOrigin.x + trigger.frame.width / 2,
+              y: triggerOrigin.y + trigger.frame.height / 2)
+        settle()
+
+        guard let initialEntry = PortalStoreHolder.current.entries.first else {
+            Issue.record("select menu did not open")
+            return
+        }
+        let initialPosition = initialEntry.position
+
+        let menuScrollView = firstNode(in: tree.root, where: {
+            $0 !== scrollView
+                && registry.handlers(for: $0).wheel != nil
+                && abs($0.frame.height - 112) < 0.1
+        })
+        #expect(menuScrollView != nil)
+
+        guard let overlayHost = firstNode(in: tree.root, where: {
+            $0.firstResource(PortalResource.self) != nil
+        }), let popoverBox = overlayHost.parent else {
+            Issue.record("popover overlay host was not materialized")
+            return
+        }
+
+        scrollView.contentOffset = CGPoint(x: 0, y: 120)
+        NodeRenderer().render(root: tree.root!, into: DrawList())
+
+        guard let updatedEntry = PortalStoreHolder.current.entries.first else {
+            Issue.record("select menu closed unexpectedly")
+            return
+        }
+        let boxOrigin = visualOrigin(of: popoverBox)
+        let expected = CGPoint(x: boxOrigin.x, y: boxOrigin.y + popoverBox.frame.height)
+        #expect(abs(updatedEntry.position.x - expected.x) < 0.5)
+        #expect(abs(updatedEntry.position.y - expected.y) < 0.5)
+        #expect(updatedEntry.position.y < initialPosition.y - 20)
+
+        guard let portalEntryNode = firstNode(in: tree.root, where: {
+            $0.attachments[LayoutDebugAttachmentKey.layoutRole] as? String == "portal-entry"
+        }) else {
+            Issue.record("portal entry node was not materialized")
+            return
+        }
+        #expect(abs(portalEntryNode.absoluteFrame.minX - expected.x) < 0.5)
+        #expect(abs(portalEntryNode.absoluteFrame.minY - expected.y) < 0.5)
     } }
 
     @Test("Stable scrollbar gutter reserves the trailing lane for content")

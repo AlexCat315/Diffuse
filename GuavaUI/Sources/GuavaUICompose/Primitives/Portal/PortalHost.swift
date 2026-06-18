@@ -93,7 +93,9 @@ private struct _PortalEntrySlot: _PrimitiveView {
         return node
     }
 
-    func _updateNode(_ node: Node) {}
+    func _updateNode(_ node: Node) {
+        PortalStoreHolder.current.attachSlotNode(entry.id, node: node)
+    }
 
     func _makeLayoutNode() -> LayoutNode? {
         let layout = LayoutNode()
