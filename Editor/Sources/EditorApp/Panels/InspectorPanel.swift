@@ -248,6 +248,7 @@ struct InspectorPanel: View {
                 switch mode {
                 case .none: return L("None")
                 case .localPlane: return L("Local Plane")
+                case .worldPlane: return L("World Plane")
                 }
             }
         }
