@@ -666,10 +666,10 @@ public enum SceneSerializer {
             "collisionDamping": c.collisionDamping,
             "startSize": c.startSize,
             "endSize": c.endSize,
-            "sizeCurve": c.sizeCurve.rawValue,
+            "sizeCurve": serializeParticleCurve(c.sizeCurve),
             "startColor": vec4ToJSON(c.startColor),
             "endColor": vec4ToJSON(c.endColor),
-            "colorCurve": c.colorCurve.rawValue,
+            "colorCurve": serializeParticleCurve(c.colorCurve),
             "blendMode": c.blendMode.rawValue,
             "seed": Int(bitPattern: UInt(c.seed)),
         ]
@@ -704,13 +704,50 @@ public enum SceneSerializer {
             collisionDamping: jsonToFloat(d["collisionDamping"]) ?? 0,
             startSize: jsonToFloat(d["startSize"]) ?? 1,
             endSize: jsonToFloat(d["endSize"]) ?? 0,
-            sizeCurve: ParticleCurve(rawValue: jsonToString(d["sizeCurve"]) ?? "linear") ?? .linear,
+            sizeCurve: deserializeParticleCurve(d["sizeCurve"]),
             startColor: jsonToFloatArray(d["startColor"]).flatMap(jsonToVec4) ?? SIMD4<Float>(1, 1, 1, 1),
             endColor: jsonToFloatArray(d["endColor"]).flatMap(jsonToVec4) ?? SIMD4<Float>(1, 1, 1, 0),
-            colorCurve: ParticleCurve(rawValue: jsonToString(d["colorCurve"]) ?? "linear") ?? .linear,
+            colorCurve: deserializeParticleCurve(d["colorCurve"]),
             blendMode: ParticleBlendMode(rawValue: jsonToString(d["blendMode"]) ?? "alpha") ?? .alpha,
             seed: UInt64(bitPattern: Int64(jsonToInt(d["seed"]) ?? 0))
         )
+    }
+
+    private static func serializeParticleCurve(_ curve: ParticleCurve) -> Any {
+        switch curve {
+        case .linear, .easeIn, .easeOut, .easeInOut:
+            return curve.rawValue
+        case .keyframes(let keyframes):
+            return [
+                "type": curve.rawValue,
+                "keyframes": keyframes.map {
+                    [
+                        "time": $0.time,
+                        "value": $0.value,
+                    ]
+                },
+            ]
+        }
+    }
+
+    private static func deserializeParticleCurve(_ value: Any?) -> ParticleCurve {
+        if let raw = jsonToString(value) {
+            return ParticleCurve(rawValue: raw) ?? .linear
+        }
+        guard let dict = jsonToDict(value),
+              jsonToString(dict["type"]) == "keyframes"
+        else {
+            return .linear
+        }
+        let keyframes = (dict["keyframes"] as? [[String: Any]] ?? []).compactMap { frame -> ParticleCurveKeyframe? in
+            guard let time = jsonToFloat(frame["time"]),
+                  let value = jsonToFloat(frame["value"])
+            else {
+                return nil
+            }
+            return ParticleCurveKeyframe(time: time, value: value)
+        }
+        return .keyframes(keyframes)
     }
 }
 

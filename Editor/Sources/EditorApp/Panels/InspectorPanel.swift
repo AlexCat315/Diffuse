@@ -258,14 +258,24 @@ struct InspectorPanel: View {
         let binding: Binding<ParticleCurve>
 
         var body: some View {
-            EnumField(value: binding, width: 150) { curve in
-                switch curve {
-                case .linear: return L("Linear")
-                case .easeIn: return L("Ease In")
-                case .easeOut: return L("Ease Out")
-                case .easeInOut: return L("Ease In-Out")
-                }
+            Select(selection: binding,
+                   options: options,
+                   width: 150)
+        }
+
+        private var options: [SelectOption<ParticleCurve>] {
+            var values: [SelectOption<ParticleCurve>] = [
+                SelectOption(value: .linear, label: L("Linear")),
+                SelectOption(value: .easeIn, label: L("Ease In")),
+                SelectOption(value: .easeOut, label: L("Ease Out")),
+                SelectOption(value: .easeInOut, label: L("Ease In-Out")),
+            ]
+            if case .keyframes(let keyframes) = binding.wrappedValue {
+                values.append(SelectOption(value: binding.wrappedValue,
+                                           label: "\(L("Keyframes")) (\(keyframes.count))",
+                                           isEnabled: false))
             }
+            return values
         }
     }
 
