@@ -77,6 +77,12 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public var startVelocity: SIMD3<Float>
     public var velocityRandomness: SIMD3<Float>
     public var gravity: SIMD3<Float>
+    /// Deterministic procedural acceleration strength applied each tick.
+    public var noiseStrength: Float
+    /// Spatial frequency for procedural noise; higher values vary faster over space.
+    public var noiseScale: Float
+    /// Lifetime-time scroll speed for procedural noise.
+    public var noiseSpeed: Float
     public var collisionMode: ParticleCollisionMode
     /// Local-space Y position of the collision plane when `collisionMode == .localPlane`.
     public var collisionPlaneY: Float
@@ -114,6 +120,9 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         startVelocity: SIMD3<Float> = SIMD3<Float>(0, 1, 0),
         velocityRandomness: SIMD3<Float> = .zero,
         gravity: SIMD3<Float> = SIMD3<Float>(0, -9.81, 0),
+        noiseStrength: Float = 0,
+        noiseScale: Float = 1,
+        noiseSpeed: Float = 1,
         collisionMode: ParticleCollisionMode = .none,
         collisionPlaneY: Float = 0,
         collisionRestitution: Float = 0.5,
@@ -146,6 +155,9 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.startVelocity = startVelocity
         self.velocityRandomness = velocityRandomness
         self.gravity = gravity
+        self.noiseStrength = max(0, noiseStrength)
+        self.noiseScale = max(0.0001, noiseScale)
+        self.noiseSpeed = max(0, noiseSpeed)
         self.collisionMode = collisionMode
         self.collisionPlaneY = collisionPlaneY
         self.collisionRestitution = simd_clamp(collisionRestitution, 0, 1)
@@ -176,6 +188,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         survivors.reserveCapacity(particles.count)
         for var p in particles {
             p.velocity += gravity * dt
+            p.velocity += noiseForce(position: p.position, age: p.age) * dt
             p.position += p.velocity * dt
             applyCollision(to: &p)
             p.age += dt
@@ -247,6 +260,21 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             let inverse = 1 - x
             return 1 - 2 * inverse * inverse
         }
+    }
+
+    private func noiseForce(position: SIMD3<Float>, age: Float) -> SIMD3<Float> {
+        guard noiseStrength > 0 else { return .zero }
+        let p = position * noiseScale
+        let phase = age * noiseSpeed + Float(seed & 0xFFFF) * 0.0001
+        return SIMD3<Float>(
+            sineWave(p.x * 12.9898 + p.y * 78.233 + p.z * 37.719 + phase),
+            sineWave(p.y * 26.651 + p.z * 91.191 + p.x * 13.153 + phase + 2.17),
+            sineWave(p.z * 54.123 + p.x * 44.531 + p.y * 9.151 + phase + 4.31)
+        ) * noiseStrength
+    }
+
+    private func sineWave(_ x: Float) -> Float {
+        Float(sin(Double(x)))
     }
 
     private func applyCollision(to p: inout Particle) {
