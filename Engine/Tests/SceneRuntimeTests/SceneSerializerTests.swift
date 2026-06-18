@@ -443,8 +443,16 @@ struct SceneSerializerTests {
                             collisionMode: .worldPlane, collisionPlaneY: -1,
                             collisionRestitution: 0.7, collisionDamping: 0.2,
                             startSize: 0.5, endSize: 0.1,
-                            sizeCurve: .easeInOut,
-                            colorCurve: .easeOut,
+                            sizeRandomness: 0.35,
+                            sizeCurve: .keyframes([
+                                ParticleCurveKeyframe(time: 0, value: 0),
+                                ParticleCurveKeyframe(time: 0.5, value: 1),
+                                ParticleCurveKeyframe(time: 1, value: 0.25),
+                            ]),
+                            colorCurve: .keyframes([
+                                ParticleCurveKeyframe(time: 0, value: 1),
+                                ParticleCurveKeyframe(time: 1, value: 0),
+                            ]),
                             blendMode: .additive,
                             seed: 12345),
             for: entity
@@ -476,8 +484,16 @@ struct SceneSerializerTests {
         #expect(e!.collisionPlaneY == -1)
         #expect(e!.collisionRestitution == 0.7)
         #expect(e!.collisionDamping == 0.2)
-        #expect(e!.sizeCurve == .easeInOut)
-        #expect(e!.colorCurve == .easeOut)
+        #expect(e!.sizeRandomness == 0.35)
+        #expect(e!.sizeCurve == .keyframes([
+            ParticleCurveKeyframe(time: 0, value: 0),
+            ParticleCurveKeyframe(time: 0.5, value: 1),
+            ParticleCurveKeyframe(time: 1, value: 0.25),
+        ]))
+        #expect(e!.colorCurve == .keyframes([
+            ParticleCurveKeyframe(time: 0, value: 1),
+            ParticleCurveKeyframe(time: 1, value: 0),
+        ]))
         #expect(e!.blendMode == .additive)
         #expect(e!.seed == 12345)
         // Deterministic config restored: same seed + same advance ⇒ same particles.

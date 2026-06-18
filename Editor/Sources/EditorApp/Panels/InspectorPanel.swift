@@ -1,3 +1,6 @@
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 import EditorCore
 import GuavaUICompose
 import GuavaUIRuntime
@@ -258,15 +261,74 @@ struct InspectorPanel: View {
         let binding: Binding<ParticleCurve>
 
         var body: some View {
-            EnumField(value: binding, width: 150) { curve in
-                switch curve {
-                case .linear: return L("Linear")
-                case .easeIn: return L("Ease In")
-                case .easeOut: return L("Ease Out")
-                case .easeInOut: return L("Ease In-Out")
+            Column(alignment: .leading, spacing: 6) {
+                Select(selection: binding,
+                       options: options,
+                       width: 150)
+                if case .keyframes(let keyframes) = binding.wrappedValue {
+                    ParticleCurvePreview(binding: binding)
+                        .frame(height: 46)
+                    ParticleCurveKeyframeRows(binding: binding, keyframes: keyframes)
+                    Row(alignment: .center, spacing: 6) {
+                        Button(L("Add")) { appendKeyframe(to: keyframes) }
+                            .buttonStyle(.secondary)
+                            .frame(width: 52, height: 22)
+                        Button(L("Reset")) { binding.wrappedValue = .keyframes(Self.defaultKeyframes) }
+                            .buttonStyle(.ghost)
+                            .frame(width: 56, height: 22)
+                        Spacer(minLength: 0)
+                    }
                 }
             }
         }
+
+        private var options: [SelectOption<ParticleCurve>] {
+            var values: [SelectOption<ParticleCurve>] = [
+                SelectOption(value: .linear, label: L("Linear")),
+                SelectOption(value: .easeIn, label: L("Ease In")),
+                SelectOption(value: .easeOut, label: L("Ease Out")),
+                SelectOption(value: .easeInOut, label: L("Ease In-Out")),
+            ]
+            if case .keyframes(let keyframes) = binding.wrappedValue {
+                values.append(SelectOption(value: binding.wrappedValue,
+                                           label: "\(L("Keyframes")) (\(keyframes.count))"))
+            } else {
+                values.append(SelectOption(value: .keyframes(Self.defaultKeyframes),
+                                           label: L("Keyframes")))
+            }
+            return values
+        }
+
+        private static let defaultKeyframes: [ParticleCurveKeyframe] = [
+            ParticleCurveKeyframe(time: 0, value: 0),
+            ParticleCurveKeyframe(time: 1, value: 1),
+        ]
+
+        private func appendKeyframe(to keyframes: [ParticleCurveKeyframe]) {
+            let sorted = keyframes.sortedByTimeStable()
+            let insert: ParticleCurveKeyframe
+            if sorted.count >= 2 {
+                let widestPair = zip(sorted.indices.dropLast(), sorted.indices.dropFirst())
+                    .max { lhs, rhs in
+                        let leftSpan = sorted[lhs.1].time - sorted[lhs.0].time
+                        let rightSpan = sorted[rhs.1].time - sorted[rhs.0].time
+                        return leftSpan < rightSpan
+                    }
+                if let pair = widestPair {
+                    let lower = sorted[pair.0]
+                    let upper = sorted[pair.1]
+                    let time = (lower.time + upper.time) * 0.5
+                    let value = (lower.value + upper.value) * 0.5
+                    insert = ParticleCurveKeyframe(time: time, value: value)
+                } else {
+                    insert = ParticleCurveKeyframe(time: 0.5, value: 0.5)
+                }
+            } else {
+                insert = ParticleCurveKeyframe(time: 0.5, value: 0.5)
+            }
+            binding.wrappedValue = .keyframes((sorted + [insert]).sortedByTimeStable())
+        }
+
     }
 
     private struct InspectorParticleBlendModeValue: View {
@@ -354,11 +416,366 @@ private extension EditorInspectorFieldValue {
         switch self {
         case .vector3:
             return max(defaultHeight, 30)
+        case let .particleCurve(binding):
+            if case .keyframes(let keyframes) = binding.wrappedValue {
+                return max(defaultHeight, 116 + Float(keyframes.count) * 26)
+            }
+            return max(defaultHeight, 30)
         case let .json(_, minHeight):
             return max(defaultHeight, minHeight + 34)
         default:
             return nil
         }
+    }
+}
+
+private struct ParticleCurveKeyframeRows: View {
+    let binding: Binding<ParticleCurve>
+    let keyframes: [ParticleCurveKeyframe]
+
+    var body: some View {
+        Box(direction: .column, alignItems: .flexStart, spacing: 4) {
+            Row(alignment: .center, spacing: 6) {
+                Text("T")
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                    .frame(width: 50)
+                Text("V")
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                    .frame(width: 50)
+                Spacer(minLength: 0)
+            }
+            ParticleCurveKeyframeEntryList(binding: binding, keyframes: keyframes)
+        }
+    }
+}
+
+private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
+    let binding: Binding<ParticleCurve>
+    let keyframes: [ParticleCurveKeyframe]
+
+    func _makeNode() -> Node {
+        let node = Node()
+        node.isHitTestable = false
+        return node
+    }
+
+    func _updateNode(_ node: Node) {}
+
+    func _makeLayoutNode() -> LayoutNode? {
+        let layout = LayoutNode()
+        layout.flexDirection = .column
+        layout.alignItems = .flexStart
+        layout.setGap(4, gutter: .all)
+        return layout
+    }
+
+    func _updateLayout(_ layout: LayoutNode) {
+        layout.flexDirection = .column
+        layout.alignItems = .flexStart
+        layout.setGap(4, gutter: .all)
+    }
+
+    var _children: [any View] {
+        (0..<keyframes.count).map { index in
+            AnyView(
+                Row(alignment: .center, spacing: 6) {
+                    NumberField(value: keyTimeBinding(index: index),
+                                decimals: 2,
+                                size: .small,
+                                minValue: 0,
+                                maxValue: 1,
+                                step: 0.01,
+                                showsStepper: true)
+                    .frame(width: 50)
+                    NumberField(value: keyValueBinding(index: index),
+                                decimals: 2,
+                                size: .small,
+                                minValue: -4,
+                                maxValue: 4,
+                                step: 0.05,
+                                showsStepper: true)
+                    .frame(width: 50)
+                    Button("-",
+                           isEnabled: keyframes.count > 2,
+                           action: { removeKeyframe(at: index) })
+                    .buttonStyle(.ghost)
+                    .frame(width: 22, height: 22)
+                    Spacer(minLength: 0)
+                }
+            )
+        }
+    }
+
+    private func keyTimeBinding(index: Int) -> Binding<Float> {
+        Binding<Float>(
+            get: {
+                guard case .keyframes(let keys) = binding.wrappedValue,
+                      keys.indices.contains(index)
+                else { return 0 }
+                return keys[index].time
+            },
+            set: { value in
+                updateKeyframe(at: index) { key in
+                    key.time = min(max(value, 0), 1)
+                }
+            }
+        )
+    }
+
+    private func keyValueBinding(index: Int) -> Binding<Float> {
+        Binding<Float>(
+            get: {
+                guard case .keyframes(let keys) = binding.wrappedValue,
+                      keys.indices.contains(index)
+                else { return 0 }
+                return keys[index].value
+            },
+            set: { value in
+                updateKeyframe(at: index) { key in
+                    key.value = value
+                }
+            }
+        )
+    }
+
+    private func updateKeyframe(at index: Int,
+                                mutate: (inout ParticleCurveKeyframe) -> Void) {
+        guard case .keyframes(var keys) = binding.wrappedValue,
+              keys.indices.contains(index)
+        else { return }
+        mutate(&keys[index])
+        binding.wrappedValue = .keyframes(keys.sortedByTimeStable())
+    }
+
+    private func removeKeyframe(at index: Int) {
+        guard keyframes.count > 2, keyframes.indices.contains(index) else { return }
+        var next = keyframes
+        next.remove(at: index)
+        binding.wrappedValue = .keyframes(next.sortedByTimeStable())
+    }
+}
+
+private struct ParticleCurvePreview: View {
+    let binding: Binding<ParticleCurve>
+
+    var body: some View {
+        ParticleCurvePreviewHost(binding: binding)
+            .frame(minWidth: 120, minHeight: 44)
+    }
+}
+
+private struct ParticleCurvePreviewHost: _PrimitiveView {
+    let binding: Binding<ParticleCurve>
+
+    private static let activeKeyIndex = "__particle_curve_active_key_index"
+
+    func _makeNode() -> Node {
+        let node = Node()
+        node.isHitTestable = true
+        return node
+    }
+
+    func _updateNode(_ node: Node) {
+        let snapshot = self
+        node.cursor = .pointer
+        node.draw = { list, origin in
+            snapshot.render(node: node, origin: origin, list: list)
+        }
+
+        guard let registry = InteractionRegistryHolder.current else {
+            InteractionRegistryHolder.current?.remove(node)
+            return
+        }
+        registry.setPointer(node) { event, phase, _ in
+            guard event.button == .left else { return .ignored }
+            switch phase {
+            case .down:
+                PointerCaptureHolder.current?.acquire(node)
+                let graph = snapshot.graphRect(for: node)
+                let index = snapshot.pickOrInsertKey(windowX: event.x, windowY: event.y, graph: graph)
+                let nextIndex = snapshot.writeKey(at: index,
+                                                  windowX: event.x,
+                                                  windowY: event.y,
+                                                  graph: graph) ?? index
+                node.attachments[Self.activeKeyIndex] = nextIndex
+                return .handled
+            case .up:
+                node.attachments[Self.activeKeyIndex] = nil
+                if PointerCaptureHolder.current?.target === node {
+                    PointerCaptureHolder.current?.release()
+                }
+                return .handled
+            }
+        }
+        registry.setMotion(node) { event, _ in
+            guard PointerCaptureHolder.current?.target === node,
+                  let index = node.attachments[Self.activeKeyIndex] as? Int
+            else { return .ignored }
+            if let nextIndex = snapshot.writeKey(at: index,
+                                                 windowX: event.x,
+                                                 windowY: event.y,
+                                                 graph: snapshot.graphRect(for: node)) {
+                node.attachments[Self.activeKeyIndex] = nextIndex
+            }
+            return .handled
+        }
+    }
+
+    func _makeLayoutNode() -> LayoutNode? {
+        let layout = LayoutNode()
+        layout.height = 44
+        return layout
+    }
+
+    func _updateLayout(_ layout: LayoutNode) {
+        layout.height = 44
+    }
+
+    private func render(node: Node, origin: CGPoint, list: DrawList) {
+        let width = Float(node.frame.width)
+        let height = Float(node.frame.height)
+        guard width > 2, height > 2 else { return }
+
+        let curve = binding.wrappedValue
+        let colors = node.theme.colors
+        let x = Float(origin.x)
+        let y = Float(origin.y)
+        let rect = UIRect(x: x, y: y, width: width, height: height)
+        list.addRoundedRect(rect, radius: 5, color: colors.surfaceSunken)
+        drawBorder(rect: rect, color: colors.border, list: list)
+
+        let inset: Float = 6
+        let graph = UIRect(x: x + inset,
+                           y: y + inset,
+                           width: max(1, width - inset * 2),
+                           height: max(1, height - inset * 2))
+
+        for fraction in [Float(0.25), Float(0.5), Float(0.75)] {
+            let gx = graph.minX + graph.width * fraction
+            list.addRect(UIRect(x: gx, y: graph.minY, width: 1, height: graph.height),
+                         color: colors.divider)
+            let gy = graph.minY + graph.height * fraction
+            list.addRect(UIRect(x: graph.minX, y: gy, width: graph.width, height: 1),
+                         color: colors.divider)
+        }
+
+        let samples = 28
+        var previous: (x: Float, y: Float)?
+        for sample in 0...samples {
+            let t = Float(sample) / Float(samples)
+            let value = curve.evaluate(at: t)
+            let px = graph.minX + t * graph.width
+            let py = graph.maxY - min(max(value, 0), 1) * graph.height
+            if let previous {
+                list.addLine(fromX: previous.x, fromY: previous.y,
+                             toX: px, toY: py,
+                             thickness: 2,
+                             color: colors.accent)
+            }
+            previous = (px, py)
+        }
+
+        if case .keyframes(let keyframes) = curve {
+            let active = node.attachments[Self.activeKeyIndex] as? Int
+            for (index, key) in keyframes.enumerated() {
+                let px = graph.minX + key.time * graph.width
+                let py = graph.maxY - min(max(key.value, 0), 1) * graph.height
+                let radius: Float = active == index ? 3.5 : 2.5
+                let marker = UIRect(x: px - radius,
+                                    y: py - radius,
+                                    width: radius * 2,
+                                    height: radius * 2)
+                list.addRoundedRect(marker,
+                                    radius: radius,
+                                    color: active == index ? colors.warning : colors.accentSecondary)
+            }
+        }
+    }
+
+    private func graphRect(for node: Node) -> UIRect {
+        let inset: Float = 6
+        let x = Float(node.absoluteOrigin.x)
+        let y = Float(node.absoluteOrigin.y)
+        let width = max(1, Float(node.frame.width) - inset * 2)
+        let height = max(1, Float(node.frame.height) - inset * 2)
+        return UIRect(x: x + inset, y: y + inset, width: width, height: height)
+    }
+
+    private func pickOrInsertKey(windowX: Float, windowY: Float, graph: UIRect) -> Int {
+        guard case .keyframes(let keyframes) = binding.wrappedValue else { return 0 }
+        if let index = nearestKeyIndex(windowX: windowX, windowY: windowY, graph: graph, keyframes: keyframes) {
+            return index
+        }
+
+        var next = keyframes
+        let key = keyframe(windowX: windowX, windowY: windowY, graph: graph)
+        next.append(key)
+        let sorted = next.sortedByTimeStable()
+        binding.wrappedValue = .keyframes(sorted)
+        return nearestKeyIndex(windowX: windowX,
+                               windowY: windowY,
+                               graph: graph,
+                               keyframes: sorted) ?? max(0, sorted.count - 1)
+    }
+
+    private func nearestKeyIndex(windowX: Float,
+                                 windowY: Float,
+                                 graph: UIRect,
+                                 keyframes: [ParticleCurveKeyframe]) -> Int? {
+        let thresholdSquared: Float = 64
+        var best: (index: Int, distance: Float)?
+        for (index, key) in keyframes.enumerated() {
+            let px = graph.minX + key.time * graph.width
+            let py = graph.maxY - min(max(key.value, 0), 1) * graph.height
+            let dx = px - windowX
+            let dy = py - windowY
+            let distance = dx * dx + dy * dy
+            if distance <= thresholdSquared, best == nil || distance < best!.distance {
+                best = (index, distance)
+            }
+        }
+        return best?.index
+    }
+
+    private func writeKey(at index: Int, windowX: Float, windowY: Float, graph: UIRect) -> Int? {
+        guard case .keyframes(var keyframes) = binding.wrappedValue,
+              keyframes.indices.contains(index)
+        else { return nil }
+        keyframes[index] = keyframe(windowX: windowX, windowY: windowY, graph: graph)
+        let sorted = keyframes.sortedByTimeStable()
+        binding.wrappedValue = .keyframes(sorted)
+        return nearestKeyIndex(windowX: windowX,
+                               windowY: windowY,
+                               graph: graph,
+                               keyframes: sorted)
+    }
+
+    private func keyframe(windowX: Float, windowY: Float, graph: UIRect) -> ParticleCurveKeyframe {
+        let time = min(max((windowX - graph.minX) / max(1, graph.width), 0), 1)
+        let value = min(max((graph.maxY - windowY) / max(1, graph.height), 0), 1)
+        return ParticleCurveKeyframe(time: time, value: value)
+    }
+
+    private func drawBorder(rect: UIRect, color: Color, list: DrawList) {
+        list.addRect(UIRect(x: rect.minX, y: rect.minY, width: rect.width, height: 1), color: color)
+        list.addRect(UIRect(x: rect.minX, y: rect.maxY - 1, width: rect.width, height: 1), color: color)
+        list.addRect(UIRect(x: rect.minX, y: rect.minY, width: 1, height: rect.height), color: color)
+        list.addRect(UIRect(x: rect.maxX - 1, y: rect.minY, width: 1, height: rect.height), color: color)
+    }
+}
+
+private extension Array where Element == ParticleCurveKeyframe {
+    func sortedByTimeStable() -> [ParticleCurveKeyframe] {
+        enumerated()
+            .sorted {
+                if $0.element.time == $1.element.time {
+                    return $0.offset < $1.offset
+                }
+                return $0.element.time < $1.element.time
+            }
+            .map(\.element)
     }
 }
 
