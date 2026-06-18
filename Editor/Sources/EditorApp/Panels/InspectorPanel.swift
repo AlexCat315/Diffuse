@@ -262,24 +262,8 @@ struct InspectorPanel: View {
         @State private var selectedKeyIndex: Int? = nil
 
         var body: some View {
-            Box(direction: .column, alignItems: .stretch, spacing: 8) {
-                Row(alignment: .center, spacing: 8) {
-                    Select(selection: binding,
-                           options: options,
-                           width: 170)
-                    if case .keyframes(let keyframes) = binding.wrappedValue {
-                        Button(L("Add")) { appendKeyframe(to: keyframes) }
-                            .buttonStyle(.secondary)
-                            .frame(width: 52, height: 24)
-                        Button(L("Reset")) {
-                            binding.wrappedValue = .keyframes(Self.defaultKeyframes)
-                            selectedKeyIndex = nil
-                        }
-                            .buttonStyle(.ghost)
-                            .frame(width: 58, height: 24)
-                    }
-                    Spacer(minLength: 0)
-                }
+            Box(direction: .column, alignItems: .stretch, spacing: 7) {
+                toolbar
                 if case .keyframes(let keyframes) = binding.wrappedValue {
                     ParticleCurvePreview(binding: binding, selectedKeyIndex: $selectedKeyIndex)
                         .frame(height: 72)
@@ -287,6 +271,30 @@ struct InspectorPanel: View {
                                               keyframes: keyframes,
                                               selectedKeyIndex: $selectedKeyIndex)
                 }
+            }
+            .padding(horizontal: 8, vertical: 8)
+            .background(.surfaceSunken)
+            .cornerRadius(6)
+            .border(.border, width: 1)
+        }
+
+        private var toolbar: some View {
+            Row(alignment: .center, spacing: 8) {
+                Select(selection: binding,
+                       options: options,
+                       width: 170)
+                if case .keyframes(let keyframes) = binding.wrappedValue {
+                    Button(L("Add")) { appendKeyframe(to: keyframes) }
+                        .buttonStyle(.secondary)
+                        .frame(width: 52, height: 24)
+                    Button(L("Reset")) {
+                        binding.wrappedValue = .keyframes(Self.defaultKeyframes)
+                        selectedKeyIndex = nil
+                    }
+                        .buttonStyle(.ghost)
+                        .frame(width: 58, height: 24)
+                }
+                Spacer(minLength: 0)
             }
         }
 
@@ -438,9 +446,9 @@ private extension EditorInspectorFieldValue {
             return max(defaultHeight, 30)
         case let .particleCurve(binding):
             if case .keyframes(let keyframes) = binding.wrappedValue {
-                return max(defaultHeight, 184 + Float(keyframes.count) * 32)
+                return max(defaultHeight, 150 + Float(keyframes.count) * 28)
             }
-            return max(defaultHeight, 44)
+            return max(defaultHeight, 58)
         case let .json(_, minHeight):
             return max(defaultHeight, minHeight + 34)
         default:
@@ -473,6 +481,7 @@ private struct ParticleCurveKeyframeRows: View {
                                            keyframes: keyframes,
                                            selectedKeyIndex: selectedKeyIndex)
         }
+        .padding(horizontal: 1, vertical: 0)
     }
 }
 
@@ -530,8 +539,10 @@ private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
                                 step: 0.05,
                                 showsStepper: true)
                     .frame(width: 74)
-                    Button("-",
+                    Button(icon: .resource(UICommonIcons.close),
+                           size: 10,
                            isEnabled: keyframes.count > 2,
+                           tooltip: L("Remove keyframe"),
                            action: { removeKeyframe(at: index) })
                     .buttonStyle(.ghost)
                     .frame(width: 22, height: 22)
