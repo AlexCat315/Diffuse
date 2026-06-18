@@ -759,6 +759,9 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let startVelocity: EditorSceneManifestVector3
     public let velocityRandomness: EditorSceneManifestVector3
     public let gravity: EditorSceneManifestVector3
+    public let noiseStrength: Float
+    public let noiseScale: Float
+    public let noiseSpeed: Float
     public let collisionMode: ParticleCollisionMode
     public let collisionPlaneY: Float
     public let collisionRestitution: Float
@@ -788,6 +791,9 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.startVelocity = EditorSceneManifestVector3(component.startVelocity)
         self.velocityRandomness = EditorSceneManifestVector3(component.velocityRandomness)
         self.gravity = EditorSceneManifestVector3(component.gravity)
+        self.noiseStrength = component.noiseStrength
+        self.noiseScale = component.noiseScale
+        self.noiseSpeed = component.noiseSpeed
         self.collisionMode = component.collisionMode
         self.collisionPlaneY = component.collisionPlaneY
         self.collisionRestitution = component.collisionRestitution
@@ -811,6 +817,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
                         coneRadius: coneRadius, coneHeight: coneHeight,
                         startVelocity: startVelocity.simdValue,
                         velocityRandomness: velocityRandomness.simdValue, gravity: gravity.simdValue,
+                        noiseStrength: noiseStrength, noiseScale: noiseScale, noiseSpeed: noiseSpeed,
                         collisionMode: collisionMode, collisionPlaneY: collisionPlaneY,
                         collisionRestitution: collisionRestitution, collisionDamping: collisionDamping,
                         startSize: startSize, endSize: endSize, sizeCurve: sizeCurve,
@@ -822,6 +829,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         case isEmitting, looping, emissionRate, maxParticles, lifetime, lifetimeRandomness
         case originOffset, spawnRadius, emissionShape, boxHalfExtents, coneRadius, coneHeight
         case startVelocity, velocityRandomness, gravity
+        case noiseStrength, noiseScale, noiseSpeed
         case collisionMode, collisionPlaneY, collisionRestitution, collisionDamping
         case startSize, endSize, sizeCurve, startColor, endColor, colorCurve, blendMode, seed
     }
@@ -848,6 +856,9 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
             ?? EditorSceneManifestVector3(.zero)
         self.gravity = try c.decodeIfPresent(EditorSceneManifestVector3.self, forKey: .gravity)
             ?? EditorSceneManifestVector3(SIMD3<Float>(0, -9.81, 0))
+        self.noiseStrength = try c.decodeIfPresent(Float.self, forKey: .noiseStrength) ?? 0
+        self.noiseScale = try c.decodeIfPresent(Float.self, forKey: .noiseScale) ?? 1
+        self.noiseSpeed = try c.decodeIfPresent(Float.self, forKey: .noiseSpeed) ?? 1
         self.collisionMode = try c.decodeIfPresent(ParticleCollisionMode.self, forKey: .collisionMode) ?? .none
         self.collisionPlaneY = try c.decodeIfPresent(Float.self, forKey: .collisionPlaneY) ?? 0
         self.collisionRestitution = try c.decodeIfPresent(Float.self, forKey: .collisionRestitution) ?? 0.5
@@ -1794,6 +1805,18 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .vector3(x: particleGravityBinding(for: entity, axis: 0),
                                                      y: particleGravityBinding(for: entity, axis: 1),
                                                      z: particleGravityBinding(for: entity, axis: 2))),
+                EditorInspectorField(id: "particle-noise-strength", label: L("Noise Strength"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.noiseStrength,
+                                                                                    summary: "Update particle noise strength"),
+                                                               min: 0, max: 100, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-noise-scale", label: L("Noise Scale"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.noiseScale,
+                                                                                    summary: "Update particle noise scale"),
+                                                               min: 0.0001, max: 100, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-noise-speed", label: L("Noise Speed"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.noiseSpeed,
+                                                                                    summary: "Update particle noise speed"),
+                                                               min: 0, max: 100, step: 0.1, showsStepper: true)),
                 EditorInspectorField(id: "particle-collision-mode", label: L("Collision"),
                                      value: .particleCollisionMode(particleCollisionModeBinding(for: entity))),
                 EditorInspectorField(id: "particle-collision-plane-y", label: L("Plane Y"),
