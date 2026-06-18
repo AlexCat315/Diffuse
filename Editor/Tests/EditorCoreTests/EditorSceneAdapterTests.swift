@@ -161,6 +161,7 @@ struct EditorSceneAdapterTests {
                                 ParticleCurveKeyframe(time: 1, value: 0),
                             ]),
                             blendMode: .additive,
+                            textureAssetID: "Assets/Textures/smoke.png",
                             texturePath: "/tmp/particle-smoke.png",
                             seed: 777),
             for: entityID(hero.id)
@@ -215,6 +216,7 @@ struct EditorSceneAdapterTests {
             ParticleCurveKeyframe(time: 1, value: 0),
         ]))
         #expect(e!.blendMode == .additive)
+        #expect(e!.textureAssetID == "Assets/Textures/smoke.png")
         #expect(e!.texturePath == "/tmp/particle-smoke.png")
         #expect(e!.seed == 777)
     }
