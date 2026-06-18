@@ -346,6 +346,11 @@ public struct GPUBlendState: Sendable {
         alpha: GPUBlendComponent(operation: .add, srcFactor: .one, dstFactor: .oneMinusSrcAlpha)
     )
 
+    public static let additiveBlending = GPUBlendState(
+        color: GPUBlendComponent(operation: .add, srcFactor: .srcAlpha, dstFactor: .one),
+        alpha: GPUBlendComponent(operation: .add, srcFactor: .zero, dstFactor: .one)
+    )
+
     public static let premultipliedAlpha = GPUBlendState(
         color: GPUBlendComponent(operation: .add, srcFactor: .one, dstFactor: .oneMinusSrcAlpha),
         alpha: GPUBlendComponent(operation: .add, srcFactor: .one, dstFactor: .oneMinusSrcAlpha)
