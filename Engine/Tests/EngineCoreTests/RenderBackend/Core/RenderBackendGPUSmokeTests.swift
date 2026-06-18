@@ -133,7 +133,7 @@ struct RenderBackendGPUSmokeTests {
 
         let stats = renderer.currentFrameStats()
         #expect(stats.activePasses.contains(.particles))
-        #expect(stats.passDrawCallCounts[.particles] == 1)
+        #expect(stats.passDrawCallCounts[.particles] == 2)
 
         guard let texture = renderer.offscreenColorTexture else {
             Issue.record("expected renderer to retain an offscreen color texture")
@@ -704,6 +704,12 @@ struct RenderBackendGPUSmokeTests {
                     position: .zero,
                     size: 1.2,
                     color: SIMD4<Float>(1.0, 0.5, 0.1, 1.0)
+                ),
+                RenderParticle(
+                    position: SIMD3<Float>(0.25, 0.1, 0),
+                    size: 0.9,
+                    color: SIMD4<Float>(0.2, 0.55, 1.0, 0.8),
+                    blendMode: .additive
                 )
             ]
         )

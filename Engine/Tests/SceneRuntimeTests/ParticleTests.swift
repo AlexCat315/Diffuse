@@ -134,6 +134,21 @@ struct ParticleTests {
         #expect(abs(p.color.w - 0.5) < 1e-4)   // alpha lerp(1, 0, 0.5) = 0.5
     }
 
+    @Test("appearance curves remap normalized age for size and color")
+    func appearanceCurves() {
+        var emitter = ParticleEmitter(emissionRate: 0, lifetime: 1, gravity: .zero,
+                                      startSize: 0, endSize: 1, sizeCurve: .easeIn,
+                                      startColor: SIMD4<Float>(1, 1, 1, 0),
+                                      endColor: SIMD4<Float>(1, 1, 1, 1),
+                                      colorCurve: .easeOut)
+        emitter.emit(1)
+        emitter.advance(deltaTime: 0.5)
+
+        let p = emitter.particles[0]
+        #expect(abs(p.size - 0.25) < 1e-4)
+        #expect(abs(p.color.w - 0.75) < 1e-4)
+    }
+
     @Test("SceneRuntime.advanceParticles steps every emitter component")
     func sceneAdvancesAllEmitters() {
         var scene = SceneRuntime()

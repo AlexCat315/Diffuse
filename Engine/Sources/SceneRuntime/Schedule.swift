@@ -562,7 +562,8 @@ public struct RuntimeWorldSchedule {
                     RenderParticle(
                         position: SIMD3<Float>(worldPosition.x, worldPosition.y, worldPosition.z),
                         size: particle.size,
-                        color: particle.color
+                        color: particle.color,
+                        blendMode: emitter.blendMode
                     )
                 )
             }
