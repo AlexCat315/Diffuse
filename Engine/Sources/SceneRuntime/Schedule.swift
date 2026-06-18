@@ -360,14 +360,17 @@ public struct RuntimeWorldSchedule {
                         }
                     }
                 }
-                if deltaTimeSeconds > 0 {
-                    world.updateComponents(ParticleEmitter.self) { _, emitter in
-                        emitter.advance(deltaTime: deltaTimeSeconds)
-                    }
-                }
                 if world.hierarchyNeedsPropagation() {
                     let report = world.propagateTransforms(using: jobSystem)
                     recordJobReport(report, for: .animationAndScripts)
+                }
+                if deltaTimeSeconds > 0 {
+                    let particleEntities = world.entities(with: ParticleEmitter.self)
+                    let worldTransforms = world.worldTransformSnapshot(matching: particleEntities)
+                    world.updateComponents(ParticleEmitter.self) { entity, emitter in
+                        emitter.advance(deltaTime: deltaTimeSeconds,
+                                        worldTransform: worldTransforms[entity]?.matrix)
+                    }
                 }
             case .spatialIndexUpdate:
                 let spatialIndexBuild = buildSpatialIndexResource(in: world, using: jobSystem)

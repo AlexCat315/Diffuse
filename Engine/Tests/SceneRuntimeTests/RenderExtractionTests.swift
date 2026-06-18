@@ -215,6 +215,39 @@ struct RenderExtractionTests {
         #expect(extracted.scene.particles[0].blendMode == .additive)
         #expect(extracted.scene.particles[1].blendMode == .alpha)
     }
+
+    @Test("tick propagates transforms before world-plane particle collision")
+    func tickUsesPropagatedTransformForWorldPlaneParticles() {
+        var runtime = SceneRuntime()
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 5, 0)), for: entity)
+
+        var emitter = ParticleEmitter(
+            isEmitting: false,
+            emissionRate: 0,
+            maxParticles: 1,
+            lifetime: 100,
+            startVelocity: .zero,
+            gravity: SIMD3<Float>(0, -10, 0),
+            collisionMode: .worldPlane,
+            collisionPlaneY: 0,
+            collisionRestitution: 0.5,
+            collisionDamping: 0
+        )
+        emitter.emit(1)
+        _ = runtime.setComponent(emitter, for: entity)
+
+        _ = runtime.tick(deltaTime: 1)
+
+        guard let extracted = runtime.extractedRenderScene else {
+            Issue.record("expected extracted render scene resource")
+            return
+        }
+
+        #expect(extracted.scene.particles.count == 1)
+        #expect(isClose(extracted.scene.particles[0].position.y, 0))
+        #expect(isClose(runtime.component(ParticleEmitter.self, for: entity)?.particles[0].velocity.y ?? 0, 5))
+    }
 }
 
 private func translation(of matrix: simd_float4x4) -> SIMD3<Float> {
