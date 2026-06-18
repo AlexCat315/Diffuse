@@ -746,6 +746,7 @@ public struct EditorSceneManifestAnimationGraphPlayer: Codable, Sendable, Equata
 public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let isEmitting: Bool
     public let looping: Bool
+    public let duration: Float
     public let emissionRate: Float
     public let burstCount: Int
     public let burstInterval: Float
@@ -780,6 +781,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public init(_ component: ParticleEmitter) {
         self.isEmitting = component.isEmitting
         self.looping = component.looping
+        self.duration = component.duration
         self.emissionRate = component.emissionRate
         self.burstCount = component.burstCount
         self.burstInterval = component.burstInterval
@@ -813,7 +815,8 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     }
 
     var component: ParticleEmitter {
-        ParticleEmitter(isEmitting: isEmitting, looping: looping, emissionRate: emissionRate,
+        ParticleEmitter(isEmitting: isEmitting, looping: looping, duration: duration,
+                        emissionRate: emissionRate,
                         burstCount: burstCount, burstInterval: burstInterval,
                         maxParticles: maxParticles, lifetime: lifetime,
                         lifetimeRandomness: lifetimeRandomness, originOffset: originOffset.simdValue,
@@ -831,7 +834,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case isEmitting, looping, emissionRate, burstCount, burstInterval
+        case isEmitting, looping, duration, emissionRate, burstCount, burstInterval
         case maxParticles, lifetime, lifetimeRandomness
         case originOffset, spawnRadius, emissionShape, boxHalfExtents, coneRadius, coneHeight
         case startVelocity, velocityRandomness, gravity
@@ -844,6 +847,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.isEmitting = try c.decodeIfPresent(Bool.self, forKey: .isEmitting) ?? true
         self.looping = try c.decodeIfPresent(Bool.self, forKey: .looping) ?? true
+        self.duration = try c.decodeIfPresent(Float.self, forKey: .duration) ?? 0
         self.emissionRate = try c.decodeIfPresent(Float.self, forKey: .emissionRate) ?? 10
         self.burstCount = try c.decodeIfPresent(Int.self, forKey: .burstCount) ?? 0
         self.burstInterval = try c.decodeIfPresent(Float.self, forKey: .burstInterval) ?? 0
@@ -1769,6 +1773,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 EditorInspectorField(id: "particle-looping", label: L("Looping"),
                                      value: .bool(particleBoolBinding(for: entity, \.looping,
                                                                       summary: "Toggle particle looping"))),
+                EditorInspectorField(id: "particle-duration", label: L("Duration"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.duration,
+                                                                                    summary: "Update particle duration"),
+                                                               min: 0, max: 600, step: 0.1, showsStepper: true)),
                 EditorInspectorField(id: "particle-rate", label: L("Emission Rate"),
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.emissionRate,
                                                                                     summary: "Update emission rate"),

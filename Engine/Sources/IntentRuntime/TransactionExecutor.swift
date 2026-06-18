@@ -254,7 +254,16 @@ public struct TransactionExecutor {
 
     private func validate(_ transaction: TransactionIR,
                           against context: TransactionExecutionContext) throws {
-        let domains = Set(transaction.operations.map(\ .domain))
+        let domains = transaction.operations.reduce(into: Set<TransactionDomain>()) { partial, operation in
+            switch operation {
+            case .scene:
+                partial.insert(.scene)
+            case .sequence:
+                partial.insert(.sequence)
+            case .asset:
+                partial.insert(.asset)
+            }
+        }
 
         if domains.contains(.scene), let expected = transaction.baseRevisions.sceneRevision {
             guard let actual = context.sceneRuntime?.snapshot.revision else {

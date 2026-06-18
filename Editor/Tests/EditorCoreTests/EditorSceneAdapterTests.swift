@@ -135,7 +135,8 @@ struct EditorSceneAdapterTests {
             return
         }
         _ = source.scene.setComponent(
-            ParticleEmitter(emissionRate: 24, burstCount: 5, burstInterval: 0.4,
+            ParticleEmitter(looping: false, duration: 3.25,
+                            emissionRate: 24, burstCount: 5, burstInterval: 0.4,
                             maxParticles: 64, lifetime: 1.25,
                             spawnRadius: 0.3, emissionShape: .box,
                             boxHalfExtents: SIMD3<Float>(1, 2, 3),
@@ -169,6 +170,8 @@ struct EditorSceneAdapterTests {
         let e = restored.scene.component(ParticleEmitter.self, for: restoredID)
         #expect(e != nil)
         #expect(e!.emissionRate == 24)
+        #expect(e!.looping == false)
+        #expect(e!.duration == 3.25)
         #expect(e!.burstCount == 5)
         #expect(e!.burstInterval == 0.4)
         #expect(e!.maxParticles == 64)
