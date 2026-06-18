@@ -189,6 +189,7 @@ struct RenderExtractionTests {
                 velocityRandomness: .zero,
                 gravity: .zero,
                 startSize: 0.5,
+                startRotation: z < -10 ? 0.75 : 0.25,
                 blendMode: z < -10 ? .additive : .alpha
             )
             emitter.emit(1)
@@ -212,6 +213,8 @@ struct RenderExtractionTests {
         #expect(isClose(extracted.scene.particles[0].position.z, -20))
         #expect(isClose(extracted.scene.particles[1].position.z, -5))
         #expect(isClose(extracted.scene.particles[0].size, 0.5))
+        #expect(isClose(extracted.scene.particles[0].rotation, 0.75))
+        #expect(isClose(extracted.scene.particles[1].rotation, 0.25))
         #expect(extracted.scene.particles[0].blendMode == .additive)
         #expect(extracted.scene.particles[1].blendMode == .alpha)
     }

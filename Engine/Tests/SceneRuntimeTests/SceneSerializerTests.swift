@@ -444,6 +444,10 @@ struct SceneSerializerTests {
                             collisionRestitution: 0.7, collisionDamping: 0.2,
                             startSize: 0.5, endSize: 0.1,
                             sizeRandomness: 0.35,
+                            startRotation: 0.25,
+                            rotationRandomness: 0.5,
+                            angularVelocity: 1.5,
+                            angularVelocityRandomness: 0.75,
                             sizeCurve: .keyframes([
                                 ParticleCurveKeyframe(time: 0, value: 0),
                                 ParticleCurveKeyframe(time: 0.5, value: 1),
@@ -485,6 +489,10 @@ struct SceneSerializerTests {
         #expect(e!.collisionRestitution == 0.7)
         #expect(e!.collisionDamping == 0.2)
         #expect(e!.sizeRandomness == 0.35)
+        #expect(e!.startRotation == 0.25)
+        #expect(e!.rotationRandomness == 0.5)
+        #expect(e!.angularVelocity == 1.5)
+        #expect(e!.angularVelocityRandomness == 0.75)
         #expect(e!.sizeCurve == .keyframes([
             ParticleCurveKeyframe(time: 0, value: 0),
             ParticleCurveKeyframe(time: 0.5, value: 1),
