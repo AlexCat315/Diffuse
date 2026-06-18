@@ -57,6 +57,60 @@ struct ParticleTests {
         #expect(run() == run())
     }
 
+    @Test("box emission spawns within configured half extents")
+    func boxEmissionShape() {
+        var emitter = ParticleEmitter(emissionRate: 0, maxParticles: 64, lifetime: 10,
+                                      emissionShape: .box,
+                                      boxHalfExtents: SIMD3<Float>(2, 3, 4),
+                                      startVelocity: .zero, gravity: .zero,
+                                      seed: 7)
+        emitter.emit(32)
+
+        #expect(emitter.aliveCount == 32)
+        for p in emitter.particles {
+            #expect(abs(p.position.x) <= 2)
+            #expect(abs(p.position.y) <= 3)
+            #expect(abs(p.position.z) <= 4)
+        }
+    }
+
+    @Test("cone emission spawns inside cone volume oriented by start velocity")
+    func coneEmissionShape() {
+        var emitter = ParticleEmitter(emissionRate: 0, maxParticles: 64, lifetime: 10,
+                                      emissionShape: .cone,
+                                      coneRadius: 2, coneHeight: 5,
+                                      startVelocity: SIMD3<Float>(0, 1, 0),
+                                      gravity: .zero, seed: 11)
+        emitter.emit(32)
+
+        #expect(emitter.aliveCount == 32)
+        for p in emitter.particles {
+            #expect(p.position.y >= 0)
+            #expect(p.position.y <= 5)
+            let radial = sqrt(p.position.x * p.position.x + p.position.z * p.position.z)
+            let allowedRadius = 2 * (p.position.y / 5)
+            #expect(radial <= allowedRadius + 0.0001)
+        }
+    }
+
+    @Test("local plane collision bounces particles and damps tangent velocity")
+    func localPlaneCollision() {
+        var emitter = ParticleEmitter(emissionRate: 0, lifetime: 100,
+                                      startVelocity: SIMD3<Float>(4, 0, 0),
+                                      gravity: SIMD3<Float>(0, -10, 0),
+                                      collisionMode: .localPlane,
+                                      collisionPlaneY: 0,
+                                      collisionRestitution: 0.5,
+                                      collisionDamping: 0.25)
+        emitter.emit(1)
+        emitter.advance(deltaTime: 1)
+
+        let p = emitter.particles[0]
+        #expect(abs(p.position.y) < 1e-4)
+        #expect(abs(p.velocity.y - 5) < 1e-4)
+        #expect(abs(p.velocity.x - 3) < 1e-4)
+    }
+
     @Test("isEmitting=false stops new spawns but still ages live particles")
     func stoppedEmitterStillAges() {
         var emitter = ParticleEmitter(emissionRate: 100, lifetime: 0.5, gravity: .zero)
