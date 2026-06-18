@@ -149,6 +149,25 @@ struct ParticleTests {
         #expect(abs(p.color.w - 0.75) < 1e-4)
     }
 
+    @Test("noise force deterministically accelerates particles")
+    func noiseForce() {
+        var emitter = ParticleEmitter(emissionRate: 0, lifetime: 10,
+                                      startVelocity: .zero, gravity: .zero,
+                                      noiseStrength: 2, noiseScale: 1, noiseSpeed: 0,
+                                      seed: 0)
+        emitter.emit(1)
+        emitter.advance(deltaTime: 1)
+
+        let p = emitter.particles[0]
+        let expected = SIMD3<Float>(
+            0,
+            Float(sin(2.17)) * 2,
+            Float(sin(4.31)) * 2
+        )
+        #expect(simd_length(p.velocity - expected) < 1e-4)
+        #expect(simd_length(p.position - expected) < 1e-4)
+    }
+
     @Test("SceneRuntime.advanceParticles steps every emitter component")
     func sceneAdvancesAllEmitters() {
         var scene = SceneRuntime()

@@ -437,6 +437,7 @@ struct SceneSerializerTests {
                             coneRadius: 0.75, coneHeight: 2.5,
                             startVelocity: SIMD3<Float>(0, 3, 0),
                             gravity: SIMD3<Float>(0, -2, 0),
+                            noiseStrength: 1.25, noiseScale: 3.5, noiseSpeed: 0.75,
                             collisionMode: .localPlane, collisionPlaneY: -1,
                             collisionRestitution: 0.7, collisionDamping: 0.2,
                             startSize: 0.5, endSize: 0.1,
@@ -462,6 +463,9 @@ struct SceneSerializerTests {
         #expect(e!.coneRadius == 0.75)
         #expect(e!.coneHeight == 2.5)
         #expect(e!.startVelocity == SIMD3<Float>(0, 3, 0))
+        #expect(e!.noiseStrength == 1.25)
+        #expect(e!.noiseScale == 3.5)
+        #expect(e!.noiseSpeed == 0.75)
         #expect(e!.collisionMode == .localPlane)
         #expect(e!.collisionPlaneY == -1)
         #expect(e!.collisionRestitution == 0.7)
