@@ -27,6 +27,21 @@ struct ParticleTests {
         #expect(emitter.aliveCount == 9)
     }
 
+    @Test("non-looping duration stops new emissions")
+    func nonLoopingDurationStopsEmission() {
+        var emitter = ParticleEmitter(looping: false, duration: 0.5,
+                                      emissionRate: 10, maxParticles: 100, lifetime: 100,
+                                      startVelocity: .zero, gravity: .zero)
+        emitter.advance(deltaTime: 0.5)
+        #expect(emitter.aliveCount == 5)
+        emitter.advance(deltaTime: 1.0)
+        #expect(emitter.aliveCount == 5)
+
+        emitter.clear()
+        emitter.advance(deltaTime: 0.1)
+        #expect(emitter.aliveCount == 1)
+    }
+
     @Test("particles are culled once they exceed their lifetime")
     func lifetimeCulling() {
         var emitter = ParticleEmitter(emissionRate: 0, lifetime: 0.5, gravity: .zero)
