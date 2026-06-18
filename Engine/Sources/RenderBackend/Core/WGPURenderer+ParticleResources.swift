@@ -3,9 +3,10 @@ import SceneRuntime
 import SIMDCompat
 
 /// GPU mirror of `RenderParticle`. `position_size` packs world position (xyz) and
-/// size (w); layout matches `ParticleInstance` in `particles.wgsl` (two vec4s).
+/// size (w); layout matches `ParticleInstance` in `particles.wgsl`.
 private struct GPUParticleInstance {
     var positionSize: SIMD4<Float>
+    var rotation: SIMD4<Float>
     var color: SIMD4<Float>
 }
 
@@ -95,6 +96,7 @@ extension WGPURenderer {
                 instances.append(
                     GPUParticleInstance(
                         positionSize: SIMD4<Float>(particle.position, particle.size),
+                        rotation: SIMD4<Float>(particle.rotation, 0, 0, 0),
                         color: particle.color
                     )
                 )

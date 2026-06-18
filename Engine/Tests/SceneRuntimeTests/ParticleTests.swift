@@ -225,6 +225,23 @@ struct ParticleTests {
         #expect(particles.contains { abs($0.size - 2) > 0.0001 })
     }
 
+    @Test("particle rotation integrates angular velocity")
+    func particleRotation() {
+        var emitter = ParticleEmitter(emissionRate: 0,
+                                      maxParticles: 4,
+                                      lifetime: 10,
+                                      startVelocity: .zero,
+                                      gravity: .zero,
+                                      startRotation: 0.25,
+                                      angularVelocity: 2)
+        emitter.emit(1)
+        emitter.advance(deltaTime: 0.5)
+
+        let p = emitter.particles[0]
+        #expect(abs(p.rotation - 1.25) < 1e-4)
+        #expect(abs(p.angularVelocity - 2) < 1e-4)
+    }
+
     @Test("keyframe curves linearly interpolate sorted keys")
     func appearanceKeyframeCurves() {
         var emitter = ParticleEmitter(
