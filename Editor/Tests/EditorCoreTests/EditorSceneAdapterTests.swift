@@ -147,8 +147,15 @@ struct EditorSceneAdapterTests {
                             collisionMode: .worldPlane, collisionPlaneY: -0.5,
                             collisionRestitution: 0.6, collisionDamping: 0.15,
                             startSize: 0.4, endSize: 0.05,
-                            sizeCurve: .easeIn,
-                            colorCurve: .easeInOut,
+                            sizeRandomness: 0.45,
+                            sizeCurve: .keyframes([
+                                ParticleCurveKeyframe(time: 0, value: 0),
+                                ParticleCurveKeyframe(time: 1, value: 1),
+                            ]),
+                            colorCurve: .keyframes([
+                                ParticleCurveKeyframe(time: 0, value: 1),
+                                ParticleCurveKeyframe(time: 1, value: 0),
+                            ]),
                             blendMode: .additive,
                             seed: 777),
             for: entityID(hero.id)
@@ -189,8 +196,15 @@ struct EditorSceneAdapterTests {
         #expect(e!.collisionPlaneY == -0.5)
         #expect(e!.collisionRestitution == 0.6)
         #expect(e!.collisionDamping == 0.15)
-        #expect(e!.sizeCurve == .easeIn)
-        #expect(e!.colorCurve == .easeInOut)
+        #expect(e!.sizeRandomness == 0.45)
+        #expect(e!.sizeCurve == .keyframes([
+            ParticleCurveKeyframe(time: 0, value: 0),
+            ParticleCurveKeyframe(time: 1, value: 1),
+        ]))
+        #expect(e!.colorCurve == .keyframes([
+            ParticleCurveKeyframe(time: 0, value: 1),
+            ParticleCurveKeyframe(time: 1, value: 0),
+        ]))
         #expect(e!.blendMode == .additive)
         #expect(e!.seed == 777)
     }
