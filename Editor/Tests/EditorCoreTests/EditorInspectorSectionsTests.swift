@@ -155,6 +155,18 @@ struct EditorInspectorSectionsTests {
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.maxParticles == 128)
         } else { Issue.record("missing max field") }
 
+        if case let .constrainedNumber(burstCount, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-burst-count") {
+            burstCount.wrappedValue = 4.8
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.burstCount == 5)
+        } else { Issue.record("missing burst count field") }
+
+        if case let .constrainedNumber(burstInterval, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-burst-interval") {
+            burstInterval.wrappedValue = 0.25
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.burstInterval == 0.25)
+        } else { Issue.record("missing burst interval field") }
+
         if case let .bool(emitting) = field(adapter, id, section: "particle-emitter", field: "particle-emitting") {
             emitting.wrappedValue = false
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.isEmitting == false)
