@@ -212,7 +212,9 @@ public struct Menu: View {
         let listHeight = Float(maxVisibleRows) * rowHeight
         Box(direction: .column, alignItems: .stretch, spacing: 1) {
             if shouldScroll {
-                ScrollView(.vertical) {
+                ScrollView(.vertical,
+                           consumePolicy: .always,
+                           scrollbarGutter: .stable) {
                     Box(direction: .column, alignItems: .stretch, spacing: 1) {
                         rows()
                     }
@@ -561,15 +563,18 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
-        // Anchor below the trigger container (parent Box), in window space.
-        let boxFrame = node.parent?.absoluteFrame ?? .zero
-        let position = CGPoint(x: boxFrame.minX, y: boxFrame.maxY)
+        let position = popoverPosition(for: node)
 
         // Register / update the overlay entry through the node-owned resource.
         // `present` re-registers if a prior entry was cleaned up, so a reused
         // node reliably re-shows the menu.
         node.firstResource(PortalResource.self)?
             .present(position: position, width: width, content: AnyView(content))
+        node.overlayDraw = { [weak node] _, _ in
+            guard let node else { return }
+            node.firstResource(PortalResource.self)?
+                .updatePosition(popoverPosition(for: node))
+        }
 
         // Keyboard handler
         node.isFocusable = keyHandler != nil
@@ -601,6 +606,11 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
         // Content is portal-rendered via the window-scoped PortalStore + PortalHost
         []
     }
+
+    private func popoverPosition(for node: Node) -> CGPoint {
+        let boxFrame = node.parent?.absoluteFrame ?? .zero
+        return CGPoint(x: boxFrame.minX, y: boxFrame.maxY)
+    }
 }
 
 public struct SelectOption<Value: Hashable>: Identifiable {
@@ -624,17 +634,20 @@ public struct Select<Value: Hashable>: View {
     public let options: [SelectOption<Value>]
     public let isEnabled: Bool
     public let width: Float?
+    public let maxVisibleRows: Int
     public let placeholder: String
 
     public init(selection: Binding<Value>,
                 options: [SelectOption<Value>],
                 isEnabled: Bool = true,
                 width: Float? = nil,
+                maxVisibleRows: Int = 8,
                 placeholder: String = "Select") {
         self.selection = selection
         self.options = options
         self.isEnabled = isEnabled
         self.width = width
+        self.maxVisibleRows = max(1, maxVisibleRows)
         self.placeholder = placeholder
     }
 
@@ -710,6 +723,7 @@ private struct _StatefulSelect<Value: Hashable>: View {
         }, content: {
             Menu(menuEntries,
                  width: select.width,
+                 maxVisibleRows: select.maxVisibleRows,
                  highlightedIndex: isPresented ? highlightedIndex : nil,
                  onItemActivated: {
                 isPresented = false
@@ -744,15 +758,18 @@ public struct EnumField<Value: Hashable & CaseIterable>: View where Value.AllCas
     public let value: Binding<Value>
     public let isEnabled: Bool
     public let width: Float?
+    public let maxVisibleRows: Int
     public let label: (Value) -> String
 
     public init(value: Binding<Value>,
                 isEnabled: Bool = true,
                 width: Float? = nil,
+                maxVisibleRows: Int = 8,
                 label: @escaping (Value) -> String = { String(describing: $0) }) {
         self.value = value
         self.isEnabled = isEnabled
         self.width = width
+        self.maxVisibleRows = max(1, maxVisibleRows)
         self.label = label
     }
 
@@ -761,6 +778,7 @@ public struct EnumField<Value: Hashable & CaseIterable>: View where Value.AllCas
                options: options,
                isEnabled: isEnabled,
                width: width,
+               maxVisibleRows: maxVisibleRows,
                placeholder: "Select")
     }
 

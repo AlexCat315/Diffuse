@@ -790,8 +790,8 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         #expect(scrollView.contentOffset.y > 0)
     } }
 
-    @Test("Scrollable Menu in Popover-style list passes boundary wheel to parent ScrollView")
-    func nestedMenuBoundaryPassesWheelToParentScrollView() { GlobalTestLock.locked {
+    @Test("Scrollable Menu consumes boundary wheel before parent ScrollView")
+    func nestedMenuConsumesBoundaryWheelBeforeParentScrollView() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
         let focus = FocusChain()
         InteractionRegistryHolder.current = registry
@@ -848,7 +848,7 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         dispatcher.dispatch(.mouseWheel(MouseWheelEvent(x: 0, y: -1)))
 
         #expect(menuScrollView.contentOffset.y == previousMenuOffset)
-        #expect(parentScrollView.contentOffset.y > 0)
+        #expect(parentScrollView.contentOffset.y == 0)
     } }
 
     @Test("Focused TextField wheel priority outranks hovered parent ScrollView")
