@@ -432,8 +432,14 @@ struct SceneSerializerTests {
         let entity = original.createEntity()
         _ = original.setComponent(
             ParticleEmitter(emissionRate: 33, maxParticles: 128, lifetime: 1.5,
-                            spawnRadius: 0.25, startVelocity: SIMD3<Float>(0, 3, 0),
-                            gravity: SIMD3<Float>(0, -2, 0), startSize: 0.5, endSize: 0.1,
+                            spawnRadius: 0.25, emissionShape: .cone,
+                            boxHalfExtents: SIMD3<Float>(1, 2, 3),
+                            coneRadius: 0.75, coneHeight: 2.5,
+                            startVelocity: SIMD3<Float>(0, 3, 0),
+                            gravity: SIMD3<Float>(0, -2, 0),
+                            collisionMode: .localPlane, collisionPlaneY: -1,
+                            collisionRestitution: 0.7, collisionDamping: 0.2,
+                            startSize: 0.5, endSize: 0.1,
                             seed: 12345),
             for: entity
         )
@@ -448,7 +454,15 @@ struct SceneSerializerTests {
         #expect(e!.maxParticles == 128)
         #expect(e!.lifetime == 1.5)
         #expect(e!.spawnRadius == 0.25)
+        #expect(e!.emissionShape == .cone)
+        #expect(e!.boxHalfExtents == SIMD3<Float>(1, 2, 3))
+        #expect(e!.coneRadius == 0.75)
+        #expect(e!.coneHeight == 2.5)
         #expect(e!.startVelocity == SIMD3<Float>(0, 3, 0))
+        #expect(e!.collisionMode == .localPlane)
+        #expect(e!.collisionPlaneY == -1)
+        #expect(e!.collisionRestitution == 0.7)
+        #expect(e!.collisionDamping == 0.2)
         #expect(e!.seed == 12345)
         // Deterministic config restored: same seed + same advance ⇒ same particles.
         var a = e!; var b = original.component(ParticleEmitter.self, for: original.entities()[0])!
