@@ -141,6 +141,7 @@ struct EditorSceneAdapterTests {
                             coneRadius: 0.8, coneHeight: 3.5,
                             startVelocity: SIMD3<Float>(0, 2, 0),
                             gravity: SIMD3<Float>(0, -3, 0),
+                            noiseStrength: 1.5, noiseScale: 2.25, noiseSpeed: 0.5,
                             collisionMode: .localPlane, collisionPlaneY: -0.5,
                             collisionRestitution: 0.6, collisionDamping: 0.15,
                             startSize: 0.4, endSize: 0.05,
@@ -175,6 +176,9 @@ struct EditorSceneAdapterTests {
         #expect(e!.coneRadius == 0.8)
         #expect(e!.coneHeight == 3.5)
         #expect(e!.startVelocity == SIMD3<Float>(0, 2, 0))
+        #expect(e!.noiseStrength == 1.5)
+        #expect(e!.noiseScale == 2.25)
+        #expect(e!.noiseSpeed == 0.5)
         #expect(e!.collisionMode == .localPlane)
         #expect(e!.collisionPlaneY == -0.5)
         #expect(e!.collisionRestitution == 0.6)
