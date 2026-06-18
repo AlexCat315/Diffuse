@@ -203,6 +203,28 @@ struct ParticleTests {
         #expect(abs(p.color.w - 0.75) < 1e-4)
     }
 
+    @Test("size randomness applies stable per-particle scales")
+    func sizeRandomness() {
+        func run() -> [Particle] {
+            var emitter = ParticleEmitter(emissionRate: 0,
+                                          maxParticles: 8,
+                                          lifetime: 1,
+                                          gravity: .zero,
+                                          startSize: 2,
+                                          endSize: 2,
+                                          sizeRandomness: 0.5,
+                                          seed: 99)
+            emitter.emit(4)
+            emitter.advance(deltaTime: 0.25)
+            return emitter.particles
+        }
+
+        let particles = run()
+        #expect(particles == run())
+        #expect(particles.allSatisfy { $0.size >= 1 && $0.size <= 3 })
+        #expect(particles.contains { abs($0.size - 2) > 0.0001 })
+    }
+
     @Test("keyframe curves linearly interpolate sorted keys")
     func appearanceKeyframeCurves() {
         var emitter = ParticleEmitter(
