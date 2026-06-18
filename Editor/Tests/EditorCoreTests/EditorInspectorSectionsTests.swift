@@ -178,6 +178,24 @@ struct EditorInspectorSectionsTests {
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.collisionRestitution == 0.7)
         } else { Issue.record("missing restitution field") }
 
+        if case let .constrainedNumber(noiseStrength, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-noise-strength") {
+            noiseStrength.wrappedValue = 1.5
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.noiseStrength == 1.5)
+        } else { Issue.record("missing noise strength field") }
+
+        if case let .constrainedNumber(noiseScale, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-noise-scale") {
+            noiseScale.wrappedValue = 2.5
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.noiseScale == 2.5)
+        } else { Issue.record("missing noise scale field") }
+
+        if case let .constrainedNumber(noiseSpeed, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-noise-speed") {
+            noiseSpeed.wrappedValue = 0.75
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.noiseSpeed == 0.75)
+        } else { Issue.record("missing noise speed field") }
+
         if case let .particleCurve(sizeCurve) =
             field(adapter, id, section: "particle-emitter", field: "particle-size-curve") {
             sizeCurve.wrappedValue = .easeInOut
