@@ -505,8 +505,10 @@ public final class EditorApplication: @unchecked Sendable {
     public func handleAssetDrop(at cursorX: Float, cursorY: Float) -> Bool {
         guard let payload = store.state.activeAssetDrag else { return false }
         defer { store.dispatch(.endAssetDrag) }
+        let payloadAsset = EditorAssetCatalog.asset(for: payload.assetID)
         let dropPayload = AssetDropPayload(id: payload.assetID,
                                            name: payload.displayName,
+                                           subtitle: payloadAsset?.relativePath,
                                            kind: payload.kindLabel)
         if AssetDropRegistryHolder.current?.drop(dropPayload, atX: cursorX, y: cursorY) == true {
             logConsole("Dropped \(payload.displayName)")
@@ -518,7 +520,7 @@ public final class EditorApplication: @unchecked Sendable {
             logConsole("Canceled asset drop", severity: .warning, detail: payload.displayName)
             return false
         }
-        guard let asset = EditorAssetCatalog.asset(for: payload.assetID) else {
+        guard let asset = payloadAsset else {
             logConsole("Missing asset for drop", severity: .error, detail: payload.assetID)
             return false
         }
