@@ -259,6 +259,7 @@ struct InspectorPanel: View {
 
     private struct InspectorParticleCurveValue: View {
         let binding: Binding<ParticleCurve>
+        @State private var selectedKeyIndex: Int? = nil
 
         var body: some View {
             Box(direction: .column, alignItems: .stretch, spacing: 8) {
@@ -270,16 +271,21 @@ struct InspectorPanel: View {
                         Button(L("Add")) { appendKeyframe(to: keyframes) }
                             .buttonStyle(.secondary)
                             .frame(width: 52, height: 24)
-                        Button(L("Reset")) { binding.wrappedValue = .keyframes(Self.defaultKeyframes) }
+                        Button(L("Reset")) {
+                            binding.wrappedValue = .keyframes(Self.defaultKeyframes)
+                            selectedKeyIndex = nil
+                        }
                             .buttonStyle(.ghost)
                             .frame(width: 58, height: 24)
                     }
                     Spacer(minLength: 0)
                 }
                 if case .keyframes(let keyframes) = binding.wrappedValue {
-                    ParticleCurvePreview(binding: binding)
+                    ParticleCurvePreview(binding: binding, selectedKeyIndex: $selectedKeyIndex)
                         .frame(height: 72)
-                    ParticleCurveKeyframeRows(binding: binding, keyframes: keyframes)
+                    ParticleCurveKeyframeRows(binding: binding,
+                                              keyframes: keyframes,
+                                              selectedKeyIndex: $selectedKeyIndex)
                 }
             }
         }
@@ -328,7 +334,9 @@ struct InspectorPanel: View {
             } else {
                 insert = ParticleCurveKeyframe(time: 0.5, value: 0.5)
             }
-            binding.wrappedValue = .keyframes((sorted + [insert]).sortedByTimeStable())
+            let next = (sorted + [insert]).sortedByTimeStable()
+            binding.wrappedValue = .keyframes(next)
+            selectedKeyIndex = next.nearestIndex(to: insert)
         }
 
     }
@@ -444,10 +452,13 @@ private extension EditorInspectorFieldValue {
 private struct ParticleCurveKeyframeRows: View {
     let binding: Binding<ParticleCurve>
     let keyframes: [ParticleCurveKeyframe]
+    let selectedKeyIndex: Binding<Int?>
 
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 4) {
             Row(alignment: .center, spacing: 6) {
+                Text("")
+                    .frame(width: 30)
                 Text(L("Time"))
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
@@ -458,7 +469,9 @@ private struct ParticleCurveKeyframeRows: View {
                     .frame(width: 74)
                 Spacer(minLength: 0)
             }
-            ParticleCurveKeyframeEntryList(binding: binding, keyframes: keyframes)
+            ParticleCurveKeyframeEntryList(binding: binding,
+                                           keyframes: keyframes,
+                                           selectedKeyIndex: selectedKeyIndex)
         }
     }
 }
@@ -466,6 +479,7 @@ private struct ParticleCurveKeyframeRows: View {
 private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
     let binding: Binding<ParticleCurve>
     let keyframes: [ParticleCurveKeyframe]
+    let selectedKeyIndex: Binding<Int?>
 
     func _makeNode() -> Node {
         let node = Node()
@@ -493,6 +507,13 @@ private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
         (0..<keyframes.count).map { index in
             AnyView(
                 Row(alignment: .center, spacing: 6) {
+                    Button(isSelected: selectedKeyIndex.wrappedValue == index,
+                           tooltip: L("Select keyframe"),
+                           action: { selectedKeyIndex.wrappedValue = index }) {
+                        Text("\(index + 1)")
+                    }
+                    .buttonStyle(.toggle)
+                    .frame(width: 30, height: 22)
                     NumberField(value: keyTimeBinding(index: index),
                                 decimals: 2,
                                 size: .small,
@@ -558,7 +579,10 @@ private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
               keys.indices.contains(index)
         else { return }
         mutate(&keys[index])
-        binding.wrappedValue = .keyframes(keys.sortedByTimeStable())
+        let editedKey = keys[index]
+        let sorted = keys.sortedByTimeStable()
+        binding.wrappedValue = .keyframes(sorted)
+        selectedKeyIndex.wrappedValue = sorted.nearestIndex(to: editedKey)
     }
 
     private func removeKeyframe(at index: Int) {
@@ -566,20 +590,23 @@ private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
         var next = keyframes
         next.remove(at: index)
         binding.wrappedValue = .keyframes(next.sortedByTimeStable())
+        selectedKeyIndex.wrappedValue = next.isEmpty ? nil : min(index, next.count - 1)
     }
 }
 
 private struct ParticleCurvePreview: View {
     let binding: Binding<ParticleCurve>
+    let selectedKeyIndex: Binding<Int?>
 
     var body: some View {
-        ParticleCurvePreviewHost(binding: binding)
+        ParticleCurvePreviewHost(binding: binding, selectedKeyIndex: selectedKeyIndex)
             .frame(minWidth: 120, minHeight: 44)
     }
 }
 
 private struct ParticleCurvePreviewHost: _PrimitiveView {
     let binding: Binding<ParticleCurve>
+    let selectedKeyIndex: Binding<Int?>
 
     private static let activeKeyIndex = "__particle_curve_active_key_index"
 
@@ -612,8 +639,12 @@ private struct ParticleCurvePreviewHost: _PrimitiveView {
                                                   windowY: event.y,
                                                   graph: graph) ?? index
                 node.attachments[Self.activeKeyIndex] = nextIndex
+                snapshot.selectedKeyIndex.wrappedValue = nextIndex
                 return .handled
             case .up:
+                if let index = node.attachments[Self.activeKeyIndex] as? Int {
+                    snapshot.selectedKeyIndex.wrappedValue = index
+                }
                 node.attachments[Self.activeKeyIndex] = nil
                 if PointerCaptureHolder.current?.target === node {
                     PointerCaptureHolder.current?.release()
@@ -630,6 +661,7 @@ private struct ParticleCurvePreviewHost: _PrimitiveView {
                                                  windowY: event.y,
                                                  graph: snapshot.graphRect(for: node)) {
                 node.attachments[Self.activeKeyIndex] = nextIndex
+                snapshot.selectedKeyIndex.wrappedValue = nextIndex
             }
             return .handled
         }
@@ -690,7 +722,7 @@ private struct ParticleCurvePreviewHost: _PrimitiveView {
         }
 
         if case .keyframes(let keyframes) = curve {
-            let active = node.attachments[Self.activeKeyIndex] as? Int
+            let active = node.attachments[Self.activeKeyIndex] as? Int ?? selectedKeyIndex.wrappedValue
             for (index, key) in keyframes.enumerated() {
                 let px = graph.minX + key.time * graph.width
                 let py = graph.maxY - min(max(key.value, 0), 1) * graph.height
@@ -726,10 +758,12 @@ private struct ParticleCurvePreviewHost: _PrimitiveView {
         next.append(key)
         let sorted = next.sortedByTimeStable()
         binding.wrappedValue = .keyframes(sorted)
-        return nearestKeyIndex(windowX: windowX,
-                               windowY: windowY,
-                               graph: graph,
-                               keyframes: sorted) ?? max(0, sorted.count - 1)
+        let index = nearestKeyIndex(windowX: windowX,
+                                    windowY: windowY,
+                                    graph: graph,
+                                    keyframes: sorted) ?? max(0, sorted.count - 1)
+        selectedKeyIndex.wrappedValue = index
+        return index
     }
 
     private func nearestKeyIndex(windowX: Float,
@@ -758,10 +792,12 @@ private struct ParticleCurvePreviewHost: _PrimitiveView {
         keyframes[index] = keyframe(windowX: windowX, windowY: windowY, graph: graph)
         let sorted = keyframes.sortedByTimeStable()
         binding.wrappedValue = .keyframes(sorted)
-        return nearestKeyIndex(windowX: windowX,
-                               windowY: windowY,
-                               graph: graph,
-                               keyframes: sorted)
+        let nextIndex = nearestKeyIndex(windowX: windowX,
+                                        windowY: windowY,
+                                        graph: graph,
+                                        keyframes: sorted)
+        selectedKeyIndex.wrappedValue = nextIndex
+        return nextIndex
     }
 
     private func keyframe(windowX: Float, windowY: Float, graph: UIRect) -> ParticleCurveKeyframe {
@@ -788,6 +824,21 @@ private extension Array where Element == ParticleCurveKeyframe {
                 return $0.element.time < $1.element.time
             }
             .map(\.element)
+    }
+
+    func nearestIndex(to keyframe: ParticleCurveKeyframe) -> Int? {
+        guard !isEmpty else { return nil }
+        return indices.min { lhs, rhs in
+            let left = distanceSquared(self[lhs], keyframe)
+            let right = distanceSquared(self[rhs], keyframe)
+            return left < right
+        }
+    }
+
+    private func distanceSquared(_ lhs: ParticleCurveKeyframe, _ rhs: ParticleCurveKeyframe) -> Float {
+        let dt = lhs.time - rhs.time
+        let dv = lhs.value - rhs.value
+        return dt * dt + dv * dv
     }
 }
 
