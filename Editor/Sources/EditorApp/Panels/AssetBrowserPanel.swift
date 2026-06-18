@@ -30,7 +30,9 @@ struct AssetBrowserPanel: View {
         MainActor.assumeIsolated {
             display.requestOpenFile(
                 filters: [(name: L("3D Models"),
-                           extensions: AssetImportResolver.supportedExtensions.sorted())],
+                           extensions: AssetImportResolver.supportedModelExtensions.sorted()),
+                          (name: L("Textures"),
+                           extensions: AssetImportResolver.supportedTextureExtensions.sorted())],
                 allowsMultiple: true,
                 defaultPath: importDestination(for: folder)
             ) { paths in
@@ -84,7 +86,7 @@ struct AssetBrowserPanel: View {
                            detail: missingDependencies.joined(separator: ", "))
         }
         if !unsupported.isEmpty {
-            app.logConsole("Unsupported format — import glTF (.glb/.gltf) or .obj",
+            app.logConsole("Unsupported format — import models or textures",
                            severity: .warning,
                            detail: unsupported.joined(separator: ", "))
         }

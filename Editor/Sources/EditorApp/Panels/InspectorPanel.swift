@@ -429,6 +429,7 @@ struct InspectorPanel: View {
             return AnyView(AssetRefField(value: assetRefBinding(binding),
                                          activePayload: activeAssetDropPayload,
                                          acceptedKinds: acceptedKinds,
+                                         pickerOptions: assetPickerOptions(acceptedKinds: acceptedKinds),
                                          placeholder: placeholder))
         }
     }
@@ -437,9 +438,11 @@ struct InspectorPanel: View {
         Binding(
             get: { [store] in
                 store.activeAssetDrag.map {
-                    AssetDropPayload(id: $0.assetID,
-                                     name: $0.displayName,
-                                     kind: $0.kindLabel)
+                    let asset = EditorAssetCatalog.asset(for: $0.assetID)
+                    return AssetDropPayload(id: $0.assetID,
+                                            name: $0.displayName,
+                                            subtitle: asset?.relativePath,
+                                            kind: $0.kindLabel)
                 }
             },
             set: { _ in }
@@ -465,6 +468,20 @@ struct InspectorPanel: View {
                 }
             }
         )
+    }
+
+    private func assetPickerOptions(acceptedKinds: Set<String>) -> [AssetRef] {
+        EditorAssetCatalog.entries()
+            .filter { acceptedKinds.isEmpty || acceptedKinds.contains($0.kind.sceneKindLabel) }
+            .sorted { lhs, rhs in
+                lhs.relativePath.localizedCaseInsensitiveCompare(rhs.relativePath) == .orderedAscending
+            }
+            .map {
+                AssetRef(id: $0.id,
+                         name: $0.name,
+                         subtitle: $0.relativePath,
+                         kind: $0.kind.sceneKindLabel)
+            }
     }
 }
 
