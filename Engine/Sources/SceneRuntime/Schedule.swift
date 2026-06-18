@@ -567,7 +567,8 @@ public struct RuntimeWorldSchedule {
                         size: particle.size,
                         rotation: particle.rotation,
                         color: particle.color,
-                        blendMode: emitter.blendMode
+                        blendMode: emitter.blendMode,
+                        texturePath: emitter.texturePath
                     )
                 )
             }

@@ -256,6 +256,14 @@ struct GPUMeshTextureResource {
     let sourcePath: String
 }
 
+struct GPUParticleTextureResource {
+    let texture: GPUTexture
+    let view: GPUTextureView
+    let width: UInt32
+    let height: UInt32
+    let sourcePath: String
+}
+
 struct BasePassEncodingReport {
     let drawCallCount: Int
     let renderBundleCount: Int
