@@ -139,6 +139,7 @@ public final class ViewGraph {
         for child in node.children {
             writeLayoutBack(node: child, parentOrigin: childOrigin)
         }
+        node.layoutDidUpdate?(node)
     }
 
     private func syncTextInputArea(for node: Node, absoluteOrigin: CGPoint) {

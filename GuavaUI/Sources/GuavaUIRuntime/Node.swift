@@ -227,6 +227,11 @@ public final class Node: @unchecked Sendable {
         }
     }
 
+    /// Optional hook invoked after a layout pass writes this node's frame back
+    /// from the layout tree. Used by primitives that mirror layout-derived
+    /// geometry into non-tree state, such as portal overlays.
+    public var layoutDidUpdate: ((Node) -> Void)?
+
     /// Children render translated by `-contentOffset`. Used by ScrollView to
     /// scroll its content while keeping its own clip rect anchored.
     public var contentOffset: CGPoint = .zero {

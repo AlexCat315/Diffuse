@@ -493,10 +493,16 @@ public extension Menu {
     }
 }
 
+public enum PopoverPlacement: Sendable {
+    case start
+    case end
+}
+
 public struct Popover<Label: View, Content: View>: View {
     public let isPresented: Binding<Bool>
     public let isEnabled: Bool
     public let width: Float?
+    public let placement: PopoverPlacement
     public let label: Label
     public let content: Content
     public let onKey: ((KeyEvent, EventPhase) -> EventResult)?
@@ -504,12 +510,14 @@ public struct Popover<Label: View, Content: View>: View {
     public init(isPresented: Binding<Bool>,
                 isEnabled: Bool = true,
                 width: Float? = nil,
+                placement: PopoverPlacement = .start,
                 onKey: ((KeyEvent, EventPhase) -> EventResult)? = nil,
                 @ViewBuilder label: () -> Label,
                 @ViewBuilder content: () -> Content) {
         self.isPresented = isPresented
         self.isEnabled = isEnabled
         self.width = width
+        self.placement = placement
         self.onKey = onKey
         self.label = label()
         self.content = content()
@@ -527,7 +535,9 @@ public struct Popover<Label: View, Content: View>: View {
             .buttonStyle(.plain)
 
             if isPresented.wrappedValue {
-                _PopoverOverlayHost(width: width, keyHandler: onKey) {
+                _PopoverOverlayHost(width: width,
+                                    placement: placement,
+                                    keyHandler: onKey) {
                     Box(direction: .column, alignItems: .stretch, spacing: 0) {
                         content
                     }
@@ -541,13 +551,16 @@ public struct Popover<Label: View, Content: View>: View {
 
 private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
     let width: Float?
+    let placement: PopoverPlacement
     let content: Content
     let keyHandler: ((KeyEvent, EventPhase) -> EventResult)?
 
     init(width: Float?,
+         placement: PopoverPlacement,
          keyHandler: ((KeyEvent, EventPhase) -> EventResult)? = nil,
          @ViewBuilder content: () -> Content) {
         self.width = width
+        self.placement = placement
         self.keyHandler = keyHandler
         self.content = content()
     }
@@ -563,7 +576,9 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
-        let position = popoverPosition(for: node)
+        let position = Self.popoverPosition(for: node,
+                                            width: width,
+                                            placement: placement)
 
         // Register / update the overlay entry through the node-owned resource.
         // `present` re-registers if a prior entry was cleaned up, so a reused
@@ -573,7 +588,15 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
         node.overlayDraw = { [weak node] _, _ in
             guard let node else { return }
             node.firstResource(PortalResource.self)?
-                .updatePosition(popoverPosition(for: node))
+                .updatePosition(Self.popoverPosition(for: node,
+                                                     width: width,
+                                                     placement: placement))
+        }
+        node.layoutDidUpdate = { [width, placement] node in
+            node.firstResource(PortalResource.self)?
+                .updatePosition(Self.popoverPosition(for: node,
+                                                     width: width,
+                                                     placement: placement))
         }
 
         // Keyboard handler
@@ -607,9 +630,50 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
         []
     }
 
-    private func popoverPosition(for node: Node) -> CGPoint {
-        let boxFrame = node.parent?.absoluteFrame ?? .zero
-        return CGPoint(x: boxFrame.minX, y: boxFrame.maxY)
+    private static func popoverPosition(for node: Node,
+                                        width: Float?,
+                                        placement: PopoverPlacement) -> CGPoint {
+        let boxFrame = anchorFrame(for: node) ?? node.parent?.absoluteFrame ?? .zero
+        let x: CGFloat
+        switch placement {
+        case .start:
+            x = boxFrame.minX
+        case .end:
+            if let width {
+                x = boxFrame.maxX - CGFloat(width)
+            } else {
+                x = boxFrame.minX
+            }
+        }
+        return CGPoint(x: x, y: boxFrame.maxY)
+    }
+
+    private static func anchorFrame(for node: Node) -> CGRect? {
+        var current: Node? = node
+        while let currentNode = current, let parent = currentNode.parent {
+            if let index = parent.children.firstIndex(where: { $0 === currentNode }) {
+                for sibling in parent.children[..<index].reversed() {
+                    if let frame = firstVisibleFrame(in: sibling) {
+                        return frame
+                    }
+                }
+            }
+            current = parent
+        }
+        return nil
+    }
+
+    private static func firstVisibleFrame(in node: Node) -> CGRect? {
+        let frame = node.absoluteFrame
+        if frame.width > 0 || frame.height > 0 {
+            return frame
+        }
+        for child in node.children.reversed() {
+            if let frame = firstVisibleFrame(in: child) {
+                return frame
+            }
+        }
+        return nil
     }
 }
 

@@ -56,6 +56,39 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
         }
     }
 
+    private struct EndPlacementHarness: View {
+        @State var isPresented: Bool = true
+
+        var body: some View {
+            Column(alignment: .leading, spacing: 0) {
+                Popover(isPresented: $isPresented,
+                        width: 140,
+                        placement: .end) {
+                    _PopoverProbe(id: "trigger", width: 80, height: 20)
+                } content: {
+                    _PopoverProbe(id: "menu", width: 140, height: 60)
+                }
+            }
+        }
+    }
+
+    @Test("Popover can align overlay end edge with trigger end edge")
+    func popoverEndPlacementAlignsTrailingEdges() { GlobalTestLock.locked {
+        PortalStoreHolder.current.clear()
+        defer { PortalStoreHolder.current.clear() }
+
+        let tree = NodeTree()
+        let recomposer = Recomposer()
+        let graph = ViewGraph(tree: tree, recomposer: recomposer)
+
+        graph.install(root: EndPlacementHarness())
+        graph.computeLayout(width: 240, height: 200)
+
+        let entry = PortalStoreHolder.current.entries.first
+        #expect(entry?.position.x == -60)
+        #expect(entry?.position.y == 20)
+    } }
+
     @Test("Opening Popover does not move following siblings")
     func openingPopoverDoesNotAffectSiblingLayout() { GlobalTestLock.locked {
         // Presenting the popover registers into the window-scoped PortalStore,
@@ -538,4 +571,5 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
         }
         return nil
     }
+
 }
