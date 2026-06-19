@@ -509,7 +509,8 @@ public final class EditorApplication: @unchecked Sendable {
         let dropPayload = AssetDropPayload(id: payload.assetID,
                                            name: payload.displayName,
                                            subtitle: payloadAsset?.relativePath,
-                                           kind: payload.kindLabel)
+                                           kind: payload.kindLabel,
+                                           previewPath: payloadAsset?.kind.isTexture == true ? payloadAsset?.absolutePath : nil)
         if AssetDropRegistryHolder.current?.drop(dropPayload, atX: cursorX, y: cursorY) == true {
             logConsole("Dropped \(payload.displayName)")
             return true

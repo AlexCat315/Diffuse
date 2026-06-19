@@ -266,7 +266,7 @@ struct InspectorPanel: View {
                 toolbar
                 if case .keyframes(let keyframes) = binding.wrappedValue {
                     ParticleCurvePreview(binding: binding, selectedKeyIndex: $selectedKeyIndex)
-                        .frame(height: 72)
+                        .frame(height: ParticleCurveEditorLayout.previewHeight)
                     ParticleCurveKeyframeRows(binding: binding,
                                               keyframes: keyframes,
                                               selectedKeyIndex: $selectedKeyIndex)
@@ -276,6 +276,15 @@ struct InspectorPanel: View {
             .background(.surfaceSunken)
             .cornerRadius(6)
             .border(.border, width: 1)
+            .frame(height: fixedHeight)
+            .clipped()
+        }
+
+        private var fixedHeight: Float {
+            if case .keyframes(let keyframes) = binding.wrappedValue {
+                return ParticleCurveEditorLayout.valueHeight(keyframeCount: keyframes.count)
+            }
+            return ParticleCurveEditorLayout.linearValueHeight
         }
 
         private var toolbar: some View {
@@ -296,6 +305,7 @@ struct InspectorPanel: View {
                 }
                 Spacer(minLength: 0)
             }
+            .frame(height: ParticleCurveEditorLayout.toolbarHeight)
         }
 
         private var options: [SelectOption<ParticleCurve>] {
@@ -442,7 +452,8 @@ struct InspectorPanel: View {
                     return AssetDropPayload(id: $0.assetID,
                                             name: $0.displayName,
                                             subtitle: asset?.relativePath,
-                                            kind: $0.kindLabel)
+                                            kind: $0.kindLabel,
+                                            previewPath: asset?.previewPath)
                 }
             },
             set: { _ in }
@@ -456,7 +467,8 @@ struct InspectorPanel: View {
                     AssetRef(id: $0.id,
                              name: $0.name,
                              subtitle: $0.subtitle,
-                             kind: $0.kind)
+                             kind: $0.kind,
+                             previewPath: $0.previewPath)
                 }
             },
             set: { next in
@@ -464,7 +476,8 @@ struct InspectorPanel: View {
                     EditorInspectorAssetRef(id: $0.id,
                                             name: $0.name,
                                             subtitle: $0.subtitle,
-                                            kind: $0.kind)
+                                            kind: $0.kind,
+                                            previewPath: $0.previewPath)
                 }
             }
         )
@@ -480,8 +493,15 @@ struct InspectorPanel: View {
                 AssetRef(id: $0.id,
                          name: $0.name,
                          subtitle: $0.relativePath,
-                         kind: $0.kind.sceneKindLabel)
+                         kind: $0.kind.sceneKindLabel,
+                         previewPath: $0.previewPath)
             }
+    }
+}
+
+private extension EditorAsset {
+    var previewPath: String? {
+        kind.isTexture ? absolutePath : nil
     }
 }
 
@@ -503,14 +523,58 @@ private extension EditorInspectorFieldValue {
             return max(defaultHeight, 34)
         case let .particleCurve(binding):
             if case .keyframes(let keyframes) = binding.wrappedValue {
-                return max(defaultHeight, 150 + Float(keyframes.count) * 28)
+                return max(defaultHeight, ParticleCurveEditorLayout.rowHeight(keyframeCount: keyframes.count))
             }
-            return max(defaultHeight, 58)
+            return max(defaultHeight, ParticleCurveEditorLayout.linearRowHeight)
         case let .json(_, minHeight):
             return max(defaultHeight, minHeight + 34)
         default:
             return nil
         }
+    }
+}
+
+private enum ParticleCurveEditorLayout {
+    static let cardVerticalPadding: Float = 8
+    static let contentGap: Float = 7
+    static let toolbarHeight: Float = 32
+    static let previewHeight: Float = 72
+    static let keyframeHeaderHeight: Float = 20
+    static let keyframeEntryHeight: Float = 24
+    static let keyframeRowGap: Float = 4
+    static let propertyGridLabelHeight: Float = 18
+    static let propertyGridVerticalPadding: Float = 6
+    static let linearValueHeight: Float = cardVerticalPadding * 2 + toolbarHeight
+    static let linearRowHeight: Float = propertyGridLabelHeight
+        + propertyGridVerticalPadding * 2
+        + linearValueHeight
+
+    static func keyframeEntryListHeight(keyframeCount: Int) -> Float {
+        guard keyframeCount > 0 else { return 0 }
+        let rows = Float(keyframeCount) * keyframeEntryHeight
+        let gaps = Float(max(0, keyframeCount - 1)) * keyframeRowGap
+        return rows + gaps
+    }
+
+    static func keyframeRowsHeight(keyframeCount: Int) -> Float {
+        keyframeHeaderHeight
+            + keyframeRowGap
+            + keyframeEntryListHeight(keyframeCount: keyframeCount)
+    }
+
+    static func valueHeight(keyframeCount: Int) -> Float {
+        cardVerticalPadding * 2
+            + toolbarHeight
+            + contentGap
+            + previewHeight
+            + contentGap
+            + keyframeRowsHeight(keyframeCount: keyframeCount)
+    }
+
+    static func rowHeight(keyframeCount: Int) -> Float {
+        propertyGridLabelHeight
+            + propertyGridVerticalPadding * 2
+            + valueHeight(keyframeCount: keyframeCount)
     }
 }
 
@@ -520,7 +584,7 @@ private struct ParticleCurveKeyframeRows: View {
     let selectedKeyIndex: Binding<Int?>
 
     var body: some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 4) {
+        Box(direction: .column, alignItems: .stretch, spacing: ParticleCurveEditorLayout.keyframeRowGap) {
             Row(alignment: .center, spacing: 6) {
                 Text("")
                     .frame(width: 30)
@@ -534,11 +598,14 @@ private struct ParticleCurveKeyframeRows: View {
                     .frame(width: 74)
                 Spacer(minLength: 0)
             }
+            .frame(height: ParticleCurveEditorLayout.keyframeHeaderHeight)
             ParticleCurveKeyframeEntryList(binding: binding,
                                            keyframes: keyframes,
                                            selectedKeyIndex: selectedKeyIndex)
         }
+        .frame(height: ParticleCurveEditorLayout.keyframeRowsHeight(keyframeCount: keyframes.count))
         .padding(horizontal: 1, vertical: 0)
+        .clipped()
     }
 }
 
@@ -559,14 +626,16 @@ private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
         let layout = LayoutNode()
         layout.flexDirection = .column
         layout.alignItems = .stretch
-        layout.setGap(4, gutter: .all)
+        layout.height = ParticleCurveEditorLayout.keyframeEntryListHeight(keyframeCount: keyframes.count)
+        layout.setGap(ParticleCurveEditorLayout.keyframeRowGap, gutter: .all)
         return layout
     }
 
     func _updateLayout(_ layout: LayoutNode) {
         layout.flexDirection = .column
         layout.alignItems = .stretch
-        layout.setGap(4, gutter: .all)
+        layout.height = ParticleCurveEditorLayout.keyframeEntryListHeight(keyframeCount: keyframes.count)
+        layout.setGap(ParticleCurveEditorLayout.keyframeRowGap, gutter: .all)
     }
 
     var _children: [any View] {
@@ -605,6 +674,7 @@ private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
                     .frame(width: 22, height: 22)
                     Spacer(minLength: 0)
                 }
+                .frame(height: ParticleCurveEditorLayout.keyframeEntryHeight)
             )
         }
     }
@@ -737,12 +807,12 @@ private struct ParticleCurvePreviewHost: _PrimitiveView {
 
     func _makeLayoutNode() -> LayoutNode? {
         let layout = LayoutNode()
-        layout.height = 44
+        layout.height = ParticleCurveEditorLayout.previewHeight
         return layout
     }
 
     func _updateLayout(_ layout: LayoutNode) {
-        layout.height = 44
+        layout.height = ParticleCurveEditorLayout.previewHeight
     }
 
     private func render(node: Node, origin: CGPoint, list: DrawList) {

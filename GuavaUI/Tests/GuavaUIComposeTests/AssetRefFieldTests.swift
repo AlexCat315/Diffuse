@@ -19,7 +19,8 @@ struct AssetRefFieldTests: GuavaUIComposeSerializedSuite {
         store.active = AssetDropPayload(id: "asset-1",
                                         name: "SM_Ruin_Arch_01",
                                         subtitle: "Content/Environment/Ruins",
-                                        kind: "mesh")
+                                        kind: "mesh",
+                                        previewPath: "/tmp/preview.png")
 
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
@@ -36,6 +37,7 @@ struct AssetRefFieldTests: GuavaUIComposeSerializedSuite {
         #expect(registry.drop(store.active!, atX: 12, y: 12) == true)
         #expect(store.value?.id == "asset-1")
         #expect(store.value?.kind == "mesh")
+        #expect(store.value?.previewPath == "/tmp/preview.png")
     } }
 
     @Test("AssetDropRegistry rejects unsupported asset kinds")
