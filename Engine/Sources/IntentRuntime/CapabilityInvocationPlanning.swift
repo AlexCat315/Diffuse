@@ -449,6 +449,7 @@ private struct CapabilityOperationProjection {
             self.arguments["is_emitting"] = .bool(emitter.isEmitting)
             self.arguments["emission_shape"] = .string(emitter.emissionShape.rawValue)
             self.arguments["collision_mode"] = .string(emitter.collisionMode.rawValue)
+            self.arguments["simulation_space"] = .string(emitter.simulationSpace.rawValue)
             self.arguments["noise_strength"] = .number(Double(emitter.noiseStrength))
             self.arguments["noise_scale"] = .number(Double(emitter.noiseScale))
             self.arguments["noise_speed"] = .number(Double(emitter.noiseSpeed))

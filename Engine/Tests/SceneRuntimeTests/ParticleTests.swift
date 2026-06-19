@@ -242,6 +242,49 @@ struct ParticleTests {
         #expect(abs(p.angularVelocity - 2) < 1e-4)
     }
 
+    @Test("world simulation space spawns and stores particles in world coordinates")
+    func worldSimulationSpaceStoresWorldParticles() {
+        var transform = matrix_identity_float4x4
+        transform.columns.3 = SIMD4<Float>(10, 0, 0, 1)
+        var emitter = ParticleEmitter(isEmitting: false,
+                                      emissionRate: 0,
+                                      maxParticles: 4,
+                                      lifetime: 10,
+                                      originOffset: SIMD3<Float>(1, 0, 0),
+                                      startVelocity: SIMD3<Float>(0, 2, 0),
+                                      gravity: .zero,
+                                      simulationSpace: .world)
+        emitter.emit(1, worldTransform: transform)
+
+        #expect(emitter.particles.count == 1)
+        #expect(emitter.particles[0].position == SIMD3<Float>(11, 0, 0))
+        #expect(emitter.particles[0].velocity == SIMD3<Float>(0, 2, 0))
+        emitter.advance(deltaTime: 0.5, worldTransform: matrix_identity_float4x4)
+        #expect(emitter.particles[0].position == SIMD3<Float>(11, 1, 0))
+    }
+
+    @Test("SceneRuntime.emitParticles passes entity transform for world-space emitters")
+    func sceneEmitParticlesUsesWorldTransformForWorldSpaceEmitters() {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setLocalTransform(LocalTransform(translation: SIMD3<Float>(4, 0, 0)), for: entity)
+        scene.propagateTransforms()
+        _ = scene.setComponent(
+            ParticleEmitter(isEmitting: false,
+                            emissionRate: 0,
+                            maxParticles: 2,
+                            lifetime: 10,
+                            startVelocity: .zero,
+                            gravity: .zero,
+                            simulationSpace: .world),
+            for: entity
+        )
+
+        let emitted = scene.emitParticles(from: entity, count: 1)
+        #expect(emitted)
+        #expect(scene.component(ParticleEmitter.self, for: entity)?.particles[0].position == SIMD3<Float>(4, 0, 0))
+    }
+
     @Test("keyframe curves linearly interpolate sorted keys")
     func appearanceKeyframeCurves() {
         var emitter = ParticleEmitter(
