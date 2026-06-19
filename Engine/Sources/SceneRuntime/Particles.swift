@@ -48,6 +48,13 @@ public enum ParticleCollisionMode: String, CaseIterable, Codable, Sendable, Equa
     case worldPlane
 }
 
+public enum ParticleSimulationSpace: String, CaseIterable, Codable, Sendable, Equatable, Hashable {
+    /// Particles are stored in emitter-local space and follow the entity transform.
+    case local
+    /// Particles are stored in world space after spawning and remain independent of later emitter motion.
+    case world
+}
+
 public struct ParticleCurveKeyframe: Codable, Sendable, Equatable, Hashable {
     public var time: Float
     public var value: Float
@@ -229,6 +236,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     /// Lifetime-time scroll speed for procedural noise.
     public var noiseSpeed: Float
     public var collisionMode: ParticleCollisionMode
+    public var simulationSpace: ParticleSimulationSpace
     /// Y position of the collision plane. Interpreted in local or world space based on `collisionMode`.
     public var collisionPlaneY: Float
     /// Bounce factor applied to velocity normal to the collision plane.
@@ -289,6 +297,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         noiseScale: Float = 1,
         noiseSpeed: Float = 1,
         collisionMode: ParticleCollisionMode = .none,
+        simulationSpace: ParticleSimulationSpace = .local,
         collisionPlaneY: Float = 0,
         collisionRestitution: Float = 0.5,
         collisionDamping: Float = 0,
@@ -334,6 +343,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.noiseScale = max(0.0001, noiseScale)
         self.noiseSpeed = max(0, noiseSpeed)
         self.collisionMode = collisionMode
+        self.simulationSpace = simulationSpace
         self.collisionPlaneY = collisionPlaneY
         self.collisionRestitution = simd_clamp(collisionRestitution, 0, 1)
         self.collisionDamping = simd_clamp(collisionDamping, 0, 1)
@@ -368,7 +378,9 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public mutating func advance(deltaTime: Double, worldTransform: simd_float4x4? = nil) {
         guard deltaTime > 0 else { return }
         let dt = Float(deltaTime)
-        let collisionContext = makeCollisionContext(worldTransform: worldTransform)
+        let collisionContext = simulationSpace == .local
+            ? makeCollisionContext(worldTransform: worldTransform)
+            : nil
 
         var survivors: [Particle] = []
         survivors.reserveCapacity(particles.count)
@@ -394,7 +406,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             let toSpawn = Int(emissionAccumulator)
             if toSpawn > 0 {
                 emissionAccumulator -= Float(toSpawn)
-                spawn(toSpawn)
+                spawn(toSpawn, worldTransform: worldTransform)
             }
         }
         if burstCount > 0, burstInterval > 0 {
@@ -402,14 +414,16 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             let bursts = Int(burstAccumulator / burstInterval)
             if bursts > 0 {
                 burstAccumulator -= Float(bursts) * burstInterval
-                spawn(bursts * burstCount)
+                spawn(bursts * burstCount, worldTransform: worldTransform)
             }
         }
     }
 
     /// Spawns `count` particles immediately (a burst), independent of the emission rate.
     /// Honors the `maxParticles` cap.
-    public mutating func emit(_ count: Int) { spawn(count) }
+    public mutating func emit(_ count: Int, worldTransform: simd_float4x4? = nil) {
+        spawn(count, worldTransform: worldTransform)
+    }
 
     /// Removes all live particles and resets emission timing.
     public mutating func clear() {
@@ -433,7 +447,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         return min(dt, remaining)
     }
 
-    private mutating func spawn(_ count: Int) {
+    private mutating func spawn(_ count: Int, worldTransform: simd_float4x4? = nil) {
         guard count > 0, maxParticles > 0 else { return }
         let room = maxParticles - particles.count
         let n = min(count, max(0, room))
@@ -446,8 +460,21 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             let sizeScale = max(0, 1 + nextSigned() * sizeRandomness)
             let rotation = startRotation + nextSigned() * rotationRandomness
             let angularVelocity = self.angularVelocity + nextSigned() * angularVelocityRandomness
-            var p = Particle(position: originOffset + offset,
-                             velocity: startVelocity + jitter,
+            let localPosition = originOffset + offset
+            let localVelocity = startVelocity + jitter
+            let spawnTransform = worldTransform ?? matrix_identity_float4x4
+            let position: SIMD3<Float>
+            let velocity: SIMD3<Float>
+            switch simulationSpace {
+            case .local:
+                position = localPosition
+                velocity = localVelocity
+            case .world:
+                position = Self.transformPoint(localPosition, by: spawnTransform)
+                velocity = Self.transformDirection(localVelocity, by: spawnTransform)
+            }
+            var p = Particle(position: position,
+                             velocity: velocity,
                              lifetime: life,
                              sizeScale: sizeScale,
                              rotation: rotation,
@@ -455,6 +482,23 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             refreshAppearance(&p)
             particles.append(p)
         }
+    }
+
+    private static func transformPoint(_ point: SIMD3<Float>, by matrix: simd_float4x4) -> SIMD3<Float> {
+        let transformed = matrix * SIMD4<Float>(point, 1)
+        if abs(transformed.w) > 0.0001 {
+            return SIMD3<Float>(
+                transformed.x / transformed.w,
+                transformed.y / transformed.w,
+                transformed.z / transformed.w
+            )
+        }
+        return SIMD3<Float>(transformed.x, transformed.y, transformed.z)
+    }
+
+    private static func transformDirection(_ direction: SIMD3<Float>, by matrix: simd_float4x4) -> SIMD3<Float> {
+        let transformed = matrix * SIMD4<Float>(direction, 0)
+        return SIMD3<Float>(transformed.x, transformed.y, transformed.z)
     }
 
     private func refreshAppearance(_ p: inout Particle) {
@@ -624,8 +668,9 @@ public extension SceneRuntime {
     /// Returns false when the entity has no particle emitter.
     @discardableResult
     mutating func emitParticles(from entity: EntityID, count: Int) -> Bool {
-        updateComponent(ParticleEmitter.self, for: entity) { emitter in
-            emitter.emit(count)
+        let transform = worldTransform(for: entity)?.matrix
+        return updateComponent(ParticleEmitter.self, for: entity) { emitter in
+            emitter.emit(count, worldTransform: transform)
         }
     }
 }

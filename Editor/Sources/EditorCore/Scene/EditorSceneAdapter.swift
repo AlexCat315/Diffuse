@@ -766,6 +766,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let noiseScale: Float
     public let noiseSpeed: Float
     public let collisionMode: ParticleCollisionMode
+    public let simulationSpace: ParticleSimulationSpace
     public let collisionPlaneY: Float
     public let collisionRestitution: Float
     public let collisionDamping: Float
@@ -808,6 +809,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.noiseScale = component.noiseScale
         self.noiseSpeed = component.noiseSpeed
         self.collisionMode = component.collisionMode
+        self.simulationSpace = component.simulationSpace
         self.collisionPlaneY = component.collisionPlaneY
         self.collisionRestitution = component.collisionRestitution
         self.collisionDamping = component.collisionDamping
@@ -840,7 +842,8 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
                         startVelocity: startVelocity.simdValue,
                         velocityRandomness: velocityRandomness.simdValue, gravity: gravity.simdValue,
                         noiseStrength: noiseStrength, noiseScale: noiseScale, noiseSpeed: noiseSpeed,
-                        collisionMode: collisionMode, collisionPlaneY: collisionPlaneY,
+                        collisionMode: collisionMode, simulationSpace: simulationSpace,
+                        collisionPlaneY: collisionPlaneY,
                         collisionRestitution: collisionRestitution, collisionDamping: collisionDamping,
                         startSize: startSize, endSize: endSize, sizeRandomness: sizeRandomness,
                         startRotation: startRotation, rotationRandomness: rotationRandomness,
@@ -857,7 +860,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         case originOffset, spawnRadius, emissionShape, boxHalfExtents, coneRadius, coneHeight
         case startVelocity, velocityRandomness, gravity
         case noiseStrength, noiseScale, noiseSpeed
-        case collisionMode, collisionPlaneY, collisionRestitution, collisionDamping
+        case collisionMode, simulationSpace, collisionPlaneY, collisionRestitution, collisionDamping
         case startSize, endSize, sizeRandomness
         case startRotation, rotationRandomness, angularVelocity, angularVelocityRandomness
         case sizeCurve, startColor, endColor, colorCurve, blendMode, textureAssetID, texturePath, seed
@@ -892,6 +895,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.noiseScale = try c.decodeIfPresent(Float.self, forKey: .noiseScale) ?? 1
         self.noiseSpeed = try c.decodeIfPresent(Float.self, forKey: .noiseSpeed) ?? 1
         self.collisionMode = try c.decodeIfPresent(ParticleCollisionMode.self, forKey: .collisionMode) ?? .none
+        self.simulationSpace = try c.decodeIfPresent(ParticleSimulationSpace.self, forKey: .simulationSpace) ?? .local
         self.collisionPlaneY = try c.decodeIfPresent(Float.self, forKey: .collisionPlaneY) ?? 0
         self.collisionRestitution = try c.decodeIfPresent(Float.self, forKey: .collisionRestitution) ?? 0.5
         self.collisionDamping = try c.decodeIfPresent(Float.self, forKey: .collisionDamping) ?? 0
@@ -953,6 +957,7 @@ public enum EditorInspectorFieldValue {
     case colliderShapeKind(Binding<ColliderShapeKind>)
     case particleEmissionShape(Binding<ParticleEmissionShape>)
     case particleCollisionMode(Binding<ParticleCollisionMode>)
+    case particleSimulationSpace(Binding<ParticleSimulationSpace>)
     case particleCurve(Binding<ParticleCurve>)
     case particleBlendMode(Binding<ParticleBlendMode>)
     case asset(Binding<EditorInspectorAssetRef?>, acceptedKinds: Set<String>, placeholder: String)
@@ -1821,6 +1826,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 EditorInspectorField(id: "particle-looping", label: L("Looping"),
                                      value: .bool(particleBoolBinding(for: entity, \.looping,
                                                                       summary: "Toggle particle looping"))),
+                EditorInspectorField(id: "particle-simulation-space", label: L("Space"),
+                                     value: .particleSimulationSpace(particleSimulationSpaceBinding(for: entity))),
                 EditorInspectorField(id: "particle-duration", label: L("Duration"),
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.duration,
                                                                                     summary: "Update particle duration"),
@@ -2026,6 +2033,16 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             set: { [self] next in
                 guard scene.component(ParticleEmitter.self, for: entity)?.collisionMode != next else { return }
                 updateParticleEmitter(entity, summary: "Update particle collision mode") { $0.collisionMode = next }
+            }
+        )
+    }
+
+    private func particleSimulationSpaceBinding(for entity: EntityID) -> Binding<ParticleSimulationSpace> {
+        Binding(
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.simulationSpace ?? .local },
+            set: { [self] next in
+                guard scene.component(ParticleEmitter.self, for: entity)?.simulationSpace != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle simulation space") { $0.simulationSpace = next }
             }
         )
     }
