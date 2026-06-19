@@ -214,6 +214,9 @@ public final class AppRuntime {
         host.onFrame = { [weak self] _ in
             self?.handleFrame() ?? false
         }
+        host.onWindowTeardown = { [weak self] windowID in
+            self?.releaseGPUSurface(for: windowID)
+        }
         host.onTeardown = { [weak self] in
             self?.releaseGPUSurfaces()
         }
@@ -309,8 +312,8 @@ public final class AppRuntime {
                 self?.host.restoreWindow(id)
             },
             closeWindowByID: { [weak self] id in
-                self?.auxiliaryWindows.removeValue(forKey: id)
                 self?.host.closeWindow(id)
+                self?.auxiliaryWindows.removeValue(forKey: id)
             },
             isWindowMaximizedByID: { [weak self] id in
                 self?.host.isWindowMaximized(id) ?? false
@@ -345,6 +348,20 @@ public final class AppRuntime {
         for window in auxiliaryWindows.values {
             window.releaseGPUSurface()
         }
+    }
+
+    private func releaseGPUSurface(for windowID: WindowID) {
+        if host.mainSession?.id == windowID {
+            configuredSurface = false
+            msaaColorView = nil
+            msaaColorTexture = nil
+            msaaColorWidth = 0
+            msaaColorHeight = 0
+            surface = nil
+            return
+        }
+
+        auxiliaryWindows[windowID]?.releaseGPUSurface()
     }
 
     private func handleInit<Root: View>(native: NativeRenderSurface,
@@ -781,8 +798,8 @@ public final class AppRuntime {
     }
 
     private func closeAuxiliaryWindow(_ windowID: WindowID) {
-        auxiliaryWindows.removeValue(forKey: windowID)
         host.closeWindow(windowID)
+        auxiliaryWindows.removeValue(forKey: windowID)
     }
 
     private func isAuxiliaryWindowOpen(_ windowID: WindowID) -> Bool {
