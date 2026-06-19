@@ -440,7 +440,8 @@ struct SceneSerializerTests {
                             startVelocity: SIMD3<Float>(0, 3, 0),
                             gravity: SIMD3<Float>(0, -2, 0),
                             noiseStrength: 1.25, noiseScale: 3.5, noiseSpeed: 0.75,
-                            collisionMode: .worldPlane, collisionPlaneY: -1,
+                            collisionMode: .worldPlane, simulationSpace: .world,
+                            collisionPlaneY: -1,
                             collisionRestitution: 0.7, collisionDamping: 0.2,
                             startSize: 0.5, endSize: 0.1,
                             sizeRandomness: 0.35,
@@ -487,6 +488,7 @@ struct SceneSerializerTests {
         #expect(e!.noiseScale == 3.5)
         #expect(e!.noiseSpeed == 0.75)
         #expect(e!.collisionMode == .worldPlane)
+        #expect(e!.simulationSpace == .world)
         #expect(e!.collisionPlaneY == -1)
         #expect(e!.collisionRestitution == 0.7)
         #expect(e!.collisionDamping == 0.2)

@@ -545,9 +545,10 @@ public struct RuntimeWorldSchedule {
     }
 
     /// Flattens every live `ParticleEmitter` pool into world-space billboard
-    /// particles for the render backend. Emitter-local positions are transformed
-    /// by the entity's world matrix; the result is sorted back-to-front for the
-    /// camera so alpha blending composites correctly.
+    /// particles for the render backend. Local-space particles are transformed
+    /// by the entity's world matrix; world-space particles are already stored in
+    /// render space. The result is sorted back-to-front for the camera so alpha
+    /// blending composites correctly.
     private func collectRenderParticles(
         in world: RuntimeWorld,
         cameraEye: SIMD3<Float>
@@ -560,10 +561,25 @@ public struct RuntimeWorldSchedule {
             let toWorld = world.worldTransform(for: entity)?.matrix ?? matrix_identity_float4x4
             result.reserveCapacity(result.count + emitter.particles.count)
             for particle in emitter.particles {
-                let worldPosition = toWorld * SIMD4<Float>(particle.position, 1)
+                let worldPosition: SIMD3<Float>
+                switch emitter.simulationSpace {
+                case .local:
+                    let transformed = toWorld * SIMD4<Float>(particle.position, 1)
+                    if abs(transformed.w) > 0.0001 {
+                        worldPosition = SIMD3<Float>(
+                            transformed.x / transformed.w,
+                            transformed.y / transformed.w,
+                            transformed.z / transformed.w
+                        )
+                    } else {
+                        worldPosition = SIMD3<Float>(transformed.x, transformed.y, transformed.z)
+                    }
+                case .world:
+                    worldPosition = particle.position
+                }
                 result.append(
                     RenderParticle(
-                        position: SIMD3<Float>(worldPosition.x, worldPosition.y, worldPosition.z),
+                        position: worldPosition,
                         size: particle.size,
                         rotation: particle.rotation,
                         color: particle.color,

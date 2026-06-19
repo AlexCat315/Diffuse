@@ -1464,6 +1464,8 @@ public struct TransactionExecutor {
                     value: .float(Float(emitter.maxParticles))))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleEmitting",
                     value: .bool(emitter.isEmitting)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleSimulationSpace",
+                    value: .string(emitter.simulationSpace.rawValue)))
 
             case let .setConstraintEnabled(entityID, value):
                 events.append(.entityAuthoredChanged(
