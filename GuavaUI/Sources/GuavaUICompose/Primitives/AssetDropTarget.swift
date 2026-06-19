@@ -6,15 +6,18 @@ public struct AssetDropPayload: Sendable, Equatable {
     public let name: String
     public let subtitle: String?
     public let kind: String
+    public let previewPath: String?
 
     public init(id: String,
                 name: String,
                 subtitle: String? = nil,
-                kind: String) {
+                kind: String,
+                previewPath: String? = nil) {
         self.id = id
         self.name = name
         self.subtitle = subtitle
         self.kind = kind
+        self.previewPath = previewPath
     }
 }
 

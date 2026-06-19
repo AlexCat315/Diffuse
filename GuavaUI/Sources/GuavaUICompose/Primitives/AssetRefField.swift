@@ -5,15 +5,18 @@ public struct AssetRef: Sendable, Equatable {
     public let name: String
     public let subtitle: String?
     public let kind: String
+    public let previewPath: String?
 
     public init(id: String,
                 name: String,
                 subtitle: String? = nil,
-                kind: String) {
+                kind: String,
+                previewPath: String? = nil) {
         self.id = id
         self.name = name
         self.subtitle = subtitle
         self.kind = kind
+        self.previewPath = previewPath
     }
 
     public init(payload: AssetDropPayload) {
@@ -21,6 +24,7 @@ public struct AssetRef: Sendable, Equatable {
         self.name = payload.name
         self.subtitle = payload.subtitle
         self.kind = payload.kind
+        self.previewPath = payload.previewPath
     }
 }
 
@@ -55,8 +59,8 @@ public struct AssetRefField: View {
             value.wrappedValue = AssetRef(payload: payload)
         }) {
             Row(alignment: .center, spacing: 8) {
-                AssetKindBadge(kind: value.wrappedValue?.kind,
-                               isEnabled: isEnabled)
+                AssetRefPreview(ref: value.wrappedValue,
+                                isEnabled: isEnabled)
 
                 Box(direction: .column, alignItems: .stretch, spacing: 1) {
                     Text(value.wrappedValue?.name ?? placeholder)
@@ -150,5 +154,26 @@ private struct AssetKindBadge: View {
             .frame(width: 34, height: 20)
             .background(.surfaceOverlay)
             .cornerRadius(3)
+    }
+}
+
+private struct AssetRefPreview: View {
+    let ref: AssetRef?
+    let isEnabled: Bool
+
+    var body: some View {
+        if let previewPath = ref?.previewPath, !previewPath.isEmpty {
+            Image(file: previewPath,
+                  width: 34,
+                  height: 24,
+                  contentMode: .fit)
+                .frame(width: 34, height: 24)
+                .background(.surfaceOverlay)
+                .cornerRadius(3)
+                .opacity(isEnabled ? 1 : 0.55)
+                .clipped()
+        } else {
+            AssetKindBadge(kind: ref?.kind, isEnabled: isEnabled)
+        }
     }
 }
