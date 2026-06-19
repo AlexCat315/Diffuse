@@ -77,6 +77,7 @@ struct AssetBrowserPanel: View {
             _ = app.reloadAssets()
             // A re-imported file may reuse an id, so drop cached thumbnails.
             AssetThumbnailRasterizer.invalidate()
+            ImageAssetRegistryHolder.current?.clear()
             app.logConsole("Imported \(importedNames.count) asset\(importedNames.count == 1 ? "" : "s")",
                            detail: importedNames.joined(separator: ", "))
         }
@@ -490,6 +491,9 @@ private struct AssetThumbnail: View {
                 // Software-rendered shaded preview of the actual mesh, square-fit.
                 MeshThumbnailView(assetID: asset.id, meshIndex: asset.meshIndex)
                     .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
+            } else if asset.kind.isTexture {
+                TextureThumbnailView(path: asset.absolutePath, width: 76, height: 72)
+                    .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
             } else {
                 Box(direction: .column, alignItems: .center, justifyContent: .center) {
                     Icon(.svg(named: asset.kind.iconName, in: .module, subdirectory: "HierarchyIcons"),
@@ -516,6 +520,25 @@ private struct AssetThumbnail: View {
     }
 }
 
+private struct TextureThumbnailView: View {
+    let path: String
+    let width: Float
+    let height: Float
+
+    var body: some View {
+        Box(direction: .column, alignItems: .center, justifyContent: .center) {
+            Image(file: path,
+                  width: width,
+                  height: height,
+                  contentMode: .fit)
+                .frame(width: width, height: height)
+                .clipped()
+        }
+        .frame(width: width, height: height)
+        .background(.surfaceSunken)
+    }
+}
+
 // MARK: - Asset list row
 
 private struct AssetListRow: View {
@@ -528,10 +551,15 @@ private struct AssetListRow: View {
         AssetDragSource(asset: asset, app: app, onSelect: onSelect) {
             Row(alignment: .center, spacing: 9) {
                 Box(direction: .column, alignItems: .center, justifyContent: .center) {
-                    Icon(.svg(named: asset.kind.iconName, in: .module, subdirectory: "HierarchyIcons"),
-                         size: 18,
-                         color: asset.kind.tint)
-                        .frame(width: 18, height: 18)
+                    if asset.kind.isTexture {
+                        TextureThumbnailView(path: asset.absolutePath, width: 26, height: 26)
+                            .cornerRadius(3)
+                    } else {
+                        Icon(.svg(named: asset.kind.iconName, in: .module, subdirectory: "HierarchyIcons"),
+                             size: 18,
+                             color: asset.kind.tint)
+                            .frame(width: 18, height: 18)
+                    }
                 }
                 .frame(width: 26, height: 26)
 
@@ -571,7 +599,7 @@ private struct AssetBrowserEmptyState: View {
                 .font(.bodyStrong)
                 .foregroundColor(.onSurface)
 
-            Text(L("Import .glb, .gltf, or .obj files — or drop them anywhere inside the project folder and reload."))
+            Text(L("Import .glb, .gltf, .obj, or texture files — or drop them anywhere inside the project folder and reload."))
                 .font(.caption)
                 .foregroundColor(.onSurfaceVariant)
                 .frame(width: 260)
