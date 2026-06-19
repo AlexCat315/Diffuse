@@ -484,7 +484,30 @@ struct InspectorPanel: View {
     }
 
     private func assetPickerOptions(acceptedKinds: Set<String>) -> [AssetRef] {
-        EditorAssetCatalog.entries()
+        InspectorAssetPickerCache.options(acceptedKinds: acceptedKinds)
+    }
+}
+
+private enum InspectorAssetPickerCache {
+    nonisolated(unsafe) private static var cachedSignature: String = ""
+    nonisolated(unsafe) private static var cachedOptions: [String: [AssetRef]] = [:]
+
+    static func options(acceptedKinds: Set<String>) -> [AssetRef] {
+        let entries = EditorAssetCatalog.entries()
+        let signature = entries.map {
+            "\($0.id)|\($0.kind.sceneKindLabel)|\($0.name)|\($0.relativePath)|\($0.absolutePath)"
+        }.joined(separator: "\n")
+        let key = acceptedKinds.sorted().joined(separator: "|")
+
+        if signature == cachedSignature, let hit = cachedOptions[key] {
+            return hit
+        }
+        if signature != cachedSignature {
+            cachedOptions.removeAll(keepingCapacity: true)
+            cachedSignature = signature
+        }
+
+        let options = entries
             .filter { acceptedKinds.isEmpty || acceptedKinds.contains($0.kind.sceneKindLabel) }
             .sorted { lhs, rhs in
                 lhs.relativePath.localizedCaseInsensitiveCompare(rhs.relativePath) == .orderedAscending
@@ -496,6 +519,8 @@ struct InspectorPanel: View {
                          kind: $0.kind.sceneKindLabel,
                          previewPath: $0.previewPath)
             }
+        cachedOptions[key] = options
+        return options
     }
 }
 

@@ -337,6 +337,10 @@ public final class SDL3PlatformHost: PlatformHost {
         session.requestDisplay()
     }
 
+    public func enqueueMainThreadWork(_ work: @escaping () -> Void) {
+        mainThreadInbox.enqueue(work)
+    }
+
     public func setTargetFrameRate(_ framesPerSecond: Double?) {
         guard let framesPerSecond, framesPerSecond.isFinite, framesPerSecond > 0 else {
             frameRateMode = .eventDriven
