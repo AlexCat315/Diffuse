@@ -256,6 +256,41 @@ struct MultiWindowSmokeTests {
     }
 
     @MainActor
+    @Test("OS close request releases window resources before native destroy")
+    func osCloseRequestReleasesWindowResourcesBeforeDestroy() throws {
+        let shell = MockShell(eventBatches: [])
+        let host = SDL3PlatformHost(shellFactory: { shell })
+
+        let session = try host.openWindow(title: "A", tree: NodeTree())
+        var tornDown: [WindowID] = []
+        host.onWindowTeardown = { tornDown.append($0) }
+
+        let shouldShellDestroy = shell.closeInterceptor?(session.id) ?? true
+
+        #expect(shouldShellDestroy == false)
+        #expect(tornDown == [session.id])
+        #expect(shell.window(for: session.id) == nil)
+    }
+
+    @MainActor
+    @Test("OS close veto keeps native window alive")
+    func osCloseVetoKeepsNativeWindowAlive() throws {
+        let shell = MockShell(eventBatches: [])
+        let host = SDL3PlatformHost(shellFactory: { shell })
+
+        let session = try host.openWindow(title: "A", tree: NodeTree())
+        var tornDown: [WindowID] = []
+        host.onWindowTeardown = { tornDown.append($0) }
+        host.windowCloseInterceptor = { _ in false }
+
+        let shouldShellDestroy = shell.closeInterceptor?(session.id) ?? true
+
+        #expect(shouldShellDestroy == false)
+        #expect(tornDown.isEmpty)
+        #expect(shell.window(for: session.id) != nil)
+    }
+
+    @MainActor
     @Test("Focused text input area syncs to the shell from the live node")
     func focusedTextInputAreaSyncsToShell() throws {
         let shell = MockShell(eventBatches: [[], []])

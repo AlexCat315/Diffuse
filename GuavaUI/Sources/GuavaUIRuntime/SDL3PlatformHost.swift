@@ -165,6 +165,10 @@ public final class SDL3PlatformHost: PlatformHost {
     public var onResize: (@MainActor (UInt32, UInt32) -> Void)?
     public var onEvent: (@MainActor (InputEvent) -> Void)?
     public var onBeforeCommit: (@MainActor (_ deltaTime: Double) -> Void)?
+    /// Fires before an individual native window is destroyed. Consumers that
+    /// own per-window GPU surfaces must release the matching surface here so it
+    /// does not outlive the SDL/Wayland window it was created from.
+    public var onWindowTeardown: (@MainActor (_ windowID: WindowID) -> Void)?
     /// Fires once when the run loop has exited, *before* the shell tears down its
     /// windows and quits SDL. The symmetric counterpart to `onInit`: consumers
     /// must release any GPU surfaces created from a window handle here, while the
@@ -293,6 +297,7 @@ public final class SDL3PlatformHost: PlatformHost {
     /// Destroy a window. The matching `PlatformWindowSession` is dropped on
     /// the next iteration of the run loop via `pruneClosedSessions`.
     public func closeWindow(_ windowID: WindowID) {
+        onWindowTeardown?(windowID)
         shell?.destroyWindow(windowID)
     }
 
@@ -605,7 +610,16 @@ public final class SDL3PlatformHost: PlatformHost {
         }
         let created = try shellFactory()
         created.closeInterceptor = { [weak self] windowID in
-            self?.windowCloseInterceptor?(windowID) ?? true
+            guard let self else { return true }
+            guard self.windowCloseInterceptor?(windowID) ?? true else {
+                return false
+            }
+            if let windowID {
+                self.closeWindow(windowID)
+            } else {
+                self.stop()
+            }
+            return false
         }
         shell = created
         return created
