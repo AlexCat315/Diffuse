@@ -173,6 +173,36 @@ struct EditorInspectorSectionsTests {
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.burstInterval == 0.25)
         } else { Issue.record("missing burst interval field") }
 
+        if case let .constrainedNumber(distanceRate, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-distance-rate") {
+            distanceRate.wrappedValue = 12
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.distanceEmissionRate == 12)
+        } else { Issue.record("missing distance emission field") }
+
+        if case let .constrainedNumber(sheetColumns, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-texture-sheet-columns") {
+            sheetColumns.wrappedValue = 4
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.textureSheetColumns == 4)
+        } else { Issue.record("missing texture sheet columns field") }
+
+        if case let .constrainedNumber(sheetRows, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-texture-sheet-rows") {
+            sheetRows.wrappedValue = 2
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.textureSheetRows == 2)
+        } else { Issue.record("missing texture sheet rows field") }
+
+        if case let .constrainedNumber(sheetFrames, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-texture-sheet-frames") {
+            sheetFrames.wrappedValue = 7.2
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.textureSheetFrameCount == 7)
+        } else { Issue.record("missing texture sheet frame field") }
+
+        if case let .constrainedNumber(sheetFPS, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-texture-sheet-fps") {
+            sheetFPS.wrappedValue = 12
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.textureSheetFrameRate == 12)
+        } else { Issue.record("missing texture sheet fps field") }
+
         if case let .bool(emitting) = field(adapter, id, section: "particle-emitter", field: "particle-emitting") {
             emitting.wrappedValue = false
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.isEmitting == false)

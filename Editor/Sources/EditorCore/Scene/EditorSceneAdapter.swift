@@ -748,6 +748,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let looping: Bool
     public let duration: Float
     public let emissionRate: Float
+    public let distanceEmissionRate: Float
     public let burstCount: Int
     public let burstInterval: Float
     public let maxParticles: Int
@@ -784,6 +785,10 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let blendMode: ParticleBlendMode
     public let textureAssetID: String?
     public let texturePath: String?
+    public let textureSheetColumns: Int
+    public let textureSheetRows: Int
+    public let textureSheetFrameCount: Int
+    public let textureSheetFrameRate: Float
     public let seed: UInt64
 
     public init(_ component: ParticleEmitter) {
@@ -791,6 +796,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.looping = component.looping
         self.duration = component.duration
         self.emissionRate = component.emissionRate
+        self.distanceEmissionRate = component.distanceEmissionRate
         self.burstCount = component.burstCount
         self.burstInterval = component.burstInterval
         self.maxParticles = component.maxParticles
@@ -827,12 +833,17 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.blendMode = component.blendMode
         self.textureAssetID = component.textureAssetID
         self.texturePath = component.texturePath
+        self.textureSheetColumns = component.textureSheetColumns
+        self.textureSheetRows = component.textureSheetRows
+        self.textureSheetFrameCount = component.textureSheetFrameCount
+        self.textureSheetFrameRate = component.textureSheetFrameRate
         self.seed = component.seed
     }
 
     var component: ParticleEmitter {
         ParticleEmitter(isEmitting: isEmitting, looping: looping, duration: duration,
                         emissionRate: emissionRate,
+                        distanceEmissionRate: distanceEmissionRate,
                         burstCount: burstCount, burstInterval: burstInterval,
                         maxParticles: maxParticles, lifetime: lifetime,
                         lifetimeRandomness: lifetimeRandomness, originOffset: originOffset.simdValue,
@@ -851,11 +862,16 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
                         sizeCurve: sizeCurve,
                         startColor: startColor.simdValue, endColor: endColor.simdValue,
                         colorCurve: colorCurve, blendMode: blendMode,
-                        textureAssetID: textureAssetID, texturePath: texturePath, seed: seed)
+                        textureAssetID: textureAssetID, texturePath: texturePath,
+                        textureSheetColumns: textureSheetColumns,
+                        textureSheetRows: textureSheetRows,
+                        textureSheetFrameCount: textureSheetFrameCount,
+                        textureSheetFrameRate: textureSheetFrameRate,
+                        seed: seed)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case isEmitting, looping, duration, emissionRate, burstCount, burstInterval
+        case isEmitting, looping, duration, emissionRate, distanceEmissionRate, burstCount, burstInterval
         case maxParticles, lifetime, lifetimeRandomness
         case originOffset, spawnRadius, emissionShape, boxHalfExtents, coneRadius, coneHeight
         case startVelocity, velocityRandomness, gravity
@@ -863,7 +879,8 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         case collisionMode, simulationSpace, collisionPlaneY, collisionRestitution, collisionDamping
         case startSize, endSize, sizeRandomness
         case startRotation, rotationRandomness, angularVelocity, angularVelocityRandomness
-        case sizeCurve, startColor, endColor, colorCurve, blendMode, textureAssetID, texturePath, seed
+        case sizeCurve, startColor, endColor, colorCurve, blendMode, textureAssetID, texturePath
+        case textureSheetColumns, textureSheetRows, textureSheetFrameCount, textureSheetFrameRate, seed
     }
 
     public init(from decoder: Decoder) throws {
@@ -872,6 +889,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.looping = try c.decodeIfPresent(Bool.self, forKey: .looping) ?? true
         self.duration = try c.decodeIfPresent(Float.self, forKey: .duration) ?? 0
         self.emissionRate = try c.decodeIfPresent(Float.self, forKey: .emissionRate) ?? 10
+        self.distanceEmissionRate = try c.decodeIfPresent(Float.self, forKey: .distanceEmissionRate) ?? 0
         self.burstCount = try c.decodeIfPresent(Int.self, forKey: .burstCount) ?? 0
         self.burstInterval = try c.decodeIfPresent(Float.self, forKey: .burstInterval) ?? 0
         self.maxParticles = try c.decodeIfPresent(Int.self, forKey: .maxParticles) ?? 256
@@ -915,6 +933,10 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.blendMode = try c.decodeIfPresent(ParticleBlendMode.self, forKey: .blendMode) ?? .alpha
         self.textureAssetID = try c.decodeIfPresent(String.self, forKey: .textureAssetID)
         self.texturePath = try c.decodeIfPresent(String.self, forKey: .texturePath)
+        self.textureSheetColumns = try c.decodeIfPresent(Int.self, forKey: .textureSheetColumns) ?? 1
+        self.textureSheetRows = try c.decodeIfPresent(Int.self, forKey: .textureSheetRows) ?? 1
+        self.textureSheetFrameCount = try c.decodeIfPresent(Int.self, forKey: .textureSheetFrameCount) ?? 1
+        self.textureSheetFrameRate = try c.decodeIfPresent(Float.self, forKey: .textureSheetFrameRate) ?? 0
         self.seed = try c.decodeIfPresent(UInt64.self, forKey: .seed) ?? 0x9E3779B9
     }
 }
@@ -1836,6 +1858,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.emissionRate,
                                                                                     summary: "Update emission rate"),
                                                                min: 0, max: 1000, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-distance-rate", label: L("Rate over Distance"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.distanceEmissionRate,
+                                                                                    summary: "Update distance emission rate"),
+                                                               min: 0, max: 1000, step: 1, showsStepper: true)),
                 EditorInspectorField(id: "particle-burst-count", label: L("Burst Count"),
                                      value: .constrainedNumber(particleIntBinding(for: entity, \.burstCount,
                                                                                   summary: "Update particle burst count"),
@@ -1943,6 +1969,22 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .asset(particleTextureAssetBinding(for: entity),
                                                    acceptedKinds: [ImportableAssetKind.png.sceneKindLabel],
                                                    placeholder: L("Drop texture"))),
+                EditorInspectorField(id: "particle-texture-sheet-columns", label: L("Sheet Columns"),
+                                     value: .constrainedNumber(particleIntBinding(for: entity, \.textureSheetColumns,
+                                                                                  summary: "Update texture sheet columns"),
+                                                               min: 1, max: 64, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-texture-sheet-rows", label: L("Sheet Rows"),
+                                     value: .constrainedNumber(particleIntBinding(for: entity, \.textureSheetRows,
+                                                                                  summary: "Update texture sheet rows"),
+                                                               min: 1, max: 64, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-texture-sheet-frames", label: L("Sheet Frames"),
+                                     value: .constrainedNumber(particleIntBinding(for: entity, \.textureSheetFrameCount,
+                                                                                  summary: "Update texture sheet frames"),
+                                                               min: 1, max: 4096, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-texture-sheet-fps", label: L("Sheet FPS"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.textureSheetFrameRate,
+                                                                                    summary: "Update texture sheet FPS"),
+                                                               min: 0, max: 240, step: 1, showsStepper: true)),
             ]
         )
     }

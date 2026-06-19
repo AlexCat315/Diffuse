@@ -189,10 +189,15 @@ struct RenderExtractionTests {
                 velocityRandomness: .zero,
                 gravity: .zero,
                 startSize: 0.5,
+                endSize: 0.5,
                 startRotation: z < -10 ? 0.75 : 0.25,
-                blendMode: z < -10 ? .additive : .alpha
+                blendMode: z < -10 ? .additive : .alpha,
+                textureSheetColumns: 2,
+                textureSheetRows: 2,
+                textureSheetFrameCount: 4
             )
             emitter.emit(1)
+            emitter.advance(deltaTime: 50)
             _ = runtime.setComponent(emitter, for: entity)
             return entity
         }
@@ -217,6 +222,7 @@ struct RenderExtractionTests {
         #expect(isClose(extracted.scene.particles[1].rotation, 0.25))
         #expect(extracted.scene.particles[0].blendMode == .additive)
         #expect(extracted.scene.particles[1].blendMode == .alpha)
+        #expect(extracted.scene.particles[0].uvRect == SIMD4<Float>(0, 0.5, 0.5, 0.5))
     }
 
     @Test("tick propagates transforms before world-plane particle collision")
