@@ -257,6 +257,19 @@ struct InspectorPanel: View {
         }
     }
 
+    private struct InspectorParticleSimulationSpaceValue: View {
+        let binding: Binding<ParticleSimulationSpace>
+
+        var body: some View {
+            EnumField(value: binding, width: 150) { space in
+                switch space {
+                case .local: return L("Local")
+                case .world: return L("World")
+                }
+            }
+        }
+    }
+
     private struct InspectorParticleCurveValue: View {
         let binding: Binding<ParticleCurve>
         @State private var selectedKeyIndex: Int? = nil
@@ -431,6 +444,8 @@ struct InspectorPanel: View {
             return AnyView(InspectorParticleEmissionShapeValue(binding: binding))
         case let .particleCollisionMode(binding):
             return AnyView(InspectorParticleCollisionModeValue(binding: binding))
+        case let .particleSimulationSpace(binding):
+            return AnyView(InspectorParticleSimulationSpaceValue(binding: binding))
         case let .particleCurve(binding):
             return AnyView(InspectorParticleCurveValue(binding: binding))
         case let .particleBlendMode(binding):
