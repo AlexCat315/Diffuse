@@ -443,6 +443,7 @@ private struct CapabilityOperationProjection {
             self.verb = "scene.set_particle_emitter"
             self.arguments["duration"] = .number(Double(emitter.duration))
             self.arguments["emission_rate"] = .number(Double(emitter.emissionRate))
+            self.arguments["distance_emission_rate"] = .number(Double(emitter.distanceEmissionRate))
             self.arguments["burst_count"] = .integer(Int64(emitter.burstCount))
             self.arguments["burst_interval"] = .number(Double(emitter.burstInterval))
             self.arguments["max_particles"] = .integer(Int64(emitter.maxParticles))
@@ -461,6 +462,10 @@ private struct CapabilityOperationProjection {
             self.arguments["size_curve"] = .string(Self.particleCurveSummary(emitter.sizeCurve))
             self.arguments["color_curve"] = .string(Self.particleCurveSummary(emitter.colorCurve))
             self.arguments["blend_mode"] = .string(emitter.blendMode.rawValue)
+            self.arguments["texture_sheet_columns"] = .integer(Int64(emitter.textureSheetColumns))
+            self.arguments["texture_sheet_rows"] = .integer(Int64(emitter.textureSheetRows))
+            self.arguments["texture_sheet_frame_count"] = .integer(Int64(emitter.textureSheetFrameCount))
+            self.arguments["texture_sheet_frame_rate"] = .number(Double(emitter.textureSheetFrameRate))
         }
     }
 

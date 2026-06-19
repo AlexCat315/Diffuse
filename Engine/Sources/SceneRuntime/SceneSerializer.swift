@@ -643,6 +643,7 @@ public enum SceneSerializer {
             "looping": c.looping,
             "duration": c.duration,
             "emissionRate": c.emissionRate,
+            "distanceEmissionRate": c.distanceEmissionRate,
             "burstCount": c.burstCount,
             "burstInterval": c.burstInterval,
             "maxParticles": c.maxParticles,
@@ -677,6 +678,10 @@ public enum SceneSerializer {
             "endColor": vec4ToJSON(c.endColor),
             "colorCurve": serializeParticleCurve(c.colorCurve),
             "blendMode": c.blendMode.rawValue,
+            "textureSheetColumns": c.textureSheetColumns,
+            "textureSheetRows": c.textureSheetRows,
+            "textureSheetFrameCount": c.textureSheetFrameCount,
+            "textureSheetFrameRate": c.textureSheetFrameRate,
             "seed": Int(bitPattern: UInt(c.seed)),
         ]
         if let textureAssetID = c.textureAssetID {
@@ -694,6 +699,7 @@ public enum SceneSerializer {
             looping: jsonToBool(d["looping"]) ?? true,
             duration: jsonToFloat(d["duration"]) ?? 0,
             emissionRate: jsonToFloat(d["emissionRate"]) ?? 10,
+            distanceEmissionRate: jsonToFloat(d["distanceEmissionRate"]) ?? 0,
             burstCount: jsonToInt(d["burstCount"]) ?? 0,
             burstInterval: jsonToFloat(d["burstInterval"]) ?? 0,
             maxParticles: jsonToInt(d["maxParticles"]) ?? 256,
@@ -730,6 +736,10 @@ public enum SceneSerializer {
             blendMode: ParticleBlendMode(rawValue: jsonToString(d["blendMode"]) ?? "alpha") ?? .alpha,
             textureAssetID: jsonToString(d["textureAssetID"]),
             texturePath: jsonToString(d["texturePath"]),
+            textureSheetColumns: jsonToInt(d["textureSheetColumns"]) ?? 1,
+            textureSheetRows: jsonToInt(d["textureSheetRows"]) ?? 1,
+            textureSheetFrameCount: jsonToInt(d["textureSheetFrameCount"]) ?? 1,
+            textureSheetFrameRate: jsonToFloat(d["textureSheetFrameRate"]) ?? 0,
             seed: UInt64(bitPattern: Int64(jsonToInt(d["seed"]) ?? 0))
         )
     }

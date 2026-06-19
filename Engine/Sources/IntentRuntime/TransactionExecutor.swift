@@ -1460,12 +1460,16 @@ public struct TransactionExecutor {
                 let ref = "scene:\(entityID)"
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleEmissionRate",
                     value: .float(emitter.emissionRate)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleDistanceEmissionRate",
+                    value: .float(emitter.distanceEmissionRate)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleMaxParticles",
                     value: .float(Float(emitter.maxParticles))))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleEmitting",
                     value: .bool(emitter.isEmitting)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleSimulationSpace",
                     value: .string(emitter.simulationSpace.rawValue)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleTextureSheetFrameCount",
+                    value: .float(Float(emitter.textureSheetFrameCount))))
 
             case let .setConstraintEnabled(entityID, value):
                 events.append(.entityAuthoredChanged(
