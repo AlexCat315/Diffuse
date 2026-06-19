@@ -181,13 +181,18 @@ public final class AppRuntime {
         let previousViewportBridge = ViewportTextureBridgeHolder.current
         let previousImageAssets = ImageAssetRegistryHolder.current
         let previousAssetDropRegistry = AssetDropRegistryHolder.current
+        let previousUIWorkScheduler = UIWorkSchedulerHolder.enqueue
         ViewportTextureBridgeHolder.current = viewportTextures
         ImageAssetRegistryHolder.current = imageAssets
         AssetDropRegistryHolder.current = assetDropRegistry
+        UIWorkSchedulerHolder.enqueue = { [weak host] work in
+            host?.enqueueMainThreadWork(work)
+        }
         defer {
             ViewportTextureBridgeHolder.current = previousViewportBridge
             ImageAssetRegistryHolder.current = previousImageAssets
             AssetDropRegistryHolder.current = previousAssetDropRegistry
+            UIWorkSchedulerHolder.enqueue = previousUIWorkScheduler
         }
 
         // 把进程级 holder 接到主窗口的 input context 上，使 Compose / Workspace

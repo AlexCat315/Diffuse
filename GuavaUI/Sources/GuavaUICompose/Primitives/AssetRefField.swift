@@ -96,13 +96,12 @@ public struct AssetRefField: View {
                 if !pickerOptions.isEmpty {
                     Popover(isPresented: $isPickerPresented,
                             isEnabled: isEnabled,
-                            width: 240) {
-                        Icon(UICommonIcons.chevronDown,
+                            width: 240,
+                            placement: .end) {
+                        Icon(isPickerPresented ? UICommonIcons.chevronUp : UICommonIcons.chevronDown,
                              size: 10,
                              color: .onSurfaceMuted)
                             .frame(width: 22, height: 22)
-                            .background(.surfaceOverlay)
-                            .cornerRadius(3)
                     } content: {
                         Menu(pickerMenuEntries,
                              width: 240,
@@ -163,15 +162,14 @@ private struct AssetRefPreview: View {
 
     var body: some View {
         if let previewPath = ref?.previewPath, !previewPath.isEmpty {
-            Image(file: previewPath,
-                  width: 34,
-                  height: 24,
-                  contentMode: .fit)
-                .frame(width: 34, height: 24)
-                .background(.surfaceOverlay)
-                .cornerRadius(3)
-                .opacity(isEnabled ? 1 : 0.55)
-                .clipped()
+            AsyncImageThumbnail(path: previewPath,
+                                width: 34,
+                                height: 24,
+                                isEnabled: isEnabled) {
+                AssetKindBadge(kind: ref?.kind, isEnabled: isEnabled)
+            }
+            .background(.surfaceOverlay)
+            .cornerRadius(3)
         } else {
             AssetKindBadge(kind: ref?.kind, isEnabled: isEnabled)
         }
