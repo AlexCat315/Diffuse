@@ -432,7 +432,8 @@ struct SceneSerializerTests {
         let entity = original.createEntity()
         _ = original.setComponent(
             ParticleEmitter(looping: false, duration: 4.5,
-                            emissionRate: 33, burstCount: 7, burstInterval: 0.25,
+                            emissionRate: 33, distanceEmissionRate: 12,
+                            burstCount: 7, burstInterval: 0.25,
                             maxParticles: 128, lifetime: 1.5,
                             spawnRadius: 0.25, emissionShape: .cone,
                             boxHalfExtents: SIMD3<Float>(1, 2, 3),
@@ -461,6 +462,10 @@ struct SceneSerializerTests {
                             blendMode: .additive,
                             textureAssetID: "Assets/Textures/smoke.png",
                             texturePath: "/tmp/particle-smoke.png",
+                            textureSheetColumns: 4,
+                            textureSheetRows: 2,
+                            textureSheetFrameCount: 7,
+                            textureSheetFrameRate: 12,
                             seed: 12345),
             for: entity
         )
@@ -472,6 +477,7 @@ struct SceneSerializerTests {
         let e = restored.component(ParticleEmitter.self, for: restored.entities()[0])
         #expect(e != nil)
         #expect(e!.emissionRate == 33)
+        #expect(e!.distanceEmissionRate == 12)
         #expect(e!.looping == false)
         #expect(e!.duration == 4.5)
         #expect(e!.burstCount == 7)
@@ -509,6 +515,10 @@ struct SceneSerializerTests {
         #expect(e!.blendMode == .additive)
         #expect(e!.textureAssetID == "Assets/Textures/smoke.png")
         #expect(e!.texturePath == "/tmp/particle-smoke.png")
+        #expect(e!.textureSheetColumns == 4)
+        #expect(e!.textureSheetRows == 2)
+        #expect(e!.textureSheetFrameCount == 7)
+        #expect(e!.textureSheetFrameRate == 12)
         #expect(e!.seed == 12345)
         // Deterministic config restored: same seed + same advance ⇒ same particles.
         var a = e!; var b = original.component(ParticleEmitter.self, for: original.entities()[0])!

@@ -145,6 +145,8 @@ public struct RenderParticle: Sendable, Equatable {
     public var size: Float
     public var rotation: Float
     public var color: SIMD4<Float>
+    /// Texture sheet UV rect: x, y, width, height.
+    public var uvRect: SIMD4<Float>
     public var blendMode: ParticleBlendMode
     public var texturePath: String?
 
@@ -152,12 +154,14 @@ public struct RenderParticle: Sendable, Equatable {
                 size: Float,
                 rotation: Float = 0,
                 color: SIMD4<Float>,
+                uvRect: SIMD4<Float> = SIMD4<Float>(0, 0, 1, 1),
                 blendMode: ParticleBlendMode = .alpha,
                 texturePath: String? = nil) {
         self.position = position
         self.size = size
         self.rotation = rotation
         self.color = color
+        self.uvRect = uvRect
         self.blendMode = blendMode
         self.texturePath = texturePath
     }

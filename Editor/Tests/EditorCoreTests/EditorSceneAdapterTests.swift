@@ -136,7 +136,8 @@ struct EditorSceneAdapterTests {
         }
         _ = source.scene.setComponent(
             ParticleEmitter(looping: false, duration: 3.25,
-                            emissionRate: 24, burstCount: 5, burstInterval: 0.4,
+                            emissionRate: 24, distanceEmissionRate: 9,
+                            burstCount: 5, burstInterval: 0.4,
                             maxParticles: 64, lifetime: 1.25,
                             spawnRadius: 0.3, emissionShape: .box,
                             boxHalfExtents: SIMD3<Float>(1, 2, 3),
@@ -164,12 +165,18 @@ struct EditorSceneAdapterTests {
                             blendMode: .additive,
                             textureAssetID: "Assets/Textures/smoke.png",
                             texturePath: "/tmp/particle-smoke.png",
+                            textureSheetColumns: 3,
+                            textureSheetRows: 2,
+                            textureSheetFrameCount: 6,
+                            textureSheetFrameRate: 15,
                             seed: 777),
             for: entityID(hero.id)
         )
 
         let manifest = source.manifest(selectedEntityID: hero.id)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.emissionRate == 24)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.distanceEmissionRate == 9)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.textureSheetFrameCount == 6)
 
         // Survive a full Codable cycle (mirrors how saves persist the manifest).
         let data = try JSONEncoder().encode(manifest)
@@ -184,6 +191,7 @@ struct EditorSceneAdapterTests {
         let e = restored.scene.component(ParticleEmitter.self, for: restoredID)
         #expect(e != nil)
         #expect(e!.emissionRate == 24)
+        #expect(e!.distanceEmissionRate == 9)
         #expect(e!.looping == false)
         #expect(e!.duration == 3.25)
         #expect(e!.burstCount == 5)
@@ -220,6 +228,10 @@ struct EditorSceneAdapterTests {
         #expect(e!.blendMode == .additive)
         #expect(e!.textureAssetID == "Assets/Textures/smoke.png")
         #expect(e!.texturePath == "/tmp/particle-smoke.png")
+        #expect(e!.textureSheetColumns == 3)
+        #expect(e!.textureSheetRows == 2)
+        #expect(e!.textureSheetFrameCount == 6)
+        #expect(e!.textureSheetFrameRate == 15)
         #expect(e!.seed == 777)
     }
 

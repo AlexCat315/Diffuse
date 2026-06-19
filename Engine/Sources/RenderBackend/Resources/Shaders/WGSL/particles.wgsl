@@ -15,6 +15,7 @@ struct ParticleInstance {
     position_size : vec4<f32>,  // xyz = world position, w = size
     rotation : vec4<f32>,       // x = billboard rotation in radians
     color : vec4<f32>,
+    uv_rect : vec4<f32>,        // x/y = origin, z/w = extent
 };
 
 @group(0) @binding(0) var<uniform> u : ParticleUniforms;
@@ -26,6 +27,7 @@ struct VsOut {
     @builtin(position) position : vec4<f32>,
     @location(0) uv : vec2<f32>,
     @location(1) color : vec4<f32>,
+    @location(2) local_uv : vec2<f32>,
 };
 
 @vertex
@@ -54,14 +56,16 @@ fn vs_main(@builtin(vertex_index) vertex_index : u32,
 
     var out : VsOut;
     out.position = u.view_proj * vec4<f32>(world_position, 1.0);
-    out.uv = corner + vec2<f32>(0.5, 0.5);
+    let local_uv = corner + vec2<f32>(0.5, 0.5);
+    out.uv = particle.uv_rect.xy + local_uv * particle.uv_rect.zw;
+    out.local_uv = local_uv;
     out.color = particle.color;
     return out;
 }
 
 @fragment
 fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
-    let dist = length(in.uv - vec2<f32>(0.5, 0.5)) * 2.0;
+    let dist = length(in.local_uv - vec2<f32>(0.5, 0.5)) * 2.0;
     let falloff = smoothstep(1.0, 0.0, dist);
     let texel = textureSample(particle_texture, particle_sampler, in.uv);
     let alpha = in.color.a * texel.a * falloff;
