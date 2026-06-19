@@ -11,6 +11,7 @@ private struct GPUParticleInstance {
     var positionSize: SIMD4<Float>
     var rotation: SIMD4<Float>
     var color: SIMD4<Float>
+    var uvRect: SIMD4<Float>
 }
 
 /// Per-frame billboard uniforms; layout matches `ParticleUniforms` in the shader.
@@ -126,7 +127,8 @@ extension WGPURenderer {
                     GPUParticleInstance(
                         positionSize: SIMD4<Float>(particle.position, particle.size),
                         rotation: SIMD4<Float>(particle.rotation, 0, 0, 0),
-                        color: particle.color
+                        color: particle.color,
+                        uvRect: particle.uvRect
                     )
                 )
             }
