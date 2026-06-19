@@ -963,15 +963,18 @@ public struct EditorInspectorAssetRef: Sendable, Equatable {
     public let name: String
     public let subtitle: String?
     public let kind: String
+    public let previewPath: String?
 
     public init(id: String,
                 name: String,
                 subtitle: String? = nil,
-                kind: String) {
+                kind: String,
+                previewPath: String? = nil) {
         self.id = id
         self.name = name
         self.subtitle = subtitle
         self.kind = kind
+        self.previewPath = previewPath
     }
 }
 
@@ -2058,14 +2061,16 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                     return EditorInspectorAssetRef(id: asset.id,
                                                    name: asset.name,
                                                    subtitle: asset.relativePath,
-                                                   kind: asset.kind.sceneKindLabel)
+                                                   kind: asset.kind.sceneKindLabel,
+                                                   previewPath: asset.kind.isTexture ? asset.absolutePath : nil)
                 }
                 if let texturePath = emitter.texturePath, !texturePath.isEmpty {
                     let url = URL(fileURLWithPath: texturePath)
                     return EditorInspectorAssetRef(id: emitter.textureAssetID ?? texturePath,
                                                    name: url.deletingPathExtension().lastPathComponent,
                                                    subtitle: texturePath,
-                                                   kind: ImportableAssetKind.png.sceneKindLabel)
+                                                   kind: ImportableAssetKind.png.sceneKindLabel,
+                                                   previewPath: texturePath)
                 }
                 return nil
             },
