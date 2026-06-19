@@ -251,6 +251,38 @@ struct RenderExtractionTests {
         #expect(isClose(extracted.scene.particles[0].position.y, 0))
         #expect(isClose(runtime.component(ParticleEmitter.self, for: entity)?.particles[0].velocity.y ?? 0, 5))
     }
+
+    @Test("renderExtract does not transform world-space particles twice")
+    func renderExtractKeepsWorldSpaceParticlesInPlace() {
+        var runtime = SceneRuntime()
+        let camera = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+        _ = runtime.setComponent(CameraComponent(isActive: true), for: camera)
+
+        let emitterEntity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(10, 0, 0)), for: emitterEntity)
+        var emitter = ParticleEmitter(isEmitting: false,
+                                      emissionRate: 0,
+                                      maxParticles: 2,
+                                      lifetime: 10,
+                                      startVelocity: .zero,
+                                      gravity: .zero,
+                                      simulationSpace: .world)
+        var spawnTransform = matrix_identity_float4x4
+        spawnTransform.columns.3 = SIMD4<Float>(2, 0, 0, 1)
+        emitter.emit(1, worldTransform: spawnTransform)
+        _ = runtime.setComponent(emitter, for: emitterEntity)
+
+        _ = runtime.tick()
+
+        guard let extracted = runtime.extractedRenderScene else {
+            Issue.record("expected extracted render scene resource")
+            return
+        }
+
+        #expect(extracted.scene.particles.count == 1)
+        #expect(isClose(extracted.scene.particles[0].position.x, 2))
+    }
 }
 
 private func translation(of matrix: simd_float4x4) -> SIMD3<Float> {

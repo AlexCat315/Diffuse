@@ -190,6 +190,12 @@ struct EditorInspectorSectionsTests {
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.collisionMode == .worldPlane)
         } else { Issue.record("missing collision mode field") }
 
+        if case let .particleSimulationSpace(space) =
+            field(adapter, id, section: "particle-emitter", field: "particle-simulation-space") {
+            space.wrappedValue = .world
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.simulationSpace == .world)
+        } else { Issue.record("missing simulation space field") }
+
         if case let .constrainedNumber(restitution, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-collision-restitution") {
             restitution.wrappedValue = 0.7
