@@ -111,8 +111,14 @@ struct IntentRuntimeTests {
         _ = scene.setComponent(ParticleEmitter(emissionRate: 10), for: entity)
 
         let emitter = ParticleEmitter(duration: 2.5, emissionRate: 55,
+                                      distanceEmissionRate: 7,
                                       maxParticles: 200, lifetime: 3,
-                                      simulationSpace: .world, seed: 99)
+                                      simulationSpace: .world,
+                                      textureSheetColumns: 4,
+                                      textureSheetRows: 2,
+                                      textureSheetFrameCount: 8,
+                                      textureSheetFrameRate: 16,
+                                      seed: 99)
         let transaction = TransactionIR(
             intent: IntentIR(verb: "scene.set_particle_emitter", summary: "Update emitter", source: .human),
             summary: "Update emitter",
@@ -127,8 +133,13 @@ struct IntentRuntimeTests {
         #expect(applied.changedDomains == [.scene])
         #expect(updated.duration == 2.5)
         #expect(updated.emissionRate == 55)
+        #expect(updated.distanceEmissionRate == 7)
         #expect(updated.maxParticles == 200)
         #expect(updated.simulationSpace == .world)
+        #expect(updated.textureSheetColumns == 4)
+        #expect(updated.textureSheetRows == 2)
+        #expect(updated.textureSheetFrameCount == 8)
+        #expect(updated.textureSheetFrameRate == 16)
         #expect(updated.seed == 99)
     }
 

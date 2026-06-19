@@ -27,6 +27,50 @@ struct ParticleTests {
         #expect(emitter.aliveCount == 9)
     }
 
+    @Test("distance emission spawns particles after the emitter moves")
+    func distanceEmission() {
+        var start = matrix_identity_float4x4
+        start.columns.3 = SIMD4<Float>(0, 0, 0, 1)
+        var moved = matrix_identity_float4x4
+        moved.columns.3 = SIMD4<Float>(1, 0, 0, 1)
+        var emitter = ParticleEmitter(emissionRate: 0,
+                                      distanceEmissionRate: 4,
+                                      maxParticles: 16,
+                                      lifetime: 10,
+                                      startVelocity: .zero,
+                                      gravity: .zero,
+                                      simulationSpace: .world)
+
+        emitter.advance(deltaTime: 0.1, worldTransform: start)
+        #expect(emitter.aliveCount == 0)
+
+        emitter.advance(deltaTime: 0.1, worldTransform: moved)
+        #expect(emitter.aliveCount == 4)
+        #expect(emitter.particles.map(\.position.x) == [0.125, 0.375, 0.625, 0.875])
+    }
+
+    @Test("distance emission carries fractional movement between frames")
+    func distanceEmissionAccumulator() {
+        var start = matrix_identity_float4x4
+        var moved = matrix_identity_float4x4
+        var emitter = ParticleEmitter(emissionRate: 0,
+                                      distanceEmissionRate: 2,
+                                      maxParticles: 16,
+                                      lifetime: 10,
+                                      startVelocity: .zero,
+                                      gravity: .zero,
+                                      simulationSpace: .world)
+
+        emitter.advance(deltaTime: 0.1, worldTransform: start)
+        moved.columns.3 = SIMD4<Float>(0.25, 0, 0, 1)
+        emitter.advance(deltaTime: 0.1, worldTransform: moved)
+        #expect(emitter.aliveCount == 0)
+
+        start.columns.3 = SIMD4<Float>(0.5, 0, 0, 1)
+        emitter.advance(deltaTime: 0.1, worldTransform: start)
+        #expect(emitter.aliveCount == 1)
+    }
+
     @Test("non-looping duration stops new emissions")
     func nonLoopingDurationStopsEmission() {
         var emitter = ParticleEmitter(looping: false, duration: 0.5,
@@ -328,6 +372,30 @@ struct ParticleTests {
         ])
         #expect(abs(curve.evaluate(at: 0.25) - 0.5) < 1e-4)
         #expect(abs(curve.evaluate(at: 0.75) - 0.5) < 1e-4)
+    }
+
+    @Test("texture sheet UV rect advances over lifetime or frame rate")
+    func textureSheetUVRect() {
+        var lifetimeEmitter = ParticleEmitter(emissionRate: 0,
+                                              lifetime: 1,
+                                              gravity: .zero,
+                                              textureSheetColumns: 2,
+                                              textureSheetRows: 2,
+                                              textureSheetFrameCount: 4)
+        lifetimeEmitter.emit(1)
+        lifetimeEmitter.advance(deltaTime: 0.5)
+        #expect(lifetimeEmitter.textureUVRect(for: lifetimeEmitter.particles[0]) == SIMD4<Float>(0, 0.5, 0.5, 0.5))
+
+        var rateEmitter = ParticleEmitter(emissionRate: 0,
+                                          lifetime: 10,
+                                          gravity: .zero,
+                                          textureSheetColumns: 4,
+                                          textureSheetRows: 1,
+                                          textureSheetFrameCount: 4,
+                                          textureSheetFrameRate: 2)
+        rateEmitter.emit(1)
+        rateEmitter.advance(deltaTime: 1.5)
+        #expect(rateEmitter.textureUVRect(for: rateEmitter.particles[0]) == SIMD4<Float>(0.75, 0, 0.25, 1))
     }
 
     @Test("noise force deterministically accelerates particles")

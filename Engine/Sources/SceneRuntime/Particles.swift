@@ -1,9 +1,9 @@
 import EngineKernel
 import SIMDCompat
 
-/// A single live particle owned by a `ParticleEmitter`. Positions/velocities are in the
-/// emitter's local space; `size`/`color` are re-derived from `age` each step so the render
-/// backend can consume them directly without re-evaluating the gradient.
+/// A single live particle owned by a `ParticleEmitter`. Positions/velocities are stored in
+/// the emitter's configured simulation space; `size`/`color` are re-derived from `age` each
+/// step so the render backend can consume them directly without re-evaluating the gradient.
 public struct Particle: Sendable, Equatable {
     public var position: SIMD3<Float>
     public var velocity: SIMD3<Float>
@@ -208,6 +208,8 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public var duration: Float
     /// Particles spawned per second from the continuous emitter.
     public var emissionRate: Float
+    /// Particles spawned per unit traveled by the emitter. Useful for stable trails.
+    public var distanceEmissionRate: Float
     /// Particles spawned each burst tick. Zero disables scheduled bursts.
     public var burstCount: Int
     /// Seconds between scheduled bursts when `burstCount > 0`.
@@ -265,13 +267,23 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     /// Optional resolved image file path sampled by billboard particles. Nil keeps the
     /// procedural soft-round sprite fallback.
     public var texturePath: String?
+    /// Number of columns in the particle texture sheet. One keeps the full texture.
+    public var textureSheetColumns: Int
+    /// Number of rows in the particle texture sheet. One keeps the full texture.
+    public var textureSheetRows: Int
+    /// Number of frames used from the sheet, in row-major order.
+    public var textureSheetFrameCount: Int
+    /// Frames per second for texture sheet playback. Zero maps frames over particle lifetime.
+    public var textureSheetFrameRate: Float
     public var seed: UInt64
 
     // Live state
     public private(set) var particles: [Particle]
     private var emitterAge: Float
     private var emissionAccumulator: Float
+    private var distanceEmissionAccumulator: Float
     private var burstAccumulator: Float
+    private var previousEmitterPosition: SIMD3<Float>?
     private var rngState: UInt64
 
     public init(
@@ -279,6 +291,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         looping: Bool = true,
         duration: Float = 0,
         emissionRate: Float = 10,
+        distanceEmissionRate: Float = 0,
         burstCount: Int = 0,
         burstInterval: Float = 0,
         maxParticles: Int = 256,
@@ -315,12 +328,17 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         blendMode: ParticleBlendMode = .alpha,
         textureAssetID: String? = nil,
         texturePath: String? = nil,
+        textureSheetColumns: Int = 1,
+        textureSheetRows: Int = 1,
+        textureSheetFrameCount: Int = 1,
+        textureSheetFrameRate: Float = 0,
         seed: UInt64 = 0x9E3779B9
     ) {
         self.isEmitting = isEmitting
         self.looping = looping
         self.duration = max(0, duration)
         self.emissionRate = max(0, emissionRate)
+        self.distanceEmissionRate = max(0, distanceEmissionRate)
         self.burstCount = max(0, burstCount)
         self.burstInterval = max(0, burstInterval)
         self.maxParticles = max(0, maxParticles)
@@ -361,16 +379,46 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.blendMode = blendMode
         self.textureAssetID = textureAssetID?.isEmpty == true ? nil : textureAssetID
         self.texturePath = texturePath?.isEmpty == true ? nil : texturePath
+        self.textureSheetColumns = max(1, textureSheetColumns)
+        self.textureSheetRows = max(1, textureSheetRows)
+        self.textureSheetFrameCount = max(1, textureSheetFrameCount)
+        self.textureSheetFrameRate = max(0, textureSheetFrameRate)
         self.seed = seed
         self.particles = []
         self.emitterAge = 0
         self.emissionAccumulator = 0
+        self.distanceEmissionAccumulator = 0
         self.burstAccumulator = 0
+        self.previousEmitterPosition = nil
         self.rngState = seed
     }
 
     /// Number of currently-alive particles.
     public var aliveCount: Int { particles.count }
+
+    /// UV rect for a particle's current texture sheet frame: x, y, width, height.
+    public func textureUVRect(for particle: Particle) -> SIMD4<Float> {
+        let columns = max(1, textureSheetColumns)
+        let rows = max(1, textureSheetRows)
+        let maxFrames = max(1, columns * rows)
+        let frameCount = min(maxFrames, max(1, textureSheetFrameCount))
+        let frameIndex: Int
+        if textureSheetFrameRate > 0 {
+            frameIndex = min(frameCount - 1, max(0, Int(floor(particle.age * textureSheetFrameRate))))
+        } else {
+            frameIndex = min(frameCount - 1, max(0, Int(floor(particle.normalizedAge * Float(frameCount)))))
+        }
+        let column = frameIndex % columns
+        let row = frameIndex / columns
+        let width = 1 / Float(columns)
+        let height = 1 / Float(rows)
+        return SIMD4<Float>(
+            Float(column) * width,
+            Float(row) * height,
+            width,
+            height
+        )
+    }
 
     /// Advances the simulation by `deltaTime` seconds: integrates existing particles, culls
     /// expired ones, then spawns from the continuous emission rate and scheduled bursts
@@ -378,6 +426,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public mutating func advance(deltaTime: Double, worldTransform: simd_float4x4? = nil) {
         guard deltaTime > 0 else { return }
         let dt = Float(deltaTime)
+        let currentEmitterPosition = distanceEmitterPosition(worldTransform: worldTransform)
         let collisionContext = simulationSpace == .local
             ? makeCollisionContext(worldTransform: worldTransform)
             : nil
@@ -398,9 +447,15 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         }
         particles = survivors
 
-        guard isEmitting else { return }
+        guard isEmitting else {
+            previousEmitterPosition = currentEmitterPosition
+            return
+        }
         let emissionDt = activeEmissionDelta(dt)
-        guard emissionDt > 0 else { return }
+        guard emissionDt > 0 else {
+            previousEmitterPosition = currentEmitterPosition
+            return
+        }
         if emissionRate > 0 {
             emissionAccumulator += emissionRate * emissionDt
             let toSpawn = Int(emissionAccumulator)
@@ -417,6 +472,9 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
                 spawn(bursts * burstCount, worldTransform: worldTransform)
             }
         }
+        spawnDistanceEmission(from: previousEmitterPosition,
+                              to: currentEmitterPosition,
+                              worldTransform: worldTransform)
     }
 
     /// Spawns `count` particles immediately (a burst), independent of the emission rate.
@@ -430,10 +488,21 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         particles.removeAll(keepingCapacity: true)
         emitterAge = 0
         emissionAccumulator = 0
+        distanceEmissionAccumulator = 0
         burstAccumulator = 0
+        previousEmitterPosition = nil
     }
 
     // MARK: - Internals
+
+    private struct ParticleSpawnSample {
+        var offset: SIMD3<Float>
+        var velocityJitter: SIMD3<Float>
+        var lifetime: Float
+        var sizeScale: Float
+        var rotation: Float
+        var angularVelocity: Float
+    }
 
     private mutating func activeEmissionDelta(_ dt: Float) -> Float {
         guard duration > 0 else { return dt }
@@ -447,21 +516,16 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         return min(dt, remaining)
     }
 
-    private mutating func spawn(_ count: Int, worldTransform: simd_float4x4? = nil) {
+    private mutating func spawn(_ count: Int,
+                                worldTransform: simd_float4x4? = nil,
+                                worldOriginOverride: SIMD3<Float>? = nil) {
         guard count > 0, maxParticles > 0 else { return }
         let room = maxParticles - particles.count
         let n = min(count, max(0, room))
         for _ in 0..<n {
-            let offset = spawnOffset()
-            let jitter = SIMD3<Float>(nextSigned() * velocityRandomness.x,
-                                      nextSigned() * velocityRandomness.y,
-                                      nextSigned() * velocityRandomness.z)
-            let life = max(0.0001, lifetime + nextSigned() * lifetimeRandomness)
-            let sizeScale = max(0, 1 + nextSigned() * sizeRandomness)
-            let rotation = startRotation + nextSigned() * rotationRandomness
-            let angularVelocity = self.angularVelocity + nextSigned() * angularVelocityRandomness
-            let localPosition = originOffset + offset
-            let localVelocity = startVelocity + jitter
+            let sample = makeSpawnSample()
+            let localPosition = originOffset + sample.offset
+            let localVelocity = startVelocity + sample.velocityJitter
             let spawnTransform = worldTransform ?? matrix_identity_float4x4
             let position: SIMD3<Float>
             let velocity: SIMD3<Float>
@@ -470,18 +534,68 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
                 position = localPosition
                 velocity = localVelocity
             case .world:
-                position = Self.transformPoint(localPosition, by: spawnTransform)
+                if let worldOriginOverride {
+                    position = worldOriginOverride + Self.transformDirection(sample.offset, by: spawnTransform)
+                } else {
+                    position = Self.transformPoint(localPosition, by: spawnTransform)
+                }
                 velocity = Self.transformDirection(localVelocity, by: spawnTransform)
             }
             var p = Particle(position: position,
                              velocity: velocity,
-                             lifetime: life,
-                             sizeScale: sizeScale,
-                             rotation: rotation,
-                             angularVelocity: angularVelocity)
+                             lifetime: sample.lifetime,
+                             sizeScale: sample.sizeScale,
+                             rotation: sample.rotation,
+                             angularVelocity: sample.angularVelocity)
             refreshAppearance(&p)
             particles.append(p)
         }
+    }
+
+    private mutating func makeSpawnSample() -> ParticleSpawnSample {
+        let offset = spawnOffset()
+        let jitter = SIMD3<Float>(nextSigned() * velocityRandomness.x,
+                                  nextSigned() * velocityRandomness.y,
+                                  nextSigned() * velocityRandomness.z)
+        return ParticleSpawnSample(
+            offset: offset,
+            velocityJitter: jitter,
+            lifetime: max(0.0001, lifetime + nextSigned() * lifetimeRandomness),
+            sizeScale: max(0, 1 + nextSigned() * sizeRandomness),
+            rotation: startRotation + nextSigned() * rotationRandomness,
+            angularVelocity: angularVelocity + nextSigned() * angularVelocityRandomness
+        )
+    }
+
+    private mutating func spawnDistanceEmission(from previous: SIMD3<Float>?,
+                                                to current: SIMD3<Float>,
+                                                worldTransform: simd_float4x4?) {
+        defer { previousEmitterPosition = current }
+        guard distanceEmissionRate > 0,
+              let previous else { return }
+        let delta = current - previous
+        let distance = simd_length(delta)
+        guard distance > 0.0001 else { return }
+
+        distanceEmissionAccumulator += distance * distanceEmissionRate
+        let toSpawn = Int(distanceEmissionAccumulator)
+        guard toSpawn > 0 else { return }
+        distanceEmissionAccumulator -= Float(toSpawn)
+
+        switch simulationSpace {
+        case .local:
+            spawn(toSpawn, worldTransform: worldTransform)
+        case .world:
+            for index in 0..<toSpawn {
+                let t = (Float(index) + 0.5) / Float(toSpawn)
+                let worldOrigin = previous + delta * t
+                spawn(1, worldTransform: worldTransform, worldOriginOverride: worldOrigin)
+            }
+        }
+    }
+
+    private func distanceEmitterPosition(worldTransform: simd_float4x4?) -> SIMD3<Float> {
+        Self.transformPoint(originOffset, by: worldTransform ?? matrix_identity_float4x4)
     }
 
     private static func transformPoint(_ point: SIMD3<Float>, by matrix: simd_float4x4) -> SIMD3<Float> {
