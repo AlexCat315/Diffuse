@@ -527,12 +527,14 @@ private struct TextureThumbnailView: View {
 
     var body: some View {
         Box(direction: .column, alignItems: .center, justifyContent: .center) {
-            Image(file: path,
-                  width: width,
-                  height: height,
-                  contentMode: .fit)
+            AsyncImageThumbnail(path: path, width: width, height: height) {
+                Box(direction: .column, alignItems: .center, justifyContent: .center) {
+                    Icon(.svg(named: "squares-2x2", in: .module, subdirectory: "HierarchyIcons"),
+                         size: Swift.min(Swift.min(width, height), 24),
+                         color: .success)
+                }
                 .frame(width: width, height: height)
-                .clipped()
+            }
         }
         .frame(width: width, height: height)
         .background(.surfaceSunken)
