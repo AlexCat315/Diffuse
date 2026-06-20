@@ -71,6 +71,27 @@ struct ParticleTests {
         #expect(emitter.aliveCount == 1)
     }
 
+    @Test("spawned particles can inherit emitter velocity")
+    func velocityInheritance() {
+        let start = matrix_identity_float4x4
+        var moved = matrix_identity_float4x4
+        moved.columns.3 = SIMD4<Float>(2, 0, 0, 1)
+        var emitter = ParticleEmitter(emissionRate: 0,
+                                      distanceEmissionRate: 1,
+                                      maxParticles: 8,
+                                      lifetime: 10,
+                                      startVelocity: .zero,
+                                      velocityInheritance: 0.5,
+                                      gravity: .zero,
+                                      simulationSpace: .world)
+
+        emitter.advance(deltaTime: 1, worldTransform: start)
+        emitter.advance(deltaTime: 1, worldTransform: moved)
+
+        #expect(emitter.aliveCount == 2)
+        #expect(emitter.particles.allSatisfy { $0.velocity == SIMD3<Float>(1, 0, 0) })
+    }
+
     @Test("non-looping duration stops new emissions")
     func nonLoopingDurationStopsEmission() {
         var emitter = ParticleEmitter(looping: false, duration: 0.5,
@@ -95,6 +116,113 @@ struct ParticleTests {
         #expect(emitter.aliveCount == 0)
     }
 
+    @Test("death sub-emitter spawns child particles with independent appearance")
+    func deathSubEmitter() {
+        var emitter = ParticleEmitter(isEmitting: false,
+                                      emissionRate: 0,
+                                      maxParticles: 8,
+                                      lifetime: 0.5,
+                                      subEmitterTrigger: .death,
+                                      subEmitterBurstCount: 2,
+                                      subEmitterMaxDepth: 1,
+                                      subEmitterLifetime: 2,
+                                      subEmitterStartVelocity: SIMD3<Float>(1, 0, 0),
+                                      subEmitterVelocityRandomness: .zero,
+                                      subEmitterStartSize: 0.25,
+                                      subEmitterEndSize: 0.25,
+                                      subEmitterStartColor: SIMD4<Float>(1, 0, 0, 1),
+                                      subEmitterEndColor: SIMD4<Float>(1, 0, 0, 1),
+                                      startVelocity: .zero,
+                                      gravity: .zero)
+        emitter.emit(1)
+        emitter.advance(deltaTime: 0.6)
+
+        #expect(emitter.aliveCount == 2)
+        for child in emitter.particles {
+            #expect(child.generation == 1)
+            #expect(child.lifetime == 2)
+            #expect(child.velocity == SIMD3<Float>(1, 0, 0))
+            #expect(child.size == 0.25)
+            #expect(child.color == SIMD4<Float>(1, 0, 0, 1))
+        }
+
+        emitter.advance(deltaTime: 2.1)
+        #expect(emitter.aliveCount == 0)
+    }
+
+    @Test("multiple death sub-emitter rules spawn independent child appearances")
+    func multipleDeathSubEmitters() {
+        var emitter = ParticleEmitter(isEmitting: false,
+                                      emissionRate: 0,
+                                      maxParticles: 8,
+                                      lifetime: 0.5,
+                                      subEmitters: [
+                                          ParticleSubEmitter(trigger: .death,
+                                                             burstCount: 1,
+                                                             lifetime: 2,
+                                                             startVelocity: SIMD3<Float>(1, 0, 0),
+                                                             startSize: 0.2,
+                                                             endSize: 0.2,
+                                                             startColor: SIMD4<Float>(1, 0, 0, 1),
+                                                             endColor: SIMD4<Float>(1, 0, 0, 1)),
+                                          ParticleSubEmitter(trigger: .death,
+                                                             burstCount: 2,
+                                                             lifetime: 3,
+                                                             startVelocity: SIMD3<Float>(0, 1, 0),
+                                                             startSize: 0.4,
+                                                             endSize: 0.4,
+                                                             startColor: SIMD4<Float>(0, 0, 1, 1),
+                                                             endColor: SIMD4<Float>(0, 0, 1, 1)),
+                                      ],
+                                      startVelocity: .zero,
+                                      gravity: .zero)
+        emitter.emit(1)
+        emitter.advance(deltaTime: 0.6)
+
+        #expect(emitter.aliveCount == 3)
+        let redChildren = emitter.particles.filter { $0.appearanceIndex == 2 }
+        let blueChildren = emitter.particles.filter { $0.appearanceIndex == 3 }
+        #expect(redChildren.count == 1)
+        #expect(blueChildren.count == 2)
+        #expect(redChildren.allSatisfy { $0.generation == 1 && $0.lifetime == 2 })
+        #expect(redChildren.allSatisfy { $0.velocity == SIMD3<Float>(1, 0, 0) })
+        #expect(redChildren.allSatisfy { $0.size == 0.2 && $0.color == SIMD4<Float>(1, 0, 0, 1) })
+        #expect(blueChildren.allSatisfy { $0.generation == 1 && $0.lifetime == 3 })
+        #expect(blueChildren.allSatisfy { $0.velocity == SIMD3<Float>(0, 1, 0) })
+        #expect(blueChildren.allSatisfy { $0.size == 0.4 && $0.color == SIMD4<Float>(0, 0, 1, 1) })
+    }
+
+    @Test("collision sub-emitter spawns child particles at the collision point")
+    func collisionSubEmitter() {
+        var emitter = ParticleEmitter(isEmitting: false,
+                                      emissionRate: 0,
+                                      maxParticles: 8,
+                                      lifetime: 10,
+                                      subEmitterTrigger: .collision,
+                                      subEmitterBurstCount: 1,
+                                      subEmitterLifetime: 2,
+                                      subEmitterStartVelocity: SIMD3<Float>(2, 0, 0),
+                                      subEmitterVelocityRandomness: .zero,
+                                      originOffset: SIMD3<Float>(0, 0.5, 0),
+                                      startVelocity: SIMD3<Float>(0, -1, 0),
+                                      gravity: .zero,
+                                      collisionMode: .localPlane,
+                                      collisionPlaneY: 0,
+                                      collisionRestitution: 0.5)
+        emitter.emit(1)
+        emitter.advance(deltaTime: 1)
+
+        #expect(emitter.aliveCount == 2)
+        let parent = emitter.particles.first { $0.generation == 0 }
+        let child = emitter.particles.first { $0.generation == 1 }
+        #expect(parent != nil)
+        #expect(child != nil)
+        #expect(parent!.position.y == 0)
+        #expect(abs(parent!.velocity.y - 0.5) < 1e-4)
+        #expect(child!.position.y == 0)
+        #expect(child!.velocity == SIMD3<Float>(2, 0, 0))
+    }
+
     @Test("gravity and velocity integrate with semi-implicit Euler")
     func motionIntegration() {
         var emitter = ParticleEmitter(emissionRate: 0, lifetime: 100,
@@ -105,6 +233,45 @@ struct ParticleTests {
         let p = emitter.particles[0]
         #expect(abs(p.velocity.y + 10) < 1e-4)   // v += g*dt → -10
         #expect(abs(p.position.y + 10) < 1e-4)   // p += v*dt → -10
+    }
+
+    @Test("radial force accelerates particles away from the force center")
+    func radialForce() {
+        var emitter = ParticleEmitter(emissionRate: 0,
+                                      lifetime: 10,
+                                      originOffset: SIMD3<Float>(1, 0, 0),
+                                      startVelocity: .zero,
+                                      gravity: .zero,
+                                      forceMode: .radial,
+                                      forceRadius: 0,
+                                      forceStrength: 2,
+                                      forceFalloff: 0)
+        emitter.emit(1)
+        emitter.advance(deltaTime: 1)
+
+        let p = emitter.particles[0]
+        #expect(abs(p.velocity.x - 2) < 1e-4)
+        #expect(abs(p.position.x - 3) < 1e-4)
+    }
+
+    @Test("vortex force accelerates particles around the configured axis")
+    func vortexForce() {
+        var emitter = ParticleEmitter(emissionRate: 0,
+                                      lifetime: 10,
+                                      originOffset: SIMD3<Float>(1, 0, 0),
+                                      startVelocity: .zero,
+                                      gravity: .zero,
+                                      forceMode: .vortex,
+                                      forceAxis: SIMD3<Float>(0, 1, 0),
+                                      forceRadius: 0,
+                                      forceStrength: 3,
+                                      forceFalloff: 0)
+        emitter.emit(1)
+        emitter.advance(deltaTime: 1)
+
+        let p = emitter.particles[0]
+        #expect(abs(p.velocity.z + 3) < 1e-4)
+        #expect(abs(p.position.z + 3) < 1e-4)
     }
 
     @Test("maxParticles caps the live pool")
@@ -359,6 +526,8 @@ struct ParticleTests {
 
     @Test("ParticleCurve evaluates presets and keyframes")
     func particleCurveEvaluation() {
+        #expect(ParticleCurve.constant(2.5).evaluate(at: -1) == 2.5)
+        #expect(ParticleCurve.constant(2.5).evaluate(at: 2) == 2.5)
         #expect(ParticleCurve.linear.evaluate(at: -1) == 0)
         #expect(ParticleCurve.linear.evaluate(at: 2) == 1)
         #expect(abs(ParticleCurve.easeIn.evaluate(at: 0.5) - 0.25) < 1e-4)
@@ -372,6 +541,78 @@ struct ParticleTests {
         ])
         #expect(abs(curve.evaluate(at: 0.25) - 0.5) < 1e-4)
         #expect(abs(curve.evaluate(at: 0.75) - 0.5) < 1e-4)
+    }
+
+    @Test("emission rate curve modulates continuous spawn rate over emitter duration")
+    func emissionRateCurveModulatesContinuousEmission() {
+        var emitter = ParticleEmitter(
+            looping: false,
+            duration: 2,
+            emissionRate: 10,
+            emissionRateCurve: .keyframes([
+                ParticleCurveKeyframe(time: 0, value: 0),
+                ParticleCurveKeyframe(time: 1, value: 2),
+            ]),
+            maxParticles: 100,
+            lifetime: 10,
+            startVelocity: .zero,
+            gravity: .zero
+        )
+
+        emitter.advance(deltaTime: 1)
+        #expect(emitter.aliveCount == 5)
+        emitter.advance(deltaTime: 1)
+        #expect(emitter.aliveCount == 20)
+    }
+
+    @Test("distance emission rate curve modulates movement-based spawn rate")
+    func distanceEmissionRateCurveModulatesDistanceEmission() {
+        var emitter = ParticleEmitter(
+            looping: false,
+            duration: 2,
+            emissionRate: 0,
+            distanceEmissionRate: 10,
+            distanceEmissionRateCurve: .keyframes([
+                ParticleCurveKeyframe(time: 0, value: 0),
+                ParticleCurveKeyframe(time: 1, value: 2),
+            ]),
+            maxParticles: 100,
+            lifetime: 10,
+            startVelocity: .zero,
+            gravity: .zero,
+            simulationSpace: .world
+        )
+        var transform = matrix_identity_float4x4
+
+        emitter.advance(deltaTime: 0.01, worldTransform: transform)
+        transform.columns.3.x = 1
+        emitter.advance(deltaTime: 1, worldTransform: transform)
+        #expect(emitter.aliveCount == 5)
+        transform.columns.3.x = 2
+        emitter.advance(deltaTime: 1, worldTransform: transform)
+        #expect(emitter.aliveCount == 20)
+    }
+
+    @Test("prewarm simulates once before the first active tick")
+    func prewarmSimulatesBeforeFirstTick() {
+        var emitter = ParticleEmitter(
+            prewarmTime: 1,
+            prewarmStep: 0.5,
+            emissionRate: 10,
+            maxParticles: 100,
+            lifetime: 10,
+            startVelocity: .zero,
+            gravity: .zero
+        )
+
+        emitter.advance(deltaTime: 0.1)
+        #expect(emitter.aliveCount == 11)
+        emitter.advance(deltaTime: 0.1)
+        #expect(emitter.aliveCount == 12)
+
+        emitter.clear()
+        emitter.advance(deltaTime: 0.1)
+        #expect(emitter.aliveCount == 11)
     }
 
     @Test("texture sheet UV rect advances over lifetime or frame rate")
@@ -396,6 +637,19 @@ struct ParticleTests {
         rateEmitter.emit(1)
         rateEmitter.advance(deltaTime: 1.5)
         #expect(rateEmitter.textureUVRect(for: rateEmitter.particles[0]) == SIMD4<Float>(0.75, 0, 0.25, 1))
+    }
+
+    @Test("trail configuration is sanitized at construction")
+    func trailConfigurationSanitizes() {
+        let emitter = ParticleEmitter(trailLength: -1,
+                                      trailSegments: -4,
+                                      trailEndSizeScale: -0.5,
+                                      trailEndAlphaScale: 2)
+
+        #expect(emitter.trailLength == 0)
+        #expect(emitter.trailSegments == 0)
+        #expect(emitter.trailEndSizeScale == 0)
+        #expect(emitter.trailEndAlphaScale == 1)
     }
 
     @Test("noise force deterministically accelerates particles")

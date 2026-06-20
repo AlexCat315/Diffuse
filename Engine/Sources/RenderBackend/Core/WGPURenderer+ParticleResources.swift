@@ -12,6 +12,7 @@ private struct GPUParticleInstance {
     var rotation: SIMD4<Float>
     var color: SIMD4<Float>
     var uvRect: SIMD4<Float>
+    var axisStretch: SIMD4<Float>
 }
 
 /// Per-frame billboard uniforms; layout matches `ParticleUniforms` in the shader.
@@ -19,6 +20,7 @@ private struct ParticleUniforms {
     var viewProj: simd_float4x4
     var cameraRight: SIMD4<Float>
     var cameraUp: SIMD4<Float>
+    var cameraForward: SIMD4<Float>
 }
 
 extension WGPURenderer {
@@ -103,24 +105,21 @@ extension WGPURenderer {
         var instances = [GPUParticleInstance]()
         var batches: [ParticleBatch] = []
         instances.reserveCapacity(scene.particles.count)
-        let batchKeys = scene.particles.reduce(into: [ParticleBatchKey]()) { keys, particle in
+        var groupedParticles: [ParticleBatchKey: [RenderParticle]] = [:]
+        groupedParticles.reserveCapacity(max(1, scene.particleSummary.batchCount))
+        for particle in scene.particles {
             let key = ParticleBatchKey(blendMode: particle.blendMode,
                                        texturePath: normalizedParticleTexturePath(particle.texturePath))
-            if !keys.contains(key) {
-                keys.append(key)
-            }
-        }.sorted { lhs, rhs in
+            groupedParticles[key, default: []].append(particle)
+        }
+        let batchKeys = groupedParticles.keys.sorted { lhs, rhs in
             if lhs.blendMode != rhs.blendMode {
                 return lhs.blendMode.rawValue < rhs.blendMode.rawValue
             }
             return (lhs.texturePath ?? "") < (rhs.texturePath ?? "")
         }
         for key in batchKeys {
-            let particles = scene.particles.filter {
-                $0.blendMode == key.blendMode
-                    && normalizedParticleTexturePath($0.texturePath) == key.texturePath
-            }
-            guard !particles.isEmpty else { continue }
+            guard let particles = groupedParticles[key], !particles.isEmpty else { continue }
             let start = instances.count
             for particle in particles {
                 instances.append(
@@ -128,7 +127,8 @@ extension WGPURenderer {
                         positionSize: SIMD4<Float>(particle.position, particle.size),
                         rotation: SIMD4<Float>(particle.rotation, 0, 0, 0),
                         color: particle.color,
-                        uvRect: particle.uvRect
+                        uvRect: particle.uvRect,
+                        axisStretch: SIMD4<Float>(particle.alignmentAxis, particle.stretch)
                     )
                 )
             }
@@ -152,7 +152,8 @@ extension WGPURenderer {
         var uniforms = ParticleUniforms(
             viewProj: viewProj,
             cameraRight: SIMD4<Float>(right, 0),
-            cameraUp: SIMD4<Float>(up, 0)
+            cameraUp: SIMD4<Float>(up, 0),
+            cameraForward: SIMD4<Float>(forward, 0)
         )
         writeUniform(&uniforms, buffer: particleUniformBuffer)
 

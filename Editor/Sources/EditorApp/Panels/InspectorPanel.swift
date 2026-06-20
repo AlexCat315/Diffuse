@@ -323,11 +323,16 @@ struct InspectorPanel: View {
 
         private var options: [SelectOption<ParticleCurve>] {
             var values: [SelectOption<ParticleCurve>] = [
+                SelectOption(value: .constant(1), label: L("Constant")),
                 SelectOption(value: .linear, label: L("Linear")),
                 SelectOption(value: .easeIn, label: L("Ease In")),
                 SelectOption(value: .easeOut, label: L("Ease Out")),
                 SelectOption(value: .easeInOut, label: L("Ease In-Out")),
             ]
+            if case .constant(let value) = binding.wrappedValue, value != 1 {
+                values.append(SelectOption(value: binding.wrappedValue,
+                                           label: "\(L("Constant")) \(value)"))
+            }
             if case .keyframes(let keyframes) = binding.wrappedValue {
                 values.append(SelectOption(value: binding.wrappedValue,
                                            label: "\(L("Keyframes")) (\(keyframes.count))"))
@@ -382,6 +387,390 @@ struct InspectorPanel: View {
                 case .additive: return L("Additive")
                 }
             }
+        }
+    }
+
+    private struct InspectorParticleRenderAlignmentValue: View {
+        let binding: Binding<ParticleRenderAlignment>
+
+        var body: some View {
+            EnumField(value: binding, width: 150) { alignment in
+                switch alignment {
+                case .billboard: return L("Billboard")
+                case .velocity: return L("Velocity")
+                }
+            }
+        }
+    }
+
+    private struct InspectorParticleForceModeValue: View {
+        let binding: Binding<ParticleForceMode>
+
+        var body: some View {
+            EnumField(value: binding, width: 150) { mode in
+                switch mode {
+                case .none: return L("None")
+                case .radial: return L("Radial")
+                case .vortex: return L("Vortex")
+                }
+            }
+        }
+    }
+
+    private struct InspectorParticleSubEmitterTriggerValue: View {
+        let binding: Binding<ParticleSubEmitterTrigger>
+
+        var body: some View {
+            EnumField(value: binding, width: 150) { trigger in
+                switch trigger {
+                case .none: return L("None")
+                case .death: return L("Death")
+                case .collision: return L("Collision")
+                }
+            }
+        }
+    }
+
+    private struct InspectorParticleSubEmittersValue: View {
+        let binding: Binding<[ParticleSubEmitter]>
+
+        var body: some View {
+            Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                Row(alignment: .center, spacing: 8) {
+                    Text("\(binding.wrappedValue.count) \(L("Rules"))")
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                    Spacer(minLength: 0)
+                    Button(L("Add")) { appendRule() }
+                        .buttonStyle(.secondary)
+                        .frame(width: 56, height: 24)
+                }
+                .frame(height: ParticleSubEmitterEditorLayout.toolbarHeight)
+
+                if binding.wrappedValue.isEmpty {
+                    Box(direction: .column, alignItems: .center, justifyContent: .center) {
+                        Text(L("No sub-emitter rules"))
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                    }
+                    .frame(height: ParticleSubEmitterEditorLayout.emptyHeight)
+                    .background(.surface)
+                    .cornerRadius(6)
+                    .border(.border, width: 1)
+                } else {
+                    ScrollView(.vertical,
+                               consumePolicy: .always,
+                               scrollbarGutter: .stable) {
+                        Box(direction: .column, alignItems: .stretch, spacing: ParticleSubEmitterEditorLayout.ruleGap) {
+                            for index in binding.wrappedValue.indices {
+                                ParticleSubEmitterRuleCard(binding: binding, index: index)
+                            }
+                        }
+                    }
+                    .frame(height: ParticleSubEmitterEditorLayout.listHeight(ruleCount: binding.wrappedValue.count))
+                }
+            }
+            .padding(horizontal: 8, vertical: 8)
+            .background(.surfaceSunken)
+            .cornerRadius(6)
+            .border(.border, width: 1)
+            .frame(height: ParticleSubEmitterEditorLayout.valueHeight(ruleCount: binding.wrappedValue.count))
+            .clipped()
+        }
+
+        private func appendRule() {
+            var next = binding.wrappedValue
+            next.append(ParticleSubEmitter(trigger: .death,
+                                           burstCount: 8,
+                                           probability: 1,
+                                           maxDepth: 1,
+                                           inheritVelocity: 0.25,
+                                           lifetime: 0.45,
+                                           startVelocity: SIMD3<Float>(0, 1.5, 0),
+                                           velocityRandomness: SIMD3<Float>(0.5, 0.5, 0.5),
+                                           startSize: 0.25,
+                                           endSize: 0,
+                                           startColor: SIMD4<Float>(1, 1, 1, 1),
+                                           endColor: SIMD4<Float>(1, 1, 1, 0)))
+            binding.wrappedValue = next
+        }
+    }
+
+    private struct ParticleSubEmitterRuleCard: View {
+        let binding: Binding<[ParticleSubEmitter]>
+        let index: Int
+
+        var body: some View {
+            Box(direction: .column, alignItems: .stretch, spacing: 7) {
+                Row(alignment: .center, spacing: 8) {
+                    Text("#\(index + 1)")
+                        .font(.bodyStrong)
+                        .foregroundColor(.onSurface)
+                    Spacer(minLength: 0)
+                    Button(icon: .resource(UICommonIcons.close),
+                           size: 10,
+                           tooltip: L("Remove rule"),
+                           action: removeRule)
+                    .buttonStyle(.ghost)
+                    .frame(width: 24, height: 24)
+                }
+                .frame(height: 24)
+
+                Row(alignment: .center, spacing: 8) {
+                    labeledCompactField(L("Trigger")) {
+                        EnumField(value: triggerBinding, width: 112) { trigger in
+                            switch trigger {
+                            case .none: return L("None")
+                            case .death: return L("Death")
+                            case .collision: return L("Collision")
+                            }
+                        }
+                    }
+                    labeledCompactField(L("Count")) {
+                        NumberField(value: intBinding(\.burstCount),
+                                    decimals: 0,
+                                    size: .small,
+                                    minValue: 0,
+                                    maxValue: 10_000,
+                                    step: 1,
+                                    showsStepper: true)
+                    }
+                    labeledCompactField(L("Chance")) {
+                        NumberField(value: floatBinding(\.probability),
+                                    decimals: 2,
+                                    size: .small,
+                                    minValue: 0,
+                                    maxValue: 1,
+                                    step: 0.05,
+                                    showsStepper: true)
+                    }
+                }
+
+                Row(alignment: .center, spacing: 8) {
+                    labeledCompactField(L("Depth")) {
+                        NumberField(value: intBinding(\.maxDepth),
+                                    decimals: 0,
+                                    size: .small,
+                                    minValue: 0,
+                                    maxValue: 16,
+                                    step: 1,
+                                    showsStepper: true)
+                    }
+                    labeledCompactField(L("Inherit")) {
+                        NumberField(value: floatBinding(\.inheritVelocity),
+                                    decimals: 2,
+                                    size: .small,
+                                    minValue: 0,
+                                    maxValue: 10,
+                                    step: 0.05,
+                                    showsStepper: true)
+                    }
+                    labeledCompactField(L("Life")) {
+                        NumberField(value: floatBinding(\.lifetime),
+                                    decimals: 2,
+                                    size: .small,
+                                    minValue: 0.0001,
+                                    maxValue: 60,
+                                    step: 0.05,
+                                    showsStepper: true)
+                    }
+                }
+
+                labeledWideField(L("Velocity")) {
+                    Vec3Field(x: vectorBinding(\.startVelocity, axis: 0),
+                              y: vectorBinding(\.startVelocity, axis: 1),
+                              z: vectorBinding(\.startVelocity, axis: 2),
+                              decimals: 2,
+                              size: .small)
+                }
+                labeledWideField(L("Random")) {
+                    Vec3Field(x: vectorBinding(\.velocityRandomness, axis: 0),
+                              y: vectorBinding(\.velocityRandomness, axis: 1),
+                              z: vectorBinding(\.velocityRandomness, axis: 2),
+                              decimals: 2,
+                              size: .small)
+                }
+
+                Row(alignment: .center, spacing: 8) {
+                    labeledCompactField(L("Start Size")) {
+                        NumberField(value: floatBinding(\.startSize),
+                                    decimals: 2,
+                                    size: .small,
+                                    minValue: 0,
+                                    maxValue: 100,
+                                    step: 0.05,
+                                    showsStepper: true)
+                    }
+                    labeledCompactField(L("End Size")) {
+                        NumberField(value: floatBinding(\.endSize),
+                                    decimals: 2,
+                                    size: .small,
+                                    minValue: 0,
+                                    maxValue: 100,
+                                    step: 0.05,
+                                    showsStepper: true)
+                    }
+                }
+
+                Row(alignment: .center, spacing: 8) {
+                    labeledColorField(L("Start Color")) {
+                        ColorField(color: colorBinding(isStart: true),
+                                   showAlpha: true,
+                                   showsInlineValues: false)
+                    }
+                    labeledColorField(L("End Color")) {
+                        ColorField(color: colorBinding(isStart: false),
+                                   showAlpha: true,
+                                   showsInlineValues: false)
+                    }
+                }
+            }
+            .padding(horizontal: 8, vertical: 8)
+            .background(.surface)
+            .cornerRadius(6)
+            .border(.border, width: 1)
+            .frame(height: ParticleSubEmitterEditorLayout.ruleHeight)
+            .clipped()
+        }
+
+        private func labeledCompactField<Content: View>(_ title: String,
+                                                        @ViewBuilder content: () -> Content) -> some View {
+            Box(direction: .column, alignItems: .stretch, spacing: 3) {
+                Text(title)
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                content()
+                    .frame(height: 24)
+                    .clipped()
+            }
+            .flex(1, shrink: 1, basis: 0)
+        }
+
+        private func labeledWideField<Content: View>(_ title: String,
+                                                     @ViewBuilder content: () -> Content) -> some View {
+            Row(alignment: .center, spacing: 8) {
+                Text(title)
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                    .frame(width: 66)
+                content()
+                    .flex(1, shrink: 1, basis: 0)
+                    .clipped()
+            }
+            .frame(height: 28)
+        }
+
+        private func labeledColorField<Content: View>(_ title: String,
+                                                      @ViewBuilder content: () -> Content) -> some View {
+            Box(direction: .column, alignItems: .stretch, spacing: 3) {
+                Text(title)
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                content()
+                    .frame(height: 26)
+                    .clipped()
+            }
+            .flex(1, shrink: 1, basis: 0)
+        }
+
+        private var rule: ParticleSubEmitter? {
+            guard binding.wrappedValue.indices.contains(index) else { return nil }
+            return binding.wrappedValue[index]
+        }
+
+        private var triggerBinding: Binding<ParticleSubEmitterTrigger> {
+            Binding(
+                get: { rule?.trigger ?? .none },
+                set: { value in updateRule { $0.trigger = value } }
+            )
+        }
+
+        private func floatBinding(_ keyPath: WritableKeyPath<ParticleSubEmitter, Float>) -> Binding<Float> {
+            Binding(
+                get: { rule?[keyPath: keyPath] ?? 0 },
+                set: { value in updateRule { $0[keyPath: keyPath] = value } }
+            )
+        }
+
+        private func intBinding(_ keyPath: WritableKeyPath<ParticleSubEmitter, Int>) -> Binding<Float> {
+            Binding(
+                get: { Float(rule?[keyPath: keyPath] ?? 0) },
+                set: { value in updateRule { $0[keyPath: keyPath] = Int(value.rounded()) } }
+            )
+        }
+
+        private func vectorBinding(_ keyPath: WritableKeyPath<ParticleSubEmitter, SIMD3<Float>>,
+                                   axis: Int) -> Binding<Float> {
+            Binding(
+                get: {
+                    guard let rule, axis >= 0 && axis < 3 else { return 0 }
+                    return rule[keyPath: keyPath][axis]
+                },
+                set: { value in
+                    guard axis >= 0 && axis < 3 else { return }
+                    updateRule { $0[keyPath: keyPath][axis] = value }
+                }
+            )
+        }
+
+        private func colorBinding(isStart: Bool) -> Binding<Color> {
+            Binding(
+                get: {
+                    let color = rule.map { isStart ? $0.startColor : $0.endColor }
+                        ?? SIMD4<Float>(1, 1, 1, 1)
+                    return Color(r: color.x, g: color.y, b: color.z, a: color.w)
+                },
+                set: { value in
+                    let color = SIMD4<Float>(clamp01(value.r),
+                                             clamp01(value.g),
+                                             clamp01(value.b),
+                                             clamp01(value.a))
+                    updateRule {
+                        if isStart {
+                            $0.startColor = color
+                        } else {
+                            $0.endColor = color
+                        }
+                    }
+                }
+            )
+        }
+
+        private func updateRule(_ mutate: (inout ParticleSubEmitter) -> Void) {
+            guard binding.wrappedValue.indices.contains(index) else { return }
+            var next = binding.wrappedValue
+            mutate(&next[index])
+            next[index] = sanitized(next[index])
+            binding.wrappedValue = next
+        }
+
+        private func removeRule() {
+            guard binding.wrappedValue.indices.contains(index) else { return }
+            var next = binding.wrappedValue
+            next.remove(at: index)
+            binding.wrappedValue = next
+        }
+
+        private func sanitized(_ rule: ParticleSubEmitter) -> ParticleSubEmitter {
+            ParticleSubEmitter(trigger: rule.trigger,
+                               burstCount: rule.burstCount,
+                               probability: rule.probability,
+                               maxDepth: rule.maxDepth,
+                               inheritVelocity: rule.inheritVelocity,
+                               lifetime: rule.lifetime,
+                               startVelocity: rule.startVelocity,
+                               velocityRandomness: rule.velocityRandomness,
+                               startSize: rule.startSize,
+                               endSize: rule.endSize,
+                               startColor: rule.startColor,
+                               endColor: rule.endColor)
+        }
+
+        private func clamp01(_ value: Float) -> Float {
+            max(0, min(1, value))
         }
     }
 
@@ -450,6 +839,14 @@ struct InspectorPanel: View {
             return AnyView(InspectorParticleCurveValue(binding: binding))
         case let .particleBlendMode(binding):
             return AnyView(InspectorParticleBlendModeValue(binding: binding))
+        case let .particleRenderAlignment(binding):
+            return AnyView(InspectorParticleRenderAlignmentValue(binding: binding))
+        case let .particleForceMode(binding):
+            return AnyView(InspectorParticleForceModeValue(binding: binding))
+        case let .particleSubEmitterTrigger(binding):
+            return AnyView(InspectorParticleSubEmitterTriggerValue(binding: binding))
+        case let .particleSubEmitters(binding):
+            return AnyView(InspectorParticleSubEmittersValue(binding: binding))
         case let .asset(binding, acceptedKinds, placeholder):
             return AnyView(AssetRefField(value: assetRefBinding(binding),
                                          activePayload: activeAssetDropPayload,
@@ -548,7 +945,7 @@ private extension EditorAsset {
 private extension EditorInspectorFieldValue {
     var preferredRowLayout: PropertyGridRowLayout {
         switch self {
-        case .particleCurve:
+        case .particleCurve, .particleSubEmitters:
             return .fullWidth
         default:
             return .twoColumn
@@ -566,6 +963,8 @@ private extension EditorInspectorFieldValue {
                 return max(defaultHeight, ParticleCurveEditorLayout.rowHeight(keyframeCount: keyframes.count))
             }
             return max(defaultHeight, ParticleCurveEditorLayout.linearRowHeight)
+        case let .particleSubEmitters(binding):
+            return max(defaultHeight, ParticleSubEmitterEditorLayout.rowHeight(ruleCount: binding.wrappedValue.count))
         case let .json(_, minHeight):
             return max(defaultHeight, minHeight + 34)
         default:
@@ -615,6 +1014,43 @@ private enum ParticleCurveEditorLayout {
         propertyGridLabelHeight
             + propertyGridVerticalPadding * 2
             + valueHeight(keyframeCount: keyframeCount)
+    }
+}
+
+private enum ParticleSubEmitterEditorLayout {
+    static let cardVerticalPadding: Float = 8
+    static let propertyGridLabelHeight: Float = 18
+    static let propertyGridVerticalPadding: Float = 6
+    static let toolbarHeight: Float = 24
+    static let emptyHeight: Float = 42
+    static let ruleHeight: Float = 236
+    static let ruleGap: Float = 8
+    static let maxVisibleRules = 2
+
+    static func listHeight(ruleCount: Int) -> Float {
+        guard ruleCount > 0 else { return emptyHeight }
+        let visibleRules = min(ruleCount, maxVisibleRules)
+        let rulesHeight = Float(visibleRules) * ruleHeight
+        let gapsHeight = Float(max(0, visibleRules - 1)) * ruleGap
+        return rulesHeight + gapsHeight
+    }
+
+    static func contentHeight(ruleCount: Int) -> Float {
+        let bodyHeight = ruleCount == 0 ? emptyHeight : listHeight(ruleCount: ruleCount)
+        return cardVerticalPadding * 2
+            + toolbarHeight
+            + ruleGap
+            + bodyHeight
+    }
+
+    static func valueHeight(ruleCount: Int) -> Float {
+        contentHeight(ruleCount: ruleCount)
+    }
+
+    static func rowHeight(ruleCount: Int) -> Float {
+        propertyGridLabelHeight
+            + propertyGridVerticalPadding * 2
+            + valueHeight(ruleCount: ruleCount)
     }
 }
 

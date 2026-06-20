@@ -559,9 +559,17 @@ public struct RuntimeWorldSchedule {
                   !emitter.particles.isEmpty
             else { continue }
             let toWorld = world.worldTransform(for: entity)?.matrix ?? matrix_identity_float4x4
-            result.reserveCapacity(result.count + emitter.particles.count)
+            let distanceFade = renderDistanceFade(emitter: emitter,
+                                                  toWorld: toWorld,
+                                                  cameraEye: cameraEye)
+            if distanceFade <= 0 {
+                continue
+            }
+            let trailSegments = emitter.trailLength > 0 ? emitter.trailSegments : 0
+            result.reserveCapacity(result.count + emitter.particles.count * (1 + trailSegments))
             for particle in emitter.particles {
                 let worldPosition: SIMD3<Float>
+                let worldVelocity: SIMD3<Float>
                 switch emitter.simulationSpace {
                 case .local:
                     let transformed = toWorld * SIMD4<Float>(particle.position, 1)
@@ -574,26 +582,135 @@ public struct RuntimeWorldSchedule {
                     } else {
                         worldPosition = SIMD3<Float>(transformed.x, transformed.y, transformed.z)
                     }
+                    worldVelocity = Self.transformDirection(particle.velocity, by: toWorld)
                 case .world:
                     worldPosition = particle.position
+                    worldVelocity = particle.velocity
                 }
-                result.append(
-                    RenderParticle(
-                        position: worldPosition,
-                        size: particle.size,
-                        rotation: particle.rotation,
-                        color: particle.color,
-                        uvRect: emitter.textureUVRect(for: particle),
-                        blendMode: emitter.blendMode,
-                        texturePath: emitter.texturePath
-                    )
+                let uvRect = emitter.textureUVRect(for: particle)
+                let alignment = renderAlignment(for: emitter, worldVelocity: worldVelocity)
+                var color = particle.color
+                color.w *= distanceFade
+                let base = RenderParticle(
+                    position: worldPosition,
+                    size: particle.size,
+                    rotation: particle.rotation,
+                    color: color,
+                    uvRect: uvRect,
+                    alignmentAxis: alignment.axis,
+                    stretch: alignment.stretch,
+                    blendMode: emitter.blendMode,
+                    texturePath: emitter.texturePath
                 )
+                result.append(base)
+                appendTrailParticles(for: particle,
+                                     emitter: emitter,
+                                     base: base,
+                                     worldVelocity: worldVelocity,
+                                     to: &result)
             }
         }
         result.sort {
             simd_length_squared($0.position - cameraEye) > simd_length_squared($1.position - cameraEye)
         }
         return result
+    }
+
+    private func renderDistanceFade(
+        emitter: ParticleEmitter,
+        toWorld: simd_float4x4,
+        cameraEye: SIMD3<Float>
+    ) -> Float {
+        guard emitter.maxRenderDistance > 0 else {
+            return 1
+        }
+        let origin = Self.transformPoint(emitter.originOffset, by: toWorld)
+        let distance = simd_length(origin - cameraEye)
+        guard distance <= emitter.maxRenderDistance else {
+            return 0
+        }
+        guard emitter.renderDistanceFadeRange > 0 else {
+            return 1
+        }
+        let fadeRange = min(emitter.renderDistanceFadeRange, emitter.maxRenderDistance)
+        guard fadeRange > 0.0001 else {
+            return 1
+        }
+        let fadeStart = emitter.maxRenderDistance - fadeRange
+        guard distance > fadeStart else {
+            return 1
+        }
+        return simd_clamp((emitter.maxRenderDistance - distance) / fadeRange, 0, 1)
+    }
+
+    private func appendTrailParticles(
+        for particle: Particle,
+        emitter: ParticleEmitter,
+        base: RenderParticle,
+        worldVelocity: SIMD3<Float>,
+        to result: inout [RenderParticle]
+    ) {
+        guard emitter.trailLength > 0,
+              emitter.trailSegments > 0,
+              particle.size > 0
+        else { return }
+
+        let speed = simd_length(worldVelocity)
+        guard speed > 0.0001 else { return }
+
+        let segmentCount = emitter.trailSegments
+        let step = worldVelocity * (emitter.trailLength / Float(segmentCount))
+        for index in 1...segmentCount {
+            let t = Float(index) / Float(segmentCount)
+            let sizeScale = 1 + (emitter.trailEndSizeScale - 1) * t
+            let alphaScale = 1 + (emitter.trailEndAlphaScale - 1) * t
+            var color = base.color
+            color.w *= alphaScale
+            result.append(
+                RenderParticle(
+                    position: base.position - step * Float(index),
+                    size: max(0, base.size * sizeScale),
+                    rotation: base.rotation,
+                    color: color,
+                    uvRect: base.uvRect,
+                    alignmentAxis: base.alignmentAxis,
+                    stretch: base.stretch,
+                    blendMode: base.blendMode,
+                    texturePath: base.texturePath
+                )
+            )
+        }
+    }
+
+    private func renderAlignment(for emitter: ParticleEmitter,
+                                 worldVelocity: SIMD3<Float>) -> (axis: SIMD3<Float>, stretch: Float) {
+        guard emitter.renderAlignment == .velocity else {
+            return (.zero, 1)
+        }
+        let speed = simd_length(worldVelocity)
+        guard speed > 0.0001 else {
+            return (.zero, 1)
+        }
+        let stretch = min(emitter.velocityStretchMax,
+                          max(1, 1 + speed * emitter.velocityStretchScale))
+        return (worldVelocity / speed, stretch)
+    }
+
+    private static func transformDirection(_ direction: SIMD3<Float>, by matrix: simd_float4x4) -> SIMD3<Float> {
+        let transformed = matrix * SIMD4<Float>(direction, 0)
+        return SIMD3<Float>(transformed.x, transformed.y, transformed.z)
+    }
+
+    private static func transformPoint(_ point: SIMD3<Float>, by matrix: simd_float4x4) -> SIMD3<Float> {
+        let transformed = matrix * SIMD4<Float>(point, 1)
+        if abs(transformed.w) > 0.0001 {
+            return SIMD3<Float>(
+                transformed.x / transformed.w,
+                transformed.y / transformed.w,
+                transformed.z / transformed.w
+            )
+        }
+        return SIMD3<Float>(transformed.x, transformed.y, transformed.z)
     }
 
     private func selectRenderCamera(

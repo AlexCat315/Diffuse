@@ -9,6 +9,7 @@ struct ParticleUniforms {
     view_proj : mat4x4<f32>,
     camera_right : vec4<f32>,
     camera_up : vec4<f32>,
+    camera_forward : vec4<f32>,
 };
 
 struct ParticleInstance {
@@ -16,6 +17,7 @@ struct ParticleInstance {
     rotation : vec4<f32>,       // x = billboard rotation in radians
     color : vec4<f32>,
     uv_rect : vec4<f32>,        // x/y = origin, z/w = extent
+    axis_stretch : vec4<f32>,   // xyz = optional world axis, w = stretch
 };
 
 @group(0) @binding(0) var<uniform> u : ParticleUniforms;
@@ -44,14 +46,29 @@ fn vs_main(@builtin(vertex_index) vertex_index : u32,
 
     let particle = particles[instance_index];
     let corner = corners[vertex_index];
-    let s = sin(particle.rotation.x);
-    let c = cos(particle.rotation.x);
-    let rotated_corner = vec2<f32>(
-        corner.x * c - corner.y * s,
-        corner.x * s + corner.y * c
-    );
-    let offset = (u.camera_right.xyz * rotated_corner.x + u.camera_up.xyz * rotated_corner.y)
-        * particle.position_size.w;
+    let axis_len = length(particle.axis_stretch.xyz);
+    var offset : vec3<f32>;
+    if axis_len > 0.0001 {
+        let axis = particle.axis_stretch.xyz / axis_len;
+        let projected = axis - u.camera_forward.xyz * dot(axis, u.camera_forward.xyz);
+        let projected_len = length(projected);
+        var along = u.camera_up.xyz;
+        if projected_len > 0.0001 {
+            along = projected / projected_len;
+        }
+        let side = normalize(cross(along, u.camera_forward.xyz));
+        offset = (side * corner.x + along * corner.y * particle.axis_stretch.w)
+            * particle.position_size.w;
+    } else {
+        let s = sin(particle.rotation.x);
+        let c = cos(particle.rotation.x);
+        let rotated_corner = vec2<f32>(
+            corner.x * c - corner.y * s,
+            corner.x * s + corner.y * c
+        );
+        offset = (u.camera_right.xyz * rotated_corner.x + u.camera_up.xyz * rotated_corner.y)
+            * particle.position_size.w;
+    }
     let world_position = particle.position_size.xyz + offset;
 
     var out : VsOut;
