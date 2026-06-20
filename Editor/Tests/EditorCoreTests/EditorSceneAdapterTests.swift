@@ -134,17 +134,71 @@ struct EditorSceneAdapterTests {
             Issue.record("Expected preview scene hero")
             return
         }
+        let subEmitters = [
+            ParticleSubEmitter(trigger: .death,
+                               burstCount: 2,
+                               probability: 0.5,
+                               maxDepth: 1,
+                               inheritVelocity: 0.25,
+                               lifetime: 0.45,
+                               startVelocity: SIMD3<Float>(2, 0, 0),
+                               velocityRandomness: SIMD3<Float>(0.1, 0, 0),
+                               startSize: 0.3,
+                               endSize: 0.12,
+                               startColor: SIMD4<Float>(1, 0, 0, 1),
+                               endColor: SIMD4<Float>(1, 0, 0, 0)),
+            ParticleSubEmitter(trigger: .collision,
+                               burstCount: 1,
+                               probability: 1,
+                               maxDepth: 2,
+                               inheritVelocity: 0.4,
+                               lifetime: 0.8,
+                               startVelocity: SIMD3<Float>(0, 2, 0),
+                               velocityRandomness: SIMD3<Float>(0, 0.2, 0),
+                               startSize: 0.5,
+                               endSize: 0.2,
+                               startColor: SIMD4<Float>(0, 0, 1, 1),
+                               endColor: SIMD4<Float>(0, 0, 1, 0)),
+        ]
         _ = source.scene.setComponent(
             ParticleEmitter(looping: false, duration: 3.25,
-                            emissionRate: 24, distanceEmissionRate: 9,
+                            prewarmTime: 0.75,
+                            prewarmStep: 0.04,
+                            emissionRate: 24,
+                            emissionRateCurve: .constant(1.25),
+                            distanceEmissionRate: 9,
+                            distanceEmissionRateCurve: .keyframes([
+                                ParticleCurveKeyframe(time: 0, value: 0),
+                                ParticleCurveKeyframe(time: 1, value: 2),
+                            ]),
                             burstCount: 5, burstInterval: 0.4,
                             maxParticles: 64, lifetime: 1.25,
+                            subEmitterTrigger: .death,
+                            subEmitterBurstCount: 4,
+                            subEmitterProbability: 0.8,
+                            subEmitterMaxDepth: 2,
+                            subEmitterInheritVelocity: 0.45,
+                            subEmitterLifetime: 0.6,
+                            subEmitterStartVelocity: SIMD3<Float>(1, 2, 3),
+                            subEmitterVelocityRandomness: SIMD3<Float>(0.2, 0.3, 0.4),
+                            subEmitterStartSize: 0.22,
+                            subEmitterEndSize: 0.06,
+                            subEmitterStartColor: SIMD4<Float>(1, 0.5, 0.25, 1),
+                            subEmitterEndColor: SIMD4<Float>(1, 0.1, 0, 0),
+                            subEmitters: subEmitters,
                             spawnRadius: 0.3, emissionShape: .box,
                             boxHalfExtents: SIMD3<Float>(1, 2, 3),
                             coneRadius: 0.8, coneHeight: 3.5,
                             startVelocity: SIMD3<Float>(0, 2, 0),
+                            velocityInheritance: 0.35,
                             gravity: SIMD3<Float>(0, -3, 0),
                             noiseStrength: 1.5, noiseScale: 2.25, noiseSpeed: 0.5,
+                            forceMode: .radial,
+                            forceCenter: SIMD3<Float>(1, 2, 3),
+                            forceAxis: SIMD3<Float>(0, 1, 0),
+                            forceRadius: 8,
+                            forceStrength: -2.5,
+                            forceFalloff: 1.5,
                             collisionMode: .worldPlane, simulationSpace: .world,
                             collisionPlaneY: -0.5,
                             collisionRestitution: 0.6, collisionDamping: 0.15,
@@ -163,20 +217,51 @@ struct EditorSceneAdapterTests {
                                 ParticleCurveKeyframe(time: 1, value: 0),
                             ]),
                             blendMode: .additive,
+                            renderAlignment: .velocity,
+                            velocityStretchScale: 0.3,
+                            velocityStretchMax: 7,
+                            maxRenderDistance: 96,
+                            renderDistanceFadeRange: 16,
                             textureAssetID: "Assets/Textures/smoke.png",
                             texturePath: "/tmp/particle-smoke.png",
                             textureSheetColumns: 3,
                             textureSheetRows: 2,
                             textureSheetFrameCount: 6,
                             textureSheetFrameRate: 15,
+                            trailLength: 0.8,
+                            trailSegments: 6,
+                            trailEndSizeScale: 0.3,
+                            trailEndAlphaScale: 0.15,
                             seed: 777),
             for: entityID(hero.id)
         )
 
         let manifest = source.manifest(selectedEntityID: hero.id)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.prewarmTime == 0.75)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.prewarmStep == 0.04)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.emissionRate == 24)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.emissionRateCurve == .constant(1.25))
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.distanceEmissionRate == 9)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.distanceEmissionRateCurve == .keyframes([
+            ParticleCurveKeyframe(time: 0, value: 0),
+            ParticleCurveKeyframe(time: 1, value: 2),
+        ]))
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.subEmitterTrigger == .death)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.subEmitterBurstCount == 4)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.subEmitterProbability == 0.8)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.subEmitterMaxDepth == 2)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.subEmitterLifetime == 0.6)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.subEmitters.map(\.component) == subEmitters)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.forceMode == .radial)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.forceCenter.simdValue == SIMD3<Float>(1, 2, 3))
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.forceAxis.simdValue == SIMD3<Float>(0, 1, 0))
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.forceRadius == 8)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.forceStrength == -2.5)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.forceFalloff == 1.5)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.maxRenderDistance == 96)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.renderDistanceFadeRange == 16)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.textureSheetFrameCount == 6)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.trailSegments == 6)
 
         // Survive a full Codable cycle (mirrors how saves persist the manifest).
         let data = try JSONEncoder().encode(manifest)
@@ -191,22 +276,49 @@ struct EditorSceneAdapterTests {
         let e = restored.scene.component(ParticleEmitter.self, for: restoredID)
         #expect(e != nil)
         #expect(e!.emissionRate == 24)
+        #expect(e!.emissionRateCurve == .constant(1.25))
         #expect(e!.distanceEmissionRate == 9)
+        #expect(e!.distanceEmissionRateCurve == .keyframes([
+            ParticleCurveKeyframe(time: 0, value: 0),
+            ParticleCurveKeyframe(time: 1, value: 2),
+        ]))
         #expect(e!.looping == false)
         #expect(e!.duration == 3.25)
+        #expect(e!.prewarmTime == 0.75)
+        #expect(e!.prewarmStep == 0.04)
         #expect(e!.burstCount == 5)
         #expect(e!.burstInterval == 0.4)
         #expect(e!.maxParticles == 64)
         #expect(e!.lifetime == 1.25)
+        #expect(e!.subEmitterTrigger == .death)
+        #expect(e!.subEmitterBurstCount == 4)
+        #expect(e!.subEmitterProbability == 0.8)
+        #expect(e!.subEmitterMaxDepth == 2)
+        #expect(e!.subEmitterInheritVelocity == 0.45)
+        #expect(e!.subEmitterLifetime == 0.6)
+        #expect(e!.subEmitterStartVelocity == SIMD3<Float>(1, 2, 3))
+        #expect(e!.subEmitterVelocityRandomness == SIMD3<Float>(0.2, 0.3, 0.4))
+        #expect(e!.subEmitterStartSize == 0.22)
+        #expect(e!.subEmitterEndSize == 0.06)
+        #expect(e!.subEmitterStartColor == SIMD4<Float>(1, 0.5, 0.25, 1))
+        #expect(e!.subEmitterEndColor == SIMD4<Float>(1, 0.1, 0, 0))
+        #expect(e!.subEmitters == subEmitters)
         #expect(e!.spawnRadius == 0.3)
         #expect(e!.emissionShape == .box)
         #expect(e!.boxHalfExtents == SIMD3<Float>(1, 2, 3))
         #expect(e!.coneRadius == 0.8)
         #expect(e!.coneHeight == 3.5)
         #expect(e!.startVelocity == SIMD3<Float>(0, 2, 0))
+        #expect(e!.velocityInheritance == 0.35)
         #expect(e!.noiseStrength == 1.5)
         #expect(e!.noiseScale == 2.25)
         #expect(e!.noiseSpeed == 0.5)
+        #expect(e!.forceMode == .radial)
+        #expect(e!.forceCenter == SIMD3<Float>(1, 2, 3))
+        #expect(e!.forceAxis == SIMD3<Float>(0, 1, 0))
+        #expect(e!.forceRadius == 8)
+        #expect(e!.forceStrength == -2.5)
+        #expect(e!.forceFalloff == 1.5)
         #expect(e!.collisionMode == .worldPlane)
         #expect(e!.simulationSpace == .world)
         #expect(e!.collisionPlaneY == -0.5)
@@ -226,12 +338,21 @@ struct EditorSceneAdapterTests {
             ParticleCurveKeyframe(time: 1, value: 0),
         ]))
         #expect(e!.blendMode == .additive)
+        #expect(e!.renderAlignment == .velocity)
+        #expect(e!.velocityStretchScale == 0.3)
+        #expect(e!.velocityStretchMax == 7)
+        #expect(e!.maxRenderDistance == 96)
+        #expect(e!.renderDistanceFadeRange == 16)
         #expect(e!.textureAssetID == "Assets/Textures/smoke.png")
         #expect(e!.texturePath == "/tmp/particle-smoke.png")
         #expect(e!.textureSheetColumns == 3)
         #expect(e!.textureSheetRows == 2)
         #expect(e!.textureSheetFrameCount == 6)
         #expect(e!.textureSheetFrameRate == 15)
+        #expect(e!.trailLength == 0.8)
+        #expect(e!.trailSegments == 6)
+        #expect(e!.trailEndSizeScale == 0.3)
+        #expect(e!.trailEndAlphaScale == 0.15)
         #expect(e!.seed == 777)
     }
 

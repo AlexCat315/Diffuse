@@ -1458,18 +1458,72 @@ public struct TransactionExecutor {
 
             case let .setParticleEmitter(entityID, emitter):
                 let ref = "scene:\(entityID)"
+                events.append(.entityAuthoredChanged(ref: ref, property: "particlePrewarmTime",
+                    value: .float(emitter.prewarmTime)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particlePrewarmStep",
+                    value: .float(emitter.prewarmStep)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleEmissionRate",
                     value: .float(emitter.emissionRate)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleEmissionRateCurve",
+                    value: .string(Self.particleCurveSummary(emitter.emissionRateCurve))))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleDistanceEmissionRate",
                     value: .float(emitter.distanceEmissionRate)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleDistanceEmissionRateCurve",
+                    value: .string(Self.particleCurveSummary(emitter.distanceEmissionRateCurve))))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleMaxParticles",
                     value: .float(Float(emitter.maxParticles))))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterTrigger",
+                    value: .string(emitter.subEmitterTrigger.rawValue)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterBurstCount",
+                    value: .float(Float(emitter.subEmitterBurstCount))))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterProbability",
+                    value: .float(emitter.subEmitterProbability)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterMaxDepth",
+                    value: .float(Float(emitter.subEmitterMaxDepth))))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterInheritVelocity",
+                    value: .float(emitter.subEmitterInheritVelocity)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterLifetime",
+                    value: .float(emitter.subEmitterLifetime)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterStartVelocity",
+                    value: .vec3(emitter.subEmitterStartVelocity.x,
+                                 emitter.subEmitterStartVelocity.y,
+                                 emitter.subEmitterStartVelocity.z)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterVelocityRandomness",
+                    value: .vec3(emitter.subEmitterVelocityRandomness.x,
+                                 emitter.subEmitterVelocityRandomness.y,
+                                 emitter.subEmitterVelocityRandomness.z)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterStartSize",
+                    value: .float(emitter.subEmitterStartSize)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleSubEmitterEndSize",
+                    value: .float(emitter.subEmitterEndSize)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleEmitting",
                     value: .bool(emitter.isEmitting)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleSimulationSpace",
                     value: .string(emitter.simulationSpace.rawValue)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleVelocityInheritance",
+                    value: .float(emitter.velocityInheritance)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleForceMode",
+                    value: .string(emitter.forceMode.rawValue)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleForceCenter",
+                    value: .vec3(emitter.forceCenter.x, emitter.forceCenter.y, emitter.forceCenter.z)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleForceAxis",
+                    value: .vec3(emitter.forceAxis.x, emitter.forceAxis.y, emitter.forceAxis.z)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleForceRadius",
+                    value: .float(emitter.forceRadius)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleForceStrength",
+                    value: .float(emitter.forceStrength)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleForceFalloff",
+                    value: .float(emitter.forceFalloff)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleRenderAlignment",
+                    value: .string(emitter.renderAlignment.rawValue)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleVelocityStretchScale",
+                    value: .float(emitter.velocityStretchScale)))
                 events.append(.entityAuthoredChanged(ref: ref, property: "particleTextureSheetFrameCount",
                     value: .float(Float(emitter.textureSheetFrameCount))))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleTrailLength",
+                    value: .float(emitter.trailLength)))
+                events.append(.entityAuthoredChanged(ref: ref, property: "particleTrailSegments",
+                    value: .float(Float(emitter.trailSegments))))
 
             case let .setConstraintEnabled(entityID, value):
                 events.append(.entityAuthoredChanged(
@@ -1555,6 +1609,17 @@ public struct TransactionExecutor {
                                                   value: .vec3(s.x, s.y, s.z)))
         }
         return result
+    }
+
+    private static func particleCurveSummary(_ curve: ParticleCurve) -> String {
+        switch curve {
+        case .constant(let value):
+            return "constant:\(value)"
+        case .keyframes(let keyframes):
+            return "keyframes:\(keyframes.count)"
+        default:
+            return curve.rawValue
+        }
     }
 
     private func extractEulerXYZDegrees(_ m: simd_float4x4) -> SIMD3<Float> {
