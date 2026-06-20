@@ -110,14 +110,46 @@ struct IntentRuntimeTests {
         let entity = scene.createEntity()
         _ = scene.setComponent(ParticleEmitter(emissionRate: 10), for: entity)
 
-        let emitter = ParticleEmitter(duration: 2.5, emissionRate: 55,
+        let emitter = ParticleEmitter(duration: 2.5,
+                                      prewarmTime: 1.5,
+                                      prewarmStep: 0.05,
+                                      emissionRate: 55,
+                                      emissionRateCurve: .constant(1.25),
                                       distanceEmissionRate: 7,
+                                      distanceEmissionRateCurve: .keyframes([
+                                        ParticleCurveKeyframe(time: 0, value: 0),
+                                        ParticleCurveKeyframe(time: 1, value: 2),
+                                      ]),
                                       maxParticles: 200, lifetime: 3,
+                                      subEmitterTrigger: .death,
+                                      subEmitterBurstCount: 5,
+                                      subEmitterProbability: 0.7,
+                                      subEmitterMaxDepth: 2,
+                                      subEmitterInheritVelocity: 0.35,
+                                      subEmitterLifetime: 0.4,
+                                      subEmitterStartVelocity: SIMD3<Float>(1, 2, 3),
+                                      subEmitterVelocityRandomness: SIMD3<Float>(0.1, 0.2, 0.3),
+                                      subEmitterStartSize: 0.25,
+                                      subEmitterEndSize: 0.05,
+                                      velocityInheritance: 0.45,
+                                      forceMode: .radial,
+                                      forceCenter: SIMD3<Float>(1, 2, 3),
+                                      forceAxis: SIMD3<Float>(0, 1, 0),
+                                      forceRadius: 9,
+                                      forceStrength: -4,
+                                      forceFalloff: 2,
                                       simulationSpace: .world,
+                                      renderAlignment: .velocity,
+                                      velocityStretchScale: 0.2,
+                                      velocityStretchMax: 5,
                                       textureSheetColumns: 4,
                                       textureSheetRows: 2,
                                       textureSheetFrameCount: 8,
                                       textureSheetFrameRate: 16,
+                                      trailLength: 0.5,
+                                      trailSegments: 3,
+                                      trailEndSizeScale: 0.25,
+                                      trailEndAlphaScale: 0.1,
                                       seed: 99)
         let transaction = TransactionIR(
             intent: IntentIR(verb: "scene.set_particle_emitter", summary: "Update emitter", source: .human),
@@ -132,14 +164,45 @@ struct IntentRuntimeTests {
 
         #expect(applied.changedDomains == [.scene])
         #expect(updated.duration == 2.5)
+        #expect(updated.prewarmTime == 1.5)
+        #expect(updated.prewarmStep == 0.05)
         #expect(updated.emissionRate == 55)
+        #expect(updated.emissionRateCurve == .constant(1.25))
         #expect(updated.distanceEmissionRate == 7)
+        #expect(updated.distanceEmissionRateCurve == .keyframes([
+            ParticleCurveKeyframe(time: 0, value: 0),
+            ParticleCurveKeyframe(time: 1, value: 2),
+        ]))
         #expect(updated.maxParticles == 200)
+        #expect(updated.subEmitterTrigger == .death)
+        #expect(updated.subEmitterBurstCount == 5)
+        #expect(updated.subEmitterProbability == 0.7)
+        #expect(updated.subEmitterMaxDepth == 2)
+        #expect(updated.subEmitterInheritVelocity == 0.35)
+        #expect(updated.subEmitterLifetime == 0.4)
+        #expect(updated.subEmitterStartVelocity == SIMD3<Float>(1, 2, 3))
+        #expect(updated.subEmitterVelocityRandomness == SIMD3<Float>(0.1, 0.2, 0.3))
+        #expect(updated.subEmitterStartSize == 0.25)
+        #expect(updated.subEmitterEndSize == 0.05)
         #expect(updated.simulationSpace == .world)
+        #expect(updated.velocityInheritance == 0.45)
+        #expect(updated.forceMode == .radial)
+        #expect(updated.forceCenter == SIMD3<Float>(1, 2, 3))
+        #expect(updated.forceAxis == SIMD3<Float>(0, 1, 0))
+        #expect(updated.forceRadius == 9)
+        #expect(updated.forceStrength == -4)
+        #expect(updated.forceFalloff == 2)
+        #expect(updated.renderAlignment == .velocity)
+        #expect(updated.velocityStretchScale == 0.2)
+        #expect(updated.velocityStretchMax == 5)
         #expect(updated.textureSheetColumns == 4)
         #expect(updated.textureSheetRows == 2)
         #expect(updated.textureSheetFrameCount == 8)
         #expect(updated.textureSheetFrameRate == 16)
+        #expect(updated.trailLength == 0.5)
+        #expect(updated.trailSegments == 3)
+        #expect(updated.trailEndSizeScale == 0.25)
+        #expect(updated.trailEndAlphaScale == 0.1)
         #expect(updated.seed == 99)
     }
 

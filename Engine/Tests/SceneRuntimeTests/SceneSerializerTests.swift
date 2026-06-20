@@ -430,17 +430,71 @@ struct SceneSerializerTests {
     func particleEmitterRoundTrip() throws {
         var original = SceneRuntime()
         let entity = original.createEntity()
+        let subEmitters = [
+            ParticleSubEmitter(trigger: .death,
+                               burstCount: 2,
+                               probability: 0.5,
+                               maxDepth: 1,
+                               inheritVelocity: 0.2,
+                               lifetime: 0.4,
+                               startVelocity: SIMD3<Float>(2, 0, 0),
+                               velocityRandomness: SIMD3<Float>(0.1, 0, 0),
+                               startSize: 0.3,
+                               endSize: 0.1,
+                               startColor: SIMD4<Float>(1, 0, 0, 1),
+                               endColor: SIMD4<Float>(1, 0, 0, 0)),
+            ParticleSubEmitter(trigger: .collision,
+                               burstCount: 1,
+                               probability: 1,
+                               maxDepth: 2,
+                               inheritVelocity: 0.4,
+                               lifetime: 0.8,
+                               startVelocity: SIMD3<Float>(0, 2, 0),
+                               velocityRandomness: SIMD3<Float>(0, 0.2, 0),
+                               startSize: 0.5,
+                               endSize: 0.2,
+                               startColor: SIMD4<Float>(0, 0, 1, 1),
+                               endColor: SIMD4<Float>(0, 0, 1, 0)),
+        ]
         _ = original.setComponent(
             ParticleEmitter(looping: false, duration: 4.5,
-                            emissionRate: 33, distanceEmissionRate: 12,
+                            prewarmTime: 1.25,
+                            prewarmStep: 0.05,
+                            emissionRate: 33,
+                            emissionRateCurve: .constant(1.5),
+                            distanceEmissionRate: 12,
+                            distanceEmissionRateCurve: .keyframes([
+                                ParticleCurveKeyframe(time: 0, value: 0),
+                                ParticleCurveKeyframe(time: 1, value: 2),
+                            ]),
                             burstCount: 7, burstInterval: 0.25,
                             maxParticles: 128, lifetime: 1.5,
+                            subEmitterTrigger: .collision,
+                            subEmitterBurstCount: 3,
+                            subEmitterProbability: 0.75,
+                            subEmitterMaxDepth: 2,
+                            subEmitterInheritVelocity: 0.5,
+                            subEmitterLifetime: 0.35,
+                            subEmitterStartVelocity: SIMD3<Float>(1, 2, 3),
+                            subEmitterVelocityRandomness: SIMD3<Float>(0.1, 0.2, 0.3),
+                            subEmitterStartSize: 0.2,
+                            subEmitterEndSize: 0.05,
+                            subEmitterStartColor: SIMD4<Float>(1, 0.5, 0.25, 1),
+                            subEmitterEndColor: SIMD4<Float>(1, 0.25, 0, 0),
+                            subEmitters: subEmitters,
                             spawnRadius: 0.25, emissionShape: .cone,
                             boxHalfExtents: SIMD3<Float>(1, 2, 3),
                             coneRadius: 0.75, coneHeight: 2.5,
                             startVelocity: SIMD3<Float>(0, 3, 0),
+                            velocityInheritance: 0.4,
                             gravity: SIMD3<Float>(0, -2, 0),
                             noiseStrength: 1.25, noiseScale: 3.5, noiseSpeed: 0.75,
+                            forceMode: .vortex,
+                            forceCenter: SIMD3<Float>(1, 2, 3),
+                            forceAxis: SIMD3<Float>(0, 1, 0),
+                            forceRadius: 12,
+                            forceStrength: 4.5,
+                            forceFalloff: 2,
                             collisionMode: .worldPlane, simulationSpace: .world,
                             collisionPlaneY: -1,
                             collisionRestitution: 0.7, collisionDamping: 0.2,
@@ -460,12 +514,21 @@ struct SceneSerializerTests {
                                 ParticleCurveKeyframe(time: 1, value: 0),
                             ]),
                             blendMode: .additive,
+                            renderAlignment: .velocity,
+                            velocityStretchScale: 0.25,
+                            velocityStretchMax: 6,
+                            maxRenderDistance: 80,
+                            renderDistanceFadeRange: 12,
                             textureAssetID: "Assets/Textures/smoke.png",
                             texturePath: "/tmp/particle-smoke.png",
                             textureSheetColumns: 4,
                             textureSheetRows: 2,
                             textureSheetFrameCount: 7,
                             textureSheetFrameRate: 12,
+                            trailLength: 0.75,
+                            trailSegments: 5,
+                            trailEndSizeScale: 0.25,
+                            trailEndAlphaScale: 0.1,
                             seed: 12345),
             for: entity
         )
@@ -477,22 +540,49 @@ struct SceneSerializerTests {
         let e = restored.component(ParticleEmitter.self, for: restored.entities()[0])
         #expect(e != nil)
         #expect(e!.emissionRate == 33)
+        #expect(e!.emissionRateCurve == .constant(1.5))
         #expect(e!.distanceEmissionRate == 12)
+        #expect(e!.distanceEmissionRateCurve == .keyframes([
+            ParticleCurveKeyframe(time: 0, value: 0),
+            ParticleCurveKeyframe(time: 1, value: 2),
+        ]))
         #expect(e!.looping == false)
         #expect(e!.duration == 4.5)
+        #expect(e!.prewarmTime == 1.25)
+        #expect(e!.prewarmStep == 0.05)
         #expect(e!.burstCount == 7)
         #expect(e!.burstInterval == 0.25)
         #expect(e!.maxParticles == 128)
         #expect(e!.lifetime == 1.5)
+        #expect(e!.subEmitterTrigger == .collision)
+        #expect(e!.subEmitterBurstCount == 3)
+        #expect(e!.subEmitterProbability == 0.75)
+        #expect(e!.subEmitterMaxDepth == 2)
+        #expect(e!.subEmitterInheritVelocity == 0.5)
+        #expect(e!.subEmitterLifetime == 0.35)
+        #expect(e!.subEmitterStartVelocity == SIMD3<Float>(1, 2, 3))
+        #expect(e!.subEmitterVelocityRandomness == SIMD3<Float>(0.1, 0.2, 0.3))
+        #expect(e!.subEmitterStartSize == 0.2)
+        #expect(e!.subEmitterEndSize == 0.05)
+        #expect(e!.subEmitterStartColor == SIMD4<Float>(1, 0.5, 0.25, 1))
+        #expect(e!.subEmitterEndColor == SIMD4<Float>(1, 0.25, 0, 0))
+        #expect(e!.subEmitters == subEmitters)
         #expect(e!.spawnRadius == 0.25)
         #expect(e!.emissionShape == .cone)
         #expect(e!.boxHalfExtents == SIMD3<Float>(1, 2, 3))
         #expect(e!.coneRadius == 0.75)
         #expect(e!.coneHeight == 2.5)
         #expect(e!.startVelocity == SIMD3<Float>(0, 3, 0))
+        #expect(e!.velocityInheritance == 0.4)
         #expect(e!.noiseStrength == 1.25)
         #expect(e!.noiseScale == 3.5)
         #expect(e!.noiseSpeed == 0.75)
+        #expect(e!.forceMode == .vortex)
+        #expect(e!.forceCenter == SIMD3<Float>(1, 2, 3))
+        #expect(e!.forceAxis == SIMD3<Float>(0, 1, 0))
+        #expect(e!.forceRadius == 12)
+        #expect(e!.forceStrength == 4.5)
+        #expect(e!.forceFalloff == 2)
         #expect(e!.collisionMode == .worldPlane)
         #expect(e!.simulationSpace == .world)
         #expect(e!.collisionPlaneY == -1)
@@ -513,12 +603,21 @@ struct SceneSerializerTests {
             ParticleCurveKeyframe(time: 1, value: 0),
         ]))
         #expect(e!.blendMode == .additive)
+        #expect(e!.renderAlignment == .velocity)
+        #expect(e!.velocityStretchScale == 0.25)
+        #expect(e!.velocityStretchMax == 6)
+        #expect(e!.maxRenderDistance == 80)
+        #expect(e!.renderDistanceFadeRange == 12)
         #expect(e!.textureAssetID == "Assets/Textures/smoke.png")
         #expect(e!.texturePath == "/tmp/particle-smoke.png")
         #expect(e!.textureSheetColumns == 4)
         #expect(e!.textureSheetRows == 2)
         #expect(e!.textureSheetFrameCount == 7)
         #expect(e!.textureSheetFrameRate == 12)
+        #expect(e!.trailLength == 0.75)
+        #expect(e!.trailSegments == 5)
+        #expect(e!.trailEndSizeScale == 0.25)
+        #expect(e!.trailEndAlphaScale == 0.1)
         #expect(e!.seed == 12345)
         // Deterministic config restored: same seed + same advance ⇒ same particles.
         var a = e!; var b = original.component(ParticleEmitter.self, for: original.entities()[0])!

@@ -223,6 +223,167 @@ struct RenderExtractionTests {
         #expect(extracted.scene.particles[0].blendMode == .additive)
         #expect(extracted.scene.particles[1].blendMode == .alpha)
         #expect(extracted.scene.particles[0].uvRect == SIMD4<Float>(0, 0.5, 0.5, 0.5))
+
+        let summary = extracted.scene.particleSummary
+        #expect(summary.particleCount == 2)
+        #expect(summary.alphaCount == 1)
+        #expect(summary.additiveCount == 1)
+        #expect(summary.texturedCount == 0)
+        #expect(summary.batchCount == 2)
+        #expect(summary.bounds.isEmpty == false)
+        let radius: Float = 0.5 * 0.70710678
+        #expect(isClose(summary.bounds.minimum.x, -radius))
+        #expect(isClose(summary.bounds.maximum.x, radius))
+        #expect(isClose(summary.bounds.minimum.z, -20 - radius))
+        #expect(isClose(summary.bounds.maximum.z, -5 + radius))
+    }
+
+    @Test("renderExtract culls emitters beyond max render distance")
+    func renderExtractCullsDistantParticleEmitters() throws {
+        var runtime = SceneRuntime()
+
+        let camera = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+        _ = runtime.setComponent(CameraComponent(isActive: true), for: camera)
+
+        func makeEmitter(z: Float) {
+            let entity = runtime.createEntity()
+            _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, z)), for: entity)
+            var emitter = ParticleEmitter(isEmitting: false,
+                                          emissionRate: 0,
+                                          maxParticles: 4,
+                                          lifetime: 10,
+                                          spawnRadius: 0,
+                                          startVelocity: .zero,
+                                          gravity: .zero,
+                                          maxRenderDistance: 10)
+            emitter.emit(1)
+            _ = runtime.setComponent(emitter, for: entity)
+        }
+
+        makeEmitter(z: -5)
+        makeEmitter(z: -25)
+
+        _ = runtime.tick()
+        let extracted = try #require(runtime.extractedRenderScene)
+
+        #expect(extracted.scene.particles.count == 1)
+        #expect(isClose(extracted.scene.particles[0].position.z, -5))
+        #expect(extracted.scene.particleSummary.particleCount == 1)
+        #expect(extracted.scene.particleSummary.bounds.isEmpty == false)
+    }
+
+    @Test("renderExtract fades emitters near max render distance")
+    func renderExtractFadesParticleEmittersNearMaxRenderDistance() throws {
+        var runtime = SceneRuntime()
+
+        let camera = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+        _ = runtime.setComponent(CameraComponent(isActive: true), for: camera)
+
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -15)), for: entity)
+        var emitter = ParticleEmitter(isEmitting: false,
+                                      emissionRate: 0,
+                                      maxParticles: 4,
+                                      lifetime: 10,
+                                      spawnRadius: 0,
+                                      startVelocity: .zero,
+                                      gravity: .zero,
+                                      startColor: SIMD4<Float>(1, 1, 1, 0.8),
+                                      endColor: SIMD4<Float>(1, 1, 1, 0.8),
+                                      maxRenderDistance: 20,
+                                      renderDistanceFadeRange: 10)
+        emitter.emit(1)
+        _ = runtime.setComponent(emitter, for: entity)
+
+        _ = runtime.tick()
+        let extracted = try #require(runtime.extractedRenderScene)
+
+        #expect(extracted.scene.particles.count == 1)
+        #expect(isClose(extracted.scene.particles[0].position.z, -15))
+        #expect(isClose(extracted.scene.particles[0].color.w, 0.4))
+    }
+
+    @Test("renderExtract expands velocity trails into faded particle segments")
+    func renderExtractCollectsParticleTrails() throws {
+        var runtime = SceneRuntime()
+
+        let camera = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+        _ = runtime.setComponent(CameraComponent(isActive: true), for: camera)
+
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -10)), for: entity)
+        var emitter = ParticleEmitter(
+            isEmitting: false,
+            emissionRate: 0,
+            maxParticles: 4,
+            lifetime: 10,
+            spawnRadius: 0,
+            startVelocity: SIMD3<Float>(1, 0, 0),
+            gravity: .zero,
+            startSize: 2,
+            endSize: 2,
+            startColor: SIMD4<Float>(1, 1, 1, 1),
+            endColor: SIMD4<Float>(1, 1, 1, 1),
+            trailLength: 1,
+            trailSegments: 2,
+            trailEndSizeScale: 0.5,
+            trailEndAlphaScale: 0
+        )
+        emitter.emit(1)
+        _ = runtime.setComponent(emitter, for: entity)
+
+        _ = runtime.tick()
+        guard let extracted = runtime.extractedRenderScene else {
+            Issue.record("expected extracted render scene resource")
+            return
+        }
+
+        #expect(extracted.scene.particles.count == 3)
+        let sortedX = extracted.scene.particles.map(\.position.x).sorted()
+        #expect(sortedX == [-1, -0.5, 0])
+        let main = try #require(extracted.scene.particles.first { isClose($0.position.x, 0) })
+        let mid = try #require(extracted.scene.particles.first { isClose($0.position.x, -0.5) })
+        let tail = try #require(extracted.scene.particles.first { isClose($0.position.x, -1) })
+        #expect(main.size == 2)
+        #expect(mid.size == 1.5)
+        #expect(tail.size == 1)
+        #expect(mid.color.w == 0.5)
+        #expect(tail.color.w == 0)
+    }
+
+    @Test("renderExtract annotates velocity-aligned particle stretch")
+    func renderExtractCollectsVelocityAlignment() throws {
+        var runtime = SceneRuntime()
+
+        let camera = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+        _ = runtime.setComponent(CameraComponent(isActive: true), for: camera)
+
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -5)), for: entity)
+        var emitter = ParticleEmitter(
+            isEmitting: false,
+            emissionRate: 0,
+            maxParticles: 4,
+            lifetime: 10,
+            startVelocity: SIMD3<Float>(2, 0, 0),
+            gravity: .zero,
+            renderAlignment: .velocity,
+            velocityStretchScale: 0.5,
+            velocityStretchMax: 1.5
+        )
+        emitter.emit(1)
+        _ = runtime.setComponent(emitter, for: entity)
+
+        _ = runtime.tick()
+        let extracted = try #require(runtime.extractedRenderScene)
+        let particle = try #require(extracted.scene.particles.first)
+
+        #expect(particle.alignmentAxis == SIMD3<Float>(1, 0, 0))
+        #expect(particle.stretch == 1.5)
     }
 
     @Test("tick propagates transforms before world-plane particle collision")
