@@ -743,17 +743,79 @@ public struct EditorSceneManifestAnimationGraphPlayer: Codable, Sendable, Equata
     }
 }
 
+public struct EditorSceneManifestParticleSubEmitter: Codable, Sendable, Equatable {
+    public let trigger: ParticleSubEmitterTrigger
+    public let burstCount: Int
+    public let probability: Float
+    public let maxDepth: Int
+    public let inheritVelocity: Float
+    public let lifetime: Float
+    public let startVelocity: EditorSceneManifestVector3
+    public let velocityRandomness: EditorSceneManifestVector3
+    public let startSize: Float
+    public let endSize: Float
+    public let startColor: EditorSceneManifestVector4
+    public let endColor: EditorSceneManifestVector4
+
+    public init(_ rule: ParticleSubEmitter) {
+        self.trigger = rule.trigger
+        self.burstCount = rule.burstCount
+        self.probability = rule.probability
+        self.maxDepth = rule.maxDepth
+        self.inheritVelocity = rule.inheritVelocity
+        self.lifetime = rule.lifetime
+        self.startVelocity = EditorSceneManifestVector3(rule.startVelocity)
+        self.velocityRandomness = EditorSceneManifestVector3(rule.velocityRandomness)
+        self.startSize = rule.startSize
+        self.endSize = rule.endSize
+        self.startColor = EditorSceneManifestVector4(rule.startColor)
+        self.endColor = EditorSceneManifestVector4(rule.endColor)
+    }
+
+    var component: ParticleSubEmitter {
+        ParticleSubEmitter(trigger: trigger,
+                           burstCount: burstCount,
+                           probability: probability,
+                           maxDepth: maxDepth,
+                           inheritVelocity: inheritVelocity,
+                           lifetime: lifetime,
+                           startVelocity: startVelocity.simdValue,
+                           velocityRandomness: velocityRandomness.simdValue,
+                           startSize: startSize,
+                           endSize: endSize,
+                           startColor: startColor.simdValue,
+                           endColor: endColor.simdValue)
+    }
+}
+
 public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let isEmitting: Bool
     public let looping: Bool
     public let duration: Float
+    public let prewarmTime: Float
+    public let prewarmStep: Float
     public let emissionRate: Float
+    public let emissionRateCurve: ParticleCurve
     public let distanceEmissionRate: Float
+    public let distanceEmissionRateCurve: ParticleCurve
     public let burstCount: Int
     public let burstInterval: Float
     public let maxParticles: Int
     public let lifetime: Float
     public let lifetimeRandomness: Float
+    public let subEmitterTrigger: ParticleSubEmitterTrigger
+    public let subEmitterBurstCount: Int
+    public let subEmitterProbability: Float
+    public let subEmitterMaxDepth: Int
+    public let subEmitterInheritVelocity: Float
+    public let subEmitterLifetime: Float
+    public let subEmitterStartVelocity: EditorSceneManifestVector3
+    public let subEmitterVelocityRandomness: EditorSceneManifestVector3
+    public let subEmitterStartSize: Float
+    public let subEmitterEndSize: Float
+    public let subEmitterStartColor: EditorSceneManifestVector4
+    public let subEmitterEndColor: EditorSceneManifestVector4
+    public let subEmitters: [EditorSceneManifestParticleSubEmitter]
     public let originOffset: EditorSceneManifestVector3
     public let spawnRadius: Float
     public let emissionShape: ParticleEmissionShape
@@ -762,10 +824,17 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let coneHeight: Float
     public let startVelocity: EditorSceneManifestVector3
     public let velocityRandomness: EditorSceneManifestVector3
+    public let velocityInheritance: Float
     public let gravity: EditorSceneManifestVector3
     public let noiseStrength: Float
     public let noiseScale: Float
     public let noiseSpeed: Float
+    public let forceMode: ParticleForceMode
+    public let forceCenter: EditorSceneManifestVector3
+    public let forceAxis: EditorSceneManifestVector3
+    public let forceRadius: Float
+    public let forceStrength: Float
+    public let forceFalloff: Float
     public let collisionMode: ParticleCollisionMode
     public let simulationSpace: ParticleSimulationSpace
     public let collisionPlaneY: Float
@@ -783,25 +852,51 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let endColor: EditorSceneManifestVector4
     public let colorCurve: ParticleCurve
     public let blendMode: ParticleBlendMode
+    public let renderAlignment: ParticleRenderAlignment
+    public let velocityStretchScale: Float
+    public let velocityStretchMax: Float
+    public let maxRenderDistance: Float
+    public let renderDistanceFadeRange: Float
     public let textureAssetID: String?
     public let texturePath: String?
     public let textureSheetColumns: Int
     public let textureSheetRows: Int
     public let textureSheetFrameCount: Int
     public let textureSheetFrameRate: Float
+    public let trailLength: Float
+    public let trailSegments: Int
+    public let trailEndSizeScale: Float
+    public let trailEndAlphaScale: Float
     public let seed: UInt64
 
     public init(_ component: ParticleEmitter) {
         self.isEmitting = component.isEmitting
         self.looping = component.looping
         self.duration = component.duration
+        self.prewarmTime = component.prewarmTime
+        self.prewarmStep = component.prewarmStep
         self.emissionRate = component.emissionRate
+        self.emissionRateCurve = component.emissionRateCurve
         self.distanceEmissionRate = component.distanceEmissionRate
+        self.distanceEmissionRateCurve = component.distanceEmissionRateCurve
         self.burstCount = component.burstCount
         self.burstInterval = component.burstInterval
         self.maxParticles = component.maxParticles
         self.lifetime = component.lifetime
         self.lifetimeRandomness = component.lifetimeRandomness
+        self.subEmitterTrigger = component.subEmitterTrigger
+        self.subEmitterBurstCount = component.subEmitterBurstCount
+        self.subEmitterProbability = component.subEmitterProbability
+        self.subEmitterMaxDepth = component.subEmitterMaxDepth
+        self.subEmitterInheritVelocity = component.subEmitterInheritVelocity
+        self.subEmitterLifetime = component.subEmitterLifetime
+        self.subEmitterStartVelocity = EditorSceneManifestVector3(component.subEmitterStartVelocity)
+        self.subEmitterVelocityRandomness = EditorSceneManifestVector3(component.subEmitterVelocityRandomness)
+        self.subEmitterStartSize = component.subEmitterStartSize
+        self.subEmitterEndSize = component.subEmitterEndSize
+        self.subEmitterStartColor = EditorSceneManifestVector4(component.subEmitterStartColor)
+        self.subEmitterEndColor = EditorSceneManifestVector4(component.subEmitterEndColor)
+        self.subEmitters = component.subEmitters.map(EditorSceneManifestParticleSubEmitter.init)
         self.originOffset = EditorSceneManifestVector3(component.originOffset)
         self.spawnRadius = component.spawnRadius
         self.emissionShape = component.emissionShape
@@ -810,10 +905,17 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.coneHeight = component.coneHeight
         self.startVelocity = EditorSceneManifestVector3(component.startVelocity)
         self.velocityRandomness = EditorSceneManifestVector3(component.velocityRandomness)
+        self.velocityInheritance = component.velocityInheritance
         self.gravity = EditorSceneManifestVector3(component.gravity)
         self.noiseStrength = component.noiseStrength
         self.noiseScale = component.noiseScale
         self.noiseSpeed = component.noiseSpeed
+        self.forceMode = component.forceMode
+        self.forceCenter = EditorSceneManifestVector3(component.forceCenter)
+        self.forceAxis = EditorSceneManifestVector3(component.forceAxis)
+        self.forceRadius = component.forceRadius
+        self.forceStrength = component.forceStrength
+        self.forceFalloff = component.forceFalloff
         self.collisionMode = component.collisionMode
         self.simulationSpace = component.simulationSpace
         self.collisionPlaneY = component.collisionPlaneY
@@ -831,28 +933,63 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.endColor = EditorSceneManifestVector4(component.endColor)
         self.colorCurve = component.colorCurve
         self.blendMode = component.blendMode
+        self.renderAlignment = component.renderAlignment
+        self.velocityStretchScale = component.velocityStretchScale
+        self.velocityStretchMax = component.velocityStretchMax
+        self.maxRenderDistance = component.maxRenderDistance
+        self.renderDistanceFadeRange = component.renderDistanceFadeRange
         self.textureAssetID = component.textureAssetID
         self.texturePath = component.texturePath
         self.textureSheetColumns = component.textureSheetColumns
         self.textureSheetRows = component.textureSheetRows
         self.textureSheetFrameCount = component.textureSheetFrameCount
         self.textureSheetFrameRate = component.textureSheetFrameRate
+        self.trailLength = component.trailLength
+        self.trailSegments = component.trailSegments
+        self.trailEndSizeScale = component.trailEndSizeScale
+        self.trailEndAlphaScale = component.trailEndAlphaScale
         self.seed = component.seed
     }
 
     var component: ParticleEmitter {
         ParticleEmitter(isEmitting: isEmitting, looping: looping, duration: duration,
+                        prewarmTime: prewarmTime,
+                        prewarmStep: prewarmStep,
                         emissionRate: emissionRate,
+                        emissionRateCurve: emissionRateCurve,
                         distanceEmissionRate: distanceEmissionRate,
+                        distanceEmissionRateCurve: distanceEmissionRateCurve,
                         burstCount: burstCount, burstInterval: burstInterval,
                         maxParticles: maxParticles, lifetime: lifetime,
-                        lifetimeRandomness: lifetimeRandomness, originOffset: originOffset.simdValue,
+                        lifetimeRandomness: lifetimeRandomness,
+                        subEmitterTrigger: subEmitterTrigger,
+                        subEmitterBurstCount: subEmitterBurstCount,
+                        subEmitterProbability: subEmitterProbability,
+                        subEmitterMaxDepth: subEmitterMaxDepth,
+                        subEmitterInheritVelocity: subEmitterInheritVelocity,
+                        subEmitterLifetime: subEmitterLifetime,
+                        subEmitterStartVelocity: subEmitterStartVelocity.simdValue,
+                        subEmitterVelocityRandomness: subEmitterVelocityRandomness.simdValue,
+                        subEmitterStartSize: subEmitterStartSize,
+                        subEmitterEndSize: subEmitterEndSize,
+                        subEmitterStartColor: subEmitterStartColor.simdValue,
+                        subEmitterEndColor: subEmitterEndColor.simdValue,
+                        subEmitters: subEmitters.map(\.component),
+                        originOffset: originOffset.simdValue,
                         spawnRadius: spawnRadius, emissionShape: emissionShape,
                         boxHalfExtents: boxHalfExtents.simdValue,
                         coneRadius: coneRadius, coneHeight: coneHeight,
                         startVelocity: startVelocity.simdValue,
-                        velocityRandomness: velocityRandomness.simdValue, gravity: gravity.simdValue,
+                        velocityRandomness: velocityRandomness.simdValue,
+                        velocityInheritance: velocityInheritance,
+                        gravity: gravity.simdValue,
                         noiseStrength: noiseStrength, noiseScale: noiseScale, noiseSpeed: noiseSpeed,
+                        forceMode: forceMode,
+                        forceCenter: forceCenter.simdValue,
+                        forceAxis: forceAxis.simdValue,
+                        forceRadius: forceRadius,
+                        forceStrength: forceStrength,
+                        forceFalloff: forceFalloff,
                         collisionMode: collisionMode, simulationSpace: simulationSpace,
                         collisionPlaneY: collisionPlaneY,
                         collisionRestitution: collisionRestitution, collisionDamping: collisionDamping,
@@ -862,25 +999,45 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
                         sizeCurve: sizeCurve,
                         startColor: startColor.simdValue, endColor: endColor.simdValue,
                         colorCurve: colorCurve, blendMode: blendMode,
+                        renderAlignment: renderAlignment,
+                        velocityStretchScale: velocityStretchScale,
+                        velocityStretchMax: velocityStretchMax,
+                        maxRenderDistance: maxRenderDistance,
+                        renderDistanceFadeRange: renderDistanceFadeRange,
                         textureAssetID: textureAssetID, texturePath: texturePath,
                         textureSheetColumns: textureSheetColumns,
                         textureSheetRows: textureSheetRows,
                         textureSheetFrameCount: textureSheetFrameCount,
                         textureSheetFrameRate: textureSheetFrameRate,
+                        trailLength: trailLength,
+                        trailSegments: trailSegments,
+                        trailEndSizeScale: trailEndSizeScale,
+                        trailEndAlphaScale: trailEndAlphaScale,
                         seed: seed)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case isEmitting, looping, duration, emissionRate, distanceEmissionRate, burstCount, burstInterval
+        case isEmitting, looping, duration, prewarmTime, prewarmStep, emissionRate, emissionRateCurve
+        case distanceEmissionRate, distanceEmissionRateCurve, burstCount, burstInterval
         case maxParticles, lifetime, lifetimeRandomness
+        case subEmitterTrigger, subEmitterBurstCount, subEmitterProbability, subEmitterMaxDepth
+        case subEmitterInheritVelocity, subEmitterLifetime
+        case subEmitterStartVelocity, subEmitterVelocityRandomness
+        case subEmitterStartSize, subEmitterEndSize, subEmitterStartColor, subEmitterEndColor
+        case subEmitters
         case originOffset, spawnRadius, emissionShape, boxHalfExtents, coneRadius, coneHeight
-        case startVelocity, velocityRandomness, gravity
+        case startVelocity, velocityRandomness, velocityInheritance, gravity
         case noiseStrength, noiseScale, noiseSpeed
+        case forceMode, forceCenter, forceAxis, forceRadius, forceStrength, forceFalloff
         case collisionMode, simulationSpace, collisionPlaneY, collisionRestitution, collisionDamping
         case startSize, endSize, sizeRandomness
         case startRotation, rotationRandomness, angularVelocity, angularVelocityRandomness
-        case sizeCurve, startColor, endColor, colorCurve, blendMode, textureAssetID, texturePath
-        case textureSheetColumns, textureSheetRows, textureSheetFrameCount, textureSheetFrameRate, seed
+        case sizeCurve, startColor, endColor, colorCurve, blendMode
+        case renderAlignment, velocityStretchScale, velocityStretchMax
+        case maxRenderDistance, renderDistanceFadeRange
+        case textureAssetID, texturePath
+        case textureSheetColumns, textureSheetRows, textureSheetFrameCount, textureSheetFrameRate
+        case trailLength, trailSegments, trailEndSizeScale, trailEndAlphaScale, seed
     }
 
     public init(from decoder: Decoder) throws {
@@ -888,13 +1045,41 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.isEmitting = try c.decodeIfPresent(Bool.self, forKey: .isEmitting) ?? true
         self.looping = try c.decodeIfPresent(Bool.self, forKey: .looping) ?? true
         self.duration = try c.decodeIfPresent(Float.self, forKey: .duration) ?? 0
+        self.prewarmTime = try c.decodeIfPresent(Float.self, forKey: .prewarmTime) ?? 0
+        self.prewarmStep = try c.decodeIfPresent(Float.self, forKey: .prewarmStep) ?? (1.0 / 30.0)
         self.emissionRate = try c.decodeIfPresent(Float.self, forKey: .emissionRate) ?? 10
+        self.emissionRateCurve = try c.decodeIfPresent(ParticleCurve.self, forKey: .emissionRateCurve) ?? .constant(1)
         self.distanceEmissionRate = try c.decodeIfPresent(Float.self, forKey: .distanceEmissionRate) ?? 0
+        self.distanceEmissionRateCurve = try c.decodeIfPresent(ParticleCurve.self,
+                                                                forKey: .distanceEmissionRateCurve) ?? .constant(1)
         self.burstCount = try c.decodeIfPresent(Int.self, forKey: .burstCount) ?? 0
         self.burstInterval = try c.decodeIfPresent(Float.self, forKey: .burstInterval) ?? 0
         self.maxParticles = try c.decodeIfPresent(Int.self, forKey: .maxParticles) ?? 256
         self.lifetime = try c.decodeIfPresent(Float.self, forKey: .lifetime) ?? 2
         self.lifetimeRandomness = try c.decodeIfPresent(Float.self, forKey: .lifetimeRandomness) ?? 0
+        self.subEmitterTrigger = try c.decodeIfPresent(ParticleSubEmitterTrigger.self,
+                                                        forKey: .subEmitterTrigger) ?? .none
+        self.subEmitterBurstCount = try c.decodeIfPresent(Int.self, forKey: .subEmitterBurstCount) ?? 0
+        self.subEmitterProbability = try c.decodeIfPresent(Float.self, forKey: .subEmitterProbability) ?? 1
+        self.subEmitterMaxDepth = try c.decodeIfPresent(Int.self, forKey: .subEmitterMaxDepth) ?? 1
+        self.subEmitterInheritVelocity = try c.decodeIfPresent(Float.self, forKey: .subEmitterInheritVelocity) ?? 0
+        self.subEmitterLifetime = try c.decodeIfPresent(Float.self, forKey: .subEmitterLifetime) ?? 0.5
+        self.subEmitterStartVelocity = try c.decodeIfPresent(EditorSceneManifestVector3.self,
+                                                              forKey: .subEmitterStartVelocity)
+            ?? EditorSceneManifestVector3(.zero)
+        self.subEmitterVelocityRandomness = try c.decodeIfPresent(EditorSceneManifestVector3.self,
+                                                                   forKey: .subEmitterVelocityRandomness)
+            ?? EditorSceneManifestVector3(.zero)
+        self.subEmitterStartSize = try c.decodeIfPresent(Float.self, forKey: .subEmitterStartSize) ?? 0.25
+        self.subEmitterEndSize = try c.decodeIfPresent(Float.self, forKey: .subEmitterEndSize) ?? 0
+        self.subEmitterStartColor = try c.decodeIfPresent(EditorSceneManifestVector4.self,
+                                                           forKey: .subEmitterStartColor)
+            ?? EditorSceneManifestVector4(SIMD4<Float>(1, 1, 1, 1))
+        self.subEmitterEndColor = try c.decodeIfPresent(EditorSceneManifestVector4.self,
+                                                         forKey: .subEmitterEndColor)
+            ?? EditorSceneManifestVector4(SIMD4<Float>(1, 1, 1, 0))
+        self.subEmitters = try c.decodeIfPresent([EditorSceneManifestParticleSubEmitter].self,
+                                                  forKey: .subEmitters) ?? []
         self.originOffset = try c.decodeIfPresent(EditorSceneManifestVector3.self, forKey: .originOffset)
             ?? EditorSceneManifestVector3(.zero)
         self.spawnRadius = try c.decodeIfPresent(Float.self, forKey: .spawnRadius) ?? 0
@@ -907,11 +1092,20 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
             ?? EditorSceneManifestVector3(SIMD3<Float>(0, 1, 0))
         self.velocityRandomness = try c.decodeIfPresent(EditorSceneManifestVector3.self, forKey: .velocityRandomness)
             ?? EditorSceneManifestVector3(.zero)
+        self.velocityInheritance = try c.decodeIfPresent(Float.self, forKey: .velocityInheritance) ?? 0
         self.gravity = try c.decodeIfPresent(EditorSceneManifestVector3.self, forKey: .gravity)
             ?? EditorSceneManifestVector3(SIMD3<Float>(0, -9.81, 0))
         self.noiseStrength = try c.decodeIfPresent(Float.self, forKey: .noiseStrength) ?? 0
         self.noiseScale = try c.decodeIfPresent(Float.self, forKey: .noiseScale) ?? 1
         self.noiseSpeed = try c.decodeIfPresent(Float.self, forKey: .noiseSpeed) ?? 1
+        self.forceMode = try c.decodeIfPresent(ParticleForceMode.self, forKey: .forceMode) ?? .none
+        self.forceCenter = try c.decodeIfPresent(EditorSceneManifestVector3.self, forKey: .forceCenter)
+            ?? EditorSceneManifestVector3(.zero)
+        self.forceAxis = try c.decodeIfPresent(EditorSceneManifestVector3.self, forKey: .forceAxis)
+            ?? EditorSceneManifestVector3(SIMD3<Float>(0, 1, 0))
+        self.forceRadius = try c.decodeIfPresent(Float.self, forKey: .forceRadius) ?? 0
+        self.forceStrength = try c.decodeIfPresent(Float.self, forKey: .forceStrength) ?? 0
+        self.forceFalloff = try c.decodeIfPresent(Float.self, forKey: .forceFalloff) ?? 1
         self.collisionMode = try c.decodeIfPresent(ParticleCollisionMode.self, forKey: .collisionMode) ?? .none
         self.simulationSpace = try c.decodeIfPresent(ParticleSimulationSpace.self, forKey: .simulationSpace) ?? .local
         self.collisionPlaneY = try c.decodeIfPresent(Float.self, forKey: .collisionPlaneY) ?? 0
@@ -931,12 +1125,22 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
             ?? EditorSceneManifestVector4(SIMD4<Float>(1, 1, 1, 0))
         self.colorCurve = try c.decodeIfPresent(ParticleCurve.self, forKey: .colorCurve) ?? .linear
         self.blendMode = try c.decodeIfPresent(ParticleBlendMode.self, forKey: .blendMode) ?? .alpha
+        self.renderAlignment = try c.decodeIfPresent(ParticleRenderAlignment.self,
+                                                      forKey: .renderAlignment) ?? .billboard
+        self.velocityStretchScale = try c.decodeIfPresent(Float.self, forKey: .velocityStretchScale) ?? 0
+        self.velocityStretchMax = try c.decodeIfPresent(Float.self, forKey: .velocityStretchMax) ?? 8
+        self.maxRenderDistance = try c.decodeIfPresent(Float.self, forKey: .maxRenderDistance) ?? 0
+        self.renderDistanceFadeRange = try c.decodeIfPresent(Float.self, forKey: .renderDistanceFadeRange) ?? 0
         self.textureAssetID = try c.decodeIfPresent(String.self, forKey: .textureAssetID)
         self.texturePath = try c.decodeIfPresent(String.self, forKey: .texturePath)
         self.textureSheetColumns = try c.decodeIfPresent(Int.self, forKey: .textureSheetColumns) ?? 1
         self.textureSheetRows = try c.decodeIfPresent(Int.self, forKey: .textureSheetRows) ?? 1
         self.textureSheetFrameCount = try c.decodeIfPresent(Int.self, forKey: .textureSheetFrameCount) ?? 1
         self.textureSheetFrameRate = try c.decodeIfPresent(Float.self, forKey: .textureSheetFrameRate) ?? 0
+        self.trailLength = try c.decodeIfPresent(Float.self, forKey: .trailLength) ?? 0
+        self.trailSegments = try c.decodeIfPresent(Int.self, forKey: .trailSegments) ?? 0
+        self.trailEndSizeScale = try c.decodeIfPresent(Float.self, forKey: .trailEndSizeScale) ?? 0.5
+        self.trailEndAlphaScale = try c.decodeIfPresent(Float.self, forKey: .trailEndAlphaScale) ?? 0
         self.seed = try c.decodeIfPresent(UInt64.self, forKey: .seed) ?? 0x9E3779B9
     }
 }
@@ -982,6 +1186,10 @@ public enum EditorInspectorFieldValue {
     case particleSimulationSpace(Binding<ParticleSimulationSpace>)
     case particleCurve(Binding<ParticleCurve>)
     case particleBlendMode(Binding<ParticleBlendMode>)
+    case particleRenderAlignment(Binding<ParticleRenderAlignment>)
+    case particleForceMode(Binding<ParticleForceMode>)
+    case particleSubEmitterTrigger(Binding<ParticleSubEmitterTrigger>)
+    case particleSubEmitters(Binding<[ParticleSubEmitter]>)
     case asset(Binding<EditorInspectorAssetRef?>, acceptedKinds: Set<String>, placeholder: String)
 }
 
@@ -1854,14 +2062,28 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.duration,
                                                                                     summary: "Update particle duration"),
                                                                min: 0, max: 600, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-prewarm-time", label: L("Prewarm"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.prewarmTime,
+                                                                                    summary: "Update particle prewarm"),
+                                                               min: 0, max: 600, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-prewarm-step", label: L("Prewarm Step"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.prewarmStep,
+                                                                                    summary: "Update particle prewarm step"),
+                                                               min: 0.004, max: 1, step: 0.01, showsStepper: true)),
                 EditorInspectorField(id: "particle-rate", label: L("Emission Rate"),
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.emissionRate,
                                                                                     summary: "Update emission rate"),
                                                                min: 0, max: 1000, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-rate-curve", label: L("Rate Curve"),
+                                     value: .particleCurve(particleCurveBinding(for: entity, \.emissionRateCurve,
+                                                                                summary: "Update particle rate curve"))),
                 EditorInspectorField(id: "particle-distance-rate", label: L("Rate over Distance"),
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.distanceEmissionRate,
                                                                                     summary: "Update distance emission rate"),
                                                                min: 0, max: 1000, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-distance-rate-curve", label: L("Distance Curve"),
+                                     value: .particleCurve(particleCurveBinding(for: entity, \.distanceEmissionRateCurve,
+                                                                                summary: "Update particle distance rate curve"))),
                 EditorInspectorField(id: "particle-burst-count", label: L("Burst Count"),
                                      value: .constrainedNumber(particleIntBinding(for: entity, \.burstCount,
                                                                                   summary: "Update particle burst count"),
@@ -1877,6 +2099,72 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.lifetime,
                                                                                     summary: "Update particle lifetime"),
                                                                min: 0, max: 60, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-sub-emitter-trigger", label: L("Sub Emit"),
+                                     value: .particleSubEmitterTrigger(particleSubEmitterTriggerBinding(for: entity))),
+                EditorInspectorField(id: "particle-sub-emitter-burst", label: L("Sub Count"),
+                                     value: .constrainedNumber(particleIntBinding(for: entity, \.subEmitterBurstCount,
+                                                                                  summary: "Update sub-emitter count"),
+                                                               min: 0, max: 10_000, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-sub-emitter-probability", label: L("Sub Chance"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity,
+                                                                                    \.subEmitterProbability,
+                                                                                    summary: "Update sub-emitter chance"),
+                                                               min: 0, max: 1, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "particle-sub-emitter-depth", label: L("Sub Depth"),
+                                     value: .constrainedNumber(particleIntBinding(for: entity, \.subEmitterMaxDepth,
+                                                                                  summary: "Update sub-emitter depth"),
+                                                               min: 0, max: 16, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-sub-emitter-inherit", label: L("Sub Inherit"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity,
+                                                                                    \.subEmitterInheritVelocity,
+                                                                                    summary: "Update sub-emitter inheritance"),
+                                                               min: 0, max: 10, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "particle-sub-emitter-lifetime", label: L("Sub Lifetime"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.subEmitterLifetime,
+                                                                                    summary: "Update sub-emitter lifetime"),
+                                                               min: 0.0001, max: 60, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-sub-emitter-velocity", label: L("Sub Velocity"),
+                                     value: .vector3(x: particleVectorBinding(for: entity,
+                                                                               keyPath: \.subEmitterStartVelocity,
+                                                                               axis: 0,
+                                                                               summary: "Update sub-emitter velocity"),
+                                                     y: particleVectorBinding(for: entity,
+                                                                               keyPath: \.subEmitterStartVelocity,
+                                                                               axis: 1,
+                                                                               summary: "Update sub-emitter velocity"),
+                                                     z: particleVectorBinding(for: entity,
+                                                                               keyPath: \.subEmitterStartVelocity,
+                                                                               axis: 2,
+                                                                               summary: "Update sub-emitter velocity"))),
+                EditorInspectorField(id: "particle-sub-emitter-velocity-random", label: L("Sub Vel Random"),
+                                     value: .vector3(x: particleVectorBinding(for: entity,
+                                                                               keyPath: \.subEmitterVelocityRandomness,
+                                                                               axis: 0,
+                                                                               summary: "Update sub-emitter velocity randomness"),
+                                                     y: particleVectorBinding(for: entity,
+                                                                               keyPath: \.subEmitterVelocityRandomness,
+                                                                               axis: 1,
+                                                                               summary: "Update sub-emitter velocity randomness"),
+                                                     z: particleVectorBinding(for: entity,
+                                                                               keyPath: \.subEmitterVelocityRandomness,
+                                                                               axis: 2,
+                                                                               summary: "Update sub-emitter velocity randomness"))),
+                EditorInspectorField(id: "particle-sub-emitter-start-size", label: L("Sub Start Size"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity,
+                                                                                    \.subEmitterStartSize,
+                                                                                    summary: "Update sub-emitter start size"),
+                                                               min: 0, max: 100, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-sub-emitter-end-size", label: L("Sub End Size"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity,
+                                                                                    \.subEmitterEndSize,
+                                                                                    summary: "Update sub-emitter end size"),
+                                                               min: 0, max: 100, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-sub-emitter-start-color", label: L("Sub Start Color"),
+                                     value: .color(particleSubEmitterColorBinding(for: entity, isStart: true))),
+                EditorInspectorField(id: "particle-sub-emitter-end-color", label: L("Sub End Color"),
+                                     value: .color(particleSubEmitterColorBinding(for: entity, isStart: false))),
+                EditorInspectorField(id: "particle-sub-emitters", label: L("Sub Emitters"),
+                                     value: .particleSubEmitters(particleSubEmittersBinding(for: entity))),
                 EditorInspectorField(id: "particle-shape", label: L("Shape"),
                                      value: .particleEmissionShape(particleShapeBinding(for: entity))),
                 EditorInspectorField(id: "particle-spawn-radius", label: L("Spawn Radius"),
@@ -1923,6 +2211,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.angularVelocityRandomness,
                                                                                     summary: "Update spin randomness"),
                                                                min: 0, max: 1000, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-velocity-inheritance", label: L("Velocity Inherit"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.velocityInheritance,
+                                                                                    summary: "Update velocity inheritance"),
+                                                               min: 0, max: 10, step: 0.05, showsStepper: true)),
                 EditorInspectorField(id: "particle-size-curve", label: L("Size Curve"),
                                      value: .particleCurve(particleCurveBinding(for: entity, \.sizeCurve,
                                                                                 summary: "Update particle size curve"))),
@@ -1942,6 +2234,46 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.noiseSpeed,
                                                                                     summary: "Update particle noise speed"),
                                                                min: 0, max: 100, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-force-mode", label: L("Force"),
+                                     value: .particleForceMode(particleForceModeBinding(for: entity))),
+                EditorInspectorField(id: "particle-force-center", label: L("Force Center"),
+                                     value: .vector3(x: particleVectorBinding(for: entity,
+                                                                               keyPath: \.forceCenter,
+                                                                               axis: 0,
+                                                                               summary: "Update particle force center"),
+                                                     y: particleVectorBinding(for: entity,
+                                                                               keyPath: \.forceCenter,
+                                                                               axis: 1,
+                                                                               summary: "Update particle force center"),
+                                                     z: particleVectorBinding(for: entity,
+                                                                               keyPath: \.forceCenter,
+                                                                               axis: 2,
+                                                                               summary: "Update particle force center"))),
+                EditorInspectorField(id: "particle-force-axis", label: L("Force Axis"),
+                                     value: .vector3(x: particleVectorBinding(for: entity,
+                                                                               keyPath: \.forceAxis,
+                                                                               axis: 0,
+                                                                               summary: "Update particle force axis"),
+                                                     y: particleVectorBinding(for: entity,
+                                                                               keyPath: \.forceAxis,
+                                                                               axis: 1,
+                                                                               summary: "Update particle force axis"),
+                                                     z: particleVectorBinding(for: entity,
+                                                                               keyPath: \.forceAxis,
+                                                                               axis: 2,
+                                                                               summary: "Update particle force axis"))),
+                EditorInspectorField(id: "particle-force-radius", label: L("Force Radius"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.forceRadius,
+                                                                                    summary: "Update particle force radius"),
+                                                               min: 0, max: 10_000, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-force-strength", label: L("Force Strength"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.forceStrength,
+                                                                                    summary: "Update particle force strength"),
+                                                               min: -10_000, max: 10_000, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-force-falloff", label: L("Force Falloff"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.forceFalloff,
+                                                                                    summary: "Update particle force falloff"),
+                                                               min: 0, max: 16, step: 0.1, showsStepper: true)),
                 EditorInspectorField(id: "particle-collision-mode", label: L("Collision"),
                                      value: .particleCollisionMode(particleCollisionModeBinding(for: entity))),
                 EditorInspectorField(id: "particle-collision-plane-y", label: L("Plane Y"),
@@ -1965,6 +2297,24 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                                                                 summary: "Update particle color curve"))),
                 EditorInspectorField(id: "particle-blend-mode", label: L("Blend"),
                                      value: .particleBlendMode(particleBlendModeBinding(for: entity))),
+                EditorInspectorField(id: "particle-render-alignment", label: L("Alignment"),
+                                     value: .particleRenderAlignment(particleRenderAlignmentBinding(for: entity))),
+                EditorInspectorField(id: "particle-velocity-stretch-scale", label: L("Velocity Stretch"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.velocityStretchScale,
+                                                                                    summary: "Update velocity stretch"),
+                                                               min: 0, max: 10, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "particle-velocity-stretch-max", label: L("Max Stretch"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.velocityStretchMax,
+                                                                                    summary: "Update max velocity stretch"),
+                                                               min: 1, max: 100, step: 0.5, showsStepper: true)),
+                EditorInspectorField(id: "particle-max-render-distance", label: L("Max Render Distance"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.maxRenderDistance,
+                                                                                    summary: "Update particle render distance"),
+                                                               min: 0, max: 100_000, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-render-distance-fade", label: L("Distance Fade"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.renderDistanceFadeRange,
+                                                                                    summary: "Update particle distance fade"),
+                                                               min: 0, max: 100_000, step: 1, showsStepper: true)),
                 EditorInspectorField(id: "particle-texture", label: L("Texture"),
                                      value: .asset(particleTextureAssetBinding(for: entity),
                                                    acceptedKinds: [ImportableAssetKind.png.sceneKindLabel],
@@ -1985,6 +2335,22 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.textureSheetFrameRate,
                                                                                     summary: "Update texture sheet FPS"),
                                                                min: 0, max: 240, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-trail-length", label: L("Trail Length"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.trailLength,
+                                                                                    summary: "Update particle trail length"),
+                                                               min: 0, max: 10, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "particle-trail-segments", label: L("Trail Segments"),
+                                     value: .constrainedNumber(particleIntBinding(for: entity, \.trailSegments,
+                                                                                  summary: "Update particle trail segments"),
+                                                               min: 0, max: 64, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-trail-end-size", label: L("Trail End Size"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.trailEndSizeScale,
+                                                                                    summary: "Update particle trail end size"),
+                                                               min: 0, max: 4, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "particle-trail-end-alpha", label: L("Trail End Alpha"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.trailEndAlphaScale,
+                                                                                    summary: "Update particle trail end alpha"),
+                                                               min: 0, max: 1, step: 0.05, showsStepper: true)),
             ]
         )
     }
@@ -2079,6 +2445,67 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
+    private func particleForceModeBinding(for entity: EntityID) -> Binding<ParticleForceMode> {
+        Binding(
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.forceMode ?? .none },
+            set: { [self] next in
+                guard scene.component(ParticleEmitter.self, for: entity)?.forceMode != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle force mode") { $0.forceMode = next }
+            }
+        )
+    }
+
+    private func particleSubEmitterTriggerBinding(for entity: EntityID) -> Binding<ParticleSubEmitterTrigger> {
+        Binding(
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.subEmitterTrigger ?? .none },
+            set: { [self] next in
+                guard scene.component(ParticleEmitter.self, for: entity)?.subEmitterTrigger != next else { return }
+                updateParticleEmitter(entity, summary: "Update sub-emitter trigger") { $0.subEmitterTrigger = next }
+            }
+        )
+    }
+
+    private func particleSubEmittersBinding(for entity: EntityID) -> Binding<[ParticleSubEmitter]> {
+        Binding(
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.subEmitters ?? [] },
+            set: { [self] next in
+                let sanitized = next.map(sanitizedParticleSubEmitter)
+                guard scene.component(ParticleEmitter.self, for: entity)?.subEmitters != sanitized else { return }
+                updateParticleEmitter(entity, summary: "Update particle sub-emitters") {
+                    $0.subEmitters = sanitized
+                }
+            }
+        )
+    }
+
+    private func sanitizedParticleSubEmitter(_ rule: ParticleSubEmitter) -> ParticleSubEmitter {
+        ParticleSubEmitter(trigger: rule.trigger,
+                           burstCount: rule.burstCount,
+                           probability: rule.probability,
+                           maxDepth: rule.maxDepth,
+                           inheritVelocity: rule.inheritVelocity,
+                           lifetime: rule.lifetime,
+                           startVelocity: rule.startVelocity,
+                           velocityRandomness: rule.velocityRandomness,
+                           startSize: rule.startSize,
+                           endSize: rule.endSize,
+                           startColor: rule.startColor,
+                           endColor: rule.endColor)
+    }
+
+    private func particleVectorBinding(for entity: EntityID,
+                                       keyPath: WritableKeyPath<ParticleEmitter, SIMD3<Float>>,
+                                       axis: Int,
+                                       summary: String) -> Binding<Float> {
+        Binding(
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?[keyPath: keyPath][axis] ?? 0 },
+            set: { [self] next in
+                guard scene.component(ParticleEmitter.self, for: entity)?[keyPath: keyPath][axis] != next else { return }
+                updateParticleEmitter(entity, summary: summary) { $0[keyPath: keyPath][axis] = next }
+            }
+        )
+    }
+
     private func particleSimulationSpaceBinding(for entity: EntityID) -> Binding<ParticleSimulationSpace> {
         Binding(
             get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.simulationSpace ?? .local },
@@ -2107,6 +2534,16 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             set: { [self] next in
                 guard scene.component(ParticleEmitter.self, for: entity)?.blendMode != next else { return }
                 updateParticleEmitter(entity, summary: "Update particle blend mode") { $0.blendMode = next }
+            }
+        )
+    }
+
+    private func particleRenderAlignmentBinding(for entity: EntityID) -> Binding<ParticleRenderAlignment> {
+        Binding(
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.renderAlignment ?? .billboard },
+            set: { [self] next in
+                guard scene.component(ParticleEmitter.self, for: entity)?.renderAlignment != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle render alignment") { $0.renderAlignment = next }
             }
         )
     }
@@ -2164,6 +2601,27 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             set: { [self] next in
                 guard scene.component(ParticleEmitter.self, for: entity)?.gravity[axis] != next else { return }
                 updateParticleEmitter(entity, summary: "Update particle gravity") { $0.gravity[axis] = next }
+            }
+        )
+    }
+
+    private func particleSubEmitterColorBinding(for entity: EntityID, isStart: Bool) -> Binding<Color> {
+        Binding(
+            get: { [self] in
+                let c = scene.component(ParticleEmitter.self, for: entity)
+                    .map { isStart ? $0.subEmitterStartColor : $0.subEmitterEndColor }
+                    ?? SIMD4<Float>(1, 1, 1, 1)
+                return Color(r: c.x, g: c.y, b: c.z, a: c.w)
+            },
+            set: { [self] next in
+                let v = SIMD4<Float>(max(0, min(1, next.r)), max(0, min(1, next.g)),
+                                     max(0, min(1, next.b)), max(0, min(1, next.a)))
+                let current = scene.component(ParticleEmitter.self, for: entity)
+                    .map { isStart ? $0.subEmitterStartColor : $0.subEmitterEndColor }
+                guard current != v else { return }
+                updateParticleEmitter(entity, summary: "Update sub-emitter color") {
+                    if isStart { $0.subEmitterStartColor = v } else { $0.subEmitterEndColor = v }
+                }
             }
         )
     }

@@ -442,18 +442,40 @@ private struct CapabilityOperationProjection {
         case let .setParticleEmitter(_, emitter):
             self.verb = "scene.set_particle_emitter"
             self.arguments["duration"] = .number(Double(emitter.duration))
+            self.arguments["prewarm_time"] = .number(Double(emitter.prewarmTime))
+            self.arguments["prewarm_step"] = .number(Double(emitter.prewarmStep))
             self.arguments["emission_rate"] = .number(Double(emitter.emissionRate))
+            self.arguments["emission_rate_curve"] = .string(Self.particleCurveSummary(emitter.emissionRateCurve))
             self.arguments["distance_emission_rate"] = .number(Double(emitter.distanceEmissionRate))
+            self.arguments["distance_emission_rate_curve"] = .string(Self.particleCurveSummary(emitter.distanceEmissionRateCurve))
             self.arguments["burst_count"] = .integer(Int64(emitter.burstCount))
             self.arguments["burst_interval"] = .number(Double(emitter.burstInterval))
             self.arguments["max_particles"] = .integer(Int64(emitter.maxParticles))
+            self.arguments["sub_emitter_trigger"] = .string(emitter.subEmitterTrigger.rawValue)
+            self.arguments["sub_emitter_burst_count"] = .integer(Int64(emitter.subEmitterBurstCount))
+            self.arguments["sub_emitter_probability"] = .number(Double(emitter.subEmitterProbability))
+            self.arguments["sub_emitter_max_depth"] = .integer(Int64(emitter.subEmitterMaxDepth))
+            self.arguments["sub_emitter_inherit_velocity"] = .number(Double(emitter.subEmitterInheritVelocity))
+            self.arguments["sub_emitter_lifetime"] = .number(Double(emitter.subEmitterLifetime))
+            self.arguments["sub_emitter_start_velocity"] = .vec3(IntentVector3(emitter.subEmitterStartVelocity))
+            self.arguments["sub_emitter_velocity_randomness"] =
+                .vec3(IntentVector3(emitter.subEmitterVelocityRandomness))
+            self.arguments["sub_emitter_start_size"] = .number(Double(emitter.subEmitterStartSize))
+            self.arguments["sub_emitter_end_size"] = .number(Double(emitter.subEmitterEndSize))
             self.arguments["is_emitting"] = .bool(emitter.isEmitting)
             self.arguments["emission_shape"] = .string(emitter.emissionShape.rawValue)
             self.arguments["collision_mode"] = .string(emitter.collisionMode.rawValue)
             self.arguments["simulation_space"] = .string(emitter.simulationSpace.rawValue)
+            self.arguments["velocity_inheritance"] = .number(Double(emitter.velocityInheritance))
             self.arguments["noise_strength"] = .number(Double(emitter.noiseStrength))
             self.arguments["noise_scale"] = .number(Double(emitter.noiseScale))
             self.arguments["noise_speed"] = .number(Double(emitter.noiseSpeed))
+            self.arguments["force_mode"] = .string(emitter.forceMode.rawValue)
+            self.arguments["force_center"] = .vec3(IntentVector3(emitter.forceCenter))
+            self.arguments["force_axis"] = .vec3(IntentVector3(emitter.forceAxis))
+            self.arguments["force_radius"] = .number(Double(emitter.forceRadius))
+            self.arguments["force_strength"] = .number(Double(emitter.forceStrength))
+            self.arguments["force_falloff"] = .number(Double(emitter.forceFalloff))
             self.arguments["size_randomness"] = .number(Double(emitter.sizeRandomness))
             self.arguments["start_rotation"] = .number(Double(emitter.startRotation))
             self.arguments["rotation_randomness"] = .number(Double(emitter.rotationRandomness))
@@ -462,15 +484,24 @@ private struct CapabilityOperationProjection {
             self.arguments["size_curve"] = .string(Self.particleCurveSummary(emitter.sizeCurve))
             self.arguments["color_curve"] = .string(Self.particleCurveSummary(emitter.colorCurve))
             self.arguments["blend_mode"] = .string(emitter.blendMode.rawValue)
+            self.arguments["render_alignment"] = .string(emitter.renderAlignment.rawValue)
+            self.arguments["velocity_stretch_scale"] = .number(Double(emitter.velocityStretchScale))
+            self.arguments["velocity_stretch_max"] = .number(Double(emitter.velocityStretchMax))
             self.arguments["texture_sheet_columns"] = .integer(Int64(emitter.textureSheetColumns))
             self.arguments["texture_sheet_rows"] = .integer(Int64(emitter.textureSheetRows))
             self.arguments["texture_sheet_frame_count"] = .integer(Int64(emitter.textureSheetFrameCount))
             self.arguments["texture_sheet_frame_rate"] = .number(Double(emitter.textureSheetFrameRate))
+            self.arguments["trail_length"] = .number(Double(emitter.trailLength))
+            self.arguments["trail_segments"] = .integer(Int64(emitter.trailSegments))
+            self.arguments["trail_end_size_scale"] = .number(Double(emitter.trailEndSizeScale))
+            self.arguments["trail_end_alpha_scale"] = .number(Double(emitter.trailEndAlphaScale))
         }
     }
 
     private static func particleCurveSummary(_ curve: ParticleCurve) -> String {
         switch curve {
+        case .constant(let value):
+            return "constant:\(value)"
         case .keyframes(let keyframes):
             return "keyframes:\(keyframes.count)"
         default:
