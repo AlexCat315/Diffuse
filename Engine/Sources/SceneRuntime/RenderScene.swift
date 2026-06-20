@@ -147,6 +147,10 @@ public struct RenderParticle: Sendable, Equatable {
     public var color: SIMD4<Float>
     /// Texture sheet UV rect: x, y, width, height.
     public var uvRect: SIMD4<Float>
+    /// Optional world-space axis used for velocity-aligned billboard rendering.
+    public var alignmentAxis: SIMD3<Float>
+    /// Multiplier applied along `alignmentAxis`; 1 keeps the particle square.
+    public var stretch: Float
     public var blendMode: ParticleBlendMode
     public var texturePath: String?
 
@@ -155,6 +159,8 @@ public struct RenderParticle: Sendable, Equatable {
                 rotation: Float = 0,
                 color: SIMD4<Float>,
                 uvRect: SIMD4<Float> = SIMD4<Float>(0, 0, 1, 1),
+                alignmentAxis: SIMD3<Float> = .zero,
+                stretch: Float = 1,
                 blendMode: ParticleBlendMode = .alpha,
                 texturePath: String? = nil) {
         self.position = position
@@ -162,8 +168,98 @@ public struct RenderParticle: Sendable, Equatable {
         self.rotation = rotation
         self.color = color
         self.uvRect = uvRect
+        self.alignmentAxis = alignmentAxis
+        self.stretch = max(1, stretch)
         self.blendMode = blendMode
         self.texturePath = texturePath
+    }
+}
+
+public struct RenderBounds: Sendable, Equatable {
+    public var isEmpty: Bool
+    public var minimum: SIMD3<Float>
+    public var maximum: SIMD3<Float>
+
+    public init(isEmpty: Bool = true,
+                minimum: SIMD3<Float> = .zero,
+                maximum: SIMD3<Float> = .zero) {
+        self.isEmpty = isEmpty
+        self.minimum = minimum
+        self.maximum = maximum
+    }
+
+    public mutating func include(center: SIMD3<Float>, radius: Float) {
+        let r = max(0, radius)
+        let minimum = center - SIMD3<Float>(repeating: r)
+        let maximum = center + SIMD3<Float>(repeating: r)
+        if isEmpty {
+            self.minimum = minimum
+            self.maximum = maximum
+            isEmpty = false
+        } else {
+            self.minimum = simd_min(self.minimum, minimum)
+            self.maximum = simd_max(self.maximum, maximum)
+        }
+    }
+}
+
+public struct ParticleRenderSummary: Sendable, Equatable {
+    public var particleCount: Int
+    public var alphaCount: Int
+    public var additiveCount: Int
+    public var texturedCount: Int
+    public var batchCount: Int
+    public var bounds: RenderBounds
+
+    public init(particleCount: Int = 0,
+                alphaCount: Int = 0,
+                additiveCount: Int = 0,
+                texturedCount: Int = 0,
+                batchCount: Int = 0,
+                bounds: RenderBounds = RenderBounds()) {
+        self.particleCount = max(0, particleCount)
+        self.alphaCount = max(0, alphaCount)
+        self.additiveCount = max(0, additiveCount)
+        self.texturedCount = max(0, texturedCount)
+        self.batchCount = max(0, batchCount)
+        self.bounds = bounds
+    }
+
+    public init(particles: [RenderParticle]) {
+        var alphaCount = 0
+        var additiveCount = 0
+        var texturedCount = 0
+        var bounds = RenderBounds()
+        var batchKeys = Set<String>()
+
+        for particle in particles {
+            switch particle.blendMode {
+            case .alpha:
+                alphaCount += 1
+            case .additive:
+                additiveCount += 1
+            }
+            let textureKey = particle.texturePath?.isEmpty == false ? particle.texturePath! : ""
+            if !textureKey.isEmpty {
+                texturedCount += 1
+            }
+            batchKeys.insert("\(particle.blendMode.rawValue)|\(textureKey)")
+            bounds.include(center: particle.position,
+                           radius: particle.conservativeRadius)
+        }
+
+        self.init(particleCount: particles.count,
+                  alphaCount: alphaCount,
+                  additiveCount: additiveCount,
+                  texturedCount: texturedCount,
+                  batchCount: batchKeys.count,
+                  bounds: bounds)
+    }
+}
+
+private extension RenderParticle {
+    var conservativeRadius: Float {
+        max(0, size) * max(1, stretch) * 0.70710678
     }
 }
 
@@ -197,16 +293,20 @@ public struct RenderScene: Sendable {
     public var environment: RenderEnvironment
     /// World-space billboard particles, pre-sorted back-to-front for the camera.
     public var particles: [RenderParticle]
+    /// Aggregate particle bounds and batch-count hints for culling, budgets, and profiler UI.
+    public var particleSummary: ParticleRenderSummary
 
     public init(camera: RenderCamera,
                 instances: [RenderInstance] = [],
                 lights: [RenderLight] = [],
                 environment: RenderEnvironment = .fallback,
-                particles: [RenderParticle] = []) {
+                particles: [RenderParticle] = [],
+                particleSummary: ParticleRenderSummary? = nil) {
         self.camera = camera
         self.instances = instances
         self.lights = lights
         self.environment = environment
         self.particles = particles
+        self.particleSummary = particleSummary ?? ParticleRenderSummary(particles: particles)
     }
 }
