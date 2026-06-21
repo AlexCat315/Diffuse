@@ -1,4 +1,5 @@
-﻿import EngineKernel
+﻿import Foundation
+import EngineKernel
 import SIMDCompat
 
 public enum RuntimeSystemPhase: String, CaseIterable, Sendable {
@@ -365,12 +366,24 @@ public struct RuntimeWorldSchedule {
                     recordJobReport(report, for: .animationAndScripts)
                 }
                 if deltaTimeSeconds > 0 {
+                    let particleOptions = particleAdvanceOptions(in: &world)
                     let particleEntities = world.entities(with: ParticleEmitter.self)
                     let worldTransforms = world.worldTransformSnapshot(matching: particleEntities)
+                    var particleStats: [ParticleEmitterFrameStats] = []
+                    particleStats.reserveCapacity(particleEntities.count)
                     world.updateComponents(ParticleEmitter.self) { entity, emitter in
                         emitter.advance(deltaTime: deltaTimeSeconds,
-                                        worldTransform: worldTransforms[entity]?.matrix)
+                                        worldTransform: worldTransforms[entity]?.matrix,
+                                        options: particleOptions)
+                        particleStats.append(emitter.lastFrameStats)
                     }
+                    world.setDerivedResource(
+                        ParticleFrameStatsResource(simulatedDeltaTime: Float(deltaTimeSeconds),
+                                                   emitterStats: particleStats)
+                    )
+                } else {
+                    world.setDerivedResource(ParticleFrameStatsResource.empty)
+                    world.setDerivedResource(ParticleScalabilityStateResource.default)
                 }
             case .spatialIndexUpdate:
                 let spatialIndexBuild = buildSpatialIndexResource(in: world, using: jobSystem)
@@ -517,6 +530,18 @@ public struct RuntimeWorldSchedule {
         physicsFrameState.backendIdentifier = physicsBackend.identifier
     }
 
+    private func particleAdvanceOptions(in world: inout RuntimeWorld) -> ParticleAdvanceOptions {
+        let baseOptions = (world.resource(ParticleScalabilityResource.self)
+            ?? .default).advanceOptions
+        let policy = world.resource(ParticleScalabilityPolicyResource.self) ?? .disabled
+        let state = policy.updatedState(
+            previousStats: world.resource(ParticleFrameStatsResource.self) ?? .empty,
+            previousState: world.resource(ParticleScalabilityStateResource.self) ?? .default
+        )
+        world.setDerivedResource(state)
+        return state.applying(to: baseOptions)
+    }
+
     private func extractRenderScene(
         in world: RuntimeWorld
     ) -> (resource: ExtractedRenderSceneResource, report: JobDispatchReport) {
@@ -526,14 +551,16 @@ public struct RuntimeWorldSchedule {
         let lightCollection = collectRenderLights(from: view)
         let instances = instanceCollection.instances
         let lights = lightCollection.lights
-        let particles = collectRenderParticles(in: world, cameraEye: cameraSelection.camera.eye)
+        let particles = collectRenderParticles(in: world, camera: cameraSelection.camera)
+        let particleSimulationBatches = collectParticleSimulationBatches(in: world)
         return (
             ExtractedRenderSceneResource(
                 scene: RenderScene(
                     camera: cameraSelection.camera,
                     instances: instances.map(\.instance),
                     lights: lights.map(\.light),
-                    particles: particles
+                    particles: particles,
+                    particleSimulationBatches: particleSimulationBatches
                 ),
                 activeCameraEntity: cameraSelection.entity,
                 instanceEntities: instances.map(\.entity),
@@ -544,6 +571,52 @@ public struct RuntimeWorldSchedule {
         )
     }
 
+    private func collectParticleSimulationBatches(in world: RuntimeWorld)
+        -> [RenderParticleSimulationBatch] {
+        var result: [RenderParticleSimulationBatch] = []
+        for entity in world.entities(with: ParticleEmitter.self) {
+            guard let emitter = world.component(ParticleEmitter.self, for: entity),
+                  !emitter.particles.isEmpty
+            else { continue }
+            let plan = emitter.gpuSimulationPlan
+            guard plan.usesGPU else { continue }
+            let toWorld = world.worldTransform(for: entity)?.matrix ?? matrix_identity_float4x4
+            let renderOnGPU = canRenderEmitterParticlesOnGPU(emitter)
+            result.append(
+                RenderParticleSimulationBatch(
+                    plan: plan,
+                    particles: emitter.particles,
+                    gravity: emitter.gravity,
+                    vectorFieldDirection: emitter.vectorFieldDirection,
+                    vectorFieldStrength: emitter.vectorFieldMode == .curl ? emitter.vectorFieldStrength : 0,
+                    vectorFieldScale: emitter.vectorFieldScale,
+                    vectorFieldScrollSpeed: emitter.vectorFieldScrollSpeed,
+                    renderOnGPU: renderOnGPU,
+                    worldTransform: emitter.simulationSpace == .local ? toWorld : matrix_identity_float4x4,
+                    uvRect: SIMD4<Float>(0, 0, 1, 1),
+                    blendMode: emitter.blendMode,
+                    texturePath: emitter.texturePath
+                )
+            )
+        }
+        return result
+    }
+
+    private func canRenderEmitterParticlesOnGPU(_ emitter: ParticleEmitter) -> Bool {
+        guard emitter.gpuSimulationPlan.usesGPU else { return false }
+        guard emitter.renderAlignment == .billboard else { return false }
+        guard emitter.trailLength == 0 || emitter.trailSegments == 0 else { return false }
+        guard emitter.maxRenderedParticles == 0 else { return false }
+        guard emitter.maxRenderDistance == 0 else { return false }
+        guard emitter.renderLODStartDistance == 0 && emitter.renderLODEndDistance == 0 else { return false }
+        guard emitter.textureAssetID == nil || emitter.texturePath != nil else { return false }
+        guard emitter.textureSheetColumns == 1,
+              emitter.textureSheetRows == 1,
+              emitter.textureSheetFrameCount == 1
+        else { return false }
+        return true
+    }
+
     /// Flattens every live `ParticleEmitter` pool into world-space billboard
     /// particles for the render backend. Local-space particles are transformed
     /// by the entity's world matrix; world-space particles are already stored in
@@ -551,23 +624,36 @@ public struct RuntimeWorldSchedule {
     /// blending composites correctly.
     private func collectRenderParticles(
         in world: RuntimeWorld,
-        cameraEye: SIMD3<Float>
+        camera: RenderCamera
     ) -> [RenderParticle] {
         var result: [RenderParticle] = []
         for entity in world.entities(with: ParticleEmitter.self) {
             guard let emitter = world.component(ParticleEmitter.self, for: entity),
                   !emitter.particles.isEmpty
             else { continue }
+            if canRenderEmitterParticlesOnGPU(emitter) {
+                continue
+            }
             let toWorld = world.worldTransform(for: entity)?.matrix ?? matrix_identity_float4x4
+            if !isEmitterVisibleToCamera(emitter: emitter,
+                                         toWorld: toWorld,
+                                         camera: camera) {
+                continue
+            }
             let distanceFade = renderDistanceFade(emitter: emitter,
                                                   toWorld: toWorld,
-                                                  cameraEye: cameraEye)
+                                                  cameraEye: camera.eye)
             if distanceFade <= 0 {
                 continue
             }
+            let cameraDistance = emitterCameraDistance(emitter: emitter,
+                                                       toWorld: toWorld,
+                                                       cameraEye: camera.eye)
+            let sourceParticles = renderSourceParticles(for: emitter,
+                                                        cameraDistance: cameraDistance)
             let trailSegments = emitter.trailLength > 0 ? emitter.trailSegments : 0
-            result.reserveCapacity(result.count + emitter.particles.count * (1 + trailSegments))
-            for particle in emitter.particles {
+            result.reserveCapacity(result.count + sourceParticles.count * (1 + trailSegments))
+            for particle in sourceParticles {
                 let worldPosition: SIMD3<Float>
                 let worldVelocity: SIMD3<Float>
                 switch emitter.simulationSpace {
@@ -611,9 +697,82 @@ public struct RuntimeWorldSchedule {
             }
         }
         result.sort {
-            simd_length_squared($0.position - cameraEye) > simd_length_squared($1.position - cameraEye)
+            simd_length_squared($0.position - camera.eye) > simd_length_squared($1.position - camera.eye)
         }
         return result
+    }
+
+    private func renderSourceParticles(
+        for emitter: ParticleEmitter,
+        cameraDistance: Float
+    ) -> ArraySlice<Particle> {
+        let budget = emitter.effectiveMaxRenderedParticles(cameraDistance: cameraDistance,
+                                                           liveParticleCount: emitter.particles.count)
+        guard budget > 0 else {
+            return emitter.particles[emitter.particles.endIndex...]
+        }
+        guard budget < emitter.particles.count else {
+            return emitter.particles[...]
+        }
+        return emitter.particles.suffix(budget)
+    }
+
+    private struct CameraBasis {
+        var forward: SIMD3<Float>
+        var right: SIMD3<Float>
+        var up: SIMD3<Float>
+    }
+
+    private func isEmitterVisibleToCamera(
+        emitter: ParticleEmitter,
+        toWorld: simd_float4x4,
+        camera: RenderCamera
+    ) -> Bool {
+        let radius = emitter.effectiveRenderBoundsRadius()
+        guard radius > 0 else {
+            return true
+        }
+        let center = Self.transformPoint(emitter.originOffset, by: toWorld)
+        let basis = cameraBasis(for: camera)
+        let offset = center - camera.eye
+        let forwardDistance = simd_dot(offset, basis.forward)
+
+        if forwardDistance + radius < camera.near {
+            return false
+        }
+        if camera.far > camera.near,
+           forwardDistance - radius > camera.far {
+            return false
+        }
+
+        let verticalHalfFov = max(0.001, min(Float.pi * 0.49, camera.fovYRadians * 0.5))
+        let verticalHalfExtent = max(0, forwardDistance) * Float(tan(Double(verticalHalfFov))) + radius
+        let verticalDistance = abs(simd_dot(offset, basis.up))
+        if verticalDistance > verticalHalfExtent {
+            return false
+        }
+        let horizontalHalfExtent = max(0, forwardDistance)
+            * Float(tan(Double(verticalHalfFov)))
+            * max(0.001, camera.aspectRatio)
+            + radius
+        let horizontalDistance = abs(simd_dot(offset, basis.right))
+        if horizontalDistance > horizontalHalfExtent {
+            return false
+        }
+        return true
+    }
+
+    private func cameraBasis(for camera: RenderCamera) -> CameraBasis {
+        let rawForward = camera.target - camera.eye
+        let forward = normalizedOrDefault(rawForward, SIMD3<Float>(0, 0, -1))
+        let requestedUp = normalizedOrDefault(camera.up, SIMD3<Float>(0, 1, 0))
+        var right = simd_cross(forward, requestedUp)
+        if simd_length_squared(right) <= 0.000_001 {
+            right = simd_cross(forward, SIMD3<Float>(1, 0, 0))
+        }
+        right = normalizedOrDefault(right, SIMD3<Float>(1, 0, 0))
+        let up = normalizedOrDefault(simd_cross(right, forward), SIMD3<Float>(0, 1, 0))
+        return CameraBasis(forward: forward, right: right, up: up)
     }
 
     private func renderDistanceFade(
@@ -641,6 +800,15 @@ public struct RuntimeWorldSchedule {
             return 1
         }
         return simd_clamp((emitter.maxRenderDistance - distance) / fadeRange, 0, 1)
+    }
+
+    private func emitterCameraDistance(
+        emitter: ParticleEmitter,
+        toWorld: simd_float4x4,
+        cameraEye: SIMD3<Float>
+    ) -> Float {
+        let origin = Self.transformPoint(emitter.originOffset, by: toWorld)
+        return simd_length(origin - cameraEye)
     }
 
     private func appendTrailParticles(
@@ -726,6 +894,7 @@ public struct RuntimeWorldSchedule {
                 target: component.target,
                 up: component.up,
                 fovYRadians: component.fovYRadians,
+                aspectRatio: component.aspectRatio,
                 near: component.near,
                 far: component.far
             )
@@ -854,6 +1023,14 @@ private extension LightComponent {
 
 private func degreesToRadians(_ degrees: Float) -> Float {
     degrees * .pi / 180
+}
+
+private func normalizedOrDefault(_ vector: SIMD3<Float>, _ fallback: SIMD3<Float>) -> SIMD3<Float> {
+    let lengthSquared = simd_length_squared(vector)
+    guard lengthSquared > 0.000_001 else {
+        return fallback
+    }
+    return vector / sqrt(lengthSquared)
 }
 
 private func renderForwardDirection(from matrix: simd_float4x4) -> SIMD3<Float> {

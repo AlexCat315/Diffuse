@@ -416,6 +416,9 @@ private struct CapabilityOperationProjection {
         case let .setCameraFOV(_, fovYDegrees):
             self.verb = "scene.set_camera_fov"
             self.arguments["fov_y_degrees"] = .number(Double(fovYDegrees))
+        case let .setCameraAspectRatio(_, aspectRatio):
+            self.verb = "scene.set_camera_aspect_ratio"
+            self.arguments["aspect_ratio"] = .number(Double(aspectRatio))
         case let .setCameraActive(_, isActive):
             self.verb = "scene.set_camera_active"
             self.arguments["is_active"] = .bool(isActive)
