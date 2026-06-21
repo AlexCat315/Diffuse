@@ -3,6 +3,7 @@ import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
 import RenderBackend
+import SceneRuntime
 
 struct DeveloperToolsPanel: View {
     let app: EditorApplication
@@ -14,6 +15,9 @@ struct DeveloperToolsPanel: View {
             let timingRevision = store.frameTimingRevision
             let frameStats = store.state.frameStats
             let renderStats = app.currentRenderStats()
+            let particleStats = app.currentParticleFrameStats()
+            let particleScalability = app.currentParticleScalabilityState()
+            let particleRenderSummary = app.currentRenderScene().particleSummary
 
             TabView(selection: $selectedTab, tabs: [
                 TabItem(L("Performance"), id: DeveloperToolTab.performance) {
@@ -28,6 +32,12 @@ struct DeveloperToolsPanel: View {
                     RuntimeDiagnosticsView(store: store,
                                            timingRevision: timingRevision)
                 },
+                TabItem("Particles", id: DeveloperToolTab.particles) {
+                    ParticleDiagnosticsView(stats: particleStats,
+                                            scalability: particleScalability,
+                                            renderSummary: particleRenderSummary,
+                                            renderStats: renderStats)
+                },
                 TabItem(L("Console"), id: DeveloperToolTab.console) {
                     ConsoleDiagnosticsView(store: store)
                 },
@@ -41,6 +51,7 @@ private enum DeveloperToolTab: Hashable {
     case performance
     case render
     case runtime
+    case particles
     case console
 }
 
@@ -222,6 +233,105 @@ private struct RuntimeDiagnosticsView: View {
                     }
                     StatRow(label: "Count", value: "\(store.selectedEntityIDs.count)")
                     StatRow(label: "Playback", value: String(describing: store.playbackState))
+                }
+                .flex(1, shrink: 1)
+            }
+            .padding(horizontal: 12, vertical: 10)
+        }
+    }
+}
+
+private struct ParticleDiagnosticsView: View {
+    let stats: ParticleFrameStatsResource
+    let scalability: ParticleScalabilityStateResource
+    let renderSummary: ParticleRenderSummary
+    let renderStats: RenderFrameStats
+
+    var body: some View {
+        ScrollView(.vertical) {
+            Row(alignment: .top, spacing: 12) {
+                StatGroup(title: "Emitters") {
+                    StatRow(label: "Total", value: "\(stats.emitterCount)")
+                    StatRow(label: "Active", value: "\(stats.activeEmitterCount)")
+                    StatRow(label: "Sim Step", value: formatMs(Double(stats.simulatedDeltaTime) * 1000))
+                    StatRow(label: "Live", value: "\(stats.liveParticleCount)")
+                    StatRow(label: "Configured Cap", value: "\(stats.maxParticleCount)")
+                    StatRow(label: "Effective Cap", value: "\(stats.liveParticleLimit)")
+                }
+                .flex(1, shrink: 1)
+
+                StatGroup(title: "Spawned") {
+                    StatRow(label: "Total", value: "\(stats.spawnedParticleCount)")
+                    StatRow(label: "Continuous", value: "\(stats.continuousSpawnedCount)")
+                    StatRow(label: "Burst", value: "\(stats.burstSpawnedCount)")
+                    StatRow(label: "Distance", value: "\(stats.distanceSpawnedCount)")
+                    StatRow(label: "Sub-Emitter", value: "\(stats.subEmitterSpawnedCount)")
+                    StatRow(label: "Capacity Drops", value: "\(stats.capacityLimitedSpawnCount)")
+                }
+                .flex(1, shrink: 1)
+
+                StatGroup(title: "Lifecycle") {
+                    StatRow(label: "Expired", value: "\(stats.expiredParticleCount)")
+                    StatRow(label: "Collisions", value: "\(stats.collisionCount)")
+                    StatRow(label: "Live / Config", value: formatPercent(stats.liveParticleCount,
+                                                                          stats.maxParticleCount))
+                    StatRow(label: "Live / Effective", value: formatPercent(stats.liveParticleCount,
+                                                                             stats.liveParticleLimit))
+                    StatRow(label: "Drop Rate", value: formatPercent(stats.capacityLimitedSpawnCount,
+                                                                      stats.spawnedParticleCount
+                                                                        + stats.capacityLimitedSpawnCount))
+                }
+                .flex(1, shrink: 1)
+            }
+            .padding(horizontal: 12, vertical: 10)
+
+            Divider()
+
+            Row(alignment: .top, spacing: 12) {
+                StatGroup(title: "Scalability Signals") {
+                    StatRow(label: "Applied Scale", value: formatScale(scalability.appliedScale))
+                    StatRow(label: "Pressure", value: formatScale(scalability.pressure))
+                    StatRow(label: "Reason", value: scalability.reason.rawValue)
+                    StatRow(label: "At Effective Cap", value: stats.liveParticleLimit > 0
+                            && stats.liveParticleCount >= stats.liveParticleLimit ? "YES" : "NO")
+                    StatRow(label: "Spawn Pressure", value: stats.capacityLimitedSpawnCount > 0 ? "YES" : "NO")
+                    StatRow(label: "Event Activity", value: stats.subEmitterSpawnedCount > 0
+                            || stats.collisionCount > 0 ? "YES" : "NO")
+                    StatRow(label: "Idle", value: stats.activeEmitterCount == 0 ? "YES" : "NO")
+                }
+                .flex(1, shrink: 1)
+
+                StatGroup(title: "Render Batches") {
+                    StatRow(label: "Submitted", value: "\(renderSummary.particleCount)")
+                    StatRow(label: "Batches", value: "\(renderSummary.batchCount)")
+                    StatRow(label: "Alpha", value: "\(renderSummary.alphaCount)")
+                    StatRow(label: "Additive", value: "\(renderSummary.additiveCount)")
+                    StatRow(label: "Textured", value: "\(renderSummary.texturedCount)")
+                    StatRow(label: "Unique Textures", value: "\(renderSummary.uniqueTextureCount)")
+                }
+                .flex(1, shrink: 1)
+
+                StatGroup(title: "GPU Simulation") {
+                    StatRow(label: "Batches", value: "\(renderStats.gpuParticleSimulationBatchCount)")
+                    StatRow(label: "Particles", value: "\(renderStats.gpuParticleSimulationParticleCount)")
+                    StatRow(label: "Workgroups", value: "\(renderStats.gpuParticleSimulationDispatchWorkgroups)")
+                    StatRow(label: "Render Instances", value: "\(renderStats.gpuParticleRenderInstanceCount)")
+                    StatRow(label: "Encode", value: formatNs(renderStats.gpuParticleSimulationEncodeNS))
+                }
+                .flex(1, shrink: 1)
+            }
+            .padding(horizontal: 12, vertical: 10)
+
+            Row(alignment: .top, spacing: 12) {
+                StatGroup(title: "Frame Balance") {
+                    StatRow(label: "Spawned - Expired",
+                            value: "\(stats.spawnedParticleCount - stats.expiredParticleCount)")
+                    StatRow(label: "Event Spawn Share", value: formatPercent(stats.subEmitterSpawnedCount,
+                                                                              stats.spawnedParticleCount))
+                    StatRow(label: "Distance Spawn Share", value: formatPercent(stats.distanceSpawnedCount,
+                                                                                 stats.spawnedParticleCount))
+                    StatRow(label: "Burst Spawn Share", value: formatPercent(stats.burstSpawnedCount,
+                                                                              stats.spawnedParticleCount))
                 }
                 .flex(1, shrink: 1)
             }
@@ -413,6 +523,18 @@ private func formatSignedMs(_ ms: Double) -> String {
     if ms == 0 { return "0.00ms" }
     let prefix = ms > 0 ? "+" : "-"
     return "\(prefix)\(formatMs(abs(ms)))"
+}
+
+private func formatPercent(_ numerator: Int, _ denominator: Int) -> String {
+    guard denominator > 0 else { return "--" }
+    let percent = Double(numerator) / Double(denominator) * 100
+    if percent < 10 { return String(format: "%.1f%%", percent) }
+    return String(format: "%.0f%%", percent)
+}
+
+private func formatScale(_ value: Float) -> String {
+    guard value.isFinite else { return "--" }
+    return String(format: "%.2f", value)
 }
 
 private func cpuMs(_ stats: EditorFrameStats) -> Double {

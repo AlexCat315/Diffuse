@@ -755,6 +755,15 @@ public struct TransactionExecutor {
                                                                    type: "CameraComponent")
                 }
 
+            case let .setCameraAspectRatio(entityID, aspectRatio):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(CameraComponent.self, for: entity, { camera in
+                    camera.aspectRatio = max(0.001, aspectRatio)
+                }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "CameraComponent")
+                }
+
             case let .setCameraActive(entityID, isActive):
                 let entity = try requireEntity(entityID, in: scene)
                 guard scene.updateComponent(CameraComponent.self, for: entity, { camera in
@@ -1122,6 +1131,8 @@ public struct TransactionExecutor {
             return "scene:camera_pose:\(id)"
         case let .setCameraFOV(id, _):
             return "scene:camera_fov:\(id)"
+        case let .setCameraAspectRatio(id, _):
+            return "scene:camera_aspect:\(id)"
         case let .setCameraActive(id, _):
             return "scene:camera_active:\(id)"
         case let .setAudioSource(id, _):
@@ -1353,6 +1364,11 @@ public struct TransactionExecutor {
                 events.append(.entityAuthoredChanged(
                     ref: "scene:\(entityID)", property: "cameraFovYDegrees",
                     value: .float(max(1, min(179, fovYDegrees)))))
+
+            case let .setCameraAspectRatio(entityID, aspectRatio):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "cameraAspectRatio",
+                    value: .float(max(0.001, aspectRatio))))
 
             case let .setCameraActive(entityID, isActive):
                 events.append(.entityAuthoredChanged(

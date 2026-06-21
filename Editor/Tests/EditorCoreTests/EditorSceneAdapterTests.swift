@@ -33,6 +33,28 @@ struct EditorSceneAdapterTests {
         #expect(scene.hasActiveParticles())
     }
 
+    @Test("Editor scene adapter exposes particle frame stats after ticking")
+    func editorSceneAdapterExposesParticleFrameStats() {
+        let adapter = EditorSceneAdapter()
+        let entity = adapter.scene.createEntity()
+        _ = adapter.scene.setComponent(
+            ParticleEmitter(emissionRate: 10,
+                            maxParticles: 100,
+                            lifetime: 100,
+                            gravity: .zero),
+            for: entity
+        )
+
+        adapter.tickScene(deltaTime: 1)
+
+        let stats = adapter.currentParticleFrameStats()
+        #expect(stats.emitterCount >= 1)
+        #expect(stats.continuousSpawnedCount >= 10)
+        #expect(stats.spawnedParticleCount >= 10)
+        #expect(stats.liveParticleCount >= 10)
+        #expect(stats.maxParticleCount >= 100)
+    }
+
     @Test("Scene manifest restores preview hierarchy and runtime components")
     func sceneManifestRestoresPreviewHierarchyAndComponents() {
         let source = EditorSceneAdapter()
@@ -63,6 +85,7 @@ struct EditorSceneAdapterTests {
         }
         if let cameraID = camera.map(\.id).map(entityID) {
             #expect(restored.scene.component(CameraComponent.self, for: cameraID)?.isActive == true)
+            #expect(restored.scene.component(CameraComponent.self, for: cameraID)?.aspectRatio == 1)
         }
         if let lightID = light.map(\.id).map(entityID) {
             #expect(restored.scene.component(LightComponent.self, for: lightID)?.intensity == 3.0)
@@ -70,6 +93,76 @@ struct EditorSceneAdapterTests {
         if let constraintID = constraint.map(\.id).map(entityID) {
             #expect(restored.scene.component(Constraint.self, for: constraintID)?.constraintType == .distance)
         }
+    }
+
+    @Test("Scene manifest round-trips particle scalability settings")
+    func sceneManifestRoundTripsParticleScalabilitySettings() throws {
+        let source = EditorSceneAdapter()
+        source.scene.setResource(ParticleScalabilityResource(emissionScale: 0.4,
+                                                            burstScale: 0.5,
+                                                            distanceEmissionScale: 0.6,
+                                                            maxLiveParticleScale: 0.7))
+        source.scene.setResource(ParticleScalabilityPolicyResource(isEnabled: true,
+                                                                   targetLiveParticles: 128,
+                                                                   targetSpawnedParticlesPerFrame: 32,
+                                                                   minimumScale: 0.35,
+                                                                   pressureStep: 0.25,
+                                                                   recoveryStep: 0.1))
+
+        let manifest = source.manifest(selectedEntityID: source.defaultSelectionID)
+        #expect(manifest.particleScalability?.emissionScale == 0.4)
+        #expect(manifest.particleScalability?.burstScale == 0.5)
+        #expect(manifest.particleScalability?.distanceEmissionScale == 0.6)
+        #expect(manifest.particleScalability?.maxLiveParticleScale == 0.7)
+        #expect(manifest.particleScalabilityPolicy?.isEnabled == true)
+        #expect(manifest.particleScalabilityPolicy?.targetLiveParticles == 128)
+        #expect(manifest.particleScalabilityPolicy?.targetSpawnedParticlesPerFrame == 32)
+        #expect(manifest.particleScalabilityPolicy?.minimumScale == 0.35)
+        #expect(manifest.particleScalabilityPolicy?.pressureStep == 0.25)
+        #expect(manifest.particleScalabilityPolicy?.recoveryStep == 0.1)
+
+        let data = try JSONEncoder().encode(manifest)
+        let decoded = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
+        let restored = EditorSceneAdapter()
+        _ = restored.load(manifest: decoded)
+        let settings = try #require(restored.scene.resource(ParticleScalabilityResource.self))
+        #expect(settings.emissionScale == 0.4)
+        #expect(settings.burstScale == 0.5)
+        #expect(settings.distanceEmissionScale == 0.6)
+        #expect(settings.maxLiveParticleScale == 0.7)
+        let policy = try #require(restored.scene.resource(ParticleScalabilityPolicyResource.self))
+        #expect(policy.isEnabled)
+        #expect(policy.targetLiveParticles == 128)
+        #expect(policy.targetSpawnedParticlesPerFrame == 32)
+        #expect(policy.minimumScale == 0.35)
+        #expect(policy.pressureStep == 0.25)
+        #expect(policy.recoveryStep == 0.1)
+    }
+
+    @Test("Scene manifest round-trips camera aspect ratio")
+    func sceneManifestRoundTripsCameraAspectRatio() throws {
+        let source = EditorSceneAdapter()
+        guard let cameraNode = flatten(source.roots).first(where: { $0.name == "Main Camera" }) else {
+            Issue.record("Expected preview scene camera")
+            return
+        }
+        let cameraID = entityID(cameraNode.id)
+        guard source.scene.updateComponent(CameraComponent.self, for: cameraID, { camera in
+            camera.aspectRatio = 1.777
+        }) else {
+            Issue.record("Expected camera component")
+            return
+        }
+
+        let manifest = source.manifest(selectedEntityID: cameraNode.id)
+        #expect(findNode(in: manifest.roots, id: cameraNode.id)?.camera?.aspectRatio == 1.777)
+
+        let data = try JSONEncoder().encode(manifest)
+        let decoded = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
+        let restored = EditorSceneAdapter()
+        _ = restored.load(manifest: decoded)
+        let restoredID = try #require(flatten(restored.roots).first { $0.name == "Main Camera" }?.id)
+        #expect(restored.scene.component(CameraComponent.self, for: entityID(restoredID))?.aspectRatio == 1.777)
     }
 
     @Test("Scene manifest round-trips the renderable scene contract")
@@ -172,7 +265,9 @@ struct EditorSceneAdapterTests {
                                 ParticleCurveKeyframe(time: 1, value: 2),
                             ]),
                             burstCount: 5, burstInterval: 0.4,
-                            maxParticles: 64, lifetime: 1.25,
+                            maxParticles: 64,
+                            maxRenderedParticles: 32,
+                            lifetime: 1.25,
                             subEmitterTrigger: .death,
                             subEmitterBurstCount: 4,
                             subEmitterProbability: 0.8,
@@ -199,7 +294,14 @@ struct EditorSceneAdapterTests {
                             forceRadius: 8,
                             forceStrength: -2.5,
                             forceFalloff: 1.5,
+                            vectorFieldMode: .curl,
+                            vectorFieldDirection: SIMD3<Float>(0, 0, 1),
+                            vectorFieldStrength: 3.75,
+                            vectorFieldScale: 1.5,
+                            vectorFieldScrollSpeed: 0.25,
                             collisionMode: .worldPlane, simulationSpace: .world,
+                            simulationBackend: .gpuIfSupported,
+                            gpuSimulationWorkgroupSize: 128,
                             collisionPlaneY: -0.5,
                             collisionRestitution: 0.6, collisionDamping: 0.15,
                             startSize: 0.4, endSize: 0.05,
@@ -222,6 +324,11 @@ struct EditorSceneAdapterTests {
                             velocityStretchMax: 7,
                             maxRenderDistance: 96,
                             renderDistanceFadeRange: 16,
+                            renderLODStartDistance: 32,
+                            renderLODEndDistance: 128,
+                            renderLODMinParticleScale: 0.4,
+                            renderBoundsMode: .automatic,
+                            renderBoundsRadius: 28,
                             textureAssetID: "Assets/Textures/smoke.png",
                             texturePath: "/tmp/particle-smoke.png",
                             textureSheetColumns: 3,
@@ -240,6 +347,7 @@ struct EditorSceneAdapterTests {
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.prewarmTime == 0.75)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.prewarmStep == 0.04)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.emissionRate == 24)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.maxRenderedParticles == 32)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.emissionRateCurve == .constant(1.25))
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.distanceEmissionRate == 9)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.distanceEmissionRateCurve == .keyframes([
@@ -258,8 +366,20 @@ struct EditorSceneAdapterTests {
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.forceRadius == 8)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.forceStrength == -2.5)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.forceFalloff == 1.5)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.vectorFieldMode == .curl)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.vectorFieldDirection.simdValue == SIMD3<Float>(0, 0, 1))
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.vectorFieldStrength == 3.75)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.vectorFieldScale == 1.5)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.vectorFieldScrollSpeed == 0.25)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.simulationBackend == .gpuIfSupported)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.gpuSimulationWorkgroupSize == 128)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.maxRenderDistance == 96)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.renderDistanceFadeRange == 16)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.renderLODStartDistance == 32)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.renderLODEndDistance == 128)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.renderLODMinParticleScale == 0.4)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.renderBoundsMode == .automatic)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.renderBoundsRadius == 28)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.textureSheetFrameCount == 6)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.trailSegments == 6)
 
@@ -289,6 +409,7 @@ struct EditorSceneAdapterTests {
         #expect(e!.burstCount == 5)
         #expect(e!.burstInterval == 0.4)
         #expect(e!.maxParticles == 64)
+        #expect(e!.maxRenderedParticles == 32)
         #expect(e!.lifetime == 1.25)
         #expect(e!.subEmitterTrigger == .death)
         #expect(e!.subEmitterBurstCount == 4)
@@ -319,6 +440,13 @@ struct EditorSceneAdapterTests {
         #expect(e!.forceRadius == 8)
         #expect(e!.forceStrength == -2.5)
         #expect(e!.forceFalloff == 1.5)
+        #expect(e!.vectorFieldMode == .curl)
+        #expect(e!.vectorFieldDirection == SIMD3<Float>(0, 0, 1))
+        #expect(e!.vectorFieldStrength == 3.75)
+        #expect(e!.vectorFieldScale == 1.5)
+        #expect(e!.vectorFieldScrollSpeed == 0.25)
+        #expect(e!.simulationBackend == .gpuIfSupported)
+        #expect(e!.gpuSimulationWorkgroupSize == 128)
         #expect(e!.collisionMode == .worldPlane)
         #expect(e!.simulationSpace == .world)
         #expect(e!.collisionPlaneY == -0.5)
@@ -343,6 +471,11 @@ struct EditorSceneAdapterTests {
         #expect(e!.velocityStretchMax == 7)
         #expect(e!.maxRenderDistance == 96)
         #expect(e!.renderDistanceFadeRange == 16)
+        #expect(e!.renderLODStartDistance == 32)
+        #expect(e!.renderLODEndDistance == 128)
+        #expect(e!.renderLODMinParticleScale == 0.4)
+        #expect(e!.renderBoundsMode == .automatic)
+        #expect(e!.renderBoundsRadius == 28)
         #expect(e!.textureAssetID == "Assets/Textures/smoke.png")
         #expect(e!.texturePath == "/tmp/particle-smoke.png")
         #expect(e!.textureSheetColumns == 3)

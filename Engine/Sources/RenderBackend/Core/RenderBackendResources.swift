@@ -264,6 +264,49 @@ struct GPUParticleTextureResource {
     let sourcePath: String
 }
 
+struct GPUParticleSimulationResources {
+    let bindGroupLayout: GPUBindGroupLayout
+    let pipelineLayout: GPUPipelineLayout
+    let pipeline: GPUComputePipeline
+    let uniformBuffer: GPUBuffer
+    let stateBuffer: GPUBuffer
+    let bindGroup: GPUBindGroup
+    let instanceBindGroupLayout: GPUBindGroupLayout
+    let instancePipelineLayout: GPUPipelineLayout
+    let instancePipeline: GPUComputePipeline
+    let instanceUniformBuffer: GPUBuffer
+    let capacity: Int
+    let workgroupSize: Int
+}
+
+extension GPUParticleSimulationResources: @unchecked Sendable {}
+
+struct GPUParticleSimulationEncodeReport {
+    var batchCount: Int
+    var particleCount: Int
+    var dispatchWorkgroups: Int
+    var renderInstanceCount: Int
+
+    init(batchCount: Int = 0,
+         particleCount: Int = 0,
+         dispatchWorkgroups: Int = 0,
+         renderInstanceCount: Int = 0) {
+        self.batchCount = max(0, batchCount)
+        self.particleCount = max(0, particleCount)
+        self.dispatchWorkgroups = max(0, dispatchWorkgroups)
+        self.renderInstanceCount = max(0, renderInstanceCount)
+    }
+
+    mutating func include(batchParticleCount: Int,
+                          dispatchWorkgroups: Int,
+                          renderInstanceCount: Int = 0) {
+        batchCount += 1
+        particleCount += max(0, batchParticleCount)
+        self.dispatchWorkgroups += max(0, dispatchWorkgroups)
+        self.renderInstanceCount += max(0, renderInstanceCount)
+    }
+}
+
 struct BasePassEncodingReport {
     let drawCallCount: Int
     let renderBundleCount: Int

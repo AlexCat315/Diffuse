@@ -203,11 +203,74 @@ public struct RenderBounds: Sendable, Equatable {
     }
 }
 
+public struct ParticleRenderBatchKey: Hashable, Sendable, Equatable {
+    public var blendMode: ParticleBlendMode
+    public var texturePath: String?
+
+    public init(blendMode: ParticleBlendMode, texturePath: String? = nil) {
+        self.blendMode = blendMode
+        self.texturePath = normalizedParticleTexturePath(texturePath)
+    }
+
+    public init(particle: RenderParticle) {
+        self.init(blendMode: particle.blendMode, texturePath: particle.texturePath)
+    }
+}
+
+public struct ParticleRenderBatch: Sendable, Equatable {
+    public var key: ParticleRenderBatchKey
+    public var start: Int
+    public var count: Int
+
+    public init(key: ParticleRenderBatchKey, start: Int, count: Int) {
+        self.key = key
+        self.start = max(0, start)
+        self.count = max(0, count)
+    }
+}
+
+public struct ParticleRenderBatchPlan: Sendable, Equatable {
+    public var batches: [ParticleRenderBatch]
+    public var uniqueTextureCount: Int
+
+    public init(particles: [RenderParticle]) {
+        var batches: [ParticleRenderBatch] = []
+        batches.reserveCapacity(max(1, particles.count))
+        var uniqueTextures = Set<String>()
+        var currentKey: ParticleRenderBatchKey?
+        var currentStart = 0
+
+        for (index, particle) in particles.enumerated() {
+            let key = ParticleRenderBatchKey(particle: particle)
+            if let texturePath = key.texturePath {
+                uniqueTextures.insert(texturePath)
+            }
+            if let currentKey, currentKey != key {
+                batches.append(ParticleRenderBatch(key: currentKey,
+                                                   start: currentStart,
+                                                   count: index - currentStart))
+                currentStart = index
+            }
+            currentKey = key
+        }
+
+        if let currentKey {
+            batches.append(ParticleRenderBatch(key: currentKey,
+                                               start: currentStart,
+                                               count: particles.count - currentStart))
+        }
+
+        self.batches = batches
+        self.uniqueTextureCount = uniqueTextures.count
+    }
+}
+
 public struct ParticleRenderSummary: Sendable, Equatable {
     public var particleCount: Int
     public var alphaCount: Int
     public var additiveCount: Int
     public var texturedCount: Int
+    public var uniqueTextureCount: Int
     public var batchCount: Int
     public var bounds: RenderBounds
 
@@ -215,12 +278,14 @@ public struct ParticleRenderSummary: Sendable, Equatable {
                 alphaCount: Int = 0,
                 additiveCount: Int = 0,
                 texturedCount: Int = 0,
+                uniqueTextureCount: Int = 0,
                 batchCount: Int = 0,
                 bounds: RenderBounds = RenderBounds()) {
         self.particleCount = max(0, particleCount)
         self.alphaCount = max(0, alphaCount)
         self.additiveCount = max(0, additiveCount)
         self.texturedCount = max(0, texturedCount)
+        self.uniqueTextureCount = max(0, uniqueTextureCount)
         self.batchCount = max(0, batchCount)
         self.bounds = bounds
     }
@@ -230,7 +295,7 @@ public struct ParticleRenderSummary: Sendable, Equatable {
         var additiveCount = 0
         var texturedCount = 0
         var bounds = RenderBounds()
-        var batchKeys = Set<String>()
+        let batchPlan = ParticleRenderBatchPlan(particles: particles)
 
         for particle in particles {
             switch particle.blendMode {
@@ -239,11 +304,9 @@ public struct ParticleRenderSummary: Sendable, Equatable {
             case .additive:
                 additiveCount += 1
             }
-            let textureKey = particle.texturePath?.isEmpty == false ? particle.texturePath! : ""
-            if !textureKey.isEmpty {
+            if normalizedParticleTexturePath(particle.texturePath) != nil {
                 texturedCount += 1
             }
-            batchKeys.insert("\(particle.blendMode.rawValue)|\(textureKey)")
             bounds.include(center: particle.position,
                            radius: particle.conservativeRadius)
         }
@@ -252,9 +315,62 @@ public struct ParticleRenderSummary: Sendable, Equatable {
                   alphaCount: alphaCount,
                   additiveCount: additiveCount,
                   texturedCount: texturedCount,
-                  batchCount: batchKeys.count,
+                  uniqueTextureCount: batchPlan.uniqueTextureCount,
+                  batchCount: batchPlan.batches.count,
                   bounds: bounds)
     }
+}
+
+public struct RenderParticleSimulationBatch: Sendable, Equatable {
+    public var plan: ParticleGPUSimulationPlan
+    public var particles: [Particle]
+    public var gravity: SIMD3<Float>
+    public var vectorFieldDirection: SIMD3<Float>
+    public var vectorFieldStrength: Float
+    public var vectorFieldScale: Float
+    public var vectorFieldScrollSpeed: Float
+    public var renderOnGPU: Bool
+    public var worldTransform: simd_float4x4
+    public var uvRect: SIMD4<Float>
+    public var blendMode: ParticleBlendMode
+    public var texturePath: String?
+
+    public init(plan: ParticleGPUSimulationPlan,
+                particles: [Particle],
+                gravity: SIMD3<Float>,
+                vectorFieldDirection: SIMD3<Float> = SIMD3<Float>(0, 1, 0),
+                vectorFieldStrength: Float = 0,
+                vectorFieldScale: Float = 1,
+                vectorFieldScrollSpeed: Float = 0,
+                renderOnGPU: Bool = false,
+                worldTransform: simd_float4x4 = matrix_identity_float4x4,
+                uvRect: SIMD4<Float> = SIMD4<Float>(0, 0, 1, 1),
+                blendMode: ParticleBlendMode = .alpha,
+                texturePath: String? = nil) {
+        self.plan = plan
+        self.particles = particles
+        self.gravity = gravity
+        self.vectorFieldDirection = vectorFieldDirection
+        self.vectorFieldStrength = max(0, vectorFieldStrength)
+        self.vectorFieldScale = max(0.0001, vectorFieldScale)
+        self.vectorFieldScrollSpeed = vectorFieldScrollSpeed
+        self.renderOnGPU = renderOnGPU
+        self.worldTransform = worldTransform
+        self.uvRect = uvRect
+        self.blendMode = blendMode
+        self.texturePath = normalizedParticleTexturePath(texturePath)
+    }
+
+    public var particleCount: Int {
+        min(particles.count, max(0, plan.particleCapacity))
+    }
+}
+
+private func normalizedParticleTexturePath(_ path: String?) -> String? {
+    guard let path = path?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !path.isEmpty
+    else { return nil }
+    return path
 }
 
 private extension RenderParticle {
@@ -268,6 +384,7 @@ public struct RenderCamera: Sendable, Equatable {
     public var target: SIMD3<Float>
     public var up: SIMD3<Float>
     public var fovYRadians: Float
+    public var aspectRatio: Float
     public var near: Float
     public var far: Float
 
@@ -275,12 +392,14 @@ public struct RenderCamera: Sendable, Equatable {
                 target: SIMD3<Float> = .zero,
                 up: SIMD3<Float> = SIMD3<Float>(0, 1, 0),
                 fovYRadians: Float = .pi / 4,
+                aspectRatio: Float = 1,
                 near: Float = 0.1,
                 far: Float = 100.0) {
         self.eye = eye
         self.target = target
         self.up = up
         self.fovYRadians = fovYRadians
+        self.aspectRatio = max(0.001, aspectRatio)
         self.near = near
         self.far = far
     }
@@ -293,6 +412,8 @@ public struct RenderScene: Sendable {
     public var environment: RenderEnvironment
     /// World-space billboard particles, pre-sorted back-to-front for the camera.
     public var particles: [RenderParticle]
+    /// GPU-simulation input batches extracted from authored particle emitters.
+    public var particleSimulationBatches: [RenderParticleSimulationBatch]
     /// Aggregate particle bounds and batch-count hints for culling, budgets, and profiler UI.
     public var particleSummary: ParticleRenderSummary
 
@@ -301,12 +422,14 @@ public struct RenderScene: Sendable {
                 lights: [RenderLight] = [],
                 environment: RenderEnvironment = .fallback,
                 particles: [RenderParticle] = [],
+                particleSimulationBatches: [RenderParticleSimulationBatch] = [],
                 particleSummary: ParticleRenderSummary? = nil) {
         self.camera = camera
         self.instances = instances
         self.lights = lights
         self.environment = environment
         self.particles = particles
+        self.particleSimulationBatches = particleSimulationBatches
         self.particleSummary = particleSummary ?? ParticleRenderSummary(particles: particles)
     }
 }

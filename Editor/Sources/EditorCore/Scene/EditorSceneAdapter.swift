@@ -123,6 +123,54 @@ public struct EditorSceneManifestPhysicsSettings: Codable, Sendable, Equatable {
     }
 }
 
+public struct EditorSceneManifestParticleScalability: Codable, Sendable, Equatable {
+    public let emissionScale: Float
+    public let burstScale: Float
+    public let distanceEmissionScale: Float
+    public let maxLiveParticleScale: Float
+
+    public init(_ settings: ParticleScalabilityResource) {
+        self.emissionScale = settings.emissionScale
+        self.burstScale = settings.burstScale
+        self.distanceEmissionScale = settings.distanceEmissionScale
+        self.maxLiveParticleScale = settings.maxLiveParticleScale
+    }
+
+    var settings: ParticleScalabilityResource {
+        ParticleScalabilityResource(emissionScale: emissionScale,
+                                    burstScale: burstScale,
+                                    distanceEmissionScale: distanceEmissionScale,
+                                    maxLiveParticleScale: maxLiveParticleScale)
+    }
+}
+
+public struct EditorSceneManifestParticleScalabilityPolicy: Codable, Sendable, Equatable {
+    public let isEnabled: Bool
+    public let targetLiveParticles: Int
+    public let targetSpawnedParticlesPerFrame: Int
+    public let minimumScale: Float
+    public let pressureStep: Float
+    public let recoveryStep: Float
+
+    public init(_ policy: ParticleScalabilityPolicyResource) {
+        self.isEnabled = policy.isEnabled
+        self.targetLiveParticles = policy.targetLiveParticles
+        self.targetSpawnedParticlesPerFrame = policy.targetSpawnedParticlesPerFrame
+        self.minimumScale = policy.minimumScale
+        self.pressureStep = policy.pressureStep
+        self.recoveryStep = policy.recoveryStep
+    }
+
+    var policy: ParticleScalabilityPolicyResource {
+        ParticleScalabilityPolicyResource(isEnabled: isEnabled,
+                                          targetLiveParticles: targetLiveParticles,
+                                          targetSpawnedParticlesPerFrame: targetSpawnedParticlesPerFrame,
+                                          minimumScale: minimumScale,
+                                          pressureStep: pressureStep,
+                                          recoveryStep: recoveryStep)
+    }
+}
+
 public struct EditorSceneManifest: Codable, Sendable, Equatable {
     public let schemaVersion: Int
     public let revision: UInt64
@@ -130,6 +178,8 @@ public struct EditorSceneManifest: Codable, Sendable, Equatable {
     public let selectedEntityID: UInt64?
     public let sceneKind: String?
     public let physicsSettings: EditorSceneManifestPhysicsSettings?
+    public let particleScalability: EditorSceneManifestParticleScalability?
+    public let particleScalabilityPolicy: EditorSceneManifestParticleScalabilityPolicy?
     public let projectAssetCount: Int?
     public let lastModifiedAt: String?
     public let roots: [EditorSceneManifestNode]
@@ -140,6 +190,8 @@ public struct EditorSceneManifest: Codable, Sendable, Equatable {
                 selectedEntityID: UInt64? = nil,
                 sceneKind: String? = nil,
                 physicsSettings: EditorSceneManifestPhysicsSettings? = nil,
+                particleScalability: EditorSceneManifestParticleScalability? = nil,
+                particleScalabilityPolicy: EditorSceneManifestParticleScalabilityPolicy? = nil,
                 projectAssetCount: Int? = nil,
                 lastModifiedAt: String? = nil,
                 roots: [EditorSceneManifestNode]) {
@@ -149,6 +201,8 @@ public struct EditorSceneManifest: Codable, Sendable, Equatable {
         self.selectedEntityID = selectedEntityID
         self.sceneKind = sceneKind
         self.physicsSettings = physicsSettings
+        self.particleScalability = particleScalability
+        self.particleScalabilityPolicy = particleScalabilityPolicy
         self.projectAssetCount = projectAssetCount
         self.lastModifiedAt = lastModifiedAt
         self.roots = roots
@@ -359,28 +413,53 @@ public struct EditorSceneManifestCamera: Codable, Sendable, Equatable {
     public let target: EditorSceneManifestVector3
     public let up: EditorSceneManifestVector3
     public let fovYRadians: Float
+    public let aspectRatio: Float
     public let near: Float
     public let far: Float
     public let isActive: Bool
 
+    private enum CodingKeys: String, CodingKey {
+        case target
+        case up
+        case fovYRadians
+        case aspectRatio
+        case near
+        case far
+        case isActive
+    }
+
     public init(target: EditorSceneManifestVector3,
                 up: EditorSceneManifestVector3,
                 fovYRadians: Float,
+                aspectRatio: Float = 1,
                 near: Float,
                 far: Float,
                 isActive: Bool) {
         self.target = target
         self.up = up
         self.fovYRadians = fovYRadians
+        self.aspectRatio = max(0.001, aspectRatio)
         self.near = near
         self.far = far
         self.isActive = isActive
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(target: try c.decode(EditorSceneManifestVector3.self, forKey: .target),
+                  up: try c.decode(EditorSceneManifestVector3.self, forKey: .up),
+                  fovYRadians: try c.decode(Float.self, forKey: .fovYRadians),
+                  aspectRatio: try c.decodeIfPresent(Float.self, forKey: .aspectRatio) ?? 1,
+                  near: try c.decode(Float.self, forKey: .near),
+                  far: try c.decode(Float.self, forKey: .far),
+                  isActive: try c.decode(Bool.self, forKey: .isActive))
     }
 
     public init(_ component: CameraComponent) {
         self.init(target: EditorSceneManifestVector3(component.target),
                   up: EditorSceneManifestVector3(component.up),
                   fovYRadians: component.fovYRadians,
+                  aspectRatio: component.aspectRatio,
                   near: component.near,
                   far: component.far,
                   isActive: component.isActive)
@@ -390,6 +469,7 @@ public struct EditorSceneManifestCamera: Codable, Sendable, Equatable {
         CameraComponent(target: target.simdValue,
                         up: up.simdValue,
                         fovYRadians: fovYRadians,
+                        aspectRatio: aspectRatio,
                         near: near,
                         far: far,
                         isActive: isActive)
@@ -801,6 +881,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let burstCount: Int
     public let burstInterval: Float
     public let maxParticles: Int
+    public let maxRenderedParticles: Int
     public let lifetime: Float
     public let lifetimeRandomness: Float
     public let subEmitterTrigger: ParticleSubEmitterTrigger
@@ -835,8 +916,15 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let forceRadius: Float
     public let forceStrength: Float
     public let forceFalloff: Float
+    public let vectorFieldMode: ParticleVectorFieldMode
+    public let vectorFieldDirection: EditorSceneManifestVector3
+    public let vectorFieldStrength: Float
+    public let vectorFieldScale: Float
+    public let vectorFieldScrollSpeed: Float
     public let collisionMode: ParticleCollisionMode
     public let simulationSpace: ParticleSimulationSpace
+    public let simulationBackend: ParticleSimulationBackend
+    public let gpuSimulationWorkgroupSize: Int
     public let collisionPlaneY: Float
     public let collisionRestitution: Float
     public let collisionDamping: Float
@@ -857,6 +945,11 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let velocityStretchMax: Float
     public let maxRenderDistance: Float
     public let renderDistanceFadeRange: Float
+    public let renderLODStartDistance: Float
+    public let renderLODEndDistance: Float
+    public let renderLODMinParticleScale: Float
+    public let renderBoundsMode: ParticleRenderBoundsMode
+    public let renderBoundsRadius: Float
     public let textureAssetID: String?
     public let texturePath: String?
     public let textureSheetColumns: Int
@@ -882,6 +975,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.burstCount = component.burstCount
         self.burstInterval = component.burstInterval
         self.maxParticles = component.maxParticles
+        self.maxRenderedParticles = component.maxRenderedParticles
         self.lifetime = component.lifetime
         self.lifetimeRandomness = component.lifetimeRandomness
         self.subEmitterTrigger = component.subEmitterTrigger
@@ -916,8 +1010,15 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.forceRadius = component.forceRadius
         self.forceStrength = component.forceStrength
         self.forceFalloff = component.forceFalloff
+        self.vectorFieldMode = component.vectorFieldMode
+        self.vectorFieldDirection = EditorSceneManifestVector3(component.vectorFieldDirection)
+        self.vectorFieldStrength = component.vectorFieldStrength
+        self.vectorFieldScale = component.vectorFieldScale
+        self.vectorFieldScrollSpeed = component.vectorFieldScrollSpeed
         self.collisionMode = component.collisionMode
         self.simulationSpace = component.simulationSpace
+        self.simulationBackend = component.simulationBackend
+        self.gpuSimulationWorkgroupSize = component.gpuSimulationWorkgroupSize
         self.collisionPlaneY = component.collisionPlaneY
         self.collisionRestitution = component.collisionRestitution
         self.collisionDamping = component.collisionDamping
@@ -938,6 +1039,11 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.velocityStretchMax = component.velocityStretchMax
         self.maxRenderDistance = component.maxRenderDistance
         self.renderDistanceFadeRange = component.renderDistanceFadeRange
+        self.renderLODStartDistance = component.renderLODStartDistance
+        self.renderLODEndDistance = component.renderLODEndDistance
+        self.renderLODMinParticleScale = component.renderLODMinParticleScale
+        self.renderBoundsMode = component.renderBoundsMode
+        self.renderBoundsRadius = component.renderBoundsRadius
         self.textureAssetID = component.textureAssetID
         self.texturePath = component.texturePath
         self.textureSheetColumns = component.textureSheetColumns
@@ -960,7 +1066,9 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
                         distanceEmissionRate: distanceEmissionRate,
                         distanceEmissionRateCurve: distanceEmissionRateCurve,
                         burstCount: burstCount, burstInterval: burstInterval,
-                        maxParticles: maxParticles, lifetime: lifetime,
+                        maxParticles: maxParticles,
+                        maxRenderedParticles: maxRenderedParticles,
+                        lifetime: lifetime,
                         lifetimeRandomness: lifetimeRandomness,
                         subEmitterTrigger: subEmitterTrigger,
                         subEmitterBurstCount: subEmitterBurstCount,
@@ -990,7 +1098,14 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
                         forceRadius: forceRadius,
                         forceStrength: forceStrength,
                         forceFalloff: forceFalloff,
+                        vectorFieldMode: vectorFieldMode,
+                        vectorFieldDirection: vectorFieldDirection.simdValue,
+                        vectorFieldStrength: vectorFieldStrength,
+                        vectorFieldScale: vectorFieldScale,
+                        vectorFieldScrollSpeed: vectorFieldScrollSpeed,
                         collisionMode: collisionMode, simulationSpace: simulationSpace,
+                        simulationBackend: simulationBackend,
+                        gpuSimulationWorkgroupSize: gpuSimulationWorkgroupSize,
                         collisionPlaneY: collisionPlaneY,
                         collisionRestitution: collisionRestitution, collisionDamping: collisionDamping,
                         startSize: startSize, endSize: endSize, sizeRandomness: sizeRandomness,
@@ -1004,6 +1119,11 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
                         velocityStretchMax: velocityStretchMax,
                         maxRenderDistance: maxRenderDistance,
                         renderDistanceFadeRange: renderDistanceFadeRange,
+                        renderLODStartDistance: renderLODStartDistance,
+                        renderLODEndDistance: renderLODEndDistance,
+                        renderLODMinParticleScale: renderLODMinParticleScale,
+                        renderBoundsMode: renderBoundsMode,
+                        renderBoundsRadius: renderBoundsRadius,
                         textureAssetID: textureAssetID, texturePath: texturePath,
                         textureSheetColumns: textureSheetColumns,
                         textureSheetRows: textureSheetRows,
@@ -1019,7 +1139,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case isEmitting, looping, duration, prewarmTime, prewarmStep, emissionRate, emissionRateCurve
         case distanceEmissionRate, distanceEmissionRateCurve, burstCount, burstInterval
-        case maxParticles, lifetime, lifetimeRandomness
+        case maxParticles, maxRenderedParticles, lifetime, lifetimeRandomness
         case subEmitterTrigger, subEmitterBurstCount, subEmitterProbability, subEmitterMaxDepth
         case subEmitterInheritVelocity, subEmitterLifetime
         case subEmitterStartVelocity, subEmitterVelocityRandomness
@@ -1029,12 +1149,16 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         case startVelocity, velocityRandomness, velocityInheritance, gravity
         case noiseStrength, noiseScale, noiseSpeed
         case forceMode, forceCenter, forceAxis, forceRadius, forceStrength, forceFalloff
-        case collisionMode, simulationSpace, collisionPlaneY, collisionRestitution, collisionDamping
+        case vectorFieldMode, vectorFieldDirection, vectorFieldStrength, vectorFieldScale, vectorFieldScrollSpeed
+        case collisionMode, simulationSpace, simulationBackend, gpuSimulationWorkgroupSize
+        case collisionPlaneY, collisionRestitution, collisionDamping
         case startSize, endSize, sizeRandomness
         case startRotation, rotationRandomness, angularVelocity, angularVelocityRandomness
         case sizeCurve, startColor, endColor, colorCurve, blendMode
         case renderAlignment, velocityStretchScale, velocityStretchMax
         case maxRenderDistance, renderDistanceFadeRange
+        case renderLODStartDistance, renderLODEndDistance, renderLODMinParticleScale
+        case renderBoundsMode, renderBoundsRadius
         case textureAssetID, texturePath
         case textureSheetColumns, textureSheetRows, textureSheetFrameCount, textureSheetFrameRate
         case trailLength, trailSegments, trailEndSizeScale, trailEndAlphaScale, seed
@@ -1055,6 +1179,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.burstCount = try c.decodeIfPresent(Int.self, forKey: .burstCount) ?? 0
         self.burstInterval = try c.decodeIfPresent(Float.self, forKey: .burstInterval) ?? 0
         self.maxParticles = try c.decodeIfPresent(Int.self, forKey: .maxParticles) ?? 256
+        self.maxRenderedParticles = try c.decodeIfPresent(Int.self, forKey: .maxRenderedParticles) ?? 0
         self.lifetime = try c.decodeIfPresent(Float.self, forKey: .lifetime) ?? 2
         self.lifetimeRandomness = try c.decodeIfPresent(Float.self, forKey: .lifetimeRandomness) ?? 0
         self.subEmitterTrigger = try c.decodeIfPresent(ParticleSubEmitterTrigger.self,
@@ -1106,8 +1231,18 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.forceRadius = try c.decodeIfPresent(Float.self, forKey: .forceRadius) ?? 0
         self.forceStrength = try c.decodeIfPresent(Float.self, forKey: .forceStrength) ?? 0
         self.forceFalloff = try c.decodeIfPresent(Float.self, forKey: .forceFalloff) ?? 1
+        self.vectorFieldMode = try c.decodeIfPresent(ParticleVectorFieldMode.self, forKey: .vectorFieldMode) ?? .none
+        self.vectorFieldDirection = try c.decodeIfPresent(EditorSceneManifestVector3.self,
+                                                           forKey: .vectorFieldDirection)
+            ?? EditorSceneManifestVector3(SIMD3<Float>(0, 1, 0))
+        self.vectorFieldStrength = try c.decodeIfPresent(Float.self, forKey: .vectorFieldStrength) ?? 0
+        self.vectorFieldScale = try c.decodeIfPresent(Float.self, forKey: .vectorFieldScale) ?? 1
+        self.vectorFieldScrollSpeed = try c.decodeIfPresent(Float.self, forKey: .vectorFieldScrollSpeed) ?? 0
         self.collisionMode = try c.decodeIfPresent(ParticleCollisionMode.self, forKey: .collisionMode) ?? .none
         self.simulationSpace = try c.decodeIfPresent(ParticleSimulationSpace.self, forKey: .simulationSpace) ?? .local
+        self.simulationBackend = try c.decodeIfPresent(ParticleSimulationBackend.self,
+                                                        forKey: .simulationBackend) ?? .cpu
+        self.gpuSimulationWorkgroupSize = try c.decodeIfPresent(Int.self, forKey: .gpuSimulationWorkgroupSize) ?? 64
         self.collisionPlaneY = try c.decodeIfPresent(Float.self, forKey: .collisionPlaneY) ?? 0
         self.collisionRestitution = try c.decodeIfPresent(Float.self, forKey: .collisionRestitution) ?? 0.5
         self.collisionDamping = try c.decodeIfPresent(Float.self, forKey: .collisionDamping) ?? 0
@@ -1131,6 +1266,12 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.velocityStretchMax = try c.decodeIfPresent(Float.self, forKey: .velocityStretchMax) ?? 8
         self.maxRenderDistance = try c.decodeIfPresent(Float.self, forKey: .maxRenderDistance) ?? 0
         self.renderDistanceFadeRange = try c.decodeIfPresent(Float.self, forKey: .renderDistanceFadeRange) ?? 0
+        self.renderLODStartDistance = try c.decodeIfPresent(Float.self, forKey: .renderLODStartDistance) ?? 0
+        self.renderLODEndDistance = try c.decodeIfPresent(Float.self, forKey: .renderLODEndDistance) ?? 0
+        self.renderLODMinParticleScale = try c.decodeIfPresent(Float.self, forKey: .renderLODMinParticleScale) ?? 1
+        self.renderBoundsRadius = try c.decodeIfPresent(Float.self, forKey: .renderBoundsRadius) ?? 0
+        self.renderBoundsMode = try c.decodeIfPresent(ParticleRenderBoundsMode.self, forKey: .renderBoundsMode)
+            ?? (renderBoundsRadius > 0 ? .manual : .disabled)
         self.textureAssetID = try c.decodeIfPresent(String.self, forKey: .textureAssetID)
         self.texturePath = try c.decodeIfPresent(String.self, forKey: .texturePath)
         self.textureSheetColumns = try c.decodeIfPresent(Int.self, forKey: .textureSheetColumns) ?? 1
@@ -1184,10 +1325,13 @@ public enum EditorInspectorFieldValue {
     case particleEmissionShape(Binding<ParticleEmissionShape>)
     case particleCollisionMode(Binding<ParticleCollisionMode>)
     case particleSimulationSpace(Binding<ParticleSimulationSpace>)
+    case particleSimulationBackend(Binding<ParticleSimulationBackend>)
     case particleCurve(Binding<ParticleCurve>)
     case particleBlendMode(Binding<ParticleBlendMode>)
     case particleRenderAlignment(Binding<ParticleRenderAlignment>)
+    case particleRenderBoundsMode(Binding<ParticleRenderBoundsMode>)
     case particleForceMode(Binding<ParticleForceMode>)
+    case particleVectorFieldMode(Binding<ParticleVectorFieldMode>)
     case particleSubEmitterTrigger(Binding<ParticleSubEmitterTrigger>)
     case particleSubEmitters(Binding<[ParticleSubEmitter]>)
     case asset(Binding<EditorInspectorAssetRef?>, acceptedKinds: Set<String>, placeholder: String)
@@ -1280,6 +1424,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         let restoredSelection = selectedEntity.flatMap { scene.contains($0) ? $0.rawValue : nil }
         let physicsSettings = scene.resource(PhysicsSettingsResource.self)
             .map(EditorSceneManifestPhysicsSettings.init)
+        let particleScalability = scene.resource(ParticleScalabilityResource.self)
+            .map(EditorSceneManifestParticleScalability.init)
+        let particleScalabilityPolicy = scene.resource(ParticleScalabilityPolicyResource.self)
+            .map(EditorSceneManifestParticleScalabilityPolicy.init)
         let sceneKind = scene.resource(SceneKindComponent.self)?.value
         let assetCount = AssetRegistry.shared.entriesSnapshot().count
         let timestamp = ISO8601DateFormatter().string(from: Date())
@@ -1288,6 +1436,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                    selectedEntityID: restoredSelection,
                                    sceneKind: sceneKind,
                                    physicsSettings: physicsSettings,
+                                   particleScalability: particleScalability,
+                                   particleScalabilityPolicy: particleScalabilityPolicy,
                                    projectAssetCount: assetCount > 0 ? assetCount : nil,
                                    lastModifiedAt: timestamp,
                                    roots: scene.roots().map(manifestNode))
@@ -1368,6 +1518,12 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         if let physicsSettings = manifest.physicsSettings {
             restoredScene.setResource(physicsSettings.settings)
         }
+        if let particleScalability = manifest.particleScalability {
+            restoredScene.setResource(particleScalability.settings)
+        }
+        if let particleScalabilityPolicy = manifest.particleScalabilityPolicy {
+            restoredScene.setResource(particleScalabilityPolicy.policy)
+        }
         rebuildMeshColliderResources(in: &restoredScene)
         restoredScene.propagateTransforms()
 
@@ -1413,6 +1569,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         var sections: [EditorInspectorSection] = [
             generalSection(for: entity),
             hierarchySection(for: entity),
+            particleScalabilitySection(),
         ]
 
         if let transformSection = transformSection(for: entity) {
@@ -1973,6 +2130,12 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                     value: .constrainedNumber(cameraFOVBinding(for: entity),
                                               min: 1, max: 179, step: 1, showsStepper: true)
                 ),
+                EditorInspectorField(
+                    id: "camera-aspect",
+                    label: L("Aspect Ratio"),
+                    value: .constrainedNumber(cameraAspectBinding(for: entity),
+                                              min: 0.1, max: 10, step: 0.01, showsStepper: true)
+                ),
             ]
         )
     }
@@ -2012,6 +2175,24 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
+    private func cameraAspectBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(CameraComponent.self, for: entity)?.aspectRatio ?? 1
+            },
+            set: { [self] next in
+                guard let cam = scene.component(CameraComponent.self, for: entity) else { return }
+                let clamped = max(0.1, min(10, next))
+                guard abs(cam.aspectRatio - clamped) > 1e-4 else { return }
+                _ = applySceneTransaction(intentVerb: "scene.set_camera_aspect_ratio",
+                                          summary: "Update camera aspect ratio",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setCameraAspectRatio(entityID: entity.rawValue,
+                                                                             aspectRatio: clamped)])
+            }
+        )
+    }
+
     private func audioListenerSection(for entity: EntityID) -> EditorInspectorSection? {
         guard scene.hasComponent(AudioListener.self, for: entity) else { return nil }
         return EditorInspectorSection(
@@ -2044,6 +2225,128 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
+    private func particleScalabilitySection() -> EditorInspectorSection {
+        let state = scene.resource(ParticleScalabilityStateResource.self) ?? .default
+        return EditorInspectorSection(
+            id: "particle-scalability",
+            title: L("Particle Scalability"),
+            fields: [
+                EditorInspectorField(id: "particle-scale-emission", label: L("Emission Scale"),
+                                     value: .constrainedNumber(particleScalabilityFloatBinding(\.emissionScale),
+                                                               min: 0, max: 1, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "particle-scale-burst", label: L("Burst Scale"),
+                                     value: .constrainedNumber(particleScalabilityFloatBinding(\.burstScale),
+                                                               min: 0, max: 1, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "particle-scale-distance", label: L("Distance Scale"),
+                                     value: .constrainedNumber(particleScalabilityFloatBinding(\.distanceEmissionScale),
+                                                               min: 0, max: 1, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "particle-scale-live-cap", label: L("Live Cap Scale"),
+                                     value: .constrainedNumber(particleScalabilityFloatBinding(\.maxLiveParticleScale),
+                                                               min: 0, max: 1, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "particle-policy-enabled", label: L("Auto Scale"),
+                                     value: .bool(particleScalabilityPolicyEnabledBinding())),
+                EditorInspectorField(id: "particle-policy-target-live", label: L("Target Live"),
+                                     value: .constrainedNumber(particleScalabilityPolicyIntBinding(\.targetLiveParticles),
+                                                               min: 0, max: 1_000_000, step: 100, showsStepper: true)),
+                EditorInspectorField(id: "particle-policy-target-spawn", label: L("Target Spawn"),
+                                     value: .constrainedNumber(particleScalabilityPolicyIntBinding(\.targetSpawnedParticlesPerFrame),
+                                                               min: 0, max: 1_000_000, step: 10, showsStepper: true)),
+                EditorInspectorField(id: "particle-policy-min-scale", label: L("Minimum Scale"),
+                                     value: .constrainedNumber(particleScalabilityPolicyFloatBinding(\.minimumScale),
+                                                               min: 0, max: 1, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "particle-policy-pressure-step", label: L("Pressure Step"),
+                                     value: .constrainedNumber(particleScalabilityPolicyFloatBinding(\.pressureStep),
+                                                               min: 0, max: 1, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "particle-policy-recovery-step", label: L("Recovery Step"),
+                                     value: .constrainedNumber(particleScalabilityPolicyFloatBinding(\.recoveryStep),
+                                                               min: 0, max: 1, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "particle-policy-applied-scale", label: L("Applied Scale"),
+                                     value: .readOnly(format(state.appliedScale))),
+                EditorInspectorField(id: "particle-policy-pressure", label: L("Pressure"),
+                                     value: .readOnly(format(state.pressure))),
+                EditorInspectorField(id: "particle-policy-reason", label: L("Reason"),
+                                     value: .readOnly(state.reason.rawValue)),
+            ]
+        )
+    }
+
+    private func updateParticleScalability(_ mutate: (inout ParticleScalabilityResource) -> Void) {
+        var next = scene.resource(ParticleScalabilityResource.self) ?? .default
+        mutate(&next)
+        let sanitized = ParticleScalabilityResource(emissionScale: next.emissionScale,
+                                                    burstScale: next.burstScale,
+                                                    distanceEmissionScale: next.distanceEmissionScale,
+                                                    maxLiveParticleScale: next.maxLiveParticleScale)
+        guard scene.resource(ParticleScalabilityResource.self) != sanitized else { return }
+        scene.setResource(sanitized)
+        notifyRevisionChanged()
+    }
+
+    private func updateParticleScalabilityPolicy(_ mutate: (inout ParticleScalabilityPolicyResource) -> Void) {
+        var next = scene.resource(ParticleScalabilityPolicyResource.self) ?? .disabled
+        mutate(&next)
+        let sanitized = ParticleScalabilityPolicyResource(isEnabled: next.isEnabled,
+                                                          targetLiveParticles: next.targetLiveParticles,
+                                                          targetSpawnedParticlesPerFrame: next.targetSpawnedParticlesPerFrame,
+                                                          minimumScale: next.minimumScale,
+                                                          pressureStep: next.pressureStep,
+                                                          recoveryStep: next.recoveryStep)
+        guard scene.resource(ParticleScalabilityPolicyResource.self) != sanitized else { return }
+        scene.setResource(sanitized)
+        notifyRevisionChanged()
+    }
+
+    private func particleScalabilityFloatBinding(
+        _ keyPath: WritableKeyPath<ParticleScalabilityResource, Float>
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in scene.resource(ParticleScalabilityResource.self)?[keyPath: keyPath] ?? 1 },
+            set: { [self] next in
+                guard scene.resource(ParticleScalabilityResource.self)?[keyPath: keyPath] != next else { return }
+                updateParticleScalability { $0[keyPath: keyPath] = next }
+            }
+        )
+    }
+
+    private func particleScalabilityPolicyEnabledBinding() -> Binding<Bool> {
+        Binding(
+            get: { [self] in scene.resource(ParticleScalabilityPolicyResource.self)?.isEnabled ?? false },
+            set: { [self] next in
+                guard scene.resource(ParticleScalabilityPolicyResource.self)?.isEnabled != next else { return }
+                updateParticleScalabilityPolicy { $0.isEnabled = next }
+            }
+        )
+    }
+
+    private func particleScalabilityPolicyFloatBinding(
+        _ keyPath: WritableKeyPath<ParticleScalabilityPolicyResource, Float>
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in scene.resource(ParticleScalabilityPolicyResource.self)?[keyPath: keyPath]
+                ?? ParticleScalabilityPolicyResource.disabled[keyPath: keyPath] },
+            set: { [self] next in
+                guard scene.resource(ParticleScalabilityPolicyResource.self)?[keyPath: keyPath] != next else { return }
+                updateParticleScalabilityPolicy { $0[keyPath: keyPath] = next }
+            }
+        )
+    }
+
+    private func particleScalabilityPolicyIntBinding(
+        _ keyPath: WritableKeyPath<ParticleScalabilityPolicyResource, Int>
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                Float(scene.resource(ParticleScalabilityPolicyResource.self)?[keyPath: keyPath]
+                      ?? ParticleScalabilityPolicyResource.disabled[keyPath: keyPath])
+            },
+            set: { [self] next in
+                let value = max(0, Int(next.rounded()))
+                guard scene.resource(ParticleScalabilityPolicyResource.self)?[keyPath: keyPath] != value else { return }
+                updateParticleScalabilityPolicy { $0[keyPath: keyPath] = value }
+            }
+        )
+    }
+
     private func particleEmitterSection(for entity: EntityID) -> EditorInspectorSection? {
         guard scene.hasComponent(ParticleEmitter.self, for: entity) else { return nil }
         return EditorInspectorSection(
@@ -2058,6 +2361,18 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                                                       summary: "Toggle particle looping"))),
                 EditorInspectorField(id: "particle-simulation-space", label: L("Space"),
                                      value: .particleSimulationSpace(particleSimulationSpaceBinding(for: entity))),
+                EditorInspectorField(id: "particle-simulation-backend", label: L("Backend"),
+                                     value: .particleSimulationBackend(particleSimulationBackendBinding(for: entity))),
+                EditorInspectorField(id: "particle-gpu-workgroup-size", label: L("GPU Workgroup"),
+                                     value: .constrainedNumber(particleIntBinding(for: entity,
+                                                                                  \.gpuSimulationWorkgroupSize,
+                                                                                  summary: "Update GPU particle workgroup size"),
+                                                               min: 1,
+                                                               max: Float(ParticleGPUSimulationPlan.maximumWorkgroupSize),
+                                                               step: 1,
+                                                               showsStepper: true)),
+                EditorInspectorField(id: "particle-gpu-status", label: L("GPU Status"),
+                                     value: .readOnly(particleGPUStatusLabel(for: entity))),
                 EditorInspectorField(id: "particle-duration", label: L("Duration"),
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.duration,
                                                                                     summary: "Update particle duration"),
@@ -2094,6 +2409,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                                                min: 0, max: 60, step: 0.1, showsStepper: true)),
                 EditorInspectorField(id: "particle-max", label: L("Max Particles"),
                                      value: .constrainedNumber(particleMaxBinding(for: entity),
+                                                               min: 0, max: 100_000, step: 16, showsStepper: true)),
+                EditorInspectorField(id: "particle-max-rendered", label: L("Max Rendered"),
+                                     value: .constrainedNumber(particleIntBinding(for: entity, \.maxRenderedParticles,
+                                                                                  summary: "Update max rendered particles"),
                                                                min: 0, max: 100_000, step: 16, showsStepper: true)),
                 EditorInspectorField(id: "particle-lifetime", label: L("Lifetime"),
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.lifetime,
@@ -2274,6 +2593,33 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.forceFalloff,
                                                                                     summary: "Update particle force falloff"),
                                                                min: 0, max: 16, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-vector-field-mode", label: L("Vector Field"),
+                                     value: .particleVectorFieldMode(particleVectorFieldModeBinding(for: entity))),
+                EditorInspectorField(id: "particle-vector-field-direction", label: L("Field Direction"),
+                                     value: .vector3(x: particleVectorBinding(for: entity,
+                                                                               keyPath: \.vectorFieldDirection,
+                                                                               axis: 0,
+                                                                               summary: "Update vector field direction"),
+                                                     y: particleVectorBinding(for: entity,
+                                                                               keyPath: \.vectorFieldDirection,
+                                                                               axis: 1,
+                                                                               summary: "Update vector field direction"),
+                                                     z: particleVectorBinding(for: entity,
+                                                                               keyPath: \.vectorFieldDirection,
+                                                                               axis: 2,
+                                                                               summary: "Update vector field direction"))),
+                EditorInspectorField(id: "particle-vector-field-strength", label: L("Field Strength"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.vectorFieldStrength,
+                                                                                    summary: "Update vector field strength"),
+                                                               min: -10_000, max: 10_000, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-vector-field-scale", label: L("Field Scale"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.vectorFieldScale,
+                                                                                    summary: "Update vector field scale"),
+                                                               min: 0.0001, max: 1_000, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-vector-field-scroll", label: L("Field Scroll"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.vectorFieldScrollSpeed,
+                                                                                    summary: "Update vector field scroll"),
+                                                               min: 0, max: 1_000, step: 0.1, showsStepper: true)),
                 EditorInspectorField(id: "particle-collision-mode", label: L("Collision"),
                                      value: .particleCollisionMode(particleCollisionModeBinding(for: entity))),
                 EditorInspectorField(id: "particle-collision-plane-y", label: L("Plane Y"),
@@ -2315,6 +2661,28 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.renderDistanceFadeRange,
                                                                                     summary: "Update particle distance fade"),
                                                                min: 0, max: 100_000, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-render-lod-start", label: L("LOD Start"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.renderLODStartDistance,
+                                                                                    summary: "Update particle render LOD start"),
+                                                               min: 0, max: 100_000, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-render-lod-end", label: L("LOD End"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.renderLODEndDistance,
+                                                                                    summary: "Update particle render LOD end"),
+                                                               min: 0, max: 100_000, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-render-lod-min-scale", label: L("LOD Min Scale"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.renderLODMinParticleScale,
+                                                                                    summary: "Update particle render LOD scale"),
+                                                               min: 0, max: 1, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "particle-render-bounds-mode", label: L("Bounds Mode"),
+                                     value: .particleRenderBoundsMode(particleRenderBoundsModeBinding(for: entity))),
+                EditorInspectorField(id: "particle-render-bounds-radius", label: L("Manual Bounds"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.renderBoundsRadius,
+                                                                                    summary: "Update particle render bounds"),
+                                                               min: 0, max: 100_000, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-render-bounds-estimate", label: L("Auto Bounds"),
+                                     value: .readOnly(format(scene.component(ParticleEmitter.self,
+                                                                             for: entity)?
+                                         .estimatedRenderBoundsRadius() ?? 0))),
                 EditorInspectorField(id: "particle-texture", label: L("Texture"),
                                      value: .asset(particleTextureAssetBinding(for: entity),
                                                    acceptedKinds: [ImportableAssetKind.png.sceneKindLabel],
@@ -2353,6 +2721,55 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                                                min: 0, max: 1, step: 0.05, showsStepper: true)),
             ]
         )
+    }
+
+    private func particleGPUStatusLabel(for entity: EntityID) -> String {
+        guard let emitter = scene.component(ParticleEmitter.self, for: entity) else {
+            return L("No emitter")
+        }
+        let plan = emitter.gpuSimulationPlan
+        switch plan.status {
+        case .disabled:
+            return L("CPU")
+        case .supported:
+            return "\(L("Supported")) (\(plan.dispatchWorkgroups)x\(plan.workgroupSize))"
+        case .fallbackToCPU:
+            return "\(L("CPU fallback")): \(particleGPUUnsupportedReasonList(plan.unsupportedReasons))"
+        case .requiredButUnsupported:
+            return "\(L("Unsupported")): \(particleGPUUnsupportedReasonList(plan.unsupportedReasons))"
+        }
+    }
+
+    private func particleGPUUnsupportedReasonList(
+        _ reasons: [ParticleGPUSimulationUnsupportedReason]
+    ) -> String {
+        guard !reasons.isEmpty else { return L("None") }
+        return reasons.map(particleGPUUnsupportedReasonLabel).joined(separator: ", ")
+    }
+
+    private func particleGPUUnsupportedReasonLabel(
+        _ reason: ParticleGPUSimulationUnsupportedReason
+    ) -> String {
+        switch reason {
+        case .backendCPU:
+            return L("CPU backend")
+        case .noParticleCapacity:
+            return L("no capacity")
+        case .eventSubEmitters:
+            return L("sub-emitters")
+        case .distanceEmission:
+            return L("distance emission")
+        case .noise:
+            return L("noise")
+        case .forceFields:
+            return L("force fields")
+        case .uniformVectorField:
+            return L("uniform vector field")
+        case .collisions:
+            return L("collisions")
+        case .angularVelocity:
+            return L("angular velocity")
+        }
     }
 
     /// Applies `mutate` to a copy of the emitter and submits it as a whole-component update.
@@ -2455,6 +2872,18 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
+    private func particleVectorFieldModeBinding(for entity: EntityID) -> Binding<ParticleVectorFieldMode> {
+        Binding(
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.vectorFieldMode ?? .none },
+            set: { [self] next in
+                guard scene.component(ParticleEmitter.self, for: entity)?.vectorFieldMode != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle vector field mode") {
+                    $0.vectorFieldMode = next
+                }
+            }
+        )
+    }
+
     private func particleSubEmitterTriggerBinding(for entity: EntityID) -> Binding<ParticleSubEmitterTrigger> {
         Binding(
             get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.subEmitterTrigger ?? .none },
@@ -2516,6 +2945,18 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
+    private func particleSimulationBackendBinding(for entity: EntityID) -> Binding<ParticleSimulationBackend> {
+        Binding(
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.simulationBackend ?? .cpu },
+            set: { [self] next in
+                guard scene.component(ParticleEmitter.self, for: entity)?.simulationBackend != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle simulation backend") {
+                    $0.simulationBackend = next
+                }
+            }
+        )
+    }
+
     private func particleCurveBinding(for entity: EntityID,
                                       _ keyPath: WritableKeyPath<ParticleEmitter, ParticleCurve>,
                                       summary: String) -> Binding<ParticleCurve> {
@@ -2544,6 +2985,18 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             set: { [self] next in
                 guard scene.component(ParticleEmitter.self, for: entity)?.renderAlignment != next else { return }
                 updateParticleEmitter(entity, summary: "Update particle render alignment") { $0.renderAlignment = next }
+            }
+        )
+    }
+
+    private func particleRenderBoundsModeBinding(for entity: EntityID) -> Binding<ParticleRenderBoundsMode> {
+        Binding(
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.renderBoundsMode ?? .disabled },
+            set: { [self] next in
+                guard scene.component(ParticleEmitter.self, for: entity)?.renderBoundsMode != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle render bounds mode") {
+                    $0.renderBoundsMode = next
+                }
             }
         )
     }
