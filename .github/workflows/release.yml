@@ -8,14 +8,17 @@ on:
       tag:
         description: Release tag to publish assets to
         required: true
-        default: v0.0.3
+        default: v0.0.5
       target:
         description: Commit SHA or branch to use when creating a missing release
         required: false
-        default: main
+        default: next
 
 permissions:
   contents: write
+
+env:
+  GUAVA_SWIFT_VERSION: "6.3.2"
 
 jobs:
   prepare-release:
@@ -91,6 +94,9 @@ jobs:
         shell: bash
         run: |
           for xcode in \
+            /Applications/Xcode_26.5.app \
+            /Applications/Xcode_26.4.1.app \
+            /Applications/Xcode_26.4.app \
             /Applications/Xcode_26.3.app \
             /Applications/Xcode_16.4.app \
             /Applications/Xcode_16.3.app \
@@ -102,7 +108,21 @@ jobs:
             fi
           done
           xcodebuild -version
-          swift --version
+
+      - name: Install Swift
+        uses: SwiftyLab/setup-swift@latest
+        with:
+          swift-version: ${{ env.GUAVA_SWIFT_VERSION }}
+
+      - name: Verify Swift version
+        shell: bash
+        run: |
+          actual="$(swift --version | head -n 1)"
+          echo "$actual"
+          if [[ "$actual" != *"Swift version ${GUAVA_SWIFT_VERSION} "* ]]; then
+            echo "Expected Swift ${GUAVA_SWIFT_VERSION}; selected toolchain was: $actual" >&2
+            exit 1
+          fi
 
       - name: Build native dependencies
         run: python3 bootstrap.py --force
@@ -156,16 +176,23 @@ jobs:
           submodules: recursive
 
       - name: Install Swift
-        uses: compnerd/gha-setup-swift@main
+        uses: SwiftyLab/setup-swift@latest
         with:
-          branch: swift-6.1-release
-          tag: 6.1-RELEASE
+          swift-version: ${{ env.GUAVA_SWIFT_VERSION }}
 
       - name: Show toolchain
         shell: pwsh
         run: |
           swift --version
           cmake --version
+
+      - name: Verify Swift version
+        shell: pwsh
+        run: |
+          $actual = (swift --version | Select-Object -First 1)
+          if ($actual -notlike "*Swift version $env:GUAVA_SWIFT_VERSION *") {
+            Write-Error "Expected Swift $env:GUAVA_SWIFT_VERSION; selected toolchain was: $actual"
+          }
 
       - name: Build native dependencies
         shell: pwsh
@@ -215,5 +242,131 @@ jobs:
       - name: Upload
         shell: pwsh
         run: gh release upload "${{ needs.prepare-release.outputs.tag }}" "${{ steps.package.outputs.zip_path }}" --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  build-editor-linux:
+    name: Editor Linux
+    needs: prepare-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.target }}
+          submodules: recursive
+
+      - name: Install system dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev \
+            libdbus-1-dev \
+            libdrm-dev \
+            libegl1-mesa-dev \
+            libgbm-dev \
+            libgl1-mesa-dev \
+            libgles2-mesa-dev \
+            libibus-1.0-dev \
+            libjack-jackd2-dev \
+            libpipewire-0.3-dev \
+            libpulse-dev \
+            libsndio-dev \
+            libudev-dev \
+            libwayland-dev \
+            libx11-dev \
+            libxcursor-dev \
+            libxext-dev \
+            libxfixes-dev \
+            libxi-dev \
+            libxinerama-dev \
+            libxkbcommon-dev \
+            libxrandr-dev \
+            libxrender-dev \
+            libxss-dev \
+            libxtst-dev \
+            mesa-common-dev \
+            ninja-build \
+            patchelf
+
+      - name: Install Swift
+        uses: SwiftyLab/setup-swift@latest
+        with:
+          swift-version: ${{ env.GUAVA_SWIFT_VERSION }}
+
+      - name: Show toolchain
+        shell: bash
+        run: |
+          swift --version
+          cmake --version
+
+      - name: Verify Swift version
+        shell: bash
+        run: |
+          actual="$(swift --version | head -n 1)"
+          if [[ "$actual" != *"Swift version ${GUAVA_SWIFT_VERSION} "* ]]; then
+            echo "Expected Swift ${GUAVA_SWIFT_VERSION}; selected toolchain was: $actual" >&2
+            exit 1
+          fi
+
+      - name: Build native dependencies
+        shell: bash
+        run: python3 bootstrap.py --force
+
+      - name: Build Editor and MCP
+        shell: bash
+        run: |
+          swift build -c release --package-path Editor --product EditorApp
+          swift build -c release --package-path guava-mcp
+
+      - name: Package
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          editor_bin="$(swift build -c release --package-path Editor --product EditorApp --show-bin-path)"
+          mcp_bin="$(swift build -c release --package-path guava-mcp --show-bin-path)"
+
+          dist_root="$PWD/dist"
+          package_dir="$dist_root/GuavaEditor-linux-x86_64"
+          rm -rf "$dist_root"
+          mkdir -p "$package_dir/Tools" "$package_dir/Lib"
+
+          cp "$editor_bin/EditorApp" "$package_dir/"
+          cp "$mcp_bin/GuavaMCP" "$package_dir/Tools/"
+
+          find "$editor_bin" -maxdepth 1 -type d \( -name "*.bundle" -o -name "*.resources" \) \
+            -exec cp -R {} "$package_dir/" \;
+
+          ldd "$package_dir/EditorApp" "$package_dir/Tools/GuavaMCP" \
+            | awk '/=> \// { print $3 } /^\// { print $1 }' \
+            | sort -u \
+            | { grep -E '/swift-|/usr/lib/swift|/swift/linux|libswift|libFoundation|libdispatch|libBlocksRuntime|lib_Foundation|libicu' || true; } \
+            | while read -r lib; do
+                if [ -f "$lib" ]; then
+                  cp -L "$lib" "$package_dir/Lib/"
+                fi
+              done
+
+          patchelf --set-rpath '$ORIGIN/Lib:$ORIGIN' "$package_dir/EditorApp"
+          patchelf --set-rpath '$ORIGIN/../Lib:$ORIGIN/..' "$package_dir/Tools/GuavaMCP"
+
+          cat > "$package_dir/run-editor.sh" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          cd "$(dirname "$0")"
+          export LD_LIBRARY_PATH="$PWD/Lib:${LD_LIBRARY_PATH:-}"
+          exec ./EditorApp "$@"
+          EOF
+          chmod +x "$package_dir/run-editor.sh"
+
+          tar_path="$dist_root/guava-editor-linux-x86_64.tar.gz"
+          tar -C "$dist_root" -czf "$tar_path" "$(basename "$package_dir")"
+          echo "tar_path=$tar_path" >> "$GITHUB_OUTPUT"
+
+      - name: Upload
+        shell: bash
+        run: gh release upload "${{ needs.prepare-release.outputs.tag }}" "${{ steps.package.outputs.tar_path }}" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
