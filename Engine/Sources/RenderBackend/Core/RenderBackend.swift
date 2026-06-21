@@ -104,9 +104,23 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     var particleTextureFailures: Set<String> = []
     var fallbackParticleTexture: GPUTexture?
     var fallbackParticleTextureView: GPUTextureView?
-    var particleSimulationResources: GPUParticleSimulationResources?
+    var particleSimulationResources: [GPUParticleSimulationResources?] = []
     var gpuParticleRenderBatches: [ParticleRenderBatch] = []
     var gpuParticleRenderInstanceCount: Int = 0
+    var particleIndirectDrawBuffer: GPUBuffer?
+    var particleIndirectDrawCapacity: Int = 0
+    var particleIndirectDrawCount: Int = 0
+    var particleCullPipeline: GPUComputePipeline?
+    var particleCullBindGroupLayout: GPUBindGroupLayout?
+    var particleCullPipelineLayout: GPUPipelineLayout?
+    var particleCullUniformBuffer: GPUBuffer?
+    var particleCullBatchBuffer: GPUBuffer?
+    var particleCullBatchCapacity: Int = 0
+    var particleVisibleStorageBuffer: GPUBuffer?
+    var particleVisibleStorageCapacity: Int = 0
+    var particleCullBatchCount: Int = 0
+    var particleCullCandidateCount: Int = 0
+    var particleCullDispatchWorkgroups: Int = 0
 
     // Opaque-render cache (see WGPURenderer+OpaqueCache): when only the
     // transparent particles change between frames, the expensive opaque passes
@@ -286,6 +300,10 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             let encoder = try backend.createCommandEncoder()
             let particleSimulationReport: GPUParticleSimulationEncodeReport
             let particleSimulationEncodeNS: UInt64
+            particleIndirectDrawCount = 0
+            particleCullBatchCount = 0
+            particleCullCandidateCount = 0
+            particleCullDispatchWorkgroups = 0
             if packet.scene.particleSimulationBatches.isEmpty {
                 gpuParticleRenderBatches.removeAll(keepingCapacity: true)
                 gpuParticleRenderInstanceCount = 0
@@ -297,7 +315,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                     encoder: encoder,
                     scene: packet.scene,
                     deltaTime: Float(max(0, packet.deltaTime)),
-                    elapsedTime: Float(max(0, packet.simulationTimeSeconds))
+                    elapsedTime: Float(max(0, packet.simulationTimeSeconds)),
+                    additionalRenderInstanceCapacity: packet.scene.particles.count
                 )
                 particleSimulationEncodeNS = DispatchTime.now().uptimeNanoseconds - startNS
             }
@@ -632,6 +651,10 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 gpuParticleSimulationParticleCount: particleSimulationReport.particleCount,
                 gpuParticleSimulationDispatchWorkgroups: particleSimulationReport.dispatchWorkgroups,
                 gpuParticleRenderInstanceCount: particleSimulationReport.renderInstanceCount,
+                gpuParticleIndirectDrawCount: particleIndirectDrawCount,
+                gpuParticleCullBatchCount: particleCullBatchCount,
+                gpuParticleCullCandidateCount: particleCullCandidateCount,
+                gpuParticleCullDispatchWorkgroups: particleCullDispatchWorkgroups,
                 gpuParticleSimulationEncodeNS: particleSimulationEncodeNS,
                 shadowedLightCount: shadowPlan.uniforms.isEnabled
                     ? shadowPlan.shadowedLightCount
