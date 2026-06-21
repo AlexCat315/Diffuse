@@ -862,6 +862,18 @@ public final class EditorApplication: @unchecked Sendable {
         engine.currentRenderStats()
     }
 
+    public func currentRenderScene() -> RenderScene {
+        scene.currentRenderScene()
+    }
+
+    public func currentParticleFrameStats() -> ParticleFrameStatsResource {
+        scene.currentParticleFrameStats()
+    }
+
+    public func currentParticleScalabilityState() -> ParticleScalabilityStateResource {
+        scene.currentParticleScalabilityState()
+    }
+
     public func currentViewportSurfaceState() -> ViewportSurfaceState {
         engine.currentViewportSurfaceState()
     }

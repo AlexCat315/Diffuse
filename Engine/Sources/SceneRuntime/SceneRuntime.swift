@@ -58,6 +58,14 @@ public struct SceneRuntime {
         world.resource(SpatialIndexBuildSettings.self) ?? SpatialIndexBuildSettings()
     }
 
+    public var particleFrameStats: ParticleFrameStatsResource {
+        world.resource(ParticleFrameStatsResource.self) ?? .empty
+    }
+
+    public var particleScalabilityState: ParticleScalabilityStateResource {
+        world.resource(ParticleScalabilityStateResource.self) ?? .default
+    }
+
     public mutating func setSpatialIndexBuildSettings(_ settings: SpatialIndexBuildSettings) {
         world.setResource(settings)
     }

@@ -270,6 +270,20 @@ struct InspectorPanel: View {
         }
     }
 
+    private struct InspectorParticleSimulationBackendValue: View {
+        let binding: Binding<ParticleSimulationBackend>
+
+        var body: some View {
+            EnumField(value: binding, width: 170) { backend in
+                switch backend {
+                case .cpu: return L("CPU")
+                case .gpuIfSupported: return L("GPU Preferred")
+                case .gpuRequired: return L("GPU Required")
+                }
+            }
+        }
+    }
+
     private struct InspectorParticleCurveValue: View {
         let binding: Binding<ParticleCurve>
         @State private var selectedKeyIndex: Int? = nil
@@ -403,6 +417,20 @@ struct InspectorPanel: View {
         }
     }
 
+    private struct InspectorParticleRenderBoundsModeValue: View {
+        let binding: Binding<ParticleRenderBoundsMode>
+
+        var body: some View {
+            EnumField(value: binding, width: 150) { mode in
+                switch mode {
+                case .disabled: return L("Disabled")
+                case .manual: return L("Manual")
+                case .automatic: return L("Automatic")
+                }
+            }
+        }
+    }
+
     private struct InspectorParticleForceModeValue: View {
         let binding: Binding<ParticleForceMode>
 
@@ -412,6 +440,20 @@ struct InspectorPanel: View {
                 case .none: return L("None")
                 case .radial: return L("Radial")
                 case .vortex: return L("Vortex")
+                }
+            }
+        }
+    }
+
+    private struct InspectorParticleVectorFieldModeValue: View {
+        let binding: Binding<ParticleVectorFieldMode>
+
+        var body: some View {
+            EnumField(value: binding, width: 150) { mode in
+                switch mode {
+                case .none: return L("None")
+                case .uniform: return L("Uniform")
+                case .curl: return L("Curl")
                 }
             }
         }
@@ -835,14 +877,20 @@ struct InspectorPanel: View {
             return AnyView(InspectorParticleCollisionModeValue(binding: binding))
         case let .particleSimulationSpace(binding):
             return AnyView(InspectorParticleSimulationSpaceValue(binding: binding))
+        case let .particleSimulationBackend(binding):
+            return AnyView(InspectorParticleSimulationBackendValue(binding: binding))
         case let .particleCurve(binding):
             return AnyView(InspectorParticleCurveValue(binding: binding))
         case let .particleBlendMode(binding):
             return AnyView(InspectorParticleBlendModeValue(binding: binding))
         case let .particleRenderAlignment(binding):
             return AnyView(InspectorParticleRenderAlignmentValue(binding: binding))
+        case let .particleRenderBoundsMode(binding):
+            return AnyView(InspectorParticleRenderBoundsModeValue(binding: binding))
         case let .particleForceMode(binding):
             return AnyView(InspectorParticleForceModeValue(binding: binding))
+        case let .particleVectorFieldMode(binding):
+            return AnyView(InspectorParticleVectorFieldModeValue(binding: binding))
         case let .particleSubEmitterTrigger(binding):
             return AnyView(InspectorParticleSubEmitterTriggerValue(binding: binding))
         case let .particleSubEmitters(binding):

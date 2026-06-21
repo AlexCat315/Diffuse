@@ -106,6 +106,19 @@ public final class GPUCommandEncoder {
                                            bytesPerRow, rowsPerImage,
                                            width, height, depthOrLayers)
     }
+
+    public func copyBufferToBuffer(source: GPUBuffer,
+                                   sourceOffset: UInt64 = 0,
+                                   destination: GPUBuffer,
+                                   destinationOffset: UInt64 = 0,
+                                   size: UInt64) {
+        wgpu_bridge_copy_buffer_to_buffer(handle,
+                                          source.handle,
+                                          sourceOffset,
+                                          destination.handle,
+                                          destinationOffset,
+                                          size)
+    }
 }
 
 public final class GPURenderPassEncoder {

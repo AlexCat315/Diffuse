@@ -21,6 +21,7 @@ struct CapabilityRuntimeTests {
             // Camera
             "scene.set_camera_pose",
             "scene.set_camera_fov",
+            "scene.set_camera_aspect_ratio",
             "scene.set_camera_active",
             // Light
             "scene.set_light_type",
