@@ -245,6 +245,8 @@ struct RenderBackendGPUSmokeTests {
             velocity: SIMD3<Float>(1, 2, 3),
             age: 0,
             lifetime: 10,
+            rotation: 0.25,
+            angularVelocity: 2,
             size: 1,
             color: SIMD4<Float>(1, 0.5, 0.25, 1)
         )
@@ -255,7 +257,15 @@ struct RenderBackendGPUSmokeTests {
                 plan: plan,
                 particles: [particle],
                 deltaTime: 0.5,
-                gravity: SIMD3<Float>(0, -10, 0)
+                gravity: SIMD3<Float>(0, -10, 0),
+                vectorFieldDirection: SIMD3<Float>(2, 0, 0),
+                vectorFieldStrength: 4,
+                vectorFieldMode: .uniform,
+                forceMode: .radial,
+                forceCenter: SIMD3<Float>(-1, 0, 0),
+                forceRadius: 0,
+                forceStrength: 6,
+                forceFalloff: 0
             )
         )
 
@@ -271,14 +281,16 @@ struct RenderBackendGPUSmokeTests {
                                                           count: 1,
                                                           backend: backend)
         let state = try #require(states.first)
-        #expect(abs(state.velocityAge.x - 1) < 0.001)
+        #expect(abs(state.velocityAge.x - 6) < 0.001)
         #expect(abs(state.velocityAge.y - -3) < 0.001)
         #expect(abs(state.velocityAge.z - 3) < 0.001)
         #expect(abs(state.velocityAge.w - 0.5) < 0.001)
-        #expect(abs(state.positionLifetime.x - 0.5) < 0.001)
+        #expect(abs(state.positionLifetime.x - 3) < 0.001)
         #expect(abs(state.positionLifetime.y - -1.5) < 0.001)
         #expect(abs(state.positionLifetime.z - 1.5) < 0.001)
         #expect(abs(state.positionLifetime.w - 10) < 0.001)
+        #expect(abs(state.sizeRotation.y - 1.25) < 0.001)
+        #expect(abs(state.sizeRotation.z - 2) < 0.001)
     }
 
     @Test("particle GPU simulation prepass is reported during full render",
@@ -327,8 +339,40 @@ struct RenderBackendGPUSmokeTests {
         #expect(stats.gpuParticleSimulationParticleCount == 4)
         #expect(stats.gpuParticleSimulationDispatchWorkgroups == 2)
         #expect(stats.gpuParticleRenderInstanceCount == 4)
+        #expect(stats.gpuParticleIndirectDrawCount == 3)
+        #expect(stats.gpuParticleCullBatchCount == 3)
+        #expect(stats.gpuParticleCullCandidateCount == 5)
+        #expect(stats.gpuParticleCullDispatchWorkgroups == 1)
         #expect(stats.gpuParticleSimulationEncodeNS > 0)
-        #expect(stats.passDrawCallCounts[.particles] == 2)
+        #expect(stats.passDrawCallCounts[.particles] == 3)
+
+        guard let indirectBuffer = renderer.particleIndirectDrawBuffer else {
+            Issue.record("expected particle indirect draw buffer")
+            return
+        }
+        let args = try readbackParticleIndirectDrawArgs(buffer: indirectBuffer,
+                                                        count: 3,
+                                                        backend: backend)
+        #expect(args.map(\.vertexCount) == [6, 6, 6])
+        #expect(args.map(\.instanceCount) == [1, 2, 1])
+        #expect(args.map(\.firstVertex) == [0, 0, 0])
+        #expect(args.map(\.firstInstance) == [0, 2, 4])
+
+        guard let visibleBuffer = renderer.particleVisibleStorageBuffer else {
+            Issue.record("expected particle visible storage buffer")
+            return
+        }
+        let visibleInstances = try readbackParticleInstances(buffer: visibleBuffer,
+                                                             count: 5,
+                                                             backend: backend)
+        #expect(abs(visibleInstances[2].axisStretch.x) < 0.001)
+        #expect(abs(visibleInstances[2].axisStretch.y - 1) < 0.001)
+        #expect(abs(visibleInstances[2].axisStretch.z) < 0.001)
+        #expect(abs(visibleInstances[2].axisStretch.w - 1.5) < 0.001)
+        #expect(abs(visibleInstances[3].axisStretch.x) < 0.001)
+        #expect(abs(visibleInstances[3].axisStretch.y - 1) < 0.001)
+        #expect(abs(visibleInstances[3].axisStretch.z) < 0.001)
+        #expect(abs(visibleInstances[3].axisStretch.w - 1.25) < 0.001)
     }
 
     @Test("opaque-cache overlay frame matches a full render and camera change invalidates it",
@@ -902,25 +946,33 @@ struct RenderBackendGPUSmokeTests {
                 near: 0.1,
                 far: 20
             ),
+            particles: [
+                RenderParticle(position: SIMD3<Float>(-0.35, 0.2, 0),
+                               size: 0.35,
+                               color: SIMD4<Float>(1, 0.5, 0, 0.9))
+            ],
             particleSimulationBatches: [
                 RenderParticleSimulationBatch(
                     plan: plan,
                     particles: [
                         Particle(position: .zero,
-                                 velocity: SIMD3<Float>(1, 2, 3),
+                                 velocity: .zero,
                                  age: 0,
                                  lifetime: 10,
                                  size: 1,
                                  color: SIMD4<Float>(1, 1, 1, 1)),
-                        Particle(position: SIMD3<Float>(0.2, 0.1, 0),
-                                 velocity: SIMD3<Float>(0, 1, 0),
+                        Particle(position: SIMD3<Float>(100, 0.1, 0),
+                                 velocity: .zero,
                                  age: 0.25,
                                  lifetime: 8,
                                  size: 0.5,
                                  color: SIMD4<Float>(1, 0, 0, 1))
                     ],
-                    gravity: SIMD3<Float>(0, -10, 0),
-                    renderOnGPU: true
+                    gravity: .zero,
+                    renderOnGPU: true,
+                    textureSheetColumns: 2,
+                    textureSheetRows: 2,
+                    textureSheetFrameCount: 4
                 ),
                 RenderParticleSimulationBatch(
                     plan: plan,
@@ -938,9 +990,12 @@ struct RenderBackendGPUSmokeTests {
                                  size: 0.4,
                                  color: SIMD4<Float>(0, 0.5, 1, 1))
                     ],
-                    gravity: SIMD3<Float>(0, -5, 0),
+                    gravity: .zero,
                     renderOnGPU: true,
-                    blendMode: .additive
+                    blendMode: .additive,
+                    renderAlignment: .velocity,
+                    velocityStretchScale: 0.25,
+                    velocityStretchMax: 1.5
                 )
             ]
         )
@@ -1048,6 +1103,21 @@ private struct GPUReadbackParticleSimulationState {
     var velocityAge: SIMD4<Float>
     var sizeRotation: SIMD4<Float>
     var color: SIMD4<Float>
+}
+
+private struct GPUReadbackParticleIndirectDrawArgs {
+    var vertexCount: UInt32
+    var instanceCount: UInt32
+    var firstVertex: UInt32
+    var firstInstance: UInt32
+}
+
+private struct GPUReadbackParticleInstance {
+    var positionSize: SIMD4<Float>
+    var rotation: SIMD4<Float>
+    var color: SIMD4<Float>
+    var uvRect: SIMD4<Float>
+    var axisStretch: SIMD4<Float>
 }
 
 private func renderPixels(
@@ -1158,6 +1228,62 @@ private func readbackParticleSimulationStates(
     }
 
     let typed = mapped.bindMemory(to: GPUReadbackParticleSimulationState.self,
+                                  capacity: count)
+    return Array(UnsafeBufferPointer(start: typed, count: count))
+}
+
+private func readbackParticleIndirectDrawArgs(
+    buffer: GPUBuffer,
+    count: Int,
+    backend: WGPUBackend
+) throws -> [GPUReadbackParticleIndirectDrawArgs] {
+    let stride = MemoryLayout<GPUReadbackParticleIndirectDrawArgs>.stride
+    let bufferSize = UInt64(max(0, count) * stride)
+    let readback = try backend.createBuffer(size: bufferSize, usage: [.copyDst, .mapRead])
+    let encoder = try backend.createCommandEncoder()
+    encoder.copyBufferToBuffer(source: buffer,
+                               destination: readback,
+                               size: bufferSize)
+    let commandBuffer = try encoder.finish()
+    backend.submit(commandBuffer)
+
+    try backend.bufferMapSync(readback, size: bufferSize)
+    defer { readback.unmap() }
+
+    guard let mapped = readback.getMappedRange(size: bufferSize) else {
+        Issue.record("particle indirect args readback buffer mapping returned nil")
+        return []
+    }
+
+    let typed = mapped.bindMemory(to: GPUReadbackParticleIndirectDrawArgs.self,
+                                  capacity: count)
+    return Array(UnsafeBufferPointer(start: typed, count: count))
+}
+
+private func readbackParticleInstances(
+    buffer: GPUBuffer,
+    count: Int,
+    backend: WGPUBackend
+) throws -> [GPUReadbackParticleInstance] {
+    let stride = MemoryLayout<GPUReadbackParticleInstance>.stride
+    let bufferSize = UInt64(max(0, count) * stride)
+    let readback = try backend.createBuffer(size: bufferSize, usage: [.copyDst, .mapRead])
+    let encoder = try backend.createCommandEncoder()
+    encoder.copyBufferToBuffer(source: buffer,
+                               destination: readback,
+                               size: bufferSize)
+    let commandBuffer = try encoder.finish()
+    backend.submit(commandBuffer)
+
+    try backend.bufferMapSync(readback, size: bufferSize)
+    defer { readback.unmap() }
+
+    guard let mapped = readback.getMappedRange(size: bufferSize) else {
+        Issue.record("particle instance readback buffer mapping returned nil")
+        return []
+    }
+
+    let typed = mapped.bindMemory(to: GPUReadbackParticleInstance.self,
                                   capacity: count)
     return Array(UnsafeBufferPointer(start: typed, count: count))
 }

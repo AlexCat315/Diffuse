@@ -325,40 +325,82 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
     public var plan: ParticleGPUSimulationPlan
     public var particles: [Particle]
     public var gravity: SIMD3<Float>
+    public var vectorFieldMode: ParticleVectorFieldMode
     public var vectorFieldDirection: SIMD3<Float>
     public var vectorFieldStrength: Float
     public var vectorFieldScale: Float
     public var vectorFieldScrollSpeed: Float
+    public var forceMode: ParticleForceMode
+    public var forceCenter: SIMD3<Float>
+    public var forceAxis: SIMD3<Float>
+    public var forceRadius: Float
+    public var forceStrength: Float
+    public var forceFalloff: Float
     public var renderOnGPU: Bool
     public var worldTransform: simd_float4x4
     public var uvRect: SIMD4<Float>
+    public var textureSheetColumns: Int
+    public var textureSheetRows: Int
+    public var textureSheetFrameCount: Int
+    public var textureSheetFrameRate: Float
     public var blendMode: ParticleBlendMode
     public var texturePath: String?
+    public var renderAlignment: ParticleRenderAlignment
+    public var velocityStretchScale: Float
+    public var velocityStretchMax: Float
 
     public init(plan: ParticleGPUSimulationPlan,
                 particles: [Particle],
                 gravity: SIMD3<Float>,
+                vectorFieldMode: ParticleVectorFieldMode = .none,
                 vectorFieldDirection: SIMD3<Float> = SIMD3<Float>(0, 1, 0),
                 vectorFieldStrength: Float = 0,
                 vectorFieldScale: Float = 1,
                 vectorFieldScrollSpeed: Float = 0,
+                forceMode: ParticleForceMode = .none,
+                forceCenter: SIMD3<Float> = .zero,
+                forceAxis: SIMD3<Float> = SIMD3<Float>(0, 1, 0),
+                forceRadius: Float = 0,
+                forceStrength: Float = 0,
+                forceFalloff: Float = 1,
                 renderOnGPU: Bool = false,
                 worldTransform: simd_float4x4 = matrix_identity_float4x4,
                 uvRect: SIMD4<Float> = SIMD4<Float>(0, 0, 1, 1),
+                textureSheetColumns: Int = 1,
+                textureSheetRows: Int = 1,
+                textureSheetFrameCount: Int = 1,
+                textureSheetFrameRate: Float = 0,
                 blendMode: ParticleBlendMode = .alpha,
-                texturePath: String? = nil) {
+                texturePath: String? = nil,
+                renderAlignment: ParticleRenderAlignment = .billboard,
+                velocityStretchScale: Float = 0,
+                velocityStretchMax: Float = 8) {
         self.plan = plan
         self.particles = particles
         self.gravity = gravity
+        self.vectorFieldMode = vectorFieldMode
         self.vectorFieldDirection = vectorFieldDirection
         self.vectorFieldStrength = max(0, vectorFieldStrength)
         self.vectorFieldScale = max(0.0001, vectorFieldScale)
         self.vectorFieldScrollSpeed = vectorFieldScrollSpeed
+        self.forceMode = forceMode
+        self.forceCenter = forceCenter
+        self.forceAxis = forceAxis
+        self.forceRadius = max(0, forceRadius)
+        self.forceStrength = forceStrength
+        self.forceFalloff = max(0, forceFalloff)
         self.renderOnGPU = renderOnGPU
         self.worldTransform = worldTransform
         self.uvRect = uvRect
+        self.textureSheetColumns = max(1, textureSheetColumns)
+        self.textureSheetRows = max(1, textureSheetRows)
+        self.textureSheetFrameCount = max(1, textureSheetFrameCount)
+        self.textureSheetFrameRate = max(0, textureSheetFrameRate)
         self.blendMode = blendMode
         self.texturePath = normalizedParticleTexturePath(texturePath)
+        self.renderAlignment = renderAlignment
+        self.velocityStretchScale = max(0, velocityStretchScale)
+        self.velocityStretchMax = max(1, velocityStretchMax)
     }
 
     public var particleCount: Int {

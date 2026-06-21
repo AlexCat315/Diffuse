@@ -343,11 +343,39 @@ struct ParticleTests {
         #expect(complexFallbackPlan.status == .fallbackToCPU)
         #expect(complexFallbackPlan.unsupportedReasons == [
             .noise,
-            .forceFields,
-            .uniformVectorField,
-            .collisions,
-            .angularVelocity
+            .collisions
         ])
+
+        let forcePlan = ParticleEmitter(emissionRate: 10,
+                                        maxParticles: 64,
+                                        lifetime: 10,
+                                        forceMode: .vortex,
+                                        forceAxis: SIMD3<Float>(0, 1, 0),
+                                        forceRadius: 8,
+                                        forceStrength: -3,
+                                        forceFalloff: 2,
+                                        simulationBackend: .gpuIfSupported).gpuSimulationPlan
+        #expect(forcePlan.status == .supported)
+        #expect(forcePlan.usesGPU)
+
+        let uniformVectorFieldPlan = ParticleEmitter(emissionRate: 10,
+                                                     maxParticles: 64,
+                                                     lifetime: 10,
+                                                     vectorFieldMode: .uniform,
+                                                     vectorFieldDirection: SIMD3<Float>(2, 0, 0),
+                                                     vectorFieldStrength: 4,
+                                                     simulationBackend: .gpuIfSupported).gpuSimulationPlan
+        #expect(uniformVectorFieldPlan.status == .supported)
+        #expect(uniformVectorFieldPlan.usesGPU)
+
+        let angularVelocityPlan = ParticleEmitter(emissionRate: 10,
+                                                  maxParticles: 64,
+                                                  lifetime: 10,
+                                                  simulationBackend: .gpuIfSupported,
+                                                  angularVelocity: 0.25,
+                                                  angularVelocityRandomness: 0.1).gpuSimulationPlan
+        #expect(angularVelocityPlan.status == .supported)
+        #expect(angularVelocityPlan.usesGPU)
 
         let required = ParticleEmitter(emissionRate: 10,
                                        maxParticles: 64,

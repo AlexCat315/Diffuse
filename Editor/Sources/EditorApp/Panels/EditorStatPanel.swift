@@ -316,6 +316,10 @@ private struct ParticleDiagnosticsView: View {
                     StatRow(label: "Particles", value: "\(renderStats.gpuParticleSimulationParticleCount)")
                     StatRow(label: "Workgroups", value: "\(renderStats.gpuParticleSimulationDispatchWorkgroups)")
                     StatRow(label: "Render Instances", value: "\(renderStats.gpuParticleRenderInstanceCount)")
+                    StatRow(label: "Indirect Draws", value: "\(renderStats.gpuParticleIndirectDrawCount)")
+                    StatRow(label: "Cull Batches", value: "\(renderStats.gpuParticleCullBatchCount)")
+                    StatRow(label: "Cull Candidates", value: "\(renderStats.gpuParticleCullCandidateCount)")
+                    StatRow(label: "Cull Workgroups", value: "\(renderStats.gpuParticleCullDispatchWorkgroups)")
                     StatRow(label: "Encode", value: formatNs(renderStats.gpuParticleSimulationEncodeNS))
                 }
                 .flex(1, shrink: 1)
