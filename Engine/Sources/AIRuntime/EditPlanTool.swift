@@ -143,6 +143,10 @@ public enum EditPlanTool {
                     "type": "number",
                     "description": "Vertical field-of-view in degrees (1–179) for set_camera_fov. Typical: 30=telephoto, 50=normal, 75=wide.",
                 ] as [String: Any],
+                "camera_aspect_ratio": [
+                    "type": "number",
+                    "description": "Authored camera width/height aspect ratio for set_camera_aspect_ratio. Typical: 1.777 for 16:9.",
+                ] as [String: Any],
                 "camera_is_active": [
                     "type": "boolean",
                     "description": "Whether this camera is the active render camera for set_camera_active.",

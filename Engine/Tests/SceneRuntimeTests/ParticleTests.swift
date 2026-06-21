@@ -274,6 +274,92 @@ struct ParticleTests {
         #expect(abs(p.position.z + 3) < 1e-4)
     }
 
+    @Test("uniform vector field accelerates particles in the configured direction")
+    func uniformVectorField() {
+        var emitter = ParticleEmitter(emissionRate: 0,
+                                      lifetime: 10,
+                                      startVelocity: .zero,
+                                      gravity: .zero,
+                                      vectorFieldMode: .uniform,
+                                      vectorFieldDirection: SIMD3<Float>(2, 0, 0),
+                                      vectorFieldStrength: 4)
+        emitter.emit(1)
+        emitter.advance(deltaTime: 0.5)
+
+        let p = emitter.particles[0]
+        #expect(abs(p.velocity.x - 2) < 1e-4)
+        #expect(abs(p.position.x - 1) < 1e-4)
+        #expect(abs(p.velocity.y) < 1e-4)
+        #expect(abs(p.position.y) < 1e-4)
+    }
+
+    @Test("GPU simulation plan reports dispatch shape and unsupported module fallbacks")
+    func gpuSimulationPlan() {
+        let supported = ParticleEmitter(emissionRate: 10,
+                                        maxParticles: 130,
+                                        lifetime: 10,
+                                        simulationBackend: .gpuIfSupported,
+                                        gpuSimulationWorkgroupSize: 64)
+        let supportedPlan = supported.gpuSimulationPlan
+        #expect(supportedPlan.status == .supported)
+        #expect(supportedPlan.usesGPU)
+        #expect(supportedPlan.particleCapacity == 130)
+        #expect(supportedPlan.workgroupSize == 64)
+        #expect(supportedPlan.dispatchWorkgroups == 3)
+        #expect(supportedPlan.unsupportedReasons.isEmpty)
+
+        let clamped = ParticleEmitter(emissionRate: 10,
+                                      maxParticles: 513,
+                                      lifetime: 10,
+                                      simulationBackend: .gpuIfSupported,
+                                      gpuSimulationWorkgroupSize: 512)
+        let clampedPlan = clamped.gpuSimulationPlan
+        #expect(clampedPlan.status == .supported)
+        #expect(clampedPlan.workgroupSize == ParticleGPUSimulationPlan.maximumWorkgroupSize)
+        #expect(clampedPlan.dispatchWorkgroups == 3)
+
+        let fallback = ParticleEmitter(emissionRate: 0,
+                                       distanceEmissionRate: 2,
+                                       maxParticles: 64,
+                                       lifetime: 10,
+                                       simulationBackend: .gpuIfSupported)
+        let fallbackPlan = fallback.gpuSimulationPlan
+        #expect(fallbackPlan.status == .fallbackToCPU)
+        #expect(!fallbackPlan.usesGPU)
+        #expect(fallbackPlan.unsupportedReasons == [.distanceEmission])
+
+        let complexFallback = ParticleEmitter(emissionRate: 10,
+                                              maxParticles: 64,
+                                              lifetime: 10,
+                                              noiseStrength: 1,
+                                              forceMode: .radial,
+                                              forceStrength: 2,
+                                              vectorFieldMode: .uniform,
+                                              vectorFieldStrength: 3,
+                                              collisionMode: .localPlane,
+                                              simulationBackend: .gpuIfSupported,
+                                              angularVelocity: 0.25)
+        let complexFallbackPlan = complexFallback.gpuSimulationPlan
+        #expect(complexFallbackPlan.status == .fallbackToCPU)
+        #expect(complexFallbackPlan.unsupportedReasons == [
+            .noise,
+            .forceFields,
+            .uniformVectorField,
+            .collisions,
+            .angularVelocity
+        ])
+
+        let required = ParticleEmitter(emissionRate: 10,
+                                       maxParticles: 64,
+                                       lifetime: 10,
+                                       subEmitterTrigger: .death,
+                                       subEmitterBurstCount: 1,
+                                       simulationBackend: .gpuRequired)
+        let requiredPlan = required.gpuSimulationPlan
+        #expect(requiredPlan.status == .requiredButUnsupported)
+        #expect(requiredPlan.unsupportedReasons == [.eventSubEmitters])
+    }
+
     @Test("maxParticles caps the live pool")
     func maxParticlesCap() {
         var emitter = ParticleEmitter(emissionRate: 10_000, maxParticles: 5, lifetime: 1000, gravity: .zero)
@@ -650,6 +736,217 @@ struct ParticleTests {
         #expect(emitter.trailSegments == 0)
         #expect(emitter.trailEndSizeScale == 0)
         #expect(emitter.trailEndAlphaScale == 1)
+    }
+
+    @Test("automatic render bounds estimate covers configured motion and billboard size")
+    func automaticRenderBoundsEstimate() {
+        let emitter = ParticleEmitter(lifetime: 2,
+                                      spawnRadius: 1,
+                                      startVelocity: SIMD3<Float>(2, 0, 0),
+                                      velocityRandomness: .zero,
+                                      gravity: .zero,
+                                      startSize: 2,
+                                      endSize: 1,
+                                      renderBoundsMode: .automatic)
+
+        let estimated = emitter.estimatedRenderBoundsRadius()
+
+        #expect(estimated > 6.4)
+        #expect(abs(emitter.effectiveRenderBoundsRadius() - estimated) < 0.0001)
+    }
+
+    @Test("manual render bounds preserve legacy radius behavior")
+    func manualRenderBoundsPreserveLegacyRadius() {
+        let emitter = ParticleEmitter(renderBoundsRadius: 12)
+
+        #expect(emitter.renderBoundsMode == .manual)
+        #expect(emitter.effectiveRenderBoundsRadius() == 12)
+    }
+
+    @Test("render LOD scales particle submission budget by camera distance")
+    func renderLODScalesSubmissionBudget() {
+        let emitter = ParticleEmitter(maxRenderedParticles: 100,
+                                      renderLODStartDistance: 10,
+                                      renderLODEndDistance: 30,
+                                      renderLODMinParticleScale: 0.25)
+
+        #expect(emitter.renderLODScale(cameraDistance: 0) == 1)
+        #expect(emitter.renderLODScale(cameraDistance: 30) == 0.25)
+        #expect(emitter.effectiveMaxRenderedParticles(cameraDistance: 20,
+                                                      liveParticleCount: 200) == 63)
+        #expect(emitter.effectiveMaxRenderedParticles(cameraDistance: 30,
+                                                      liveParticleCount: 200) == 25)
+    }
+
+    @Test("advance options scale continuous, burst, distance emission, and live cap")
+    func advanceOptionsScaleEmission() {
+        var continuous = ParticleEmitter(emissionRate: 10,
+                                         maxParticles: 100,
+                                         lifetime: 100,
+                                         gravity: .zero)
+        continuous.advance(deltaTime: 1, options: ParticleAdvanceOptions(emissionScale: 0.5))
+        #expect(continuous.aliveCount == 5)
+
+        var burst = ParticleEmitter(emissionRate: 0,
+                                    burstCount: 3,
+                                    burstInterval: 1,
+                                    maxParticles: 100,
+                                    lifetime: 100,
+                                    gravity: .zero)
+        burst.advance(deltaTime: 1, options: ParticleAdvanceOptions(burstScale: 0.5))
+        #expect(burst.aliveCount == 1)
+        burst.advance(deltaTime: 1, options: ParticleAdvanceOptions(burstScale: 0.5))
+        #expect(burst.aliveCount == 3)
+
+        var distance = ParticleEmitter(emissionRate: 0,
+                                       distanceEmissionRate: 10,
+                                       maxParticles: 100,
+                                       lifetime: 100,
+                                       gravity: .zero)
+        distance.advance(deltaTime: 0.01, worldTransform: matrix_identity_float4x4)
+        var moved = matrix_identity_float4x4
+        moved.columns.3.x = 1
+        distance.advance(deltaTime: 0.01,
+                         worldTransform: moved,
+                         options: ParticleAdvanceOptions(distanceEmissionScale: 0.25))
+        #expect(distance.aliveCount == 2)
+
+        var capped = ParticleEmitter(emissionRate: 100,
+                                     maxParticles: 10,
+                                     lifetime: 100,
+                                     gravity: .zero)
+        capped.advance(deltaTime: 1, options: ParticleAdvanceOptions(maxLiveParticleScale: 0.5))
+        #expect(capped.aliveCount == 5)
+    }
+
+    @Test("schedule applies particle scalability resource during simulation")
+    func scheduleAppliesParticleScalabilityResource() {
+        var scene = SceneRuntime()
+        scene.setResource(ParticleScalabilityResource(emissionScale: 0.25,
+                                                      maxLiveParticleScale: 0.5))
+        let entity = scene.createEntity()
+        _ = scene.setComponent(ParticleEmitter(emissionRate: 20,
+                                               maxParticles: 100,
+                                               lifetime: 100,
+                                               gravity: .zero),
+                               for: entity)
+
+        _ = scene.tick(deltaTime: 1)
+
+        #expect(scene.component(ParticleEmitter.self, for: entity)?.aliveCount == 5)
+    }
+
+    @Test("emitter frame stats report spawn, expire, collision, and capacity pressure")
+    func emitterFrameStatsReportSimulationWork() {
+        var capped = ParticleEmitter(emissionRate: 10,
+                                     maxParticles: 5,
+                                     lifetime: 0.5,
+                                     gravity: .zero)
+        capped.advance(deltaTime: 1)
+        #expect(capped.lastFrameStats.continuousSpawnedCount == 5)
+        #expect(capped.lastFrameStats.capacityLimitedSpawnCount == 5)
+        #expect(capped.lastFrameStats.spawnedParticleCount == 5)
+        #expect(capped.lastFrameStats.liveParticleCount == 5)
+
+        capped.advance(deltaTime: 1)
+        #expect(capped.lastFrameStats.expiredParticleCount == 5)
+        #expect(capped.lastFrameStats.continuousSpawnedCount == 5)
+        #expect(capped.lastFrameStats.capacityLimitedSpawnCount == 5)
+        #expect(capped.lastFrameStats.liveParticleCount == 5)
+
+        var collision = ParticleEmitter(isEmitting: false,
+                                        emissionRate: 0,
+                                        maxParticles: 3,
+                                        lifetime: 10,
+                                        subEmitterTrigger: .collision,
+                                        subEmitterBurstCount: 5,
+                                        subEmitterLifetime: 2,
+                                        originOffset: SIMD3<Float>(0, 0.5, 0),
+                                        startVelocity: SIMD3<Float>(0, -1, 0),
+                                        gravity: .zero,
+                                        collisionMode: .localPlane,
+                                        collisionPlaneY: 0)
+        collision.emit(1)
+        collision.advance(deltaTime: 1)
+        #expect(collision.lastFrameStats.collisionCount == 1)
+        #expect(collision.lastFrameStats.subEmitterSpawnedCount == 2)
+        #expect(collision.lastFrameStats.capacityLimitedSpawnCount == 1)
+        #expect(collision.lastFrameStats.liveParticleCount == 3)
+    }
+
+    @Test("schedule publishes aggregate particle frame stats")
+    func schedulePublishesParticleFrameStats() {
+        var scene = SceneRuntime()
+        let a = scene.createEntity()
+        let b = scene.createEntity()
+        _ = scene.setComponent(ParticleEmitter(emissionRate: 10,
+                                               maxParticles: 100,
+                                               lifetime: 100,
+                                               gravity: .zero),
+                               for: a)
+        _ = scene.setComponent(ParticleEmitter(emissionRate: 4,
+                                               maxParticles: 100,
+                                               lifetime: 100,
+                                               gravity: .zero),
+                               for: b)
+
+        _ = scene.tick(deltaTime: 1)
+
+        let stats = scene.particleFrameStats
+        #expect(stats.emitterCount == 2)
+        #expect(stats.activeEmitterCount == 2)
+        #expect(stats.continuousSpawnedCount == 14)
+        #expect(stats.spawnedParticleCount == 14)
+        #expect(stats.liveParticleCount == 14)
+        #expect(stats.maxParticleCount == 200)
+    }
+
+    @Test("particle scalability policy throttles simulation from previous frame pressure")
+    func particleScalabilityPolicyThrottlesFromPreviousFramePressure() {
+        var scene = SceneRuntime()
+        scene.setResource(ParticleScalabilityPolicyResource(isEnabled: true,
+                                                            targetLiveParticles: 10,
+                                                            minimumScale: 0.5,
+                                                            pressureStep: 0.5,
+                                                            recoveryStep: 0.1))
+        let entity = scene.createEntity()
+        _ = scene.setComponent(ParticleEmitter(emissionRate: 40,
+                                               maxParticles: 100,
+                                               lifetime: 100,
+                                               gravity: .zero),
+                               for: entity)
+
+        _ = scene.tick(deltaTime: 1)
+        #expect(scene.component(ParticleEmitter.self, for: entity)?.aliveCount == 40)
+        #expect(scene.particleScalabilityState.appliedScale == 1)
+        #expect(scene.particleScalabilityState.reason == .none)
+
+        _ = scene.tick(deltaTime: 1)
+        let state = scene.particleScalabilityState
+        #expect(abs(state.appliedScale - 0.5) < 0.0001)
+        #expect(state.reason == .liveBudget)
+        #expect(scene.component(ParticleEmitter.self, for: entity)?.aliveCount == 50)
+        #expect(scene.particleFrameStats.capacityLimitedSpawnCount == 10)
+    }
+
+    @Test("particle scalability policy recovers when pressure clears")
+    func particleScalabilityPolicyRecoversWhenPressureClears() {
+        let policy = ParticleScalabilityPolicyResource(isEnabled: true,
+                                                       targetLiveParticles: 100,
+                                                       minimumScale: 0.25,
+                                                       pressureStep: 0.5,
+                                                       recoveryStep: 0.2)
+
+        let state = policy.updatedState(
+            previousStats: .empty,
+            previousState: ParticleScalabilityStateResource(appliedScale: 0.5,
+                                                            pressure: 1,
+                                                            reason: .liveBudget)
+        )
+
+        #expect(abs(state.appliedScale - 0.7) < 0.0001)
+        #expect(state.reason == .none)
+        #expect(state.pressure == 0)
     }
 
     @Test("noise force deterministically accelerates particles")

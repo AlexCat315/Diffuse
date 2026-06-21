@@ -284,6 +284,13 @@ public struct SceneEditPlanExecutor: Sendable {
             }
             return [.setCameraFOV(entityID: id, fovYDegrees: fov)]
 
+        case .setCameraAspectRatio:
+            let id = try resolveEntityID(step, scene: scene)
+            guard let aspectRatio = step.cameraAspectRatio else {
+                throw SceneEditPlanExecutorError.missingField(op: step.op, field: "camera_aspect_ratio")
+            }
+            return [.setCameraAspectRatio(entityID: id, aspectRatio: aspectRatio)]
+
         case .setCameraActive:
             let id = try resolveEntityID(step, scene: scene)
             let active = step.cameraIsActive ?? true

@@ -580,6 +580,13 @@ void wgpu_bridge_compute_pass_dispatch_indirect(void* pass,
 void wgpu_bridge_compute_pass_end(void* pass);
 void wgpu_bridge_release_compute_pass_encoder(void* pass);
 
+void wgpu_bridge_copy_buffer_to_buffer(void* encoder,
+                                       void* source,
+                                       uint64_t source_offset,
+                                       void* destination,
+                                       uint64_t destination_offset,
+                                       uint64_t size);
+
 /* ─── MRT Render Pass ────────────────────────────────────────────── */
 
 int wgpu_bridge_begin_render_pass_mrt(

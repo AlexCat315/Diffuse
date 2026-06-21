@@ -309,6 +309,7 @@ public enum SceneSerializer {
         [
             "isActive": c.isActive,
             "fovYRadians": c.fovYRadians,
+            "aspectRatio": c.aspectRatio,
             "near": c.near,
             "far": c.far,
             "target": vec3ToJSON(c.target),
@@ -321,6 +322,7 @@ public enum SceneSerializer {
             target: jsonToFloatArray(d["target"]).flatMap(jsonToVec3) ?? SIMD3<Float>(0, 1, 0),
             up: jsonToFloatArray(d["up"]).flatMap(jsonToVec3) ?? SIMD3<Float>(0, 1, 0),
             fovYRadians: jsonToFloat(d["fovYRadians"]) ?? 1.0,
+            aspectRatio: jsonToFloat(d["aspectRatio"]) ?? 1,
             near: jsonToFloat(d["near"]) ?? 0.1,
             far: jsonToFloat(d["far"]) ?? 1000,
             isActive: jsonToBool(d["isActive"]) ?? false
@@ -651,6 +653,7 @@ public enum SceneSerializer {
             "burstCount": c.burstCount,
             "burstInterval": c.burstInterval,
             "maxParticles": c.maxParticles,
+            "maxRenderedParticles": c.maxRenderedParticles,
             "lifetime": c.lifetime,
             "lifetimeRandomness": c.lifetimeRandomness,
             "subEmitterTrigger": c.subEmitterTrigger.rawValue,
@@ -685,8 +688,15 @@ public enum SceneSerializer {
             "forceRadius": c.forceRadius,
             "forceStrength": c.forceStrength,
             "forceFalloff": c.forceFalloff,
+            "vectorFieldMode": c.vectorFieldMode.rawValue,
+            "vectorFieldDirection": vec3ToJSON(c.vectorFieldDirection),
+            "vectorFieldStrength": c.vectorFieldStrength,
+            "vectorFieldScale": c.vectorFieldScale,
+            "vectorFieldScrollSpeed": c.vectorFieldScrollSpeed,
             "collisionMode": c.collisionMode.rawValue,
             "simulationSpace": c.simulationSpace.rawValue,
+            "simulationBackend": c.simulationBackend.rawValue,
+            "gpuSimulationWorkgroupSize": c.gpuSimulationWorkgroupSize,
             "collisionPlaneY": c.collisionPlaneY,
             "collisionRestitution": c.collisionRestitution,
             "collisionDamping": c.collisionDamping,
@@ -707,6 +717,11 @@ public enum SceneSerializer {
             "velocityStretchMax": c.velocityStretchMax,
             "maxRenderDistance": c.maxRenderDistance,
             "renderDistanceFadeRange": c.renderDistanceFadeRange,
+            "renderLODStartDistance": c.renderLODStartDistance,
+            "renderLODEndDistance": c.renderLODEndDistance,
+            "renderLODMinParticleScale": c.renderLODMinParticleScale,
+            "renderBoundsMode": c.renderBoundsMode.rawValue,
+            "renderBoundsRadius": c.renderBoundsRadius,
             "textureSheetColumns": c.textureSheetColumns,
             "textureSheetRows": c.textureSheetRows,
             "textureSheetFrameCount": c.textureSheetFrameCount,
@@ -727,7 +742,10 @@ public enum SceneSerializer {
     }
 
     private static func deserializeParticleEmitter(_ d: [String: Any]) -> ParticleEmitter {
-        ParticleEmitter(
+        let renderBoundsRadius = jsonToFloat(d["renderBoundsRadius"]) ?? 0
+        let renderBoundsMode = ParticleRenderBoundsMode(rawValue: jsonToString(d["renderBoundsMode"]) ?? "")
+            ?? (renderBoundsRadius > 0 ? .manual : .disabled)
+        return ParticleEmitter(
             isEmitting: jsonToBool(d["isEmitting"]) ?? true,
             looping: jsonToBool(d["looping"]) ?? true,
             duration: jsonToFloat(d["duration"]) ?? 0,
@@ -740,6 +758,7 @@ public enum SceneSerializer {
             burstCount: jsonToInt(d["burstCount"]) ?? 0,
             burstInterval: jsonToFloat(d["burstInterval"]) ?? 0,
             maxParticles: jsonToInt(d["maxParticles"]) ?? 256,
+            maxRenderedParticles: jsonToInt(d["maxRenderedParticles"]) ?? 0,
             lifetime: jsonToFloat(d["lifetime"]) ?? 2,
             lifetimeRandomness: jsonToFloat(d["lifetimeRandomness"]) ?? 0,
             subEmitterTrigger: ParticleSubEmitterTrigger(rawValue: jsonToString(d["subEmitterTrigger"]) ?? "none") ?? .none,
@@ -776,8 +795,16 @@ public enum SceneSerializer {
             forceRadius: jsonToFloat(d["forceRadius"]) ?? 0,
             forceStrength: jsonToFloat(d["forceStrength"]) ?? 0,
             forceFalloff: jsonToFloat(d["forceFalloff"]) ?? 1,
+            vectorFieldMode: ParticleVectorFieldMode(rawValue: jsonToString(d["vectorFieldMode"]) ?? "none") ?? .none,
+            vectorFieldDirection: jsonToFloatArray(d["vectorFieldDirection"]).flatMap(jsonToVec3)
+                ?? SIMD3<Float>(0, 1, 0),
+            vectorFieldStrength: jsonToFloat(d["vectorFieldStrength"]) ?? 0,
+            vectorFieldScale: jsonToFloat(d["vectorFieldScale"]) ?? 1,
+            vectorFieldScrollSpeed: jsonToFloat(d["vectorFieldScrollSpeed"]) ?? 0,
             collisionMode: ParticleCollisionMode(rawValue: jsonToString(d["collisionMode"]) ?? "none") ?? .none,
             simulationSpace: ParticleSimulationSpace(rawValue: jsonToString(d["simulationSpace"]) ?? "local") ?? .local,
+            simulationBackend: ParticleSimulationBackend(rawValue: jsonToString(d["simulationBackend"]) ?? "cpu") ?? .cpu,
+            gpuSimulationWorkgroupSize: jsonToInt(d["gpuSimulationWorkgroupSize"]) ?? 64,
             collisionPlaneY: jsonToFloat(d["collisionPlaneY"]) ?? 0,
             collisionRestitution: jsonToFloat(d["collisionRestitution"]) ?? 0.5,
             collisionDamping: jsonToFloat(d["collisionDamping"]) ?? 0,
@@ -798,6 +825,11 @@ public enum SceneSerializer {
             velocityStretchMax: jsonToFloat(d["velocityStretchMax"]) ?? 8,
             maxRenderDistance: jsonToFloat(d["maxRenderDistance"]) ?? 0,
             renderDistanceFadeRange: jsonToFloat(d["renderDistanceFadeRange"]) ?? 0,
+            renderLODStartDistance: jsonToFloat(d["renderLODStartDistance"]) ?? 0,
+            renderLODEndDistance: jsonToFloat(d["renderLODEndDistance"]) ?? 0,
+            renderLODMinParticleScale: jsonToFloat(d["renderLODMinParticleScale"]) ?? 1,
+            renderBoundsMode: renderBoundsMode,
+            renderBoundsRadius: renderBoundsRadius,
             textureAssetID: jsonToString(d["textureAssetID"]),
             texturePath: jsonToString(d["texturePath"]),
             textureSheetColumns: jsonToInt(d["textureSheetColumns"]) ?? 1,

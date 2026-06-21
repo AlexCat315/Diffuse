@@ -29,6 +29,14 @@ extension EditorSceneAdapter {
         scene.renderScene
     }
 
+    public func currentParticleFrameStats() -> ParticleFrameStatsResource {
+        scene.particleFrameStats
+    }
+
+    public func currentParticleScalabilityState() -> ParticleScalabilityStateResource {
+        scene.particleScalabilityState
+    }
+
     public func entityWorldPosition(_ rawID: UInt64) -> SIMD3<Float>? {
         guard let entity = makeEntityID(rawID) else { return nil }
         return scene.worldTransform(for: entity)?.translation

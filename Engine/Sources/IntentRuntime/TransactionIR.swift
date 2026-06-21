@@ -123,6 +123,7 @@ public enum SceneMutation: Sendable, Equatable {
                        target: SIMD3<Float>,
                        up: SIMD3<Float>?)
     case setCameraFOV(entityID: UInt64, fovYDegrees: Float)
+    case setCameraAspectRatio(entityID: UInt64, aspectRatio: Float)
     case setCameraActive(entityID: UInt64, isActive: Bool)
     case setAudioSource(entityID: UInt64, source: AudioSource)
     case setAnimationPlayer(entityID: UInt64, clipName: String?, speed: Float, loop: Bool, isPlaying: Bool)
@@ -174,6 +175,7 @@ public enum SceneMutation: Sendable, Equatable {
              let .setScriptBindings(id, _),
              let .setCameraPose(id, _, _, _),
              let .setCameraFOV(id, _),
+             let .setCameraAspectRatio(id, _),
              let .setCameraActive(id, _),
              let .setAudioSource(id, _),
              let .setAnimationPlayer(id, _, _, _, _),
