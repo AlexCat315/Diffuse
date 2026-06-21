@@ -235,10 +235,16 @@ jobs:
           sudo apt-get install -y \
             libasound2-dev \
             libdbus-1-dev \
+            libdrm-dev \
             libegl1-mesa-dev \
+            libgbm-dev \
             libgl1-mesa-dev \
+            libgles2-mesa-dev \
             libibus-1.0-dev \
+            libjack-jackd2-dev \
+            libpipewire-0.3-dev \
             libpulse-dev \
+            libsndio-dev \
             libudev-dev \
             libwayland-dev \
             libx11-dev \
@@ -251,6 +257,7 @@ jobs:
             libxrandr-dev \
             libxrender-dev \
             libxss-dev \
+            libxtst-dev \
             mesa-common-dev \
             ninja-build \
             patchelf
