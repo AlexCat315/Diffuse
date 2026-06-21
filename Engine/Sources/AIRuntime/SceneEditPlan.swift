@@ -70,6 +70,7 @@ public enum SceneEditOp: String, Codable, Sendable, CaseIterable {
     // Camera
     case setCameraPose     = "set_camera_pose"
     case setCameraFOV      = "set_camera_fov"
+    case setCameraAspectRatio = "set_camera_aspect_ratio"
     case setCameraActive   = "set_camera_active"
 
     // Visual
@@ -221,8 +222,9 @@ public struct SceneEditStep: Codable, Sendable {
     // set_light_cast_shadows
     public var lightCastShadows: Bool?
 
-    // set_camera_fov / set_camera_active
+    // set_camera_fov / set_camera_aspect_ratio / set_camera_active
     public var cameraFovYDegrees: Float?
+    public var cameraAspectRatio: Float?
     public var cameraIsActive: Bool?
 
     // set_mesh_visibility
@@ -260,6 +262,7 @@ public struct SceneEditStep: Codable, Sendable {
         case cameraTarget       = "camera_target"
         case cameraUp           = "camera_up"
         case cameraFovYDegrees  = "camera_fov_y"
+        case cameraAspectRatio  = "camera_aspect_ratio"
         case cameraIsActive     = "camera_is_active"
         case motionType         = "motion_type"
         case mass

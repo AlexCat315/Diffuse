@@ -1191,6 +1191,26 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertTrue(hasFOV, "set_camera_fov must produce setCameraFOV mutation")
     }
 
+    func testSetCameraAspectExecutorProducesMutation() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(CameraComponent(), for: entity)
+        let ref = "scene:\(entity.rawValue)"
+
+        let json = """
+        {"summary":"aspect","steps":[{"op":"set_camera_aspect_ratio","entity_id":"\(ref)","camera_aspect_ratio":1.777}]}
+        """
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
+
+        let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
+        let hasAspect = ops.contains {
+            if case let .setCameraAspectRatio(_, aspect) = $0 { return abs(aspect - 1.777) < 0.001 }
+            return false
+        }
+        XCTAssertTrue(hasAspect, "set_camera_aspect_ratio must produce setCameraAspectRatio mutation")
+    }
+
     func testSetCameraActiveExecutorProducesMutation() throws {
         var scene = SceneRuntime()
         let entity = scene.createEntity()

@@ -61,6 +61,351 @@ public enum ParticleSimulationSpace: String, CaseIterable, Codable, Sendable, Eq
     case world
 }
 
+public enum ParticleSimulationBackend: String, CaseIterable, Codable, Sendable, Equatable, Hashable {
+    /// CPU simulation is authoritative.
+    case cpu
+    /// Use GPU simulation when the emitter's authored modules are supported; otherwise fall back to CPU.
+    case gpuIfSupported
+    /// Require GPU simulation. Unsupported module combinations are reported by `ParticleGPUSimulationPlan`.
+    case gpuRequired
+}
+
+public enum ParticleGPUSimulationPlanStatus: String, Codable, Sendable, Equatable, Hashable {
+    case disabled
+    case supported
+    case fallbackToCPU
+    case requiredButUnsupported
+}
+
+public enum ParticleGPUSimulationUnsupportedReason: String, Codable, Sendable, Equatable, Hashable {
+    case backendCPU
+    case noParticleCapacity
+    case eventSubEmitters
+    case distanceEmission
+    case noise
+    case forceFields
+    case uniformVectorField
+    case collisions
+    case angularVelocity
+}
+
+public struct ParticleGPUSimulationPlan: Sendable, Equatable {
+    public static let maximumWorkgroupSize = 256
+
+    public var backend: ParticleSimulationBackend
+    public var status: ParticleGPUSimulationPlanStatus
+    public var particleCapacity: Int
+    public var workgroupSize: Int
+    public var dispatchWorkgroups: Int
+    public var unsupportedReasons: [ParticleGPUSimulationUnsupportedReason]
+
+    public init(emitter: ParticleEmitter) {
+        self.backend = emitter.simulationBackend
+        self.particleCapacity = max(0, emitter.maxParticles)
+        self.workgroupSize = min(
+            max(1, emitter.gpuSimulationWorkgroupSize),
+            Self.maximumWorkgroupSize
+        )
+        self.dispatchWorkgroups = particleCapacity > 0
+            ? Int(ceil(Float(particleCapacity) / Float(workgroupSize)))
+            : 0
+
+        var reasons: [ParticleGPUSimulationUnsupportedReason] = []
+        if emitter.simulationBackend == .cpu {
+            reasons.append(.backendCPU)
+        }
+        if particleCapacity == 0 {
+            reasons.append(.noParticleCapacity)
+        }
+        if emitter.hasEventSubEmitterRules {
+            reasons.append(.eventSubEmitters)
+        }
+        if emitter.distanceEmissionRate > 0 {
+            reasons.append(.distanceEmission)
+        }
+        if emitter.noiseStrength > 0 {
+            reasons.append(.noise)
+        }
+        if emitter.forceMode != .none, emitter.forceStrength != 0 {
+            reasons.append(.forceFields)
+        }
+        if emitter.vectorFieldMode == .uniform, emitter.vectorFieldStrength != 0 {
+            reasons.append(.uniformVectorField)
+        }
+        if emitter.collisionMode != .none {
+            reasons.append(.collisions)
+        }
+        if emitter.angularVelocity != 0 || emitter.angularVelocityRandomness != 0 {
+            reasons.append(.angularVelocity)
+        }
+        self.unsupportedReasons = reasons
+
+        if emitter.simulationBackend == .cpu {
+            self.status = .disabled
+        } else if reasons.isEmpty {
+            self.status = .supported
+        } else if emitter.simulationBackend == .gpuRequired {
+            self.status = .requiredButUnsupported
+        } else {
+            self.status = .fallbackToCPU
+        }
+    }
+
+    public var usesGPU: Bool {
+        status == .supported
+    }
+}
+
+public enum ParticleRenderBoundsMode: String, CaseIterable, Codable, Sendable, Equatable {
+    /// Frustum culling is disabled for this emitter.
+    case disabled
+    /// Use the authored `renderBoundsRadius`.
+    case manual
+    /// Estimate a conservative radius from emitter shape, lifetime, velocity, forces, and billboard size.
+    case automatic
+}
+
+public struct ParticleAdvanceOptions: Sendable, Equatable {
+    public var emissionScale: Float
+    public var burstScale: Float
+    public var distanceEmissionScale: Float
+    public var maxLiveParticleScale: Float
+
+    public init(emissionScale: Float = 1,
+                burstScale: Float = 1,
+                distanceEmissionScale: Float = 1,
+                maxLiveParticleScale: Float = 1) {
+        self.emissionScale = simd_clamp(emissionScale, 0, 10)
+        self.burstScale = simd_clamp(burstScale, 0, 10)
+        self.distanceEmissionScale = simd_clamp(distanceEmissionScale, 0, 10)
+        self.maxLiveParticleScale = simd_clamp(maxLiveParticleScale, 0, 1)
+    }
+
+    public static let `default` = ParticleAdvanceOptions()
+
+    public func liveParticleLimit(configuredMaxParticles: Int) -> Int {
+        let configured = max(0, configuredMaxParticles)
+        guard configured > 0 else { return 0 }
+        guard maxLiveParticleScale < 1 else { return configured }
+        guard maxLiveParticleScale > 0 else { return 0 }
+        return min(configured, max(1, Int(floor(Float(configured) * maxLiveParticleScale))))
+    }
+}
+
+public struct ParticleScalabilityResource: Sendable, Equatable {
+    public var emissionScale: Float
+    public var burstScale: Float
+    public var distanceEmissionScale: Float
+    public var maxLiveParticleScale: Float
+
+    public init(emissionScale: Float = 1,
+                burstScale: Float = 1,
+                distanceEmissionScale: Float = 1,
+                maxLiveParticleScale: Float = 1) {
+        let options = ParticleAdvanceOptions(emissionScale: emissionScale,
+                                             burstScale: burstScale,
+                                             distanceEmissionScale: distanceEmissionScale,
+                                             maxLiveParticleScale: maxLiveParticleScale)
+        self.emissionScale = options.emissionScale
+        self.burstScale = options.burstScale
+        self.distanceEmissionScale = options.distanceEmissionScale
+        self.maxLiveParticleScale = options.maxLiveParticleScale
+    }
+
+    public static let `default` = ParticleScalabilityResource()
+
+    public var advanceOptions: ParticleAdvanceOptions {
+        ParticleAdvanceOptions(emissionScale: emissionScale,
+                               burstScale: burstScale,
+                               distanceEmissionScale: distanceEmissionScale,
+                               maxLiveParticleScale: maxLiveParticleScale)
+    }
+}
+
+public enum ParticleScalabilityPressureReason: String, CaseIterable, Sendable, Equatable {
+    case none
+    case liveBudget
+    case spawnBudget
+    case capacityLimited
+}
+
+public struct ParticleScalabilityStateResource: Sendable, Equatable {
+    public var appliedScale: Float
+    public var pressure: Float
+    public var reason: ParticleScalabilityPressureReason
+
+    public init(appliedScale: Float = 1,
+                pressure: Float = 0,
+                reason: ParticleScalabilityPressureReason = .none) {
+        self.appliedScale = simd_clamp(appliedScale, 0, 1)
+        self.pressure = simd_clamp(pressure, 0, 10)
+        self.reason = reason
+    }
+
+    public static let `default` = ParticleScalabilityStateResource()
+
+    public func applying(to base: ParticleAdvanceOptions) -> ParticleAdvanceOptions {
+        ParticleAdvanceOptions(emissionScale: base.emissionScale * appliedScale,
+                               burstScale: base.burstScale * appliedScale,
+                               distanceEmissionScale: base.distanceEmissionScale * appliedScale,
+                               maxLiveParticleScale: base.maxLiveParticleScale * appliedScale)
+    }
+}
+
+public struct ParticleScalabilityPolicyResource: Sendable, Equatable {
+    public var isEnabled: Bool
+    public var targetLiveParticles: Int
+    public var targetSpawnedParticlesPerFrame: Int
+    public var minimumScale: Float
+    public var pressureStep: Float
+    public var recoveryStep: Float
+
+    public init(isEnabled: Bool = false,
+                targetLiveParticles: Int = 0,
+                targetSpawnedParticlesPerFrame: Int = 0,
+                minimumScale: Float = 0.25,
+                pressureStep: Float = 0.15,
+                recoveryStep: Float = 0.05) {
+        self.isEnabled = isEnabled
+        self.targetLiveParticles = max(0, targetLiveParticles)
+        self.targetSpawnedParticlesPerFrame = max(0, targetSpawnedParticlesPerFrame)
+        self.minimumScale = simd_clamp(minimumScale, 0, 1)
+        self.pressureStep = simd_clamp(pressureStep, 0, 1)
+        self.recoveryStep = simd_clamp(recoveryStep, 0, 1)
+    }
+
+    public static let disabled = ParticleScalabilityPolicyResource()
+
+    public func updatedState(previousStats: ParticleFrameStatsResource,
+                             previousState: ParticleScalabilityStateResource = .default)
+        -> ParticleScalabilityStateResource {
+        guard isEnabled else { return .default }
+
+        let pressureSample = pressure(from: previousStats)
+        let nextScale: Float
+        if pressureSample.pressure > 0 {
+            let reduction = pressureStep * min(1, pressureSample.pressure)
+            nextScale = max(minimumScale, previousState.appliedScale * (1 - reduction))
+        } else {
+            nextScale = min(1, previousState.appliedScale + recoveryStep)
+        }
+        return ParticleScalabilityStateResource(appliedScale: nextScale,
+                                                pressure: pressureSample.pressure,
+                                                reason: pressureSample.reason)
+    }
+
+    private func pressure(from stats: ParticleFrameStatsResource)
+        -> (pressure: Float, reason: ParticleScalabilityPressureReason) {
+        if stats.capacityLimitedSpawnCount > 0 {
+            return (1, .capacityLimited)
+        }
+
+        var pressure: Float = 0
+        var reason: ParticleScalabilityPressureReason = .none
+        if targetLiveParticles > 0, stats.liveParticleCount > targetLiveParticles {
+            pressure = max(pressure, Float(stats.liveParticleCount - targetLiveParticles)
+                           / Float(targetLiveParticles))
+            reason = .liveBudget
+        }
+        if targetSpawnedParticlesPerFrame > 0,
+           stats.spawnedParticleCount > targetSpawnedParticlesPerFrame {
+            let spawnPressure = Float(stats.spawnedParticleCount - targetSpawnedParticlesPerFrame)
+                / Float(targetSpawnedParticlesPerFrame)
+            if spawnPressure > pressure {
+                pressure = spawnPressure
+                reason = .spawnBudget
+            }
+        }
+        return (pressure, reason)
+    }
+}
+
+public struct ParticleEmitterFrameStats: Sendable, Equatable {
+    public var simulatedDeltaTime: Float
+    public var startingLiveParticleCount: Int
+    public var liveParticleCount: Int
+    public var maxParticleCount: Int
+    public var liveParticleLimit: Int
+    public var continuousSpawnedCount: Int
+    public var burstSpawnedCount: Int
+    public var distanceSpawnedCount: Int
+    public var subEmitterSpawnedCount: Int
+    public var expiredParticleCount: Int
+    public var collisionCount: Int
+    public var capacityLimitedSpawnCount: Int
+
+    public init(simulatedDeltaTime: Float = 0,
+                startingLiveParticleCount: Int = 0,
+                liveParticleCount: Int = 0,
+                maxParticleCount: Int = 0,
+                liveParticleLimit: Int = 0,
+                continuousSpawnedCount: Int = 0,
+                burstSpawnedCount: Int = 0,
+                distanceSpawnedCount: Int = 0,
+                subEmitterSpawnedCount: Int = 0,
+                expiredParticleCount: Int = 0,
+                collisionCount: Int = 0,
+                capacityLimitedSpawnCount: Int = 0) {
+        self.simulatedDeltaTime = max(0, simulatedDeltaTime)
+        self.startingLiveParticleCount = max(0, startingLiveParticleCount)
+        self.liveParticleCount = max(0, liveParticleCount)
+        self.maxParticleCount = max(0, maxParticleCount)
+        self.liveParticleLimit = max(0, liveParticleLimit)
+        self.continuousSpawnedCount = max(0, continuousSpawnedCount)
+        self.burstSpawnedCount = max(0, burstSpawnedCount)
+        self.distanceSpawnedCount = max(0, distanceSpawnedCount)
+        self.subEmitterSpawnedCount = max(0, subEmitterSpawnedCount)
+        self.expiredParticleCount = max(0, expiredParticleCount)
+        self.collisionCount = max(0, collisionCount)
+        self.capacityLimitedSpawnCount = max(0, capacityLimitedSpawnCount)
+    }
+
+    public static let empty = ParticleEmitterFrameStats()
+
+    public var spawnedParticleCount: Int {
+        continuousSpawnedCount + burstSpawnedCount + distanceSpawnedCount + subEmitterSpawnedCount
+    }
+}
+
+public struct ParticleFrameStatsResource: Sendable, Equatable {
+    public var simulatedDeltaTime: Float
+    public var emitterCount: Int
+    public var activeEmitterCount: Int
+    public var liveParticleCount: Int
+    public var maxParticleCount: Int
+    public var liveParticleLimit: Int
+    public var spawnedParticleCount: Int
+    public var continuousSpawnedCount: Int
+    public var burstSpawnedCount: Int
+    public var distanceSpawnedCount: Int
+    public var subEmitterSpawnedCount: Int
+    public var expiredParticleCount: Int
+    public var collisionCount: Int
+    public var capacityLimitedSpawnCount: Int
+
+    public init(simulatedDeltaTime: Float = 0,
+                emitterStats: [ParticleEmitterFrameStats] = []) {
+        self.simulatedDeltaTime = max(0, simulatedDeltaTime)
+        self.emitterCount = emitterStats.count
+        self.activeEmitterCount = emitterStats.filter {
+            $0.liveParticleCount > 0 || $0.spawnedParticleCount > 0
+        }.count
+        self.liveParticleCount = emitterStats.reduce(0) { $0 + $1.liveParticleCount }
+        self.maxParticleCount = emitterStats.reduce(0) { $0 + $1.maxParticleCount }
+        self.liveParticleLimit = emitterStats.reduce(0) { $0 + $1.liveParticleLimit }
+        self.spawnedParticleCount = emitterStats.reduce(0) { $0 + $1.spawnedParticleCount }
+        self.continuousSpawnedCount = emitterStats.reduce(0) { $0 + $1.continuousSpawnedCount }
+        self.burstSpawnedCount = emitterStats.reduce(0) { $0 + $1.burstSpawnedCount }
+        self.distanceSpawnedCount = emitterStats.reduce(0) { $0 + $1.distanceSpawnedCount }
+        self.subEmitterSpawnedCount = emitterStats.reduce(0) { $0 + $1.subEmitterSpawnedCount }
+        self.expiredParticleCount = emitterStats.reduce(0) { $0 + $1.expiredParticleCount }
+        self.collisionCount = emitterStats.reduce(0) { $0 + $1.collisionCount }
+        self.capacityLimitedSpawnCount = emitterStats.reduce(0) { $0 + $1.capacityLimitedSpawnCount }
+    }
+
+    public static let empty = ParticleFrameStatsResource()
+}
+
 public struct ParticleCurveKeyframe: Codable, Sendable, Equatable, Hashable {
     public var time: Float
     public var value: Float
@@ -227,6 +572,12 @@ public enum ParticleForceMode: String, CaseIterable, Codable, Sendable, Equatabl
     case vortex
 }
 
+public enum ParticleVectorFieldMode: String, CaseIterable, Codable, Sendable, Equatable, Hashable {
+    case none
+    case uniform
+    case curl
+}
+
 public enum ParticleSubEmitterTrigger: String, CaseIterable, Codable, Sendable, Equatable, Hashable {
     case none
     case death
@@ -305,6 +656,8 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     /// Seconds between scheduled bursts when `burstCount > 0`.
     public var burstInterval: Float
     public var maxParticles: Int
+    /// Maximum source particles submitted to the renderer per frame. Zero renders the whole live pool.
+    public var maxRenderedParticles: Int
     public var lifetime: Float
     public var lifetimeRandomness: Float
     /// Event that can spawn secondary particles from each source particle.
@@ -368,8 +721,23 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public var forceStrength: Float
     /// Radius attenuation exponent. Zero keeps full strength inside the radius.
     public var forceFalloff: Float
+    /// Optional CPU vector field module. This is deterministic and can later be mirrored by GPU simulation.
+    public var vectorFieldMode: ParticleVectorFieldMode
+    /// Preferred direction for uniform vector fields and the curl-field bias axis.
+    public var vectorFieldDirection: SIMD3<Float>
+    /// Acceleration magnitude contributed by the vector field.
+    public var vectorFieldStrength: Float
+    /// Spatial frequency for procedural vector-field sampling.
+    public var vectorFieldScale: Float
+    /// Lifetime-time scroll speed for procedural vector-field sampling.
+    public var vectorFieldScrollSpeed: Float
     public var collisionMode: ParticleCollisionMode
     public var simulationSpace: ParticleSimulationSpace
+    /// Selects the authoritative particle simulation backend. GPU modes currently expose
+    /// planning/validation and prepare the emitter for a compute-dispatch path.
+    public var simulationBackend: ParticleSimulationBackend
+    /// Number of particles handled per compute workgroup when GPU simulation is active.
+    public var gpuSimulationWorkgroupSize: Int
     /// Y position of the collision plane. Interpreted in local or world space based on `collisionMode`.
     public var collisionPlaneY: Float
     /// Bounce factor applied to velocity normal to the collision plane.
@@ -402,6 +770,16 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public var maxRenderDistance: Float
     /// Range before `maxRenderDistance` over which rendered alpha fades to zero.
     public var renderDistanceFadeRange: Float
+    /// Camera distance where render LOD scaling begins. Disabled unless end distance is greater than start distance.
+    public var renderLODStartDistance: Float
+    /// Camera distance where render LOD reaches `renderLODMinParticleScale`.
+    public var renderLODEndDistance: Float
+    /// Minimum fraction of the render particle submission budget kept at `renderLODEndDistance`.
+    public var renderLODMinParticleScale: Float
+    /// Chooses whether camera-frustum culling uses no bounds, manual bounds, or an estimated conservative bound.
+    public var renderBoundsMode: ParticleRenderBoundsMode
+    /// World-space radius around `originOffset` used when `renderBoundsMode == .manual`.
+    public var renderBoundsRadius: Float
     /// Optional editor asset identifier for the image sampled by billboard particles.
     public var textureAssetID: String?
     /// Optional resolved image file path sampled by billboard particles. Nil keeps the
@@ -427,10 +805,12 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
 
     // Live state
     public private(set) var particles: [Particle]
+    public private(set) var lastFrameStats: ParticleEmitterFrameStats
     private var emitterAge: Float
     private var emissionAccumulator: Float
     private var distanceEmissionAccumulator: Float
     private var burstAccumulator: Float
+    private var burstSpawnAccumulator: Float
     private var previousEmitterPosition: SIMD3<Float>?
     private var hasPrewarmed: Bool
     private var rngState: UInt64
@@ -448,6 +828,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         burstCount: Int = 0,
         burstInterval: Float = 0,
         maxParticles: Int = 256,
+        maxRenderedParticles: Int = 0,
         lifetime: Float = 2,
         lifetimeRandomness: Float = 0,
         subEmitterTrigger: ParticleSubEmitterTrigger = .none,
@@ -482,8 +863,15 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         forceRadius: Float = 0,
         forceStrength: Float = 0,
         forceFalloff: Float = 1,
+        vectorFieldMode: ParticleVectorFieldMode = .none,
+        vectorFieldDirection: SIMD3<Float> = SIMD3<Float>(0, 1, 0),
+        vectorFieldStrength: Float = 0,
+        vectorFieldScale: Float = 1,
+        vectorFieldScrollSpeed: Float = 0,
         collisionMode: ParticleCollisionMode = .none,
         simulationSpace: ParticleSimulationSpace = .local,
+        simulationBackend: ParticleSimulationBackend = .cpu,
+        gpuSimulationWorkgroupSize: Int = 64,
         collisionPlaneY: Float = 0,
         collisionRestitution: Float = 0.5,
         collisionDamping: Float = 0,
@@ -504,6 +892,11 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         velocityStretchMax: Float = 8,
         maxRenderDistance: Float = 0,
         renderDistanceFadeRange: Float = 0,
+        renderLODStartDistance: Float = 0,
+        renderLODEndDistance: Float = 0,
+        renderLODMinParticleScale: Float = 1,
+        renderBoundsMode: ParticleRenderBoundsMode? = nil,
+        renderBoundsRadius: Float = 0,
         textureAssetID: String? = nil,
         texturePath: String? = nil,
         textureSheetColumns: Int = 1,
@@ -528,6 +921,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.burstCount = max(0, burstCount)
         self.burstInterval = max(0, burstInterval)
         self.maxParticles = max(0, maxParticles)
+        self.maxRenderedParticles = max(0, maxRenderedParticles)
         self.lifetime = max(0, lifetime)
         self.lifetimeRandomness = max(0, lifetimeRandomness)
         self.subEmitterTrigger = subEmitterTrigger
@@ -579,8 +973,15 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.forceRadius = max(0, forceRadius)
         self.forceStrength = forceStrength
         self.forceFalloff = max(0, forceFalloff)
+        self.vectorFieldMode = vectorFieldMode
+        self.vectorFieldDirection = vectorFieldDirection
+        self.vectorFieldStrength = vectorFieldStrength
+        self.vectorFieldScale = max(0.0001, vectorFieldScale)
+        self.vectorFieldScrollSpeed = max(0, vectorFieldScrollSpeed)
         self.collisionMode = collisionMode
         self.simulationSpace = simulationSpace
+        self.simulationBackend = simulationBackend
+        self.gpuSimulationWorkgroupSize = max(1, gpuSimulationWorkgroupSize)
         self.collisionPlaneY = collisionPlaneY
         self.collisionRestitution = simd_clamp(collisionRestitution, 0, 1)
         self.collisionDamping = simd_clamp(collisionDamping, 0, 1)
@@ -601,6 +1002,11 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.velocityStretchMax = max(1, velocityStretchMax)
         self.maxRenderDistance = max(0, maxRenderDistance)
         self.renderDistanceFadeRange = max(0, renderDistanceFadeRange)
+        self.renderLODStartDistance = max(0, renderLODStartDistance)
+        self.renderLODEndDistance = max(0, renderLODEndDistance)
+        self.renderLODMinParticleScale = simd_clamp(renderLODMinParticleScale, 0, 1)
+        self.renderBoundsMode = renderBoundsMode ?? (renderBoundsRadius > 0 ? .manual : .disabled)
+        self.renderBoundsRadius = max(0, renderBoundsRadius)
         self.textureAssetID = textureAssetID?.isEmpty == true ? nil : textureAssetID
         self.texturePath = texturePath?.isEmpty == true ? nil : texturePath
         self.textureSheetColumns = max(1, textureSheetColumns)
@@ -613,17 +1019,147 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.trailEndAlphaScale = simd_clamp(trailEndAlphaScale, 0, 1)
         self.seed = seed
         self.particles = []
+        self.lastFrameStats = .empty
         self.emitterAge = 0
         self.emissionAccumulator = 0
         self.distanceEmissionAccumulator = 0
         self.burstAccumulator = 0
+        self.burstSpawnAccumulator = 0
         self.previousEmitterPosition = nil
         self.hasPrewarmed = false
         self.rngState = seed
     }
 
+    public func effectiveRenderBoundsRadius() -> Float {
+        switch renderBoundsMode {
+        case .disabled:
+            return 0
+        case .manual:
+            return max(0, renderBoundsRadius)
+        case .automatic:
+            return estimatedRenderBoundsRadius()
+        }
+    }
+
+    public func renderLODScale(cameraDistance: Float) -> Float {
+        guard renderLODEndDistance > renderLODStartDistance else {
+            return 1
+        }
+        let t = simd_clamp((max(0, cameraDistance) - renderLODStartDistance)
+                           / (renderLODEndDistance - renderLODStartDistance), 0, 1)
+        return 1 + (renderLODMinParticleScale - 1) * t
+    }
+
+    public func effectiveMaxRenderedParticles(cameraDistance: Float, liveParticleCount: Int) -> Int {
+        let liveCount = max(0, liveParticleCount)
+        guard liveCount > 0 else { return 0 }
+        let baseLimit = maxRenderedParticles > 0 ? min(maxRenderedParticles, liveCount) : liveCount
+        let scale = renderLODScale(cameraDistance: cameraDistance)
+        guard scale > 0 else { return 0 }
+        return min(baseLimit, max(1, Int(ceil(Float(baseLimit) * scale))))
+    }
+
+    public func estimatedRenderBoundsRadius() -> Float {
+        let primaryLifetime = max(0.0001, lifetime + lifetimeRandomness)
+        let spawnExtent = estimatedSpawnExtent()
+        let primaryVelocity = estimatedVelocityMagnitude(startVelocity: startVelocity,
+                                                         randomness: velocityRandomness)
+        let acceleration = estimatedAccelerationMagnitude()
+        let primaryTravel = estimatedTravelDistance(lifetime: primaryLifetime,
+                                                    velocityMagnitude: primaryVelocity,
+                                                    accelerationMagnitude: acceleration)
+        let childTravel = estimatedSubEmitterExpansion(accelerationMagnitude: acceleration)
+        let billboardRadius = estimatedBillboardRadius(velocityMagnitude: max(primaryVelocity, childTravel.velocity))
+        let forceExtent: Float
+        if forceMode != .none, forceRadius > 0 {
+            forceExtent = simd_length(forceCenter) + forceRadius
+        } else {
+            forceExtent = 0
+        }
+        let radius = spawnExtent + primaryTravel + childTravel.distance + billboardRadius + forceExtent
+        return radius.isFinite ? max(0, radius) : max(0, renderBoundsRadius)
+    }
+
+    private func estimatedSpawnExtent() -> Float {
+        switch emissionShape {
+        case .sphere:
+            return spawnRadius
+        case .box:
+            return simd_length(boxHalfExtents)
+        case .cone:
+            return sqrt(coneRadius * coneRadius + coneHeight * coneHeight)
+        }
+    }
+
+    private func estimatedVelocityMagnitude(startVelocity: SIMD3<Float>,
+                                            randomness: SIMD3<Float>) -> Float {
+        simd_length(startVelocity) + simd_length(randomness)
+    }
+
+    private func estimatedAccelerationMagnitude() -> Float {
+        simd_length(gravity) + noiseStrength + abs(forceStrength) + abs(vectorFieldStrength)
+    }
+
+    private func estimatedTravelDistance(lifetime: Float,
+                                         velocityMagnitude: Float,
+                                         accelerationMagnitude: Float) -> Float {
+        velocityMagnitude * lifetime + 0.5 * accelerationMagnitude * lifetime * lifetime
+    }
+
+    private func estimatedSubEmitterExpansion(
+        accelerationMagnitude: Float
+    ) -> (distance: Float, velocity: Float) {
+        var maxDistance: Float = 0
+        var maxVelocity: Float = 0
+        if let legacySubEmitterRule {
+            accumulateSubEmitterExpansion(rule: legacySubEmitterRule,
+                                          accelerationMagnitude: accelerationMagnitude,
+                                          maxDistance: &maxDistance,
+                                          maxVelocity: &maxVelocity)
+        }
+        for rule in subEmitters {
+            accumulateSubEmitterExpansion(rule: rule,
+                                          accelerationMagnitude: accelerationMagnitude,
+                                          maxDistance: &maxDistance,
+                                          maxVelocity: &maxVelocity)
+        }
+        return (maxDistance, maxVelocity)
+    }
+
+    private func accumulateSubEmitterExpansion(rule: ParticleSubEmitter,
+                                               accelerationMagnitude: Float,
+                                               maxDistance: inout Float,
+                                               maxVelocity: inout Float) {
+        let velocity = estimatedVelocityMagnitude(startVelocity: rule.startVelocity,
+                                                  randomness: rule.velocityRandomness)
+        let travel = estimatedTravelDistance(lifetime: rule.lifetime,
+                                             velocityMagnitude: velocity,
+                                             accelerationMagnitude: accelerationMagnitude)
+        let depth = Float(max(1, rule.maxDepth))
+        maxDistance = max(maxDistance, travel * depth)
+        maxVelocity = max(maxVelocity, velocity)
+    }
+
+    private func estimatedBillboardRadius(velocityMagnitude: Float) -> Float {
+        var size = max(startSize, endSize, subEmitterStartSize, subEmitterEndSize)
+        for rule in subEmitters {
+            size = max(size, rule.startSize, rule.endSize)
+        }
+        let sizeScale = max(0, 1 + sizeRandomness)
+        let stretch = renderAlignment == .velocity
+            ? min(velocityStretchMax, max(1, 1 + velocityMagnitude * velocityStretchScale))
+            : 1
+        let billboardRadius = max(0, size) * sizeScale * max(1, stretch) * 0.70710678
+        let trailRadius = trailLength > 0 ? velocityMagnitude * trailLength : 0
+        return billboardRadius + trailRadius
+    }
+
     /// Number of currently-alive particles.
     public var aliveCount: Int { particles.count }
+
+    public var gpuSimulationPlan: ParticleGPUSimulationPlan {
+        ParticleGPUSimulationPlan(emitter: self)
+    }
 
     /// UV rect for a particle's current texture sheet frame: x, y, width, height.
     public func textureUVRect(for particle: Particle) -> SIMD4<Float> {
@@ -652,14 +1188,26 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     /// Advances the simulation by `deltaTime` seconds: integrates existing particles, culls
     /// expired ones, then spawns from the continuous emission rate and scheduled bursts
     /// (capped at `maxParticles`).
-    public mutating func advance(deltaTime: Double, worldTransform: simd_float4x4? = nil) {
+    public mutating func advance(deltaTime: Double,
+                                 worldTransform: simd_float4x4? = nil,
+                                 options: ParticleAdvanceOptions = .default) {
         guard deltaTime > 0 else { return }
-        runPrewarmIfNeeded(worldTransform: worldTransform)
-        advanceStep(deltaTime: Float(deltaTime), worldTransform: worldTransform)
+        runPrewarmIfNeeded(worldTransform: worldTransform, options: options)
+        advanceStep(deltaTime: Float(deltaTime), worldTransform: worldTransform, options: options)
     }
 
-    private mutating func advanceStep(deltaTime dt: Float, worldTransform: simd_float4x4? = nil) {
+    private mutating func advanceStep(deltaTime dt: Float,
+                                      worldTransform: simd_float4x4? = nil,
+                                      options: ParticleAdvanceOptions = .default) {
         guard dt > 0 else { return }
+        let liveParticleLimit = options.liveParticleLimit(configuredMaxParticles: maxParticles)
+        var frameStats = ParticleEmitterFrameStats(
+            simulatedDeltaTime: dt,
+            startingLiveParticleCount: particles.count,
+            liveParticleCount: particles.count,
+            maxParticleCount: maxParticles,
+            liveParticleLimit: liveParticleLimit
+        )
         let currentEmitterPosition = distanceEmitterPosition(worldTransform: worldTransform)
         let inheritedWorldVelocity = inheritedEmitterVelocity(
             from: previousEmitterPosition,
@@ -677,10 +1225,12 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             p.velocity += gravity * dt
             p.velocity += noiseForce(position: p.position, age: p.age) * dt
             p.velocity += forceAcceleration(position: p.position) * dt
+            p.velocity += vectorFieldAcceleration(position: p.position, age: p.age) * dt
             p.position += p.velocity * dt
             p.rotation += p.angularVelocity * dt
             let collided = applyCollision(to: &p, context: collisionContext)
             if collided {
+                frameStats.collisionCount += 1
                 spawnSubEmitterParticles(trigger: .collision,
                                          source: p,
                                          survivorsCount: survivors.count,
@@ -691,6 +1241,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
                 refreshAppearance(&p)
                 survivors.append(p)
             } else {
+                frameStats.expiredParticleCount += 1
                 spawnSubEmitterParticles(trigger: .death,
                                          source: p,
                                          survivorsCount: survivors.count,
@@ -698,24 +1249,36 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             }
         }
         particles = survivors
-        appendEventParticles(eventParticles)
+        let eventSpawnResult = appendEventParticles(eventParticles)
+        frameStats.subEmitterSpawnedCount += eventSpawnResult.spawned
+        frameStats.capacityLimitedSpawnCount += eventSpawnResult.dropped
 
         guard isEmitting else {
             previousEmitterPosition = currentEmitterPosition
+            frameStats.liveParticleCount = particles.count
+            lastFrameStats = frameStats
             return
         }
         let emissionStep = activeEmissionStep(dt)
         guard emissionStep.delta > 0 else {
             previousEmitterPosition = currentEmitterPosition
+            frameStats.liveParticleCount = particles.count
+            lastFrameStats = frameStats
             return
         }
         let emissionRateMultiplier = max(0, emissionRateCurve.evaluate(at: emissionStep.normalizedAge))
-        if emissionRate > 0, emissionRateMultiplier > 0 {
-            emissionAccumulator += emissionRate * emissionRateMultiplier * emissionStep.delta
+        let scaledEmissionRateMultiplier = emissionRateMultiplier * options.emissionScale
+        if emissionRate > 0, scaledEmissionRateMultiplier > 0 {
+            emissionAccumulator += emissionRate * scaledEmissionRateMultiplier * emissionStep.delta
             let toSpawn = Int(emissionAccumulator)
             if toSpawn > 0 {
                 emissionAccumulator -= Float(toSpawn)
-                spawn(toSpawn, worldTransform: worldTransform, inheritedWorldVelocity: inheritedWorldVelocity)
+                let spawnResult = spawn(toSpawn,
+                                        worldTransform: worldTransform,
+                                        inheritedWorldVelocity: inheritedWorldVelocity,
+                                        maxLiveParticles: liveParticleLimit)
+                frameStats.continuousSpawnedCount += spawnResult.spawned
+                frameStats.capacityLimitedSpawnCount += spawnResult.dropped
             }
         }
         if burstCount > 0, burstInterval > 0 {
@@ -723,17 +1286,32 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             let bursts = Int(burstAccumulator / burstInterval)
             if bursts > 0 {
                 burstAccumulator -= Float(bursts) * burstInterval
-                spawn(bursts * burstCount,
-                      worldTransform: worldTransform,
-                      inheritedWorldVelocity: inheritedWorldVelocity)
+                burstSpawnAccumulator += Float(bursts * burstCount) * options.burstScale
+                let toSpawn = Int(burstSpawnAccumulator)
+                if toSpawn > 0 {
+                    burstSpawnAccumulator -= Float(toSpawn)
+                    let spawnResult = spawn(toSpawn,
+                                            worldTransform: worldTransform,
+                                            inheritedWorldVelocity: inheritedWorldVelocity,
+                                            maxLiveParticles: liveParticleLimit)
+                    frameStats.burstSpawnedCount += spawnResult.spawned
+                    frameStats.capacityLimitedSpawnCount += spawnResult.dropped
+                }
             }
         }
         let distanceRateMultiplier = max(0, distanceEmissionRateCurve.evaluate(at: emissionStep.normalizedAge))
-        spawnDistanceEmission(from: previousEmitterPosition,
-                              to: currentEmitterPosition,
-                              worldTransform: worldTransform,
-                              inheritedWorldVelocity: inheritedWorldVelocity,
-                              rateMultiplier: distanceRateMultiplier)
+        let distanceSpawnResult = spawnDistanceEmission(
+            from: previousEmitterPosition,
+            to: currentEmitterPosition,
+            worldTransform: worldTransform,
+            inheritedWorldVelocity: inheritedWorldVelocity,
+            rateMultiplier: distanceRateMultiplier * options.distanceEmissionScale,
+            maxLiveParticles: liveParticleLimit
+        )
+        frameStats.distanceSpawnedCount += distanceSpawnResult.spawned
+        frameStats.capacityLimitedSpawnCount += distanceSpawnResult.dropped
+        frameStats.liveParticleCount = particles.count
+        lastFrameStats = frameStats
     }
 
     /// Spawns `count` particles immediately (a burst), independent of the emission rate.
@@ -749,11 +1327,22 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         emissionAccumulator = 0
         distanceEmissionAccumulator = 0
         burstAccumulator = 0
+        burstSpawnAccumulator = 0
         previousEmitterPosition = nil
         hasPrewarmed = false
+        lastFrameStats = .empty
     }
 
     // MARK: - Internals
+
+    private struct ParticleSpawnResult {
+        var requested: Int
+        var spawned: Int
+
+        var dropped: Int {
+            max(0, requested - spawned)
+        }
+    }
 
     private struct ParticleSpawnSample {
         var offset: SIMD3<Float>
@@ -771,7 +1360,8 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         var endColor: SIMD4<Float>
     }
 
-    private mutating func runPrewarmIfNeeded(worldTransform: simd_float4x4?) {
+    private mutating func runPrewarmIfNeeded(worldTransform: simd_float4x4?,
+                                             options: ParticleAdvanceOptions) {
         guard !hasPrewarmed,
               isEmitting,
               prewarmTime > 0,
@@ -784,7 +1374,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         let step = min(max(1.0 / 240.0, prewarmStep), prewarmTime)
         while remaining > 0.0001 {
             let dt = min(step, remaining)
-            advanceStep(deltaTime: dt, worldTransform: worldTransform)
+            advanceStep(deltaTime: dt, worldTransform: worldTransform, options: options)
             remaining -= dt
         }
         previousEmitterPosition = distanceEmitterPosition(worldTransform: worldTransform)
@@ -813,13 +1403,19 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         return ActiveEmissionStep(delta: activeDelta, normalizedAge: simd_clamp(sampleAge / duration, 0, 1))
     }
 
+    @discardableResult
     private mutating func spawn(_ count: Int,
                                 worldTransform: simd_float4x4? = nil,
                                 worldOriginOverride: SIMD3<Float>? = nil,
-                                inheritedWorldVelocity: SIMD3<Float> = .zero) {
-        guard count > 0, maxParticles > 0 else { return }
-        let room = maxParticles - particles.count
-        let n = min(count, max(0, room))
+                                inheritedWorldVelocity: SIMD3<Float> = .zero,
+                                maxLiveParticles: Int? = nil) -> ParticleSpawnResult {
+        let requested = max(0, count)
+        guard requested > 0, maxParticles > 0 else {
+            return ParticleSpawnResult(requested: requested, spawned: 0)
+        }
+        let liveLimit = min(maxParticles, max(0, maxLiveParticles ?? maxParticles))
+        let room = liveLimit - particles.count
+        let n = min(requested, max(0, room))
         for _ in 0..<n {
             let sample = makeSpawnSample()
             let localPosition = originOffset + sample.offset
@@ -851,6 +1447,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             refreshAppearance(&p)
             particles.append(p)
         }
+        return ParticleSpawnResult(requested: requested, spawned: n)
     }
 
     private mutating func makeSpawnSample() -> ParticleSpawnSample {
@@ -925,43 +1522,63 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         }
     }
 
-    private mutating func appendEventParticles(_ eventParticles: [Particle]) {
-        guard !eventParticles.isEmpty else { return }
+    private mutating func appendEventParticles(_ eventParticles: [Particle]) -> ParticleSpawnResult {
+        guard !eventParticles.isEmpty else {
+            return ParticleSpawnResult(requested: 0, spawned: 0)
+        }
         let room = maxParticles - particles.count
-        guard room > 0 else { return }
-        particles.append(contentsOf: eventParticles.prefix(room))
+        guard room > 0 else {
+            return ParticleSpawnResult(requested: eventParticles.count, spawned: 0)
+        }
+        let toAppend = min(eventParticles.count, room)
+        particles.append(contentsOf: eventParticles.prefix(toAppend))
+        return ParticleSpawnResult(requested: eventParticles.count, spawned: toAppend)
     }
 
     private mutating func spawnDistanceEmission(from previous: SIMD3<Float>?,
                                                 to current: SIMD3<Float>,
                                                 worldTransform: simd_float4x4?,
                                                 inheritedWorldVelocity: SIMD3<Float>,
-                                                rateMultiplier: Float) {
+                                                rateMultiplier: Float,
+                                                maxLiveParticles: Int? = nil) -> ParticleSpawnResult {
         defer { previousEmitterPosition = current }
         guard distanceEmissionRate > 0,
               rateMultiplier > 0,
-              let previous else { return }
+              let previous else {
+            return ParticleSpawnResult(requested: 0, spawned: 0)
+        }
         let delta = current - previous
         let distance = simd_length(delta)
-        guard distance > 0.0001 else { return }
+        guard distance > 0.0001 else {
+            return ParticleSpawnResult(requested: 0, spawned: 0)
+        }
 
         distanceEmissionAccumulator += distance * distanceEmissionRate * rateMultiplier
         let toSpawn = Int(distanceEmissionAccumulator)
-        guard toSpawn > 0 else { return }
+        guard toSpawn > 0 else {
+            return ParticleSpawnResult(requested: 0, spawned: 0)
+        }
         distanceEmissionAccumulator -= Float(toSpawn)
 
         switch simulationSpace {
         case .local:
-            spawn(toSpawn, worldTransform: worldTransform, inheritedWorldVelocity: inheritedWorldVelocity)
+            return spawn(toSpawn,
+                         worldTransform: worldTransform,
+                         inheritedWorldVelocity: inheritedWorldVelocity,
+                         maxLiveParticles: maxLiveParticles)
         case .world:
+            var spawned = 0
             for index in 0..<toSpawn {
                 let t = (Float(index) + 0.5) / Float(toSpawn)
                 let worldOrigin = previous + delta * t
-                spawn(1,
-                      worldTransform: worldTransform,
-                      worldOriginOverride: worldOrigin,
-                      inheritedWorldVelocity: inheritedWorldVelocity)
+                let spawnResult = spawn(1,
+                                        worldTransform: worldTransform,
+                                        worldOriginOverride: worldOrigin,
+                                        inheritedWorldVelocity: inheritedWorldVelocity,
+                                        maxLiveParticles: maxLiveParticles)
+                spawned += spawnResult.spawned
             }
+            return ParticleSpawnResult(requested: toSpawn, spawned: spawned)
         }
     }
 
@@ -1061,6 +1678,10 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
                                   endColor: subEmitterEndColor)
     }
 
+    fileprivate var hasEventSubEmitterRules: Bool {
+        legacySubEmitterRule != nil || subEmitters.contains(where: \.isActive)
+    }
+
     private func noiseForce(position: SIMD3<Float>, age: Float) -> SIMD3<Float> {
         guard noiseStrength > 0 else { return .zero }
         let p = position * noiseScale
@@ -1103,6 +1724,30 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             let radial = planar / planarDistance
             let tangent = normalizedOrDefault(simd_cross(axis, radial), SIMD3<Float>(0, 0, 1))
             return tangent * forceStrength * attenuation
+        }
+    }
+
+    private func vectorFieldAcceleration(position: SIMD3<Float>, age: Float) -> SIMD3<Float> {
+        guard vectorFieldMode != .none, vectorFieldStrength != 0 else { return .zero }
+        switch vectorFieldMode {
+        case .none:
+            return .zero
+        case .uniform:
+            return normalizedOrDefault(vectorFieldDirection, SIMD3<Float>(0, 1, 0)) * vectorFieldStrength
+        case .curl:
+            let p = position * vectorFieldScale
+            let phase = age * vectorFieldScrollSpeed + Float((seed >> 16) & 0xFFFF) * 0.0001
+            let bias = normalizedOrDefault(vectorFieldDirection, SIMD3<Float>(0, 1, 0))
+            let field = SIMD3<Float>(
+                sineWave(p.y * 8.173 + p.z * 3.117 + phase)
+                    - sineWave(p.z * 5.731 + p.x * 7.191 - phase),
+                sineWave(p.z * 6.313 + p.x * 4.997 + phase + 1.37)
+                    - sineWave(p.x * 9.239 + p.y * 2.173 - phase),
+                sineWave(p.x * 4.113 + p.y * 7.911 + phase + 2.71)
+                    - sineWave(p.y * 5.337 + p.z * 6.771 - phase)
+            )
+            let blended = field + bias * 0.25
+            return normalizedOrDefault(blended, bias) * vectorFieldStrength
         }
     }
 
@@ -1242,14 +1887,30 @@ public extension SceneRuntime {
     /// Advances every `ParticleEmitter` in the scene by `deltaTime` seconds.
     /// Returns the number of emitters stepped.
     @discardableResult
-    mutating func advanceParticles(deltaTime: Double) -> Int {
+    mutating func advanceParticles(deltaTime: Double,
+                                   options: ParticleAdvanceOptions = .default) -> Int {
         let particleEntities = entities(with: ParticleEmitter.self)
         let worldTransforms = Dictionary(uniqueKeysWithValues: particleEntities.map {
             ($0, worldTransform(for: $0)?.matrix ?? matrix_identity_float4x4)
         })
-        return updateComponents(ParticleEmitter.self) { entity, emitter in
-            emitter.advance(deltaTime: deltaTime, worldTransform: worldTransforms[entity] ?? matrix_identity_float4x4)
+        let policy = resource(ParticleScalabilityPolicyResource.self) ?? .disabled
+        let scalabilityState = policy.updatedState(
+            previousStats: particleFrameStats,
+            previousState: resource(ParticleScalabilityStateResource.self) ?? .default
+        )
+        setResource(scalabilityState)
+        let effectiveOptions = scalabilityState.applying(to: options)
+        var particleStats: [ParticleEmitterFrameStats] = []
+        particleStats.reserveCapacity(particleEntities.count)
+        let stepped = updateComponents(ParticleEmitter.self) { entity, emitter in
+            emitter.advance(deltaTime: deltaTime,
+                            worldTransform: worldTransforms[entity] ?? matrix_identity_float4x4,
+                            options: effectiveOptions)
+            particleStats.append(emitter.lastFrameStats)
         }
+        setResource(ParticleFrameStatsResource(simulatedDeltaTime: Float(max(0, deltaTime)),
+                                               emitterStats: particleStats))
+        return stepped
     }
 
     /// Emits particles immediately from one entity's `ParticleEmitter`.

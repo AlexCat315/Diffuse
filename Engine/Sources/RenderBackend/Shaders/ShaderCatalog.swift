@@ -98,4 +98,12 @@ struct ShaderCatalog: Sendable {
         }
         return try loadSource(at: program.vertex)
     }
+
+    func loadWGSLComputeModule(named name: String) throws -> String {
+        let program = try computeProgram(named: name)
+        guard program.compute.hasSuffix(".wgsl") else {
+            throw ShaderCatalogError.unsupportedModuleLayout(name)
+        }
+        return try loadSource(at: program.compute)
+    }
 }

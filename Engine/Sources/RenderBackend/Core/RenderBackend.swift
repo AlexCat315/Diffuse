@@ -104,6 +104,9 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     var particleTextureFailures: Set<String> = []
     var fallbackParticleTexture: GPUTexture?
     var fallbackParticleTextureView: GPUTextureView?
+    var particleSimulationResources: GPUParticleSimulationResources?
+    var gpuParticleRenderBatches: [ParticleRenderBatch] = []
+    var gpuParticleRenderInstanceCount: Int = 0
 
     // Opaque-render cache (see WGPURenderer+OpaqueCache): when only the
     // transparent particles change between frames, the expensive opaque passes
@@ -281,6 +284,23 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             var hdrCurrent = sceneColorTarget
             var bloomTarget = sceneColorTarget
             let encoder = try backend.createCommandEncoder()
+            let particleSimulationReport: GPUParticleSimulationEncodeReport
+            let particleSimulationEncodeNS: UInt64
+            if packet.scene.particleSimulationBatches.isEmpty {
+                gpuParticleRenderBatches.removeAll(keepingCapacity: true)
+                gpuParticleRenderInstanceCount = 0
+                particleSimulationReport = GPUParticleSimulationEncodeReport()
+                particleSimulationEncodeNS = 0
+            } else {
+                let startNS = DispatchTime.now().uptimeNanoseconds
+                particleSimulationReport = try encodeParticleSimulationPrePass(
+                    encoder: encoder,
+                    scene: packet.scene,
+                    deltaTime: Float(max(0, packet.deltaTime)),
+                    elapsedTime: Float(max(0, packet.simulationTimeSeconds))
+                )
+                particleSimulationEncodeNS = DispatchTime.now().uptimeNanoseconds - startNS
+            }
 
             // Opaque-render cache + progressive refinement. The opaque inputs
             // (camera, geometry, lights, settings, skinning — NOT particles) are
@@ -608,6 +628,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 passDrawCallCounts: passDrawCallCounts,
                 renderBundleCount: renderBundleCount,
                 renderBundleParallelJobs: renderBundleParallelJobs,
+                gpuParticleSimulationBatchCount: particleSimulationReport.batchCount,
+                gpuParticleSimulationParticleCount: particleSimulationReport.particleCount,
+                gpuParticleSimulationDispatchWorkgroups: particleSimulationReport.dispatchWorkgroups,
+                gpuParticleRenderInstanceCount: particleSimulationReport.renderInstanceCount,
+                gpuParticleSimulationEncodeNS: particleSimulationEncodeNS,
                 shadowedLightCount: shadowPlan.uniforms.isEnabled
                     ? shadowPlan.shadowedLightCount
                     : 0,

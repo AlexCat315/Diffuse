@@ -171,7 +171,12 @@ struct SceneSerializerTests {
         let entity = original.createEntity()
         _ = original.setLocalTransform(LocalTransform(translation: .zero), for: entity)
         _ = original.setComponent(
-            CameraComponent(target: SIMD3<Float>(0, 1, 0), fovYRadians: 1.2, near: 0.05, far: 500, isActive: true),
+            CameraComponent(target: SIMD3<Float>(0, 1, 0),
+                            fovYRadians: 1.2,
+                            aspectRatio: 1.777,
+                            near: 0.05,
+                            far: 500,
+                            isActive: true),
             for: entity
         )
 
@@ -184,6 +189,7 @@ struct SceneSerializerTests {
         #expect(cam != nil)
         #expect(cam!.isActive)
         #expect(cam!.fovYRadians == 1.2)
+        #expect(cam!.aspectRatio == 1.777)
         #expect(cam!.near == 0.05)
         #expect(cam!.far == 500)
     }
@@ -468,7 +474,9 @@ struct SceneSerializerTests {
                                 ParticleCurveKeyframe(time: 1, value: 2),
                             ]),
                             burstCount: 7, burstInterval: 0.25,
-                            maxParticles: 128, lifetime: 1.5,
+                            maxParticles: 128,
+                            maxRenderedParticles: 64,
+                            lifetime: 1.5,
                             subEmitterTrigger: .collision,
                             subEmitterBurstCount: 3,
                             subEmitterProbability: 0.75,
@@ -495,7 +503,14 @@ struct SceneSerializerTests {
                             forceRadius: 12,
                             forceStrength: 4.5,
                             forceFalloff: 2,
+                            vectorFieldMode: .curl,
+                            vectorFieldDirection: SIMD3<Float>(0, 0, 1),
+                            vectorFieldStrength: 6.25,
+                            vectorFieldScale: 2.5,
+                            vectorFieldScrollSpeed: 0.4,
                             collisionMode: .worldPlane, simulationSpace: .world,
+                            simulationBackend: .gpuIfSupported,
+                            gpuSimulationWorkgroupSize: 128,
                             collisionPlaneY: -1,
                             collisionRestitution: 0.7, collisionDamping: 0.2,
                             startSize: 0.5, endSize: 0.1,
@@ -519,6 +534,11 @@ struct SceneSerializerTests {
                             velocityStretchMax: 6,
                             maxRenderDistance: 80,
                             renderDistanceFadeRange: 12,
+                            renderLODStartDistance: 20,
+                            renderLODEndDistance: 70,
+                            renderLODMinParticleScale: 0.35,
+                            renderBoundsMode: .automatic,
+                            renderBoundsRadius: 24,
                             textureAssetID: "Assets/Textures/smoke.png",
                             texturePath: "/tmp/particle-smoke.png",
                             textureSheetColumns: 4,
@@ -553,6 +573,7 @@ struct SceneSerializerTests {
         #expect(e!.burstCount == 7)
         #expect(e!.burstInterval == 0.25)
         #expect(e!.maxParticles == 128)
+        #expect(e!.maxRenderedParticles == 64)
         #expect(e!.lifetime == 1.5)
         #expect(e!.subEmitterTrigger == .collision)
         #expect(e!.subEmitterBurstCount == 3)
@@ -583,8 +604,15 @@ struct SceneSerializerTests {
         #expect(e!.forceRadius == 12)
         #expect(e!.forceStrength == 4.5)
         #expect(e!.forceFalloff == 2)
+        #expect(e!.vectorFieldMode == .curl)
+        #expect(e!.vectorFieldDirection == SIMD3<Float>(0, 0, 1))
+        #expect(e!.vectorFieldStrength == 6.25)
+        #expect(e!.vectorFieldScale == 2.5)
+        #expect(e!.vectorFieldScrollSpeed == 0.4)
         #expect(e!.collisionMode == .worldPlane)
         #expect(e!.simulationSpace == .world)
+        #expect(e!.simulationBackend == .gpuIfSupported)
+        #expect(e!.gpuSimulationWorkgroupSize == 128)
         #expect(e!.collisionPlaneY == -1)
         #expect(e!.collisionRestitution == 0.7)
         #expect(e!.collisionDamping == 0.2)
@@ -608,6 +636,11 @@ struct SceneSerializerTests {
         #expect(e!.velocityStretchMax == 6)
         #expect(e!.maxRenderDistance == 80)
         #expect(e!.renderDistanceFadeRange == 12)
+        #expect(e!.renderLODStartDistance == 20)
+        #expect(e!.renderLODEndDistance == 70)
+        #expect(e!.renderLODMinParticleScale == 0.35)
+        #expect(e!.renderBoundsMode == .automatic)
+        #expect(e!.renderBoundsRadius == 24)
         #expect(e!.textureAssetID == "Assets/Textures/smoke.png")
         #expect(e!.texturePath == "/tmp/particle-smoke.png")
         #expect(e!.textureSheetColumns == 4)
