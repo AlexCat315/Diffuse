@@ -109,6 +109,11 @@ jobs:
           done
           xcodebuild -version
 
+      - name: Install Swift
+        uses: SwiftyLab/setup-swift@latest
+        with:
+          swift-version: ${{ env.GUAVA_SWIFT_VERSION }}
+
       - name: Verify Swift version
         shell: bash
         run: |
