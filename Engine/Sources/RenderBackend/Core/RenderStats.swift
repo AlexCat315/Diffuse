@@ -7,6 +7,11 @@ public struct RenderFrameStats: Sendable {
     public var passDrawCallCounts: [RenderPassKind: Int]
     public var renderBundleCount: Int
     public var renderBundleParallelJobs: Int
+    public var gpuParticleSimulationBatchCount: Int
+    public var gpuParticleSimulationParticleCount: Int
+    public var gpuParticleSimulationDispatchWorkgroups: Int
+    public var gpuParticleRenderInstanceCount: Int
+    public var gpuParticleSimulationEncodeNS: UInt64
     public var shadowedLightCount: Int
     public var shadowTileCount: Int
     public var shadowCascadeCount: Int
@@ -30,6 +35,11 @@ public struct RenderFrameStats: Sendable {
         passDrawCallCounts: [RenderPassKind: Int] = [:],
         renderBundleCount: Int = 0,
         renderBundleParallelJobs: Int = 0,
+        gpuParticleSimulationBatchCount: Int = 0,
+        gpuParticleSimulationParticleCount: Int = 0,
+        gpuParticleSimulationDispatchWorkgroups: Int = 0,
+        gpuParticleRenderInstanceCount: Int = 0,
+        gpuParticleSimulationEncodeNS: UInt64 = 0,
         shadowedLightCount: Int = 0,
         shadowTileCount: Int = 0,
         shadowCascadeCount: Int = 0,
@@ -52,6 +62,11 @@ public struct RenderFrameStats: Sendable {
         self.passDrawCallCounts = passDrawCallCounts
         self.renderBundleCount = renderBundleCount
         self.renderBundleParallelJobs = renderBundleParallelJobs
+        self.gpuParticleSimulationBatchCount = gpuParticleSimulationBatchCount
+        self.gpuParticleSimulationParticleCount = gpuParticleSimulationParticleCount
+        self.gpuParticleSimulationDispatchWorkgroups = gpuParticleSimulationDispatchWorkgroups
+        self.gpuParticleRenderInstanceCount = gpuParticleRenderInstanceCount
+        self.gpuParticleSimulationEncodeNS = gpuParticleSimulationEncodeNS
         self.shadowedLightCount = shadowedLightCount
         self.shadowTileCount = shadowTileCount
         self.shadowCascadeCount = shadowCascadeCount

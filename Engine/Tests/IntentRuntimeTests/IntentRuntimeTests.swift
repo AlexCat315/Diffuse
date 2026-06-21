@@ -347,6 +347,7 @@ struct IntentRuntimeTests {
         let entity = scene.createEntity()
         _ = scene.setComponent(SceneNameComponent(value: "Hero"), for: entity)
         _ = scene.setLocalTransform(LocalTransform(translation: .zero), for: entity)
+        _ = scene.setComponent(CameraComponent(), for: entity)
 
         let rename = IntentIR(verb: "scene.set_name",
                               summary: "Rename selected entity",
@@ -358,12 +359,18 @@ struct IntentRuntimeTests {
                             targetObjectIDs: ["scene:\(entity.rawValue)"],
                             arguments: ["translation": .vec3(IntentVector3(x: 3, y: 4, z: 5))],
                             source: .human)
+        let aspect = IntentIR(verb: "scene.set_camera_aspect_ratio",
+                              summary: "Set camera aspect",
+                              targetObjectIDs: ["scene:\(entity.rawValue)"],
+                              arguments: ["aspect_ratio": .number(1.777)],
+                              source: .human)
         let context = IntentTransactionBuildContext(sceneRuntime: scene,
                                                     selectedEntityID: entity.rawValue,
                                                     defaultSpawnMeshIndex: 7)
 
         let renameTx = try builder.buildTransaction(from: rename, context: context)
         let moveTx = try builder.buildTransaction(from: move, context: context)
+        let aspectTx = try builder.buildTransaction(from: aspect, context: context)
 
         #expect(renameTx.operations == [.scene(.setSceneName(entityID: entity.rawValue, value: "Boss"))])
         guard case let .scene(.setLocalTransform(rawID, transform)) = moveTx.operations.first else {
@@ -372,6 +379,8 @@ struct IntentRuntimeTests {
         }
         #expect(rawID == entity.rawValue)
         #expect(transform.translation == SIMD3<Float>(3, 4, 5))
+        #expect(aspectTx.operations == [.scene(.setCameraAspectRatio(entityID: entity.rawValue,
+                                                                     aspectRatio: 1.777))])
     }
 
     @Test("AmbiguityScorer treats fully specified human intents as clear")
@@ -1734,7 +1743,7 @@ struct UndoStackTests {
         #expect(outerEvent != nil, "setLightSpotOuterAngle must emit lightSpotOuter authored event")
     }
 
-    @Test("setCameraFOV and setCameraActive emit authored world events")
+    @Test("camera mutations emit authored world events")
     func cameraOpsEmitWorldEvents() throws {
         let executor = TransactionExecutor()
         var scene = SceneRuntime()
@@ -1744,6 +1753,7 @@ struct UndoStackTests {
             summary: "camera ops",
             operations: [
                 .scene(.setCameraFOV(entityID: entity.rawValue, fovYDegrees: 75)),
+                .scene(.setCameraAspectRatio(entityID: entity.rawValue, aspectRatio: 1.777)),
                 .scene(.setCameraActive(entityID: entity.rawValue, isActive: true)),
             ],
             baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
@@ -1756,12 +1766,20 @@ struct UndoStackTests {
             if case .entityAuthoredChanged(_, "cameraFovYDegrees", .float(75)) = $0 { return true }
             return false
         }
+        let aspectEvent = result.worldEvents.first {
+            if case .entityAuthoredChanged(_, "cameraAspectRatio", .float(let value)) = $0 {
+                return abs(value - 1.777) < 0.001
+            }
+            return false
+        }
         let activeEvent = result.worldEvents.first {
             if case .entityAuthoredChanged(_, "cameraIsActive", .bool(true)) = $0 { return true }
             return false
         }
         #expect(fovEvent    != nil, "setCameraFOV must emit cameraFovYDegrees authored event")
+        #expect(aspectEvent != nil, "setCameraAspectRatio must emit cameraAspectRatio authored event")
         #expect(activeEvent != nil, "setCameraActive must emit cameraIsActive authored event")
+        #expect(context.sceneRuntime?.component(CameraComponent.self, for: entity)?.aspectRatio == 1.777)
     }
 
     @Test("granular collider mutations emit individual authored world events")

@@ -116,6 +116,14 @@ public struct IntentTransactionBuilder: Sendable {
                                          up: nil)]
             summary = "Set camera pose"
 
+        case "scene.set_camera_aspect_ratio":
+            let entityID = try targetEntityID(for: intent, context: context)
+            guard let aspectRatio = numberArgument("aspect_ratio", in: intent) else {
+                throw IntentTransactionBuilderError.missingArgument(verbID: intent.verb, argument: "aspect_ratio")
+            }
+            mutations = [.setCameraAspectRatio(entityID: entityID, aspectRatio: aspectRatio)]
+            summary = intent.summary.isEmpty ? "Set camera aspect ratio" : intent.summary
+
         default:
             throw IntentTransactionBuilderError.unsupportedVerb(intent.verb)
         }
@@ -165,6 +173,17 @@ public struct IntentTransactionBuilder: Sendable {
             return nil
         }
         return value.simdValue
+    }
+
+    private func numberArgument(_ name: String, in intent: IntentIR) -> Float? {
+        switch intent.arguments[name] {
+        case let .number(value):
+            return Float(value)
+        case let .integer(value):
+            return Float(value)
+        default:
+            return nil
+        }
     }
 
     private func rawEntityID(fromTargetObjectID target: String) throws -> UInt64 {

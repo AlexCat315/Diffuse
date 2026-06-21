@@ -1349,6 +1349,22 @@ void wgpu_bridge_release_compute_pass_encoder(void* pass) {
     if (pass) wgpuComputePassEncoderRelease((WGPUComputePassEncoder)pass);
 }
 
+void wgpu_bridge_copy_buffer_to_buffer(void* encoder,
+                                       void* source,
+                                       uint64_t source_offset,
+                                       void* destination,
+                                       uint64_t destination_offset,
+                                       uint64_t size) {
+    if (encoder && source && destination) {
+        wgpuCommandEncoderCopyBufferToBuffer((WGPUCommandEncoder)encoder,
+                                             (WGPUBuffer)source,
+                                             source_offset,
+                                             (WGPUBuffer)destination,
+                                             destination_offset,
+                                             size);
+    }
+}
+
 /* ════════════════════════════════════════════════════════════════════
    MRT Render Pass / Pipeline
    ════════════════════════════════════════════════════════════════════ */

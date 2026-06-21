@@ -14,6 +14,7 @@ struct ShaderCatalogTests {
         let tonemap = try catalog.renderProgram(named: "tonemap")
         let fxaa = try catalog.renderProgram(named: "fxaa")
         let ssaoCompute = try catalog.computeProgram(named: "ssao_compute")
+        let particleSimulate = try catalog.computeProgram(named: "particle_simulate")
 
         #expect(mesh.vertex == "WGSL/mesh.wgsl")
         #expect(mesh.fragment == "WGSL/mesh.wgsl")
@@ -23,6 +24,8 @@ struct ShaderCatalogTests {
         #expect(tonemap.fragment == "WGSL/tonemap.wgsl")
         #expect(fxaa.vertex == "WGSL/fxaa.wgsl")
         #expect(ssaoCompute.compute == "WGSL/ssao_compute.wgsl")
+        #expect(particleSimulate.compute == "WGSL/particle_simulate.wgsl")
+        #expect(particleSimulate.threadcountX == 64)
 
         let meshModule = try catalog.loadWGSLRenderModule(named: "mesh")
         #expect(meshModule.contains("@vertex"))
@@ -69,6 +72,10 @@ struct ShaderCatalogTests {
         let inkPaperPostModule = try catalog.loadWGSLRenderModule(named: "ink_paper_post")
         #expect(inkPaperPostModule.contains("paper_hash"))
         #expect(inkPaperPostModule.contains("style.ink_wash_color"))
+        let particleSimulateModule = try catalog.loadWGSLComputeModule(named: "particle_simulate")
+        #expect(particleSimulateModule.contains("@compute @workgroup_size(64)"))
+        #expect(particleSimulateModule.contains("ParticleSimState"))
+        #expect(particleSimulateModule.contains("var<storage, read_write> particles"))
 
         #expect(catalog.manifest.programs.allSatisfy { $0.vertex.hasPrefix("WGSL/") && ($0.fragment?.hasPrefix("WGSL/") ?? true) })
         #expect(catalog.manifest.computePrograms.allSatisfy { $0.compute.hasPrefix("WGSL/") })

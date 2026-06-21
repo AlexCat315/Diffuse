@@ -191,6 +191,20 @@
       "threadcount_x": 64,
       "threadcount_y": 1,
       "threadcount_z": 1
+    },
+    {
+      "name": "particle_simulate",
+      "compute": "WGSL/particle_simulate.wgsl",
+      "threadcount_x": 64,
+      "threadcount_y": 1,
+      "threadcount_z": 1
+    },
+    {
+      "name": "particle_sim_to_instance",
+      "compute": "WGSL/particle_sim_to_instance.wgsl",
+      "threadcount_x": 64,
+      "threadcount_y": 1,
+      "threadcount_z": 1
     }
   ]
 }

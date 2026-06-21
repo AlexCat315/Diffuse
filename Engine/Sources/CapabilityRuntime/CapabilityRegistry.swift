@@ -171,6 +171,18 @@ public struct CapabilityRegistry: Sendable {
                 ]
             ),
             CapabilityDescriptor(
+                verb: "scene.set_camera_aspect_ratio",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [
+                    editable,
+                    entityExists,
+                    camera,
+                ]
+            ),
+            CapabilityDescriptor(
                 verb: "scene.set_camera_active",
                 releasePhase: .stable,
                 requiresConfirmation: false,
