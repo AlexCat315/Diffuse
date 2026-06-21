@@ -84,7 +84,6 @@ public enum ParticleGPUSimulationUnsupportedReason: String, Codable, Sendable, E
     case distanceEmission
     case noise
     case forceFields
-    case uniformVectorField
     case collisions
     case angularVelocity
 }
@@ -126,17 +125,8 @@ public struct ParticleGPUSimulationPlan: Sendable, Equatable {
         if emitter.noiseStrength > 0 {
             reasons.append(.noise)
         }
-        if emitter.forceMode != .none, emitter.forceStrength != 0 {
-            reasons.append(.forceFields)
-        }
-        if emitter.vectorFieldMode == .uniform, emitter.vectorFieldStrength != 0 {
-            reasons.append(.uniformVectorField)
-        }
         if emitter.collisionMode != .none {
             reasons.append(.collisions)
-        }
-        if emitter.angularVelocity != 0 || emitter.angularVelocityRandomness != 0 {
-            reasons.append(.angularVelocity)
         }
         self.unsupportedReasons = reasons
 

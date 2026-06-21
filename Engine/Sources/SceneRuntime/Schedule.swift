@@ -587,15 +587,29 @@ public struct RuntimeWorldSchedule {
                     plan: plan,
                     particles: emitter.particles,
                     gravity: emitter.gravity,
+                    vectorFieldMode: emitter.vectorFieldMode,
                     vectorFieldDirection: emitter.vectorFieldDirection,
-                    vectorFieldStrength: emitter.vectorFieldMode == .curl ? emitter.vectorFieldStrength : 0,
+                    vectorFieldStrength: emitter.vectorFieldStrength,
                     vectorFieldScale: emitter.vectorFieldScale,
                     vectorFieldScrollSpeed: emitter.vectorFieldScrollSpeed,
+                    forceMode: emitter.forceMode,
+                    forceCenter: emitter.forceCenter,
+                    forceAxis: emitter.forceAxis,
+                    forceRadius: emitter.forceRadius,
+                    forceStrength: emitter.forceStrength,
+                    forceFalloff: emitter.forceFalloff,
                     renderOnGPU: renderOnGPU,
                     worldTransform: emitter.simulationSpace == .local ? toWorld : matrix_identity_float4x4,
                     uvRect: SIMD4<Float>(0, 0, 1, 1),
+                    textureSheetColumns: emitter.textureSheetColumns,
+                    textureSheetRows: emitter.textureSheetRows,
+                    textureSheetFrameCount: emitter.textureSheetFrameCount,
+                    textureSheetFrameRate: emitter.textureSheetFrameRate,
                     blendMode: emitter.blendMode,
-                    texturePath: emitter.texturePath
+                    texturePath: emitter.texturePath,
+                    renderAlignment: emitter.renderAlignment,
+                    velocityStretchScale: emitter.velocityStretchScale,
+                    velocityStretchMax: emitter.velocityStretchMax
                 )
             )
         }
@@ -604,16 +618,12 @@ public struct RuntimeWorldSchedule {
 
     private func canRenderEmitterParticlesOnGPU(_ emitter: ParticleEmitter) -> Bool {
         guard emitter.gpuSimulationPlan.usesGPU else { return false }
-        guard emitter.renderAlignment == .billboard else { return false }
+        guard emitter.renderAlignment == .billboard || emitter.renderAlignment == .velocity else { return false }
         guard emitter.trailLength == 0 || emitter.trailSegments == 0 else { return false }
         guard emitter.maxRenderedParticles == 0 else { return false }
         guard emitter.maxRenderDistance == 0 else { return false }
         guard emitter.renderLODStartDistance == 0 && emitter.renderLODEndDistance == 0 else { return false }
         guard emitter.textureAssetID == nil || emitter.texturePath != nil else { return false }
-        guard emitter.textureSheetColumns == 1,
-              emitter.textureSheetRows == 1,
-              emitter.textureSheetFrameCount == 1
-        else { return false }
         return true
     }
 
