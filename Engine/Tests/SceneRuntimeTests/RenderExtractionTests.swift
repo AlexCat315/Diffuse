@@ -288,6 +288,12 @@ struct RenderExtractionTests {
                                       spawnRadius: 0,
                                       startVelocity: SIMD3<Float>(1, 2, 3),
                                       gravity: SIMD3<Float>(0, -4, 0),
+                                      forceMode: .radial,
+                                      forceCenter: SIMD3<Float>(1, 2, 3),
+                                      forceAxis: SIMD3<Float>(0, 1, 0),
+                                      forceRadius: 12,
+                                      forceStrength: -4,
+                                      forceFalloff: 2,
                                       vectorFieldMode: .curl,
                                       vectorFieldDirection: SIMD3<Float>(1, 0, 0),
                                       vectorFieldStrength: 2,
@@ -295,8 +301,15 @@ struct RenderExtractionTests {
                                       vectorFieldScrollSpeed: 3,
                                       simulationBackend: .gpuIfSupported,
                                       gpuSimulationWorkgroupSize: 64,
+                                      renderAlignment: .velocity,
+                                      velocityStretchScale: 0.25,
+                                      velocityStretchMax: 3,
                                       textureAssetID: "spark.texture",
-                                      texturePath: " smoke.png ")
+                                      texturePath: " smoke.png ",
+                                      textureSheetColumns: 4,
+                                      textureSheetRows: 2,
+                                      textureSheetFrameCount: 7,
+                                      textureSheetFrameRate: 12)
         emitter.emit(2)
         _ = runtime.setComponent(emitter, for: entity)
 
@@ -310,12 +323,26 @@ struct RenderExtractionTests {
         #expect(batch.plan.workgroupSize == 64)
         #expect(batch.particles.count == 2)
         #expect(batch.gravity == SIMD3<Float>(0, -4, 0))
+        #expect(batch.vectorFieldMode == .curl)
         #expect(batch.vectorFieldDirection == SIMD3<Float>(1, 0, 0))
         #expect(batch.vectorFieldStrength == 2)
         #expect(batch.vectorFieldScale == 0.5)
         #expect(batch.vectorFieldScrollSpeed == 3)
+        #expect(batch.forceMode == .radial)
+        #expect(batch.forceCenter == SIMD3<Float>(1, 2, 3))
+        #expect(batch.forceAxis == SIMD3<Float>(0, 1, 0))
+        #expect(batch.forceRadius == 12)
+        #expect(batch.forceStrength == -4)
+        #expect(batch.forceFalloff == 2)
         #expect(batch.renderOnGPU)
         #expect(batch.texturePath == "smoke.png")
+        #expect(batch.textureSheetColumns == 4)
+        #expect(batch.textureSheetRows == 2)
+        #expect(batch.textureSheetFrameCount == 7)
+        #expect(batch.textureSheetFrameRate == 12)
+        #expect(batch.renderAlignment == .velocity)
+        #expect(batch.velocityStretchScale == 0.25)
+        #expect(batch.velocityStretchMax == 3)
         #expect(extracted.scene.particles.isEmpty)
     }
 

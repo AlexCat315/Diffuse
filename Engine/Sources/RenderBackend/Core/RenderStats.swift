@@ -11,6 +11,10 @@ public struct RenderFrameStats: Sendable {
     public var gpuParticleSimulationParticleCount: Int
     public var gpuParticleSimulationDispatchWorkgroups: Int
     public var gpuParticleRenderInstanceCount: Int
+    public var gpuParticleIndirectDrawCount: Int
+    public var gpuParticleCullBatchCount: Int
+    public var gpuParticleCullCandidateCount: Int
+    public var gpuParticleCullDispatchWorkgroups: Int
     public var gpuParticleSimulationEncodeNS: UInt64
     public var shadowedLightCount: Int
     public var shadowTileCount: Int
@@ -39,6 +43,10 @@ public struct RenderFrameStats: Sendable {
         gpuParticleSimulationParticleCount: Int = 0,
         gpuParticleSimulationDispatchWorkgroups: Int = 0,
         gpuParticleRenderInstanceCount: Int = 0,
+        gpuParticleIndirectDrawCount: Int = 0,
+        gpuParticleCullBatchCount: Int = 0,
+        gpuParticleCullCandidateCount: Int = 0,
+        gpuParticleCullDispatchWorkgroups: Int = 0,
         gpuParticleSimulationEncodeNS: UInt64 = 0,
         shadowedLightCount: Int = 0,
         shadowTileCount: Int = 0,
@@ -66,6 +74,10 @@ public struct RenderFrameStats: Sendable {
         self.gpuParticleSimulationParticleCount = gpuParticleSimulationParticleCount
         self.gpuParticleSimulationDispatchWorkgroups = gpuParticleSimulationDispatchWorkgroups
         self.gpuParticleRenderInstanceCount = gpuParticleRenderInstanceCount
+        self.gpuParticleIndirectDrawCount = gpuParticleIndirectDrawCount
+        self.gpuParticleCullBatchCount = gpuParticleCullBatchCount
+        self.gpuParticleCullCandidateCount = gpuParticleCullCandidateCount
+        self.gpuParticleCullDispatchWorkgroups = gpuParticleCullDispatchWorkgroups
         self.gpuParticleSimulationEncodeNS = gpuParticleSimulationEncodeNS
         self.shadowedLightCount = shadowedLightCount
         self.shadowTileCount = shadowTileCount

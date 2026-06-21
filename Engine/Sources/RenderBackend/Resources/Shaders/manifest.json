@@ -205,6 +205,13 @@
       "threadcount_x": 64,
       "threadcount_y": 1,
       "threadcount_z": 1
+    },
+    {
+      "name": "particle_cull_compact",
+      "compute": "WGSL/particle_cull_compact.wgsl",
+      "threadcount_x": 64,
+      "threadcount_y": 1,
+      "threadcount_z": 1
     }
   ]
 }

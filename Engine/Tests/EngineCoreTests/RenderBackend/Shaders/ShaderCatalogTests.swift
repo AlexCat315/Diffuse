@@ -15,6 +15,7 @@ struct ShaderCatalogTests {
         let fxaa = try catalog.renderProgram(named: "fxaa")
         let ssaoCompute = try catalog.computeProgram(named: "ssao_compute")
         let particleSimulate = try catalog.computeProgram(named: "particle_simulate")
+        let particleCullCompact = try catalog.computeProgram(named: "particle_cull_compact")
 
         #expect(mesh.vertex == "WGSL/mesh.wgsl")
         #expect(mesh.fragment == "WGSL/mesh.wgsl")
@@ -26,6 +27,8 @@ struct ShaderCatalogTests {
         #expect(ssaoCompute.compute == "WGSL/ssao_compute.wgsl")
         #expect(particleSimulate.compute == "WGSL/particle_simulate.wgsl")
         #expect(particleSimulate.threadcountX == 64)
+        #expect(particleCullCompact.compute == "WGSL/particle_cull_compact.wgsl")
+        #expect(particleCullCompact.threadcountX == 64)
 
         let meshModule = try catalog.loadWGSLRenderModule(named: "mesh")
         #expect(meshModule.contains("@vertex"))
@@ -75,7 +78,12 @@ struct ShaderCatalogTests {
         let particleSimulateModule = try catalog.loadWGSLComputeModule(named: "particle_simulate")
         #expect(particleSimulateModule.contains("@compute @workgroup_size(64)"))
         #expect(particleSimulateModule.contains("ParticleSimState"))
+        #expect(particleSimulateModule.contains("fn force_acceleration"))
         #expect(particleSimulateModule.contains("var<storage, read_write> particles"))
+        let particleCullModule = try catalog.loadWGSLComputeModule(named: "particle_cull_compact")
+        #expect(particleCullModule.contains("@compute @workgroup_size(64)"))
+        #expect(particleCullModule.contains("ParticleCullBatch"))
+        #expect(particleCullModule.contains("ParticleIndirectDrawArgs"))
 
         #expect(catalog.manifest.programs.allSatisfy { $0.vertex.hasPrefix("WGSL/") && ($0.fragment?.hasPrefix("WGSL/") ?? true) })
         #expect(catalog.manifest.computePrograms.allSatisfy { $0.compute.hasPrefix("WGSL/") })
