@@ -250,6 +250,7 @@ jobs:
             libxkbcommon-dev \
             libxrandr-dev \
             libxrender-dev \
+            libxss-dev \
             mesa-common-dev \
             ninja-build \
             patchelf
@@ -298,7 +299,7 @@ jobs:
           ldd "$package_dir/EditorApp" "$package_dir/Tools/GuavaMCP" \
             | awk '/=> \// { print $3 } /^\// { print $1 }' \
             | sort -u \
-            | grep -E '/swift-|/usr/lib/swift|/swift/linux|libswift|libFoundation|libdispatch|libBlocksRuntime|lib_Foundation|libicu' \
+            | { grep -E '/swift-|/usr/lib/swift|/swift/linux|libswift|libFoundation|libdispatch|libBlocksRuntime|lib_Foundation|libicu' || true; } \
             | while read -r lib; do
                 if [ -f "$lib" ]; then
                   cp -L "$lib" "$package_dir/Lib/"
