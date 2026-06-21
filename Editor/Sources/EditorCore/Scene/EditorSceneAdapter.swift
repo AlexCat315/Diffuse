@@ -2763,8 +2763,6 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             return L("noise")
         case .forceFields:
             return L("force fields")
-        case .uniformVectorField:
-            return L("uniform vector field")
         case .collisions:
             return L("collisions")
         case .angularVelocity:
