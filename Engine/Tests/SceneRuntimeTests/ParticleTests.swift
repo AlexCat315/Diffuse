@@ -340,6 +340,47 @@ struct ParticleTests {
         #expect(emitter.lastFrameSpawnedParticles.isEmpty)
     }
 
+    @Test("SceneRuntime applies external particle simulation events by entity")
+    func sceneRuntimeAppliesExternalParticleSimulationEventsByEntity() {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(
+            ParticleEmitter(isEmitting: false,
+                            emissionRate: 0,
+                            maxParticles: 4,
+                            subEmitterTrigger: .death,
+                            subEmitterBurstCount: 1,
+                            subEmitterLifetime: 2,
+                            subEmitterStartVelocity: .zero,
+                            subEmitterVelocityRandomness: .zero,
+                            gravity: .zero),
+            for: entity
+        )
+        let missing = EntityID(index: 99, generation: 1)
+        let event = ParticleEvent(trigger: .death,
+                                  position: SIMD3<Float>(1, 2, 3),
+                                  velocity: .zero,
+                                  age: 1,
+                                  lifetime: 1,
+                                  generation: 0,
+                                  appearanceIndex: 0)
+
+        let report = scene.applyParticleSimulationEvents([
+            entity: [event],
+            missing: [event],
+        ])
+
+        #expect(report.requestedEmitterCount == 2)
+        #expect(report.appliedEmitterCount == 1)
+        #expect(report.missingEmitterCount == 1)
+        #expect(report.eventCount == 2)
+        #expect(report.spawnedParticleCount == 1)
+        let emitter = scene.component(ParticleEmitter.self, for: entity)
+        #expect(emitter?.particles.count == 1)
+        #expect(emitter?.lastFrameEvents == [event])
+        #expect(scene.particleFrameStats.subEmitterSpawnedCount == 1)
+    }
+
     @Test("gravity and velocity integrate with semi-implicit Euler")
     func motionIntegration() {
         var emitter = ParticleEmitter(emissionRate: 0, lifetime: 100,
