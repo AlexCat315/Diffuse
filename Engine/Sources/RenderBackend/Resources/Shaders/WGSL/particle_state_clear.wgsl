@@ -7,6 +7,7 @@ struct ParticleSimState {
     velocity_age: vec4<f32>,
     size_rotation: vec4<f32>,
     color: vec4<f32>,
+    params: vec4<u32>,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: ParticleStateMaintenanceUniforms;
@@ -24,6 +25,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         vec4<f32>(0.0),
         vec4<f32>(0.0),
         vec4<f32>(0.0),
-        vec4<f32>(0.0)
+        vec4<f32>(0.0),
+        vec4<u32>(0u)
     );
 }
