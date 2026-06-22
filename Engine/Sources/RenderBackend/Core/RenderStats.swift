@@ -1,5 +1,67 @@
 import Foundation
 
+public enum GPUParticleSimulationEventTrigger: UInt32, Sendable, Equatable {
+    case unknown = 0
+    case collision = 1
+    case death = 2
+
+    public init(rawTrigger: UInt32) {
+        self = GPUParticleSimulationEventTrigger(rawValue: rawTrigger) ?? .unknown
+    }
+}
+
+public struct GPUParticleSimulationEventRecord: Sendable, Equatable {
+    public var trigger: GPUParticleSimulationEventTrigger
+    public var sourceIndex: UInt32
+    public var position: SIMD3<Float>
+    public var lifetime: Float
+    public var velocity: SIMD3<Float>
+    public var age: Float
+    public var generation: UInt8
+    public var appearanceIndex: UInt16
+
+    public init(trigger: GPUParticleSimulationEventTrigger,
+                sourceIndex: UInt32,
+                position: SIMD3<Float>,
+                lifetime: Float,
+                velocity: SIMD3<Float>,
+                age: Float,
+                generation: UInt8 = 0,
+                appearanceIndex: UInt16 = 0) {
+        self.trigger = trigger
+        self.sourceIndex = sourceIndex
+        self.position = position
+        self.lifetime = lifetime
+        self.velocity = velocity
+        self.age = age
+        self.generation = generation
+        self.appearanceIndex = appearanceIndex
+    }
+}
+
+public struct GPUParticleSimulationEventSnapshot: Sendable, Equatable {
+    public var slot: Int
+    public var emitterRawValue: UInt64?
+    public var eventCapacity: Int
+    public var totalEventCount: Int
+    public var droppedEventCount: Int
+    public var records: [GPUParticleSimulationEventRecord]
+
+    public init(slot: Int,
+                emitterRawValue: UInt64?,
+                eventCapacity: Int,
+                totalEventCount: Int,
+                droppedEventCount: Int,
+                records: [GPUParticleSimulationEventRecord]) {
+        self.slot = max(0, slot)
+        self.emitterRawValue = emitterRawValue
+        self.eventCapacity = max(0, eventCapacity)
+        self.totalEventCount = max(0, totalEventCount)
+        self.droppedEventCount = max(0, droppedEventCount)
+        self.records = records
+    }
+}
+
 public struct RenderFrameStats: Sendable {
     public var frameIndex: Int
     public var passCount: Int
@@ -10,6 +72,8 @@ public struct RenderFrameStats: Sendable {
     public var gpuParticleSimulationBatchCount: Int
     public var gpuParticleSimulationParticleCount: Int
     public var gpuParticleSimulationDispatchWorkgroups: Int
+    public var gpuParticleSimulationEventCapacity: Int
+    public var gpuParticleSimulationEventBufferBytes: Int
     public var gpuParticleRenderInstanceCount: Int
     public var gpuParticleIndirectDrawCount: Int
     public var gpuParticleCullBatchCount: Int
@@ -42,6 +106,8 @@ public struct RenderFrameStats: Sendable {
         gpuParticleSimulationBatchCount: Int = 0,
         gpuParticleSimulationParticleCount: Int = 0,
         gpuParticleSimulationDispatchWorkgroups: Int = 0,
+        gpuParticleSimulationEventCapacity: Int = 0,
+        gpuParticleSimulationEventBufferBytes: Int = 0,
         gpuParticleRenderInstanceCount: Int = 0,
         gpuParticleIndirectDrawCount: Int = 0,
         gpuParticleCullBatchCount: Int = 0,
@@ -73,6 +139,8 @@ public struct RenderFrameStats: Sendable {
         self.gpuParticleSimulationBatchCount = gpuParticleSimulationBatchCount
         self.gpuParticleSimulationParticleCount = gpuParticleSimulationParticleCount
         self.gpuParticleSimulationDispatchWorkgroups = gpuParticleSimulationDispatchWorkgroups
+        self.gpuParticleSimulationEventCapacity = gpuParticleSimulationEventCapacity
+        self.gpuParticleSimulationEventBufferBytes = gpuParticleSimulationEventBufferBytes
         self.gpuParticleRenderInstanceCount = gpuParticleRenderInstanceCount
         self.gpuParticleIndirectDrawCount = gpuParticleIndirectDrawCount
         self.gpuParticleCullBatchCount = gpuParticleCullBatchCount

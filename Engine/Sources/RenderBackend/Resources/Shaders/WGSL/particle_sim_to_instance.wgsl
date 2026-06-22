@@ -12,6 +12,7 @@ struct ParticleSimState {
     velocity_age: vec4<f32>,
     size_rotation: vec4<f32>,
     color: vec4<f32>,
+    params: vec4<u32>,
 };
 
 struct ParticleInstance {
