@@ -552,7 +552,8 @@ public struct RuntimeWorldSchedule {
         let instances = instanceCollection.instances
         let lights = lightCollection.lights
         let particles = collectRenderParticles(in: world, camera: cameraSelection.camera)
-        let particleSimulationBatches = collectParticleSimulationBatches(in: world)
+        let particleSimulationBatches = collectParticleSimulationBatches(in: world,
+                                                                         camera: cameraSelection.camera)
         return (
             ExtractedRenderSceneResource(
                 scene: RenderScene(
@@ -571,7 +572,8 @@ public struct RuntimeWorldSchedule {
         )
     }
 
-    private func collectParticleSimulationBatches(in world: RuntimeWorld)
+    private func collectParticleSimulationBatches(in world: RuntimeWorld,
+                                                  camera: RenderCamera)
         -> [RenderParticleSimulationBatch] {
         var result: [RenderParticleSimulationBatch] = []
         for entity in world.entities(with: ParticleEmitter.self) {
@@ -581,12 +583,42 @@ public struct RuntimeWorldSchedule {
             let plan = emitter.gpuSimulationPlan
             guard plan.usesGPU else { continue }
             let toWorld = world.worldTransform(for: entity)?.matrix ?? matrix_identity_float4x4
-            let renderOnGPU = canRenderEmitterParticlesOnGPU(emitter)
+            let canRenderOnGPU = canRenderEmitterParticlesOnGPU(emitter)
+            let isRenderVisible = canRenderOnGPU
+                && isEmitterVisibleToCamera(emitter: emitter,
+                                            toWorld: toWorld,
+                                            camera: camera)
+            let distanceFade = isRenderVisible
+                ? renderDistanceFade(emitter: emitter, toWorld: toWorld, cameraEye: camera.eye)
+                : 0
+            let cameraDistance = emitterCameraDistance(emitter: emitter,
+                                                       toWorld: toWorld,
+                                                       cameraEye: camera.eye)
+            let renderParticleLimit = emitter.effectiveMaxRenderedParticles(
+                cameraDistance: cameraDistance,
+                liveParticleCount: emitter.particles.count
+            )
+            let renderOnGPU = canRenderOnGPU && distanceFade > 0 && renderParticleLimit > 0
+            let renderAlphaScale = renderOnGPU ? distanceFade : 0
+            let frameSpawnCount = min(
+                emitter.lastFrameSpawnedParticles.count,
+                emitter.lastFrameStats.spawnedParticleCount,
+                emitter.particles.count
+            )
+            let persistedParticleCount = max(0, emitter.particles.count - frameSpawnCount)
+            let persistedParticles = Array(emitter.particles.prefix(persistedParticleCount))
+            let spawnParticles = Array(emitter.lastFrameSpawnedParticles.suffix(frameSpawnCount))
             result.append(
                 RenderParticleSimulationBatch(
+                    emitterEntity: entity,
                     plan: plan,
-                    particles: emitter.particles,
+                    particles: persistedParticles,
+                    spawnParticles: spawnParticles,
                     gravity: emitter.gravity,
+                    noiseStrength: emitter.noiseStrength,
+                    noiseScale: emitter.noiseScale,
+                    noiseSpeed: emitter.noiseSpeed,
+                    noiseSeed: emitter.seed,
                     vectorFieldMode: emitter.vectorFieldMode,
                     vectorFieldDirection: emitter.vectorFieldDirection,
                     vectorFieldStrength: emitter.vectorFieldStrength,
@@ -598,6 +630,10 @@ public struct RuntimeWorldSchedule {
                     forceRadius: emitter.forceRadius,
                     forceStrength: emitter.forceStrength,
                     forceFalloff: emitter.forceFalloff,
+                    collisionMode: emitter.collisionMode,
+                    collisionPlaneY: emitter.collisionPlaneY,
+                    collisionRestitution: emitter.collisionRestitution,
+                    collisionDamping: emitter.collisionDamping,
                     renderOnGPU: renderOnGPU,
                     worldTransform: emitter.simulationSpace == .local ? toWorld : matrix_identity_float4x4,
                     uvRect: SIMD4<Float>(0, 0, 1, 1),
@@ -609,7 +645,13 @@ public struct RuntimeWorldSchedule {
                     texturePath: emitter.texturePath,
                     renderAlignment: emitter.renderAlignment,
                     velocityStretchScale: emitter.velocityStretchScale,
-                    velocityStretchMax: emitter.velocityStretchMax
+                    velocityStretchMax: emitter.velocityStretchMax,
+                    renderParticleLimit: renderParticleLimit,
+                    renderAlphaScale: renderAlphaScale,
+                    trailLength: emitter.trailLength,
+                    trailSegments: emitter.trailSegments,
+                    trailEndSizeScale: emitter.trailEndSizeScale,
+                    trailEndAlphaScale: emitter.trailEndAlphaScale
                 )
             )
         }
@@ -619,10 +661,6 @@ public struct RuntimeWorldSchedule {
     private func canRenderEmitterParticlesOnGPU(_ emitter: ParticleEmitter) -> Bool {
         guard emitter.gpuSimulationPlan.usesGPU else { return false }
         guard emitter.renderAlignment == .billboard || emitter.renderAlignment == .velocity else { return false }
-        guard emitter.trailLength == 0 || emitter.trailSegments == 0 else { return false }
-        guard emitter.maxRenderedParticles == 0 else { return false }
-        guard emitter.maxRenderDistance == 0 else { return false }
-        guard emitter.renderLODStartDistance == 0 && emitter.renderLODEndDistance == 0 else { return false }
         guard emitter.textureAssetID == nil || emitter.texturePath != nil else { return false }
         return true
     }
