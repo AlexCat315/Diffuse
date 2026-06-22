@@ -9,6 +9,48 @@ private let gpuSmokeEnabled = ProcessInfo.processInfo.environment["GUAVA_RUN_GPU
 
 @Suite("RenderBackendGPUSmoke", .serialized)
 struct RenderBackendGPUSmokeTests {
+    @Test("GPU particle event records convert to runtime particle events")
+    func gpuParticleEventRecordsConvertToRuntimeParticleEvents() {
+        let snapshot = GPUParticleSimulationEventSnapshot(
+            slot: 0,
+            emitterRawValue: 42,
+            eventCapacity: 3,
+            totalEventCount: 2,
+            droppedEventCount: 0,
+            records: [
+                GPUParticleSimulationEventRecord(
+                    trigger: .death,
+                    sourceIndex: 7,
+                    position: SIMD3<Float>(1, 2, 3),
+                    lifetime: 4,
+                    velocity: SIMD3<Float>(5, 6, 7),
+                    age: 1.5,
+                    generation: 2,
+                    appearanceIndex: 9
+                ),
+                GPUParticleSimulationEventRecord(
+                    trigger: .unknown,
+                    sourceIndex: 8,
+                    position: .zero,
+                    lifetime: 1,
+                    velocity: .zero,
+                    age: 0
+                ),
+            ]
+        )
+
+        let events = snapshot.makeParticleEvents()
+
+        #expect(events.count == 1)
+        #expect(events[0].trigger == .death)
+        #expect(events[0].position == SIMD3<Float>(1, 2, 3))
+        #expect(events[0].velocity == SIMD3<Float>(5, 6, 7))
+        #expect(events[0].age == 1.5)
+        #expect(events[0].lifetime == 4)
+        #expect(events[0].generation == 2)
+        #expect(events[0].appearanceIndex == 9)
+    }
+
     @Test("renders the scene contract into a readable WGPU framebuffer",
           .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU smoke test"))
     func rendersSceneContractIntoFramebuffer() throws {
@@ -273,7 +315,9 @@ struct RenderBackendGPUSmokeTests {
             rotation: 0.25,
             angularVelocity: 2,
             size: 1,
-            color: SIMD4<Float>(1, 0.5, 0.25, 1)
+            color: SIMD4<Float>(1, 0.5, 0.25, 1),
+            generation: 3,
+            appearanceIndex: 7
         )
         var collisionTransform = matrix_identity_float4x4
         collisionTransform.columns.3.y = 5
@@ -315,6 +359,11 @@ struct RenderBackendGPUSmokeTests {
         encoder.copyBufferToBuffer(source: resources.metadataBuffer,
                                    destination: metadataReadback,
                                    size: metadataStride)
+        let eventStride = UInt64(MemoryLayout<GPUReadbackParticleSimulationEvent>.stride)
+        let eventReadback = try backend.createBuffer(size: eventStride, usage: [.copyDst, .mapRead])
+        encoder.copyBufferToBuffer(source: resources.eventBuffer,
+                                   destination: eventReadback,
+                                   size: eventStride)
         let commandBuffer = try encoder.finish()
         backend.submit(commandBuffer)
 
@@ -356,6 +405,8 @@ struct RenderBackendGPUSmokeTests {
         #expect(abs(state.positionLifetime.w - 10) < 0.001)
         #expect(abs(state.sizeRotation.y - 1.25) < 0.001)
         #expect(abs(state.sizeRotation.z - 2) < 0.001)
+        #expect(state.params.x == 3)
+        #expect(state.params.y == 7)
         #expect(metadata.aliveCount == 1)
         #expect(metadata.expiredCount == 0)
         #expect(metadata.collisionCount == 1)
@@ -363,6 +414,24 @@ struct RenderBackendGPUSmokeTests {
         #expect(metadata.droppedSpawnCount == 0)
         #expect(metadata.appendCursor == 1)
         #expect(metadata.compactedCount == 1)
+        #expect(metadata.eventCount == 1)
+
+        let events = try readbackParticleSimulationEvents(buffer: eventReadback,
+                                                          count: 1,
+                                                          backend: backend)
+        let event = try #require(events.first)
+        #expect(event.params.x == 1)
+        #expect(event.params.y == 0)
+        #expect(event.params.z == 3)
+        #expect(event.params.w == 7)
+        #expect(abs(event.positionLifetime.x - expectedPosition.x) < 0.001)
+        #expect(abs(event.positionLifetime.y - expectedPosition.y) < 0.001)
+        #expect(abs(event.positionLifetime.z - expectedPosition.z) < 0.001)
+        #expect(abs(event.positionLifetime.w - 10) < 0.001)
+        #expect(abs(event.velocityAge.x - expectedVelocity.x) < 0.001)
+        #expect(abs(event.velocityAge.y - expectedVelocity.y) < 0.001)
+        #expect(abs(event.velocityAge.z - expectedVelocity.z) < 0.001)
+        #expect(abs(event.velocityAge.w) < 0.001)
     }
 
     @Test("particle GPU spawn append writes new state and reports capacity drops",
@@ -410,7 +479,9 @@ struct RenderBackendGPUSmokeTests {
             rotation: 0.75,
             angularVelocity: 1.5,
             size: 0.5,
-            color: SIMD4<Float>(0.2, 0.4, 0.6, 0.8)
+            color: SIMD4<Float>(0.2, 0.4, 0.6, 0.8),
+            generation: 2,
+            appearanceIndex: 5
         )
         let droppedSpawn = Particle(
             position: SIMD3<Float>(9, 9, 9),
@@ -443,6 +514,11 @@ struct RenderBackendGPUSmokeTests {
         encoder.copyBufferToBuffer(source: resources.metadataBuffer,
                                    destination: metadataReadback,
                                    size: metadataStride)
+        let eventStride = UInt64(MemoryLayout<GPUReadbackParticleSimulationEvent>.stride)
+        let eventReadback = try backend.createBuffer(size: eventStride, usage: [.copyDst, .mapRead])
+        encoder.copyBufferToBuffer(source: resources.eventBuffer,
+                                   destination: eventReadback,
+                                   size: eventStride)
         let commandBuffer = try encoder.finish()
         backend.submit(commandBuffer)
 
@@ -466,6 +542,8 @@ struct RenderBackendGPUSmokeTests {
         #expect(abs(states[1].sizeRotation.x - acceptedSpawn.size) < 0.001)
         #expect(abs(states[1].sizeRotation.y - acceptedSpawn.rotation) < 0.001)
         #expect(abs(states[1].sizeRotation.z - acceptedSpawn.angularVelocity) < 0.001)
+        #expect(states[1].params.x == 2)
+        #expect(states[1].params.y == 5)
         #expect(metadata.aliveCount == 2)
         #expect(metadata.expiredCount == 0)
         #expect(metadata.collisionCount == 0)
@@ -518,7 +596,9 @@ struct RenderBackendGPUSmokeTests {
             age: 2,
             lifetime: 1,
             size: 3,
-            color: SIMD4<Float>(0, 1, 0, 1)
+            color: SIMD4<Float>(0, 1, 0, 1),
+            generation: 4,
+            appearanceIndex: 9
         )
         let aliveB = Particle(
             position: SIMD3<Float>(3, 0, 0),
@@ -526,7 +606,9 @@ struct RenderBackendGPUSmokeTests {
             age: 0.25,
             lifetime: 8,
             size: 0.75,
-            color: SIMD4<Float>(0, 0, 1, 1)
+            color: SIMD4<Float>(0, 0, 1, 1),
+            generation: 6,
+            appearanceIndex: 11
         )
 
         let encoder = try backend.createCommandEncoder()
@@ -550,6 +632,11 @@ struct RenderBackendGPUSmokeTests {
         encoder.copyBufferToBuffer(source: resources.metadataBuffer,
                                    destination: metadataReadback,
                                    size: metadataStride)
+        let eventStride = UInt64(MemoryLayout<GPUReadbackParticleSimulationEvent>.stride)
+        let eventReadback = try backend.createBuffer(size: eventStride, usage: [.copyDst, .mapRead])
+        encoder.copyBufferToBuffer(source: resources.eventBuffer,
+                                   destination: eventReadback,
+                                   size: eventStride)
         let commandBuffer = try encoder.finish()
         backend.submit(commandBuffer)
 
@@ -565,6 +652,8 @@ struct RenderBackendGPUSmokeTests {
         #expect(abs(states[0].positionLifetime.w - aliveA.lifetime) < 0.001)
         #expect(abs(states[1].positionLifetime.x - aliveB.position.x) < 0.001)
         #expect(abs(states[1].positionLifetime.w - aliveB.lifetime) < 0.001)
+        #expect(states[1].params.x == UInt32(aliveB.generation))
+        #expect(states[1].params.y == UInt32(aliveB.appearanceIndex))
         #expect(abs(states[2].positionLifetime.w) < 0.001)
         #expect(abs(states[2].velocityAge.w) < 0.001)
         #expect(abs(states[3].positionLifetime.w) < 0.001)
@@ -575,6 +664,24 @@ struct RenderBackendGPUSmokeTests {
         #expect(metadata.droppedSpawnCount == 0)
         #expect(metadata.appendCursor == 2)
         #expect(metadata.compactedCount == 2)
+        #expect(metadata.eventCount == 1)
+
+        let events = try readbackParticleSimulationEvents(buffer: eventReadback,
+                                                          count: 1,
+                                                          backend: backend)
+        let event = try #require(events.first)
+        #expect(event.params.x == 2)
+        #expect(event.params.y == 1)
+        #expect(event.params.z == 4)
+        #expect(event.params.w == 9)
+        #expect(abs(event.positionLifetime.x - expired.position.x) < 0.001)
+        #expect(abs(event.positionLifetime.y - expired.position.y) < 0.001)
+        #expect(abs(event.positionLifetime.z - expired.position.z) < 0.001)
+        #expect(abs(event.positionLifetime.w - expired.lifetime) < 0.001)
+        #expect(abs(event.velocityAge.x - expired.velocity.x) < 0.001)
+        #expect(abs(event.velocityAge.y - expired.velocity.y) < 0.001)
+        #expect(abs(event.velocityAge.z - expired.velocity.z) < 0.001)
+        #expect(abs(event.velocityAge.w - expired.age) < 0.001)
     }
 
     @Test("particle GPU simulation reuses compacted emitter state across frames",
@@ -842,6 +949,8 @@ struct RenderBackendGPUSmokeTests {
             elapsedTime: 0
         )
         #expect(report.renderInstanceCount == 3)
+        #expect(report.eventCapacity == 8)
+        #expect(report.eventBufferBytes == 8 * MemoryLayout<GPUReadbackParticleSimulationEvent>.stride)
         #expect(renderer.gpuParticleRenderInstanceCount == 3)
         #expect(renderer.gpuParticleRenderBatches.first?.count == 3)
 
@@ -925,6 +1034,8 @@ struct RenderBackendGPUSmokeTests {
         )
         #expect(report.particleCount == 4)
         #expect(report.renderInstanceCount == 2)
+        #expect(report.eventCapacity == 8)
+        #expect(report.eventBufferBytes == 8 * MemoryLayout<GPUReadbackParticleSimulationEvent>.stride)
         #expect(renderer.gpuParticleRenderInstanceCount == 2)
         #expect(renderer.gpuParticleRenderBatches.first?.count == 2)
 
@@ -1062,6 +1173,8 @@ struct RenderBackendGPUSmokeTests {
         #expect(stats.gpuParticleSimulationBatchCount == 2)
         #expect(stats.gpuParticleSimulationParticleCount == 5)
         #expect(stats.gpuParticleSimulationDispatchWorkgroups == 2)
+        #expect(stats.gpuParticleSimulationEventCapacity == 12)
+        #expect(stats.gpuParticleSimulationEventBufferBytes == 12 * MemoryLayout<GPUReadbackParticleSimulationEvent>.stride)
         #expect(stats.gpuParticleRenderInstanceCount == 5)
         #expect(stats.gpuParticleIndirectDrawCount == 3)
         #expect(stats.gpuParticleCullBatchCount == 3)
@@ -1069,6 +1182,31 @@ struct RenderBackendGPUSmokeTests {
         #expect(stats.gpuParticleCullDispatchWorkgroups == 3)
         #expect(stats.gpuParticleSimulationEncodeNS > 0)
         #expect(stats.passDrawCallCounts[.particles] == 3)
+
+        let eventSnapshots = try renderer.drainGPUParticleSimulationEventSnapshots()
+        #expect(eventSnapshots.count == 2)
+        let firstSnapshot = try #require(eventSnapshots.first { $0.slot == 0 })
+        #expect(firstSnapshot.eventCapacity == 6)
+        #expect(firstSnapshot.totalEventCount == 1)
+        #expect(firstSnapshot.droppedEventCount == 0)
+        let deathEvent = try #require(firstSnapshot.records.first)
+        #expect(deathEvent.trigger == .death)
+        #expect(deathEvent.sourceIndex == 2)
+        #expect(deathEvent.generation == 2)
+        #expect(deathEvent.appearanceIndex == 4)
+        #expect(abs(deathEvent.position.x - 0.25) < 0.001)
+        #expect(abs(deathEvent.position.y) < 0.001)
+        #expect(abs(deathEvent.position.z) < 0.001)
+        #expect(abs(deathEvent.lifetime - 0.5) < 0.001)
+        #expect(abs(deathEvent.velocity.x) < 0.001)
+        #expect(abs(deathEvent.velocity.y) < 0.001)
+        #expect(abs(deathEvent.velocity.z) < 0.001)
+        #expect(abs(deathEvent.age - 0.5) < 0.001)
+        let secondSnapshot = try #require(eventSnapshots.first { $0.slot == 1 })
+        #expect(secondSnapshot.eventCapacity == 6)
+        #expect(secondSnapshot.totalEventCount == 0)
+        #expect(secondSnapshot.records.isEmpty)
+        #expect(try renderer.drainGPUParticleSimulationEventSnapshots().isEmpty)
 
         guard let indirectBuffer = renderer.particleIndirectDrawBuffer else {
             Issue.record("expected particle indirect draw buffer")
@@ -1696,7 +1834,9 @@ struct RenderBackendGPUSmokeTests {
                                  age: 0.4,
                                  lifetime: 0.5,
                                  size: 1,
-                                 color: SIMD4<Float>(1, 0, 1, 1))
+                                 color: SIMD4<Float>(1, 0, 1, 1),
+                                 generation: 2,
+                                 appearanceIndex: 4)
                     ],
                     gravity: .zero,
                     renderOnGPU: true,
@@ -1833,6 +1973,7 @@ private struct GPUReadbackParticleSimulationState {
     var velocityAge: SIMD4<Float>
     var sizeRotation: SIMD4<Float>
     var color: SIMD4<Float>
+    var params: SIMD4<UInt32>
 }
 
 private struct GPUReadbackParticleSimulationMetadata {
@@ -1843,6 +1984,13 @@ private struct GPUReadbackParticleSimulationMetadata {
     var droppedSpawnCount: UInt32
     var appendCursor: UInt32
     var compactedCount: UInt32
+    var eventCount: UInt32
+}
+
+private struct GPUReadbackParticleSimulationEvent {
+    var positionLifetime: SIMD4<Float>
+    var velocityAge: SIMD4<Float>
+    var params: SIMD4<UInt32>
 }
 
 private struct GPUReadbackParticleIndirectDrawArgs {
@@ -1986,6 +2134,26 @@ private func readbackParticleSimulationMetadata(
     }
 
     return mapped.load(as: GPUReadbackParticleSimulationMetadata.self)
+}
+
+private func readbackParticleSimulationEvents(
+    buffer: GPUBuffer,
+    count: Int,
+    backend: WGPUBackend
+) throws -> [GPUReadbackParticleSimulationEvent] {
+    let stride = MemoryLayout<GPUReadbackParticleSimulationEvent>.stride
+    let bufferSize = UInt64(max(0, count) * stride)
+    try backend.bufferMapSync(buffer, size: bufferSize)
+    defer { buffer.unmap() }
+
+    guard let mapped = buffer.getMappedRange(size: bufferSize) else {
+        Issue.record("particle simulation event readback buffer mapping returned nil")
+        return []
+    }
+
+    let typed = mapped.bindMemory(to: GPUReadbackParticleSimulationEvent.self,
+                                  capacity: count)
+    return Array(UnsafeBufferPointer(start: typed, count: count))
 }
 
 private func readbackParticleIndirectDrawArgs(

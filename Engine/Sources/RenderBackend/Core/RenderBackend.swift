@@ -107,6 +107,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     var particleSimulationResources: [GPUParticleSimulationResources?] = []
     var particleSimulationResourcesByEmitter: [UInt64: GPUParticleSimulationResources] = [:]
     var initializedParticleSimulationEmitterKeys: Set<UInt64> = []
+    var pendingParticleSimulationEventReadbacks: [GPUParticleSimulationEventReadbackRequest] = []
+    let pendingParticleSimulationEventReadbackLimit = 64
     var gpuParticleRenderBatches: [ParticleRenderBatch] = []
     var gpuParticleRenderInstanceCount: Int = 0
     var particleIndirectDrawBuffer: GPUBuffer?
@@ -652,6 +654,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 gpuParticleSimulationBatchCount: particleSimulationReport.batchCount,
                 gpuParticleSimulationParticleCount: particleSimulationReport.particleCount,
                 gpuParticleSimulationDispatchWorkgroups: particleSimulationReport.dispatchWorkgroups,
+                gpuParticleSimulationEventCapacity: particleSimulationReport.eventCapacity,
+                gpuParticleSimulationEventBufferBytes: particleSimulationReport.eventBufferBytes,
                 gpuParticleRenderInstanceCount: particleSimulationReport.renderInstanceCount,
                 gpuParticleIndirectDrawCount: particleIndirectDrawCount,
                 gpuParticleCullBatchCount: particleCullBatchCount,

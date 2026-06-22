@@ -270,6 +270,7 @@ struct GPUParticleSimulationResources {
     let pipeline: GPUComputePipeline
     let uniformBuffer: GPUBuffer
     let stateBuffer: GPUBuffer
+    let eventBuffer: GPUBuffer
     let metadataBuffer: GPUBuffer
     let bindGroup: GPUBindGroup
     let spawnBindGroupLayout: GPUBindGroupLayout
@@ -300,6 +301,7 @@ struct GPUParticleSimulationResources {
     let instancePipeline: GPUComputePipeline
     let instanceUniformBuffer: GPUBuffer
     let capacity: Int
+    let eventCapacity: Int
     let workgroupSize: Int
 }
 
@@ -310,25 +312,44 @@ struct GPUParticleSimulationEncodeReport {
     var particleCount: Int
     var dispatchWorkgroups: Int
     var renderInstanceCount: Int
+    var eventCapacity: Int
+    var eventBufferBytes: Int
 
     init(batchCount: Int = 0,
          particleCount: Int = 0,
          dispatchWorkgroups: Int = 0,
-         renderInstanceCount: Int = 0) {
+         renderInstanceCount: Int = 0,
+         eventCapacity: Int = 0,
+         eventBufferBytes: Int = 0) {
         self.batchCount = max(0, batchCount)
         self.particleCount = max(0, particleCount)
         self.dispatchWorkgroups = max(0, dispatchWorkgroups)
         self.renderInstanceCount = max(0, renderInstanceCount)
+        self.eventCapacity = max(0, eventCapacity)
+        self.eventBufferBytes = max(0, eventBufferBytes)
     }
 
     mutating func include(batchParticleCount: Int,
                           dispatchWorkgroups: Int,
-                          renderInstanceCount: Int = 0) {
+                          renderInstanceCount: Int = 0,
+                          eventCapacity: Int = 0,
+                          eventBufferBytes: Int = 0) {
         batchCount += 1
         particleCount += max(0, batchParticleCount)
         self.dispatchWorkgroups += max(0, dispatchWorkgroups)
         self.renderInstanceCount += max(0, renderInstanceCount)
+        self.eventCapacity += max(0, eventCapacity)
+        self.eventBufferBytes += max(0, eventBufferBytes)
     }
+}
+
+struct GPUParticleSimulationEventReadbackRequest {
+    let slot: Int
+    let emitterRawValue: UInt64?
+    let metadataBuffer: GPUBuffer
+    let eventBuffer: GPUBuffer
+    let eventCapacity: Int
+    let eventBufferBytes: Int
 }
 
 struct BasePassEncodingReport {
