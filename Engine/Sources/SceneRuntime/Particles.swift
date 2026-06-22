@@ -122,12 +122,6 @@ public struct ParticleGPUSimulationPlan: Sendable, Equatable {
         if emitter.distanceEmissionRate > 0 {
             reasons.append(.distanceEmission)
         }
-        if emitter.noiseStrength > 0 {
-            reasons.append(.noise)
-        }
-        if emitter.collisionMode != .none {
-            reasons.append(.collisions)
-        }
         self.unsupportedReasons = reasons
 
         if emitter.simulationBackend == .cpu {
@@ -574,6 +568,42 @@ public enum ParticleSubEmitterTrigger: String, CaseIterable, Codable, Sendable, 
     case collision
 }
 
+public struct ParticleEvent: Sendable, Equatable {
+    public var trigger: ParticleSubEmitterTrigger
+    public var position: SIMD3<Float>
+    public var velocity: SIMD3<Float>
+    public var age: Float
+    public var lifetime: Float
+    public var generation: UInt8
+    public var appearanceIndex: UInt16
+
+    public init(trigger: ParticleSubEmitterTrigger,
+                position: SIMD3<Float>,
+                velocity: SIMD3<Float>,
+                age: Float,
+                lifetime: Float,
+                generation: UInt8,
+                appearanceIndex: UInt16) {
+        self.trigger = trigger
+        self.position = position
+        self.velocity = velocity
+        self.age = max(0, age)
+        self.lifetime = max(0, lifetime)
+        self.generation = generation
+        self.appearanceIndex = appearanceIndex
+    }
+
+    public init(trigger: ParticleSubEmitterTrigger, source: Particle) {
+        self.init(trigger: trigger,
+                  position: source.position,
+                  velocity: source.velocity,
+                  age: source.age,
+                  lifetime: source.lifetime,
+                  generation: source.generation,
+                  appearanceIndex: source.appearanceIndex)
+    }
+}
+
 public struct ParticleSubEmitter: Codable, Sendable, Equatable {
     public var trigger: ParticleSubEmitterTrigger
     public var burstCount: Int
@@ -795,6 +825,8 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
 
     // Live state
     public private(set) var particles: [Particle]
+    public private(set) var lastFrameSpawnedParticles: [Particle]
+    public private(set) var lastFrameEvents: [ParticleEvent]
     public private(set) var lastFrameStats: ParticleEmitterFrameStats
     private var emitterAge: Float
     private var emissionAccumulator: Float
@@ -1009,6 +1041,8 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.trailEndAlphaScale = simd_clamp(trailEndAlphaScale, 0, 1)
         self.seed = seed
         self.particles = []
+        self.lastFrameSpawnedParticles = []
+        self.lastFrameEvents = []
         self.lastFrameStats = .empty
         self.emitterAge = 0
         self.emissionAccumulator = 0
@@ -1190,6 +1224,8 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
                                       worldTransform: simd_float4x4? = nil,
                                       options: ParticleAdvanceOptions = .default) {
         guard dt > 0 else { return }
+        lastFrameSpawnedParticles.removeAll(keepingCapacity: true)
+        lastFrameEvents.removeAll(keepingCapacity: true)
         let liveParticleLimit = options.liveParticleLimit(configuredMaxParticles: maxParticles)
         var frameStats = ParticleEmitterFrameStats(
             simulatedDeltaTime: dt,
@@ -1221,6 +1257,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             let collided = applyCollision(to: &p, context: collisionContext)
             if collided {
                 frameStats.collisionCount += 1
+                recordEvent(trigger: .collision, source: p)
                 spawnSubEmitterParticles(trigger: .collision,
                                          source: p,
                                          survivorsCount: survivors.count,
@@ -1232,6 +1269,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
                 survivors.append(p)
             } else {
                 frameStats.expiredParticleCount += 1
+                recordEvent(trigger: .death, source: p)
                 spawnSubEmitterParticles(trigger: .death,
                                          source: p,
                                          survivorsCount: survivors.count,
@@ -1307,7 +1345,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     /// Spawns `count` particles immediately (a burst), independent of the emission rate.
     /// Honors the `maxParticles` cap.
     public mutating func emit(_ count: Int, worldTransform: simd_float4x4? = nil) {
-        spawn(count, worldTransform: worldTransform)
+        spawn(count, worldTransform: worldTransform, recordSpawned: false)
     }
 
     /// Removes all live particles and resets emission timing.
@@ -1320,6 +1358,8 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         burstSpawnAccumulator = 0
         previousEmitterPosition = nil
         hasPrewarmed = false
+        lastFrameSpawnedParticles.removeAll(keepingCapacity: true)
+        lastFrameEvents.removeAll(keepingCapacity: true)
         lastFrameStats = .empty
     }
 
@@ -1348,6 +1388,12 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         var endSize: Float
         var startColor: SIMD4<Float>
         var endColor: SIMD4<Float>
+    }
+
+    private mutating func recordEvent(trigger: ParticleSubEmitterTrigger,
+                                      source: Particle) {
+        guard trigger != .none else { return }
+        lastFrameEvents.append(ParticleEvent(trigger: trigger, source: source))
     }
 
     private mutating func runPrewarmIfNeeded(worldTransform: simd_float4x4?,
@@ -1398,7 +1444,8 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
                                 worldTransform: simd_float4x4? = nil,
                                 worldOriginOverride: SIMD3<Float>? = nil,
                                 inheritedWorldVelocity: SIMD3<Float> = .zero,
-                                maxLiveParticles: Int? = nil) -> ParticleSpawnResult {
+                                maxLiveParticles: Int? = nil,
+                                recordSpawned: Bool = true) -> ParticleSpawnResult {
         let requested = max(0, count)
         guard requested > 0, maxParticles > 0 else {
             return ParticleSpawnResult(requested: requested, spawned: 0)
@@ -1436,6 +1483,9 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
                              generation: 0)
             refreshAppearance(&p)
             particles.append(p)
+            if recordSpawned {
+                lastFrameSpawnedParticles.append(p)
+            }
         }
         return ParticleSpawnResult(requested: requested, spawned: n)
     }
@@ -1522,6 +1572,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         }
         let toAppend = min(eventParticles.count, room)
         particles.append(contentsOf: eventParticles.prefix(toAppend))
+        lastFrameSpawnedParticles.append(contentsOf: eventParticles.prefix(toAppend))
         return ParticleSpawnResult(requested: eventParticles.count, spawned: toAppend)
     }
 
