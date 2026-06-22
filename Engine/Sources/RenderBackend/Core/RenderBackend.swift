@@ -105,6 +105,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     var fallbackParticleTexture: GPUTexture?
     var fallbackParticleTextureView: GPUTextureView?
     var particleSimulationResources: [GPUParticleSimulationResources?] = []
+    var particleSimulationResourcesByEmitter: [UInt64: GPUParticleSimulationResources] = [:]
+    var initializedParticleSimulationEmitterKeys: Set<UInt64> = []
     var gpuParticleRenderBatches: [ParticleRenderBatch] = []
     var gpuParticleRenderInstanceCount: Int = 0
     var particleIndirectDrawBuffer: GPUBuffer?

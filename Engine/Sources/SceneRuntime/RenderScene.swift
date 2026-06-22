@@ -322,9 +322,19 @@ public struct ParticleRenderSummary: Sendable, Equatable {
 }
 
 public struct RenderParticleSimulationBatch: Sendable, Equatable {
+    /// Stable source emitter identity. RenderBackend uses this to keep GPU state
+    /// resources attached to an emitter when batch order changes.
+    public var emitterEntity: EntityID?
     public var plan: ParticleGPUSimulationPlan
+    /// Persisted particles already resident in the simulation state at frame start.
     public var particles: [Particle]
+    /// Newly spawned particles appended by the GPU before this frame's simulation pass.
+    public var spawnParticles: [Particle]
     public var gravity: SIMD3<Float>
+    public var noiseStrength: Float
+    public var noiseScale: Float
+    public var noiseSpeed: Float
+    public var noiseSeed: UInt64
     public var vectorFieldMode: ParticleVectorFieldMode
     public var vectorFieldDirection: SIMD3<Float>
     public var vectorFieldStrength: Float
@@ -336,6 +346,10 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
     public var forceRadius: Float
     public var forceStrength: Float
     public var forceFalloff: Float
+    public var collisionMode: ParticleCollisionMode
+    public var collisionPlaneY: Float
+    public var collisionRestitution: Float
+    public var collisionDamping: Float
     public var renderOnGPU: Bool
     public var worldTransform: simd_float4x4
     public var uvRect: SIMD4<Float>
@@ -348,10 +362,24 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
     public var renderAlignment: ParticleRenderAlignment
     public var velocityStretchScale: Float
     public var velocityStretchMax: Float
+    /// Effective number of simulated particles to submit for rendering. A zero
+    /// value keeps every live simulated particle visible.
+    public var renderParticleLimit: Int
+    public var renderAlphaScale: Float
+    public var trailLength: Float
+    public var trailSegments: Int
+    public var trailEndSizeScale: Float
+    public var trailEndAlphaScale: Float
 
-    public init(plan: ParticleGPUSimulationPlan,
+    public init(emitterEntity: EntityID? = nil,
+                plan: ParticleGPUSimulationPlan,
                 particles: [Particle],
+                spawnParticles: [Particle] = [],
                 gravity: SIMD3<Float>,
+                noiseStrength: Float = 0,
+                noiseScale: Float = 1,
+                noiseSpeed: Float = 0,
+                noiseSeed: UInt64 = 0,
                 vectorFieldMode: ParticleVectorFieldMode = .none,
                 vectorFieldDirection: SIMD3<Float> = SIMD3<Float>(0, 1, 0),
                 vectorFieldStrength: Float = 0,
@@ -363,6 +391,10 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
                 forceRadius: Float = 0,
                 forceStrength: Float = 0,
                 forceFalloff: Float = 1,
+                collisionMode: ParticleCollisionMode = .none,
+                collisionPlaneY: Float = 0,
+                collisionRestitution: Float = 0.5,
+                collisionDamping: Float = 0,
                 renderOnGPU: Bool = false,
                 worldTransform: simd_float4x4 = matrix_identity_float4x4,
                 uvRect: SIMD4<Float> = SIMD4<Float>(0, 0, 1, 1),
@@ -374,10 +406,22 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
                 texturePath: String? = nil,
                 renderAlignment: ParticleRenderAlignment = .billboard,
                 velocityStretchScale: Float = 0,
-                velocityStretchMax: Float = 8) {
+                velocityStretchMax: Float = 8,
+                renderParticleLimit: Int = 0,
+                renderAlphaScale: Float = 1,
+                trailLength: Float = 0,
+                trailSegments: Int = 0,
+                trailEndSizeScale: Float = 0.5,
+                trailEndAlphaScale: Float = 0) {
+        self.emitterEntity = emitterEntity
         self.plan = plan
         self.particles = particles
+        self.spawnParticles = spawnParticles
         self.gravity = gravity
+        self.noiseStrength = max(0, noiseStrength)
+        self.noiseScale = max(0.0001, noiseScale)
+        self.noiseSpeed = max(0, noiseSpeed)
+        self.noiseSeed = noiseSeed
         self.vectorFieldMode = vectorFieldMode
         self.vectorFieldDirection = vectorFieldDirection
         self.vectorFieldStrength = max(0, vectorFieldStrength)
@@ -389,6 +433,10 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
         self.forceRadius = max(0, forceRadius)
         self.forceStrength = forceStrength
         self.forceFalloff = max(0, forceFalloff)
+        self.collisionMode = collisionMode
+        self.collisionPlaneY = collisionPlaneY
+        self.collisionRestitution = simd_clamp(collisionRestitution, 0, 1)
+        self.collisionDamping = simd_clamp(collisionDamping, 0, 1)
         self.renderOnGPU = renderOnGPU
         self.worldTransform = worldTransform
         self.uvRect = uvRect
@@ -401,10 +449,37 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
         self.renderAlignment = renderAlignment
         self.velocityStretchScale = max(0, velocityStretchScale)
         self.velocityStretchMax = max(1, velocityStretchMax)
+        self.renderParticleLimit = max(0, renderParticleLimit)
+        self.renderAlphaScale = simd_clamp(renderAlphaScale, 0, 1)
+        self.trailLength = max(0, trailLength)
+        self.trailSegments = max(0, trailSegments)
+        self.trailEndSizeScale = max(0, trailEndSizeScale)
+        self.trailEndAlphaScale = simd_clamp(trailEndAlphaScale, 0, 1)
     }
 
     public var particleCount: Int {
-        min(particles.count, max(0, plan.particleCapacity))
+        let capacity = max(0, plan.particleCapacity)
+        let baseCount = min(particles.count, capacity)
+        let spawnCount = min(spawnParticles.count, max(0, capacity - baseCount))
+        return baseCount + spawnCount
+    }
+
+    public var renderInstanceMultiplier: Int {
+        1 + (trailLength > 0 ? max(0, trailSegments) : 0)
+    }
+
+    public var renderParticleCount: Int {
+        let count = particleCount
+        guard renderParticleLimit > 0 else { return count }
+        return min(renderParticleLimit, count)
+    }
+
+    public var renderParticleStartIndex: Int {
+        max(0, particleCount - renderParticleCount)
+    }
+
+    public var renderInstanceCount: Int {
+        renderParticleCount * renderInstanceMultiplier
     }
 }
 

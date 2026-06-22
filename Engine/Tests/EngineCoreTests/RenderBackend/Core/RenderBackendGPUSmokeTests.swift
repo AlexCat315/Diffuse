@@ -196,6 +196,23 @@ struct RenderBackendGPUSmokeTests {
         #expect(cached.capacity == resources.capacity)
         #expect(cached.workgroupSize == resources.workgroupSize)
 
+        let emitterA = EntityID(index: 11, generation: 1)
+        let emitterB = EntityID(index: 12, generation: 1)
+        let emitterAResources = try #require(
+            try renderer.ensureParticleSimulationResources(for: plan, emitterEntity: emitterA)
+        )
+        let cachedEmitterAResources = try #require(
+            try renderer.ensureParticleSimulationResources(for: plan, emitterEntity: emitterA)
+        )
+        let emitterBResources = try #require(
+            try renderer.ensureParticleSimulationResources(for: plan, emitterEntity: emitterB)
+        )
+        #expect(renderer.particleSimulationResourcesByEmitter.count == 2)
+        #expect(cachedEmitterAResources.capacity == emitterAResources.capacity)
+        #expect(cachedEmitterAResources.workgroupSize == emitterAResources.workgroupSize)
+        #expect(emitterBResources.capacity == emitterAResources.capacity)
+        #expect(emitterBResources.workgroupSize == emitterAResources.workgroupSize)
+
         let largerWorkgroupPlan = ParticleEmitter(
             maxParticles: 130,
             simulationBackend: .gpuIfSupported,
@@ -206,6 +223,13 @@ struct RenderBackendGPUSmokeTests {
         )
         #expect(largerWorkgroupResources.workgroupSize == 128)
         #expect(largerWorkgroupResources.capacity >= largerWorkgroupPlan.particleCapacity)
+        let resizedEmitterAResources = try #require(
+            try renderer.ensureParticleSimulationResources(for: largerWorkgroupPlan, emitterEntity: emitterA)
+        )
+        #expect(renderer.particleSimulationResourcesByEmitter.count == 2)
+        #expect(resizedEmitterAResources.workgroupSize == 128)
+        #expect(renderer.particleSimulationResourcesByEmitter[emitterA.rawValue]?.workgroupSize == 128)
+        #expect(renderer.particleSimulationResourcesByEmitter[emitterB.rawValue]?.workgroupSize == 64)
 
         let cpuPlan = ParticleEmitter(simulationBackend: .cpu).gpuSimulationPlan
         #expect(try renderer.ensureParticleSimulationResources(for: cpuPlan) == nil)
@@ -237,6 +261,7 @@ struct RenderBackendGPUSmokeTests {
 
         let plan = ParticleEmitter(
             maxParticles: 4,
+            collisionMode: .worldPlane,
             simulationBackend: .gpuIfSupported,
             gpuSimulationWorkgroupSize: 64
         ).gpuSimulationPlan
@@ -250,6 +275,8 @@ struct RenderBackendGPUSmokeTests {
             size: 1,
             color: SIMD4<Float>(1, 0.5, 0.25, 1)
         )
+        var collisionTransform = matrix_identity_float4x4
+        collisionTransform.columns.3.y = 5
         let encoder = try backend.createCommandEncoder()
         let resources = try #require(
             try renderer.encodeParticleSimulationPass(
@@ -258,6 +285,10 @@ struct RenderBackendGPUSmokeTests {
                 particles: [particle],
                 deltaTime: 0.5,
                 gravity: SIMD3<Float>(0, -10, 0),
+                noiseStrength: 2,
+                noiseScale: 1,
+                noiseSpeed: 0,
+                noiseSeed: 0,
                 vectorFieldDirection: SIMD3<Float>(2, 0, 0),
                 vectorFieldStrength: 4,
                 vectorFieldMode: .uniform,
@@ -265,7 +296,12 @@ struct RenderBackendGPUSmokeTests {
                 forceCenter: SIMD3<Float>(-1, 0, 0),
                 forceRadius: 0,
                 forceStrength: 6,
-                forceFalloff: 0
+                forceFalloff: 0,
+                collisionMode: .worldPlane,
+                collisionPlaneY: 4.5,
+                collisionRestitution: 0.5,
+                collisionDamping: 0.25,
+                collisionWorldTransform: collisionTransform
             )
         )
 
@@ -274,23 +310,711 @@ struct RenderBackendGPUSmokeTests {
         encoder.copyBufferToBuffer(source: resources.stateBuffer,
                                    destination: readback,
                                    size: stride)
+        let metadataStride = UInt64(MemoryLayout<GPUReadbackParticleSimulationMetadata>.stride)
+        let metadataReadback = try backend.createBuffer(size: metadataStride, usage: [.copyDst, .mapRead])
+        encoder.copyBufferToBuffer(source: resources.metadataBuffer,
+                                   destination: metadataReadback,
+                                   size: metadataStride)
         let commandBuffer = try encoder.finish()
         backend.submit(commandBuffer)
 
         let states = try readbackParticleSimulationStates(buffer: readback,
                                                           count: 1,
                                                           backend: backend)
+        let metadata = try #require(
+            try readbackParticleSimulationMetadata(buffer: metadataReadback, backend: backend)
+        )
         let state = try #require(states.first)
-        #expect(abs(state.velocityAge.x - 6) < 0.001)
-        #expect(abs(state.velocityAge.y - -3) < 0.001)
-        #expect(abs(state.velocityAge.z - 3) < 0.001)
+        let expectedNoise = SIMD3<Float>(
+            0,
+            Float(sin(2.17)) * 2,
+            Float(sin(4.31)) * 2
+        )
+        let expectedAcceleration = SIMD3<Float>(0, -10, 0)
+            + expectedNoise
+            + SIMD3<Float>(6, 0, 0)
+            + SIMD3<Float>(4, 0, 0)
+        let preCollisionVelocity = SIMD3<Float>(1, 2, 3) + expectedAcceleration * 0.5
+        let preCollisionPosition = preCollisionVelocity * 0.5
+        var expectedVelocity = preCollisionVelocity
+        var expectedPosition = preCollisionPosition
+        if preCollisionPosition.y + collisionTransform.columns.3.y < 4.5 {
+            expectedPosition.y = 4.5 - collisionTransform.columns.3.y
+            if preCollisionVelocity.y < 0 {
+                expectedVelocity.x *= 0.75
+                expectedVelocity.y = -preCollisionVelocity.y * 0.5
+                expectedVelocity.z *= 0.75
+            }
+        }
+        #expect(abs(state.velocityAge.x - expectedVelocity.x) < 0.001)
+        #expect(abs(state.velocityAge.y - expectedVelocity.y) < 0.001)
+        #expect(abs(state.velocityAge.z - expectedVelocity.z) < 0.001)
         #expect(abs(state.velocityAge.w - 0.5) < 0.001)
-        #expect(abs(state.positionLifetime.x - 3) < 0.001)
-        #expect(abs(state.positionLifetime.y - -1.5) < 0.001)
-        #expect(abs(state.positionLifetime.z - 1.5) < 0.001)
+        #expect(abs(state.positionLifetime.x - expectedPosition.x) < 0.001)
+        #expect(abs(state.positionLifetime.y - expectedPosition.y) < 0.001)
+        #expect(abs(state.positionLifetime.z - expectedPosition.z) < 0.001)
         #expect(abs(state.positionLifetime.w - 10) < 0.001)
         #expect(abs(state.sizeRotation.y - 1.25) < 0.001)
         #expect(abs(state.sizeRotation.z - 2) < 0.001)
+        #expect(metadata.aliveCount == 1)
+        #expect(metadata.expiredCount == 0)
+        #expect(metadata.collisionCount == 1)
+        #expect(metadata.spawnedCount == 0)
+        #expect(metadata.droppedSpawnCount == 0)
+        #expect(metadata.appendCursor == 1)
+        #expect(metadata.compactedCount == 1)
+    }
+
+    @Test("particle GPU spawn append writes new state and reports capacity drops",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU particle spawn append test"))
+    func particleSimulationSpawnAppendWritesNewStateAndDropsOverflow() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+
+        renderer.initialize()
+
+        let plan = ParticleEmitter(
+            maxParticles: 2,
+            simulationBackend: .gpuIfSupported,
+            gpuSimulationWorkgroupSize: 64
+        ).gpuSimulationPlan
+        let existing = Particle(
+            position: SIMD3<Float>(0, 0, 0),
+            velocity: .zero,
+            age: 0,
+            lifetime: 10,
+            size: 1,
+            color: SIMD4<Float>(1, 1, 1, 1)
+        )
+        let acceptedSpawn = Particle(
+            position: SIMD3<Float>(1, 2, 3),
+            velocity: SIMD3<Float>(4, 5, 6),
+            age: 0.25,
+            lifetime: 9,
+            rotation: 0.75,
+            angularVelocity: 1.5,
+            size: 0.5,
+            color: SIMD4<Float>(0.2, 0.4, 0.6, 0.8)
+        )
+        let droppedSpawn = Particle(
+            position: SIMD3<Float>(9, 9, 9),
+            velocity: .zero,
+            age: 0,
+            lifetime: 3,
+            size: 2,
+            color: SIMD4<Float>(1, 0, 0, 1)
+        )
+
+        let encoder = try backend.createCommandEncoder()
+        let resources = try #require(
+            try renderer.encodeParticleSimulationPass(
+                encoder: encoder,
+                plan: plan,
+                particles: [existing],
+                deltaTime: 0,
+                gravity: .zero,
+                spawnParticles: [acceptedSpawn, droppedSpawn]
+            )
+        )
+
+        let stateStride = UInt64(MemoryLayout<GPUReadbackParticleSimulationState>.stride)
+        let stateReadback = try backend.createBuffer(size: stateStride * 2, usage: [.copyDst, .mapRead])
+        encoder.copyBufferToBuffer(source: resources.stateBuffer,
+                                   destination: stateReadback,
+                                   size: stateStride * 2)
+        let metadataStride = UInt64(MemoryLayout<GPUReadbackParticleSimulationMetadata>.stride)
+        let metadataReadback = try backend.createBuffer(size: metadataStride, usage: [.copyDst, .mapRead])
+        encoder.copyBufferToBuffer(source: resources.metadataBuffer,
+                                   destination: metadataReadback,
+                                   size: metadataStride)
+        let commandBuffer = try encoder.finish()
+        backend.submit(commandBuffer)
+
+        let states = try readbackParticleSimulationStates(buffer: stateReadback,
+                                                          count: 2,
+                                                          backend: backend)
+        let metadata = try #require(
+            try readbackParticleSimulationMetadata(buffer: metadataReadback, backend: backend)
+        )
+        #expect(states.count == 2)
+        #expect(abs(states[0].positionLifetime.x) < 0.001)
+        #expect(abs(states[0].positionLifetime.w - 10) < 0.001)
+        #expect(abs(states[1].positionLifetime.x - acceptedSpawn.position.x) < 0.001)
+        #expect(abs(states[1].positionLifetime.y - acceptedSpawn.position.y) < 0.001)
+        #expect(abs(states[1].positionLifetime.z - acceptedSpawn.position.z) < 0.001)
+        #expect(abs(states[1].positionLifetime.w - acceptedSpawn.lifetime) < 0.001)
+        #expect(abs(states[1].velocityAge.x - acceptedSpawn.velocity.x) < 0.001)
+        #expect(abs(states[1].velocityAge.y - acceptedSpawn.velocity.y) < 0.001)
+        #expect(abs(states[1].velocityAge.z - acceptedSpawn.velocity.z) < 0.001)
+        #expect(abs(states[1].velocityAge.w - acceptedSpawn.age) < 0.001)
+        #expect(abs(states[1].sizeRotation.x - acceptedSpawn.size) < 0.001)
+        #expect(abs(states[1].sizeRotation.y - acceptedSpawn.rotation) < 0.001)
+        #expect(abs(states[1].sizeRotation.z - acceptedSpawn.angularVelocity) < 0.001)
+        #expect(metadata.aliveCount == 2)
+        #expect(metadata.expiredCount == 0)
+        #expect(metadata.collisionCount == 0)
+        #expect(metadata.spawnedCount == 1)
+        #expect(metadata.droppedSpawnCount == 1)
+        #expect(metadata.appendCursor == 2)
+        #expect(metadata.compactedCount == 2)
+    }
+
+    @Test("particle GPU simulation compacts live state and clears the dead tail",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU particle compaction test"))
+    func particleSimulationCompactsLiveStateAndClearsDeadTail() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+
+        renderer.initialize()
+
+        let plan = ParticleEmitter(
+            maxParticles: 4,
+            simulationBackend: .gpuIfSupported,
+            gpuSimulationWorkgroupSize: 64
+        ).gpuSimulationPlan
+        let aliveA = Particle(
+            position: SIMD3<Float>(1, 0, 0),
+            velocity: SIMD3<Float>(0, 1, 0),
+            age: 0.1,
+            lifetime: 4,
+            size: 0.5,
+            color: SIMD4<Float>(1, 0, 0, 1)
+        )
+        let expired = Particle(
+            position: SIMD3<Float>(9, 9, 9),
+            velocity: SIMD3<Float>(2, 2, 2),
+            age: 2,
+            lifetime: 1,
+            size: 3,
+            color: SIMD4<Float>(0, 1, 0, 1)
+        )
+        let aliveB = Particle(
+            position: SIMD3<Float>(3, 0, 0),
+            velocity: SIMD3<Float>(0, 0, 1),
+            age: 0.25,
+            lifetime: 8,
+            size: 0.75,
+            color: SIMD4<Float>(0, 0, 1, 1)
+        )
+
+        let encoder = try backend.createCommandEncoder()
+        let resources = try #require(
+            try renderer.encodeParticleSimulationPass(
+                encoder: encoder,
+                plan: plan,
+                particles: [aliveA, expired, aliveB],
+                deltaTime: 0,
+                gravity: .zero
+            )
+        )
+
+        let stateStride = UInt64(MemoryLayout<GPUReadbackParticleSimulationState>.stride)
+        let stateReadback = try backend.createBuffer(size: stateStride * 4, usage: [.copyDst, .mapRead])
+        encoder.copyBufferToBuffer(source: resources.stateBuffer,
+                                   destination: stateReadback,
+                                   size: stateStride * 4)
+        let metadataStride = UInt64(MemoryLayout<GPUReadbackParticleSimulationMetadata>.stride)
+        let metadataReadback = try backend.createBuffer(size: metadataStride, usage: [.copyDst, .mapRead])
+        encoder.copyBufferToBuffer(source: resources.metadataBuffer,
+                                   destination: metadataReadback,
+                                   size: metadataStride)
+        let commandBuffer = try encoder.finish()
+        backend.submit(commandBuffer)
+
+        let states = try readbackParticleSimulationStates(buffer: stateReadback,
+                                                          count: 4,
+                                                          backend: backend)
+        let metadata = try #require(
+            try readbackParticleSimulationMetadata(buffer: metadataReadback, backend: backend)
+        )
+
+        #expect(states.count == 4)
+        #expect(abs(states[0].positionLifetime.x - aliveA.position.x) < 0.001)
+        #expect(abs(states[0].positionLifetime.w - aliveA.lifetime) < 0.001)
+        #expect(abs(states[1].positionLifetime.x - aliveB.position.x) < 0.001)
+        #expect(abs(states[1].positionLifetime.w - aliveB.lifetime) < 0.001)
+        #expect(abs(states[2].positionLifetime.w) < 0.001)
+        #expect(abs(states[2].velocityAge.w) < 0.001)
+        #expect(abs(states[3].positionLifetime.w) < 0.001)
+        #expect(abs(states[3].velocityAge.w) < 0.001)
+        #expect(metadata.aliveCount == 2)
+        #expect(metadata.expiredCount == 1)
+        #expect(metadata.spawnedCount == 0)
+        #expect(metadata.droppedSpawnCount == 0)
+        #expect(metadata.appendCursor == 2)
+        #expect(metadata.compactedCount == 2)
+    }
+
+    @Test("particle GPU simulation reuses compacted emitter state across frames",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU particle persistence test"))
+    func particleSimulationReusesCompactedEmitterStateAcrossFrames() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+
+        renderer.initialize()
+
+        let plan = ParticleEmitter(
+            maxParticles: 4,
+            simulationBackend: .gpuIfSupported,
+            gpuSimulationWorkgroupSize: 64
+        ).gpuSimulationPlan
+        let emitter = EntityID(index: 77, generation: 1)
+        let staleCPUState = Particle(
+            position: SIMD3<Float>(0, 0, 0),
+            velocity: SIMD3<Float>(1, 0, 0),
+            age: 0,
+            lifetime: 10,
+            size: 1,
+            color: SIMD4<Float>(1, 1, 1, 1)
+        )
+
+        do {
+            let encoder = try backend.createCommandEncoder()
+            _ = try #require(
+                try renderer.encodeParticleSimulationPass(
+                    encoder: encoder,
+                    plan: plan,
+                    particles: [staleCPUState],
+                    deltaTime: 1,
+                    gravity: .zero,
+                    emitterEntity: emitter
+                )
+            )
+            let commandBuffer = try encoder.finish()
+            backend.submit(commandBuffer)
+        }
+
+        let encoder = try backend.createCommandEncoder()
+        let resources = try #require(
+            try renderer.encodeParticleSimulationPass(
+                encoder: encoder,
+                plan: plan,
+                particles: [staleCPUState],
+                deltaTime: 1,
+                gravity: .zero,
+                emitterEntity: emitter
+            )
+        )
+        let stateStride = UInt64(MemoryLayout<GPUReadbackParticleSimulationState>.stride)
+        let stateReadback = try backend.createBuffer(size: stateStride, usage: [.copyDst, .mapRead])
+        encoder.copyBufferToBuffer(source: resources.stateBuffer,
+                                   destination: stateReadback,
+                                   size: stateStride)
+        let metadataStride = UInt64(MemoryLayout<GPUReadbackParticleSimulationMetadata>.stride)
+        let metadataReadback = try backend.createBuffer(size: metadataStride, usage: [.copyDst, .mapRead])
+        encoder.copyBufferToBuffer(source: resources.metadataBuffer,
+                                   destination: metadataReadback,
+                                   size: metadataStride)
+        let commandBuffer = try encoder.finish()
+        backend.submit(commandBuffer)
+
+        let states = try readbackParticleSimulationStates(buffer: stateReadback,
+                                                          count: 1,
+                                                          backend: backend)
+        let metadata = try #require(
+            try readbackParticleSimulationMetadata(buffer: metadataReadback, backend: backend)
+        )
+        let state = try #require(states.first)
+        #expect(abs(state.positionLifetime.x - 2) < 0.001)
+        #expect(abs(state.velocityAge.w - 2) < 0.001)
+        #expect(metadata.aliveCount == 1)
+        #expect(metadata.expiredCount == 0)
+        #expect(metadata.appendCursor == 1)
+        #expect(metadata.compactedCount == 1)
+        #expect(renderer.initializedParticleSimulationEmitterKeys.contains(emitter.rawValue))
+    }
+
+    @Test("particle GPU simulation preserves append cursor when CPU state is omitted",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU particle append cursor test"))
+    func particleSimulationPreservesAppendCursorWithoutCPUStateUpload() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+
+        renderer.initialize()
+
+        let plan = ParticleEmitter(
+            maxParticles: 4,
+            simulationBackend: .gpuIfSupported,
+            gpuSimulationWorkgroupSize: 64
+        ).gpuSimulationPlan
+        let emitter = EntityID(index: 78, generation: 1)
+        let resident = Particle(
+            position: SIMD3<Float>(1, 0, 0),
+            velocity: .zero,
+            age: 0,
+            lifetime: 10,
+            size: 1,
+            color: SIMD4<Float>(1, 1, 1, 1)
+        )
+        let spawned = Particle(
+            position: SIMD3<Float>(2, 0, 0),
+            velocity: .zero,
+            age: 0,
+            lifetime: 10,
+            size: 1,
+            color: SIMD4<Float>(0, 1, 1, 1)
+        )
+
+        do {
+            let encoder = try backend.createCommandEncoder()
+            _ = try #require(
+                try renderer.encodeParticleSimulationPass(
+                    encoder: encoder,
+                    plan: plan,
+                    particles: [resident],
+                    deltaTime: 0,
+                    gravity: .zero,
+                    emitterEntity: emitter
+                )
+            )
+            let commandBuffer = try encoder.finish()
+            backend.submit(commandBuffer)
+        }
+
+        let encoder = try backend.createCommandEncoder()
+        let resources = try #require(
+            try renderer.encodeParticleSimulationPass(
+                encoder: encoder,
+                plan: plan,
+                particles: [],
+                deltaTime: 0,
+                gravity: .zero,
+                spawnParticles: [spawned],
+                emitterEntity: emitter
+            )
+        )
+        let stateStride = UInt64(MemoryLayout<GPUReadbackParticleSimulationState>.stride)
+        let stateReadback = try backend.createBuffer(size: stateStride * 2, usage: [.copyDst, .mapRead])
+        encoder.copyBufferToBuffer(source: resources.stateBuffer,
+                                   destination: stateReadback,
+                                   size: stateStride * 2)
+        let metadataStride = UInt64(MemoryLayout<GPUReadbackParticleSimulationMetadata>.stride)
+        let metadataReadback = try backend.createBuffer(size: metadataStride, usage: [.copyDst, .mapRead])
+        encoder.copyBufferToBuffer(source: resources.metadataBuffer,
+                                   destination: metadataReadback,
+                                   size: metadataStride)
+        let commandBuffer = try encoder.finish()
+        backend.submit(commandBuffer)
+
+        let states = try readbackParticleSimulationStates(buffer: stateReadback,
+                                                          count: 2,
+                                                          backend: backend)
+        let metadata = try #require(
+            try readbackParticleSimulationMetadata(buffer: metadataReadback, backend: backend)
+        )
+
+        #expect(abs(states[0].positionLifetime.x - resident.position.x) < 0.001)
+        #expect(abs(states[0].positionLifetime.w - resident.lifetime) < 0.001)
+        #expect(abs(states[1].positionLifetime.x - spawned.position.x) < 0.001)
+        #expect(abs(states[1].positionLifetime.w - spawned.lifetime) < 0.001)
+        #expect(metadata.aliveCount == 2)
+        #expect(metadata.expiredCount == 0)
+        #expect(metadata.spawnedCount == 1)
+        #expect(metadata.droppedSpawnCount == 0)
+        #expect(metadata.appendCursor == 2)
+        #expect(metadata.compactedCount == 2)
+    }
+
+    @Test("particle GPU render path expands simulation particles into trail instances",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU particle trail test"))
+    func particleSimulationRenderPathExpandsTrailsOnGPU() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+
+        renderer.initialize()
+
+        let plan = ParticleEmitter(
+            maxParticles: 4,
+            simulationBackend: .gpuIfSupported,
+            gpuSimulationWorkgroupSize: 64
+        ).gpuSimulationPlan
+        let particle = Particle(
+            position: SIMD3<Float>(0, 0, 0),
+            velocity: SIMD3<Float>(2, 0, 0),
+            age: 0,
+            lifetime: 10,
+            size: 2,
+            color: SIMD4<Float>(1, 1, 1, 1)
+        )
+        let scene = RenderScene(
+            camera: .fallbackPerspective,
+            particleSimulationBatches: [
+                RenderParticleSimulationBatch(
+                    emitterEntity: EntityID(index: 79, generation: 1),
+                    plan: plan,
+                    particles: [particle],
+                    gravity: .zero,
+                    renderOnGPU: true,
+                    renderAlphaScale: 0.25,
+                    trailLength: 1,
+                    trailSegments: 2,
+                    trailEndSizeScale: 0.5,
+                    trailEndAlphaScale: 0
+                )
+            ]
+        )
+
+        let encoder = try backend.createCommandEncoder()
+        let report = try renderer.encodeParticleSimulationPrePass(
+            encoder: encoder,
+            scene: scene,
+            deltaTime: 0,
+            elapsedTime: 0
+        )
+        #expect(report.renderInstanceCount == 3)
+        #expect(renderer.gpuParticleRenderInstanceCount == 3)
+        #expect(renderer.gpuParticleRenderBatches.first?.count == 3)
+
+        let sourceBuffer = try #require(renderer.particleStorageBuffer)
+        let commandBuffer = try encoder.finish()
+        backend.submit(commandBuffer)
+
+        let instances = try readbackParticleInstances(buffer: sourceBuffer,
+                                                       count: 3,
+                                                       backend: backend)
+        #expect(abs(instances[0].positionSize.x - 0) < 0.001)
+        #expect(abs(instances[1].positionSize.x + 1) < 0.001)
+        #expect(abs(instances[2].positionSize.x + 2) < 0.001)
+        #expect(abs(instances[0].positionSize.w - 2) < 0.001)
+        #expect(abs(instances[1].positionSize.w - 1.5) < 0.001)
+        #expect(abs(instances[2].positionSize.w - 1) < 0.001)
+        #expect(abs(instances[0].color.w - 0.25) < 0.001)
+        #expect(abs(instances[1].color.w - 0.125) < 0.001)
+        #expect(abs(instances[2].color.w) < 0.001)
+    }
+
+    @Test("particle GPU render path applies render budgets when expanding simulation particles",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU particle budget test"))
+    func particleSimulationRenderPathAppliesRenderBudgetOnGPU() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+
+        renderer.initialize()
+
+        let plan = ParticleEmitter(
+            maxParticles: 4,
+            simulationBackend: .gpuIfSupported,
+            gpuSimulationWorkgroupSize: 64
+        ).gpuSimulationPlan
+        let particles = (0..<4).map { index in
+            Particle(
+                position: SIMD3<Float>(Float(index), 0, 0),
+                velocity: .zero,
+                age: 0,
+                lifetime: 10,
+                size: 1,
+                color: SIMD4<Float>(1, 1, 1, 1)
+            )
+        }
+        let scene = RenderScene(
+            camera: .fallbackPerspective,
+            particleSimulationBatches: [
+                RenderParticleSimulationBatch(
+                    emitterEntity: EntityID(index: 80, generation: 1),
+                    plan: plan,
+                    particles: particles,
+                    gravity: .zero,
+                    renderOnGPU: true,
+                    renderParticleLimit: 2
+                )
+            ]
+        )
+
+        let encoder = try backend.createCommandEncoder()
+        let report = try renderer.encodeParticleSimulationPrePass(
+            encoder: encoder,
+            scene: scene,
+            deltaTime: 0,
+            elapsedTime: 0
+        )
+        #expect(report.particleCount == 4)
+        #expect(report.renderInstanceCount == 2)
+        #expect(renderer.gpuParticleRenderInstanceCount == 2)
+        #expect(renderer.gpuParticleRenderBatches.first?.count == 2)
+
+        let sourceBuffer = try #require(renderer.particleStorageBuffer)
+        let commandBuffer = try encoder.finish()
+        backend.submit(commandBuffer)
+
+        let instances = try readbackParticleInstances(buffer: sourceBuffer,
+                                                       count: 2,
+                                                       backend: backend)
+        #expect(abs(instances[0].positionSize.x - 2) < 0.001)
+        #expect(abs(instances[1].positionSize.x - 3) < 0.001)
+    }
+
+    @Test("particle GPU cull compacts batches larger than one workgroup tile",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU particle cull tiling test"))
+    func particleCullCompactsLargeBatchesAcrossWorkgroupTiles() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+
+        renderer.initialize()
+
+        var particles: [RenderParticle] = []
+        particles.reserveCapacity(130)
+        for index in 0..<130 {
+            let column = Float((index % 13) - 6)
+            let row = Float((index / 13) - 5)
+            let position = SIMD3<Float>(column * 0.025, row * 0.025, 0)
+            let color = SIMD4<Float>(1, 0.65, 0.2, 1)
+            particles.append(RenderParticle(position: position,
+                                            size: 0.08,
+                                            color: color))
+        }
+        let scene = RenderScene(
+            camera: RenderCamera(
+                eye: SIMD3<Float>(0, 0, 3),
+                target: .zero,
+                up: SIMD3<Float>(0, 1, 0),
+                fovYRadians: .pi / 4,
+                near: 0.1,
+                far: 20
+            ),
+            particles: particles
+        )
+        let packet = RenderPacket(
+            frameIndex: 13,
+            deltaTime: 1.0 / 60.0,
+            drawableSize: RenderDrawableSize(width: 64, height: 64),
+            scene: scene,
+            sceneSnapshot: SceneRuntimeSnapshot(entityCount: 1, revision: 1),
+            renderSettings: RenderSettings(
+                stage: .r3ViewportInterop,
+                enableOffscreenViewport: true
+            ),
+            simulationTimeSeconds: 0
+        )
+
+        renderer.render(packet: packet)
+
+        let stats = renderer.currentFrameStats()
+        #expect(stats.gpuParticleIndirectDrawCount == 1)
+        #expect(stats.gpuParticleCullBatchCount == 1)
+        #expect(stats.gpuParticleCullCandidateCount == particles.count)
+        #expect(stats.gpuParticleCullDispatchWorkgroups == 1)
+        #expect(stats.passDrawCallCounts[.particles] == 1)
+
+        let indirectBuffer = try #require(renderer.particleIndirectDrawBuffer)
+        let args = try readbackParticleIndirectDrawArgs(buffer: indirectBuffer,
+                                                        count: 1,
+                                                        backend: backend)
+        #expect(args.first?.vertexCount == 6)
+        #expect(args.first?.instanceCount == UInt32(particles.count))
+        #expect(args.first?.firstVertex == 0)
+        #expect(args.first?.firstInstance == 0)
     }
 
     @Test("particle GPU simulation prepass is reported during full render",
@@ -336,13 +1060,13 @@ struct RenderBackendGPUSmokeTests {
 
         let stats = renderer.currentFrameStats()
         #expect(stats.gpuParticleSimulationBatchCount == 2)
-        #expect(stats.gpuParticleSimulationParticleCount == 4)
+        #expect(stats.gpuParticleSimulationParticleCount == 5)
         #expect(stats.gpuParticleSimulationDispatchWorkgroups == 2)
-        #expect(stats.gpuParticleRenderInstanceCount == 4)
+        #expect(stats.gpuParticleRenderInstanceCount == 5)
         #expect(stats.gpuParticleIndirectDrawCount == 3)
         #expect(stats.gpuParticleCullBatchCount == 3)
-        #expect(stats.gpuParticleCullCandidateCount == 5)
-        #expect(stats.gpuParticleCullDispatchWorkgroups == 1)
+        #expect(stats.gpuParticleCullCandidateCount == 6)
+        #expect(stats.gpuParticleCullDispatchWorkgroups == 3)
         #expect(stats.gpuParticleSimulationEncodeNS > 0)
         #expect(stats.passDrawCallCounts[.particles] == 3)
 
@@ -356,7 +1080,7 @@ struct RenderBackendGPUSmokeTests {
         #expect(args.map(\.vertexCount) == [6, 6, 6])
         #expect(args.map(\.instanceCount) == [1, 2, 1])
         #expect(args.map(\.firstVertex) == [0, 0, 0])
-        #expect(args.map(\.firstInstance) == [0, 2, 4])
+        #expect(args.map(\.firstInstance) == [0, 3, 5])
 
         guard let visibleBuffer = renderer.particleVisibleStorageBuffer else {
             Issue.record("expected particle visible storage buffer")
@@ -365,14 +1089,14 @@ struct RenderBackendGPUSmokeTests {
         let visibleInstances = try readbackParticleInstances(buffer: visibleBuffer,
                                                              count: 5,
                                                              backend: backend)
-        #expect(abs(visibleInstances[2].axisStretch.x) < 0.001)
-        #expect(abs(visibleInstances[2].axisStretch.y - 1) < 0.001)
-        #expect(abs(visibleInstances[2].axisStretch.z) < 0.001)
-        #expect(abs(visibleInstances[2].axisStretch.w - 1.5) < 0.001)
         #expect(abs(visibleInstances[3].axisStretch.x) < 0.001)
         #expect(abs(visibleInstances[3].axisStretch.y - 1) < 0.001)
         #expect(abs(visibleInstances[3].axisStretch.z) < 0.001)
-        #expect(abs(visibleInstances[3].axisStretch.w - 1.25) < 0.001)
+        #expect(abs(visibleInstances[3].axisStretch.w - 1.5) < 0.001)
+        #expect(abs(visibleInstances[4].axisStretch.x) < 0.001)
+        #expect(abs(visibleInstances[4].axisStretch.y - 1) < 0.001)
+        #expect(abs(visibleInstances[4].axisStretch.z) < 0.001)
+        #expect(abs(visibleInstances[4].axisStretch.w - 1.25) < 0.001)
     }
 
     @Test("opaque-cache overlay frame matches a full render and camera change invalidates it",
@@ -933,7 +1657,7 @@ struct RenderBackendGPUSmokeTests {
 
     private static func makeParticleSimulationScene() -> RenderScene {
         let plan = ParticleEmitter(
-            maxParticles: 2,
+            maxParticles: 3,
             simulationBackend: .gpuIfSupported,
             gpuSimulationWorkgroupSize: 64
         ).gpuSimulationPlan
@@ -966,7 +1690,13 @@ struct RenderBackendGPUSmokeTests {
                                  age: 0.25,
                                  lifetime: 8,
                                  size: 0.5,
-                                 color: SIMD4<Float>(1, 0, 0, 1))
+                                 color: SIMD4<Float>(1, 0, 0, 1)),
+                        Particle(position: SIMD3<Float>(0.25, 0, 0),
+                                 velocity: .zero,
+                                 age: 0.4,
+                                 lifetime: 0.5,
+                                 size: 1,
+                                 color: SIMD4<Float>(1, 0, 1, 1))
                     ],
                     gravity: .zero,
                     renderOnGPU: true,
@@ -1105,6 +1835,16 @@ private struct GPUReadbackParticleSimulationState {
     var color: SIMD4<Float>
 }
 
+private struct GPUReadbackParticleSimulationMetadata {
+    var aliveCount: UInt32
+    var expiredCount: UInt32
+    var collisionCount: UInt32
+    var spawnedCount: UInt32
+    var droppedSpawnCount: UInt32
+    var appendCursor: UInt32
+    var compactedCount: UInt32
+}
+
 private struct GPUReadbackParticleIndirectDrawArgs {
     var vertexCount: UInt32
     var instanceCount: UInt32
@@ -1230,6 +1970,22 @@ private func readbackParticleSimulationStates(
     let typed = mapped.bindMemory(to: GPUReadbackParticleSimulationState.self,
                                   capacity: count)
     return Array(UnsafeBufferPointer(start: typed, count: count))
+}
+
+private func readbackParticleSimulationMetadata(
+    buffer: GPUBuffer,
+    backend: WGPUBackend
+) throws -> GPUReadbackParticleSimulationMetadata? {
+    let bufferSize = UInt64(MemoryLayout<GPUReadbackParticleSimulationMetadata>.stride)
+    try backend.bufferMapSync(buffer, size: bufferSize)
+    defer { buffer.unmap() }
+
+    guard let mapped = buffer.getMappedRange(size: bufferSize) else {
+        Issue.record("particle simulation metadata readback buffer mapping returned nil")
+        return nil
+    }
+
+    return mapped.load(as: GPUReadbackParticleSimulationMetadata.self)
 }
 
 private func readbackParticleIndirectDrawArgs(

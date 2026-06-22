@@ -14,6 +14,29 @@ struct ParticleTests {
         #expect(emitter.aliveCount == 10)
     }
 
+    @Test("frame spawned particles track accepted advance emissions")
+    func frameSpawnedParticlesTrackAcceptedAdvanceEmissions() {
+        var emitter = ParticleEmitter(emissionRate: 10,
+                                      maxParticles: 1,
+                                      lifetime: 100,
+                                      startVelocity: .zero,
+                                      gravity: .zero)
+
+        emitter.advance(deltaTime: 0.2)
+
+        #expect(emitter.aliveCount == 1)
+        #expect(emitter.lastFrameStats.continuousSpawnedCount == 1)
+        #expect(emitter.lastFrameStats.capacityLimitedSpawnCount == 1)
+        #expect(emitter.lastFrameSpawnedParticles.count == 1)
+
+        emitter.isEmitting = false
+        emitter.advance(deltaTime: 0.1)
+
+        #expect(emitter.aliveCount == 1)
+        #expect(emitter.lastFrameStats.spawnedParticleCount == 0)
+        #expect(emitter.lastFrameSpawnedParticles.isEmpty)
+    }
+
     @Test("scheduled bursts spawn particles at configured intervals")
     func scheduledBursts() {
         var emitter = ParticleEmitter(emissionRate: 0, burstCount: 3, burstInterval: 0.5,
@@ -138,6 +161,11 @@ struct ParticleTests {
         emitter.advance(deltaTime: 0.6)
 
         #expect(emitter.aliveCount == 2)
+        #expect(emitter.lastFrameEvents.count == 1)
+        #expect(emitter.lastFrameEvents[0].trigger == .death)
+        #expect(emitter.lastFrameEvents[0].generation == 0)
+        #expect(emitter.lastFrameEvents[0].age >= 0.6)
+        #expect(emitter.lastFrameEvents[0].lifetime == 0.5)
         for child in emitter.particles {
             #expect(child.generation == 1)
             #expect(child.lifetime == 2)
@@ -148,6 +176,10 @@ struct ParticleTests {
 
         emitter.advance(deltaTime: 2.1)
         #expect(emitter.aliveCount == 0)
+        #expect(emitter.lastFrameEvents.count == 2)
+
+        emitter.clear()
+        #expect(emitter.lastFrameEvents.isEmpty)
     }
 
     @Test("multiple death sub-emitter rules spawn independent child appearances")
@@ -221,6 +253,10 @@ struct ParticleTests {
         #expect(abs(parent!.velocity.y - 0.5) < 1e-4)
         #expect(child!.position.y == 0)
         #expect(child!.velocity == SIMD3<Float>(2, 0, 0))
+        #expect(emitter.lastFrameEvents.count == 1)
+        #expect(emitter.lastFrameEvents[0].trigger == .collision)
+        #expect(emitter.lastFrameEvents[0].position.y == 0)
+        #expect(abs(emitter.lastFrameEvents[0].velocity.y - 0.5) < 1e-4)
     }
 
     @Test("gravity and velocity integrate with semi-implicit Euler")
@@ -340,11 +376,19 @@ struct ParticleTests {
                                               simulationBackend: .gpuIfSupported,
                                               angularVelocity: 0.25)
         let complexFallbackPlan = complexFallback.gpuSimulationPlan
-        #expect(complexFallbackPlan.status == .fallbackToCPU)
-        #expect(complexFallbackPlan.unsupportedReasons == [
-            .noise,
-            .collisions
-        ])
+        #expect(complexFallbackPlan.status == .supported)
+        #expect(complexFallbackPlan.usesGPU)
+        #expect(complexFallbackPlan.unsupportedReasons.isEmpty)
+
+        let noisePlan = ParticleEmitter(emissionRate: 10,
+                                        maxParticles: 64,
+                                        lifetime: 10,
+                                        noiseStrength: 2,
+                                        noiseScale: 3,
+                                        noiseSpeed: 0.5,
+                                        simulationBackend: .gpuIfSupported).gpuSimulationPlan
+        #expect(noisePlan.status == .supported)
+        #expect(noisePlan.usesGPU)
 
         let forcePlan = ParticleEmitter(emissionRate: 10,
                                         maxParticles: 64,
@@ -377,6 +421,17 @@ struct ParticleTests {
         #expect(angularVelocityPlan.status == .supported)
         #expect(angularVelocityPlan.usesGPU)
 
+        let planeCollisionPlan = ParticleEmitter(emissionRate: 10,
+                                                 maxParticles: 64,
+                                                 lifetime: 10,
+                                                 collisionMode: .worldPlane,
+                                                 simulationBackend: .gpuIfSupported,
+                                                 collisionPlaneY: -1,
+                                                 collisionRestitution: 0.25,
+                                                 collisionDamping: 0.5).gpuSimulationPlan
+        #expect(planeCollisionPlan.status == .supported)
+        #expect(planeCollisionPlan.usesGPU)
+
         let required = ParticleEmitter(emissionRate: 10,
                                        maxParticles: 64,
                                        lifetime: 10,
@@ -386,6 +441,16 @@ struct ParticleTests {
         let requiredPlan = required.gpuSimulationPlan
         #expect(requiredPlan.status == .requiredButUnsupported)
         #expect(requiredPlan.unsupportedReasons == [.eventSubEmitters])
+
+        let collisionEventRequired = ParticleEmitter(emissionRate: 10,
+                                                     maxParticles: 64,
+                                                     lifetime: 10,
+                                                     subEmitterTrigger: .collision,
+                                                     subEmitterBurstCount: 1,
+                                                     collisionMode: .worldPlane,
+                                                     simulationBackend: .gpuRequired).gpuSimulationPlan
+        #expect(collisionEventRequired.status == .requiredButUnsupported)
+        #expect(collisionEventRequired.unsupportedReasons == [.eventSubEmitters])
     }
 
     @Test("maxParticles caps the live pool")
