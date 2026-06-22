@@ -85,6 +85,53 @@ struct RenderThreadTests {
         thread.shutdown()
     }
 
+    @Test("RenderThread reports drained GPU particle simulation events")
+    func renderThreadReportsDrainedGPUParticleSimulationEvents() {
+        let ring = RingBuffer<RenderPacket>()
+        let runtime = NoopRuntime()
+        let snapshot = GPUParticleSimulationEventSnapshot(
+            slot: 0,
+            emitterRawValue: EntityID(index: 2, generation: 1).rawValue,
+            eventCapacity: 4,
+            totalEventCount: 1,
+            droppedEventCount: 0,
+            records: [
+                GPUParticleSimulationEventRecord(
+                    trigger: .death,
+                    sourceIndex: 0,
+                    position: .zero,
+                    lifetime: 1,
+                    velocity: .zero,
+                    age: 1
+                ),
+            ]
+        )
+        let consumer = SnapshotConsumer(snapshots: [snapshot])
+        let reportRecorder = RenderReportRecorder()
+        let rendered = DispatchSemaphore(value: 0)
+
+        let thread = RenderThread(
+            runtime: runtime,
+            ringBuffer: ring,
+            consumer: consumer,
+            onFrameRendered: { report in
+                reportRecorder.append(report)
+                rendered.signal()
+            }
+        )
+        thread.start()
+
+        ring.publish(Self.makePacket(frameIndex: 3))
+        thread.requestRender()
+
+        #expect(rendered.wait(timeout: .now() + 2) == .success)
+        let report = reportRecorder.snapshot().first
+        #expect(report?.particleSimulationEventSnapshots == [snapshot])
+        #expect(consumer.drainCount() == 1)
+
+        thread.shutdown()
+    }
+
     private static func makePacket(frameIndex: Int) -> RenderPacket {
         RenderPacket(
             frameIndex: frameIndex,
@@ -170,6 +217,44 @@ private final class FastConsumer: RenderPacketConsumer, @unchecked Sendable {
     }
 }
 
+private final class SnapshotConsumer: RenderPacketConsumer, @unchecked Sendable {
+    private let lock = NSLock()
+    private var snapshots: [GPUParticleSimulationEventSnapshot]
+    private var drained = 0
+
+    init(snapshots: [GPUParticleSimulationEventSnapshot]) {
+        self.snapshots = snapshots
+    }
+
+    func initialize() {}
+
+    func render(packet: RenderPacket) {}
+
+    func currentFrameStats() -> RenderFrameStats {
+        .init()
+    }
+
+    func currentViewportSurfaceState() -> ViewportSurfaceState {
+        .init()
+    }
+
+    func drainGPUParticleSimulationEventSnapshots(
+        maxSnapshots: Int
+    ) throws -> [GPUParticleSimulationEventSnapshot] {
+        lock.withLock {
+            drained += 1
+            let count = min(max(0, maxSnapshots), snapshots.count)
+            let result = Array(snapshots.prefix(count))
+            snapshots.removeFirst(count)
+            return result
+        }
+    }
+
+    func drainCount() -> Int {
+        lock.withLock { drained }
+    }
+}
+
 private final class FrameRecorder: @unchecked Sendable {
     private let lock = NSLock()
     private var frames: [Int] = []
@@ -182,6 +267,21 @@ private final class FrameRecorder: @unchecked Sendable {
 
     func snapshot() -> [Int] {
         lock.withLock { frames }
+    }
+}
+
+private final class RenderReportRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var reports: [RenderThreadReport] = []
+
+    func append(_ report: RenderThreadReport) {
+        lock.withLock {
+            reports.append(report)
+        }
+    }
+
+    func snapshot() -> [RenderThreadReport] {
+        lock.withLock { reports }
     }
 }
 
