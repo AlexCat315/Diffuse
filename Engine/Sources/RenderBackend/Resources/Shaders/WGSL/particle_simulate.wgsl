@@ -17,6 +17,7 @@ struct ParticleSimState {
     velocity_age: vec4<f32>,
     size_rotation: vec4<f32>,
     color: vec4<f32>,
+    params: vec4<u32>,
 };
 
 struct ParticleSimMetadata {
@@ -27,6 +28,13 @@ struct ParticleSimMetadata {
     dropped_spawn_count: atomic<u32>,
     append_cursor: atomic<u32>,
     compacted_count: atomic<u32>,
+    event_count: atomic<u32>,
+};
+
+struct ParticleSimEvent {
+    position_lifetime: vec4<f32>,
+    velocity_age: vec4<f32>,
+    params: vec4<u32>,
 };
 
 struct CollisionResult {
@@ -38,6 +46,30 @@ struct CollisionResult {
 @group(0) @binding(0) var<uniform> uniforms: ParticleSimUniforms;
 @group(0) @binding(1) var<storage, read_write> particles: array<ParticleSimState>;
 @group(0) @binding(2) var<storage, read_write> metadata: ParticleSimMetadata;
+@group(0) @binding(3) var<storage, read_write> events: array<ParticleSimEvent>;
+
+fn record_event(
+    trigger: u32,
+    source_index: u32,
+    position: vec3<f32>,
+    lifetime: f32,
+    velocity: vec3<f32>,
+    age: f32,
+    generation: u32,
+    appearance_index: u32
+) {
+    let event_index = atomicAdd(&metadata.event_count, 1u);
+    let event_capacity = u32(max(uniforms.time.w, 0.0));
+    if (event_index >= event_capacity) {
+        return;
+    }
+
+    events[event_index] = ParticleSimEvent(
+        vec4<f32>(position, lifetime),
+        vec4<f32>(velocity, age),
+        vec4<u32>(trigger, source_index, generation, appearance_index)
+    );
+}
 
 fn safe_normalize(v: vec3<f32>, fallback: vec3<f32>) -> vec3<f32> {
     let len2 = dot(v, v);
@@ -218,6 +250,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     if (age >= lifetime) {
         _ = atomicAdd(&metadata.expired_count, 1u);
+        record_event(2u, index, position, lifetime, velocity, age, particle.params.x, particle.params.y);
         return;
     }
 
@@ -232,6 +265,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     velocity = collision.velocity;
     if (collision.collided) {
         _ = atomicAdd(&metadata.collision_count, 1u);
+        record_event(1u, index, position, lifetime, velocity, age, particle.params.x, particle.params.y);
     }
     age = min(age + dt, lifetime);
 
@@ -243,5 +277,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         _ = atomicAdd(&metadata.alive_count, 1u);
     } else {
         _ = atomicAdd(&metadata.expired_count, 1u);
+        record_event(2u, index, position, lifetime, velocity, age, particle.params.x, particle.params.y);
     }
 }
