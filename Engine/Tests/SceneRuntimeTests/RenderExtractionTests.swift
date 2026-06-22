@@ -288,6 +288,9 @@ struct RenderExtractionTests {
                                       spawnRadius: 0,
                                       startVelocity: SIMD3<Float>(1, 2, 3),
                                       gravity: SIMD3<Float>(0, -4, 0),
+                                      noiseStrength: 1.5,
+                                      noiseScale: 0.75,
+                                      noiseSpeed: 0.25,
                                       forceMode: .radial,
                                       forceCenter: SIMD3<Float>(1, 2, 3),
                                       forceAxis: SIMD3<Float>(0, 1, 0),
@@ -299,8 +302,12 @@ struct RenderExtractionTests {
                                       vectorFieldStrength: 2,
                                       vectorFieldScale: 0.5,
                                       vectorFieldScrollSpeed: 3,
+                                      collisionMode: .worldPlane,
                                       simulationBackend: .gpuIfSupported,
                                       gpuSimulationWorkgroupSize: 64,
+                                      collisionPlaneY: -1,
+                                      collisionRestitution: 0.7,
+                                      collisionDamping: 0.2,
                                       renderAlignment: .velocity,
                                       velocityStretchScale: 0.25,
                                       velocityStretchMax: 3,
@@ -318,11 +325,17 @@ struct RenderExtractionTests {
 
         #expect(extracted.scene.particleSimulationBatches.count == 1)
         let batch = try #require(extracted.scene.particleSimulationBatches.first)
+        #expect(batch.emitterEntity == entity)
         #expect(batch.plan.usesGPU)
         #expect(batch.plan.particleCapacity == 8)
         #expect(batch.plan.workgroupSize == 64)
         #expect(batch.particles.count == 2)
+        #expect(batch.spawnParticles.isEmpty)
         #expect(batch.gravity == SIMD3<Float>(0, -4, 0))
+        #expect(batch.noiseStrength == 1.5)
+        #expect(batch.noiseScale == 0.75)
+        #expect(batch.noiseSpeed == 0.25)
+        #expect(batch.noiseSeed == emitter.seed)
         #expect(batch.vectorFieldMode == .curl)
         #expect(batch.vectorFieldDirection == SIMD3<Float>(1, 0, 0))
         #expect(batch.vectorFieldStrength == 2)
@@ -334,6 +347,10 @@ struct RenderExtractionTests {
         #expect(batch.forceRadius == 12)
         #expect(batch.forceStrength == -4)
         #expect(batch.forceFalloff == 2)
+        #expect(batch.collisionMode == .worldPlane)
+        #expect(batch.collisionPlaneY == -1)
+        #expect(batch.collisionRestitution == 0.7)
+        #expect(batch.collisionDamping == 0.2)
         #expect(batch.renderOnGPU)
         #expect(batch.texturePath == "smoke.png")
         #expect(batch.textureSheetColumns == 4)
@@ -343,6 +360,41 @@ struct RenderExtractionTests {
         #expect(batch.renderAlignment == .velocity)
         #expect(batch.velocityStretchScale == 0.25)
         #expect(batch.velocityStretchMax == 3)
+        #expect(extracted.scene.particles.isEmpty)
+    }
+
+    @Test("renderExtract splits GPU particle spawn requests from persisted simulation state")
+    func renderExtractSplitsGPUParticleSpawnRequests() throws {
+        var runtime = SceneRuntime()
+
+        let camera = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+        _ = runtime.setComponent(CameraComponent(isActive: true), for: camera)
+
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -4)), for: entity)
+        var emitter = ParticleEmitter(emissionRate: 10,
+                                      maxParticles: 8,
+                                      lifetime: 10,
+                                      spawnRadius: 0,
+                                      startVelocity: SIMD3<Float>(0, 1, 0),
+                                      gravity: .zero,
+                                      simulationBackend: .gpuIfSupported)
+        emitter.emit(1)
+        _ = runtime.setComponent(emitter, for: entity)
+
+        _ = runtime.tick(deltaTime: 0.2)
+        let extracted = try #require(runtime.extractedRenderScene)
+        let simulated = try #require(runtime.component(ParticleEmitter.self, for: entity))
+        let batch = try #require(extracted.scene.particleSimulationBatches.first)
+
+        #expect(simulated.aliveCount == 3)
+        #expect(simulated.lastFrameStats.continuousSpawnedCount == 2)
+        #expect(batch.emitterEntity == entity)
+        #expect(batch.particles.count == 1)
+        #expect(batch.spawnParticles.count == 2)
+        #expect(batch.particleCount == 3)
+        #expect(batch.renderOnGPU)
         #expect(extracted.scene.particles.isEmpty)
     }
 
@@ -653,6 +705,146 @@ struct RenderExtractionTests {
         #expect(tail.size == 1)
         #expect(mid.color.w == 0.5)
         #expect(tail.color.w == 0)
+    }
+
+    @Test("renderExtract keeps GPU simulated particle trails on the GPU render path")
+    func renderExtractKeepsGPUParticleTrailsOnGPUPath() throws {
+        var runtime = SceneRuntime()
+
+        let camera = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+        _ = runtime.setComponent(CameraComponent(isActive: true), for: camera)
+
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -10)), for: entity)
+        var emitter = ParticleEmitter(
+            isEmitting: false,
+            emissionRate: 0,
+            maxParticles: 4,
+            lifetime: 10,
+            startVelocity: SIMD3<Float>(1, 0, 0),
+            gravity: .zero,
+            simulationBackend: .gpuIfSupported,
+            trailLength: 1,
+            trailSegments: 2,
+            trailEndSizeScale: 0.5,
+            trailEndAlphaScale: 0
+        )
+        emitter.emit(1)
+        _ = runtime.setComponent(emitter, for: entity)
+
+        _ = runtime.tick()
+        let scene = try #require(runtime.extractedRenderScene?.scene)
+        #expect(scene.particles.isEmpty)
+        #expect(scene.particleSimulationBatches.count == 1)
+        let batch = try #require(scene.particleSimulationBatches.first)
+        #expect(batch.renderOnGPU)
+        #expect(batch.particleCount == 1)
+        #expect(batch.renderInstanceCount == 3)
+        #expect(batch.trailLength == 1)
+        #expect(batch.trailSegments == 2)
+        #expect(batch.trailEndSizeScale == 0.5)
+        #expect(batch.trailEndAlphaScale == 0)
+    }
+
+    @Test("renderExtract carries distance fade into GPU particle simulation batches")
+    func renderExtractCarriesDistanceFadeIntoGPUParticleSimulationBatches() throws {
+        var runtime = SceneRuntime()
+
+        let camera = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+        _ = runtime.setComponent(CameraComponent(isActive: true), for: camera)
+
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -10)), for: entity)
+        var emitter = ParticleEmitter(
+            isEmitting: false,
+            emissionRate: 0,
+            maxParticles: 4,
+            lifetime: 10,
+            gravity: .zero,
+            simulationBackend: .gpuIfSupported,
+            maxRenderDistance: 12,
+            renderDistanceFadeRange: 4
+        )
+        emitter.emit(1)
+        _ = runtime.setComponent(emitter, for: entity)
+
+        _ = runtime.tick()
+        let batch = try #require(runtime.extractedRenderScene?.scene.particleSimulationBatches.first)
+        #expect(batch.renderOnGPU)
+        #expect(abs(batch.renderAlphaScale - 0.5) < 0.001)
+        #expect(runtime.extractedRenderScene?.scene.particles.isEmpty == true)
+    }
+
+    @Test("renderExtract carries particle render budgets into GPU simulation batches")
+    func renderExtractCarriesRenderBudgetIntoGPUParticleSimulationBatches() throws {
+        var runtime = SceneRuntime()
+
+        let camera = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+        _ = runtime.setComponent(CameraComponent(isActive: true), for: camera)
+
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -20)), for: entity)
+        var emitter = ParticleEmitter(
+            isEmitting: false,
+            emissionRate: 0,
+            maxParticles: 6,
+            maxRenderedParticles: 4,
+            lifetime: 10,
+            gravity: .zero,
+            simulationBackend: .gpuIfSupported,
+            renderLODStartDistance: 10,
+            renderLODEndDistance: 30,
+            renderLODMinParticleScale: 0.25
+        )
+        emitter.emit(6)
+        _ = runtime.setComponent(emitter, for: entity)
+
+        _ = runtime.tick()
+        let scene = try #require(runtime.extractedRenderScene?.scene)
+        #expect(scene.particles.isEmpty)
+        let batch = try #require(scene.particleSimulationBatches.first)
+        #expect(batch.renderOnGPU)
+        #expect(batch.particleCount == 6)
+        #expect(batch.renderParticleLimit == 3)
+        #expect(batch.renderParticleCount == 3)
+        #expect(batch.renderParticleStartIndex == 3)
+        #expect(batch.renderInstanceCount == 3)
+    }
+
+    @Test("renderExtract keeps GPU simulation batches without rendering distance-faded particles")
+    func renderExtractKeepsDistanceFadedGPUParticleSimulationBatchesWithoutRendering() throws {
+        var runtime = SceneRuntime()
+
+        let camera = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+        _ = runtime.setComponent(CameraComponent(target: SIMD3<Float>(0, 0, -1),
+                                                 isActive: true),
+                                 for: camera)
+
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -40)), for: entity)
+        var emitter = ParticleEmitter(
+            isEmitting: false,
+            emissionRate: 0,
+            maxParticles: 4,
+            lifetime: 10,
+            gravity: .zero,
+            simulationBackend: .gpuIfSupported,
+            maxRenderDistance: 10
+        )
+        emitter.emit(2)
+        _ = runtime.setComponent(emitter, for: entity)
+
+        _ = runtime.tick()
+        let scene = try #require(runtime.extractedRenderScene?.scene)
+        #expect(scene.particles.isEmpty)
+        let batch = try #require(scene.particleSimulationBatches.first)
+        #expect(batch.particleCount == 2)
+        #expect(!batch.renderOnGPU)
+        #expect(batch.renderAlphaScale == 0)
     }
 
     @Test("renderExtract annotates velocity-aligned particle stretch")
