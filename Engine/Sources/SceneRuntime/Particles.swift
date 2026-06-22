@@ -1363,6 +1363,50 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         lastFrameStats = .empty
     }
 
+    /// Applies collision/death events produced by an external simulation backend and spawns
+    /// matching sub-emitter particles through the same rules as CPU simulation.
+    @discardableResult
+    public mutating func applySimulationEvents(_ events: [ParticleEvent]) -> ParticleEmitterFrameStats {
+        lastFrameSpawnedParticles.removeAll(keepingCapacity: true)
+        lastFrameEvents.removeAll(keepingCapacity: true)
+        var frameStats = ParticleEmitterFrameStats(
+            startingLiveParticleCount: particles.count,
+            liveParticleCount: particles.count,
+            maxParticleCount: maxParticles,
+            liveParticleLimit: maxParticles
+        )
+        guard !events.isEmpty else {
+            lastFrameStats = frameStats
+            return frameStats
+        }
+
+        var eventParticles: [Particle] = []
+        eventParticles.reserveCapacity(events.count)
+        for event in events where event.trigger != .none {
+            let source = sourceParticle(from: event)
+            switch event.trigger {
+            case .collision:
+                frameStats.collisionCount += 1
+            case .death:
+                frameStats.expiredParticleCount += 1
+            case .none:
+                break
+            }
+            recordEvent(trigger: event.trigger, source: source)
+            spawnSubEmitterParticles(trigger: event.trigger,
+                                     source: source,
+                                     survivorsCount: particles.count,
+                                     pending: &eventParticles)
+        }
+
+        let eventSpawnResult = appendEventParticles(eventParticles)
+        frameStats.subEmitterSpawnedCount += eventSpawnResult.spawned
+        frameStats.capacityLimitedSpawnCount += eventSpawnResult.dropped
+        frameStats.liveParticleCount = particles.count
+        lastFrameStats = frameStats
+        return frameStats
+    }
+
     // MARK: - Internals
 
     private struct ParticleSpawnResult {
@@ -1394,6 +1438,15 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
                                       source: Particle) {
         guard trigger != .none else { return }
         lastFrameEvents.append(ParticleEvent(trigger: trigger, source: source))
+    }
+
+    private func sourceParticle(from event: ParticleEvent) -> Particle {
+        Particle(position: event.position,
+                 velocity: event.velocity,
+                 age: event.age,
+                 lifetime: event.lifetime,
+                 generation: event.generation,
+                 appearanceIndex: event.appearanceIndex)
     }
 
     private mutating func runPrewarmIfNeeded(worldTransform: simd_float4x4?,
