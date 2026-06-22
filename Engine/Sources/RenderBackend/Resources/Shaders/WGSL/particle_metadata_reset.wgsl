@@ -6,6 +6,7 @@ struct ParticleSimMetadata {
     dropped_spawn_count: atomic<u32>,
     append_cursor: atomic<u32>,
     compacted_count: atomic<u32>,
+    event_count: atomic<u32>,
 };
 
 @group(0) @binding(0) var<storage, read_write> metadata: ParticleSimMetadata;
@@ -22,4 +23,5 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     atomicStore(&metadata.spawned_count, 0u);
     atomicStore(&metadata.dropped_spawn_count, 0u);
     atomicStore(&metadata.compacted_count, 0u);
+    atomicStore(&metadata.event_count, 0u);
 }

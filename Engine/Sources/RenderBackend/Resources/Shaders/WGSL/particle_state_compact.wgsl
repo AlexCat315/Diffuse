@@ -7,6 +7,7 @@ struct ParticleSimState {
     velocity_age: vec4<f32>,
     size_rotation: vec4<f32>,
     color: vec4<f32>,
+    params: vec4<u32>,
 };
 
 struct ParticleSimMetadata {
@@ -17,6 +18,7 @@ struct ParticleSimMetadata {
     dropped_spawn_count: atomic<u32>,
     append_cursor: atomic<u32>,
     compacted_count: atomic<u32>,
+    event_count: atomic<u32>,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: ParticleStateMaintenanceUniforms;

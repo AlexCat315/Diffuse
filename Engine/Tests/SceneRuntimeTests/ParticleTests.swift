@@ -259,6 +259,87 @@ struct ParticleTests {
         #expect(abs(emitter.lastFrameEvents[0].velocity.y - 0.5) < 1e-4)
     }
 
+    @Test("external simulation events drive sub-emitter spawning")
+    func externalSimulationEventsDriveSubEmitters() {
+        var emitter = ParticleEmitter(isEmitting: false,
+                                      emissionRate: 0,
+                                      maxParticles: 8,
+                                      lifetime: 10,
+                                      subEmitters: [
+                                          ParticleSubEmitter(trigger: .death,
+                                                             burstCount: 2,
+                                                             maxDepth: 2,
+                                                             inheritVelocity: 0.5,
+                                                             lifetime: 3,
+                                                             startVelocity: SIMD3<Float>(1, 0, 0),
+                                                             velocityRandomness: .zero,
+                                                             startSize: 0.3,
+                                                             endSize: 0.1,
+                                                             startColor: SIMD4<Float>(1, 0, 0, 1),
+                                                             endColor: SIMD4<Float>(1, 1, 0, 0.5)),
+                                      ],
+                                      startVelocity: .zero,
+                                      gravity: .zero)
+        let sourceEvent = ParticleEvent(trigger: .death,
+                                        position: SIMD3<Float>(2, 3, 4),
+                                        velocity: SIMD3<Float>(0, 2, 0),
+                                        age: 0.75,
+                                        lifetime: 1.5,
+                                        generation: 0,
+                                        appearanceIndex: 0)
+
+        let stats = emitter.applySimulationEvents([sourceEvent])
+
+        #expect(stats.expiredParticleCount == 1)
+        #expect(stats.subEmitterSpawnedCount == 2)
+        #expect(stats.spawnedParticleCount == 2)
+        #expect(stats.liveParticleCount == 2)
+        #expect(emitter.lastFrameEvents == [sourceEvent])
+        #expect(emitter.lastFrameSpawnedParticles.count == 2)
+        #expect(emitter.particles.count == 2)
+        for child in emitter.particles {
+            #expect(child.position == SIMD3<Float>(2, 3, 4))
+            #expect(child.velocity == SIMD3<Float>(1, 1, 0))
+            #expect(child.generation == 1)
+            #expect(child.appearanceIndex == 2)
+            #expect(child.lifetime == 3)
+            #expect(child.size == 0.3)
+            #expect(child.color == SIMD4<Float>(1, 0, 0, 1))
+        }
+    }
+
+    @Test("external simulation event bridge clears stale frame output")
+    func externalSimulationEventBridgeClearsStaleOutput() {
+        var emitter = ParticleEmitter(isEmitting: false,
+                                      emissionRate: 0,
+                                      maxParticles: 4,
+                                      subEmitterTrigger: .collision,
+                                      subEmitterBurstCount: 1,
+                                      subEmitterLifetime: 1,
+                                      subEmitterStartVelocity: SIMD3<Float>(0, 1, 0),
+                                      subEmitterVelocityRandomness: .zero,
+                                      startVelocity: .zero,
+                                      gravity: .zero)
+        let sourceEvent = ParticleEvent(trigger: .collision,
+                                        position: .zero,
+                                        velocity: .zero,
+                                        age: 0,
+                                        lifetime: 1,
+                                        generation: 0,
+                                        appearanceIndex: 0)
+
+        _ = emitter.applySimulationEvents([sourceEvent])
+        #expect(emitter.lastFrameEvents.count == 1)
+        #expect(emitter.lastFrameSpawnedParticles.count == 1)
+
+        let emptyStats = emitter.applySimulationEvents([])
+
+        #expect(emptyStats.spawnedParticleCount == 0)
+        #expect(emptyStats.liveParticleCount == 1)
+        #expect(emitter.lastFrameEvents.isEmpty)
+        #expect(emitter.lastFrameSpawnedParticles.isEmpty)
+    }
+
     @Test("gravity and velocity integrate with semi-implicit Euler")
     func motionIntegration() {
         var emitter = ParticleEmitter(emissionRate: 0, lifetime: 100,
