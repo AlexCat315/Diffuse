@@ -390,6 +390,31 @@ public struct ParticleFrameStatsResource: Sendable, Equatable {
     public static let empty = ParticleFrameStatsResource()
 }
 
+public struct ParticleSimulationEventApplyReport: Sendable, Equatable {
+    public var requestedEmitterCount: Int
+    public var appliedEmitterCount: Int
+    public var missingEmitterCount: Int
+    public var eventCount: Int
+    public var spawnedParticleCount: Int
+    public var capacityLimitedSpawnCount: Int
+
+    public init(requestedEmitterCount: Int = 0,
+                appliedEmitterCount: Int = 0,
+                missingEmitterCount: Int = 0,
+                eventCount: Int = 0,
+                spawnedParticleCount: Int = 0,
+                capacityLimitedSpawnCount: Int = 0) {
+        self.requestedEmitterCount = max(0, requestedEmitterCount)
+        self.appliedEmitterCount = max(0, appliedEmitterCount)
+        self.missingEmitterCount = max(0, missingEmitterCount)
+        self.eventCount = max(0, eventCount)
+        self.spawnedParticleCount = max(0, spawnedParticleCount)
+        self.capacityLimitedSpawnCount = max(0, capacityLimitedSpawnCount)
+    }
+
+    public static let empty = ParticleSimulationEventApplyReport()
+}
+
 public struct ParticleCurveKeyframe: Codable, Sendable, Equatable, Hashable {
     public var time: Float
     public var value: Float
@@ -2015,5 +2040,39 @@ public extension SceneRuntime {
         return updateComponent(ParticleEmitter.self, for: entity) { emitter in
             emitter.emit(count, worldTransform: transform)
         }
+    }
+
+    @discardableResult
+    mutating func applyParticleSimulationEvents(
+        _ eventsByEntity: [EntityID: [ParticleEvent]]
+    ) -> ParticleSimulationEventApplyReport {
+        var report = ParticleSimulationEventApplyReport(
+            requestedEmitterCount: eventsByEntity.count,
+            eventCount: eventsByEntity.values.reduce(0) { $0 + $1.count }
+        )
+        var emitterStats: [ParticleEmitterFrameStats] = []
+        emitterStats.reserveCapacity(eventsByEntity.count)
+        for (entity, events) in eventsByEntity where !events.isEmpty {
+            var appliedStats: ParticleEmitterFrameStats?
+            let updated = updateComponent(ParticleEmitter.self, for: entity) { emitter in
+                let stats = emitter.applySimulationEvents(events)
+                appliedStats = stats
+                emitterStats.append(stats)
+            }
+            if updated, let appliedStats {
+                report.appliedEmitterCount += 1
+                report.spawnedParticleCount += appliedStats.spawnedParticleCount
+                report.capacityLimitedSpawnCount += appliedStats.capacityLimitedSpawnCount
+            } else {
+                report.missingEmitterCount += 1
+            }
+        }
+        if !emitterStats.isEmpty {
+            setResource(
+                ParticleFrameStatsResource(simulatedDeltaTime: 0,
+                                           emitterStats: emitterStats)
+            )
+        }
+        return report
     }
 }

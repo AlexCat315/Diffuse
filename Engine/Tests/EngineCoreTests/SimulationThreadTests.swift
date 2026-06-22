@@ -101,6 +101,82 @@ struct SimulationThreadTests {
         thread.shutdown()
     }
 
+    @Test("SimulationThread applies GPU particle event snapshots before publishing the next packet")
+    func simulationThreadAppliesGPUParticleEventSnapshots() {
+        var initialScene = SceneRuntime()
+        let emitterEntity = initialScene.createEntity()
+        _ = initialScene.setComponent(
+            ParticleEmitter(isEmitting: false,
+                            emissionRate: 0,
+                            maxParticles: 4,
+                            subEmitterTrigger: .death,
+                            subEmitterBurstCount: 1,
+                            subEmitterLifetime: 2,
+                            subEmitterStartVelocity: .zero,
+                            subEmitterVelocityRandomness: .zero,
+                            subEmitterStartSize: 0.5,
+                            subEmitterEndSize: 0.5,
+                            subEmitterStartColor: SIMD4<Float>(1, 0, 0, 1),
+                            subEmitterEndColor: SIMD4<Float>(1, 0, 0, 1),
+                            gravity: .zero),
+            for: emitterEntity
+        )
+        let ring = RingBuffer<RenderPacket>()
+        let packetPublished = DispatchSemaphore(value: 0)
+        let thread = SimulationThread(
+            runtime: IdleRuntime(),
+            ringBuffer: ring,
+            onFrameReady: { _ in },
+            onPacketPublished: { packetPublished.signal() },
+            initialSceneRuntime: initialScene
+        )
+        let snapshot = GPUParticleSimulationEventSnapshot(
+            slot: 0,
+            emitterRawValue: emitterEntity.rawValue,
+            eventCapacity: 2,
+            totalEventCount: 1,
+            droppedEventCount: 0,
+            records: [
+                GPUParticleSimulationEventRecord(
+                    trigger: .death,
+                    sourceIndex: 0,
+                    position: SIMD3<Float>(0.25, 0, 0),
+                    lifetime: 1,
+                    velocity: .zero,
+                    age: 1,
+                    generation: 0,
+                    appearanceIndex: 0
+                ),
+            ]
+        )
+
+        thread.submitParticleSimulationEventSnapshots([snapshot])
+        thread.submit(
+            SimulationFrameRequest(
+                frameIndex: 1,
+                deltaTime: 0,
+                inputEvents: [],
+                drawableSize: .init(width: 64, height: 64),
+                shouldRender: true,
+                renderSettings: .init()
+            )
+        )
+
+        #expect(packetPublished.wait(timeout: .now() + 2) == .success)
+        guard let packet = ring.consumeLatest() else {
+            Issue.record("expected a render packet from the simulation thread")
+            thread.shutdown()
+            return
+        }
+
+        #expect(packet.scene.particles.count == 1)
+        #expect(packet.scene.particles.first?.position == SIMD3<Float>(0.25, 0, 0))
+        #expect(packet.scene.particles.first?.size == 0.5)
+        #expect(packet.scene.particles.first?.color == SIMD4<Float>(1, 0, 0, 1))
+
+        thread.shutdown()
+    }
+
     @Test("SimulationThread forwards input events into input phase and SceneRuntime tick")
     func simulationThreadForwardsInputEvents() {
         let ring = RingBuffer<RenderPacket>()
