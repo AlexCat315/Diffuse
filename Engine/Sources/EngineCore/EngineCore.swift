@@ -268,6 +268,9 @@ public final class EngineHost: @unchecked Sendable {
     }
 
     private func handleRenderedFrame(_ report: RenderThreadReport) {
+        simulationThread?.submitParticleSimulationEventSnapshots(
+            report.particleSimulationEventSnapshots
+        )
         let completion = EngineRenderCompletion(
             frameIndex: report.frameIndex,
             deltaTime: report.deltaTime,

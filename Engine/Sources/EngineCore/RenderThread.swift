@@ -8,19 +8,22 @@ struct RenderThreadReport: Sendable {
     public var renderSubmitSeconds: Double
     public var stats: RenderFrameStats
     public var viewportSurfaceState: ViewportSurfaceState
+    public var particleSimulationEventSnapshots: [GPUParticleSimulationEventSnapshot]
 
     init(
         frameIndex: Int,
         deltaTime: Double,
         renderSubmitSeconds: Double,
         stats: RenderFrameStats,
-        viewportSurfaceState: ViewportSurfaceState
+        viewportSurfaceState: ViewportSurfaceState,
+        particleSimulationEventSnapshots: [GPUParticleSimulationEventSnapshot] = []
     ) {
         self.frameIndex = frameIndex
         self.deltaTime = deltaTime
         self.renderSubmitSeconds = renderSubmitSeconds
         self.stats = stats
         self.viewportSurfaceState = viewportSurfaceState
+        self.particleSimulationEventSnapshots = particleSimulationEventSnapshots
     }
 }
 
@@ -112,6 +115,9 @@ final class RenderThread: @unchecked Sendable {
             )
             runtime.tickRenderSubmit(deltaTime: packet.deltaTime)
             consumer.render(packet: packet)
+            let particleSimulationEventSnapshots = (
+                try? consumer.drainGPUParticleSimulationEventSnapshots(maxSnapshots: 64)
+            ) ?? []
             let renderSubmitSeconds = Date().timeIntervalSinceReferenceDate - begin
 
             onFrameRendered(
@@ -120,7 +126,8 @@ final class RenderThread: @unchecked Sendable {
                     deltaTime: packet.deltaTime,
                     renderSubmitSeconds: renderSubmitSeconds,
                     stats: consumer.currentFrameStats(),
-                    viewportSurfaceState: consumer.currentViewportSurfaceState()
+                    viewportSurfaceState: consumer.currentViewportSurfaceState(),
+                    particleSimulationEventSnapshots: particleSimulationEventSnapshots
                 )
             )
 
