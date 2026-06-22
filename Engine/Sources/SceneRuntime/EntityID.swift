@@ -7,6 +7,11 @@ public struct EntityID: Hashable, Sendable, CustomStringConvertible {
         self.generation = generation
     }
 
+    public init(rawValue: UInt64) {
+        self.index = UInt32(truncatingIfNeeded: rawValue)
+        self.generation = UInt32(truncatingIfNeeded: rawValue >> 32)
+    }
+
     public var rawValue: UInt64 {
         (UInt64(generation) << 32) | UInt64(index)
     }
