@@ -270,7 +270,31 @@ struct GPUParticleSimulationResources {
     let pipeline: GPUComputePipeline
     let uniformBuffer: GPUBuffer
     let stateBuffer: GPUBuffer
+    let metadataBuffer: GPUBuffer
     let bindGroup: GPUBindGroup
+    let spawnBindGroupLayout: GPUBindGroupLayout
+    let spawnPipelineLayout: GPUPipelineLayout
+    let spawnPipeline: GPUComputePipeline
+    let spawnUniformBuffer: GPUBuffer
+    let spawnInputBuffer: GPUBuffer
+    let metadataResetBindGroupLayout: GPUBindGroupLayout
+    let metadataResetPipelineLayout: GPUPipelineLayout
+    let metadataResetPipeline: GPUComputePipeline
+    let metadataResetBindGroup: GPUBindGroup
+    let stateMaintenanceUniformBuffer: GPUBuffer
+    let compactStateBuffer: GPUBuffer
+    let stateClearBindGroupLayout: GPUBindGroupLayout
+    let stateClearPipelineLayout: GPUPipelineLayout
+    let stateClearPipeline: GPUComputePipeline
+    let stateClearBindGroup: GPUBindGroup
+    let stateCompactBindGroupLayout: GPUBindGroupLayout
+    let stateCompactPipelineLayout: GPUPipelineLayout
+    let stateCompactPipeline: GPUComputePipeline
+    let stateCompactBindGroup: GPUBindGroup
+    let stateFinalizeBindGroupLayout: GPUBindGroupLayout
+    let stateFinalizePipelineLayout: GPUPipelineLayout
+    let stateFinalizePipeline: GPUComputePipeline
+    let stateFinalizeBindGroup: GPUBindGroup
     let instanceBindGroupLayout: GPUBindGroupLayout
     let instancePipelineLayout: GPUPipelineLayout
     let instancePipeline: GPUComputePipeline

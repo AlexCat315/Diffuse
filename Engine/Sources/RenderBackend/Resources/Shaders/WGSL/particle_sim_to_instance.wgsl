@@ -4,6 +4,7 @@ struct ParticleSimToInstanceUniforms {
     uv_rect: vec4<f32>,
     texture_sheet: vec4<f32>,
     render_params: vec4<f32>,
+    trail_params: vec4<f32>,
 };
 
 struct ParticleSimState {
@@ -64,14 +65,33 @@ fn texture_sheet_uv_rect(particle: ParticleSimState) -> vec4<f32> {
 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    let index = gid.x;
+    let output_index = gid.x;
     let count = u32(uniforms.params.x);
     let base_instance = u32(uniforms.params.y);
-    if (index >= count) {
+    let source_start_index = u32(uniforms.params.z);
+    let trail_segments = select(0u, u32(uniforms.trail_params.x), uniforms.trail_params.y > 0.0);
+    let instance_multiplier = 1u + trail_segments;
+    let total_instance_count = count * instance_multiplier;
+    if (output_index >= total_instance_count) {
         return;
     }
 
+    let index = source_start_index + output_index / instance_multiplier;
+    let segment = output_index % instance_multiplier;
     let sim_particle = sim_particles[index];
+    let output_instance = base_instance + output_index;
+    if (sim_particle.position_lifetime.w <= 0.0
+        || sim_particle.velocity_age.w >= sim_particle.position_lifetime.w) {
+        render_particles[output_instance] = ParticleInstance(
+            vec4<f32>(0.0),
+            vec4<f32>(0.0),
+            vec4<f32>(0.0),
+            uniforms.uv_rect,
+            vec4<f32>(0.0, 0.0, 0.0, 1.0)
+        );
+        return;
+    }
+
     let world_position = uniforms.world_transform
         * vec4<f32>(sim_particle.position_lifetime.xyz, 1.0);
     let world_velocity = (uniforms.world_transform
@@ -90,14 +110,21 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         }
     }
 
+    let trail_t = select(0.0, f32(segment) / max(f32(trail_segments), 1.0), segment > 0u);
+    let trail_offset = world_velocity * uniforms.trail_params.y * trail_t;
+    let trail_size_scale = mix(1.0, max(uniforms.trail_params.z, 0.0), trail_t);
+    let trail_alpha_scale = mix(1.0, clamp(uniforms.trail_params.w, 0.0, 1.0), trail_t);
+    var color = sim_particle.color;
+    color.a = color.a * clamp(uniforms.render_params.w, 0.0, 1.0) * trail_alpha_scale;
+
     var instance: ParticleInstance;
     instance.position_size = vec4<f32>(
-        world_position.xyz * inv_w,
-        max(sim_particle.size_rotation.x, 0.0)
+        world_position.xyz * inv_w - trail_offset,
+        max(sim_particle.size_rotation.x * trail_size_scale, 0.0)
     );
     instance.rotation = vec4<f32>(sim_particle.size_rotation.y, 0.0, 0.0, 0.0);
-    instance.color = sim_particle.color;
+    instance.color = color;
     instance.uv_rect = texture_sheet_uv_rect(sim_particle);
     instance.axis_stretch = axis_stretch;
-    render_particles[base_instance + index] = instance;
+    render_particles[output_instance] = instance;
 }
