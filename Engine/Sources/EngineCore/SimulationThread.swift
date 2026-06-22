@@ -65,20 +65,35 @@ final class SimulationThread: @unchecked Sendable {
         ringBuffer: RingBuffer<RenderPacket>,
         onKernelPhase: @escaping @Sendable (EngineKernelPhase, EngineKernelPhaseContext) -> Void = { _, _ in },
         onFrameReady: @escaping @Sendable (SimulationFrameReport) -> Void,
-        onPacketPublished: @escaping @Sendable () -> Void
+        onPacketPublished: @escaping @Sendable () -> Void,
+        initialSceneRuntime: SceneRuntime? = nil
     ) {
         self.runtime = runtime
         self.ringBuffer = ringBuffer
         self.onKernelPhase = onKernelPhase
         self.onFrameReady = onFrameReady
         self.onPacketPublished = onPacketPublished
+        if let initialSceneRuntime {
+            self.sceneRuntime = initialSceneRuntime
+        }
         sceneRuntime.setScriptDriver(scriptRuntime)
-        seedDemoScene()
+        if initialSceneRuntime == nil {
+            seedDemoScene()
+        }
     }
 
     func submit(_ request: SimulationFrameRequest) {
         queue.async { [self] in
             process(request)
+        }
+    }
+
+    func submitParticleSimulationEventSnapshots(
+        _ snapshots: [GPUParticleSimulationEventSnapshot]
+    ) {
+        guard !snapshots.isEmpty else { return }
+        queue.async { [self] in
+            applyParticleSimulationEventSnapshots(snapshots)
         }
     }
 
@@ -154,5 +169,20 @@ final class SimulationThread: @unchecked Sendable {
 
     private func seedDemoScene() {
         sceneRuntime.bootstrapEditorPreviewScene()
+    }
+
+    @discardableResult
+    private func applyParticleSimulationEventSnapshots(
+        _ snapshots: [GPUParticleSimulationEventSnapshot]
+    ) -> ParticleSimulationEventApplyReport {
+        var eventsByEntity: [EntityID: [ParticleEvent]] = [:]
+        for snapshot in snapshots {
+            guard let rawValue = snapshot.emitterRawValue else { continue }
+            let events = snapshot.makeParticleEvents()
+            guard !events.isEmpty else { continue }
+            eventsByEntity[EntityID(rawValue: rawValue), default: []].append(contentsOf: events)
+        }
+        guard !eventsByEntity.isEmpty else { return .empty }
+        return sceneRuntime.applyParticleSimulationEvents(eventsByEntity)
     }
 }

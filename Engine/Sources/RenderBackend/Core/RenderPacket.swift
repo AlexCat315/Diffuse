@@ -58,4 +58,15 @@ public protocol RenderPacketConsumer: AnyObject, Sendable {
     func render(packet: RenderPacket)
     func currentFrameStats() -> RenderFrameStats
     func currentViewportSurfaceState() -> ViewportSurfaceState
+    func drainGPUParticleSimulationEventSnapshots(
+        maxSnapshots: Int
+    ) throws -> [GPUParticleSimulationEventSnapshot]
+}
+
+public extension RenderPacketConsumer {
+    func drainGPUParticleSimulationEventSnapshots(
+        maxSnapshots: Int = Int.max
+    ) throws -> [GPUParticleSimulationEventSnapshot] {
+        []
+    }
 }
