@@ -35,6 +35,27 @@ public struct EditorSceneEntitySummary {
     }
 }
 
+private final class EditorSceneManifestParticleEmitterStorage: Codable, @unchecked Sendable, Equatable {
+    let value: EditorSceneManifestParticleEmitter
+
+    init(_ value: EditorSceneManifestParticleEmitter) {
+        self.value = value
+    }
+
+    init(from decoder: Decoder) throws {
+        self.value = try EditorSceneManifestParticleEmitter(from: decoder)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        try value.encode(to: encoder)
+    }
+
+    static func == (lhs: EditorSceneManifestParticleEmitterStorage,
+                    rhs: EditorSceneManifestParticleEmitterStorage) -> Bool {
+        lhs.value == rhs.value
+    }
+}
+
 public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
     public let id: UInt64
     public let name: String
@@ -52,7 +73,10 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
     public let audioSource: EditorSceneManifestAudioSource?
     public let animationPlayer: EditorSceneManifestAnimationPlayer?
     public let animationGraphPlayer: EditorSceneManifestAnimationGraphPlayer?
-    public let particleEmitter: EditorSceneManifestParticleEmitter?
+    private let particleEmitterStorage: EditorSceneManifestParticleEmitterStorage?
+    public var particleEmitter: EditorSceneManifestParticleEmitter? {
+        particleEmitterStorage?.value
+    }
     public let children: [EditorSceneManifestNode]
 
     public init(id: UInt64,
@@ -89,8 +113,60 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.audioSource = audioSource
         self.animationPlayer = animationPlayer
         self.animationGraphPlayer = animationGraphPlayer
-        self.particleEmitter = particleEmitter
+        self.particleEmitterStorage = particleEmitter.map(EditorSceneManifestParticleEmitterStorage.init)
         self.children = children
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, kind, localTransform, asset, renderMesh, renderMaterial
+        case camera, light, rigidBody, collider, constraint, script, audioSource
+        case animationPlayer, animationGraphPlayer, particleEmitter, children
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(UInt64.self, forKey: .id)
+        self.name = try c.decode(String.self, forKey: .name)
+        self.kind = try c.decode(String.self, forKey: .kind)
+        self.localTransform = try c.decodeIfPresent(EditorSceneManifestMatrix.self, forKey: .localTransform)
+        self.asset = try c.decodeIfPresent(EditorSceneManifestAssetReference.self, forKey: .asset)
+        self.renderMesh = try c.decodeIfPresent(EditorSceneManifestRenderMesh.self, forKey: .renderMesh)
+        self.renderMaterial = try c.decodeIfPresent(EditorSceneManifestRenderMaterial.self, forKey: .renderMaterial)
+        self.camera = try c.decodeIfPresent(EditorSceneManifestCamera.self, forKey: .camera)
+        self.light = try c.decodeIfPresent(EditorSceneManifestLight.self, forKey: .light)
+        self.rigidBody = try c.decodeIfPresent(EditorSceneManifestRigidBody.self, forKey: .rigidBody)
+        self.collider = try c.decodeIfPresent(EditorSceneManifestCollider.self, forKey: .collider)
+        self.constraint = try c.decodeIfPresent(EditorSceneManifestConstraint.self, forKey: .constraint)
+        self.script = try c.decodeIfPresent(EditorSceneManifestScript.self, forKey: .script)
+        self.audioSource = try c.decodeIfPresent(EditorSceneManifestAudioSource.self, forKey: .audioSource)
+        self.animationPlayer = try c.decodeIfPresent(EditorSceneManifestAnimationPlayer.self, forKey: .animationPlayer)
+        self.animationGraphPlayer = try c.decodeIfPresent(EditorSceneManifestAnimationGraphPlayer.self,
+                                                          forKey: .animationGraphPlayer)
+        self.particleEmitterStorage = try c.decodeIfPresent(EditorSceneManifestParticleEmitterStorage.self,
+                                                            forKey: .particleEmitter)
+        self.children = try c.decodeIfPresent([EditorSceneManifestNode].self, forKey: .children) ?? []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(kind, forKey: .kind)
+        try c.encodeIfPresent(localTransform, forKey: .localTransform)
+        try c.encodeIfPresent(asset, forKey: .asset)
+        try c.encodeIfPresent(renderMesh, forKey: .renderMesh)
+        try c.encodeIfPresent(renderMaterial, forKey: .renderMaterial)
+        try c.encodeIfPresent(camera, forKey: .camera)
+        try c.encodeIfPresent(light, forKey: .light)
+        try c.encodeIfPresent(rigidBody, forKey: .rigidBody)
+        try c.encodeIfPresent(collider, forKey: .collider)
+        try c.encodeIfPresent(constraint, forKey: .constraint)
+        try c.encodeIfPresent(script, forKey: .script)
+        try c.encodeIfPresent(audioSource, forKey: .audioSource)
+        try c.encodeIfPresent(animationPlayer, forKey: .animationPlayer)
+        try c.encodeIfPresent(animationGraphPlayer, forKey: .animationGraphPlayer)
+        try c.encodeIfPresent(particleEmitterStorage, forKey: .particleEmitter)
+        try c.encode(children, forKey: .children)
     }
 }
 
@@ -966,11 +1042,15 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let textureSheetRows: Int
     public let textureSheetFrameCount: Int
     public let textureSheetFrameRate: Float
+    public let textureSheetPlaybackMode: ParticleTextureSheetPlaybackMode
+    public let textureSheetStartFrame: Int
+    public let textureSheetFrameRandomness: Int
     public let trailLength: Float
     public let trailSegments: Int
     public let trailEndSizeScale: Float
     public let trailEndAlphaScale: Float
     public let seed: UInt64
+    public let moduleStack: ParticleModuleStack?
 
     public init(_ component: ParticleEmitter) {
         self.isEmitting = component.isEmitting
@@ -1070,11 +1150,15 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.textureSheetRows = component.textureSheetRows
         self.textureSheetFrameCount = component.textureSheetFrameCount
         self.textureSheetFrameRate = component.textureSheetFrameRate
+        self.textureSheetPlaybackMode = component.textureSheetPlaybackMode
+        self.textureSheetStartFrame = component.textureSheetStartFrame
+        self.textureSheetFrameRandomness = component.textureSheetFrameRandomness
         self.trailLength = component.trailLength
         self.trailSegments = component.trailSegments
         self.trailEndSizeScale = component.trailEndSizeScale
         self.trailEndAlphaScale = component.trailEndAlphaScale
         self.seed = component.seed
+        self.moduleStack = component.moduleStack
     }
 
     var component: ParticleEmitter {
@@ -1159,6 +1243,9 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
                         textureSheetRows: textureSheetRows,
                         textureSheetFrameCount: textureSheetFrameCount,
                         textureSheetFrameRate: textureSheetFrameRate,
+                        textureSheetPlaybackMode: textureSheetPlaybackMode,
+                        textureSheetStartFrame: textureSheetStartFrame,
+                        textureSheetFrameRandomness: textureSheetFrameRandomness,
                         trailLength: trailLength,
                         trailSegments: trailSegments,
                         trailEndSizeScale: trailEndSizeScale,
@@ -1194,7 +1281,8 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         case renderBoundsMode, renderBoundsRadius
         case textureAssetID, texturePath
         case textureSheetColumns, textureSheetRows, textureSheetFrameCount, textureSheetFrameRate
-        case trailLength, trailSegments, trailEndSizeScale, trailEndAlphaScale, seed
+        case textureSheetPlaybackMode, textureSheetStartFrame, textureSheetFrameRandomness
+        case trailLength, trailSegments, trailEndSizeScale, trailEndAlphaScale, seed, moduleStack
     }
 
     public init(from decoder: Decoder) throws {
@@ -1321,11 +1409,17 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.textureSheetRows = try c.decodeIfPresent(Int.self, forKey: .textureSheetRows) ?? 1
         self.textureSheetFrameCount = try c.decodeIfPresent(Int.self, forKey: .textureSheetFrameCount) ?? 1
         self.textureSheetFrameRate = try c.decodeIfPresent(Float.self, forKey: .textureSheetFrameRate) ?? 0
+        self.textureSheetPlaybackMode = try c.decodeIfPresent(ParticleTextureSheetPlaybackMode.self,
+                                                               forKey: .textureSheetPlaybackMode) ?? .automatic
+        self.textureSheetStartFrame = try c.decodeIfPresent(Int.self, forKey: .textureSheetStartFrame) ?? 0
+        self.textureSheetFrameRandomness = try c.decodeIfPresent(Int.self,
+                                                                  forKey: .textureSheetFrameRandomness) ?? 0
         self.trailLength = try c.decodeIfPresent(Float.self, forKey: .trailLength) ?? 0
         self.trailSegments = try c.decodeIfPresent(Int.self, forKey: .trailSegments) ?? 0
         self.trailEndSizeScale = try c.decodeIfPresent(Float.self, forKey: .trailEndSizeScale) ?? 0.5
         self.trailEndAlphaScale = try c.decodeIfPresent(Float.self, forKey: .trailEndAlphaScale) ?? 0
         self.seed = try c.decodeIfPresent(UInt64.self, forKey: .seed) ?? 0x9E3779B9
+        self.moduleStack = try c.decodeIfPresent(ParticleModuleStack.self, forKey: .moduleStack)
     }
 }
 
@@ -1373,12 +1467,14 @@ public enum EditorInspectorFieldValue {
     case particleBlendMode(Binding<ParticleBlendMode>)
     case particleRenderMode(Binding<ParticleRenderMode>)
     case particleSortMode(Binding<ParticleSortMode>)
+    case particleTextureSheetPlaybackMode(Binding<ParticleTextureSheetPlaybackMode>)
     case particleRenderAlignment(Binding<ParticleRenderAlignment>)
     case particleRenderBoundsMode(Binding<ParticleRenderBoundsMode>)
     case particleForceMode(Binding<ParticleForceMode>)
     case particleVectorFieldMode(Binding<ParticleVectorFieldMode>)
     case particleSubEmitterTrigger(Binding<ParticleSubEmitterTrigger>)
     case particleSubEmitters(Binding<[ParticleSubEmitter]>)
+    case particleModuleStack(ParticleModuleStack)
     case asset(Binding<EditorInspectorAssetRef?>, acceptedKinds: Set<String>, placeholder: String)
 }
 
@@ -1476,6 +1572,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         let sceneKind = scene.resource(SceneKindComponent.self)?.value
         let assetCount = AssetRegistry.shared.entriesSnapshot().count
         let timestamp = ISO8601DateFormatter().string(from: Date())
+        let manifestRoots = scene.roots().map(manifestNode)
         return EditorSceneManifest(revision: revision,
                                    entityCount: entityCount,
                                    selectedEntityID: restoredSelection,
@@ -1485,7 +1582,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                    particleScalabilityPolicy: particleScalabilityPolicy,
                                    projectAssetCount: assetCount > 0 ? assetCount : nil,
                                    lastModifiedAt: timestamp,
-                                   roots: scene.roots().map(manifestNode))
+                                   roots: manifestRoots)
     }
 
     @discardableResult
@@ -1673,38 +1770,58 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     }
 
     private func manifestNode(_ entity: EntityID) -> EditorSceneManifestNode {
-        EditorSceneManifestNode(
+        let localTransform = scene.localTransform(for: entity).map { EditorSceneManifestMatrix($0.matrix) }
+        let asset = scene.component(AssetReferenceComponent.self, for: entity)
+            .map(EditorSceneManifestAssetReference.init)
+        let renderMesh = scene.component(RenderMeshComponent.self, for: entity)
+            .map(EditorSceneManifestRenderMesh.init)
+        let renderMaterial = scene.component(RenderMaterialComponent.self, for: entity)
+            .map(EditorSceneManifestRenderMaterial.init)
+        let camera = scene.component(CameraComponent.self, for: entity)
+            .map(EditorSceneManifestCamera.init)
+        let light = scene.component(LightComponent.self, for: entity)
+            .map(EditorSceneManifestLight.init)
+        let rigidBody = scene.component(RigidBody.self, for: entity)
+            .map(EditorSceneManifestRigidBody.init)
+        let collider = scene.component(Collider.self, for: entity)
+            .map(EditorSceneManifestCollider.init)
+        let constraint = scene.component(Constraint.self, for: entity)
+            .map(EditorSceneManifestConstraint.init)
+        let script = scene.component(ScriptComponent.self, for: entity)
+            .map(EditorSceneManifestScript.init)
+        let audioSource = scene.component(AudioSource.self, for: entity)
+            .map(EditorSceneManifestAudioSource.init)
+        let animationPlayer = scene.component(AnimationPlayer.self, for: entity)
+            .map(EditorSceneManifestAnimationPlayer.init)
+        let animationGraphPlayer = scene.component(AnimationGraphPlayer.self, for: entity)
+            .map(EditorSceneManifestAnimationGraphPlayer.init)
+        let childIDs = scene.children(of: entity)
+        var children: [EditorSceneManifestNode] = []
+        children.reserveCapacity(childIDs.count)
+        for child in childIDs {
+            children.append(manifestNode(child))
+        }
+        let particleEmitter = scene.component(ParticleEmitter.self, for: entity)
+            .map(EditorSceneManifestParticleEmitter.init)
+        return EditorSceneManifestNode(
             id: entity.rawValue,
             name: displayName(for: entity),
             kind: displayKind(for: entity),
-            localTransform: scene.localTransform(for: entity).map { EditorSceneManifestMatrix($0.matrix) },
-            asset: scene.component(AssetReferenceComponent.self, for: entity)
-                .map(EditorSceneManifestAssetReference.init),
-            renderMesh: scene.component(RenderMeshComponent.self, for: entity)
-                .map(EditorSceneManifestRenderMesh.init),
-            renderMaterial: scene.component(RenderMaterialComponent.self, for: entity)
-                .map(EditorSceneManifestRenderMaterial.init),
-            camera: scene.component(CameraComponent.self, for: entity)
-                .map(EditorSceneManifestCamera.init),
-            light: scene.component(LightComponent.self, for: entity)
-                .map(EditorSceneManifestLight.init),
-            rigidBody: scene.component(RigidBody.self, for: entity)
-                .map(EditorSceneManifestRigidBody.init),
-            collider: scene.component(Collider.self, for: entity)
-                .map(EditorSceneManifestCollider.init),
-            constraint: scene.component(Constraint.self, for: entity)
-                .map(EditorSceneManifestConstraint.init),
-            script: scene.component(ScriptComponent.self, for: entity)
-                .map(EditorSceneManifestScript.init),
-            audioSource: scene.component(AudioSource.self, for: entity)
-                .map(EditorSceneManifestAudioSource.init),
-            animationPlayer: scene.component(AnimationPlayer.self, for: entity)
-                .map(EditorSceneManifestAnimationPlayer.init),
-            animationGraphPlayer: scene.component(AnimationGraphPlayer.self, for: entity)
-                .map(EditorSceneManifestAnimationGraphPlayer.init),
-            particleEmitter: scene.component(ParticleEmitter.self, for: entity)
-                .map(EditorSceneManifestParticleEmitter.init),
-            children: scene.children(of: entity).map(manifestNode)
+            localTransform: localTransform,
+            asset: asset,
+            renderMesh: renderMesh,
+            renderMaterial: renderMaterial,
+            camera: camera,
+            light: light,
+            rigidBody: rigidBody,
+            collider: collider,
+            constraint: constraint,
+            script: script,
+            audioSource: audioSource,
+            animationPlayer: animationPlayer,
+            animationGraphPlayer: animationGraphPlayer,
+            particleEmitter: particleEmitter,
+            children: children
         )
     }
 
@@ -2393,11 +2510,13 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     }
 
     private func particleEmitterSection(for entity: EntityID) -> EditorInspectorSection? {
-        guard scene.hasComponent(ParticleEmitter.self, for: entity) else { return nil }
+        guard let emitter = scene.component(ParticleEmitter.self, for: entity) else { return nil }
         return EditorInspectorSection(
             id: "particle-emitter",
             title: L("Particle Emitter"),
             fields: [
+                EditorInspectorField(id: "particle-module-stack", label: L("Modules"),
+                                     value: .particleModuleStack(emitter.moduleStack)),
                 EditorInspectorField(id: "particle-emitting", label: L("Emitting"),
                                      value: .bool(particleBoolBinding(for: entity, \.isEmitting,
                                                                       summary: "Toggle particle emitting"))),
@@ -2787,6 +2906,20 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.textureSheetFrameRate,
                                                                                     summary: "Update texture sheet FPS"),
                                                                min: 0, max: 240, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-texture-sheet-playback", label: L("Sheet Playback"),
+                                     value: .particleTextureSheetPlaybackMode(
+                                         particleTextureSheetPlaybackModeBinding(for: entity)
+                                     )),
+                EditorInspectorField(id: "particle-texture-sheet-start-frame", label: L("Sheet Start"),
+                                     value: .constrainedNumber(particleIntBinding(for: entity,
+                                                                                  \.textureSheetStartFrame,
+                                                                                  summary: "Update texture sheet start frame"),
+                                                               min: 0, max: 4095, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-texture-sheet-random", label: L("Sheet Random"),
+                                     value: .constrainedNumber(particleIntBinding(for: entity,
+                                                                                  \.textureSheetFrameRandomness,
+                                                                                  summary: "Update texture sheet random frames"),
+                                                               min: 0, max: 4095, step: 1, showsStepper: true)),
                 EditorInspectorField(id: "particle-trail-length", label: L("Trail Length"),
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.trailLength,
                                                                                     summary: "Update particle trail length"),
@@ -3094,6 +3227,24 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             set: { [self] next in
                 guard scene.component(ParticleEmitter.self, for: entity)?.sortMode != next else { return }
                 updateParticleEmitter(entity, summary: "Update particle sort mode") { $0.sortMode = next }
+            }
+        )
+    }
+
+    private func particleTextureSheetPlaybackModeBinding(
+        for entity: EntityID
+    ) -> Binding<ParticleTextureSheetPlaybackMode> {
+        Binding(
+            get: {
+                [self] in scene.component(ParticleEmitter.self,
+                                           for: entity)?.textureSheetPlaybackMode ?? .automatic
+            },
+            set: { [self] next in
+                guard scene.component(ParticleEmitter.self,
+                                      for: entity)?.textureSheetPlaybackMode != next else { return }
+                updateParticleEmitter(entity, summary: "Update texture sheet playback") {
+                    $0.textureSheetPlaybackMode = next
+                }
             }
         )
     }
