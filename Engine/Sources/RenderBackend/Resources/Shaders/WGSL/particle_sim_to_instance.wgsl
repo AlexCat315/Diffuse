@@ -5,6 +5,7 @@ struct ParticleSimToInstanceUniforms {
     texture_sheet: vec4<f32>,
     render_params: vec4<f32>,
     trail_params: vec4<f32>,
+    texture_sheet_playback: vec4<f32>,
 };
 
 struct ParticleSimState {
@@ -41,25 +42,39 @@ fn texture_sheet_uv_rect(particle: ParticleSimState) -> vec4<f32> {
     let columns = max(u32(uniforms.texture_sheet.x), 1u);
     let rows = max(u32(uniforms.texture_sheet.y), 1u);
     let max_frames = max(columns * rows, 1u);
-    let frame_count = min(max(u32(uniforms.texture_sheet.z), 1u), max_frames);
-    var frame_index: u32;
-    if (uniforms.texture_sheet.w > 0.0) {
-        frame_index = min(
-            u32(max(floor(particle.velocity_age.w * uniforms.texture_sheet.w), 0.0)),
-            frame_count - 1u
-        );
-    } else {
-        let normalized_age = select(
-            0.0,
-            clamp(particle.velocity_age.w / particle.position_lifetime.w, 0.0, 1.0),
-            particle.position_lifetime.w > 0.0001
-        );
-        frame_index = min(
-            u32(max(floor(normalized_age * f32(frame_count)), 0.0)),
-            frame_count - 1u
-        );
+    let start_frame = min(u32(max(uniforms.texture_sheet_playback.y, 0.0)), max_frames - 1u);
+    let frame_count = min(max(u32(uniforms.texture_sheet.z), 1u), max_frames - start_frame);
+    let random_range = min(u32(max(uniforms.texture_sheet_playback.z, 0.0)), frame_count - 1u);
+    let random_offset = select(0u, particle.params.z % (random_range + 1u), random_range > 0u);
+    let first_frame = min(frame_count - 1u, random_offset);
+    let mode = u32(max(uniforms.texture_sheet_playback.x, 0.0));
+    let normalized_age = select(
+        0.0,
+        clamp(particle.velocity_age.w / particle.position_lifetime.w, 0.0, 1.0),
+        particle.position_lifetime.w > 0.0001
+    );
+    let play_once_rate = select(f32(frame_count), uniforms.texture_sheet.w, uniforms.texture_sheet.w > 0.0);
+    var advanced_frame: u32 = 0u;
+    if (mode == 0u) {
+        if (uniforms.texture_sheet.w > 0.0) {
+            advanced_frame = u32(max(floor(max(particle.velocity_age.w, 0.0) * uniforms.texture_sheet.w), 0.0));
+        } else {
+            advanced_frame = u32(max(floor(normalized_age * f32(frame_count)), 0.0));
+        }
+    } else if (mode == 1u) {
+        advanced_frame = u32(max(floor(normalized_age * f32(frame_count)), 0.0));
+    } else if (mode == 2u || mode == 3u) {
+        advanced_frame = u32(max(floor(max(particle.velocity_age.w, 0.0) * play_once_rate), 0.0));
     }
 
+    var frame_index: u32;
+    if (mode == 3u) {
+        frame_index = start_frame + ((first_frame + advanced_frame) % frame_count);
+    } else if (mode == 4u) {
+        frame_index = start_frame + first_frame;
+    } else {
+        frame_index = start_frame + min(frame_count - 1u, first_frame + advanced_frame);
+    }
     let column = frame_index % columns;
     let row = frame_index / columns;
     let sheet_rect = vec4<f32>(

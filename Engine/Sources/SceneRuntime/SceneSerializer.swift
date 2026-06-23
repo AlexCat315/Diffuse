@@ -35,6 +35,12 @@ private func jsonToStringFloatDict(_ val: Any?) -> [String: Float]? {
 private func jsonToFloatArray(_ val: Any?) -> [Float]? {
     (val as? [Any])?.compactMap { ($0 as? NSNumber).map { Float(truncating: $0) } }
 }
+private func encodeJSONValue<T: Encodable>(_ value: T) -> Any? {
+    guard let data = try? JSONEncoder().encode(value) else {
+        return nil
+    }
+    return try? JSONSerialization.jsonObject(with: data)
+}
 
 // MARK: - Scene save/load
 
@@ -736,6 +742,9 @@ public enum SceneSerializer {
             "textureSheetRows": c.textureSheetRows,
             "textureSheetFrameCount": c.textureSheetFrameCount,
             "textureSheetFrameRate": c.textureSheetFrameRate,
+            "textureSheetPlaybackMode": c.textureSheetPlaybackMode.rawValue,
+            "textureSheetStartFrame": c.textureSheetStartFrame,
+            "textureSheetFrameRandomness": c.textureSheetFrameRandomness,
             "trailLength": c.trailLength,
             "trailSegments": c.trailSegments,
             "trailEndSizeScale": c.trailEndSizeScale,
@@ -747,6 +756,9 @@ public enum SceneSerializer {
         }
         if let texturePath = c.texturePath {
             d["texturePath"] = texturePath
+        }
+        if let moduleStack = encodeJSONValue(c.moduleStack) {
+            d["moduleStack"] = moduleStack
         }
         return d
     }
@@ -856,6 +868,11 @@ public enum SceneSerializer {
             textureSheetRows: jsonToInt(d["textureSheetRows"]) ?? 1,
             textureSheetFrameCount: jsonToInt(d["textureSheetFrameCount"]) ?? 1,
             textureSheetFrameRate: jsonToFloat(d["textureSheetFrameRate"]) ?? 0,
+            textureSheetPlaybackMode: ParticleTextureSheetPlaybackMode(
+                rawValue: jsonToString(d["textureSheetPlaybackMode"]) ?? "automatic"
+            ) ?? .automatic,
+            textureSheetStartFrame: jsonToInt(d["textureSheetStartFrame"]) ?? 0,
+            textureSheetFrameRandomness: jsonToInt(d["textureSheetFrameRandomness"]) ?? 0,
             trailLength: jsonToFloat(d["trailLength"]) ?? 0,
             trailSegments: jsonToInt(d["trailSegments"]) ?? 0,
             trailEndSizeScale: jsonToFloat(d["trailEndSizeScale"]) ?? 0.5,
