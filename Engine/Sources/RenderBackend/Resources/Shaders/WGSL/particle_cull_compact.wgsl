@@ -9,6 +9,8 @@ struct ParticleInstance {
     color: vec4<f32>,
     uv_rect: vec4<f32>,
     axis_stretch: vec4<f32>,
+    ribbon_color: vec4<f32>,
+    ribbon_params: vec4<f32>,
 };
 
 struct ParticleCullBatch {

@@ -116,9 +116,6 @@ public struct ParticleGPUSimulationPlan: Sendable, Equatable {
         if particleCapacity == 0 {
             reasons.append(.noParticleCapacity)
         }
-        if emitter.hasEventSubEmitterRules {
-            reasons.append(.eventSubEmitters)
-        }
         if emitter.distanceEmissionRate > 0 {
             reasons.append(.distanceEmission)
         }
@@ -570,6 +567,22 @@ public enum ParticleBlendMode: String, CaseIterable, Codable, Sendable, Equatabl
     case additive
 }
 
+public enum ParticleRenderMode: String, CaseIterable, Codable, Sendable, Equatable, Hashable {
+    case billboard
+    case ribbon
+}
+
+public enum ParticleSortMode: String, CaseIterable, Codable, Sendable, Equatable, Hashable {
+    /// Transparent-safe default: farther particles are submitted first.
+    case distanceDescending
+    /// Nearer particles are submitted first. Useful for stylized additive effects.
+    case distanceAscending
+    /// Older particles are submitted first.
+    case oldestFirst
+    /// Younger particles are submitted first.
+    case youngestFirst
+}
+
 public enum ParticleRenderAlignment: String, CaseIterable, Codable, Sendable, Equatable, Hashable {
     case billboard
     case velocity
@@ -806,6 +819,26 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public var endColor: SIMD4<Float>
     public var colorCurve: ParticleCurve
     public var blendMode: ParticleBlendMode
+    public var renderMode: ParticleRenderMode
+    /// Controls CPU render submission ordering for transparent particle pools.
+    public var sortMode: ParticleSortMode
+    /// Multiplier applied to the generated ribbon width. One keeps particle size as width.
+    public var ribbonWidthScale: Float
+    /// Width multiplier at the oldest ribbon end. One keeps a constant-width ribbon.
+    public var ribbonTailWidthScale: Float
+    /// Alpha multiplier at the oldest ribbon end. One keeps opacity unchanged along the ribbon.
+    public var ribbonTailAlphaScale: Float
+    /// Maximum allowed distance between connected ribbon particles. Zero disables gap breaking.
+    public var ribbonMaxSegmentLength: Float
+    /// Overlap added at connected ribbon joins as a multiple of segment width.
+    /// This masks corner cracks while ribbons are still rendered as one quad per segment.
+    public var ribbonJoinOverlapScale: Float
+    /// Number of render segments generated per connected particle pair. One preserves the raw polyline.
+    public var ribbonSmoothingSegments: Int
+    /// Texture repeats per world unit along the ribbon. Zero uses one full V range per segment.
+    public var ribbonTextureTiling: Float
+    /// Base V offset applied before ribbon texture tiling.
+    public var ribbonTextureOffset: Float
     public var renderAlignment: ParticleRenderAlignment
     /// Additional length per unit of particle speed when `renderAlignment == .velocity`.
     public var velocityStretchScale: Float
@@ -934,6 +967,16 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         endColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 0),
         colorCurve: ParticleCurve = .linear,
         blendMode: ParticleBlendMode = .alpha,
+        renderMode: ParticleRenderMode = .billboard,
+        sortMode: ParticleSortMode = .distanceDescending,
+        ribbonWidthScale: Float = 1,
+        ribbonTailWidthScale: Float = 1,
+        ribbonTailAlphaScale: Float = 1,
+        ribbonMaxSegmentLength: Float = 0,
+        ribbonJoinOverlapScale: Float = 0,
+        ribbonSmoothingSegments: Int = 1,
+        ribbonTextureTiling: Float = 0,
+        ribbonTextureOffset: Float = 0,
         renderAlignment: ParticleRenderAlignment = .billboard,
         velocityStretchScale: Float = 0,
         velocityStretchMax: Float = 8,
@@ -1044,6 +1087,16 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.endColor = endColor
         self.colorCurve = colorCurve
         self.blendMode = blendMode
+        self.renderMode = renderMode
+        self.sortMode = sortMode
+        self.ribbonWidthScale = max(0, ribbonWidthScale)
+        self.ribbonTailWidthScale = max(0, ribbonTailWidthScale)
+        self.ribbonTailAlphaScale = simd_clamp(ribbonTailAlphaScale, 0, 1)
+        self.ribbonMaxSegmentLength = max(0, ribbonMaxSegmentLength)
+        self.ribbonJoinOverlapScale = max(0, ribbonJoinOverlapScale)
+        self.ribbonSmoothingSegments = min(16, max(1, ribbonSmoothingSegments))
+        self.ribbonTextureTiling = max(0, ribbonTextureTiling)
+        self.ribbonTextureOffset = ribbonTextureOffset
         self.renderAlignment = renderAlignment
         self.velocityStretchScale = max(0, velocityStretchScale)
         self.velocityStretchMax = max(1, velocityStretchMax)
@@ -1268,6 +1321,8 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         let collisionContext = simulationSpace == .local
             ? makeCollisionContext(worldTransform: worldTransform)
             : nil
+        let defersEventSubEmittersToExternalSimulation = hasEventSubEmitterRules
+            && gpuSimulationPlan.usesGPU
 
         var survivors: [Particle] = []
         var eventParticles: [Particle] = []
@@ -1282,11 +1337,13 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             let collided = applyCollision(to: &p, context: collisionContext)
             if collided {
                 frameStats.collisionCount += 1
-                recordEvent(trigger: .collision, source: p)
-                spawnSubEmitterParticles(trigger: .collision,
-                                         source: p,
-                                         survivorsCount: survivors.count,
-                                         pending: &eventParticles)
+                if !defersEventSubEmittersToExternalSimulation {
+                    recordEvent(trigger: .collision, source: p)
+                    spawnSubEmitterParticles(trigger: .collision,
+                                             source: p,
+                                             survivorsCount: survivors.count,
+                                             pending: &eventParticles)
+                }
             }
             p.age += dt
             if p.age < p.lifetime {
@@ -1294,11 +1351,13 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
                 survivors.append(p)
             } else {
                 frameStats.expiredParticleCount += 1
-                recordEvent(trigger: .death, source: p)
-                spawnSubEmitterParticles(trigger: .death,
-                                         source: p,
-                                         survivorsCount: survivors.count,
-                                         pending: &eventParticles)
+                if !defersEventSubEmittersToExternalSimulation {
+                    recordEvent(trigger: .death, source: p)
+                    spawnSubEmitterParticles(trigger: .death,
+                                             source: p,
+                                             survivorsCount: survivors.count,
+                                             pending: &eventParticles)
+                }
             }
         }
         particles = survivors
