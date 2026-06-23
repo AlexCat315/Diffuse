@@ -940,6 +940,16 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let endColor: EditorSceneManifestVector4
     public let colorCurve: ParticleCurve
     public let blendMode: ParticleBlendMode
+    public let renderMode: ParticleRenderMode
+    public let sortMode: ParticleSortMode
+    public let ribbonWidthScale: Float
+    public let ribbonTailWidthScale: Float
+    public let ribbonTailAlphaScale: Float
+    public let ribbonMaxSegmentLength: Float
+    public let ribbonJoinOverlapScale: Float
+    public let ribbonSmoothingSegments: Int
+    public let ribbonTextureTiling: Float
+    public let ribbonTextureOffset: Float
     public let renderAlignment: ParticleRenderAlignment
     public let velocityStretchScale: Float
     public let velocityStretchMax: Float
@@ -1034,6 +1044,16 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.endColor = EditorSceneManifestVector4(component.endColor)
         self.colorCurve = component.colorCurve
         self.blendMode = component.blendMode
+        self.renderMode = component.renderMode
+        self.sortMode = component.sortMode
+        self.ribbonWidthScale = component.ribbonWidthScale
+        self.ribbonTailWidthScale = component.ribbonTailWidthScale
+        self.ribbonTailAlphaScale = component.ribbonTailAlphaScale
+        self.ribbonMaxSegmentLength = component.ribbonMaxSegmentLength
+        self.ribbonJoinOverlapScale = component.ribbonJoinOverlapScale
+        self.ribbonSmoothingSegments = component.ribbonSmoothingSegments
+        self.ribbonTextureTiling = component.ribbonTextureTiling
+        self.ribbonTextureOffset = component.ribbonTextureOffset
         self.renderAlignment = component.renderAlignment
         self.velocityStretchScale = component.velocityStretchScale
         self.velocityStretchMax = component.velocityStretchMax
@@ -1114,6 +1134,16 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
                         sizeCurve: sizeCurve,
                         startColor: startColor.simdValue, endColor: endColor.simdValue,
                         colorCurve: colorCurve, blendMode: blendMode,
+                        renderMode: renderMode,
+                        sortMode: sortMode,
+                        ribbonWidthScale: ribbonWidthScale,
+                        ribbonTailWidthScale: ribbonTailWidthScale,
+                        ribbonTailAlphaScale: ribbonTailAlphaScale,
+                        ribbonMaxSegmentLength: ribbonMaxSegmentLength,
+                        ribbonJoinOverlapScale: ribbonJoinOverlapScale,
+                        ribbonSmoothingSegments: ribbonSmoothingSegments,
+                        ribbonTextureTiling: ribbonTextureTiling,
+                        ribbonTextureOffset: ribbonTextureOffset,
                         renderAlignment: renderAlignment,
                         velocityStretchScale: velocityStretchScale,
                         velocityStretchMax: velocityStretchMax,
@@ -1154,7 +1184,10 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         case collisionPlaneY, collisionRestitution, collisionDamping
         case startSize, endSize, sizeRandomness
         case startRotation, rotationRandomness, angularVelocity, angularVelocityRandomness
-        case sizeCurve, startColor, endColor, colorCurve, blendMode
+        case sizeCurve, startColor, endColor, colorCurve, blendMode, renderMode, sortMode
+        case ribbonWidthScale, ribbonTailWidthScale, ribbonTailAlphaScale, ribbonMaxSegmentLength
+        case ribbonJoinOverlapScale, ribbonSmoothingSegments
+        case ribbonTextureTiling, ribbonTextureOffset
         case renderAlignment, velocityStretchScale, velocityStretchMax
         case maxRenderDistance, renderDistanceFadeRange
         case renderLODStartDistance, renderLODEndDistance, renderLODMinParticleScale
@@ -1260,6 +1293,16 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
             ?? EditorSceneManifestVector4(SIMD4<Float>(1, 1, 1, 0))
         self.colorCurve = try c.decodeIfPresent(ParticleCurve.self, forKey: .colorCurve) ?? .linear
         self.blendMode = try c.decodeIfPresent(ParticleBlendMode.self, forKey: .blendMode) ?? .alpha
+        self.renderMode = try c.decodeIfPresent(ParticleRenderMode.self, forKey: .renderMode) ?? .billboard
+        self.sortMode = try c.decodeIfPresent(ParticleSortMode.self, forKey: .sortMode) ?? .distanceDescending
+        self.ribbonWidthScale = try c.decodeIfPresent(Float.self, forKey: .ribbonWidthScale) ?? 1
+        self.ribbonTailWidthScale = try c.decodeIfPresent(Float.self, forKey: .ribbonTailWidthScale) ?? 1
+        self.ribbonTailAlphaScale = try c.decodeIfPresent(Float.self, forKey: .ribbonTailAlphaScale) ?? 1
+        self.ribbonMaxSegmentLength = try c.decodeIfPresent(Float.self, forKey: .ribbonMaxSegmentLength) ?? 0
+        self.ribbonJoinOverlapScale = try c.decodeIfPresent(Float.self, forKey: .ribbonJoinOverlapScale) ?? 0
+        self.ribbonSmoothingSegments = try c.decodeIfPresent(Int.self, forKey: .ribbonSmoothingSegments) ?? 1
+        self.ribbonTextureTiling = try c.decodeIfPresent(Float.self, forKey: .ribbonTextureTiling) ?? 0
+        self.ribbonTextureOffset = try c.decodeIfPresent(Float.self, forKey: .ribbonTextureOffset) ?? 0
         self.renderAlignment = try c.decodeIfPresent(ParticleRenderAlignment.self,
                                                       forKey: .renderAlignment) ?? .billboard
         self.velocityStretchScale = try c.decodeIfPresent(Float.self, forKey: .velocityStretchScale) ?? 0
@@ -1328,6 +1371,8 @@ public enum EditorInspectorFieldValue {
     case particleSimulationBackend(Binding<ParticleSimulationBackend>)
     case particleCurve(Binding<ParticleCurve>)
     case particleBlendMode(Binding<ParticleBlendMode>)
+    case particleRenderMode(Binding<ParticleRenderMode>)
+    case particleSortMode(Binding<ParticleSortMode>)
     case particleRenderAlignment(Binding<ParticleRenderAlignment>)
     case particleRenderBoundsMode(Binding<ParticleRenderBoundsMode>)
     case particleForceMode(Binding<ParticleForceMode>)
@@ -2643,6 +2688,45 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                                                                 summary: "Update particle color curve"))),
                 EditorInspectorField(id: "particle-blend-mode", label: L("Blend"),
                                      value: .particleBlendMode(particleBlendModeBinding(for: entity))),
+                EditorInspectorField(id: "particle-render-mode", label: L("Render Mode"),
+                                     value: .particleRenderMode(particleRenderModeBinding(for: entity))),
+                EditorInspectorField(id: "particle-sort-mode", label: L("Sort"),
+                                     value: .particleSortMode(particleSortModeBinding(for: entity))),
+                EditorInspectorField(id: "particle-ribbon-width-scale", label: L("Ribbon Width"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.ribbonWidthScale,
+                                                                                    summary: "Update ribbon width"),
+                                                               min: 0, max: 100, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "particle-ribbon-tail-width", label: L("Ribbon Tail Width"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.ribbonTailWidthScale,
+                                                                                    summary: "Update ribbon tail width"),
+                                                               min: 0, max: 10, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "particle-ribbon-tail-alpha", label: L("Ribbon Tail Alpha"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.ribbonTailAlphaScale,
+                                                                                    summary: "Update ribbon tail alpha"),
+                                                               min: 0, max: 1, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "particle-ribbon-max-segment", label: L("Ribbon Max Segment"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.ribbonMaxSegmentLength,
+                                                                                    summary: "Update ribbon max segment"),
+                                                               min: 0, max: 100_000, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-ribbon-join-overlap", label: L("Ribbon Join Overlap"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.ribbonJoinOverlapScale,
+                                                                                    summary: "Update ribbon join overlap"),
+                                                               min: 0, max: 10, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "particle-ribbon-smoothing", label: L("Ribbon Smoothing"),
+                                     value: .constrainedNumber(particleClampedIntBinding(for: entity,
+                                                                                         \.ribbonSmoothingSegments,
+                                                                                         min: 1,
+                                                                                         max: 16,
+                                                                                         summary: "Update ribbon smoothing"),
+                                                               min: 1, max: 16, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "particle-ribbon-uv-tiling", label: L("Ribbon UV Tiling"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.ribbonTextureTiling,
+                                                                                    summary: "Update ribbon UV tiling"),
+                                                               min: 0, max: 100, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "particle-ribbon-uv-offset", label: L("Ribbon UV Offset"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.ribbonTextureOffset,
+                                                                                    summary: "Update ribbon UV offset"),
+                                                               min: -10_000, max: 10_000, step: 0.05, showsStepper: true)),
                 EditorInspectorField(id: "particle-render-alignment", label: L("Alignment"),
                                      value: .particleRenderAlignment(particleRenderAlignmentBinding(for: entity))),
                 EditorInspectorField(id: "particle-velocity-stretch-scale", label: L("Velocity Stretch"),
@@ -2829,6 +2913,23 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
+    private func particleClampedIntBinding(for entity: EntityID,
+                                           _ keyPath: WritableKeyPath<ParticleEmitter, Int>,
+                                           min minimum: Int,
+                                           max maximum: Int,
+                                           summary: String) -> Binding<Float> {
+        Binding(
+            get: { [self] in Float(scene.component(ParticleEmitter.self, for: entity)?[keyPath: keyPath] ?? minimum) },
+            set: { [self] next in
+                let lower = min(minimum, maximum)
+                let upper = max(minimum, maximum)
+                let value = Swift.max(lower, Swift.min(upper, Int(next.rounded())))
+                guard scene.component(ParticleEmitter.self, for: entity)?[keyPath: keyPath] != value else { return }
+                updateParticleEmitter(entity, summary: summary) { $0[keyPath: keyPath] = value }
+            }
+        )
+    }
+
     private func particleShapeBinding(for entity: EntityID) -> Binding<ParticleEmissionShape> {
         Binding(
             get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.emissionShape ?? .sphere },
@@ -2973,6 +3074,26 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             set: { [self] next in
                 guard scene.component(ParticleEmitter.self, for: entity)?.blendMode != next else { return }
                 updateParticleEmitter(entity, summary: "Update particle blend mode") { $0.blendMode = next }
+            }
+        )
+    }
+
+    private func particleRenderModeBinding(for entity: EntityID) -> Binding<ParticleRenderMode> {
+        Binding(
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.renderMode ?? .billboard },
+            set: { [self] next in
+                guard scene.component(ParticleEmitter.self, for: entity)?.renderMode != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle render mode") { $0.renderMode = next }
+            }
+        )
+    }
+
+    private func particleSortModeBinding(for entity: EntityID) -> Binding<ParticleSortMode> {
+        Binding(
+            get: { [self] in scene.component(ParticleEmitter.self, for: entity)?.sortMode ?? .distanceDescending },
+            set: { [self] next in
+                guard scene.component(ParticleEmitter.self, for: entity)?.sortMode != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle sort mode") { $0.sortMode = next }
             }
         )
     }

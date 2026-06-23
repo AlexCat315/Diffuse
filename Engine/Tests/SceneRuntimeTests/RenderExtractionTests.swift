@@ -34,6 +34,7 @@ struct RenderExtractionTests {
         #expect(summary.batchCount == 3)
         #expect(summary.uniqueTextureCount == 2)
         #expect(summary.texturedCount == 3)
+        #expect(particles.allSatisfy { $0.shape == .softBillboard })
     }
 
     @Test("renderExtract collects visible mesh instances and the active camera")
@@ -271,6 +272,52 @@ struct RenderExtractionTests {
         #expect(isClose(summary.bounds.maximum.z, -5 + radius))
     }
 
+    @Test("renderExtract applies authored particle sort mode")
+    func renderExtractAppliesAuthoredParticleSortMode() throws {
+        func extractedZPositions(sortMode: ParticleSortMode) throws -> [Float] {
+            var runtime = SceneRuntime()
+
+            let camera = runtime.createEntity()
+            _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+            _ = runtime.setComponent(CameraComponent(isActive: true), for: camera)
+
+            let entity = runtime.createEntity()
+            _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: entity)
+            var emitter = ParticleEmitter(isEmitting: false,
+                                          emissionRate: 0,
+                                          maxParticles: 8,
+                                          lifetime: 10,
+                                          spawnRadius: 0,
+                                          startVelocity: .zero,
+                                          velocityRandomness: .zero,
+                                          gravity: .zero,
+                                          simulationSpace: .world,
+                                          startSize: 0.5,
+                                          endSize: 0.5,
+                                          sortMode: sortMode)
+
+            var oldTransform = matrix_identity_float4x4
+            oldTransform.columns.3 = SIMD4<Float>(0, 0, -5, 1)
+            emitter.emit(1, worldTransform: oldTransform)
+            emitter.advance(deltaTime: 1)
+
+            var youngTransform = matrix_identity_float4x4
+            youngTransform.columns.3 = SIMD4<Float>(0, 0, -20, 1)
+            emitter.emit(1, worldTransform: youngTransform)
+
+            _ = runtime.setComponent(emitter, for: entity)
+            _ = runtime.tick()
+
+            let particles = try #require(runtime.extractedRenderScene?.scene.particles)
+            return particles.map(\.position.z)
+        }
+
+        #expect(try extractedZPositions(sortMode: .distanceDescending) == [-20, -5])
+        #expect(try extractedZPositions(sortMode: .distanceAscending) == [-5, -20])
+        #expect(try extractedZPositions(sortMode: .oldestFirst) == [-5, -20])
+        #expect(try extractedZPositions(sortMode: .youngestFirst) == [-20, -5])
+    }
+
     @Test("renderExtract carries GPU particle simulation batches")
     func renderExtractCarriesGPUParticleSimulationBatches() throws {
         var runtime = SceneRuntime()
@@ -308,6 +355,7 @@ struct RenderExtractionTests {
                                       collisionPlaneY: -1,
                                       collisionRestitution: 0.7,
                                       collisionDamping: 0.2,
+                                      sortMode: .oldestFirst,
                                       renderAlignment: .velocity,
                                       velocityStretchScale: 0.25,
                                       velocityStretchMax: 3,
@@ -360,7 +408,42 @@ struct RenderExtractionTests {
         #expect(batch.renderAlignment == .velocity)
         #expect(batch.velocityStretchScale == 0.25)
         #expect(batch.velocityStretchMax == 3)
+        #expect(batch.sortMode == .oldestFirst)
         #expect(extracted.scene.particles.isEmpty)
+    }
+
+    @Test("renderExtract keeps event sub-emitter particles on the GPU simulation path")
+    func renderExtractKeepsEventSubEmitterParticlesOnGPUSimulationPath() throws {
+        var runtime = SceneRuntime()
+
+        let camera = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+        _ = runtime.setComponent(CameraComponent(isActive: true), for: camera)
+
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -4)), for: entity)
+        var emitter = ParticleEmitter(isEmitting: false,
+                                      emissionRate: 0,
+                                      maxParticles: 8,
+                                      lifetime: 10,
+                                      subEmitterTrigger: .death,
+                                      subEmitterBurstCount: 2,
+                                      gravity: .zero,
+                                      simulationBackend: .gpuIfSupported)
+        emitter.emit(1)
+        _ = runtime.setComponent(emitter, for: entity)
+
+        _ = runtime.tick()
+        let scene = try #require(runtime.extractedRenderScene?.scene)
+
+        #expect(scene.particles.isEmpty)
+        #expect(scene.particleSimulationBatches.count == 1)
+        let batch = try #require(scene.particleSimulationBatches.first)
+        #expect(batch.emitterEntity == entity)
+        #expect(batch.plan.usesGPU)
+        #expect(batch.plan.unsupportedReasons.isEmpty)
+        #expect(batch.particleCount == 1)
+        #expect(batch.renderOnGPU)
     }
 
     @Test("renderExtract splits GPU particle spawn requests from persisted simulation state")
@@ -705,6 +788,230 @@ struct RenderExtractionTests {
         #expect(tail.size == 1)
         #expect(mid.color.w == 0.5)
         #expect(tail.color.w == 0)
+    }
+
+    @Test("renderExtract connects ribbon particles into stretched segments")
+    func renderExtractConnectsRibbonParticlesIntoSegments() throws {
+        var runtime = SceneRuntime()
+
+        let camera = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+        _ = runtime.setComponent(CameraComponent(isActive: true), for: camera)
+
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: entity)
+        var emitter = ParticleEmitter(
+            isEmitting: false,
+            emissionRate: 0,
+            maxParticles: 4,
+            lifetime: 10,
+            startVelocity: .zero,
+            gravity: .zero,
+            simulationSpace: .world,
+            startSize: 0.5,
+            endSize: 0.5,
+            startColor: SIMD4<Float>(1, 0, 0, 1),
+            endColor: SIMD4<Float>(1, 0, 0, 1),
+            renderMode: .ribbon
+        )
+        var first = matrix_identity_float4x4
+        first.columns.3 = SIMD4<Float>(0, 0, -5, 1)
+        var second = matrix_identity_float4x4
+        second.columns.3 = SIMD4<Float>(1, 0, -5, 1)
+        var third = matrix_identity_float4x4
+        third.columns.3 = SIMD4<Float>(3, 0, -5, 1)
+        emitter.emit(1, worldTransform: first)
+        emitter.emit(1, worldTransform: second)
+        emitter.emit(1, worldTransform: third)
+        _ = runtime.setComponent(emitter, for: entity)
+
+        _ = runtime.tick()
+        let particles = try #require(runtime.extractedRenderScene?.scene.particles)
+
+        #expect(particles.count == 2)
+        let shortSegment = try #require(particles.first { isClose($0.position.x, 0.5) })
+        let longSegment = try #require(particles.first { isClose($0.position.x, 2) })
+        #expect(shortSegment.position == SIMD3<Float>(0.5, 0, -5))
+        #expect(longSegment.position == SIMD3<Float>(2, 0, -5))
+        #expect(shortSegment.alignmentAxis == SIMD3<Float>(1, 0, 0))
+        #expect(longSegment.alignmentAxis == SIMD3<Float>(1, 0, 0))
+        #expect(shortSegment.size == 0.5)
+        #expect(longSegment.size == 0.5)
+        #expect(shortSegment.shape == .ribbonSegment)
+        #expect(longSegment.shape == .ribbonSegment)
+        #expect(isClose(shortSegment.stretch, 2))
+        #expect(isClose(longSegment.stretch, 4))
+        #expect(shortSegment.color == SIMD4<Float>(1, 0, 0, 1))
+        #expect(longSegment.color == SIMD4<Float>(1, 0, 0, 1))
+    }
+
+    @Test("renderExtract applies ribbon tapering and breaks long gaps")
+    func renderExtractAppliesRibbonTaperingAndGapBreaks() throws {
+        var runtime = SceneRuntime()
+
+        let camera = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+        _ = runtime.setComponent(CameraComponent(isActive: true), for: camera)
+
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: entity)
+        var emitter = ParticleEmitter(
+            isEmitting: false,
+            emissionRate: 0,
+            maxParticles: 8,
+            lifetime: 10,
+            startVelocity: .zero,
+            gravity: .zero,
+            simulationSpace: .world,
+            startSize: 1,
+            endSize: 1,
+            startColor: SIMD4<Float>(0.25, 0.5, 1, 1),
+            endColor: SIMD4<Float>(0.25, 0.5, 1, 1),
+            renderMode: .ribbon,
+            ribbonWidthScale: 2,
+            ribbonTailWidthScale: 0.5,
+            ribbonTailAlphaScale: 0.25,
+            ribbonMaxSegmentLength: 4,
+            ribbonTextureTiling: 2,
+            ribbonTextureOffset: 0.25
+        )
+
+        for x in [Float(0), 1, 3, 10] {
+            var transform = matrix_identity_float4x4
+            transform.columns.3 = SIMD4<Float>(x, 0, -5, 1)
+            emitter.emit(1, worldTransform: transform)
+        }
+        _ = runtime.setComponent(emitter, for: entity)
+
+        _ = runtime.tick()
+        let particles = try #require(runtime.extractedRenderScene?.scene.particles)
+
+        #expect(particles.count == 2)
+        let tailSegment = try #require(particles.first { isClose($0.position.x, 0.5) })
+        let middleSegment = try #require(particles.first { isClose($0.position.x, 2) })
+        #expect(isClose(tailSegment.size, 1.333_333_4))
+        #expect(isClose(tailSegment.startSize, 1))
+        #expect(isClose(tailSegment.endSize, 1.333_333_4))
+        #expect(isClose(middleSegment.size, 1.666_666_6))
+        #expect(isClose(middleSegment.startSize, 1.333_333_4))
+        #expect(isClose(middleSegment.endSize, 1.666_666_6))
+        #expect(isClose(tailSegment.color.w, 0.25))
+        #expect(isClose(tailSegment.endColor.w, 0.5))
+        #expect(isClose(middleSegment.color.w, 0.5))
+        #expect(isClose(middleSegment.endColor.w, 0.75))
+        #expect(tailSegment.shape == .ribbonSegment)
+        #expect(middleSegment.shape == .ribbonSegment)
+        #expect(isClose(tailSegment.textureVOffset, 0.25))
+        #expect(isClose(tailSegment.textureVScale, 2))
+        #expect(isClose(middleSegment.textureVOffset, 2.25))
+        #expect(isClose(middleSegment.textureVScale, 4))
+    }
+
+    @Test("renderExtract extends connected ribbon segments across joins")
+    func renderExtractExtendsConnectedRibbonSegmentsAcrossJoins() throws {
+        var runtime = SceneRuntime()
+
+        let camera = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+        _ = runtime.setComponent(CameraComponent(isActive: true), for: camera)
+
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: entity)
+        var emitter = ParticleEmitter(
+            isEmitting: false,
+            emissionRate: 0,
+            maxParticles: 4,
+            lifetime: 10,
+            startVelocity: .zero,
+            gravity: .zero,
+            simulationSpace: .world,
+            startSize: 1,
+            endSize: 1,
+            startColor: SIMD4<Float>(1, 1, 1, 1),
+            endColor: SIMD4<Float>(1, 1, 1, 1),
+            renderMode: .ribbon,
+            ribbonJoinOverlapScale: 0.5,
+            ribbonTextureTiling: 1
+        )
+
+        for point in [SIMD3<Float>(0, 0, -5), SIMD3<Float>(2, 0, -5), SIMD3<Float>(2, 2, -5)] {
+            var transform = matrix_identity_float4x4
+            transform.columns.3 = SIMD4<Float>(point, 1)
+            emitter.emit(1, worldTransform: transform)
+        }
+        _ = runtime.setComponent(emitter, for: entity)
+
+        _ = runtime.tick()
+        let particles = try #require(runtime.extractedRenderScene?.scene.particles)
+
+        #expect(particles.count == 2)
+        let horizontal = try #require(particles.first { isClose($0.alignmentAxis.x, 1) })
+        let vertical = try #require(particles.first { isClose($0.alignmentAxis.y, 1) })
+        #expect(horizontal.shape == .ribbonSegment)
+        #expect(vertical.shape == .ribbonSegment)
+        #expect(isClose(horizontal.position.x, 1.25))
+        #expect(isClose(horizontal.position.y, 0))
+        #expect(isClose(vertical.position.x, 2))
+        #expect(isClose(vertical.position.y, 0.75))
+        #expect(isClose(horizontal.stretch, 2.5))
+        #expect(isClose(vertical.stretch, 2.5))
+        #expect(isClose(horizontal.textureVOffset, 0))
+        #expect(isClose(horizontal.textureVScale, 2))
+        #expect(isClose(vertical.textureVOffset, 2))
+        #expect(isClose(vertical.textureVScale, 2))
+    }
+
+    @Test("renderExtract smooths ribbon paths without crossing gap breaks")
+    func renderExtractSmoothsRibbonPathsWithoutCrossingGapBreaks() throws {
+        var runtime = SceneRuntime()
+
+        let camera = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+        _ = runtime.setComponent(CameraComponent(isActive: true), for: camera)
+
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: entity)
+        var emitter = ParticleEmitter(
+            isEmitting: false,
+            emissionRate: 0,
+            maxParticles: 6,
+            lifetime: 10,
+            startVelocity: .zero,
+            gravity: .zero,
+            simulationSpace: .world,
+            startSize: 1,
+            endSize: 1,
+            startColor: SIMD4<Float>(1, 1, 1, 1),
+            endColor: SIMD4<Float>(1, 1, 1, 1),
+            renderMode: .ribbon,
+            ribbonMaxSegmentLength: 4,
+            ribbonSmoothingSegments: 2,
+            ribbonTextureTiling: 1
+        )
+
+        for point in [
+            SIMD3<Float>(0, 0, -5),
+            SIMD3<Float>(2, 0, -5),
+            SIMD3<Float>(2, 2, -5),
+            SIMD3<Float>(20, 2, -5),
+        ] {
+            var transform = matrix_identity_float4x4
+            transform.columns.3 = SIMD4<Float>(point, 1)
+            emitter.emit(1, worldTransform: transform)
+        }
+        _ = runtime.setComponent(emitter, for: entity)
+
+        _ = runtime.tick()
+        let particles = try #require(runtime.extractedRenderScene?.scene.particles)
+
+        #expect(particles.count == 4)
+        #expect(particles.contains {
+            abs($0.alignmentAxis.x) > 0.01 && abs($0.alignmentAxis.y) > 0.01
+        })
+        #expect(!particles.contains { $0.position.x > 10 })
+        let tiledLength = particles.reduce(Float(0)) { $0 + $1.textureVScale }
+        #expect(tiledLength > 4)
+        #expect(tiledLength < 4.2)
     }
 
     @Test("renderExtract keeps GPU simulated particle trails on the GPU render path")
