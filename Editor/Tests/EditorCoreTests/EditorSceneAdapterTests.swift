@@ -335,11 +335,14 @@ struct EditorSceneAdapterTests {
                             textureSheetRows: 2,
                             textureSheetFrameCount: 6,
                             textureSheetFrameRate: 15,
+                            textureSheetPlaybackMode: .loop,
+                            textureSheetStartFrame: 2,
+                            textureSheetFrameRandomness: 3,
                             trailLength: 0.8,
                             trailSegments: 6,
                             trailEndSizeScale: 0.3,
                             trailEndAlphaScale: 0.15,
-                            seed: 777),
+            seed: 777),
             for: entityID(hero.id)
         )
 
@@ -381,11 +384,30 @@ struct EditorSceneAdapterTests {
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.renderBoundsMode == .automatic)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.renderBoundsRadius == 28)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.textureSheetFrameCount == 6)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.textureSheetPlaybackMode == .loop)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.textureSheetStartFrame == 2)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.textureSheetFrameRandomness == 3)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.trailSegments == 6)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.moduleStack?.version
+                == ParticleModuleStack.currentVersion)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.moduleStack?.modules.map(\.id) == [
+            "emission",
+            "shape",
+            "velocity",
+            "forces",
+            "collision",
+            "appearance",
+            "textureSheet",
+            "renderer",
+            "trails",
+            "subEmitters",
+            "gpuSimulation",
+        ])
 
         // Survive a full Codable cycle (mirrors how saves persist the manifest).
         let data = try JSONEncoder().encode(manifest)
         let decoded = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
+        #expect(findNode(in: decoded.roots, id: hero.id)?.particleEmitter?.moduleStack?.modules.count == 11)
 
         let restored = EditorSceneAdapter()
         let result = restored.load(manifest: decoded)
@@ -482,6 +504,9 @@ struct EditorSceneAdapterTests {
         #expect(e!.textureSheetRows == 2)
         #expect(e!.textureSheetFrameCount == 6)
         #expect(e!.textureSheetFrameRate == 15)
+        #expect(e!.textureSheetPlaybackMode == .loop)
+        #expect(e!.textureSheetStartFrame == 2)
+        #expect(e!.textureSheetFrameRandomness == 3)
         #expect(e!.trailLength == 0.8)
         #expect(e!.trailSegments == 6)
         #expect(e!.trailEndSizeScale == 0.3)

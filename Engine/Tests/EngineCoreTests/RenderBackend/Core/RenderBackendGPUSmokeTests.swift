@@ -979,6 +979,82 @@ struct RenderBackendGPUSmokeTests {
         #expect(abs(instances[1].ribbonParams.y - 1.5) < 0.001)
     }
 
+    @Test("particle GPU render path applies texture sheet playback ranges",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU texture sheet test"))
+    func particleSimulationRenderPathAppliesTextureSheetPlaybackOnGPU() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+
+        renderer.initialize()
+
+        let plan = ParticleEmitter(
+            maxParticles: 1,
+            simulationBackend: .gpuIfSupported,
+            gpuSimulationWorkgroupSize: 64
+        ).gpuSimulationPlan
+        let scene = RenderScene(
+            camera: .fallbackPerspective,
+            particleSimulationBatches: [
+                RenderParticleSimulationBatch(
+                    emitterEntity: EntityID(index: 82, generation: 1),
+                    plan: plan,
+                    particles: [
+                        Particle(position: .zero,
+                                 velocity: .zero,
+                                 age: 2,
+                                 lifetime: 10,
+                                 size: 1,
+                                 color: SIMD4<Float>(1, 1, 1, 1),
+                                 textureFrameSeed: 4)
+                    ],
+                    gravity: .zero,
+                    renderOnGPU: true,
+                    textureSheetColumns: 4,
+                    textureSheetRows: 2,
+                    textureSheetFrameCount: 3,
+                    textureSheetFrameRate: 2,
+                    textureSheetPlaybackMode: .loop,
+                    textureSheetStartFrame: 2,
+                    textureSheetFrameRandomness: 2
+                )
+            ]
+        )
+
+        let encoder = try backend.createCommandEncoder()
+        let report = try renderer.encodeParticleSimulationPrePass(
+            encoder: encoder,
+            scene: scene,
+            deltaTime: 0,
+            elapsedTime: 0
+        )
+        #expect(report.renderInstanceCount == 1)
+
+        let sourceBuffer = try #require(renderer.particleStorageBuffer)
+        let commandBuffer = try encoder.finish()
+        backend.submit(commandBuffer)
+
+        let instances = try readbackParticleInstances(buffer: sourceBuffer,
+                                                       count: 1,
+                                                       backend: backend)
+        #expect(instances[0].uvRect == SIMD4<Float>(0, 0.5, 0.25, 0.5))
+    }
+
     @Test("particle GPU render path applies render budgets when expanding simulation particles",
           .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU particle budget test"))
     func particleSimulationRenderPathAppliesRenderBudgetOnGPU() throws {
