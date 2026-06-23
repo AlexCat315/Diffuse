@@ -529,6 +529,16 @@ struct SceneSerializerTests {
                                 ParticleCurveKeyframe(time: 1, value: 0),
                             ]),
                             blendMode: .additive,
+                            renderMode: .ribbon,
+                            sortMode: .youngestFirst,
+                            ribbonWidthScale: 1.75,
+                            ribbonTailWidthScale: 0.25,
+                            ribbonTailAlphaScale: 0.15,
+                            ribbonMaxSegmentLength: 3.5,
+                            ribbonJoinOverlapScale: 0.4,
+                            ribbonSmoothingSegments: 4,
+                            ribbonTextureTiling: 2.25,
+                            ribbonTextureOffset: 0.5,
                             renderAlignment: .velocity,
                             velocityStretchScale: 0.25,
                             velocityStretchMax: 6,
@@ -631,6 +641,16 @@ struct SceneSerializerTests {
             ParticleCurveKeyframe(time: 1, value: 0),
         ]))
         #expect(e!.blendMode == .additive)
+        #expect(e!.renderMode == .ribbon)
+        #expect(e!.sortMode == .youngestFirst)
+        #expect(e!.ribbonWidthScale == 1.75)
+        #expect(e!.ribbonTailWidthScale == 0.25)
+        #expect(e!.ribbonTailAlphaScale == 0.15)
+        #expect(e!.ribbonMaxSegmentLength == 3.5)
+        #expect(e!.ribbonJoinOverlapScale == 0.4)
+        #expect(e!.ribbonSmoothingSegments == 4)
+        #expect(e!.ribbonTextureTiling == 2.25)
+        #expect(e!.ribbonTextureOffset == 0.5)
         #expect(e!.renderAlignment == .velocity)
         #expect(e!.velocityStretchScale == 0.25)
         #expect(e!.velocityStretchMax == 6)

@@ -72,6 +72,11 @@ public struct RenderFrameStats: Sendable {
     public var gpuParticleSimulationBatchCount: Int
     public var gpuParticleSimulationParticleCount: Int
     public var gpuParticleSimulationDispatchWorkgroups: Int
+    public var gpuParticleSortPassCount: Int
+    public var gpuParticleSortItemCount: Int
+    public var gpuParticleSortPaddedItemCount: Int
+    public var gpuParticleSortDispatchWorkgroups: Int
+    public var gpuParticleInstanceDispatchWorkgroups: Int
     public var gpuParticleSimulationEventCapacity: Int
     public var gpuParticleSimulationEventBufferBytes: Int
     public var gpuParticleRenderInstanceCount: Int
@@ -106,6 +111,11 @@ public struct RenderFrameStats: Sendable {
         gpuParticleSimulationBatchCount: Int = 0,
         gpuParticleSimulationParticleCount: Int = 0,
         gpuParticleSimulationDispatchWorkgroups: Int = 0,
+        gpuParticleSortPassCount: Int = 0,
+        gpuParticleSortItemCount: Int = 0,
+        gpuParticleSortPaddedItemCount: Int = 0,
+        gpuParticleSortDispatchWorkgroups: Int = 0,
+        gpuParticleInstanceDispatchWorkgroups: Int = 0,
         gpuParticleSimulationEventCapacity: Int = 0,
         gpuParticleSimulationEventBufferBytes: Int = 0,
         gpuParticleRenderInstanceCount: Int = 0,
@@ -139,6 +149,11 @@ public struct RenderFrameStats: Sendable {
         self.gpuParticleSimulationBatchCount = gpuParticleSimulationBatchCount
         self.gpuParticleSimulationParticleCount = gpuParticleSimulationParticleCount
         self.gpuParticleSimulationDispatchWorkgroups = gpuParticleSimulationDispatchWorkgroups
+        self.gpuParticleSortPassCount = gpuParticleSortPassCount
+        self.gpuParticleSortItemCount = gpuParticleSortItemCount
+        self.gpuParticleSortPaddedItemCount = gpuParticleSortPaddedItemCount
+        self.gpuParticleSortDispatchWorkgroups = gpuParticleSortDispatchWorkgroups
+        self.gpuParticleInstanceDispatchWorkgroups = gpuParticleInstanceDispatchWorkgroups
         self.gpuParticleSimulationEventCapacity = gpuParticleSimulationEventCapacity
         self.gpuParticleSimulationEventBufferBytes = gpuParticleSimulationEventBufferBytes
         self.gpuParticleRenderInstanceCount = gpuParticleRenderInstanceCount
