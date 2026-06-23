@@ -417,6 +417,34 @@ struct InspectorPanel: View {
         }
     }
 
+    private struct InspectorParticleRenderModeValue: View {
+        let binding: Binding<ParticleRenderMode>
+
+        var body: some View {
+            EnumField(value: binding, width: 150) { mode in
+                switch mode {
+                case .billboard: return L("Billboard")
+                case .ribbon: return L("Ribbon")
+                }
+            }
+        }
+    }
+
+    private struct InspectorParticleSortModeValue: View {
+        let binding: Binding<ParticleSortMode>
+
+        var body: some View {
+            EnumField(value: binding, width: 190) { mode in
+                switch mode {
+                case .distanceDescending: return L("Back to Front")
+                case .distanceAscending: return L("Front to Back")
+                case .oldestFirst: return L("Oldest First")
+                case .youngestFirst: return L("Youngest First")
+                }
+            }
+        }
+    }
+
     private struct InspectorParticleRenderBoundsModeValue: View {
         let binding: Binding<ParticleRenderBoundsMode>
 
@@ -883,6 +911,10 @@ struct InspectorPanel: View {
             return AnyView(InspectorParticleCurveValue(binding: binding))
         case let .particleBlendMode(binding):
             return AnyView(InspectorParticleBlendModeValue(binding: binding))
+        case let .particleRenderMode(binding):
+            return AnyView(InspectorParticleRenderModeValue(binding: binding))
+        case let .particleSortMode(binding):
+            return AnyView(InspectorParticleSortModeValue(binding: binding))
         case let .particleRenderAlignment(binding):
             return AnyView(InspectorParticleRenderAlignmentValue(binding: binding))
         case let .particleRenderBoundsMode(binding):

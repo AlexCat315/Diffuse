@@ -314,8 +314,9 @@ private struct ParticleDiagnosticsView: View {
                 StatGroup(title: "GPU Simulation") {
                     StatRow(label: "Batches", value: "\(renderStats.gpuParticleSimulationBatchCount)")
                     StatRow(label: "Particles", value: "\(renderStats.gpuParticleSimulationParticleCount)")
-                    StatRow(label: "Workgroups", value: "\(renderStats.gpuParticleSimulationDispatchWorkgroups)")
+                    StatRow(label: "Sim Workgroups", value: "\(renderStats.gpuParticleSimulationDispatchWorkgroups)")
                     StatRow(label: "Render Instances", value: "\(renderStats.gpuParticleRenderInstanceCount)")
+                    StatRow(label: "Instance Workgroups", value: "\(renderStats.gpuParticleInstanceDispatchWorkgroups)")
                     StatRow(label: "Indirect Draws", value: "\(renderStats.gpuParticleIndirectDrawCount)")
                     StatRow(label: "Cull Batches", value: "\(renderStats.gpuParticleCullBatchCount)")
                     StatRow(label: "Cull Candidates", value: "\(renderStats.gpuParticleCullCandidateCount)")
@@ -327,6 +328,18 @@ private struct ParticleDiagnosticsView: View {
             .padding(horizontal: 12, vertical: 10)
 
             Row(alignment: .top, spacing: 12) {
+                StatGroup(title: "GPU Sort") {
+                    StatRow(label: "Passes", value: "\(renderStats.gpuParticleSortPassCount)")
+                    StatRow(label: "Items", value: "\(renderStats.gpuParticleSortItemCount)")
+                    StatRow(label: "Padded Items", value: "\(renderStats.gpuParticleSortPaddedItemCount)")
+                    StatRow(label: "Padding Overhead", value: formatPercent(
+                        renderStats.gpuParticleSortPaddedItemCount - renderStats.gpuParticleSortItemCount,
+                        renderStats.gpuParticleSortPaddedItemCount
+                    ))
+                    StatRow(label: "Workgroups", value: "\(renderStats.gpuParticleSortDispatchWorkgroups)")
+                }
+                .flex(1, shrink: 1)
+
                 StatGroup(title: "Frame Balance") {
                     StatRow(label: "Spawned - Expired",
                             value: "\(stats.spawnedParticleCount - stats.expiredParticleCount)")
@@ -336,6 +349,27 @@ private struct ParticleDiagnosticsView: View {
                                                                                  stats.spawnedParticleCount))
                     StatRow(label: "Burst Spawn Share", value: formatPercent(stats.burstSpawnedCount,
                                                                               stats.spawnedParticleCount))
+                }
+                .flex(1, shrink: 1)
+
+                StatGroup(title: "GPU Work Split") {
+                    StatRow(label: "Total", value: "\(gpuParticleWorkgroupTotal(renderStats))")
+                    StatRow(label: "Sim", value: formatPercent(
+                        renderStats.gpuParticleSimulationDispatchWorkgroups,
+                        gpuParticleWorkgroupTotal(renderStats)
+                    ))
+                    StatRow(label: "Sort", value: formatPercent(
+                        renderStats.gpuParticleSortDispatchWorkgroups,
+                        gpuParticleWorkgroupTotal(renderStats)
+                    ))
+                    StatRow(label: "Instance", value: formatPercent(
+                        renderStats.gpuParticleInstanceDispatchWorkgroups,
+                        gpuParticleWorkgroupTotal(renderStats)
+                    ))
+                    StatRow(label: "Cull", value: formatPercent(
+                        renderStats.gpuParticleCullDispatchWorkgroups,
+                        gpuParticleWorkgroupTotal(renderStats)
+                    ))
                 }
                 .flex(1, shrink: 1)
             }
@@ -527,6 +561,13 @@ private func formatSignedMs(_ ms: Double) -> String {
     if ms == 0 { return "0.00ms" }
     let prefix = ms > 0 ? "+" : "-"
     return "\(prefix)\(formatMs(abs(ms)))"
+}
+
+private func gpuParticleWorkgroupTotal(_ stats: RenderFrameStats) -> Int {
+    stats.gpuParticleSimulationDispatchWorkgroups
+        + stats.gpuParticleSortDispatchWorkgroups
+        + stats.gpuParticleInstanceDispatchWorkgroups
+        + stats.gpuParticleCullDispatchWorkgroups
 }
 
 private func formatPercent(_ numerator: Int, _ denominator: Int) -> String {
