@@ -128,6 +128,14 @@ public struct RuntimeWorldSchedule {
         var light: RenderLight
     }
 
+    private struct SortableRenderParticle {
+        var particle: RenderParticle
+        var sortMode: ParticleSortMode
+        var distanceSquared: Float
+        var age: Float
+        var sourceOrder: Int
+    }
+
     private struct PhysicsSyncCache {
         var bodies: [EntityID: PhysicsBodyDescriptor] = [:]
         var constraints: [EntityID: PhysicsConstraintDescriptor] = [:]
@@ -646,6 +654,7 @@ public struct RuntimeWorldSchedule {
                     renderAlignment: emitter.renderAlignment,
                     velocityStretchScale: emitter.velocityStretchScale,
                     velocityStretchMax: emitter.velocityStretchMax,
+                    sortMode: emitter.sortMode,
                     renderParticleLimit: renderParticleLimit,
                     renderAlphaScale: renderAlphaScale,
                     trailLength: emitter.trailLength,
@@ -660,6 +669,7 @@ public struct RuntimeWorldSchedule {
 
     private func canRenderEmitterParticlesOnGPU(_ emitter: ParticleEmitter) -> Bool {
         guard emitter.gpuSimulationPlan.usesGPU else { return false }
+        guard emitter.renderMode == .billboard else { return false }
         guard emitter.renderAlignment == .billboard || emitter.renderAlignment == .velocity else { return false }
         guard emitter.textureAssetID == nil || emitter.texturePath != nil else { return false }
         return true
@@ -674,7 +684,8 @@ public struct RuntimeWorldSchedule {
         in world: RuntimeWorld,
         camera: RenderCamera
     ) -> [RenderParticle] {
-        var result: [RenderParticle] = []
+        var sortableParticles: [SortableRenderParticle] = []
+        var nextSourceOrder = 0
         for entity in world.entities(with: ParticleEmitter.self) {
             guard let emitter = world.component(ParticleEmitter.self, for: entity),
                   !emitter.particles.isEmpty
@@ -699,34 +710,28 @@ public struct RuntimeWorldSchedule {
                                                        cameraEye: camera.eye)
             let sourceParticles = renderSourceParticles(for: emitter,
                                                         cameraDistance: cameraDistance)
+            if emitter.renderMode == .ribbon {
+                appendRibbonParticles(sourceParticles,
+                                      emitter: emitter,
+                                      toWorld: toWorld,
+                                      distanceFade: distanceFade,
+                                      cameraEye: camera.eye,
+                                      nextSourceOrder: &nextSourceOrder,
+                                      to: &sortableParticles)
+                continue
+            }
             let trailSegments = emitter.trailLength > 0 ? emitter.trailSegments : 0
-            result.reserveCapacity(result.count + sourceParticles.count * (1 + trailSegments))
+            sortableParticles.reserveCapacity(sortableParticles.count + sourceParticles.count * (1 + trailSegments))
             for particle in sourceParticles {
-                let worldPosition: SIMD3<Float>
-                let worldVelocity: SIMD3<Float>
-                switch emitter.simulationSpace {
-                case .local:
-                    let transformed = toWorld * SIMD4<Float>(particle.position, 1)
-                    if abs(transformed.w) > 0.0001 {
-                        worldPosition = SIMD3<Float>(
-                            transformed.x / transformed.w,
-                            transformed.y / transformed.w,
-                            transformed.z / transformed.w
-                        )
-                    } else {
-                        worldPosition = SIMD3<Float>(transformed.x, transformed.y, transformed.z)
-                    }
-                    worldVelocity = Self.transformDirection(particle.velocity, by: toWorld)
-                case .world:
-                    worldPosition = particle.position
-                    worldVelocity = particle.velocity
-                }
+                let sample = renderParticleSample(for: particle,
+                                                  emitter: emitter,
+                                                  toWorld: toWorld)
                 let uvRect = emitter.textureUVRect(for: particle)
-                let alignment = renderAlignment(for: emitter, worldVelocity: worldVelocity)
+                let alignment = renderAlignment(for: emitter, worldVelocity: sample.velocity)
                 var color = particle.color
                 color.w *= distanceFade
                 let base = RenderParticle(
-                    position: worldPosition,
+                    position: sample.position,
                     size: particle.size,
                     rotation: particle.rotation,
                     color: color,
@@ -736,18 +741,23 @@ public struct RuntimeWorldSchedule {
                     blendMode: emitter.blendMode,
                     texturePath: emitter.texturePath
                 )
-                result.append(base)
+                appendSortableParticle(base,
+                                       emitter: emitter,
+                                       cameraEye: camera.eye,
+                                       age: particle.age,
+                                       nextSourceOrder: &nextSourceOrder,
+                                       to: &sortableParticles)
                 appendTrailParticles(for: particle,
                                      emitter: emitter,
                                      base: base,
-                                     worldVelocity: worldVelocity,
-                                     to: &result)
+                                     worldVelocity: sample.velocity,
+                                     cameraEye: camera.eye,
+                                     nextSourceOrder: &nextSourceOrder,
+                                     to: &sortableParticles)
             }
         }
-        result.sort {
-            simd_length_squared($0.position - camera.eye) > simd_length_squared($1.position - camera.eye)
-        }
-        return result
+        sortableParticles.sort(by: compareSortableParticles)
+        return sortableParticles.map(\.particle)
     }
 
     private func renderSourceParticles(
@@ -765,10 +775,95 @@ public struct RuntimeWorldSchedule {
         return emitter.particles.suffix(budget)
     }
 
+    private func appendSortableParticle(
+        _ particle: RenderParticle,
+        emitter: ParticleEmitter,
+        cameraEye: SIMD3<Float>,
+        age: Float,
+        nextSourceOrder: inout Int,
+        to result: inout [SortableRenderParticle]
+    ) {
+        result.append(
+            SortableRenderParticle(
+                particle: particle,
+                sortMode: emitter.sortMode,
+                distanceSquared: simd_length_squared(particle.position - cameraEye),
+                age: max(0, age),
+                sourceOrder: nextSourceOrder
+            )
+        )
+        nextSourceOrder += 1
+    }
+
+    private func compareSortableParticles(
+        _ lhs: SortableRenderParticle,
+        _ rhs: SortableRenderParticle
+    ) -> Bool {
+        if lhs.sortMode != rhs.sortMode {
+            return tieBreakSortableParticles(lhs, rhs)
+        }
+
+        switch lhs.sortMode {
+        case .distanceDescending:
+            if lhs.distanceSquared != rhs.distanceSquared {
+                return lhs.distanceSquared > rhs.distanceSquared
+            }
+        case .distanceAscending:
+            if lhs.distanceSquared != rhs.distanceSquared {
+                return lhs.distanceSquared < rhs.distanceSquared
+            }
+        case .oldestFirst:
+            if lhs.age != rhs.age {
+                return lhs.age > rhs.age
+            }
+        case .youngestFirst:
+            if lhs.age != rhs.age {
+                return lhs.age < rhs.age
+            }
+        }
+        return tieBreakSortableParticles(lhs, rhs)
+    }
+
+    private func tieBreakSortableParticles(
+        _ lhs: SortableRenderParticle,
+        _ rhs: SortableRenderParticle
+    ) -> Bool {
+        if lhs.distanceSquared != rhs.distanceSquared {
+            return lhs.distanceSquared > rhs.distanceSquared
+        }
+        return lhs.sourceOrder < rhs.sourceOrder
+    }
+
     private struct CameraBasis {
         var forward: SIMD3<Float>
         var right: SIMD3<Float>
         var up: SIMD3<Float>
+    }
+
+    private struct RenderParticleSample {
+        var position: SIMD3<Float>
+        var velocity: SIMD3<Float>
+    }
+
+    private struct RibbonControlPoint {
+        var particle: Particle
+        var position: SIMD3<Float>
+        var width: Float
+        var color: SIMD4<Float>
+    }
+
+    private struct RibbonRenderSegment {
+        var startPosition: SIMD3<Float>
+        var endPosition: SIMD3<Float>
+        var startWidth: Float
+        var endWidth: Float
+        var startColor: SIMD4<Float>
+        var endColor: SIMD4<Float>
+        var sortAge: Float
+        var uvRect: SIMD4<Float>
+        var textureVOffset: Float
+        var textureVScale: Float
+        var runID: Int
     }
 
     private func isEmitterVisibleToCamera(
@@ -864,7 +959,9 @@ public struct RuntimeWorldSchedule {
         emitter: ParticleEmitter,
         base: RenderParticle,
         worldVelocity: SIMD3<Float>,
-        to result: inout [RenderParticle]
+        cameraEye: SIMD3<Float>,
+        nextSourceOrder: inout Int,
+        to result: inout [SortableRenderParticle]
     ) {
         guard emitter.trailLength > 0,
               emitter.trailSegments > 0,
@@ -882,7 +979,7 @@ public struct RuntimeWorldSchedule {
             let alphaScale = 1 + (emitter.trailEndAlphaScale - 1) * t
             var color = base.color
             color.w *= alphaScale
-            result.append(
+            appendSortableParticle(
                 RenderParticle(
                     position: base.position - step * Float(index),
                     size: max(0, base.size * sizeScale),
@@ -893,9 +990,255 @@ public struct RuntimeWorldSchedule {
                     stretch: base.stretch,
                     blendMode: base.blendMode,
                     texturePath: base.texturePath
-                )
+                ),
+                emitter: emitter,
+                cameraEye: cameraEye,
+                age: particle.age,
+                nextSourceOrder: &nextSourceOrder,
+                to: &result
             )
         }
+    }
+
+    private func appendRibbonParticles(
+        _ particles: ArraySlice<Particle>,
+        emitter: ParticleEmitter,
+        toWorld: simd_float4x4,
+        distanceFade: Float,
+        cameraEye: SIMD3<Float>,
+        nextSourceOrder: inout Int,
+        to result: inout [SortableRenderParticle]
+    ) {
+        guard particles.count >= 2 else { return }
+
+        let samples = particles.map { particle in
+            (particle: particle, sample: renderParticleSample(for: particle,
+                                                              emitter: emitter,
+                                                              toWorld: toWorld))
+        }
+        let segmentLengths = zip(samples.dropLast(), samples.dropFirst()).map { (start, end) in
+            simd_length(end.sample.position - start.sample.position)
+        }
+        let segmentCount = max(1, segmentLengths.count)
+        let controlPoints = samples.enumerated().map { index, pair in
+            let tailNormalized = 1 - simd_clamp(Float(index) / Float(segmentCount), 0, 1)
+            let widthScale = emitter.ribbonWidthScale
+                * (1 + (emitter.ribbonTailWidthScale - 1) * tailNormalized)
+            let alphaScale = 1 + (emitter.ribbonTailAlphaScale - 1) * tailNormalized
+            var color = pair.particle.color
+            color.w *= distanceFade * alphaScale
+            return RibbonControlPoint(
+                particle: pair.particle,
+                position: pair.sample.position,
+                width: max(0, pair.particle.size * widthScale),
+                color: color
+            )
+        }
+
+        let subdivisions = emitter.ribbonSmoothingSegments
+        var drafts: [RibbonRenderSegment] = []
+        drafts.reserveCapacity(max(0, segmentLengths.count * subdivisions))
+        var ribbonDistance: Float = 0
+        var runID = 0
+        for index in segmentLengths.indices {
+            let length = segmentLengths[index]
+            guard isRenderableRibbonSegment(length, emitter: emitter) else {
+                ribbonDistance = 0
+                runID += 1
+                continue
+            }
+
+            let previousPosition = connectedRibbonControlPosition(index - 1,
+                                                                  fallback: controlPoints[index].position,
+                                                                  segmentLengths: segmentLengths,
+                                                                  controlPoints: controlPoints,
+                                                                  emitter: emitter)
+            let nextPosition = connectedRibbonControlPosition(index + 2,
+                                                              fallback: controlPoints[index + 1].position,
+                                                              segmentLengths: segmentLengths,
+                                                              controlPoints: controlPoints,
+                                                              emitter: emitter)
+            for subdivision in 0..<subdivisions {
+                let t0 = Float(subdivision) / Float(subdivisions)
+                let t1 = Float(subdivision + 1) / Float(subdivisions)
+                let startPosition = ribbonInterpolatedPosition(previous: previousPosition,
+                                                               start: controlPoints[index].position,
+                                                               end: controlPoints[index + 1].position,
+                                                               next: nextPosition,
+                                                               t: t0,
+                                                               smooth: subdivisions > 1)
+                let endPosition = ribbonInterpolatedPosition(previous: previousPosition,
+                                                             start: controlPoints[index].position,
+                                                             end: controlPoints[index + 1].position,
+                                                             next: nextPosition,
+                                                             t: t1,
+                                                             smooth: subdivisions > 1)
+                let subLength = simd_length(endPosition - startPosition)
+                guard subLength > 0.0001 else { continue }
+                let startWidth = lerp(controlPoints[index].width, controlPoints[index + 1].width, t0)
+                let endWidth = lerp(controlPoints[index].width, controlPoints[index + 1].width, t1)
+                let startColor = lerp(controlPoints[index].color, controlPoints[index + 1].color, t0)
+                let endColor = lerp(controlPoints[index].color, controlPoints[index + 1].color, t1)
+                let sortAge = lerp(controlPoints[index].particle.age, controlPoints[index + 1].particle.age, (t0 + t1) * 0.5)
+                drafts.append(
+                    RibbonRenderSegment(
+                        startPosition: startPosition,
+                        endPosition: endPosition,
+                        startWidth: startWidth,
+                        endWidth: endWidth,
+                        startColor: startColor,
+                        endColor: endColor,
+                        sortAge: sortAge,
+                        uvRect: emitter.textureUVRect(for: controlPoints[index].particle),
+                        textureVOffset: emitter.ribbonTextureOffset + ribbonDistance * emitter.ribbonTextureTiling,
+                        textureVScale: subLength * emitter.ribbonTextureTiling,
+                        runID: runID
+                    )
+                )
+                ribbonDistance += subLength
+            }
+        }
+
+        let renderSegmentLengths = drafts.map { simd_length($0.endPosition - $0.startPosition) }
+        let runIDs = drafts.map(\.runID)
+        result.reserveCapacity(result.count + drafts.count)
+        for (index, draft) in drafts.enumerated() {
+            let length = renderSegmentLengths[index]
+            guard length > 0.0001 else { continue }
+            let width = max(0.0001, max(draft.startWidth, draft.endWidth))
+            let startOverlap = ribbonJoinOverlap(segmentIndex: index,
+                                                 neighborIndex: index - 1,
+                                                 width: width,
+                                                 segmentLengths: renderSegmentLengths,
+                                                 runIDs: runIDs,
+                                                 emitter: emitter)
+            let endOverlap = ribbonJoinOverlap(segmentIndex: index,
+                                               neighborIndex: index + 1,
+                                               width: width,
+                                               segmentLengths: renderSegmentLengths,
+                                               runIDs: runIDs,
+                                               emitter: emitter)
+            let direction = (draft.endPosition - draft.startPosition) / length
+            let renderLength = length + startOverlap + endOverlap
+            let renderCenter = (draft.startPosition + draft.endPosition) * 0.5
+                + direction * ((endOverlap - startOverlap) * 0.5)
+            appendSortableParticle(
+                RenderParticle(
+                    position: renderCenter,
+                    size: width,
+                    rotation: 0,
+                    color: draft.startColor,
+                    endColor: draft.endColor,
+                    uvRect: draft.uvRect,
+                    alignmentAxis: direction,
+                    stretch: max(1, renderLength / width),
+                    startSize: draft.startWidth,
+                    endSize: draft.endWidth,
+                    shape: .ribbonSegment,
+                    textureVOffset: draft.textureVOffset,
+                    textureVScale: draft.textureVScale,
+                    blendMode: emitter.blendMode,
+                    texturePath: emitter.texturePath
+                ),
+                emitter: emitter,
+                cameraEye: cameraEye,
+                age: draft.sortAge,
+                nextSourceOrder: &nextSourceOrder,
+                to: &result
+            )
+        }
+    }
+
+    private func ribbonJoinOverlap(
+        segmentIndex: Int,
+        neighborIndex: Int,
+        width: Float,
+        segmentLengths: [Float],
+        runIDs: [Int],
+        emitter: ParticleEmitter
+    ) -> Float {
+        guard emitter.ribbonJoinOverlapScale > 0,
+              segmentLengths.indices.contains(segmentIndex),
+              segmentLengths.indices.contains(neighborIndex),
+              runIDs.indices.contains(segmentIndex),
+              runIDs.indices.contains(neighborIndex),
+              runIDs[segmentIndex] == runIDs[neighborIndex]
+        else { return 0 }
+        let length = segmentLengths[segmentIndex]
+        let neighborLength = segmentLengths[neighborIndex]
+        guard length > 0.0001, neighborLength > 0.0001 else { return 0 }
+        return min(width * emitter.ribbonJoinOverlapScale,
+                   length * 0.5,
+                   neighborLength * 0.5)
+    }
+
+    private func connectedRibbonControlPosition(
+        _ pointIndex: Int,
+        fallback: SIMD3<Float>,
+        segmentLengths: [Float],
+        controlPoints: [RibbonControlPoint],
+        emitter: ParticleEmitter
+    ) -> SIMD3<Float> {
+        guard controlPoints.indices.contains(pointIndex) else {
+            return fallback
+        }
+        if pointIndex < controlPoints.count - 1,
+           !isRenderableRibbonSegment(segmentLengths[pointIndex], emitter: emitter) {
+            return fallback
+        }
+        if pointIndex > 0,
+           !isRenderableRibbonSegment(segmentLengths[pointIndex - 1], emitter: emitter) {
+            return fallback
+        }
+        return controlPoints[pointIndex].position
+    }
+
+    private func ribbonInterpolatedPosition(
+        previous: SIMD3<Float>,
+        start: SIMD3<Float>,
+        end: SIMD3<Float>,
+        next: SIMD3<Float>,
+        t: Float,
+        smooth: Bool
+    ) -> SIMD3<Float> {
+        guard smooth else {
+            return lerp(start, end, t)
+        }
+        let t2 = t * t
+        let t3 = t2 * t
+        let term0 = start * 2
+        let term1 = (end - previous) * t
+        let term2A = previous * 2
+        let term2B = start * 5
+        let term2C = end * 4
+        let term2Base = term2A - term2B + term2C - next
+        let term2 = term2Base * t2
+        let term3A = start * 3
+        let term3B = end * 3
+        let term3Base = -previous + term3A - term3B + next
+        let term3 = term3Base * t3
+        return (term0 + term1 + term2 + term3) * 0.5
+    }
+
+    private func lerp(_ start: Float, _ end: Float, _ t: Float) -> Float {
+        start + (end - start) * t
+    }
+
+    private func lerp(_ start: SIMD3<Float>, _ end: SIMD3<Float>, _ t: Float) -> SIMD3<Float> {
+        start + (end - start) * t
+    }
+
+    private func lerp(_ start: SIMD4<Float>, _ end: SIMD4<Float>, _ t: Float) -> SIMD4<Float> {
+        start + (end - start) * t
+    }
+
+    private func isRenderableRibbonSegment(_ length: Float, emitter: ParticleEmitter) -> Bool {
+        guard length > 0.0001 else { return false }
+        if emitter.ribbonMaxSegmentLength > 0,
+           length > emitter.ribbonMaxSegmentLength {
+            return false
+        }
+        return true
     }
 
     private func renderAlignment(for emitter: ParticleEmitter,
@@ -910,6 +1253,19 @@ public struct RuntimeWorldSchedule {
         let stretch = min(emitter.velocityStretchMax,
                           max(1, 1 + speed * emitter.velocityStretchScale))
         return (worldVelocity / speed, stretch)
+    }
+
+    private func renderParticleSample(for particle: Particle,
+                                      emitter: ParticleEmitter,
+                                      toWorld: simd_float4x4) -> RenderParticleSample {
+        switch emitter.simulationSpace {
+        case .local:
+            let worldPosition = Self.transformPoint(particle.position, by: toWorld)
+            let worldVelocity = Self.transformDirection(particle.velocity, by: toWorld)
+            return RenderParticleSample(position: worldPosition, velocity: worldVelocity)
+        case .world:
+            return RenderParticleSample(position: particle.position, velocity: particle.velocity)
+        }
     }
 
     private static func transformDirection(_ direction: SIMD3<Float>, by matrix: simd_float4x4) -> SIMD3<Float> {

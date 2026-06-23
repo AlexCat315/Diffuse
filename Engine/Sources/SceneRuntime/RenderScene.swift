@@ -136,6 +136,11 @@ public struct RenderInstance: Sendable {
     }
 }
 
+public enum RenderParticleShape: UInt32, Sendable, Equatable {
+    case softBillboard = 0
+    case ribbonSegment = 1
+}
+
 /// One camera-facing billboard particle, already transformed to world space and
 /// ready for the render backend. Built each frame from live `ParticleEmitter`
 /// pools; the renderer uploads these into a storage buffer and draws them as
@@ -145,12 +150,24 @@ public struct RenderParticle: Sendable, Equatable {
     public var size: Float
     public var rotation: Float
     public var color: SIMD4<Float>
+    /// Ribbon end color. Billboard particles keep this equal to `color`.
+    public var endColor: SIMD4<Float>
     /// Texture sheet UV rect: x, y, width, height.
     public var uvRect: SIMD4<Float>
     /// Optional world-space axis used for velocity-aligned billboard rendering.
     public var alignmentAxis: SIMD3<Float>
     /// Multiplier applied along `alignmentAxis`; 1 keeps the particle square.
     public var stretch: Float
+    /// Ribbon start width. Billboard particles keep this equal to `size`.
+    public var startSize: Float
+    /// Ribbon end width. Billboard particles keep this equal to `size`.
+    public var endSize: Float
+    /// Fragment alpha model used by the particle shader.
+    public var shape: RenderParticleShape
+    /// Ribbon-only V coordinate offset. Used when `textureVScale` is greater than zero.
+    public var textureVOffset: Float
+    /// Ribbon-only V coordinate scale. Zero keeps the particle's authored UV rect unchanged.
+    public var textureVScale: Float
     public var blendMode: ParticleBlendMode
     public var texturePath: String?
 
@@ -158,18 +175,30 @@ public struct RenderParticle: Sendable, Equatable {
                 size: Float,
                 rotation: Float = 0,
                 color: SIMD4<Float>,
+                endColor: SIMD4<Float>? = nil,
                 uvRect: SIMD4<Float> = SIMD4<Float>(0, 0, 1, 1),
                 alignmentAxis: SIMD3<Float> = .zero,
                 stretch: Float = 1,
+                startSize: Float? = nil,
+                endSize: Float? = nil,
+                shape: RenderParticleShape = .softBillboard,
+                textureVOffset: Float = 0,
+                textureVScale: Float = 0,
                 blendMode: ParticleBlendMode = .alpha,
                 texturePath: String? = nil) {
         self.position = position
         self.size = size
         self.rotation = rotation
         self.color = color
+        self.endColor = endColor ?? color
         self.uvRect = uvRect
         self.alignmentAxis = alignmentAxis
         self.stretch = max(1, stretch)
+        self.startSize = max(0, startSize ?? size)
+        self.endSize = max(0, endSize ?? size)
+        self.shape = shape
+        self.textureVOffset = textureVOffset
+        self.textureVScale = max(0, textureVScale)
         self.blendMode = blendMode
         self.texturePath = texturePath
     }
@@ -362,6 +391,7 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
     public var renderAlignment: ParticleRenderAlignment
     public var velocityStretchScale: Float
     public var velocityStretchMax: Float
+    public var sortMode: ParticleSortMode
     /// Effective number of simulated particles to submit for rendering. A zero
     /// value keeps every live simulated particle visible.
     public var renderParticleLimit: Int
@@ -407,6 +437,7 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
                 renderAlignment: ParticleRenderAlignment = .billboard,
                 velocityStretchScale: Float = 0,
                 velocityStretchMax: Float = 8,
+                sortMode: ParticleSortMode = .distanceDescending,
                 renderParticleLimit: Int = 0,
                 renderAlphaScale: Float = 1,
                 trailLength: Float = 0,
@@ -449,6 +480,7 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
         self.renderAlignment = renderAlignment
         self.velocityStretchScale = max(0, velocityStretchScale)
         self.velocityStretchMax = max(1, velocityStretchMax)
+        self.sortMode = sortMode
         self.renderParticleLimit = max(0, renderParticleLimit)
         self.renderAlphaScale = simd_clamp(renderAlphaScale, 0, 1)
         self.trailLength = max(0, trailLength)

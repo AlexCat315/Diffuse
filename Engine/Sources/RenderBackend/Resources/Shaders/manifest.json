@@ -207,6 +207,20 @@
       "threadcount_z": 1
     },
     {
+      "name": "particle_sort_prepare",
+      "compute": "WGSL/particle_sort_prepare.wgsl",
+      "threadcount_x": 64,
+      "threadcount_y": 1,
+      "threadcount_z": 1
+    },
+    {
+      "name": "particle_sort_bitonic",
+      "compute": "WGSL/particle_sort_bitonic.wgsl",
+      "threadcount_x": 64,
+      "threadcount_y": 1,
+      "threadcount_z": 1
+    },
+    {
       "name": "particle_spawn_append",
       "compute": "WGSL/particle_spawn_append.wgsl",
       "threadcount_x": 64,
