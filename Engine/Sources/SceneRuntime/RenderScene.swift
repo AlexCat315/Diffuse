@@ -386,6 +386,9 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
     public var textureSheetRows: Int
     public var textureSheetFrameCount: Int
     public var textureSheetFrameRate: Float
+    public var textureSheetPlaybackMode: ParticleTextureSheetPlaybackMode
+    public var textureSheetStartFrame: Int
+    public var textureSheetFrameRandomness: Int
     public var blendMode: ParticleBlendMode
     public var texturePath: String?
     public var renderAlignment: ParticleRenderAlignment
@@ -432,6 +435,9 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
                 textureSheetRows: Int = 1,
                 textureSheetFrameCount: Int = 1,
                 textureSheetFrameRate: Float = 0,
+                textureSheetPlaybackMode: ParticleTextureSheetPlaybackMode = .automatic,
+                textureSheetStartFrame: Int = 0,
+                textureSheetFrameRandomness: Int = 0,
                 blendMode: ParticleBlendMode = .alpha,
                 texturePath: String? = nil,
                 renderAlignment: ParticleRenderAlignment = .billboard,
@@ -475,6 +481,9 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
         self.textureSheetRows = max(1, textureSheetRows)
         self.textureSheetFrameCount = max(1, textureSheetFrameCount)
         self.textureSheetFrameRate = max(0, textureSheetFrameRate)
+        self.textureSheetPlaybackMode = textureSheetPlaybackMode
+        self.textureSheetStartFrame = max(0, textureSheetStartFrame)
+        self.textureSheetFrameRandomness = max(0, textureSheetFrameRandomness)
         self.blendMode = blendMode
         self.texturePath = normalizedParticleTexturePath(texturePath)
         self.renderAlignment = renderAlignment
