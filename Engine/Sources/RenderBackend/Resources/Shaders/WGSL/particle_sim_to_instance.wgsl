@@ -21,11 +21,21 @@ struct ParticleInstance {
     color: vec4<f32>,
     uv_rect: vec4<f32>,
     axis_stretch: vec4<f32>,
+    ribbon_color: vec4<f32>,
+    ribbon_params: vec4<f32>,
+};
+
+struct ParticleSortItem {
+    key: f32,
+    index: u32,
+    padding0: u32,
+    padding1: u32,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: ParticleSimToInstanceUniforms;
 @group(0) @binding(1) var<storage, read> sim_particles: array<ParticleSimState>;
 @group(0) @binding(2) var<storage, read_write> render_particles: array<ParticleInstance>;
+@group(0) @binding(3) var<storage, read> sorted_particles: array<ParticleSortItem>;
 
 fn texture_sheet_uv_rect(particle: ParticleSimState) -> vec4<f32> {
     let columns = max(u32(uniforms.texture_sheet.x), 1u);
@@ -77,7 +87,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         return;
     }
 
-    let index = source_start_index + output_index / instance_multiplier;
+    let local_particle_index = output_index / instance_multiplier;
+    let sorted_particle_index = sorted_particles[local_particle_index].index;
+    let index = source_start_index + sorted_particle_index;
     let segment = output_index % instance_multiplier;
     let sim_particle = sim_particles[index];
     let output_instance = base_instance + output_index;
@@ -88,7 +100,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
             vec4<f32>(0.0),
             vec4<f32>(0.0),
             uniforms.uv_rect,
-            vec4<f32>(0.0, 0.0, 0.0, 1.0)
+            vec4<f32>(0.0, 0.0, 0.0, 1.0),
+            vec4<f32>(0.0),
+            vec4<f32>(0.0)
         );
         return;
     }
@@ -117,15 +131,18 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let trail_alpha_scale = mix(1.0, clamp(uniforms.trail_params.w, 0.0, 1.0), trail_t);
     var color = sim_particle.color;
     color.a = color.a * clamp(uniforms.render_params.w, 0.0, 1.0) * trail_alpha_scale;
+    let size = max(sim_particle.size_rotation.x * trail_size_scale, 0.0);
 
     var instance: ParticleInstance;
     instance.position_size = vec4<f32>(
         world_position.xyz * inv_w - trail_offset,
-        max(sim_particle.size_rotation.x * trail_size_scale, 0.0)
+        size
     );
     instance.rotation = vec4<f32>(sim_particle.size_rotation.y, 0.0, 0.0, 0.0);
     instance.color = color;
     instance.uv_rect = texture_sheet_uv_rect(sim_particle);
     instance.axis_stretch = axis_stretch;
+    instance.ribbon_color = color;
+    instance.ribbon_params = vec4<f32>(size, size, 0.0, 0.0);
     render_particles[output_instance] = instance;
 }

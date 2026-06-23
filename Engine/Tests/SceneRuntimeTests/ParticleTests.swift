@@ -340,6 +340,75 @@ struct ParticleTests {
         #expect(emitter.lastFrameSpawnedParticles.isEmpty)
     }
 
+    @Test("GPU event sub-emitters defer CPU spawning until external simulation feedback")
+    func gpuEventSubEmittersDeferToExternalSimulationEvents() {
+        var emitter = ParticleEmitter(isEmitting: false,
+                                      emissionRate: 0,
+                                      maxParticles: 8,
+                                      lifetime: 0.5,
+                                      subEmitterTrigger: .death,
+                                      subEmitterBurstCount: 2,
+                                      subEmitterMaxDepth: 1,
+                                      subEmitterLifetime: 2,
+                                      subEmitterStartVelocity: SIMD3<Float>(1, 0, 0),
+                                      subEmitterVelocityRandomness: .zero,
+                                      gravity: .zero,
+                                      simulationBackend: .gpuIfSupported)
+        #expect(emitter.gpuSimulationPlan.usesGPU)
+
+        emitter.emit(1)
+        emitter.advance(deltaTime: 1)
+
+        #expect(emitter.aliveCount == 0)
+        #expect(emitter.lastFrameStats.expiredParticleCount == 1)
+        #expect(emitter.lastFrameStats.subEmitterSpawnedCount == 0)
+        #expect(emitter.lastFrameEvents.isEmpty)
+        #expect(emitter.lastFrameSpawnedParticles.isEmpty)
+
+        let feedback = ParticleEvent(trigger: .death,
+                                     position: SIMD3<Float>(2, 0, 0),
+                                     velocity: .zero,
+                                     age: 0.5,
+                                     lifetime: 0.5,
+                                     generation: 0,
+                                     appearanceIndex: 0)
+        let feedbackStats = emitter.applySimulationEvents([feedback])
+
+        #expect(feedbackStats.expiredParticleCount == 1)
+        #expect(feedbackStats.subEmitterSpawnedCount == 2)
+        #expect(emitter.aliveCount == 2)
+        #expect(emitter.lastFrameEvents == [feedback])
+        #expect(emitter.lastFrameSpawnedParticles.count == 2)
+    }
+
+    @Test("GPU fallback keeps CPU-owned event sub-emitter spawning")
+    func gpuFallbackKeepsCPUOwnedEventSubEmitterSpawning() {
+        var emitter = ParticleEmitter(isEmitting: false,
+                                      emissionRate: 0,
+                                      distanceEmissionRate: 1,
+                                      maxParticles: 4,
+                                      lifetime: 0.5,
+                                      subEmitterTrigger: .death,
+                                      subEmitterBurstCount: 1,
+                                      subEmitterMaxDepth: 1,
+                                      subEmitterLifetime: 2,
+                                      subEmitterStartVelocity: .zero,
+                                      subEmitterVelocityRandomness: .zero,
+                                      gravity: .zero,
+                                      simulationBackend: .gpuIfSupported)
+        #expect(emitter.gpuSimulationPlan.status == .fallbackToCPU)
+        #expect(!emitter.gpuSimulationPlan.usesGPU)
+
+        emitter.emit(1)
+        emitter.advance(deltaTime: 1)
+
+        #expect(emitter.aliveCount == 1)
+        #expect(emitter.lastFrameStats.expiredParticleCount == 1)
+        #expect(emitter.lastFrameStats.subEmitterSpawnedCount == 1)
+        #expect(emitter.lastFrameEvents.count == 1)
+        #expect(emitter.lastFrameSpawnedParticles.count == 1)
+    }
+
     @Test("SceneRuntime applies external particle simulation events by entity")
     func sceneRuntimeAppliesExternalParticleSimulationEventsByEntity() {
         var scene = SceneRuntime()
@@ -561,8 +630,9 @@ struct ParticleTests {
                                        subEmitterBurstCount: 1,
                                        simulationBackend: .gpuRequired)
         let requiredPlan = required.gpuSimulationPlan
-        #expect(requiredPlan.status == .requiredButUnsupported)
-        #expect(requiredPlan.unsupportedReasons == [.eventSubEmitters])
+        #expect(requiredPlan.status == .supported)
+        #expect(requiredPlan.usesGPU)
+        #expect(requiredPlan.unsupportedReasons.isEmpty)
 
         let collisionEventRequired = ParticleEmitter(emissionRate: 10,
                                                      maxParticles: 64,
@@ -571,8 +641,9 @@ struct ParticleTests {
                                                      subEmitterBurstCount: 1,
                                                      collisionMode: .worldPlane,
                                                      simulationBackend: .gpuRequired).gpuSimulationPlan
-        #expect(collisionEventRequired.status == .requiredButUnsupported)
-        #expect(collisionEventRequired.unsupportedReasons == [.eventSubEmitters])
+        #expect(collisionEventRequired.status == .supported)
+        #expect(collisionEventRequired.usesGPU)
+        #expect(collisionEventRequired.unsupportedReasons.isEmpty)
     }
 
     @Test("maxParticles caps the live pool")
@@ -942,7 +1013,15 @@ struct ParticleTests {
 
     @Test("trail configuration is sanitized at construction")
     func trailConfigurationSanitizes() {
-        let emitter = ParticleEmitter(trailLength: -1,
+        let emitter = ParticleEmitter(ribbonWidthScale: -1,
+                                      ribbonTailWidthScale: -0.5,
+                                      ribbonTailAlphaScale: 2,
+                                      ribbonMaxSegmentLength: -4,
+                                      ribbonJoinOverlapScale: -1,
+                                      ribbonSmoothingSegments: -2,
+                                      ribbonTextureTiling: -2,
+                                      ribbonTextureOffset: -0.25,
+                                      trailLength: -1,
                                       trailSegments: -4,
                                       trailEndSizeScale: -0.5,
                                       trailEndAlphaScale: 2)
@@ -951,6 +1030,14 @@ struct ParticleTests {
         #expect(emitter.trailSegments == 0)
         #expect(emitter.trailEndSizeScale == 0)
         #expect(emitter.trailEndAlphaScale == 1)
+        #expect(emitter.ribbonWidthScale == 0)
+        #expect(emitter.ribbonTailWidthScale == 0)
+        #expect(emitter.ribbonTailAlphaScale == 1)
+        #expect(emitter.ribbonMaxSegmentLength == 0)
+        #expect(emitter.ribbonJoinOverlapScale == 0)
+        #expect(emitter.ribbonSmoothingSegments == 1)
+        #expect(emitter.ribbonTextureTiling == 0)
+        #expect(emitter.ribbonTextureOffset == -0.25)
     }
 
     @Test("automatic render bounds estimate covers configured motion and billboard size")
