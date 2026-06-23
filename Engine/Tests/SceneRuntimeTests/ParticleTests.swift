@@ -6,6 +6,150 @@ import SIMDCompat
 @Suite("Particles")
 struct ParticleTests {
 
+    @Test("module stack mirrors and applies legacy emitter configuration")
+    func moduleStackMirrorsAndAppliesLegacyEmitterConfiguration() throws {
+        let emitter = ParticleEmitter(looping: false,
+                                      duration: 4,
+                                      emissionRate: 12,
+                                      distanceEmissionRate: 3,
+                                      burstCount: 2,
+                                      maxParticles: 128,
+                                      maxRenderedParticles: 32,
+                                      lifetime: 1.5,
+                                      subEmitters: [
+                                          ParticleSubEmitter(trigger: .death,
+                                                             burstCount: 2,
+                                                             lifetime: 0.4,
+                                                             startVelocity: SIMD3<Float>(1, 0, 0)),
+                                      ],
+                                      originOffset: SIMD3<Float>(0.5, 1, -0.5),
+                                      spawnRadius: 2,
+                                      emissionShape: .cone,
+                                      coneRadius: 0.75,
+                                      coneHeight: 3,
+                                      startVelocity: SIMD3<Float>(1, 2, 3),
+                                      velocityRandomness: SIMD3<Float>(0.1, 0.2, 0.3),
+                                      velocityInheritance: 0.5,
+                                      gravity: SIMD3<Float>(0, -2, 0),
+                                      noiseStrength: 1.25,
+                                      forceMode: .radial,
+                                      forceRadius: 4,
+                                      forceStrength: 6,
+                                      vectorFieldMode: .curl,
+                                      vectorFieldStrength: 2,
+                                      collisionMode: .worldPlane,
+                                      simulationSpace: .world,
+                                      simulationBackend: .gpuIfSupported,
+                                      gpuSimulationWorkgroupSize: 128,
+                                      collisionRestitution: 0.8,
+                                      collisionDamping: 0.2,
+                                      startSize: 0.5,
+                                      endSize: 0.1,
+                                      sizeRandomness: 0.3,
+                                      blendMode: .additive,
+                                      renderMode: .ribbon,
+                                      sortMode: .youngestFirst,
+                                      renderAlignment: .velocity,
+                                      velocityStretchScale: 0.4,
+                                      maxRenderDistance: 80,
+                                      textureAssetID: "texture-smoke",
+                                      texturePath: "/tmp/smoke.png",
+                                      textureSheetColumns: 4,
+                                      textureSheetRows: 2,
+                                      textureSheetFrameCount: 7,
+                                      textureSheetFrameRate: 12,
+                                      textureSheetPlaybackMode: .loop,
+                                      textureSheetStartFrame: 3,
+                                      textureSheetFrameRandomness: 2,
+                                      trailLength: 0.75,
+                                      trailSegments: 5)
+
+        var stack = emitter.moduleStack
+
+        #expect(stack.version == ParticleModuleStack.currentVersion)
+        #expect(stack.modules.map(\.id) == [
+            "emission",
+            "shape",
+            "velocity",
+            "forces",
+            "collision",
+            "appearance",
+            "textureSheet",
+            "renderer",
+            "trails",
+            "subEmitters",
+            "gpuSimulation",
+        ])
+
+        let emission = try #require(stack.modules.first { $0.id == "emission" })
+        if case let .emission(settings) = emission.settings {
+            #expect(settings.emissionRate == 12)
+            #expect(settings.distanceEmissionRate == 3)
+            #expect(settings.maxRenderedParticles == 32)
+        } else {
+            Issue.record("expected emission module settings")
+        }
+
+        let textureSheet = try #require(stack.modules.first { $0.id == "textureSheet" })
+        if case let .textureSheet(settings) = textureSheet.settings {
+            #expect(settings.textureAssetID == "texture-smoke")
+            #expect(settings.columns == 4)
+            #expect(settings.rows == 2)
+            #expect(settings.playbackMode == .loop)
+            #expect(settings.startFrame == 3)
+            #expect(settings.frameRandomness == 2)
+        } else {
+            Issue.record("expected texture sheet module settings")
+        }
+
+        try editModule(&stack, id: "emission") { settings in
+            if case var .emission(module) = settings {
+                module.emissionRate = -4
+                module.maxParticles = -8
+                settings = .emission(module)
+            }
+        }
+        try editModule(&stack, id: "collision") { settings in
+            if case var .collision(module) = settings {
+                module.collisionRestitution = 2
+                module.collisionDamping = -1
+                settings = .collision(module)
+            }
+        }
+        try editModule(&stack, id: "textureSheet") { settings in
+            if case var .textureSheet(module) = settings {
+                module.textureAssetID = ""
+                module.columns = 0
+                module.rows = -2
+                module.frameCount = 0
+                module.playbackMode = .singleFrame
+                module.frameRandomness = -3
+                settings = .textureSheet(module)
+            }
+        }
+        try editModule(&stack, id: "gpuSimulation") { settings in
+            if case var .gpuSimulation(module) = settings {
+                module.workgroupSize = 0
+                settings = .gpuSimulation(module)
+            }
+        }
+
+        var applied = ParticleEmitter()
+        applied.apply(stack)
+
+        #expect(applied.emissionRate == 0)
+        #expect(applied.maxParticles == 0)
+        #expect(applied.collisionRestitution == 1)
+        #expect(applied.collisionDamping == 0)
+        #expect(applied.textureAssetID == nil)
+        #expect(applied.textureSheetColumns == 1)
+        #expect(applied.textureSheetRows == 1)
+        #expect(applied.textureSheetFrameCount == 1)
+        #expect(applied.textureSheetPlaybackMode == .singleFrame)
+        #expect(applied.textureSheetFrameRandomness == 0)
+        #expect(applied.gpuSimulationWorkgroupSize == 1)
+    }
+
     @Test("continuous emission spawns at the configured rate")
     func continuousEmission() {
         var emitter = ParticleEmitter(emissionRate: 10, maxParticles: 1000, lifetime: 1000,
@@ -1011,6 +1155,41 @@ struct ParticleTests {
         #expect(rateEmitter.textureUVRect(for: rateEmitter.particles[0]) == SIMD4<Float>(0.75, 0, 0.25, 1))
     }
 
+    @Test("texture sheet playback supports ranges, loops, and stable random start frames")
+    func textureSheetPlaybackModes() {
+        let particle = Particle(position: .zero,
+                                velocity: .zero,
+                                age: 2,
+                                lifetime: 10,
+                                textureFrameSeed: 5)
+
+        let playOnce = ParticleEmitter(textureSheetColumns: 4,
+                                       textureSheetRows: 2,
+                                       textureSheetFrameCount: 3,
+                                       textureSheetFrameRate: 2,
+                                       textureSheetPlaybackMode: .playOnce,
+                                       textureSheetStartFrame: 2)
+        #expect(playOnce.textureSheetFrameIndex(for: particle) == 4)
+        #expect(playOnce.textureUVRect(for: particle) == SIMD4<Float>(0, 0.5, 0.25, 0.5))
+
+        let loop = ParticleEmitter(textureSheetColumns: 4,
+                                   textureSheetRows: 2,
+                                   textureSheetFrameCount: 3,
+                                   textureSheetFrameRate: 2,
+                                   textureSheetPlaybackMode: .loop,
+                                   textureSheetStartFrame: 2)
+        #expect(loop.textureSheetFrameIndex(for: particle) == 3)
+        #expect(loop.textureUVRect(for: particle) == SIMD4<Float>(0.75, 0, 0.25, 0.5))
+
+        let randomSingleFrame = ParticleEmitter(textureSheetColumns: 4,
+                                                textureSheetRows: 2,
+                                                textureSheetFrameCount: 3,
+                                                textureSheetPlaybackMode: .singleFrame,
+                                                textureSheetStartFrame: 2,
+                                                textureSheetFrameRandomness: 2)
+        #expect(randomSingleFrame.textureSheetFrameIndex(for: particle) == 4)
+    }
+
     @Test("trail configuration is sanitized at construction")
     func trailConfigurationSanitizes() {
         let emitter = ParticleEmitter(ribbonWidthScale: -1,
@@ -1301,5 +1480,12 @@ struct ParticleTests {
         #expect(scene.component(ParticleEmitter.self, for: emitterEntity)!.aliveCount == 3)
         let missingEmitterEmitted = scene.emitParticles(from: emptyEntity, count: 3)
         #expect(!missingEmitterEmitted)
+    }
+
+    private func editModule(_ stack: inout ParticleModuleStack,
+                            id: String,
+                            edit: (inout ParticleEmitterModuleSettings) -> Void) throws {
+        let index = try #require(stack.modules.firstIndex { $0.id == id })
+        edit(&stack.modules[index].settings)
     }
 }

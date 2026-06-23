@@ -114,6 +114,113 @@ struct InspectorPanel: View {
         }
     }
 
+    private struct InspectorParticleModuleStackValue: View {
+        let stack: ParticleModuleStack
+
+        var body: some View {
+            Box(direction: .column, alignItems: .stretch, spacing: 5) {
+                Row(alignment: .center, spacing: 6) {
+                    Text("\(stack.modules.count)")
+                        .font(.mono)
+                        .foregroundColor(.onSurface)
+                        .padding(horizontal: 6, vertical: 1)
+                        .background(.surfaceVariant)
+                        .cornerRadius(3)
+
+                    Text(L("modules"))
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceVariant)
+                        .flex()
+
+                    Text("v\(stack.version)")
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                }
+
+                Box(direction: .column, alignItems: .stretch, spacing: 3) {
+                    for module in stack.modules {
+                        moduleRow(module)
+                    }
+                }
+            }
+            .padding(horizontal: 7, vertical: 7)
+            .background(.surfaceSunken)
+            .cornerRadius(7)
+            .border(.border, width: 1)
+            .clipped()
+        }
+
+        private func moduleRow(_ module: ParticleEmitterModule) -> AnyView {
+            AnyView(Row(alignment: .center, spacing: 6) {
+                Text(module.stage.rawValue.uppercased())
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                    .frame(width: 66)
+
+                Text(module.displayName)
+                    .lineLimit(1)
+                    .font(.body)
+                    .foregroundColor(module.isEnabled ? .onSurface : .onSurfaceMuted)
+                    .frame(width: 104)
+
+                Text(moduleDetail(module.settings))
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceVariant)
+                    .flex()
+
+                Text(module.isEnabled ? L("On") : L("Off"))
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(module.isEnabled ? .success : .onSurfaceMuted)
+                    .frame(width: 24)
+            }
+            .padding(horizontal: 6, vertical: 3)
+            .background(.surface)
+            .cornerRadius(4))
+        }
+
+        private func moduleDetail(_ settings: ParticleEmitterModuleSettings) -> String {
+            switch settings {
+            case let .emission(module):
+                return "\(fmt(module.emissionRate))/s · max \(module.maxParticles)"
+            case let .shape(module):
+                return "\(module.emissionShape.rawValue) · r \(fmt(module.spawnRadius))"
+            case let .velocity(module):
+                return "v \(vec(module.startVelocity)) · inherit \(fmt(module.velocityInheritance))"
+            case let .forces(module):
+                return "\(module.forceMode.rawValue) · noise \(fmt(module.noiseStrength))"
+            case let .collision(module):
+                return "\(module.collisionMode.rawValue) · bounce \(fmt(module.collisionRestitution))"
+            case let .appearance(module):
+                return "life \(fmt(module.lifetime)) · size \(fmt(module.startSize)) -> \(fmt(module.endSize))"
+            case let .textureSheet(module):
+                return "\(module.columns)x\(module.rows) · \(module.playbackMode.rawValue)"
+            case let .renderer(module):
+                return "\(module.renderMode.rawValue) · \(module.sortMode.rawValue)"
+            case let .trails(module):
+                return "trail \(fmt(module.trailLength))s · \(module.trailSegments) samples"
+            case let .subEmitters(module):
+                return "\(module.rules.count) rules · legacy \(module.legacyTrigger.rawValue)"
+            case let .gpuSimulation(module):
+                return "\(module.simulationBackend.rawValue) · \(module.workgroupSize) threads"
+            }
+        }
+
+        private func fmt(_ value: Float) -> String {
+            let rounded = (value * 100).rounded() / 100
+            if rounded == Float(Int(rounded)) {
+                return "\(Int(rounded))"
+            }
+            return "\(rounded)"
+        }
+
+        private func vec(_ value: SIMD3<Float>) -> String {
+            "(\(fmt(value.x)), \(fmt(value.y)), \(fmt(value.z)))"
+        }
+    }
+
     private struct InspectorBooleanValue: View {
         let binding: Binding<Bool>
 
@@ -440,6 +547,22 @@ struct InspectorPanel: View {
                 case .distanceAscending: return L("Front to Back")
                 case .oldestFirst: return L("Oldest First")
                 case .youngestFirst: return L("Youngest First")
+                }
+            }
+        }
+    }
+
+    private struct InspectorParticleTextureSheetPlaybackModeValue: View {
+        let binding: Binding<ParticleTextureSheetPlaybackMode>
+
+        var body: some View {
+            EnumField(value: binding, width: 170) { mode in
+                switch mode {
+                case .automatic: return L("Auto")
+                case .lifetime: return L("Lifetime")
+                case .playOnce: return L("Play Once")
+                case .loop: return L("Loop")
+                case .singleFrame: return L("Single Frame")
                 }
             }
         }
@@ -915,6 +1038,8 @@ struct InspectorPanel: View {
             return AnyView(InspectorParticleRenderModeValue(binding: binding))
         case let .particleSortMode(binding):
             return AnyView(InspectorParticleSortModeValue(binding: binding))
+        case let .particleTextureSheetPlaybackMode(binding):
+            return AnyView(InspectorParticleTextureSheetPlaybackModeValue(binding: binding))
         case let .particleRenderAlignment(binding):
             return AnyView(InspectorParticleRenderAlignmentValue(binding: binding))
         case let .particleRenderBoundsMode(binding):
@@ -927,6 +1052,8 @@ struct InspectorPanel: View {
             return AnyView(InspectorParticleSubEmitterTriggerValue(binding: binding))
         case let .particleSubEmitters(binding):
             return AnyView(InspectorParticleSubEmittersValue(binding: binding))
+        case let .particleModuleStack(stack):
+            return AnyView(InspectorParticleModuleStackValue(stack: stack))
         case let .asset(binding, acceptedKinds, placeholder):
             return AnyView(AssetRefField(value: assetRefBinding(binding),
                                          activePayload: activeAssetDropPayload,
@@ -1025,7 +1152,7 @@ private extension EditorAsset {
 private extension EditorInspectorFieldValue {
     var preferredRowLayout: PropertyGridRowLayout {
         switch self {
-        case .particleCurve, .particleSubEmitters:
+        case .particleCurve, .particleSubEmitters, .particleModuleStack:
             return .fullWidth
         default:
             return .twoColumn
@@ -1045,6 +1172,12 @@ private extension EditorInspectorFieldValue {
             return max(defaultHeight, ParticleCurveEditorLayout.linearRowHeight)
         case let .particleSubEmitters(binding):
             return max(defaultHeight, ParticleSubEmitterEditorLayout.rowHeight(ruleCount: binding.wrappedValue.count))
+        case let .particleModuleStack(stack):
+            let headerHeight: Float = 24
+            let rowHeight: Float = 25
+            let innerSpacing: Float = 5 + Float(max(0, stack.modules.count - 1)) * 3
+            let cardPadding: Float = 14
+            return max(defaultHeight, headerHeight + Float(stack.modules.count) * rowHeight + innerSpacing + cardPadding + 34)
         case let .json(_, minHeight):
             return max(defaultHeight, minHeight + 34)
         default:

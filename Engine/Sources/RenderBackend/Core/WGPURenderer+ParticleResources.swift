@@ -96,6 +96,8 @@ private struct GPUParticleSimulationInstanceUniforms {
     var renderParams: SIMD4<Float>
     /// x: trail segments, y: trail length, z: trail end size scale, w: trail end alpha scale.
     var trailParams: SIMD4<Float>
+    /// x: playback mode, y: start frame, z: random frame range, w: reserved.
+    var textureSheetPlayback: SIMD4<Float>
 }
 
 /// Layout matches `ParticleSortPrepareUniforms` in `particle_sort_prepare.wgsl`.
@@ -140,7 +142,7 @@ private struct GPUParticleSimulationState {
     var velocityAge: SIMD4<Float>
     var sizeRotation: SIMD4<Float>
     var color: SIMD4<Float>
-    /// x: source generation, y: appearance index, z/w: reserved.
+    /// x: source generation, y: appearance index, z: texture frame seed, w: reserved.
     var params: SIMD4<UInt32>
 }
 
@@ -223,6 +225,21 @@ extension WGPURenderer {
             return 2
         case .youngestFirst:
             return 3
+        }
+    }
+
+    private func gpuTextureSheetPlaybackMode(_ mode: ParticleTextureSheetPlaybackMode) -> Float {
+        switch mode {
+        case .automatic:
+            return 0
+        case .lifetime:
+            return 1
+        case .playOnce:
+            return 2
+        case .loop:
+            return 3
+        case .singleFrame:
+            return 4
         }
     }
 
@@ -816,7 +833,7 @@ extension WGPURenderer {
                         params: SIMD4<UInt32>(
                             UInt32(particle.generation),
                             UInt32(particle.appearanceIndex),
-                            0,
+                            UInt32(particle.textureFrameSeed),
                             0
                         )
                     )
@@ -846,7 +863,7 @@ extension WGPURenderer {
                         params: SIMD4<UInt32>(
                             UInt32(particle.generation),
                             UInt32(particle.appearanceIndex),
-                            0,
+                            UInt32(particle.textureFrameSeed),
                             0
                         )
                     )
@@ -1335,6 +1352,12 @@ extension WGPURenderer {
                 batch.trailLength,
                 batch.trailEndSizeScale,
                 batch.trailEndAlphaScale
+            ),
+            textureSheetPlayback: SIMD4<Float>(
+                gpuTextureSheetPlaybackMode(batch.textureSheetPlaybackMode),
+                Float(batch.textureSheetStartFrame),
+                Float(batch.textureSheetFrameRandomness),
+                0
             )
         )
         writeUniform(&uniforms, buffer: resources.instanceUniformBuffer)
