@@ -16,6 +16,7 @@ public struct Particle: Sendable, Equatable {
     public var color: SIMD4<Float>
     public var generation: UInt8
     public var appearanceIndex: UInt16
+    public var textureFrameSeed: UInt16
 
     public init(position: SIMD3<Float>, velocity: SIMD3<Float>,
                 age: Float = 0, lifetime: Float,
@@ -24,7 +25,8 @@ public struct Particle: Sendable, Equatable {
                 angularVelocity: Float = 0,
                 size: Float = 1, color: SIMD4<Float> = .init(1, 1, 1, 1),
                 generation: UInt8 = 0,
-                appearanceIndex: UInt16 = 0) {
+                appearanceIndex: UInt16 = 0,
+                textureFrameSeed: UInt16 = 0) {
         self.position = position
         self.velocity = velocity
         self.age = age
@@ -36,6 +38,7 @@ public struct Particle: Sendable, Equatable {
         self.color = color
         self.generation = generation
         self.appearanceIndex = appearanceIndex
+        self.textureFrameSeed = textureFrameSeed
     }
 
     /// Normalized life progress in 0…1.
@@ -583,6 +586,19 @@ public enum ParticleSortMode: String, CaseIterable, Codable, Sendable, Equatable
     case youngestFirst
 }
 
+public enum ParticleTextureSheetPlaybackMode: String, CaseIterable, Codable, Sendable, Equatable, Hashable {
+    /// Preserve legacy behavior: FPS playback when frame rate is positive, otherwise lifetime mapping.
+    case automatic
+    /// Map the particle's normalized lifetime across the sheet once.
+    case lifetime
+    /// Advance by `textureSheetFrameRate` and hold the last frame.
+    case playOnce
+    /// Advance by `textureSheetFrameRate` and wrap inside the authored frame count.
+    case loop
+    /// Hold `textureSheetStartFrame`, with optional per-particle random offset.
+    case singleFrame
+}
+
 public enum ParticleRenderAlignment: String, CaseIterable, Codable, Sendable, Equatable, Hashable {
     case billboard
     case velocity
@@ -871,6 +887,12 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public var textureSheetFrameCount: Int
     /// Frames per second for texture sheet playback. Zero maps frames over particle lifetime.
     public var textureSheetFrameRate: Float
+    /// Controls how the texture sheet frame is selected over particle lifetime.
+    public var textureSheetPlaybackMode: ParticleTextureSheetPlaybackMode
+    /// First frame used by texture sheet playback.
+    public var textureSheetStartFrame: Int
+    /// Additional stable per-particle random frame offset in frames.
+    public var textureSheetFrameRandomness: Int
     /// Seconds of velocity-based trail rendered behind each particle. Zero disables trails.
     public var trailLength: Float
     /// Additional billboard samples rendered behind each particle for trails.
@@ -993,6 +1015,9 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         textureSheetRows: Int = 1,
         textureSheetFrameCount: Int = 1,
         textureSheetFrameRate: Float = 0,
+        textureSheetPlaybackMode: ParticleTextureSheetPlaybackMode = .automatic,
+        textureSheetStartFrame: Int = 0,
+        textureSheetFrameRandomness: Int = 0,
         trailLength: Float = 0,
         trailSegments: Int = 0,
         trailEndSizeScale: Float = 0.5,
@@ -1113,6 +1138,9 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.textureSheetRows = max(1, textureSheetRows)
         self.textureSheetFrameCount = max(1, textureSheetFrameCount)
         self.textureSheetFrameRate = max(0, textureSheetFrameRate)
+        self.textureSheetPlaybackMode = textureSheetPlaybackMode
+        self.textureSheetStartFrame = max(0, textureSheetStartFrame)
+        self.textureSheetFrameRandomness = max(0, textureSheetFrameRandomness)
         self.trailLength = max(0, trailLength)
         self.trailSegments = max(0, trailSegments)
         self.trailEndSizeScale = max(0, trailEndSizeScale)
@@ -1268,13 +1296,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         let columns = max(1, textureSheetColumns)
         let rows = max(1, textureSheetRows)
         let maxFrames = max(1, columns * rows)
-        let frameCount = min(maxFrames, max(1, textureSheetFrameCount))
-        let frameIndex: Int
-        if textureSheetFrameRate > 0 {
-            frameIndex = min(frameCount - 1, max(0, Int(floor(particle.age * textureSheetFrameRate))))
-        } else {
-            frameIndex = min(frameCount - 1, max(0, Int(floor(particle.normalizedAge * Float(frameCount)))))
-        }
+        let frameIndex = textureSheetFrameIndex(for: particle, maxFrames: maxFrames)
         let column = frameIndex % columns
         let row = frameIndex / columns
         let width = 1 / Float(columns)
@@ -1285,6 +1307,52 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             width,
             height
         )
+    }
+
+    public func textureSheetFrameIndex(for particle: Particle) -> Int {
+        let columns = max(1, textureSheetColumns)
+        let rows = max(1, textureSheetRows)
+        return textureSheetFrameIndex(for: particle, maxFrames: max(1, columns * rows))
+    }
+
+    private func textureSheetFrameIndex(for particle: Particle, maxFrames: Int) -> Int {
+        let safeMaxFrames = max(1, maxFrames)
+        let startFrame = min(max(0, textureSheetStartFrame), safeMaxFrames - 1)
+        let safeFrameCount = min(max(1, textureSheetFrameCount), safeMaxFrames - startFrame)
+        let randomRange = max(0, min(textureSheetFrameRandomness, safeFrameCount - 1))
+        let randomOffset = randomRange > 0
+            ? Int(particle.textureFrameSeed % UInt16(randomRange + 1))
+            : 0
+        let firstFrame = min(safeFrameCount - 1, randomOffset)
+
+        let advancedFrame: Int
+        switch textureSheetPlaybackMode {
+        case .automatic:
+            if textureSheetFrameRate > 0 {
+                advancedFrame = Int(floor(max(0, particle.age) * textureSheetFrameRate))
+            } else {
+                advancedFrame = Int(floor(particle.normalizedAge * Float(safeFrameCount)))
+            }
+        case .lifetime:
+            advancedFrame = Int(floor(particle.normalizedAge * Float(safeFrameCount)))
+        case .playOnce:
+            let rate = textureSheetFrameRate > 0 ? textureSheetFrameRate : Float(safeFrameCount)
+            advancedFrame = Int(floor(max(0, particle.age) * rate))
+        case .loop:
+            let rate = textureSheetFrameRate > 0 ? textureSheetFrameRate : Float(safeFrameCount)
+            advancedFrame = Int(floor(max(0, particle.age) * rate)) % safeFrameCount
+        case .singleFrame:
+            advancedFrame = 0
+        }
+
+        switch textureSheetPlaybackMode {
+        case .loop:
+            return startFrame + ((firstFrame + max(0, advancedFrame)) % safeFrameCount)
+        case .singleFrame:
+            return startFrame + firstFrame
+        case .automatic, .lifetime, .playOnce:
+            return startFrame + min(safeFrameCount - 1, firstFrame + max(0, advancedFrame))
+        }
     }
 
     /// Advances the simulation by `deltaTime` seconds: integrates existing particles, culls
@@ -1509,6 +1577,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         var sizeScale: Float
         var rotation: Float
         var angularVelocity: Float
+        var textureFrameSeed: UInt16
     }
 
     private struct ParticleAppearance {
@@ -1617,7 +1686,8 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
                              sizeScale: sample.sizeScale,
                              rotation: sample.rotation,
                              angularVelocity: sample.angularVelocity,
-                             generation: 0)
+                             generation: 0,
+                             textureFrameSeed: sample.textureFrameSeed)
             refreshAppearance(&p)
             particles.append(p)
             if recordSpawned {
@@ -1638,7 +1708,8 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             lifetime: max(0.0001, lifetime + nextSigned() * lifetimeRandomness),
             sizeScale: max(0, 1 + nextSigned() * sizeRandomness),
             rotation: startRotation + nextSigned() * rotationRandomness,
-            angularVelocity: angularVelocity + nextSigned() * angularVelocityRandomness
+            angularVelocity: angularVelocity + nextSigned() * angularVelocityRandomness,
+            textureFrameSeed: textureFrameSeedSnapshot()
         )
     }
 
@@ -1693,7 +1764,8 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
                                  rotation: startRotation + nextSigned() * rotationRandomness,
                                  angularVelocity: angularVelocity + nextSigned() * angularVelocityRandomness,
                                  generation: childGeneration,
-                                 appearanceIndex: appearanceIndex)
+                                 appearanceIndex: appearanceIndex,
+                                 textureFrameSeed: textureFrameSeedSnapshot())
             refreshAppearance(&child)
             pending.append(child)
         }
@@ -2005,6 +2077,10 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     }
 
     private mutating func nextSigned() -> Float { nextUnit() * 2 - 1 }
+
+    private func textureFrameSeedSnapshot() -> UInt16 {
+        UInt16(truncatingIfNeeded: rngState ^ (rngState >> 32))
+    }
 
     private mutating func spawnOffset() -> SIMD3<Float> {
         switch emissionShape {

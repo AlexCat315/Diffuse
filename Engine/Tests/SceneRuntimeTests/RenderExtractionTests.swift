@@ -364,7 +364,10 @@ struct RenderExtractionTests {
                                       textureSheetColumns: 4,
                                       textureSheetRows: 2,
                                       textureSheetFrameCount: 7,
-                                      textureSheetFrameRate: 12)
+                                      textureSheetFrameRate: 12,
+                                      textureSheetPlaybackMode: .loop,
+                                      textureSheetStartFrame: 3,
+                                      textureSheetFrameRandomness: 2)
         emitter.emit(2)
         _ = runtime.setComponent(emitter, for: entity)
 
@@ -405,6 +408,9 @@ struct RenderExtractionTests {
         #expect(batch.textureSheetRows == 2)
         #expect(batch.textureSheetFrameCount == 7)
         #expect(batch.textureSheetFrameRate == 12)
+        #expect(batch.textureSheetPlaybackMode == .loop)
+        #expect(batch.textureSheetStartFrame == 3)
+        #expect(batch.textureSheetFrameRandomness == 2)
         #expect(batch.renderAlignment == .velocity)
         #expect(batch.velocityStretchScale == 0.25)
         #expect(batch.velocityStretchMax == 3)

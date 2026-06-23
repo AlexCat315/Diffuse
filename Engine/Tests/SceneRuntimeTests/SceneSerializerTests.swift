@@ -555,6 +555,9 @@ struct SceneSerializerTests {
                             textureSheetRows: 2,
                             textureSheetFrameCount: 7,
                             textureSheetFrameRate: 12,
+                            textureSheetPlaybackMode: .loop,
+                            textureSheetStartFrame: 3,
+                            textureSheetFrameRandomness: 2,
                             trailLength: 0.75,
                             trailSegments: 5,
                             trailEndSizeScale: 0.25,
@@ -564,6 +567,35 @@ struct SceneSerializerTests {
         )
 
         let data = try SceneSerializer.serialize(original)
+        let json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let serializedEntities = try #require(json["entities"] as? [[String: Any]])
+        let serializedComponents = try #require(serializedEntities.first?["components"] as? [String: Any])
+        let serializedEmitter = try #require(serializedComponents["particleEmitter"] as? [String: Any])
+        let moduleStack = try #require(serializedEmitter["moduleStack"] as? [String: Any])
+        let modules = try #require(moduleStack["modules"] as? [[String: Any]])
+        #expect(moduleStack["version"] as? Int == ParticleModuleStack.currentVersion)
+        #expect(modules.map { $0["id"] as? String } == [
+            "emission",
+            "shape",
+            "velocity",
+            "forces",
+            "collision",
+            "appearance",
+            "textureSheet",
+            "renderer",
+            "trails",
+            "subEmitters",
+            "gpuSimulation",
+        ])
+        let textureSheetModule = try #require(modules.first { $0["id"] as? String == "textureSheet" })
+        let textureSheetSettings = try #require(textureSheetModule["settings"] as? [String: Any])
+        #expect(textureSheetSettings["type"] as? String == "textureSheet")
+        let textureSheetPayload = try #require(textureSheetSettings["payload"] as? [String: Any])
+        #expect(textureSheetPayload["textureAssetID"] as? String == "Assets/Textures/smoke.png")
+        #expect(textureSheetPayload["playbackMode"] as? String == "loop")
+        #expect(textureSheetPayload["startFrame"] as? Int == 3)
+        #expect(textureSheetPayload["frameRandomness"] as? Int == 2)
+
         var restored = SceneRuntime()
         try SceneSerializer.deserialize(data, into: &restored)
 
@@ -667,6 +699,9 @@ struct SceneSerializerTests {
         #expect(e!.textureSheetRows == 2)
         #expect(e!.textureSheetFrameCount == 7)
         #expect(e!.textureSheetFrameRate == 12)
+        #expect(e!.textureSheetPlaybackMode == .loop)
+        #expect(e!.textureSheetStartFrame == 3)
+        #expect(e!.textureSheetFrameRandomness == 2)
         #expect(e!.trailLength == 0.75)
         #expect(e!.trailSegments == 5)
         #expect(e!.trailEndSizeScale == 0.25)

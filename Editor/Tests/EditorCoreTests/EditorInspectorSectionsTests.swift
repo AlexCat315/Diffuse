@@ -154,6 +154,34 @@ struct EditorInspectorSectionsTests {
         #expect(hasSection(adapter, id, "particle-emitter"))
     }
 
+    @Test("particle inspector exposes the module stack")
+    func particleModuleStackField() throws {
+        let adapter = EditorSceneAdapter()
+        let id = makeEntity(in: adapter)
+        _ = adapter.addComponent(.particleEmitter, to: id)
+
+        guard case let .particleModuleStack(stack) =
+            field(adapter, id, section: "particle-emitter", field: "particle-module-stack") else {
+            Issue.record("expected particle module stack field")
+            return
+        }
+
+        #expect(stack.version == ParticleModuleStack.currentVersion)
+        #expect(stack.modules.map(\.id) == [
+            "emission",
+            "shape",
+            "velocity",
+            "forces",
+            "collision",
+            "appearance",
+            "textureSheet",
+            "renderer",
+            "trails",
+            "subEmitters",
+            "gpuSimulation",
+        ])
+    }
+
     @Test("particle scalability bindings write scene resources")
     func particleScalabilityBindings() throws {
         let adapter = EditorSceneAdapter()
@@ -405,6 +433,24 @@ struct EditorInspectorSectionsTests {
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.textureSheetFrameRate == 12)
         } else { Issue.record("missing texture sheet fps field") }
 
+        if case let .particleTextureSheetPlaybackMode(playback) =
+            field(adapter, id, section: "particle-emitter", field: "particle-texture-sheet-playback") {
+            playback.wrappedValue = .loop
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.textureSheetPlaybackMode == .loop)
+        } else { Issue.record("missing texture sheet playback field") }
+
+        if case let .constrainedNumber(sheetStart, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-texture-sheet-start-frame") {
+            sheetStart.wrappedValue = 3.2
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.textureSheetStartFrame == 3)
+        } else { Issue.record("missing texture sheet start frame field") }
+
+        if case let .constrainedNumber(sheetRandom, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-texture-sheet-random") {
+            sheetRandom.wrappedValue = 2.9
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.textureSheetFrameRandomness == 3)
+        } else { Issue.record("missing texture sheet random field") }
+
         if case let .constrainedNumber(trailLength, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-trail-length") {
             trailLength.wrappedValue = 0.75
@@ -469,7 +515,7 @@ struct EditorInspectorSectionsTests {
         if case let .readOnly(gpuStatus) =
             field(adapter, id, section: "particle-emitter", field: "particle-gpu-status") {
             #expect(gpuStatus.contains("Unsupported"))
-            #expect(gpuStatus.contains("collisions"))
+            #expect(gpuStatus.contains("distance emission"))
         } else { Issue.record("missing GPU status field") }
 
         if case let .constrainedNumber(restitution, _, _, _, _) =
