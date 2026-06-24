@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GuavaUI DevTools</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="toolbar">
+      <div class="brand">
+        <strong>GuavaUI DevTools</strong>
+        <span id="status" class="status disconnected">Disconnected</span>
+      </div>
+      <label class="endpoint">
+        <span>Endpoint</span>
+        <input id="endpoint" value="ws://127.0.0.1:9229/" spellcheck="false">
+      </label>
+      <button id="connect">Connect</button>
+      <button id="disconnect" disabled>Disconnect</button>
+    </header>
+
+    <section class="workspace">
+      <aside class="treePane">
+        <div class="paneHeader">
+          <span>Tree</span>
+          <button id="refreshTree" disabled>Refresh</button>
+        </div>
+        <div id="tree" class="tree empty">Connect to a GuavaUI app to inspect the live node tree.</div>
+      </aside>
+
+      <section class="mainPane">
+        <div class="mirrorHeader">
+          <span>Mirror</span>
+          <div class="mirrorControls">
+            <button id="startMirror" disabled>Start</button>
+            <button id="stopMirror" disabled>Stop</button>
+          </div>
+        </div>
+        <div id="mirror" class="mirror">
+          <div class="empty">No mirror frame.</div>
+          <img id="mirrorImage" alt="GuavaUI mirror frame">
+        </div>
+      </section>
+
+      <aside class="detailsPane">
+        <div class="paneHeader">
+          <span>Selection</span>
+        </div>
+        <pre id="details" class="details empty">Select a node in the tree.</pre>
+        <div class="paneHeader">
+          <span>Timing</span>
+        </div>
+        <pre id="timing" class="details empty">No timing sample.</pre>
+      </aside>
+    </section>
+
+    <section class="bottomPane">
+      <div class="paneHeader">
+        <span>Log</span>
+        <button id="clearLog">Clear</button>
+      </div>
+      <div id="log" class="log empty">No log entries.</div>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>

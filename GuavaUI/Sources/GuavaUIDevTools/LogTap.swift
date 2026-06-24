@@ -53,6 +53,16 @@ public struct LogTap: LogHandler {
         set { metadata[key] = newValue }
     }
 
+    public func log(event: LogEvent) {
+        deliver(level: event.level,
+                message: event.message,
+                metadata: event.metadata,
+                source: event.source,
+                file: event.file,
+                function: event.function,
+                line: event.line)
+    }
+
     public func log(level: Logger.Level,
                     message: Logger.Message,
                     metadata explicit: Logger.Metadata?,
@@ -60,6 +70,22 @@ public struct LogTap: LogHandler {
                     file: String,
                     function: String,
                     line: UInt) {
+        deliver(level: level,
+                message: message,
+                metadata: explicit,
+                source: source,
+                file: file,
+                function: function,
+                line: line)
+    }
+
+    private func deliver(level: Logger.Level,
+                         message: Logger.Message,
+                         metadata explicit: Logger.Metadata?,
+                         source: String,
+                         file: String,
+                         function: String,
+                         line: UInt) {
         guard let deliver = sink.deliver else { return }
         let merged = explicit.map { metadata.merging($0) { _, new in new } } ?? metadata
         let mapped = merged.mapValues { String(describing: $0) }
