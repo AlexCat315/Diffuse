@@ -11,6 +11,19 @@ public enum ParticleModuleStage: String, CaseIterable, Codable, Sendable, Equata
 
 public struct ParticleModuleStack: Codable, Sendable, Equatable {
     public static let currentVersion = 1
+    public static let defaultModuleIDs = [
+        "emission",
+        "shape",
+        "velocity",
+        "forces",
+        "collision",
+        "appearance",
+        "textureSheet",
+        "renderer",
+        "trails",
+        "subEmitters",
+        "gpuSimulation",
+    ]
 
     public var version: Int
     public var modules: [ParticleEmitterModule]
@@ -68,6 +81,63 @@ public struct ParticleModuleStack: Codable, Sendable, Equatable {
                                   settings: .gpuSimulation(ParticleGPUSimulationModule(emitter))),
         ])
     }
+
+    public init(emitter: ParticleEmitter, preserving template: ParticleModuleStack?) {
+        let current = ParticleModuleStack(emitter: emitter)
+        guard let template else {
+            self = current
+            return
+        }
+
+        var currentByID: [String: ParticleEmitterModule] = [:]
+        for module in current.modules {
+            currentByID[module.id] = module
+        }
+
+        var usedIDs: Set<String> = []
+        var modules: [ParticleEmitterModule] = []
+        modules.reserveCapacity(max(template.modules.count, current.modules.count))
+
+        for authored in template.modules {
+            if var refreshed = currentByID[authored.id] {
+                refreshed.isEnabled = authored.isEnabled
+                refreshed.isExpanded = authored.isExpanded
+                modules.append(refreshed)
+                usedIDs.insert(authored.id)
+            } else {
+                modules.append(authored)
+                usedIDs.insert(authored.id)
+            }
+        }
+
+        for module in current.modules where !usedIDs.contains(module.id) {
+            modules.append(module)
+        }
+
+        self.init(version: template.version, modules: modules)
+    }
+
+    public mutating func moveModule(from sourceIndex: Int, to destinationIndex: Int) {
+        guard modules.indices.contains(sourceIndex),
+              modules.indices.contains(destinationIndex),
+              sourceIndex != destinationIndex else { return }
+        let module = modules.remove(at: sourceIndex)
+        modules.insert(module, at: destinationIndex)
+    }
+
+    public mutating func resetAuthoringState() {
+        let order = Dictionary(uniqueKeysWithValues: Self.defaultModuleIDs.enumerated().map { ($0.element, $0.offset) })
+        modules.sort { lhs, rhs in
+            let lhsOrder = order[lhs.id] ?? Int.max
+            let rhsOrder = order[rhs.id] ?? Int.max
+            if lhsOrder != rhsOrder { return lhsOrder < rhsOrder }
+            return lhs.id < rhs.id
+        }
+        for index in modules.indices {
+            modules[index].isEnabled = true
+            modules[index].isExpanded = false
+        }
+    }
 }
 
 public struct ParticleEmitterModule: Codable, Sendable, Equatable {
@@ -75,18 +145,50 @@ public struct ParticleEmitterModule: Codable, Sendable, Equatable {
     public var stage: ParticleModuleStage
     public var displayName: String
     public var isEnabled: Bool
+    public var isExpanded: Bool
     public var settings: ParticleEmitterModuleSettings
 
     public init(id: String,
                 stage: ParticleModuleStage,
                 displayName: String,
                 isEnabled: Bool = true,
+                isExpanded: Bool = false,
                 settings: ParticleEmitterModuleSettings) {
         self.id = id
         self.stage = stage
         self.displayName = displayName
         self.isEnabled = isEnabled
+        self.isExpanded = isExpanded
         self.settings = settings
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case stage
+        case displayName
+        case isEnabled
+        case isExpanded
+        case settings
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        stage = try container.decode(ParticleModuleStage.self, forKey: .stage)
+        displayName = try container.decode(String.self, forKey: .displayName)
+        isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
+        isExpanded = try container.decodeIfPresent(Bool.self, forKey: .isExpanded) ?? false
+        settings = try container.decode(ParticleEmitterModuleSettings.self, forKey: .settings)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(stage, forKey: .stage)
+        try container.encode(displayName, forKey: .displayName)
+        try container.encode(isEnabled, forKey: .isEnabled)
+        try container.encode(isExpanded, forKey: .isExpanded)
+        try container.encode(settings, forKey: .settings)
     }
 }
 
@@ -466,7 +568,7 @@ public struct ParticleGPUSimulationModule: Codable, Sendable, Equatable {
 
 public extension ParticleEmitter {
     var moduleStack: ParticleModuleStack {
-        ParticleModuleStack(emitter: self)
+        ParticleModuleStack(emitter: self, preserving: authoredModuleStack)
     }
 
     mutating func apply(_ moduleStack: ParticleModuleStack) {
@@ -606,5 +708,6 @@ public extension ParticleEmitter {
                 gpuSimulationWorkgroupSize = max(1, settings.workgroupSize)
             }
         }
+        authoredModuleStack = ParticleModuleStack(emitter: self, preserving: moduleStack)
     }
 }

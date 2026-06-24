@@ -41,6 +41,14 @@ private func encodeJSONValue<T: Encodable>(_ value: T) -> Any? {
     }
     return try? JSONSerialization.jsonObject(with: data)
 }
+private func decodeJSONValue<T: Decodable>(_ value: Any?, as type: T.Type) -> T? {
+    guard let value,
+          JSONSerialization.isValidJSONObject(value),
+          let data = try? JSONSerialization.data(withJSONObject: value) else {
+        return nil
+    }
+    return try? JSONDecoder().decode(type, from: data)
+}
 
 // MARK: - Scene save/load
 
@@ -767,7 +775,7 @@ public enum SceneSerializer {
         let renderBoundsRadius = jsonToFloat(d["renderBoundsRadius"]) ?? 0
         let renderBoundsMode = ParticleRenderBoundsMode(rawValue: jsonToString(d["renderBoundsMode"]) ?? "")
             ?? (renderBoundsRadius > 0 ? .manual : .disabled)
-        return ParticleEmitter(
+        var emitter = ParticleEmitter(
             isEmitting: jsonToBool(d["isEmitting"]) ?? true,
             looping: jsonToBool(d["looping"]) ?? true,
             duration: jsonToFloat(d["duration"]) ?? 0,
@@ -879,6 +887,10 @@ public enum SceneSerializer {
             trailEndAlphaScale: jsonToFloat(d["trailEndAlphaScale"]) ?? 0,
             seed: UInt64(bitPattern: Int64(jsonToInt(d["seed"]) ?? 0))
         )
+        if let moduleStack = decodeJSONValue(d["moduleStack"], as: ParticleModuleStack.self) {
+            emitter.apply(moduleStack)
+        }
+        return emitter
     }
 
     private static func serializeParticleSubEmitter(_ c: ParticleSubEmitter) -> [String: Any] {
