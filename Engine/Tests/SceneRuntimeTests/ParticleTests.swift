@@ -150,6 +150,47 @@ struct ParticleTests {
         #expect(applied.gpuSimulationWorkgroupSize == 1)
     }
 
+    @Test("module stack preserves authored enabled states while rebasing settings")
+    func moduleStackPreservesEnabledStateWhileRebasingSettings() throws {
+        var emitter = ParticleEmitter(gravity: SIMD3<Float>(0, -9.81, 0))
+        var stack = emitter.moduleStack
+        let forcesIndex = try #require(stack.modules.firstIndex { $0.id == "forces" })
+        stack.modules[forcesIndex].isEnabled = false
+
+        emitter.apply(stack)
+        emitter.gravity = SIMD3<Float>(1, 2, 3)
+
+        let rebased = emitter.moduleStack
+        let forces = try #require(rebased.modules.first { $0.id == "forces" })
+        #expect(!forces.isEnabled)
+        if case let .forces(settings) = forces.settings {
+            #expect(settings.gravity == SIMD3<Float>(1, 2, 3))
+        } else {
+            Issue.record("expected forces module settings")
+        }
+    }
+
+    @Test("module stack preserves custom order and reset restores default authoring")
+    func moduleStackPreservesCustomOrderAndResetsAuthoring() throws {
+        var emitter = ParticleEmitter()
+        var stack = emitter.moduleStack
+        let textureSheetIndex = try #require(stack.modules.firstIndex { $0.id == "textureSheet" })
+        stack.moveModule(from: textureSheetIndex, to: 0)
+        stack.modules[0].isEnabled = false
+
+        emitter.apply(stack)
+
+        #expect(emitter.moduleStack.modules.first?.id == "textureSheet")
+        #expect(emitter.moduleStack.modules.first?.isEnabled == false)
+
+        var reset = emitter.moduleStack
+        reset.resetAuthoringState()
+
+        #expect(reset.modules.map(\.id) == ParticleModuleStack.defaultModuleIDs)
+        #expect(reset.modules.allSatisfy { $0.isEnabled })
+        #expect(reset.modules.allSatisfy { !$0.isExpanded })
+    }
+
     @Test("continuous emission spawns at the configured rate")
     func continuousEmission() {
         var emitter = ParticleEmitter(emissionRate: 10, maxParticles: 1000, lifetime: 1000,
@@ -560,15 +601,16 @@ struct ParticleTests {
         _ = scene.setComponent(
             ParticleEmitter(isEmitting: false,
                             emissionRate: 0,
-                            maxParticles: 4,
+                            maxParticles: 1,
                             subEmitterTrigger: .death,
-                            subEmitterBurstCount: 1,
+                            subEmitterBurstCount: 2,
                             subEmitterLifetime: 2,
                             subEmitterStartVelocity: .zero,
                             subEmitterVelocityRandomness: .zero,
                             gravity: .zero),
             for: entity
         )
+        let empty = scene.createEntity()
         let missing = EntityID(index: 99, generation: 1)
         let event = ParticleEvent(trigger: .death,
                                   position: SIMD3<Float>(1, 2, 3),
@@ -577,21 +619,36 @@ struct ParticleTests {
                                   lifetime: 1,
                                   generation: 0,
                                   appearanceIndex: 0)
+        let collision = ParticleEvent(trigger: .collision,
+                                      position: SIMD3<Float>(4, 5, 6),
+                                      velocity: SIMD3<Float>(0, 1, 0),
+                                      age: 0.25,
+                                      lifetime: 1,
+                                      generation: 0,
+                                      appearanceIndex: 0)
 
         let report = scene.applyParticleSimulationEvents([
-            entity: [event],
+            entity: [event, collision],
+            empty: [],
             missing: [event],
         ])
 
-        #expect(report.requestedEmitterCount == 2)
+        #expect(report.requestedEmitterCount == 3)
         #expect(report.appliedEmitterCount == 1)
         #expect(report.missingEmitterCount == 1)
-        #expect(report.eventCount == 2)
+        #expect(report.emptyEventEmitterCount == 1)
+        #expect(report.eventCount == 3)
+        #expect(report.appliedEventCount == 2)
+        #expect(report.deathEventCount == 1)
+        #expect(report.collisionEventCount == 1)
+        #expect(report.subEmitterSpawnedCount == 1)
         #expect(report.spawnedParticleCount == 1)
+        #expect(report.capacityLimitedSpawnCount == 1)
         let emitter = scene.component(ParticleEmitter.self, for: entity)
         #expect(emitter?.particles.count == 1)
-        #expect(emitter?.lastFrameEvents == [event])
+        #expect(emitter?.lastFrameEvents == [event, collision])
         #expect(scene.particleFrameStats.subEmitterSpawnedCount == 1)
+        #expect(scene.particleFrameStats.capacityLimitedSpawnCount == 1)
     }
 
     @Test("gravity and velocity integrate with semi-implicit Euler")
@@ -1351,7 +1408,7 @@ struct ParticleTests {
         collision.advance(deltaTime: 1)
         #expect(collision.lastFrameStats.collisionCount == 1)
         #expect(collision.lastFrameStats.subEmitterSpawnedCount == 2)
-        #expect(collision.lastFrameStats.capacityLimitedSpawnCount == 1)
+        #expect(collision.lastFrameStats.capacityLimitedSpawnCount == 3)
         #expect(collision.lastFrameStats.liveParticleCount == 3)
     }
 

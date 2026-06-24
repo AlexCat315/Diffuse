@@ -514,6 +514,45 @@ struct EditorSceneAdapterTests {
         #expect(e!.seed == 777)
     }
 
+    @Test("Particle emitter manifest applies module stack over legacy fields")
+    func particleEmitterManifestAppliesModuleStack() throws {
+        let legacy = EditorSceneManifestParticleEmitter(
+            ParticleEmitter(emissionRate: 1,
+                            maxParticles: 4,
+                            textureSheetColumns: 1,
+                            textureSheetRows: 1,
+                            textureSheetPlaybackMode: .automatic)
+        )
+        let overridingEmitter = ParticleEmitter(emissionRate: 42,
+                                                maxParticles: 256,
+                                                gpuSimulationWorkgroupSize: 128,
+                                                collisionRestitution: 0.8,
+                                                textureSheetColumns: 4,
+                                                textureSheetRows: 2,
+                                                textureSheetFrameCount: 7,
+                                                textureSheetPlaybackMode: .singleFrame,
+                                                textureSheetStartFrame: 3,
+                                                textureSheetFrameRandomness: 2)
+
+        var json = try #require(try JSONSerialization.jsonObject(with: JSONEncoder().encode(legacy)) as? [String: Any])
+        json["moduleStack"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(overridingEmitter.moduleStack))
+
+        let data = try JSONSerialization.data(withJSONObject: json)
+        let decoded = try JSONDecoder().decode(EditorSceneManifestParticleEmitter.self, from: data)
+        let emitter = decoded.component
+
+        #expect(emitter.emissionRate == 42)
+        #expect(emitter.maxParticles == 256)
+        #expect(emitter.collisionRestitution == 0.8)
+        #expect(emitter.textureSheetColumns == 4)
+        #expect(emitter.textureSheetRows == 2)
+        #expect(emitter.textureSheetFrameCount == 7)
+        #expect(emitter.textureSheetPlaybackMode == .singleFrame)
+        #expect(emitter.textureSheetStartFrame == 3)
+        #expect(emitter.textureSheetFrameRandomness == 2)
+        #expect(emitter.gpuSimulationWorkgroupSize == 128)
+    }
+
     @Test("Resetting preview scene publishes a new revision")
     func resetPreviewScenePublishesRevision() {
         let scene = EditorSceneAdapter()
