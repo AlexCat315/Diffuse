@@ -394,20 +394,35 @@ public struct ParticleSimulationEventApplyReport: Sendable, Equatable {
     public var requestedEmitterCount: Int
     public var appliedEmitterCount: Int
     public var missingEmitterCount: Int
+    public var emptyEventEmitterCount: Int
     public var eventCount: Int
+    public var appliedEventCount: Int
+    public var collisionEventCount: Int
+    public var deathEventCount: Int
+    public var subEmitterSpawnedCount: Int
     public var spawnedParticleCount: Int
     public var capacityLimitedSpawnCount: Int
 
     public init(requestedEmitterCount: Int = 0,
                 appliedEmitterCount: Int = 0,
                 missingEmitterCount: Int = 0,
+                emptyEventEmitterCount: Int = 0,
                 eventCount: Int = 0,
+                appliedEventCount: Int = 0,
+                collisionEventCount: Int = 0,
+                deathEventCount: Int = 0,
+                subEmitterSpawnedCount: Int = 0,
                 spawnedParticleCount: Int = 0,
                 capacityLimitedSpawnCount: Int = 0) {
         self.requestedEmitterCount = max(0, requestedEmitterCount)
         self.appliedEmitterCount = max(0, appliedEmitterCount)
         self.missingEmitterCount = max(0, missingEmitterCount)
+        self.emptyEventEmitterCount = max(0, emptyEventEmitterCount)
         self.eventCount = max(0, eventCount)
+        self.appliedEventCount = max(0, appliedEventCount)
+        self.collisionEventCount = max(0, collisionEventCount)
+        self.deathEventCount = max(0, deathEventCount)
+        self.subEmitterSpawnedCount = max(0, subEmitterSpawnedCount)
         self.spawnedParticleCount = max(0, spawnedParticleCount)
         self.capacityLimitedSpawnCount = max(0, capacityLimitedSpawnCount)
     }
@@ -893,6 +908,10 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public var textureSheetStartFrame: Int
     /// Additional stable per-particle random frame offset in frames.
     public var textureSheetFrameRandomness: Int
+    /// Optional authored module stack metadata. Runtime simulation still reads the
+    /// concrete emitter fields, while editor tooling uses this to preserve module
+    /// order and enabled states.
+    public var authoredModuleStack: ParticleModuleStack?
     /// Seconds of velocity-based trail rendered behind each particle. Zero disables trails.
     public var trailLength: Float
     /// Additional billboard samples rendered behind each particle for trails.
@@ -1018,6 +1037,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         textureSheetPlaybackMode: ParticleTextureSheetPlaybackMode = .automatic,
         textureSheetStartFrame: Int = 0,
         textureSheetFrameRandomness: Int = 0,
+        authoredModuleStack: ParticleModuleStack? = nil,
         trailLength: Float = 0,
         trailSegments: Int = 0,
         trailEndSizeScale: Float = 0.5,
@@ -1141,6 +1161,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.textureSheetPlaybackMode = textureSheetPlaybackMode
         self.textureSheetStartFrame = max(0, textureSheetStartFrame)
         self.textureSheetFrameRandomness = max(0, textureSheetFrameRandomness)
+        self.authoredModuleStack = authoredModuleStack
         self.trailLength = max(0, trailLength)
         self.trailSegments = max(0, trailSegments)
         self.trailEndSizeScale = max(0, trailEndSizeScale)
@@ -1394,6 +1415,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
 
         var survivors: [Particle] = []
         var eventParticles: [Particle] = []
+        var eventSubEmitterSpawnResult = ParticleSpawnResult(requested: 0, spawned: 0)
         survivors.reserveCapacity(particles.count)
         for var p in particles {
             p.velocity += gravity * dt
@@ -1407,10 +1429,12 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
                 frameStats.collisionCount += 1
                 if !defersEventSubEmittersToExternalSimulation {
                     recordEvent(trigger: .collision, source: p)
-                    spawnSubEmitterParticles(trigger: .collision,
-                                             source: p,
-                                             survivorsCount: survivors.count,
-                                             pending: &eventParticles)
+                    eventSubEmitterSpawnResult.include(
+                        spawnSubEmitterParticles(trigger: .collision,
+                                                 source: p,
+                                                 survivorsCount: survivors.count,
+                                                 pending: &eventParticles)
+                    )
                 }
             }
             p.age += dt
@@ -1421,17 +1445,19 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
                 frameStats.expiredParticleCount += 1
                 if !defersEventSubEmittersToExternalSimulation {
                     recordEvent(trigger: .death, source: p)
-                    spawnSubEmitterParticles(trigger: .death,
-                                             source: p,
-                                             survivorsCount: survivors.count,
-                                             pending: &eventParticles)
+                    eventSubEmitterSpawnResult.include(
+                        spawnSubEmitterParticles(trigger: .death,
+                                                 source: p,
+                                                 survivorsCount: survivors.count,
+                                                 pending: &eventParticles)
+                    )
                 }
             }
         }
         particles = survivors
         let eventSpawnResult = appendEventParticles(eventParticles)
         frameStats.subEmitterSpawnedCount += eventSpawnResult.spawned
-        frameStats.capacityLimitedSpawnCount += eventSpawnResult.dropped
+        frameStats.capacityLimitedSpawnCount += eventSubEmitterSpawnResult.dropped + eventSpawnResult.dropped
 
         guard isEmitting else {
             previousEmitterPosition = currentEmitterPosition
@@ -1533,6 +1559,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         }
 
         var eventParticles: [Particle] = []
+        var eventSubEmitterSpawnResult = ParticleSpawnResult(requested: 0, spawned: 0)
         eventParticles.reserveCapacity(events.count)
         for event in events where event.trigger != .none {
             let source = sourceParticle(from: event)
@@ -1545,15 +1572,17 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
                 break
             }
             recordEvent(trigger: event.trigger, source: source)
-            spawnSubEmitterParticles(trigger: event.trigger,
-                                     source: source,
-                                     survivorsCount: particles.count,
-                                     pending: &eventParticles)
+            eventSubEmitterSpawnResult.include(
+                spawnSubEmitterParticles(trigger: event.trigger,
+                                         source: source,
+                                         survivorsCount: particles.count,
+                                         pending: &eventParticles)
+            )
         }
 
         let eventSpawnResult = appendEventParticles(eventParticles)
         frameStats.subEmitterSpawnedCount += eventSpawnResult.spawned
-        frameStats.capacityLimitedSpawnCount += eventSpawnResult.dropped
+        frameStats.capacityLimitedSpawnCount += eventSubEmitterSpawnResult.dropped + eventSpawnResult.dropped
         frameStats.liveParticleCount = particles.count
         lastFrameStats = frameStats
         return frameStats
@@ -1567,6 +1596,11 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
 
         var dropped: Int {
             max(0, requested - spawned)
+        }
+
+        mutating func include(_ other: ParticleSpawnResult) {
+            requested += other.requested
+            spawned += other.spawned
         }
     }
 
@@ -1716,38 +1750,48 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     private mutating func spawnSubEmitterParticles(trigger: ParticleSubEmitterTrigger,
                                                    source: Particle,
                                                    survivorsCount: Int,
-                                                   pending: inout [Particle]) {
-        guard maxParticles > 0 else { return }
+                                                   pending: inout [Particle]) -> ParticleSpawnResult {
+        guard maxParticles > 0 else {
+            return ParticleSpawnResult(requested: 0, spawned: 0)
+        }
+        var result = ParticleSpawnResult(requested: 0, spawned: 0)
         if let legacy = legacySubEmitterRule, legacy.trigger == trigger {
-            spawnSubEmitterParticles(legacy,
-                                     appearanceIndex: 1,
-                                     source: source,
-                                     survivorsCount: survivorsCount,
-                                     pending: &pending)
+            result.include(
+                spawnSubEmitterParticles(legacy,
+                                         appearanceIndex: 1,
+                                         source: source,
+                                         survivorsCount: survivorsCount,
+                                         pending: &pending)
+            )
         }
         for (index, rule) in subEmitters.enumerated() where rule.trigger == trigger {
-            spawnSubEmitterParticles(rule,
-                                     appearanceIndex: UInt16(clamping: index + 2),
-                                     source: source,
-                                     survivorsCount: survivorsCount,
-                                     pending: &pending)
+            result.include(
+                spawnSubEmitterParticles(rule,
+                                         appearanceIndex: UInt16(clamping: index + 2),
+                                         source: source,
+                                         survivorsCount: survivorsCount,
+                                         pending: &pending)
+            )
         }
+        return result
     }
 
     private mutating func spawnSubEmitterParticles(_ rule: ParticleSubEmitter,
                                                    appearanceIndex: UInt16,
                                                    source: Particle,
                                                    survivorsCount: Int,
-                                                   pending: inout [Particle]) {
+                                                   pending: inout [Particle]) -> ParticleSpawnResult {
         guard rule.isActive,
               source.generation < UInt8(clamping: rule.maxDepth)
-        else { return }
+        else { return ParticleSpawnResult(requested: 0, spawned: 0) }
         if rule.probability < 1, nextUnit() > rule.probability {
-            return
+            return ParticleSpawnResult(requested: 0, spawned: 0)
         }
 
         let room = maxParticles - survivorsCount - pending.count
-        guard room > 0 else { return }
+        guard room > 0 else {
+            return ParticleSpawnResult(requested: rule.burstCount, spawned: 0)
+        }
         let count = min(rule.burstCount, room)
         let childGeneration = source.generation == UInt8.max ? UInt8.max : source.generation + 1
         for _ in 0..<count {
@@ -1769,6 +1813,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             refreshAppearance(&child)
             pending.append(child)
         }
+        return ParticleSpawnResult(requested: rule.burstCount, spawned: count)
     }
 
     private mutating func appendEventParticles(_ eventParticles: [Particle]) -> ParticleSpawnResult {
@@ -2187,7 +2232,11 @@ public extension SceneRuntime {
         )
         var emitterStats: [ParticleEmitterFrameStats] = []
         emitterStats.reserveCapacity(eventsByEntity.count)
-        for (entity, events) in eventsByEntity where !events.isEmpty {
+        for (entity, events) in eventsByEntity {
+            guard !events.isEmpty else {
+                report.emptyEventEmitterCount += 1
+                continue
+            }
             var appliedStats: ParticleEmitterFrameStats?
             let updated = updateComponent(ParticleEmitter.self, for: entity) { emitter in
                 let stats = emitter.applySimulationEvents(events)
@@ -2196,6 +2245,10 @@ public extension SceneRuntime {
             }
             if updated, let appliedStats {
                 report.appliedEmitterCount += 1
+                report.appliedEventCount += events.count
+                report.collisionEventCount += appliedStats.collisionCount
+                report.deathEventCount += appliedStats.expiredParticleCount
+                report.subEmitterSpawnedCount += appliedStats.subEmitterSpawnedCount
                 report.spawnedParticleCount += appliedStats.spawnedParticleCount
                 report.capacityLimitedSpawnCount += appliedStats.capacityLimitedSpawnCount
             } else {

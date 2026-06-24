@@ -714,6 +714,59 @@ struct SceneSerializerTests {
         #expect(a.particles == b.particles)
     }
 
+    @Test("deserialize: particle emitter module stack overrides legacy fields")
+    func particleEmitterModuleStackOverridesLegacyFields() throws {
+        var original = SceneRuntime()
+        let entity = original.createEntity()
+        _ = original.setComponent(
+            ParticleEmitter(emissionRate: 1,
+                            maxParticles: 4,
+                            textureSheetColumns: 1,
+                            textureSheetRows: 1,
+                            textureSheetPlaybackMode: .automatic),
+            for: entity
+        )
+
+        let overridingEmitter = ParticleEmitter(emissionRate: 42,
+                                                maxParticles: 256,
+                                                gpuSimulationWorkgroupSize: 128,
+                                                collisionRestitution: 0.8,
+                                                textureSheetColumns: 4,
+                                                textureSheetRows: 2,
+                                                textureSheetFrameCount: 7,
+                                                textureSheetPlaybackMode: .singleFrame,
+                                                textureSheetStartFrame: 3,
+                                                textureSheetFrameRandomness: 2)
+        let moduleStackData = try JSONEncoder().encode(overridingEmitter.moduleStack)
+        let moduleStackObject = try JSONSerialization.jsonObject(with: moduleStackData)
+
+        let data = try SceneSerializer.serialize(original)
+        var json = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        var entities = try #require(json["entities"] as? [[String: Any]])
+        var components = try #require(entities[0]["components"] as? [String: Any])
+        var emitter = try #require(components["particleEmitter"] as? [String: Any])
+        emitter["moduleStack"] = moduleStackObject
+        components["particleEmitter"] = emitter
+        entities[0]["components"] = components
+        json["entities"] = entities
+
+        let editedData = try JSONSerialization.data(withJSONObject: json)
+        var restored = SceneRuntime()
+        try SceneSerializer.deserialize(editedData, into: &restored)
+
+        let restoredEmitter = try #require(restored.component(ParticleEmitter.self, for: restored.entities()[0]))
+        #expect(restoredEmitter.emissionRate == 42)
+        #expect(restoredEmitter.maxParticles == 256)
+        #expect(restoredEmitter.collisionRestitution == 0.8)
+        #expect(restoredEmitter.textureSheetColumns == 4)
+        #expect(restoredEmitter.textureSheetRows == 2)
+        #expect(restoredEmitter.textureSheetFrameCount == 7)
+        #expect(restoredEmitter.textureSheetPlaybackMode == .singleFrame)
+        #expect(restoredEmitter.textureSheetStartFrame == 3)
+        #expect(restoredEmitter.textureSheetFrameRandomness == 2)
+        #expect(restoredEmitter.gpuSimulationWorkgroupSize == 128)
+    }
+
     // MARK: - Constraint
 
     @Test("round-trip: constraint reconnects to remapped entities")

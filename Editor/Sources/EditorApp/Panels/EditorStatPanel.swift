@@ -16,6 +16,7 @@ struct DeveloperToolsPanel: View {
             let frameStats = store.state.frameStats
             let renderStats = app.currentRenderStats()
             let particleStats = app.currentParticleFrameStats()
+            let particleEventReport = app.currentParticleSimulationEventApplyReport()
             let particleScalability = app.currentParticleScalabilityState()
             let particleRenderSummary = app.currentRenderScene().particleSummary
 
@@ -34,6 +35,7 @@ struct DeveloperToolsPanel: View {
                 },
                 TabItem("Particles", id: DeveloperToolTab.particles) {
                     ParticleDiagnosticsView(stats: particleStats,
+                                            eventReport: particleEventReport,
                                             scalability: particleScalability,
                                             renderSummary: particleRenderSummary,
                                             renderStats: renderStats)
@@ -243,6 +245,7 @@ private struct RuntimeDiagnosticsView: View {
 
 private struct ParticleDiagnosticsView: View {
     let stats: ParticleFrameStatsResource
+    let eventReport: ParticleSimulationEventApplyReport
     let scalability: ParticleScalabilityStateResource
     let renderSummary: ParticleRenderSummary
     let renderStats: RenderFrameStats
@@ -298,6 +301,18 @@ private struct ParticleDiagnosticsView: View {
                     StatRow(label: "Event Activity", value: stats.subEmitterSpawnedCount > 0
                             || stats.collisionCount > 0 ? "YES" : "NO")
                     StatRow(label: "Idle", value: stats.activeEmitterCount == 0 ? "YES" : "NO")
+                }
+                .flex(1, shrink: 1)
+
+                StatGroup(title: "Event Feedback") {
+                    StatRow(label: "Emitters", value: "\(eventReport.appliedEmitterCount)/\(eventReport.requestedEmitterCount)")
+                    StatRow(label: "Events", value: "\(eventReport.appliedEventCount)/\(eventReport.eventCount)")
+                    StatRow(label: "Deaths", value: "\(eventReport.deathEventCount)")
+                    StatRow(label: "Collisions", value: "\(eventReport.collisionEventCount)")
+                    StatRow(label: "Sub-Emitter Spawns", value: "\(eventReport.subEmitterSpawnedCount)")
+                    StatRow(label: "Capacity Drops", value: "\(eventReport.capacityLimitedSpawnCount)")
+                    StatRow(label: "Missing Emitters", value: "\(eventReport.missingEmitterCount)")
+                    StatRow(label: "Empty Buckets", value: "\(eventReport.emptyEventEmitterCount)")
                 }
                 .flex(1, shrink: 1)
 
