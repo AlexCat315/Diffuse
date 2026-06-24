@@ -155,7 +155,10 @@ enum EditorRootViewFactory {
                             title: localizedPanelTitle(for: "inspector"),
                             preferredSlot: .trailing,
                             iconAssetKey: "panel.inspector") {
-                InspectorPanel(store: app.store, scene: app.scene)
+                InspectorPanel(store: app.store,
+                               scene: app.scene,
+                               renderStatsProvider: { app.currentRenderStats() },
+                               particleEventReportProvider: { app.currentParticleSimulationEventApplyReport() })
             },
             PanelDescriptor(id: "viewport",
                             title: localizedPanelTitle(for: "viewport"),
