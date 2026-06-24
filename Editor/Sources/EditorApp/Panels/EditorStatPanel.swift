@@ -307,6 +307,8 @@ private struct ParticleDiagnosticsView: View {
                 StatGroup(title: "Event Feedback") {
                     StatRow(label: "Emitters", value: "\(eventReport.appliedEmitterCount)/\(eventReport.requestedEmitterCount)")
                     StatRow(label: "Events", value: "\(eventReport.appliedEventCount)/\(eventReport.eventCount)")
+                    StatRow(label: "GPU Readback", value: "\(eventReport.totalReadbackEventCount)")
+                    StatRow(label: "Dropped Events", value: "\(eventReport.droppedReadbackEventCount)")
                     StatRow(label: "Deaths", value: "\(eventReport.deathEventCount)")
                     StatRow(label: "Collisions", value: "\(eventReport.collisionEventCount)")
                     StatRow(label: "Sub-Emitter Spawns", value: "\(eventReport.subEmitterSpawnedCount)")
