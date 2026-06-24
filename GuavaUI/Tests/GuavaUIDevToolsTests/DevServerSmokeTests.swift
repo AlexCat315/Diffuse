@@ -47,11 +47,17 @@ final class DevServerSmokeTests: XCTestCase {
         let tree = NodeTree()
         let root = Node()
         root.viewTag = "Root"
-        root.frame = CGRect(x: 0, y: 0, width: 800, height: 600)
+        root.frame = CGRect(x: 5, y: 7, width: 800, height: 600)
+        root.contentOffset = CGPoint(x: 2, y: 3)
         let child = Node()
         child.viewTag = "Child"
         child.frame = CGRect(x: 10, y: 20, width: 100, height: 40)
+        child.contentOffset = CGPoint(x: 4, y: 6)
         child.backgroundColor = .white
+        child.zIndex = 3
+        child.opacity = 0.75
+        child.attachments["GuavaUI.debug.name"] = "debug.child"
+        child.attachments["GuavaUI.layout.role"] = "button"
         root.addChild(child)
         tree.root = root
 
@@ -71,8 +77,29 @@ final class DevServerSmokeTests: XCTestCase {
         XCTAssertEqual(snap.root?.children.count, 1)
         let onlyChild = snap.root?.children.first
         XCTAssertEqual(onlyChild?.viewTag, "Child")
+        XCTAssertEqual(onlyChild?.debugName, "debug.child")
         XCTAssertEqual(onlyChild?.frame.w, 100)
+        XCTAssertEqual(onlyChild?.absoluteFrame?.x, 13)
+        XCTAssertEqual(onlyChild?.absoluteFrame?.y, 24)
+        XCTAssertEqual(onlyChild?.contentOffset?.x, 4)
+        XCTAssertEqual(onlyChild?.contentOffset?.y, 6)
+        XCTAssertEqual(onlyChild?.zIndex, 3)
+        XCTAssertEqual(onlyChild?.opacity, 0.75)
+        XCTAssertEqual(onlyChild?.layoutRole, "button")
         XCTAssertEqual(onlyChild?.flags.hasBackground, true)
+        XCTAssertEqual(onlyChild?.elementID, String(child.id.rawValue))
+    }
+
+    @MainActor
+    func test_scene_inspector_finds_nodes_by_stable_element_id() {
+        let tree = NodeTree()
+        let root = Node()
+        let child = Node()
+        root.addChild(child)
+        tree.root = root
+
+        let inspector = SceneInspector(tree: tree)
+        XCTAssertTrue(inspector.find(id: String(child.id.rawValue)) === child)
     }
 
     // MARK: - Helpers
