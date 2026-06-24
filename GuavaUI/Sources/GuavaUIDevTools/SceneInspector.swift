@@ -8,6 +8,12 @@ import GuavaUIRuntime
 /// stale ids are ignored by the host.
 public final class SceneInspector: @unchecked Sendable {
 
+    private enum DebugAttachmentKey {
+        static let debugName = "GuavaUI.debug.name"
+        static let layoutRole = "GuavaUI.layout.role"
+        static let semanticRole = "GuavaUI.semantic.role"
+    }
+
     private let tree: NodeTree
     /// Optional log to attach to snapshots. Populated by the host so DevTools
     /// can show recent dirty-propagation events alongside the tree.
@@ -71,7 +77,10 @@ public final class SceneInspector: @unchecked Sendable {
     }
 
     private func search(_ node: Node, target: String) -> Node? {
-        if Self.identifier(for: node) == target { return node }
+        if Self.identifier(for: node) == target ||
+            String(node.id.rawValue) == target {
+            return node
+        }
         for child in node.children {
             if let hit = search(child, target: target) { return hit }
         }
@@ -79,16 +88,19 @@ public final class SceneInspector: @unchecked Sendable {
     }
 
     private func summarise(_ node: Node) -> NodeSummary {
-        NodeSummary(
+        let absoluteFrame = node.absoluteFrame
+        return NodeSummary(
             id: Self.identifier(for: node),
             viewTag: node.viewTag,
-            debugName: nil,
-            frame: NodeFrame(
-                x: Double(node.frame.origin.x),
-                y: Double(node.frame.origin.y),
-                w: Double(node.frame.size.width),
-                h: Double(node.frame.size.height)
-            ),
+            debugName: node.attachments[DebugAttachmentKey.debugName] as? String,
+            frame: Self.encode(frame: node.frame),
+            absoluteFrame: Self.encode(frame: absoluteFrame),
+            contentOffset: NodePoint(x: Double(node.contentOffset.x),
+                                     y: Double(node.contentOffset.y)),
+            zIndex: Double(node.zIndex),
+            opacity: Double(node.opacity),
+            layoutRole: node.attachments[DebugAttachmentKey.layoutRole] as? String,
+            semanticRole: node.attachments[DebugAttachmentKey.semanticRole] as? String,
             flags: NodeFlags(
                 hitTestable: node.isHitTestable,
                 focusable: node.isFocusable,
@@ -98,6 +110,15 @@ public final class SceneInspector: @unchecked Sendable {
             ),
             children: node.children.map { summarise($0) },
             elementID: String(node.id.rawValue)
+        )
+    }
+
+    private static func encode(frame: CGRect) -> NodeFrame {
+        NodeFrame(
+            x: Double(frame.origin.x),
+            y: Double(frame.origin.y),
+            w: Double(frame.size.width),
+            h: Double(frame.size.height)
         )
     }
 
