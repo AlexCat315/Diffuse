@@ -115,30 +115,45 @@ struct InspectorPanel: View {
     }
 
     private struct InspectorParticleModuleStackValue: View {
+        private static let advancedModuleIDs: Set<String> = [
+            "textureSheet",
+            "trails",
+            "subEmitters",
+            "gpuSimulation",
+        ]
+
         let binding: Binding<ParticleModuleStack>
 
         private var stack: ParticleModuleStack {
             binding.wrappedValue
         }
 
-        var body: some View {
-            Box(direction: .column, alignItems: .stretch, spacing: 5) {
-                Row(alignment: .center, spacing: 6) {
-                    Text("\(stack.modules.count)")
-                        .font(.mono)
-                        .foregroundColor(.onSurface)
-                        .padding(horizontal: 6, vertical: 1)
-                        .background(.surfaceVariant)
-                        .cornerRadius(3)
+        private var enabledModuleCount: Int {
+            stack.modules.filter(\.isEnabled).count
+        }
 
-                    Text(L("modules"))
+        private var advancedModuleCount: Int {
+            stack.modules.filter { isAdvancedModule($0) }.count
+        }
+
+        private var coreModuleCount: Int {
+            max(0, stack.modules.count - advancedModuleCount)
+        }
+
+        var body: some View {
+            Box(direction: .column, alignItems: .stretch, spacing: 6) {
+                Row(alignment: .center, spacing: 6) {
+                    Text("\(stack.modules.count) \(L("modules"))")
                         .font(.caption)
                         .foregroundColor(.onSurfaceVariant)
-                        .flex()
+                        .padding(horizontal: 7, vertical: 2)
+                        .background(.surfaceVariant)
+                        .cornerRadius(4)
 
                     Text("v\(stack.version)")
                         .font(.caption)
                         .foregroundColor(.onSurfaceMuted)
+                        .flex()
 
                     Button(L("Reset"),
                            tooltip: L("Reset module order and enabled states")) {
@@ -146,9 +161,16 @@ struct InspectorPanel: View {
                         stack.resetAuthoringState()
                         binding.wrappedValue = stack
                     }
+                    .buttonStyle(GhostButtonStyle())
                 }
 
-                Box(direction: .column, alignItems: .stretch, spacing: 3) {
+                Row(alignment: .center, spacing: 5) {
+                    summaryChip("\(L("Active")) \(enabledModuleCount)/\(stack.modules.count)")
+                    summaryChip("\(L("Core")) \(coreModuleCount)")
+                    summaryChip("\(L("Advanced")) \(advancedModuleCount)")
+                }
+
+                Box(direction: .column, alignItems: .stretch, spacing: 4) {
                     for index in stack.modules.indices {
                         moduleRow(index)
                     }
@@ -161,73 +183,118 @@ struct InspectorPanel: View {
             .clipped()
         }
 
+        private func summaryChip(_ text: String) -> some View {
+            Text(text)
+                .lineLimit(1)
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+                .padding(horizontal: 6, vertical: 1)
+                .background(.surface)
+                .cornerRadius(3)
+        }
+
         private func moduleRow(_ index: Int) -> AnyView {
             let module = stack.modules[index]
-            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 5) {
-                Row(alignment: .center, spacing: 6) {
-                    Button(icon: .resource(module.isExpanded ? UICommonIcons.chevronDown : UICommonIcons.chevronRight),
-                           size: 8,
-                           tooltip: module.isExpanded ? L("Collapse module") : L("Expand module")) {
-                        toggleModuleExpanded(index)
-                    }
-                    .frame(width: 20)
-
-                    Checkbox(isOn: Binding(
-                        get: { binding.wrappedValue.modules.indices.contains(index)
-                            ? binding.wrappedValue.modules[index].isEnabled
-                            : false },
-                        set: { next in
-                            var stack = binding.wrappedValue
-                            guard stack.modules.indices.contains(index),
-                                  stack.modules[index].isEnabled != next else { return }
-                            stack.modules[index].isEnabled = next
-                            binding.wrappedValue = stack
+            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 6) {
+                Row(alignment: .center, spacing: 8) {
+                    Row(alignment: .center, spacing: 3) {
+                        Button(icon: .resource(module.isExpanded ? UICommonIcons.chevronDown : UICommonIcons.chevronRight),
+                               size: 9,
+                               tooltip: module.isExpanded ? L("Collapse module") : L("Expand module")) {
+                            toggleModuleExpanded(index)
                         }
-                    ))
-                    .frame(width: 18)
+                        .frame(width: 22)
+                        .buttonStyle(GhostButtonStyle())
 
-                    Text(module.stage.rawValue.uppercased())
-                        .lineLimit(1)
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
-                        .frame(width: 60)
-
-                    Text(module.displayName)
-                        .lineLimit(1)
-                        .font(.body)
-                        .foregroundColor(module.isEnabled ? .onSurface : .onSurfaceMuted)
-                        .frame(width: 98)
-
-                    Text(moduleDetail(module.settings))
-                        .lineLimit(1)
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceVariant)
-                        .flex()
-
-                    Button(icon: .resource(UICommonIcons.chevronUp),
-                           size: 8,
-                           isEnabled: index > 0,
-                           tooltip: L("Move module up")) {
-                        moveModule(from: index, offset: -1)
+                        Checkbox(isOn: Binding(
+                            get: { binding.wrappedValue.modules.indices.contains(index)
+                                ? binding.wrappedValue.modules[index].isEnabled
+                                : false },
+                            set: { next in
+                                var stack = binding.wrappedValue
+                                guard stack.modules.indices.contains(index),
+                                      stack.modules[index].isEnabled != next else { return }
+                                stack.modules[index].isEnabled = next
+                                binding.wrappedValue = stack
+                            }
+                        ))
+                        .frame(width: 18)
                     }
-                    .frame(width: 24)
+                    .frame(width: 46)
 
-                    Button(icon: .resource(UICommonIcons.chevronDown),
-                           size: 8,
-                           isEnabled: index < stack.modules.count - 1,
-                           tooltip: L("Move module down")) {
-                        moveModule(from: index, offset: 1)
+                    Box(direction: .column, alignItems: .stretch, spacing: 2) {
+                        Row(alignment: .center, spacing: 6) {
+                            Text(module.stage.rawValue.uppercased())
+                                .lineLimit(1)
+                                .font(.caption)
+                                .foregroundColor(.onSurfaceMuted)
+                                .padding(horizontal: 5, vertical: 1)
+                                .background(.surfaceSunken)
+                                .cornerRadius(3)
+
+                            if isAdvancedModule(module) {
+                                Text(L("Advanced"))
+                                    .lineLimit(1)
+                                    .font(.caption)
+                                    .foregroundColor(.onSurfaceMuted)
+                                    .padding(horizontal: 5, vertical: 1)
+                                    .background(.surfaceSunken)
+                                    .cornerRadius(3)
+                            }
+
+                            Text(module.displayName)
+                                .lineLimit(1)
+                                .font(.body)
+                                .foregroundColor(module.isEnabled ? .onSurface : .onSurfaceMuted)
+                                .flex()
+
+                            if !module.isEnabled {
+                                Text(L("Off"))
+                                    .font(.caption)
+                                    .foregroundColor(.onSurfaceMuted)
+                            }
+                        }
+
+                        Text(moduleDetail(module.settings))
+                            .lineLimit(1)
+                            .font(.caption)
+                            .foregroundColor(module.isEnabled ? .onSurfaceVariant : .onSurfaceMuted)
                     }
-                    .frame(width: 24)
+                    .flex()
+
+                    Row(alignment: .center, spacing: 1) {
+                        Button(icon: .resource(UICommonIcons.chevronUp),
+                               size: 8,
+                               isEnabled: index > 0,
+                               tooltip: L("Move module up")) {
+                            moveModule(from: index, offset: -1)
+                        }
+                        .frame(width: 20)
+                        .buttonStyle(GhostButtonStyle())
+
+                        Button(icon: .resource(UICommonIcons.chevronDown),
+                               size: 8,
+                               isEnabled: index < stack.modules.count - 1,
+                               tooltip: L("Move module down")) {
+                            moveModule(from: index, offset: 1)
+                        }
+                        .frame(width: 20)
+                        .buttonStyle(GhostButtonStyle())
+                    }
+                    .frame(width: 42)
                 }
 
                 if module.isExpanded {
                     moduleEditor(index: index, module: module)
                 }
             }
-            .padding(horizontal: 6, vertical: 3)
+            .padding(horizontal: 6, vertical: 5)
             .background(.surface)
             .cornerRadius(4))
+        }
+
+        private func isAdvancedModule(_ module: ParticleEmitterModule) -> Bool {
+            Self.advancedModuleIDs.contains(module.id)
         }
 
         private func toggleModuleExpanded(_ index: Int) {
@@ -1971,22 +2038,24 @@ private extension EditorInspectorFieldValue {
             return max(defaultHeight, ParticleSubEmitterEditorLayout.rowHeight(ruleCount: binding.wrappedValue.count))
         case let .particleModuleStack(binding):
             let stack = binding.wrappedValue
-            let headerHeight: Float = 24
-            let rowHeight: Float = 25
+            let headerHeight: Float = 28
+            let summaryHeight: Float = 20
+            let rowHeight: Float = 38
             let moduleEditorRowHeight: Float = 48
             let expandedEditorHeight = stack.modules.reduce(Float(0)) { total, module in
                 guard module.isExpanded else { return total }
-                return total + Float(particleModuleEditorRowCount(module.settings)) * moduleEditorRowHeight
+                return total + 6 + Float(particleModuleEditorRowCount(module.settings)) * moduleEditorRowHeight
             }
-            let innerSpacing: Float = 5 + Float(max(0, stack.modules.count - 1)) * 3
+            let innerSpacing: Float = 10 + Float(max(0, stack.modules.count - 1)) * 4
             let cardPadding: Float = 14
             return max(defaultHeight,
                        headerHeight
+                       + summaryHeight
                        + Float(stack.modules.count) * rowHeight
                        + expandedEditorHeight
                        + innerSpacing
                        + cardPadding
-                       + 34)
+                       + 8)
         case let .json(_, minHeight):
             return max(defaultHeight, minHeight + 34)
         default:

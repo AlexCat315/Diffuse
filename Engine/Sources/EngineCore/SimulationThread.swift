@@ -179,6 +179,8 @@ final class SimulationThread: @unchecked Sendable {
     private func applyParticleSimulationEventSnapshots(
         _ snapshots: [GPUParticleSimulationEventSnapshot]
     ) -> ParticleSimulationEventApplyReport {
+        let totalReadbackEventCount = snapshots.reduce(0) { $0 + $1.totalEventCount }
+        let droppedReadbackEventCount = snapshots.reduce(0) { $0 + $1.droppedEventCount }
         var eventsByEntity: [EntityID: [ParticleEvent]] = [:]
         for snapshot in snapshots {
             guard let rawValue = snapshot.emitterRawValue else { continue }
@@ -186,7 +188,15 @@ final class SimulationThread: @unchecked Sendable {
             guard !events.isEmpty else { continue }
             eventsByEntity[EntityID(rawValue: rawValue), default: []].append(contentsOf: events)
         }
-        guard !eventsByEntity.isEmpty else { return .empty }
-        return sceneRuntime.applyParticleSimulationEvents(eventsByEntity)
+        guard !eventsByEntity.isEmpty else {
+            return ParticleSimulationEventApplyReport(
+                totalReadbackEventCount: totalReadbackEventCount,
+                droppedReadbackEventCount: droppedReadbackEventCount
+            )
+        }
+        var report = sceneRuntime.applyParticleSimulationEvents(eventsByEntity)
+        report.totalReadbackEventCount = totalReadbackEventCount
+        report.droppedReadbackEventCount = droppedReadbackEventCount
+        return report
     }
 }
