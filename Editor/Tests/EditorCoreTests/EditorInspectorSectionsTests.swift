@@ -160,12 +160,13 @@ struct EditorInspectorSectionsTests {
         let id = makeEntity(in: adapter)
         _ = adapter.addComponent(.particleEmitter, to: id)
 
-        guard case let .particleModuleStack(stack) =
+        guard case let .particleModuleStack(binding) =
             field(adapter, id, section: "particle-emitter", field: "particle-module-stack") else {
             Issue.record("expected particle module stack field")
             return
         }
 
+        let stack = binding.wrappedValue
         #expect(stack.version == ParticleModuleStack.currentVersion)
         #expect(stack.modules.map(\.id) == [
             "emission",
@@ -180,6 +181,200 @@ struct EditorInspectorSectionsTests {
             "subEmitters",
             "gpuSimulation",
         ])
+    }
+
+    @Test("particle module stack binding writes module enabled state")
+    func particleModuleStackBindingWritesEnabledState() throws {
+        let adapter = EditorSceneAdapter()
+        let id = makeEntity(in: adapter)
+        _ = adapter.addComponent(.particleEmitter, to: id)
+        let entity = try #require(EntityID(rawValue: id))
+
+        guard case let .particleModuleStack(binding) =
+            field(adapter, id, section: "particle-emitter", field: "particle-module-stack") else {
+            Issue.record("expected particle module stack field")
+            return
+        }
+
+        var stack = binding.wrappedValue
+        let forcesIndex = try #require(stack.modules.firstIndex { $0.id == "forces" })
+        stack.modules[forcesIndex].isEnabled = false
+        binding.wrappedValue = stack
+
+        let storedStack = try #require(adapter.scene.component(ParticleEmitter.self, for: entity)?.moduleStack)
+        let forces = try #require(storedStack.modules.first { $0.id == "forces" })
+        #expect(!forces.isEnabled)
+
+        if case let .vector3(_, gravityY, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-gravity") {
+            gravityY.wrappedValue = -3
+        } else {
+            Issue.record("missing gravity field")
+        }
+
+        let rebasedStack = try #require(adapter.scene.component(ParticleEmitter.self, for: entity)?.moduleStack)
+        let rebasedForces = try #require(rebasedStack.modules.first { $0.id == "forces" })
+        #expect(!rebasedForces.isEnabled)
+        if case let .forces(settings) = rebasedForces.settings {
+            #expect(settings.gravity.y == -3)
+        } else {
+            Issue.record("expected forces module settings")
+        }
+    }
+
+    @Test("particle module stack binding writes order and reset state")
+    func particleModuleStackBindingWritesOrderAndResetState() throws {
+        let adapter = EditorSceneAdapter()
+        let id = makeEntity(in: adapter)
+        _ = adapter.addComponent(.particleEmitter, to: id)
+        let entity = try #require(EntityID(rawValue: id))
+
+        guard case let .particleModuleStack(binding) =
+            field(adapter, id, section: "particle-emitter", field: "particle-module-stack") else {
+            Issue.record("expected particle module stack field")
+            return
+        }
+
+        var moved = binding.wrappedValue
+        let rendererIndex = try #require(moved.modules.firstIndex { $0.id == "renderer" })
+        moved.moveModule(from: rendererIndex, to: 0)
+        moved.modules[0].isEnabled = false
+        binding.wrappedValue = moved
+
+        var stored = try #require(adapter.scene.component(ParticleEmitter.self, for: entity)?.moduleStack)
+        #expect(stored.modules.first?.id == "renderer")
+        #expect(stored.modules.first?.isEnabled == false)
+
+        stored.resetAuthoringState()
+        binding.wrappedValue = stored
+
+        let reset = try #require(adapter.scene.component(ParticleEmitter.self, for: entity)?.moduleStack)
+        #expect(reset.modules.map(\.id) == ParticleModuleStack.defaultModuleIDs)
+        #expect(reset.modules.allSatisfy { $0.isEnabled })
+        #expect(reset.modules.allSatisfy { !$0.isExpanded })
+    }
+
+    @Test("particle module stack binding writes inline module settings")
+    func particleModuleStackBindingWritesInlineModuleSettings() throws {
+        let adapter = EditorSceneAdapter()
+        let id = makeEntity(in: adapter)
+        _ = adapter.addComponent(.particleEmitter, to: id)
+        let entity = try #require(EntityID(rawValue: id))
+
+        guard case let .particleModuleStack(binding) =
+            field(adapter, id, section: "particle-emitter", field: "particle-module-stack") else {
+            Issue.record("expected particle module stack field")
+            return
+        }
+
+        var stack = binding.wrappedValue
+        let emissionIndex = try #require(stack.modules.firstIndex { $0.id == "emission" })
+        stack.modules[emissionIndex].isExpanded = true
+        if case var .emission(module) = stack.modules[emissionIndex].settings {
+            module.emissionRate = 77
+            module.maxParticles = 512
+            stack.modules[emissionIndex].settings = .emission(module)
+        } else {
+            Issue.record("expected emission module settings")
+        }
+
+        let forcesIndex = try #require(stack.modules.firstIndex { $0.id == "forces" })
+        stack.modules[forcesIndex].isExpanded = true
+        if case var .forces(module) = stack.modules[forcesIndex].settings {
+            module.gravity.y = -4
+            module.noiseStrength = 2.5
+            module.vectorFieldStrength = 8.5
+            module.vectorFieldScale = 3
+            module.vectorFieldScrollSpeed = 0.75
+            stack.modules[forcesIndex].settings = .forces(module)
+        } else {
+            Issue.record("expected forces module settings")
+        }
+
+        let velocityIndex = try #require(stack.modules.firstIndex { $0.id == "velocity" })
+        stack.modules[velocityIndex].isExpanded = true
+        if case var .velocity(module) = stack.modules[velocityIndex].settings {
+            module.startVelocity = SIMD3<Float>(1, 2, 3)
+            module.velocityRandomness = SIMD3<Float>(0.25, 0.5, 0.75)
+            module.velocityInheritance = 0.4
+            stack.modules[velocityIndex].settings = .velocity(module)
+        } else {
+            Issue.record("expected velocity module settings")
+        }
+
+        let collisionIndex = try #require(stack.modules.firstIndex { $0.id == "collision" })
+        stack.modules[collisionIndex].isExpanded = true
+        if case var .collision(module) = stack.modules[collisionIndex].settings {
+            module.collisionPlaneY = -2
+            module.collisionRestitution = 0.8
+            module.collisionDamping = 0.35
+            stack.modules[collisionIndex].settings = .collision(module)
+        } else {
+            Issue.record("expected collision module settings")
+        }
+
+        let trailsIndex = try #require(stack.modules.firstIndex { $0.id == "trails" })
+        stack.modules[trailsIndex].isExpanded = true
+        if case var .trails(module) = stack.modules[trailsIndex].settings {
+            module.trailLength = 1.25
+            module.trailSegments = 7
+            module.trailEndAlphaScale = 0.3
+            module.ribbonWidthScale = 1.6
+            module.ribbonTailWidthScale = 0.2
+            module.ribbonTextureTiling = 4
+            stack.modules[trailsIndex].settings = .trails(module)
+        } else {
+            Issue.record("expected trails module settings")
+        }
+
+        let subEmittersIndex = try #require(stack.modules.firstIndex { $0.id == "subEmitters" })
+        stack.modules[subEmittersIndex].isExpanded = true
+        if case var .subEmitters(module) = stack.modules[subEmittersIndex].settings {
+            module.legacyBurstCount = 3
+            module.legacyProbability = 0.6
+            module.legacyMaxDepth = 2
+            module.legacyInheritVelocity = 0.25
+            module.legacyLifetime = 1.75
+            stack.modules[subEmittersIndex].settings = .subEmitters(module)
+        } else {
+            Issue.record("expected sub emitters module settings")
+        }
+
+        binding.wrappedValue = stack
+
+        let emitter = try #require(adapter.scene.component(ParticleEmitter.self, for: entity))
+        #expect(emitter.emissionRate == 77)
+        #expect(emitter.maxParticles == 512)
+        #expect(emitter.gravity.y == -4)
+        #expect(emitter.noiseStrength == 2.5)
+        #expect(emitter.vectorFieldStrength == 8.5)
+        #expect(emitter.vectorFieldScale == 3)
+        #expect(emitter.vectorFieldScrollSpeed == 0.75)
+        #expect(emitter.startVelocity == SIMD3<Float>(1, 2, 3))
+        #expect(emitter.velocityRandomness == SIMD3<Float>(0.25, 0.5, 0.75))
+        #expect(emitter.velocityInheritance == 0.4)
+        #expect(emitter.collisionPlaneY == -2)
+        #expect(emitter.collisionRestitution == 0.8)
+        #expect(emitter.collisionDamping == 0.35)
+        #expect(emitter.trailLength == 1.25)
+        #expect(emitter.trailSegments == 7)
+        #expect(emitter.trailEndAlphaScale == 0.3)
+        #expect(emitter.ribbonWidthScale == 1.6)
+        #expect(emitter.ribbonTailWidthScale == 0.2)
+        #expect(emitter.ribbonTextureTiling == 4)
+        #expect(emitter.subEmitterBurstCount == 3)
+        #expect(emitter.subEmitterProbability == 0.6)
+        #expect(emitter.subEmitterMaxDepth == 2)
+        #expect(emitter.subEmitterInheritVelocity == 0.25)
+        #expect(emitter.subEmitterLifetime == 1.75)
+
+        let storedStack = emitter.moduleStack
+        #expect(storedStack.modules.first { $0.id == "emission" }?.isExpanded == true)
+        #expect(storedStack.modules.first { $0.id == "forces" }?.isExpanded == true)
+        #expect(storedStack.modules.first { $0.id == "velocity" }?.isExpanded == true)
+        #expect(storedStack.modules.first { $0.id == "collision" }?.isExpanded == true)
+        #expect(storedStack.modules.first { $0.id == "trails" }?.isExpanded == true)
+        #expect(storedStack.modules.first { $0.id == "subEmitters" }?.isExpanded == true)
     }
 
     @Test("particle scalability bindings write scene resources")

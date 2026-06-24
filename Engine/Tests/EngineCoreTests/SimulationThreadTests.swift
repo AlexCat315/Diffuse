@@ -123,10 +123,16 @@ struct SimulationThreadTests {
         )
         let ring = RingBuffer<RenderPacket>()
         let packetPublished = DispatchSemaphore(value: 0)
+        let reportRecorder = ParticleSimulationEventApplyReportRecorder()
+        let reportApplied = DispatchSemaphore(value: 0)
         let thread = SimulationThread(
             runtime: IdleRuntime(),
             ringBuffer: ring,
             onFrameReady: { _ in },
+            onParticleSimulationEventsApplied: { report in
+                reportRecorder.append(report)
+                reportApplied.signal()
+            },
             onPacketPublished: { packetPublished.signal() },
             initialSceneRuntime: initialScene
         )
@@ -162,7 +168,16 @@ struct SimulationThreadTests {
             )
         )
 
+        #expect(reportApplied.wait(timeout: .now() + 2) == .success)
         #expect(packetPublished.wait(timeout: .now() + 2) == .success)
+        let report = reportRecorder.snapshot().first
+        #expect(report?.requestedEmitterCount == 1)
+        #expect(report?.appliedEmitterCount == 1)
+        #expect(report?.eventCount == 1)
+        #expect(report?.appliedEventCount == 1)
+        #expect(report?.deathEventCount == 1)
+        #expect(report?.subEmitterSpawnedCount == 1)
+
         guard let packet = ring.consumeLatest() else {
             Issue.record("expected a render packet from the simulation thread")
             thread.shutdown()
@@ -292,6 +307,21 @@ private final class PhaseRecorder: @unchecked Sendable {
 
     func snapshot() -> [Entry] {
         lock.withLock { entries }
+    }
+}
+
+private final class ParticleSimulationEventApplyReportRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var reports: [ParticleSimulationEventApplyReport] = []
+
+    func append(_ report: ParticleSimulationEventApplyReport) {
+        lock.withLock {
+            reports.append(report)
+        }
+    }
+
+    func snapshot() -> [ParticleSimulationEventApplyReport] {
+        lock.withLock { reports }
     }
 }
 
