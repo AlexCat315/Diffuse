@@ -140,8 +140,8 @@ struct SimulationThreadTests {
             slot: 0,
             emitterRawValue: emitterEntity.rawValue,
             eventCapacity: 2,
-            totalEventCount: 1,
-            droppedEventCount: 0,
+            totalEventCount: 3,
+            droppedEventCount: 2,
             records: [
                 GPUParticleSimulationEventRecord(
                     trigger: .death,
@@ -175,6 +175,8 @@ struct SimulationThreadTests {
         #expect(report?.appliedEmitterCount == 1)
         #expect(report?.eventCount == 1)
         #expect(report?.appliedEventCount == 1)
+        #expect(report?.totalReadbackEventCount == 3)
+        #expect(report?.droppedReadbackEventCount == 2)
         #expect(report?.deathEventCount == 1)
         #expect(report?.subEmitterSpawnedCount == 1)
 
@@ -188,6 +190,43 @@ struct SimulationThreadTests {
         #expect(packet.scene.particles.first?.position == SIMD3<Float>(0.25, 0, 0))
         #expect(packet.scene.particles.first?.size == 0.5)
         #expect(packet.scene.particles.first?.color == SIMD4<Float>(1, 0, 0, 1))
+
+        thread.shutdown()
+    }
+
+    @Test("SimulationThread reports dropped GPU particle events when readback has no records")
+    func simulationThreadReportsDroppedGPUParticleEventsWithoutRecords() {
+        let ring = RingBuffer<RenderPacket>()
+        let reportRecorder = ParticleSimulationEventApplyReportRecorder()
+        let reportApplied = DispatchSemaphore(value: 0)
+        let thread = SimulationThread(
+            runtime: IdleRuntime(),
+            ringBuffer: ring,
+            onFrameReady: { _ in },
+            onParticleSimulationEventsApplied: { report in
+                reportRecorder.append(report)
+                reportApplied.signal()
+            },
+            onPacketPublished: {}
+        )
+        let snapshot = GPUParticleSimulationEventSnapshot(
+            slot: 0,
+            emitterRawValue: EntityID(index: 7, generation: 1).rawValue,
+            eventCapacity: 0,
+            totalEventCount: 5,
+            droppedEventCount: 5,
+            records: []
+        )
+
+        thread.submitParticleSimulationEventSnapshots([snapshot])
+
+        #expect(reportApplied.wait(timeout: .now() + 2) == .success)
+        let report = reportRecorder.snapshot().first
+        #expect(report?.requestedEmitterCount == 0)
+        #expect(report?.eventCount == 0)
+        #expect(report?.appliedEventCount == 0)
+        #expect(report?.totalReadbackEventCount == 5)
+        #expect(report?.droppedReadbackEventCount == 5)
 
         thread.shutdown()
     }

@@ -397,6 +397,8 @@ public struct ParticleSimulationEventApplyReport: Sendable, Equatable {
     public var emptyEventEmitterCount: Int
     public var eventCount: Int
     public var appliedEventCount: Int
+    public var totalReadbackEventCount: Int
+    public var droppedReadbackEventCount: Int
     public var collisionEventCount: Int
     public var deathEventCount: Int
     public var subEmitterSpawnedCount: Int
@@ -409,6 +411,8 @@ public struct ParticleSimulationEventApplyReport: Sendable, Equatable {
                 emptyEventEmitterCount: Int = 0,
                 eventCount: Int = 0,
                 appliedEventCount: Int = 0,
+                totalReadbackEventCount: Int = 0,
+                droppedReadbackEventCount: Int = 0,
                 collisionEventCount: Int = 0,
                 deathEventCount: Int = 0,
                 subEmitterSpawnedCount: Int = 0,
@@ -420,6 +424,8 @@ public struct ParticleSimulationEventApplyReport: Sendable, Equatable {
         self.emptyEventEmitterCount = max(0, emptyEventEmitterCount)
         self.eventCount = max(0, eventCount)
         self.appliedEventCount = max(0, appliedEventCount)
+        self.totalReadbackEventCount = max(0, totalReadbackEventCount)
+        self.droppedReadbackEventCount = max(0, droppedReadbackEventCount)
         self.collisionEventCount = max(0, collisionEventCount)
         self.deathEventCount = max(0, deathEventCount)
         self.subEmitterSpawnedCount = max(0, subEmitterSpawnedCount)
