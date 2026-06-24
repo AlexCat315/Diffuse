@@ -870,6 +870,10 @@ public final class EditorApplication: @unchecked Sendable {
         scene.currentParticleFrameStats()
     }
 
+    public func currentParticleSimulationEventApplyReport() -> ParticleSimulationEventApplyReport {
+        engine.currentParticleSimulationEventApplyReport()
+    }
+
     public func currentParticleScalabilityState() -> ParticleScalabilityStateResource {
         scene.currentParticleScalabilityState()
     }

@@ -1162,95 +1162,99 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     }
 
     var component: ParticleEmitter {
-        ParticleEmitter(isEmitting: isEmitting, looping: looping, duration: duration,
-                        prewarmTime: prewarmTime,
-                        prewarmStep: prewarmStep,
-                        emissionRate: emissionRate,
-                        emissionRateCurve: emissionRateCurve,
-                        distanceEmissionRate: distanceEmissionRate,
-                        distanceEmissionRateCurve: distanceEmissionRateCurve,
-                        burstCount: burstCount, burstInterval: burstInterval,
-                        maxParticles: maxParticles,
-                        maxRenderedParticles: maxRenderedParticles,
-                        lifetime: lifetime,
-                        lifetimeRandomness: lifetimeRandomness,
-                        subEmitterTrigger: subEmitterTrigger,
-                        subEmitterBurstCount: subEmitterBurstCount,
-                        subEmitterProbability: subEmitterProbability,
-                        subEmitterMaxDepth: subEmitterMaxDepth,
-                        subEmitterInheritVelocity: subEmitterInheritVelocity,
-                        subEmitterLifetime: subEmitterLifetime,
-                        subEmitterStartVelocity: subEmitterStartVelocity.simdValue,
-                        subEmitterVelocityRandomness: subEmitterVelocityRandomness.simdValue,
-                        subEmitterStartSize: subEmitterStartSize,
-                        subEmitterEndSize: subEmitterEndSize,
-                        subEmitterStartColor: subEmitterStartColor.simdValue,
-                        subEmitterEndColor: subEmitterEndColor.simdValue,
-                        subEmitters: subEmitters.map(\.component),
-                        originOffset: originOffset.simdValue,
-                        spawnRadius: spawnRadius, emissionShape: emissionShape,
-                        boxHalfExtents: boxHalfExtents.simdValue,
-                        coneRadius: coneRadius, coneHeight: coneHeight,
-                        startVelocity: startVelocity.simdValue,
-                        velocityRandomness: velocityRandomness.simdValue,
-                        velocityInheritance: velocityInheritance,
-                        gravity: gravity.simdValue,
-                        noiseStrength: noiseStrength, noiseScale: noiseScale, noiseSpeed: noiseSpeed,
-                        forceMode: forceMode,
-                        forceCenter: forceCenter.simdValue,
-                        forceAxis: forceAxis.simdValue,
-                        forceRadius: forceRadius,
-                        forceStrength: forceStrength,
-                        forceFalloff: forceFalloff,
-                        vectorFieldMode: vectorFieldMode,
-                        vectorFieldDirection: vectorFieldDirection.simdValue,
-                        vectorFieldStrength: vectorFieldStrength,
-                        vectorFieldScale: vectorFieldScale,
-                        vectorFieldScrollSpeed: vectorFieldScrollSpeed,
-                        collisionMode: collisionMode, simulationSpace: simulationSpace,
-                        simulationBackend: simulationBackend,
-                        gpuSimulationWorkgroupSize: gpuSimulationWorkgroupSize,
-                        collisionPlaneY: collisionPlaneY,
-                        collisionRestitution: collisionRestitution, collisionDamping: collisionDamping,
-                        startSize: startSize, endSize: endSize, sizeRandomness: sizeRandomness,
-                        startRotation: startRotation, rotationRandomness: rotationRandomness,
-                        angularVelocity: angularVelocity, angularVelocityRandomness: angularVelocityRandomness,
-                        sizeCurve: sizeCurve,
-                        startColor: startColor.simdValue, endColor: endColor.simdValue,
-                        colorCurve: colorCurve, blendMode: blendMode,
-                        renderMode: renderMode,
-                        sortMode: sortMode,
-                        ribbonWidthScale: ribbonWidthScale,
-                        ribbonTailWidthScale: ribbonTailWidthScale,
-                        ribbonTailAlphaScale: ribbonTailAlphaScale,
-                        ribbonMaxSegmentLength: ribbonMaxSegmentLength,
-                        ribbonJoinOverlapScale: ribbonJoinOverlapScale,
-                        ribbonSmoothingSegments: ribbonSmoothingSegments,
-                        ribbonTextureTiling: ribbonTextureTiling,
-                        ribbonTextureOffset: ribbonTextureOffset,
-                        renderAlignment: renderAlignment,
-                        velocityStretchScale: velocityStretchScale,
-                        velocityStretchMax: velocityStretchMax,
-                        maxRenderDistance: maxRenderDistance,
-                        renderDistanceFadeRange: renderDistanceFadeRange,
-                        renderLODStartDistance: renderLODStartDistance,
-                        renderLODEndDistance: renderLODEndDistance,
-                        renderLODMinParticleScale: renderLODMinParticleScale,
-                        renderBoundsMode: renderBoundsMode,
-                        renderBoundsRadius: renderBoundsRadius,
-                        textureAssetID: textureAssetID, texturePath: texturePath,
-                        textureSheetColumns: textureSheetColumns,
-                        textureSheetRows: textureSheetRows,
-                        textureSheetFrameCount: textureSheetFrameCount,
-                        textureSheetFrameRate: textureSheetFrameRate,
-                        textureSheetPlaybackMode: textureSheetPlaybackMode,
-                        textureSheetStartFrame: textureSheetStartFrame,
-                        textureSheetFrameRandomness: textureSheetFrameRandomness,
-                        trailLength: trailLength,
-                        trailSegments: trailSegments,
-                        trailEndSizeScale: trailEndSizeScale,
-                        trailEndAlphaScale: trailEndAlphaScale,
-                        seed: seed)
+        var emitter = ParticleEmitter(isEmitting: isEmitting, looping: looping, duration: duration,
+                                      prewarmTime: prewarmTime,
+                                      prewarmStep: prewarmStep,
+                                      emissionRate: emissionRate,
+                                      emissionRateCurve: emissionRateCurve,
+                                      distanceEmissionRate: distanceEmissionRate,
+                                      distanceEmissionRateCurve: distanceEmissionRateCurve,
+                                      burstCount: burstCount, burstInterval: burstInterval,
+                                      maxParticles: maxParticles,
+                                      maxRenderedParticles: maxRenderedParticles,
+                                      lifetime: lifetime,
+                                      lifetimeRandomness: lifetimeRandomness,
+                                      subEmitterTrigger: subEmitterTrigger,
+                                      subEmitterBurstCount: subEmitterBurstCount,
+                                      subEmitterProbability: subEmitterProbability,
+                                      subEmitterMaxDepth: subEmitterMaxDepth,
+                                      subEmitterInheritVelocity: subEmitterInheritVelocity,
+                                      subEmitterLifetime: subEmitterLifetime,
+                                      subEmitterStartVelocity: subEmitterStartVelocity.simdValue,
+                                      subEmitterVelocityRandomness: subEmitterVelocityRandomness.simdValue,
+                                      subEmitterStartSize: subEmitterStartSize,
+                                      subEmitterEndSize: subEmitterEndSize,
+                                      subEmitterStartColor: subEmitterStartColor.simdValue,
+                                      subEmitterEndColor: subEmitterEndColor.simdValue,
+                                      subEmitters: subEmitters.map(\.component),
+                                      originOffset: originOffset.simdValue,
+                                      spawnRadius: spawnRadius, emissionShape: emissionShape,
+                                      boxHalfExtents: boxHalfExtents.simdValue,
+                                      coneRadius: coneRadius, coneHeight: coneHeight,
+                                      startVelocity: startVelocity.simdValue,
+                                      velocityRandomness: velocityRandomness.simdValue,
+                                      velocityInheritance: velocityInheritance,
+                                      gravity: gravity.simdValue,
+                                      noiseStrength: noiseStrength, noiseScale: noiseScale, noiseSpeed: noiseSpeed,
+                                      forceMode: forceMode,
+                                      forceCenter: forceCenter.simdValue,
+                                      forceAxis: forceAxis.simdValue,
+                                      forceRadius: forceRadius,
+                                      forceStrength: forceStrength,
+                                      forceFalloff: forceFalloff,
+                                      vectorFieldMode: vectorFieldMode,
+                                      vectorFieldDirection: vectorFieldDirection.simdValue,
+                                      vectorFieldStrength: vectorFieldStrength,
+                                      vectorFieldScale: vectorFieldScale,
+                                      vectorFieldScrollSpeed: vectorFieldScrollSpeed,
+                                      collisionMode: collisionMode, simulationSpace: simulationSpace,
+                                      simulationBackend: simulationBackend,
+                                      gpuSimulationWorkgroupSize: gpuSimulationWorkgroupSize,
+                                      collisionPlaneY: collisionPlaneY,
+                                      collisionRestitution: collisionRestitution, collisionDamping: collisionDamping,
+                                      startSize: startSize, endSize: endSize, sizeRandomness: sizeRandomness,
+                                      startRotation: startRotation, rotationRandomness: rotationRandomness,
+                                      angularVelocity: angularVelocity, angularVelocityRandomness: angularVelocityRandomness,
+                                      sizeCurve: sizeCurve,
+                                      startColor: startColor.simdValue, endColor: endColor.simdValue,
+                                      colorCurve: colorCurve, blendMode: blendMode,
+                                      renderMode: renderMode,
+                                      sortMode: sortMode,
+                                      ribbonWidthScale: ribbonWidthScale,
+                                      ribbonTailWidthScale: ribbonTailWidthScale,
+                                      ribbonTailAlphaScale: ribbonTailAlphaScale,
+                                      ribbonMaxSegmentLength: ribbonMaxSegmentLength,
+                                      ribbonJoinOverlapScale: ribbonJoinOverlapScale,
+                                      ribbonSmoothingSegments: ribbonSmoothingSegments,
+                                      ribbonTextureTiling: ribbonTextureTiling,
+                                      ribbonTextureOffset: ribbonTextureOffset,
+                                      renderAlignment: renderAlignment,
+                                      velocityStretchScale: velocityStretchScale,
+                                      velocityStretchMax: velocityStretchMax,
+                                      maxRenderDistance: maxRenderDistance,
+                                      renderDistanceFadeRange: renderDistanceFadeRange,
+                                      renderLODStartDistance: renderLODStartDistance,
+                                      renderLODEndDistance: renderLODEndDistance,
+                                      renderLODMinParticleScale: renderLODMinParticleScale,
+                                      renderBoundsMode: renderBoundsMode,
+                                      renderBoundsRadius: renderBoundsRadius,
+                                      textureAssetID: textureAssetID, texturePath: texturePath,
+                                      textureSheetColumns: textureSheetColumns,
+                                      textureSheetRows: textureSheetRows,
+                                      textureSheetFrameCount: textureSheetFrameCount,
+                                      textureSheetFrameRate: textureSheetFrameRate,
+                                      textureSheetPlaybackMode: textureSheetPlaybackMode,
+                                      textureSheetStartFrame: textureSheetStartFrame,
+                                      textureSheetFrameRandomness: textureSheetFrameRandomness,
+                                      trailLength: trailLength,
+                                      trailSegments: trailSegments,
+                                      trailEndSizeScale: trailEndSizeScale,
+                                      trailEndAlphaScale: trailEndAlphaScale,
+                                      seed: seed)
+        if let moduleStack {
+            emitter.apply(moduleStack)
+        }
+        return emitter
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -1474,7 +1478,7 @@ public enum EditorInspectorFieldValue {
     case particleVectorFieldMode(Binding<ParticleVectorFieldMode>)
     case particleSubEmitterTrigger(Binding<ParticleSubEmitterTrigger>)
     case particleSubEmitters(Binding<[ParticleSubEmitter]>)
-    case particleModuleStack(ParticleModuleStack)
+    case particleModuleStack(Binding<ParticleModuleStack>)
     case asset(Binding<EditorInspectorAssetRef?>, acceptedKinds: Set<String>, placeholder: String)
 }
 
@@ -2510,13 +2514,13 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     }
 
     private func particleEmitterSection(for entity: EntityID) -> EditorInspectorSection? {
-        guard let emitter = scene.component(ParticleEmitter.self, for: entity) else { return nil }
+        guard scene.component(ParticleEmitter.self, for: entity) != nil else { return nil }
         return EditorInspectorSection(
             id: "particle-emitter",
             title: L("Particle Emitter"),
             fields: [
                 EditorInspectorField(id: "particle-module-stack", label: L("Modules"),
-                                     value: .particleModuleStack(emitter.moduleStack)),
+                                     value: .particleModuleStack(particleModuleStackBinding(for: entity))),
                 EditorInspectorField(id: "particle-emitting", label: L("Emitting"),
                                      value: .bool(particleBoolBinding(for: entity, \.isEmitting,
                                                                       summary: "Toggle particle emitting"))),
@@ -2996,6 +3000,20 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                   summary: summary,
                                   targetRawIDs: [entity.rawValue],
                                   mutations: [.setParticleEmitter(entityID: entity.rawValue, emitter: emitter)])
+    }
+
+    private func particleModuleStackBinding(for entity: EntityID) -> Binding<ParticleModuleStack> {
+        Binding(
+            get: { [self] in
+                scene.component(ParticleEmitter.self, for: entity)?.moduleStack ?? ParticleModuleStack()
+            },
+            set: { [self] next in
+                guard scene.component(ParticleEmitter.self, for: entity)?.moduleStack != next else { return }
+                updateParticleEmitter(entity, summary: "Update particle module stack") {
+                    $0.apply(next)
+                }
+            }
+        )
     }
 
     private func particleBoolBinding(for entity: EntityID,
