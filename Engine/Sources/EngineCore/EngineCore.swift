@@ -69,6 +69,7 @@ private struct EngineHostState {
     var currentInputEvents: [InputEvent] = []
     var renderSettings: RenderSettings = .init()
     var renderStats: RenderFrameStats = .init()
+    var particleSimulationEventApplyReport: ParticleSimulationEventApplyReport = .empty
     var viewportSurfaceState: ViewportSurfaceState = .init()
     var renderCompletionHandler: (@Sendable (EngineRenderCompletion) -> Void)?
 }
@@ -177,6 +178,9 @@ public final class EngineHost: @unchecked Sendable {
             onFrameReady: { [weak self] report in
                 self?.handleSimulationFrame(report)
             },
+            onParticleSimulationEventsApplied: { [weak self] report in
+                self?.handleParticleSimulationEventsApplied(report)
+            },
             onPacketPublished: { [weak self] in
                 self?.renderThread?.requestRender()
             }
@@ -223,6 +227,10 @@ public final class EngineHost: @unchecked Sendable {
         state.withLock { $0.renderStats }
     }
 
+    public func currentParticleSimulationEventApplyReport() -> ParticleSimulationEventApplyReport {
+        state.withLock { $0.particleSimulationEventApplyReport }
+    }
+
     public func currentViewportSurfaceState() -> ViewportSurfaceState {
         state.withLock { $0.viewportSurfaceState }
     }
@@ -264,6 +272,12 @@ public final class EngineHost: @unchecked Sendable {
     private func handleSimulationFrame(_ report: SimulationFrameReport) {
         timings.withLock { ledger in
             ledger.updateSimulation(report)
+        }
+    }
+
+    private func handleParticleSimulationEventsApplied(_ report: ParticleSimulationEventApplyReport) {
+        state.withLock { state in
+            state.particleSimulationEventApplyReport = report
         }
     }
 

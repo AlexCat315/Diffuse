@@ -53,6 +53,7 @@ final class SimulationThread: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.guava.engine.simulation", qos: .userInitiated)
     private let onKernelPhase: @Sendable (EngineKernelPhase, EngineKernelPhaseContext) -> Void
     private let onFrameReady: @Sendable (SimulationFrameReport) -> Void
+    private let onParticleSimulationEventsApplied: @Sendable (ParticleSimulationEventApplyReport) -> Void
     private let onPacketPublished: @Sendable () -> Void
 
     private var sceneRuntime = SceneRuntime()
@@ -65,6 +66,7 @@ final class SimulationThread: @unchecked Sendable {
         ringBuffer: RingBuffer<RenderPacket>,
         onKernelPhase: @escaping @Sendable (EngineKernelPhase, EngineKernelPhaseContext) -> Void = { _, _ in },
         onFrameReady: @escaping @Sendable (SimulationFrameReport) -> Void,
+        onParticleSimulationEventsApplied: @escaping @Sendable (ParticleSimulationEventApplyReport) -> Void = { _ in },
         onPacketPublished: @escaping @Sendable () -> Void,
         initialSceneRuntime: SceneRuntime? = nil
     ) {
@@ -72,6 +74,7 @@ final class SimulationThread: @unchecked Sendable {
         self.ringBuffer = ringBuffer
         self.onKernelPhase = onKernelPhase
         self.onFrameReady = onFrameReady
+        self.onParticleSimulationEventsApplied = onParticleSimulationEventsApplied
         self.onPacketPublished = onPacketPublished
         if let initialSceneRuntime {
             self.sceneRuntime = initialSceneRuntime
@@ -93,7 +96,8 @@ final class SimulationThread: @unchecked Sendable {
     ) {
         guard !snapshots.isEmpty else { return }
         queue.async { [self] in
-            applyParticleSimulationEventSnapshots(snapshots)
+            let report = applyParticleSimulationEventSnapshots(snapshots)
+            onParticleSimulationEventsApplied(report)
         }
     }
 
