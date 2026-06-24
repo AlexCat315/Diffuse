@@ -4,19 +4,65 @@ import CoreGraphics
 import EditorCore
 import GuavaUICompose
 import GuavaUIRuntime
+import RenderBackend
 import SceneRuntime
+
+private struct InspectorParticleRuntimeDiagnostics {
+    let frameStats: ParticleFrameStatsResource
+    let scalability: ParticleScalabilityStateResource
+    let renderStats: RenderFrameStats
+    let eventReport: ParticleSimulationEventApplyReport
+
+    static let empty = InspectorParticleRuntimeDiagnostics(
+        frameStats: .empty,
+        scalability: .default,
+        renderStats: .init(),
+        eventReport: .empty
+    )
+
+    var hasGPUSimulationWork: Bool {
+        renderStats.gpuParticleSimulationBatchCount > 0
+            || renderStats.gpuParticleSimulationParticleCount > 0
+            || renderStats.gpuParticleSimulationDispatchWorkgroups > 0
+    }
+
+    var hasGPUEventPressure: Bool {
+        eventReport.droppedReadbackEventCount > 0
+            || renderStats.gpuParticleSimulationEventCapacity > 0
+            || eventReport.totalReadbackEventCount > 0
+    }
+}
 
 struct InspectorPanel: View {
     let store: EditorStore
     let scene: EditorSceneAdapter
+    let renderStatsProvider: () -> RenderFrameStats
+    let particleEventReportProvider: () -> ParticleSimulationEventApplyReport
+
+    init(store: EditorStore,
+         scene: EditorSceneAdapter,
+         renderStatsProvider: @escaping () -> RenderFrameStats = { .init() },
+         particleEventReportProvider: @escaping () -> ParticleSimulationEventApplyReport = { .empty }) {
+        self.store = store
+        self.scene = scene
+        self.renderStatsProvider = renderStatsProvider
+        self.particleEventReportProvider = particleEventReportProvider
+    }
 
     var body: some View {
         StoreScope(store) { store in
             let _ = store.sceneRevision
+            let _ = store.frameTimingRevision
             let selectedEntityID = store.selectedEntityID
             let entity = scene.entitySummary(id: selectedEntityID)
             let sections = scene.inspectorSections(for: selectedEntityID)
             let collapsedIDs = store.inspectorCollapsedSectionIDs
+            let particleDiagnostics = InspectorParticleRuntimeDiagnostics(
+                frameStats: scene.currentParticleFrameStats(),
+                scalability: scene.currentParticleScalabilityState(),
+                renderStats: renderStatsProvider(),
+                eventReport: particleEventReportProvider()
+            )
 
             Box(direction: .column, alignItems: .stretch) {
                 if let entity {
@@ -27,7 +73,8 @@ struct InspectorPanel: View {
 
                     PropertyGrid(propertySections(sections,
                                                   collapsedIDs: collapsedIDs,
-                                                  entityID: selectedEntityID),
+                                                  entityID: selectedEntityID,
+                                                  particleDiagnostics: particleDiagnostics),
                                  labelWidth: 108,
                                  minValueWidth: 132,
                                  rowHeight: 26,
@@ -123,6 +170,24 @@ struct InspectorPanel: View {
         ]
 
         let binding: Binding<ParticleModuleStack>
+        let diagnostics: InspectorParticleRuntimeDiagnostics
+
+        private struct ModuleDiagnosticChip {
+            let label: String
+            let value: String
+            let foreground: SemanticColorRef
+            let background: SemanticColorRef
+
+            init(_ label: String,
+                 _ value: String,
+                 foreground: SemanticColorRef = .onSurfaceVariant,
+                 background: SemanticColorRef = .surface) {
+                self.label = label
+                self.value = value
+                self.foreground = foreground
+                self.background = background
+            }
+        }
 
         private var stack: ParticleModuleStack {
             binding.wrappedValue
@@ -140,107 +205,174 @@ struct InspectorPanel: View {
             max(0, stack.modules.count - advancedModuleCount)
         }
 
-        var body: some View {
-            Box(direction: .column, alignItems: .stretch, spacing: 6) {
-                Row(alignment: .center, spacing: 6) {
-                    Text("\(stack.modules.count) \(L("modules"))")
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceVariant)
-                        .padding(horizontal: 7, vertical: 2)
-                        .background(.surfaceVariant)
-                        .cornerRadius(4)
+        private var coreModuleIndices: [Int] {
+            stack.modules.indices.filter { !isAdvancedModule(stack.modules[$0]) }
+        }
 
-                    Text("v\(stack.version)")
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
+        private var advancedModuleIndices: [Int] {
+            stack.modules.indices.filter { isAdvancedModule(stack.modules[$0]) }
+        }
+
+        var body: some View {
+            Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                Box(direction: .column, alignItems: .stretch, spacing: 5) {
+                    Row(alignment: .center, spacing: 8) {
+                        Box(direction: .column, alignItems: .stretch, spacing: 1) {
+                            Text(L("Module Stack"))
+                                .lineLimit(1)
+                                .font(.body)
+                                .foregroundColor(.onSurface)
+                            Text("\(stack.modules.count) \(L("modules")) · v\(stack.version)")
+                                .lineLimit(1)
+                                .font(.caption)
+                                .foregroundColor(.onSurfaceMuted)
+                        }
                         .flex()
 
-                    Button(L("Reset"),
-                           tooltip: L("Reset module order and enabled states")) {
-                        var stack = binding.wrappedValue
-                        stack.resetAuthoringState()
-                        binding.wrappedValue = stack
+                        Button(L("Reset"),
+                               tooltip: L("Reset module order and enabled states")) {
+                            var stack = binding.wrappedValue
+                            stack.resetAuthoringState()
+                            binding.wrappedValue = stack
+                        }
+                        .buttonStyle(GhostButtonStyle())
                     }
-                    .buttonStyle(GhostButtonStyle())
-                }
 
-                Row(alignment: .center, spacing: 5) {
-                    summaryChip("\(L("Active")) \(enabledModuleCount)/\(stack.modules.count)")
-                    summaryChip("\(L("Core")) \(coreModuleCount)")
-                    summaryChip("\(L("Advanced")) \(advancedModuleCount)")
+                    Row(alignment: .center, spacing: 5) {
+                        summaryChip("\(L("Active")) \(enabledModuleCount)/\(stack.modules.count)",
+                                    foreground: .onSurfaceVariant,
+                                    background: .surfaceVariant)
+                        summaryChip("\(L("Core")) \(coreModuleCount)")
+                        summaryChip("\(L("Advanced")) \(advancedModuleCount)")
+                        summaryChip(gpuSummaryText,
+                                    foreground: gpuSummaryForeground,
+                                    background: gpuSummaryBackground)
+                    }
                 }
+                .padding(horizontal: 2, vertical: 1)
 
                 Box(direction: .column, alignItems: .stretch, spacing: 4) {
-                    for index in stack.modules.indices {
-                        moduleRow(index)
+                    moduleGroup(title: L("Core"),
+                                subtitle: "\(enabledCount(in: coreModuleIndices))/\(coreModuleIndices.count)",
+                                indices: coreModuleIndices)
+
+                    if !advancedModuleIndices.isEmpty {
+                        moduleGroup(title: L("Advanced"),
+                                    subtitle: "\(enabledCount(in: advancedModuleIndices))/\(advancedModuleIndices.count)",
+                                    indices: advancedModuleIndices)
                     }
                 }
             }
-            .padding(horizontal: 7, vertical: 7)
+            .padding(horizontal: 8, vertical: 8)
             .background(.surfaceSunken)
             .cornerRadius(7)
             .border(.border, width: 1)
             .clipped()
         }
 
-        private func summaryChip(_ text: String) -> some View {
+        private var gpuSummaryText: String {
+            guard let module = stack.modules.first(where: { $0.id == "gpuSimulation" }),
+                  module.isEnabled,
+                  case let .gpuSimulation(settings) = module.settings else {
+                return L("GPU Off")
+            }
+            if diagnostics.hasGPUSimulationWork {
+                return L("GPU Active")
+            }
+            switch settings.simulationBackend {
+            case .cpu:
+                return L("GPU Off")
+            case .gpuIfSupported:
+                return L("GPU Preferred")
+            case .gpuRequired:
+                return L("GPU Required")
+            }
+        }
+
+        private var gpuSummaryForeground: SemanticColorRef {
+            if gpuSummaryText == L("GPU Active") {
+                return .success
+            }
+            if gpuSummaryText == L("GPU Off") {
+                return .onSurfaceMuted
+            }
+            return .info
+        }
+
+        private var gpuSummaryBackground: SemanticColorRef {
+            if gpuSummaryText == L("GPU Active") {
+                return .success.opacity(0.12)
+            }
+            if gpuSummaryText == L("GPU Off") {
+                return .surface
+            }
+            return .info.opacity(0.12)
+        }
+
+        private func summaryChip(_ text: String,
+                                 foreground: SemanticColorRef = .onSurfaceMuted,
+                                 background: SemanticColorRef = .surface) -> some View {
             Text(text)
                 .lineLimit(1)
                 .font(.caption)
-                .foregroundColor(.onSurfaceMuted)
-                .padding(horizontal: 6, vertical: 1)
-                .background(.surface)
+                .foregroundColor(foreground)
+                .padding(horizontal: 6, vertical: 2)
+                .background(background)
                 .cornerRadius(3)
         }
 
-        private func moduleRow(_ index: Int) -> AnyView {
+        private func moduleGroup(title: String, subtitle: String, indices: [Int]) -> AnyView {
+            AnyView(Box(direction: .column, alignItems: .stretch, spacing: 4) {
+                Row(alignment: .center, spacing: 6) {
+                    Text(title.uppercased())
+                        .lineLimit(1)
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+
+                    Text(subtitle)
+                        .lineLimit(1)
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                        .padding(horizontal: 5, vertical: 1)
+                        .background(.surface)
+                        .cornerRadius(3)
+
+                    Spacer(minLength: 0)
+                        .flex()
+                }
+                .padding(horizontal: 3, vertical: 2)
+
+                Box(direction: .column, alignItems: .stretch, spacing: 3) {
+                    for index in indices {
+                        moduleRow(index, groupIndices: indices)
+                    }
+                }
+            })
+        }
+
+        private func moduleRow(_ index: Int, groupIndices: [Int]) -> AnyView {
             let module = stack.modules[index]
+            let localIndex = groupIndices.firstIndex(of: index) ?? 0
+            let status = moduleStatus(module)
             return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 6) {
                 Row(alignment: .center, spacing: 8) {
-                    Row(alignment: .center, spacing: 3) {
-                        Button(icon: .resource(module.isExpanded ? UICommonIcons.chevronDown : UICommonIcons.chevronRight),
-                               size: 9,
-                               tooltip: module.isExpanded ? L("Collapse module") : L("Expand module")) {
-                            toggleModuleExpanded(index)
-                        }
-                        .frame(width: 22)
-                        .buttonStyle(GhostButtonStyle())
+                    Spacer(minLength: 0)
+                        .frame(width: 3, height: module.isExpanded ? 36 : 31)
+                        .background(moduleAccent(module))
+                        .cornerRadius(2)
+                        .opacity(module.isEnabled ? 1 : 0.45)
 
-                        Checkbox(isOn: Binding(
-                            get: { binding.wrappedValue.modules.indices.contains(index)
-                                ? binding.wrappedValue.modules[index].isEnabled
-                                : false },
-                            set: { next in
-                                var stack = binding.wrappedValue
-                                guard stack.modules.indices.contains(index),
-                                      stack.modules[index].isEnabled != next else { return }
-                                stack.modules[index].isEnabled = next
-                                binding.wrappedValue = stack
-                            }
-                        ))
-                        .frame(width: 18)
+                    Button(icon: .resource(module.isExpanded ? UICommonIcons.chevronDown : UICommonIcons.chevronRight),
+                           size: 9,
+                           tooltip: module.isExpanded ? L("Collapse module") : L("Expand module")) {
+                        toggleModuleExpanded(index)
                     }
-                    .frame(width: 46)
+                    .frame(width: 24)
+                    .buttonStyle(GhostButtonStyle())
 
                     Box(direction: .column, alignItems: .stretch, spacing: 2) {
                         Row(alignment: .center, spacing: 6) {
-                            Text(module.stage.rawValue.uppercased())
-                                .lineLimit(1)
-                                .font(.caption)
-                                .foregroundColor(.onSurfaceMuted)
-                                .padding(horizontal: 5, vertical: 1)
-                                .background(.surfaceSunken)
-                                .cornerRadius(3)
-
-                            if isAdvancedModule(module) {
-                                Text(L("Advanced"))
-                                    .lineLimit(1)
-                                    .font(.caption)
-                                    .foregroundColor(.onSurfaceMuted)
-                                    .padding(horizontal: 5, vertical: 1)
-                                    .background(.surfaceSunken)
-                                    .cornerRadius(3)
-                            }
+                            badge(module.stage.rawValue.uppercased())
 
                             Text(module.displayName)
                                 .lineLimit(1)
@@ -248,10 +380,10 @@ struct InspectorPanel: View {
                                 .foregroundColor(module.isEnabled ? .onSurface : .onSurfaceMuted)
                                 .flex()
 
-                            if !module.isEnabled {
-                                Text(L("Off"))
-                                    .font(.caption)
-                                    .foregroundColor(.onSurfaceMuted)
+                            if let status {
+                                badge(status.text,
+                                      foreground: status.foreground,
+                                      background: status.background)
                             }
                         }
 
@@ -261,40 +393,120 @@ struct InspectorPanel: View {
                             .foregroundColor(module.isEnabled ? .onSurfaceVariant : .onSurfaceMuted)
                     }
                     .flex()
+                    .opacity(module.isEnabled ? 1 : 0.62)
 
-                    Row(alignment: .center, spacing: 1) {
+                    Checkbox(isOn: Binding(
+                        get: { binding.wrappedValue.modules.indices.contains(index)
+                            ? binding.wrappedValue.modules[index].isEnabled
+                            : false },
+                        set: { next in
+                            var stack = binding.wrappedValue
+                            guard stack.modules.indices.contains(index),
+                                  stack.modules[index].isEnabled != next else { return }
+                            stack.modules[index].isEnabled = next
+                            binding.wrappedValue = stack
+                        }
+                    ))
+                    .frame(width: 18)
+
+                    Row(alignment: .center, spacing: 0) {
                         Button(icon: .resource(UICommonIcons.chevronUp),
                                size: 8,
-                               isEnabled: index > 0,
+                               isEnabled: localIndex > 0,
                                tooltip: L("Move module up")) {
-                            moveModule(from: index, offset: -1)
+                            moveModuleWithinGroup(groupIndices, localIndex: localIndex, offset: -1)
                         }
-                        .frame(width: 20)
+                        .frame(width: 18)
                         .buttonStyle(GhostButtonStyle())
 
                         Button(icon: .resource(UICommonIcons.chevronDown),
                                size: 8,
-                               isEnabled: index < stack.modules.count - 1,
+                               isEnabled: localIndex < groupIndices.count - 1,
                                tooltip: L("Move module down")) {
-                            moveModule(from: index, offset: 1)
+                            moveModuleWithinGroup(groupIndices, localIndex: localIndex, offset: 1)
                         }
-                        .frame(width: 20)
+                        .frame(width: 18)
                         .buttonStyle(GhostButtonStyle())
                     }
-                    .frame(width: 42)
+                    .frame(width: 36)
                 }
 
                 if module.isExpanded {
-                    moduleEditor(index: index, module: module)
+                    expandedModuleEditor(index: index, module: module)
                 }
             }
-            .padding(horizontal: 6, vertical: 5)
-            .background(.surface)
-            .cornerRadius(4))
+            .padding(horizontal: 6, vertical: 6)
+            .background(moduleBackground(module))
+            .cornerRadius(5)
+            .border(moduleBorder(module), width: 1))
         }
 
         private func isAdvancedModule(_ module: ParticleEmitterModule) -> Bool {
             Self.advancedModuleIDs.contains(module.id)
+        }
+
+        private func enabledCount(in indices: [Int]) -> Int {
+            indices.filter { stack.modules.indices.contains($0) && stack.modules[$0].isEnabled }.count
+        }
+
+        private func badge(_ text: String,
+                           foreground: SemanticColorRef = .onSurfaceMuted,
+                           background: SemanticColorRef = .surfaceSunken) -> some View {
+            Text(text)
+                .lineLimit(1)
+                .font(.caption)
+                .foregroundColor(foreground)
+                .padding(horizontal: 5, vertical: 1)
+                .background(background)
+                .cornerRadius(3)
+        }
+
+        private func moduleStatus(_ module: ParticleEmitterModule)
+            -> (text: String, foreground: SemanticColorRef, background: SemanticColorRef)? {
+            guard module.isEnabled else {
+                return (L("Off"), .onSurfaceMuted, .surfaceSunken)
+            }
+            guard case let .gpuSimulation(settings) = module.settings else { return nil }
+            if diagnostics.hasGPUSimulationWork {
+                return (L("Active"), .success, .success.opacity(0.12))
+            }
+            switch settings.simulationBackend {
+            case .cpu:
+                return (L("CPU"), .onSurfaceMuted, .surfaceSunken)
+            case .gpuIfSupported:
+                return (L("Preferred"), .info, .info.opacity(0.12))
+            case .gpuRequired:
+                return (L("Required"), .success, .success.opacity(0.12))
+            }
+        }
+
+        private func moduleAccent(_ module: ParticleEmitterModule) -> SemanticColorRef {
+            guard module.isEnabled else { return .divider }
+            if module.id == "gpuSimulation", diagnostics.hasGPUSimulationWork {
+                return .success
+            }
+            switch module.stage {
+            case .spawn, .initialize:
+                return .accent
+            case .update:
+                return .info
+            case .render:
+                return .accentSecondary
+            case .event:
+                return .warning
+            case .simulation:
+                return .success
+            }
+        }
+
+        private func moduleBackground(_ module: ParticleEmitterModule) -> SemanticColorRef {
+            if !module.isEnabled { return .surfaceSunken }
+            return module.isExpanded ? .surfaceRaised : .surface
+        }
+
+        private func moduleBorder(_ module: ParticleEmitterModule) -> SemanticColorRef {
+            if !module.isEnabled { return .divider }
+            return module.isExpanded ? .borderStrong : .divider
         }
 
         private func toggleModuleExpanded(_ index: Int) {
@@ -304,13 +516,152 @@ struct InspectorPanel: View {
             binding.wrappedValue = stack
         }
 
-        private func moveModule(from index: Int, offset: Int) {
+        private func moveModuleWithinGroup(_ groupIndices: [Int], localIndex: Int, offset: Int) {
             var stack = binding.wrappedValue
-            let destination = index + offset
-            guard stack.modules.indices.contains(index),
-                  stack.modules.indices.contains(destination) else { return }
-            stack.moveModule(from: index, to: destination)
+            let destinationLocalIndex = localIndex + offset
+            guard groupIndices.indices.contains(localIndex),
+                  groupIndices.indices.contains(destinationLocalIndex) else { return }
+            let source = groupIndices[localIndex]
+            let destination = groupIndices[destinationLocalIndex]
+            guard stack.modules.indices.contains(source),
+                  stack.modules.indices.contains(destination),
+                  source != destination else { return }
+            stack.modules.swapAt(source, destination)
             binding.wrappedValue = stack
+        }
+
+        private func expandedModuleEditor(index: Int, module: ParticleEmitterModule) -> AnyView {
+            AnyView(Box(direction: .column, alignItems: .stretch, spacing: 7) {
+                Row(alignment: .center, spacing: 6) {
+                    Text(L("Settings"))
+                        .lineLimit(1)
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                    Text(moduleDetail(module.settings))
+                        .lineLimit(1)
+                        .font(.caption)
+                        .foregroundColor(module.isEnabled ? .onSurfaceVariant : .onSurfaceMuted)
+                        .flex()
+                }
+
+                moduleEditor(index: index, module: module)
+
+                let chips = moduleDiagnosticChips(module)
+                if !chips.isEmpty {
+                    Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 4) {
+                        for chip in chips {
+                            diagnosticChip(chip.label,
+                                           chip.value,
+                                           foreground: chip.foreground,
+                                           background: chip.background)
+                        }
+                    }
+                }
+            }
+            .padding(horizontal: 7, vertical: 7)
+            .background(.surfaceSunken)
+            .cornerRadius(4)
+            .border(.divider, width: 1))
+        }
+
+        private func moduleDiagnosticChips(_ module: ParticleEmitterModule) -> [ModuleDiagnosticChip] {
+            switch module.settings {
+            case .emission:
+                return [
+                    ModuleDiagnosticChip(L("Live"), "\(diagnostics.frameStats.liveParticleCount)"),
+                    ModuleDiagnosticChip(L("Spawn"), "\(diagnostics.frameStats.spawnedParticleCount)"),
+                    ModuleDiagnosticChip(L("Dropped"), "\(diagnostics.frameStats.capacityLimitedSpawnCount)",
+                                         foreground: diagnostics.frameStats.capacityLimitedSpawnCount > 0 ? .warning : .onSurfaceVariant,
+                                         background: diagnostics.frameStats.capacityLimitedSpawnCount > 0 ? .warning.opacity(0.12) : .surface),
+                ]
+            case .collision:
+                return [
+                    ModuleDiagnosticChip(L("Hits"), "\(diagnostics.frameStats.collisionCount)"),
+                    ModuleDiagnosticChip(L("Events"), "\(diagnostics.eventReport.collisionEventCount)"),
+                    ModuleDiagnosticChip(L("Bounce"), moduleCollisionBounce(module.settings)),
+                ]
+            case .appearance:
+                return [
+                    ModuleDiagnosticChip(L("Expired"), "\(diagnostics.frameStats.expiredParticleCount)"),
+                    ModuleDiagnosticChip(L("Scale"), fmt(diagnostics.scalability.appliedScale)),
+                    ModuleDiagnosticChip(L("Pressure"), fmt(diagnostics.scalability.pressure),
+                                         foreground: diagnostics.scalability.pressure > 1 ? .warning : .onSurfaceVariant,
+                                         background: diagnostics.scalability.pressure > 1 ? .warning.opacity(0.12) : .surface),
+                ]
+            case .renderer:
+                return [
+                    ModuleDiagnosticChip(L("Submitted"), "\(diagnostics.renderStats.gpuParticleRenderInstanceCount)"),
+                    ModuleDiagnosticChip(L("Draws"), "\(diagnostics.renderStats.gpuParticleIndirectDrawCount)"),
+                    ModuleDiagnosticChip(L("Cull"), "\(diagnostics.renderStats.gpuParticleCullCandidateCount)"),
+                ]
+            case .textureSheet:
+                return [
+                    ModuleDiagnosticChip(L("Sort"), "\(diagnostics.renderStats.gpuParticleSortItemCount)"),
+                    ModuleDiagnosticChip(L("Passes"), "\(diagnostics.renderStats.gpuParticleSortPassCount)"),
+                ]
+            case .trails:
+                return [
+                    ModuleDiagnosticChip(L("Live"), "\(diagnostics.frameStats.liveParticleCount)"),
+                    ModuleDiagnosticChip(L("Render"), "\(diagnostics.renderStats.gpuParticleRenderInstanceCount)"),
+                ]
+            case .subEmitters:
+                return [
+                    ModuleDiagnosticChip(L("Events"), "\(diagnostics.eventReport.appliedEventCount)/\(diagnostics.eventReport.eventCount)"),
+                    ModuleDiagnosticChip(L("Spawned"), "\(diagnostics.eventReport.subEmitterSpawnedCount)"),
+                    ModuleDiagnosticChip(L("Dropped"), "\(diagnostics.eventReport.capacityLimitedSpawnCount)",
+                                         foreground: diagnostics.eventReport.capacityLimitedSpawnCount > 0 ? .warning : .onSurfaceVariant,
+                                         background: diagnostics.eventReport.capacityLimitedSpawnCount > 0 ? .warning.opacity(0.12) : .surface),
+                ]
+            case .gpuSimulation:
+                return gpuSimulationDiagnostics()
+            case .shape, .velocity, .forces:
+                return [
+                    ModuleDiagnosticChip(L("Live"), "\(diagnostics.frameStats.liveParticleCount)"),
+                    ModuleDiagnosticChip(L("Spawn"), "\(diagnostics.frameStats.spawnedParticleCount)"),
+                    ModuleDiagnosticChip(L("Frame"), formatMs(diagnostics.frameStats.simulatedDeltaTime)),
+                ]
+            }
+        }
+
+        private func gpuSimulationDiagnostics() -> [ModuleDiagnosticChip] {
+            [
+                ModuleDiagnosticChip(L("Batches"), "\(diagnostics.renderStats.gpuParticleSimulationBatchCount)",
+                                     foreground: diagnostics.hasGPUSimulationWork ? .success : .onSurfaceVariant,
+                                     background: diagnostics.hasGPUSimulationWork ? .success.opacity(0.12) : .surface),
+                ModuleDiagnosticChip(L("Particles"), "\(diagnostics.renderStats.gpuParticleSimulationParticleCount)"),
+                ModuleDiagnosticChip(L("Workgroups"), "\(diagnostics.renderStats.gpuParticleSimulationDispatchWorkgroups)"),
+                ModuleDiagnosticChip(L("Readback"), "\(diagnostics.eventReport.totalReadbackEventCount)",
+                                     foreground: diagnostics.hasGPUEventPressure ? .info : .onSurfaceVariant,
+                                     background: diagnostics.hasGPUEventPressure ? .info.opacity(0.12) : .surface),
+                ModuleDiagnosticChip(L("Dropped"), "\(diagnostics.eventReport.droppedReadbackEventCount)",
+                                     foreground: diagnostics.eventReport.droppedReadbackEventCount > 0 ? .warning : .onSurfaceVariant,
+                                     background: diagnostics.eventReport.droppedReadbackEventCount > 0 ? .warning.opacity(0.12) : .surface),
+                ModuleDiagnosticChip(L("Buffer"), "\(diagnostics.renderStats.gpuParticleSimulationEventBufferBytes)B"),
+            ]
+        }
+
+        private func diagnosticChip(_ label: String,
+                                    _ value: String,
+                                    foreground: SemanticColorRef,
+                                    background: SemanticColorRef) -> AnyView {
+            AnyView(Row(alignment: .center, spacing: 4) {
+                Text(label)
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                Text(value)
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(foreground)
+            }
+            .padding(horizontal: 6, vertical: 2)
+            .background(background)
+            .cornerRadius(3))
+        }
+
+        private func moduleCollisionBounce(_ settings: ParticleEmitterModuleSettings) -> String {
+            guard case let .collision(module) = settings else { return "--" }
+            return fmt(module.collisionRestitution)
         }
 
         private func moduleEditor(index: Int, module: ParticleEmitterModule) -> AnyView {
@@ -1080,6 +1431,11 @@ struct InspectorPanel: View {
             return "\(rounded)"
         }
 
+        private func formatMs(_ seconds: Float) -> String {
+            let ms = max(0, seconds) * 1000
+            return "\(fmt(ms))ms"
+        }
+
         private func vec(_ value: SIMD3<Float>) -> String {
             "(\(fmt(value.x)), \(fmt(value.y)), \(fmt(value.z)))"
         }
@@ -1833,7 +2189,8 @@ struct InspectorPanel: View {
 
     private func propertySections(_ sections: [EditorInspectorSection],
                                   collapsedIDs: Set<String>,
-                                  entityID: UInt64?) -> [PropertyGridSection] {
+                                  entityID: UInt64?,
+                                  particleDiagnostics: InspectorParticleRuntimeDiagnostics) -> [PropertyGridSection] {
         sections.map { section in
             let startsCollapsed = collapsedIDs.contains(section.id)
             return PropertyGridSection(
@@ -1845,7 +2202,8 @@ struct InspectorPanel: View {
                                     rowHeight: field.value.preferredRowHeight(defaultHeight: 28),
                                     layout: field.value.preferredRowLayout) {
                         fieldView(field.value,
-                                  identity: "\(entityID.map(String.init) ?? "none")/\(section.id)/\(field.id)")
+                                  identity: "\(entityID.map(String.init) ?? "none")/\(section.id)/\(field.id)",
+                                  particleDiagnostics: particleDiagnostics)
                     }
                 },
                 isCollapsible: true,
@@ -1854,7 +2212,9 @@ struct InspectorPanel: View {
         }
     }
 
-    private func fieldView(_ value: EditorInspectorFieldValue, identity: String) -> some View {
+    private func fieldView(_ value: EditorInspectorFieldValue,
+                           identity: String,
+                           particleDiagnostics: InspectorParticleRuntimeDiagnostics) -> some View {
         switch value {
         case let .readOnly(text):
             return AnyView(InspectorReadOnlyValue(text: text))
@@ -1917,7 +2277,8 @@ struct InspectorPanel: View {
         case let .particleSubEmitters(binding):
             return AnyView(InspectorParticleSubEmittersValue(binding: binding))
         case let .particleModuleStack(binding):
-            return AnyView(InspectorParticleModuleStackValue(binding: binding))
+            return AnyView(InspectorParticleModuleStackValue(binding: binding,
+                                                             diagnostics: particleDiagnostics))
         case let .asset(binding, acceptedKinds, placeholder):
             return AnyView(AssetRefField(value: assetRefBinding(binding),
                                          activePayload: activeAssetDropPayload,
@@ -2038,22 +2399,39 @@ private extension EditorInspectorFieldValue {
             return max(defaultHeight, ParticleSubEmitterEditorLayout.rowHeight(ruleCount: binding.wrappedValue.count))
         case let .particleModuleStack(binding):
             let stack = binding.wrappedValue
-            let headerHeight: Float = 28
-            let summaryHeight: Float = 20
-            let rowHeight: Float = 38
-            let moduleEditorRowHeight: Float = 48
+            let headerHeight: Float = 43
+            let summaryHeight: Float = 23
+            let groupHeaderHeight: Float = 24
+            let rowHeight: Float = 47
+            let moduleEditorRowHeight: Float = 50
+            let moduleExpandedHeaderHeight: Float = 22
+            let moduleExpandedDiagnosticsHeight: Float = 28
+            let advancedModuleIDs: Set<String> = [
+                "textureSheet",
+                "trails",
+                "subEmitters",
+                "gpuSimulation",
+            ]
+            let groupCount: Float = stack.modules.contains { advancedModuleIDs.contains($0.id) } ? 2 : 1
             let expandedEditorHeight = stack.modules.reduce(Float(0)) { total, module in
                 guard module.isExpanded else { return total }
-                return total + 6 + Float(particleModuleEditorRowCount(module.settings)) * moduleEditorRowHeight
+                return total
+                    + 8
+                    + moduleExpandedHeaderHeight
+                    + Float(particleModuleEditorRowCount(module.settings)) * moduleEditorRowHeight
+                    + moduleExpandedDiagnosticsHeight
             }
-            let innerSpacing: Float = 10 + Float(max(0, stack.modules.count - 1)) * 4
-            let cardPadding: Float = 14
+            let groupSpacing: Float = max(0, groupCount - 1) * 4
+            let rowSpacing: Float = Float(max(0, stack.modules.count - Int(groupCount))) * 3
+            let cardPadding: Float = 16
             return max(defaultHeight,
                        headerHeight
                        + summaryHeight
+                       + groupCount * groupHeaderHeight
                        + Float(stack.modules.count) * rowHeight
                        + expandedEditorHeight
-                       + innerSpacing
+                       + groupSpacing
+                       + rowSpacing
                        + cardPadding
                        + 8)
         case let .json(_, minHeight):
