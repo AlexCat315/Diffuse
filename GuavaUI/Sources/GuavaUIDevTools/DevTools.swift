@@ -46,6 +46,10 @@ public final class DevTools {
     /// `requestDisplay()` here so the first mirror frame can be produced.
     public var onMirrorStart: (@MainActor () -> Void)?
 
+    /// Invoked when a remote client selects a node. Hosts can redraw a
+    /// diagnostic overlay without mutating the normal UI tree.
+    public var onSelectionChanged: (@MainActor () -> Void)?
+
     public init(config: DevToolsConfig,
                 tree: NodeTree,
                 invalidationLog: InvalidationLog? = nil,
@@ -115,10 +119,20 @@ public final class DevTools {
     /// draw an overlay. The host is expected to drive the actual highlight.
     public private(set) var selectedNodeID: String?
 
+    /// Window-space frame for the selected node, if it still exists.
+    public var selectedNodeAbsoluteFrame: CGRect? {
+        guard let selectedNodeID,
+              let node = scene.find(id: selectedNodeID) else {
+            return nil
+        }
+        return node.absoluteFrame
+    }
+
     private var pendingDelta = false
 
     private func handleSelection(id: String) {
-        selectedNodeID = id
+        selectedNodeID = scene.find(id: id) == nil ? nil : id
+        onSelectionChanged?()
     }
 
     private func wireSinks() {

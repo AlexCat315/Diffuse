@@ -94,6 +94,11 @@ public struct NodeFrame: Codable {
     public var h: Double
 }
 
+public struct NodePoint: Codable {
+    public var x: Double
+    public var y: Double
+}
+
 public struct NodeFlags: Codable {
     public var hitTestable: Bool
     public var focusable: Bool
@@ -107,6 +112,14 @@ public struct NodeSummary: Codable {
     public var viewTag: String?
     public var debugName: String?
     public var frame: NodeFrame
+    /// Window-space frame after parent origins and scroll offsets are applied.
+    public var absoluteFrame: NodeFrame?
+    /// Current scroll offset for scrollable containers.
+    public var contentOffset: NodePoint?
+    public var zIndex: Double?
+    public var opacity: Double?
+    public var layoutRole: String?
+    public var semanticRole: String?
     public var flags: NodeFlags
     public var children: [NodeSummary]
     /// Stable runtime ElementID, encoded as decimal string. Optional so
