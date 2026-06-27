@@ -13,13 +13,17 @@ private struct InspectorParticleRuntimeDiagnostics {
     let renderStats: RenderFrameStats
     let eventReport: ParticleSimulationEventApplyReport
     let selectedEntityID: UInt64?
+    let selectedGPUSimulationPlan: ParticleGPUSimulationPlan?
+    let moduleValidationIssues: [ParticleModuleIssue]
 
     static let empty = InspectorParticleRuntimeDiagnostics(
         frameStats: .empty,
         scalability: .default,
         renderStats: .init(),
         eventReport: .empty,
-        selectedEntityID: nil
+        selectedEntityID: nil,
+        selectedGPUSimulationPlan: nil,
+        moduleValidationIssues: []
     )
 
     var selectedFrameStats: ParticleEmitterFrameStats? {
@@ -75,6 +79,10 @@ private struct InspectorParticleRuntimeDiagnostics {
             || renderStats.gpuParticleSimulationEventCapacity > 0
             || eventReport.totalReadbackEventCount > 0
     }
+
+    func validationIssues(for moduleID: String) -> [ParticleModuleIssue] {
+        moduleValidationIssues.filter { $0.moduleID == moduleID }
+    }
 }
 
 struct InspectorPanel: View {
@@ -106,7 +114,9 @@ struct InspectorPanel: View {
                 scalability: scene.currentParticleScalabilityState(),
                 renderStats: renderStatsProvider(),
                 eventReport: particleEventReportProvider(),
-                selectedEntityID: selectedEntityID
+                selectedEntityID: selectedEntityID,
+                selectedGPUSimulationPlan: scene.currentParticleGPUSimulationPlan(for: selectedEntityID),
+                moduleValidationIssues: scene.currentParticleModuleValidationIssues(for: selectedEntityID)
             )
 
             Box(direction: .column, alignItems: .stretch) {
@@ -239,6 +249,7 @@ struct InspectorPanel: View {
             case info
             case success
             case warning
+            case error
 
             var foreground: SemanticColorRef {
                 switch self {
@@ -246,6 +257,7 @@ struct InspectorPanel: View {
                 case .info: return .info
                 case .success: return .success
                 case .warning: return .warning
+                case .error: return .error
                 }
             }
 
@@ -255,6 +267,7 @@ struct InspectorPanel: View {
                 case .info: return .info.opacity(0.12)
                 case .success: return .success.opacity(0.12)
                 case .warning: return .warning.opacity(0.12)
+                case .error: return .error.opacity(0.12)
                 }
             }
 
@@ -264,6 +277,7 @@ struct InspectorPanel: View {
                 case .info: return .info
                 case .success: return .success
                 case .warning: return .warning
+                case .error: return .error
                 }
             }
         }
@@ -297,6 +311,12 @@ struct InspectorPanel: View {
             stack.modules.indices.filter { isAdvancedModule(stack.modules[$0]) }
         }
 
+        private var hasRepairableValidationIssues: Bool {
+            var repaired = stack
+            repaired.repairValidationIssues()
+            return repaired != stack
+        }
+
         var body: some View {
             Box(direction: .column, alignItems: .stretch, spacing: 8) {
                 Box(direction: .column, alignItems: .stretch, spacing: 5) {
@@ -313,6 +333,16 @@ struct InspectorPanel: View {
                         }
                         .flex()
 
+                        if hasRepairableValidationIssues {
+                            Button(L("Repair"),
+                                   tooltip: L("Clamp repairable particle module settings")) {
+                                var stack = binding.wrappedValue
+                                stack.repairValidationIssues()
+                                binding.wrappedValue = stack
+                            }
+                            .buttonStyle(GhostButtonStyle())
+                        }
+
                         Button(L("Reset"),
                                tooltip: L("Reset module order and enabled states")) {
                             var stack = binding.wrappedValue
@@ -326,6 +356,9 @@ struct InspectorPanel: View {
                         summaryChip("\(L("Active")) \(enabledModuleCount)/\(stack.modules.count)",
                                     foreground: .onSurfaceVariant,
                                     background: .surfaceVariant)
+                        summaryChip(validationSummaryStatus.text,
+                                    foreground: validationSummaryStatus.tone.foreground,
+                                    background: validationSummaryStatus.tone.background)
                         summaryChip("\(L("Core")) \(coreModuleCount)")
                         summaryChip("\(L("Advanced")) \(advancedModuleCount)")
                         summaryChip(diagnostics.statsScopeLabel)
@@ -356,42 +389,65 @@ struct InspectorPanel: View {
         }
 
         private var gpuSummaryText: String {
+            gpuSummaryStatus.text
+        }
+
+        private var validationSummaryStatus: ModuleRuntimeStatus {
+            let errors = diagnostics.moduleValidationIssues.filter { $0.severity == .error }.count
+            if errors > 0 {
+                return ModuleRuntimeStatus(text: "\(errors) \(L("Errors"))", tone: .error)
+            }
+            let warnings = diagnostics.moduleValidationIssues.filter { $0.severity == .warning }.count
+            if warnings > 0 {
+                return ModuleRuntimeStatus(text: "\(warnings) \(L("Warnings"))", tone: .warning)
+            }
+            let info = diagnostics.moduleValidationIssues.filter { $0.severity == .info }.count
+            if info > 0 {
+                return ModuleRuntimeStatus(text: "\(info) \(L("Notes"))", tone: .info)
+            }
+            return ModuleRuntimeStatus(text: L("Clean"), tone: .success)
+        }
+
+        private var gpuSummaryStatus: ModuleRuntimeStatus {
             guard let module = stack.modules.first(where: { $0.id == "gpuSimulation" }),
                   module.isEnabled,
                   case let .gpuSimulation(settings) = module.settings else {
-                return L("GPU Off")
+                return ModuleRuntimeStatus(text: L("GPU Off"), tone: .muted)
+            }
+            if diagnostics.eventReport.droppedReadbackEventCount > 0 {
+                return ModuleRuntimeStatus(text: L("GPU Dropping"), tone: .warning)
             }
             if diagnostics.hasGPUSimulationWork {
-                return L("GPU Active")
+                return ModuleRuntimeStatus(text: L("GPU Active"), tone: .success)
+            }
+            if let plan = diagnostics.selectedGPUSimulationPlan {
+                switch plan.status {
+                case .disabled:
+                    return ModuleRuntimeStatus(text: L("GPU Off"), tone: .muted)
+                case .supported:
+                    return ModuleRuntimeStatus(text: L("GPU Ready"), tone: .success)
+                case .fallbackToCPU:
+                    return ModuleRuntimeStatus(text: L("CPU Fallback"), tone: .warning)
+                case .requiredButUnsupported:
+                    return ModuleRuntimeStatus(text: L("GPU Blocked"), tone: .warning)
+                }
             }
             switch settings.simulationBackend {
             case .cpu:
-                return L("GPU Off")
+                return ModuleRuntimeStatus(text: L("GPU Off"), tone: .muted)
             case .gpuIfSupported:
-                return L("GPU Preferred")
+                return ModuleRuntimeStatus(text: L("GPU Preferred"), tone: .info)
             case .gpuRequired:
-                return L("GPU Required")
+                return ModuleRuntimeStatus(text: L("GPU Required"), tone: .warning)
             }
         }
 
         private var gpuSummaryForeground: SemanticColorRef {
-            if gpuSummaryText == L("GPU Active") {
-                return .success
-            }
-            if gpuSummaryText == L("GPU Off") {
-                return .onSurfaceMuted
-            }
-            return .info
+            gpuSummaryStatus.tone.foreground
         }
 
         private var gpuSummaryBackground: SemanticColorRef {
-            if gpuSummaryText == L("GPU Active") {
-                return .success.opacity(0.12)
-            }
-            if gpuSummaryText == L("GPU Off") {
-                return .surface
-            }
-            return .info.opacity(0.12)
+            gpuSummaryStatus.tone.background
         }
 
         private func summaryChip(_ text: String,
@@ -480,19 +536,8 @@ struct InspectorPanel: View {
                     .flex()
                     .opacity(module.isEnabled ? 1 : 0.62)
 
-                    Checkbox(isOn: Binding(
-                        get: { binding.wrappedValue.modules.indices.contains(index)
-                            ? binding.wrappedValue.modules[index].isEnabled
-                            : false },
-                        set: { next in
-                            var stack = binding.wrappedValue
-                            guard stack.modules.indices.contains(index),
-                                  stack.modules[index].isEnabled != next else { return }
-                            stack.modules[index].isEnabled = next
-                            binding.wrappedValue = stack
-                        }
-                    ))
-                    .frame(width: 18)
+                    Toggle(isOn: moduleEnabledBinding(index))
+                        .frame(width: 42)
 
                     Row(alignment: .center, spacing: 0) {
                         Button(icon: .resource(UICommonIcons.chevronUp),
@@ -534,6 +579,21 @@ struct InspectorPanel: View {
             indices.filter { stack.modules.indices.contains($0) && stack.modules[$0].isEnabled }.count
         }
 
+        private func moduleEnabledBinding(_ index: Int) -> Binding<Bool> {
+            Binding(
+                get: { binding.wrappedValue.modules.indices.contains(index)
+                    ? binding.wrappedValue.modules[index].isEnabled
+                    : false },
+                set: { next in
+                    var stack = binding.wrappedValue
+                    guard stack.modules.indices.contains(index),
+                          stack.modules[index].isEnabled != next else { return }
+                    stack.modules[index].isEnabled = next
+                    binding.wrappedValue = stack
+                }
+            )
+        }
+
         private func badge(_ text: String,
                            foreground: SemanticColorRef = .onSurfaceMuted,
                            background: SemanticColorRef = .surfaceSunken) -> some View {
@@ -549,6 +609,13 @@ struct InspectorPanel: View {
         private func moduleStatus(_ module: ParticleEmitterModule) -> ModuleRuntimeStatus? {
             guard module.isEnabled else {
                 return ModuleRuntimeStatus(text: L("Off"), tone: .muted)
+            }
+            let validationIssues = diagnostics.validationIssues(for: module.id)
+            if validationIssues.contains(where: { $0.severity == .error }) {
+                return ModuleRuntimeStatus(text: L("Error"), tone: .error)
+            }
+            if validationIssues.contains(where: { $0.severity == .warning }) {
+                return ModuleRuntimeStatus(text: L("Warn"), tone: .warning)
             }
 
             switch module.settings {
@@ -617,6 +684,18 @@ struct InspectorPanel: View {
                 if diagnostics.hasGPUSimulationWork {
                     return ModuleRuntimeStatus(text: L("Active"), tone: .success)
                 }
+                if let plan = diagnostics.selectedGPUSimulationPlan {
+                    switch plan.status {
+                    case .disabled:
+                        return ModuleRuntimeStatus(text: L("CPU"), tone: .muted)
+                    case .supported:
+                        return ModuleRuntimeStatus(text: L("Ready"), tone: .success)
+                    case .fallbackToCPU:
+                        return ModuleRuntimeStatus(text: L("Fallback"), tone: .warning)
+                    case .requiredButUnsupported:
+                        return ModuleRuntimeStatus(text: L("Blocked"), tone: .warning)
+                    }
+                }
                 switch settings.simulationBackend {
                 case .cpu:
                     return ModuleRuntimeStatus(text: L("CPU"), tone: .muted)
@@ -652,6 +731,9 @@ struct InspectorPanel: View {
 
         private func moduleBackground(_ module: ParticleEmitterModule) -> SemanticColorRef {
             if !module.isEnabled { return .surfaceSunken }
+            if moduleStatus(module)?.tone == .error {
+                return .error.opacity(0.08)
+            }
             if moduleStatus(module)?.tone == .warning {
                 return .warning.opacity(0.08)
             }
@@ -660,6 +742,9 @@ struct InspectorPanel: View {
 
         private func moduleBorder(_ module: ParticleEmitterModule) -> SemanticColorRef {
             if !module.isEnabled { return .divider }
+            if moduleStatus(module)?.tone == .error {
+                return .error
+            }
             if moduleStatus(module)?.tone == .warning {
                 return .warning
             }
@@ -691,29 +776,34 @@ struct InspectorPanel: View {
         }
 
         private func expandedModuleEditor(index: Int, module: ParticleEmitterModule) -> AnyView {
-            AnyView(Box(direction: .column, alignItems: .stretch, spacing: 7) {
-                Row(alignment: .center, spacing: 6) {
-                    Text(L("Settings"))
-                        .lineLimit(1)
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
-                    Text(moduleDetail(module.settings))
-                        .lineLimit(1)
-                        .font(.caption)
-                        .foregroundColor(module.isEnabled ? .onSurfaceVariant : .onSurfaceMuted)
-                        .flex()
-                }
+            let issues = diagnostics.validationIssues(for: module.id)
+            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 7) {
+                expandedModuleHeader(index: index, module: module)
 
                 moduleEditor(index: index, module: module)
 
+                if case .gpuSimulation = module.settings {
+                    gpuBackendStatusPanel(module)
+                }
+
+                if !issues.isEmpty {
+                    moduleIssueDetails(issues)
+                }
+
                 let chips = moduleDiagnosticChips(module)
                 if !chips.isEmpty {
-                    Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 4) {
-                        for chip in chips {
-                            diagnosticChip(chip.label,
-                                           chip.value,
-                                           foreground: chip.foreground,
-                                           background: chip.background)
+                    Box(direction: .column, alignItems: .stretch, spacing: 4) {
+                        Text(L("Runtime"))
+                            .lineLimit(1)
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                        Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 4) {
+                            for chip in chips {
+                                diagnosticChip(chip.label,
+                                               chip.value,
+                                               foreground: chip.foreground,
+                                               background: chip.background)
+                            }
                         }
                     }
                 }
@@ -724,78 +814,250 @@ struct InspectorPanel: View {
             .border(.divider, width: 1))
         }
 
+        private func gpuBackendStatusPanel(_ module: ParticleEmitterModule) -> AnyView {
+            let plan = diagnostics.selectedGPUSimulationPlan
+            let status = plan.map(gpuPlanStatus) ?? moduleStatus(module) ?? ModuleRuntimeStatus(text: L("Unknown"),
+                                                                                                tone: .muted)
+            let dispatch = plan.map { "\($0.dispatchWorkgroups) x \($0.workgroupSize)" } ?? "--"
+            let capacity = plan.map { "\($0.particleCapacity)" } ?? "--"
+            let reason = plan.map { gpuPlanUnsupportedReasonList($0.unsupportedReasons) } ?? L("No plan")
+            let reasonTone: ModuleRuntimeTone = plan?.unsupportedReasons.isEmpty == false ? .warning : .muted
+
+            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 5) {
+                Row(alignment: .center, spacing: 6) {
+                    Text(L("Backend Runtime"))
+                        .lineLimit(1)
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                    Spacer(minLength: 0)
+                        .flex()
+                    badge(status.text,
+                          foreground: status.tone.foreground,
+                          background: status.tone.background)
+                }
+
+                Row(alignment: .center, spacing: 6) {
+                    backendMetricCard(L("Capacity"), capacity, tone: .info)
+                    backendMetricCard(L("Dispatch"), dispatch, tone: diagnostics.hasGPUSimulationWork ? .success : .muted)
+                    backendMetricCard(L("Readback"),
+                                      "\(diagnostics.eventReport.totalReadbackEventCount)",
+                                      tone: diagnostics.hasGPUEventPressure ? .info : .muted)
+                }
+
+                Row(alignment: .center, spacing: 6) {
+                    Text(L("Reason"))
+                        .lineLimit(1)
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                    Text(reason)
+                        .lineLimit(2)
+                        .font(.caption)
+                        .foregroundColor(reasonTone.foreground)
+                        .flex()
+                }
+            }
+            .padding(horizontal: 6, vertical: 6)
+            .background(status.tone.background)
+            .cornerRadius(4)
+            .border(status.tone.foreground.opacity(0.35), width: 1))
+        }
+
+        private func backendMetricCard(_ label: String,
+                                       _ value: String,
+                                       tone: ModuleRuntimeTone) -> AnyView {
+            AnyView(Box(direction: .column, alignItems: .stretch, spacing: 1) {
+                Text(label)
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                Text(value)
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(tone.foreground)
+            }
+            .padding(horizontal: 6, vertical: 4)
+            .background(.surface)
+            .cornerRadius(4)
+            .border(tone.background, width: 1)
+            .flex())
+        }
+
+        private func moduleIssueDetails(_ issues: [ParticleModuleIssue]) -> AnyView {
+            AnyView(Box(direction: .column, alignItems: .stretch, spacing: 4) {
+                Text(L("Issues"))
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                for issue in issues {
+                    moduleIssueDetailRow(issue)
+                }
+            })
+        }
+
+        private func moduleIssueDetailRow(_ issue: ParticleModuleIssue) -> AnyView {
+            let tone = moduleIssueTone(issue.severity)
+            return AnyView(Row(alignment: .center, spacing: 6) {
+                badge(moduleIssueSeverityLabel(issue.severity),
+                      foreground: tone.foreground,
+                      background: tone.background)
+                Text(issue.message)
+                    .lineLimit(2)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceVariant)
+                    .flex()
+            }
+            .padding(horizontal: 5, vertical: 4)
+            .background(tone.background)
+            .cornerRadius(4))
+        }
+
+        private func expandedModuleHeader(index: Int, module: ParticleEmitterModule) -> AnyView {
+            let status = moduleStatus(module)
+            return AnyView(Row(alignment: .center, spacing: 8) {
+                Spacer(minLength: 0)
+                    .frame(width: 3, height: 42)
+                    .background(moduleAccent(module))
+                    .cornerRadius(2)
+                    .opacity(module.isEnabled ? 1 : 0.45)
+
+                Box(direction: .column, alignItems: .stretch, spacing: 3) {
+                    Row(alignment: .center, spacing: 5) {
+                        badge(module.stage.rawValue.uppercased(),
+                              foreground: moduleAccent(module),
+                              background: moduleAccent(module).opacity(0.10))
+                        if let status {
+                            badge(status.text,
+                                  foreground: status.tone.foreground,
+                                  background: status.tone.background)
+                        }
+                    }
+
+                    Text(module.displayName)
+                        .lineLimit(1)
+                        .font(.body)
+                        .foregroundColor(module.isEnabled ? .onSurface : .onSurfaceMuted)
+
+                    Text(moduleDetail(module.settings))
+                        .lineLimit(1)
+                        .font(.caption)
+                        .foregroundColor(module.isEnabled ? .onSurfaceVariant : .onSurfaceMuted)
+                }
+                .flex()
+                .opacity(module.isEnabled ? 1 : 0.66)
+
+                Box(direction: .column, alignItems: .center, spacing: 3) {
+                    Toggle(isOn: moduleEnabledBinding(index))
+                    Text(module.isEnabled ? L("Enabled") : L("Disabled"))
+                        .lineLimit(1)
+                        .font(.caption)
+                        .foregroundColor(module.isEnabled ? .onSurfaceVariant : .onSurfaceMuted)
+                }
+                .frame(width: 58)
+            }
+            .padding(horizontal: 5, vertical: 5)
+            .background(module.isEnabled ? .surface : .surfaceSunken)
+            .cornerRadius(4))
+        }
+
         private func moduleDiagnosticChips(_ module: ParticleEmitterModule) -> [ModuleDiagnosticChip] {
+            let issueChips = moduleIssueChips(module)
+            guard module.isEnabled else {
+                return issueChips + [
+                    ModuleDiagnosticChip(L("State"),
+                                         L("Disabled"),
+                                         foreground: .onSurfaceMuted,
+                                         background: .surface),
+                ]
+            }
+            let runtimeChips: [ModuleDiagnosticChip]
             switch module.settings {
             case .emission:
-                return [
+                runtimeChips = [
                     ModuleDiagnosticChip(L("Scope"), diagnostics.statsScopeLabel),
-                    ModuleDiagnosticChip(L("Live"), "\(diagnostics.liveParticleCount)"),
-                    ModuleDiagnosticChip(L("Spawn"), "\(diagnostics.spawnedParticleCount)"),
+                    runtimeMetricChip(L("Live"), diagnostics.liveParticleCount, tone: .info),
+                    runtimeMetricChip(L("Spawn"), diagnostics.spawnedParticleCount, tone: .success),
                     ModuleDiagnosticChip(L("Dropped"), "\(diagnostics.capacityLimitedSpawnCount)",
                                          foreground: diagnostics.capacityLimitedSpawnCount > 0 ? .warning : .onSurfaceVariant,
                                          background: diagnostics.capacityLimitedSpawnCount > 0 ? .warning.opacity(0.12) : .surface),
                 ]
             case .collision:
-                return [
+                runtimeChips = [
                     ModuleDiagnosticChip(L("Scope"), diagnostics.statsScopeLabel),
-                    ModuleDiagnosticChip(L("Hits"), "\(diagnostics.collisionCount)"),
-                    ModuleDiagnosticChip(L("Events"), "\(diagnostics.eventReport.collisionEventCount)"),
+                    runtimeMetricChip(L("Hits"), diagnostics.collisionCount, tone: .success),
+                    runtimeMetricChip(L("Events"), diagnostics.eventReport.collisionEventCount, tone: .info),
                     ModuleDiagnosticChip(L("Bounce"), moduleCollisionBounce(module.settings)),
                 ]
             case .appearance:
-                return [
+                runtimeChips = [
                     ModuleDiagnosticChip(L("Scope"), diagnostics.statsScopeLabel),
-                    ModuleDiagnosticChip(L("Expired"), "\(diagnostics.expiredParticleCount)"),
+                    runtimeMetricChip(L("Expired"), diagnostics.expiredParticleCount, tone: .info),
                     ModuleDiagnosticChip(L("Scale"), fmt(diagnostics.scalability.appliedScale)),
                     ModuleDiagnosticChip(L("Pressure"), fmt(diagnostics.scalability.pressure),
                                          foreground: diagnostics.scalability.pressure > 1 ? .warning : .onSurfaceVariant,
                                          background: diagnostics.scalability.pressure > 1 ? .warning.opacity(0.12) : .surface),
                 ]
             case .renderer:
-                return [
-                    ModuleDiagnosticChip(L("Submitted"), "\(diagnostics.renderStats.gpuParticleRenderInstanceCount)"),
-                    ModuleDiagnosticChip(L("Draws"), "\(diagnostics.renderStats.gpuParticleIndirectDrawCount)"),
-                    ModuleDiagnosticChip(L("Cull"), "\(diagnostics.renderStats.gpuParticleCullCandidateCount)"),
+                runtimeChips = [
+                    runtimeMetricChip(L("Submitted"), diagnostics.renderStats.gpuParticleRenderInstanceCount, tone: .success),
+                    runtimeMetricChip(L("Draws"), diagnostics.renderStats.gpuParticleIndirectDrawCount, tone: .success),
+                    runtimeMetricChip(L("Cull"), diagnostics.renderStats.gpuParticleCullCandidateCount, tone: .info),
                 ]
             case .textureSheet:
-                return [
-                    ModuleDiagnosticChip(L("Sort"), "\(diagnostics.renderStats.gpuParticleSortItemCount)"),
-                    ModuleDiagnosticChip(L("Passes"), "\(diagnostics.renderStats.gpuParticleSortPassCount)"),
+                runtimeChips = [
+                    runtimeMetricChip(L("Sort"), diagnostics.renderStats.gpuParticleSortItemCount, tone: .info),
+                    runtimeMetricChip(L("Passes"), diagnostics.renderStats.gpuParticleSortPassCount, tone: .info),
                 ]
             case .trails:
-                return [
+                runtimeChips = [
                     ModuleDiagnosticChip(L("Scope"), diagnostics.statsScopeLabel),
-                    ModuleDiagnosticChip(L("Live"), "\(diagnostics.liveParticleCount)"),
-                    ModuleDiagnosticChip(L("Render"), "\(diagnostics.renderStats.gpuParticleRenderInstanceCount)"),
+                    runtimeMetricChip(L("Live"), diagnostics.liveParticleCount, tone: .info),
+                    runtimeMetricChip(L("Render"), diagnostics.renderStats.gpuParticleRenderInstanceCount, tone: .success),
                 ]
             case .subEmitters:
-                return [
+                runtimeChips = [
                     ModuleDiagnosticChip(L("Events"), "\(diagnostics.eventReport.appliedEventCount)/\(diagnostics.eventReport.eventCount)"),
                     ModuleDiagnosticChip(L("Scope"), diagnostics.statsScopeLabel),
-                    ModuleDiagnosticChip(L("Spawned"), "\(diagnostics.subEmitterSpawnedCount)"),
+                    runtimeMetricChip(L("Spawned"), diagnostics.subEmitterSpawnedCount, tone: .success),
                     ModuleDiagnosticChip(L("Dropped"), "\(diagnostics.eventCapacityLimitedSpawnCount)",
                                          foreground: diagnostics.eventCapacityLimitedSpawnCount > 0 ? .warning : .onSurfaceVariant,
                                          background: diagnostics.eventCapacityLimitedSpawnCount > 0 ? .warning.opacity(0.12) : .surface),
                 ]
             case .gpuSimulation:
-                return gpuSimulationDiagnostics()
+                runtimeChips = gpuSimulationDiagnostics()
             case .shape, .velocity, .forces:
-                return [
+                runtimeChips = [
                     ModuleDiagnosticChip(L("Scope"), diagnostics.statsScopeLabel),
-                    ModuleDiagnosticChip(L("Live"), "\(diagnostics.liveParticleCount)"),
-                    ModuleDiagnosticChip(L("Spawn"), "\(diagnostics.spawnedParticleCount)"),
+                    runtimeMetricChip(L("Live"), diagnostics.liveParticleCount, tone: .info),
+                    runtimeMetricChip(L("Spawn"), diagnostics.spawnedParticleCount, tone: .success),
                     ModuleDiagnosticChip(L("Frame"), formatMs(diagnostics.frameStats.simulatedDeltaTime)),
                 ]
             }
+            return issueChips + runtimeChips
         }
 
         private func gpuSimulationDiagnostics() -> [ModuleDiagnosticChip] {
-            [
+            var chips: [ModuleDiagnosticChip] = []
+            if let plan = diagnostics.selectedGPUSimulationPlan {
+                let status = gpuPlanStatus(plan)
+                chips.append(ModuleDiagnosticChip(L("Plan"),
+                                                  status.text,
+                                                  foreground: status.tone.foreground,
+                                                  background: status.tone.background))
+                chips.append(ModuleDiagnosticChip(L("Dispatch"),
+                                                  "\(plan.dispatchWorkgroups)x\(plan.workgroupSize)"))
+                if !plan.unsupportedReasons.isEmpty {
+                    chips.append(ModuleDiagnosticChip(L("Reason"),
+                                                      gpuPlanUnsupportedReasonList(plan.unsupportedReasons),
+                                                      foreground: .warning,
+                                                      background: .warning.opacity(0.12)))
+                }
+            }
+            chips.append(contentsOf: [
                 ModuleDiagnosticChip(L("Batches"), "\(diagnostics.renderStats.gpuParticleSimulationBatchCount)",
                                      foreground: diagnostics.hasGPUSimulationWork ? .success : .onSurfaceVariant,
                                      background: diagnostics.hasGPUSimulationWork ? .success.opacity(0.12) : .surface),
-                ModuleDiagnosticChip(L("Particles"), "\(diagnostics.renderStats.gpuParticleSimulationParticleCount)"),
-                ModuleDiagnosticChip(L("Workgroups"), "\(diagnostics.renderStats.gpuParticleSimulationDispatchWorkgroups)"),
+                runtimeMetricChip(L("Particles"), diagnostics.renderStats.gpuParticleSimulationParticleCount, tone: .success),
+                runtimeMetricChip(L("Workgroups"), diagnostics.renderStats.gpuParticleSimulationDispatchWorkgroups, tone: .success),
                 ModuleDiagnosticChip(L("Readback"), "\(diagnostics.eventReport.totalReadbackEventCount)",
                                      foreground: diagnostics.hasGPUEventPressure ? .info : .onSurfaceVariant,
                                      background: diagnostics.hasGPUEventPressure ? .info.opacity(0.12) : .surface),
@@ -803,7 +1065,47 @@ struct InspectorPanel: View {
                                      foreground: diagnostics.eventReport.droppedReadbackEventCount > 0 ? .warning : .onSurfaceVariant,
                                      background: diagnostics.eventReport.droppedReadbackEventCount > 0 ? .warning.opacity(0.12) : .surface),
                 ModuleDiagnosticChip(L("Buffer"), "\(diagnostics.renderStats.gpuParticleSimulationEventBufferBytes)B"),
-            ]
+            ])
+            return chips
+        }
+
+        private func gpuPlanStatus(_ plan: ParticleGPUSimulationPlan) -> ModuleRuntimeStatus {
+            switch plan.status {
+            case .disabled:
+                return ModuleRuntimeStatus(text: L("CPU"), tone: .muted)
+            case .supported:
+                return ModuleRuntimeStatus(text: L("Ready"), tone: .success)
+            case .fallbackToCPU:
+                return ModuleRuntimeStatus(text: L("Fallback"), tone: .warning)
+            case .requiredButUnsupported:
+                return ModuleRuntimeStatus(text: L("Blocked"), tone: .warning)
+            }
+        }
+
+        private func gpuPlanUnsupportedReasonList(_ reasons: [ParticleGPUSimulationUnsupportedReason]) -> String {
+            guard !reasons.isEmpty else { return L("None") }
+            return reasons.map(gpuPlanUnsupportedReasonLabel).joined(separator: ", ")
+        }
+
+        private func gpuPlanUnsupportedReasonLabel(_ reason: ParticleGPUSimulationUnsupportedReason) -> String {
+            switch reason {
+            case .backendCPU:
+                return L("CPU backend")
+            case .noParticleCapacity:
+                return L("no capacity")
+            case .eventSubEmitters:
+                return L("sub-emitters")
+            case .distanceEmission:
+                return L("distance emission")
+            case .noise:
+                return L("noise")
+            case .forceFields:
+                return L("force fields")
+            case .collisions:
+                return L("collisions")
+            case .angularVelocity:
+                return L("angular velocity")
+            }
         }
 
         private func diagnosticChip(_ label: String,
@@ -823,6 +1125,72 @@ struct InspectorPanel: View {
             .padding(horizontal: 6, vertical: 2)
             .background(background)
             .cornerRadius(3))
+        }
+
+        private func runtimeMetricChip(_ label: String,
+                                       _ value: Int,
+                                       tone: ModuleRuntimeTone = .info) -> ModuleDiagnosticChip {
+            ModuleDiagnosticChip(label,
+                                 "\(value)",
+                                 foreground: value > 0 ? tone.foreground : .onSurfaceVariant,
+                                 background: value > 0 ? tone.background : .surface)
+        }
+
+        private func moduleIssueChips(_ module: ParticleEmitterModule) -> [ModuleDiagnosticChip] {
+            diagnostics.validationIssues(for: module.id).map { issue in
+                let tone = moduleIssueTone(issue.severity)
+                return ModuleDiagnosticChip(moduleIssueSeverityLabel(issue.severity),
+                                            moduleIssueTitle(issue),
+                                            foreground: tone.foreground,
+                                            background: tone.background)
+            }
+        }
+
+        private func moduleIssueTone(_ severity: ParticleModuleIssueSeverity) -> ModuleRuntimeTone {
+            switch severity {
+            case .info:
+                return .info
+            case .warning:
+                return .warning
+            case .error:
+                return .error
+            }
+        }
+
+        private func moduleIssueSeverityLabel(_ severity: ParticleModuleIssueSeverity) -> String {
+            switch severity {
+            case .info:
+                return L("Info")
+            case .warning:
+                return L("Warn")
+            case .error:
+                return L("Error")
+            }
+        }
+
+        private func moduleIssueTitle(_ issue: ParticleModuleIssue) -> String {
+            switch issue.code {
+            case "noParticleCapacity":
+                return L("No Capacity")
+            case "noSpawnSource":
+                return L("No Spawn")
+            case "invalidLifetime", "subEmitterInvalidLifetime":
+                return L("Lifetime")
+            case "invalidTextureSheet":
+                return L("Sheet Size")
+            case "frameCountExceedsCells":
+                return L("Frame Count")
+            case "gpuFallbackToCPU":
+                return L("CPU Fallback")
+            case "gpuRequiredButUnsupported":
+                return L("GPU Blocked")
+            case "invalidGPUWorkgroup":
+                return L("Workgroup")
+            case "gpuWorkgroupClamped":
+                return L("Clamped")
+            default:
+                return issue.code
+            }
         }
 
         private func moduleCollisionBounce(_ settings: ParticleEmitterModuleSettings) -> String {
@@ -906,6 +1274,94 @@ struct InspectorPanel: View {
                                      }),
                                      min: 0,
                                      max: 100,
+                                     step: 0.1,
+                                     enabled: isEnabled),
+                    ],
+                    [
+                        moduleNumber("Origin X",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .shape(module) = $0 { return module.originOffset.x }
+                                         return nil
+                                     }, set: {
+                                         if case var .shape(module) = $0 {
+                                             module.originOffset.x = $1
+                                             $0 = .shape(module)
+                                         }
+                                     }),
+                                     min: -1000,
+                                     max: 1000,
+                                     step: 0.1,
+                                     enabled: isEnabled),
+                        moduleNumber("Origin Y",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .shape(module) = $0 { return module.originOffset.y }
+                                         return nil
+                                     }, set: {
+                                         if case var .shape(module) = $0 {
+                                             module.originOffset.y = $1
+                                             $0 = .shape(module)
+                                         }
+                                     }),
+                                     min: -1000,
+                                     max: 1000,
+                                     step: 0.1,
+                                     enabled: isEnabled),
+                        moduleNumber("Origin Z",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .shape(module) = $0 { return module.originOffset.z }
+                                         return nil
+                                     }, set: {
+                                         if case var .shape(module) = $0 {
+                                             module.originOffset.z = $1
+                                             $0 = .shape(module)
+                                         }
+                                     }),
+                                     min: -1000,
+                                     max: 1000,
+                                     step: 0.1,
+                                     enabled: isEnabled),
+                    ],
+                    [
+                        moduleNumber("Box X",
+                                     moduleFloatBinding(index, fallback: 0.5, get: {
+                                         if case let .shape(module) = $0 { return module.boxHalfExtents.x }
+                                         return nil
+                                     }, set: {
+                                         if case var .shape(module) = $0 {
+                                             module.boxHalfExtents.x = $1
+                                             $0 = .shape(module)
+                                         }
+                                     }),
+                                     min: 0,
+                                     max: 1000,
+                                     step: 0.1,
+                                     enabled: isEnabled),
+                        moduleNumber("Box Y",
+                                     moduleFloatBinding(index, fallback: 0.5, get: {
+                                         if case let .shape(module) = $0 { return module.boxHalfExtents.y }
+                                         return nil
+                                     }, set: {
+                                         if case var .shape(module) = $0 {
+                                             module.boxHalfExtents.y = $1
+                                             $0 = .shape(module)
+                                         }
+                                     }),
+                                     min: 0,
+                                     max: 1000,
+                                     step: 0.1,
+                                     enabled: isEnabled),
+                        moduleNumber("Box Z",
+                                     moduleFloatBinding(index, fallback: 0.5, get: {
+                                         if case let .shape(module) = $0 { return module.boxHalfExtents.z }
+                                         return nil
+                                     }, set: {
+                                         if case var .shape(module) = $0 {
+                                             module.boxHalfExtents.z = $1
+                                             $0 = .shape(module)
+                                         }
+                                     }),
+                                     min: 0,
+                                     max: 1000,
                                      step: 0.1,
                                      enabled: isEnabled),
                     ],
@@ -1015,6 +1471,20 @@ struct InspectorPanel: View {
                                      max: 1000,
                                      step: 0.1,
                                      enabled: isEnabled),
+                        moduleNumber("Rand Z",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .velocity(module) = $0 { return module.velocityRandomness.z }
+                                         return nil
+                                     }, set: {
+                                         if case var .velocity(module) = $0 {
+                                             module.velocityRandomness.z = $1
+                                             $0 = .velocity(module)
+                                         }
+                                     }),
+                                     min: 0,
+                                     max: 1000,
+                                     step: 0.1,
+                                     enabled: isEnabled),
                         moduleNumber("Inherit",
                                      moduleFloatBinding(index, fallback: 0, get: {
                                          if case let .velocity(module) = $0 { return module.velocityInheritance }
@@ -1062,6 +1532,20 @@ struct InspectorPanel: View {
                                    label: particleVectorFieldModeLabel),
                     ],
                     [
+                        moduleNumber("Gravity X",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .forces(module) = $0 { return module.gravity.x }
+                                         return nil
+                                     }, set: {
+                                         if case var .forces(module) = $0 {
+                                             module.gravity.x = $1
+                                             $0 = .forces(module)
+                                         }
+                                     }),
+                                     min: -100,
+                                     max: 100,
+                                     step: 0.1,
+                                     enabled: isEnabled),
                         moduleNumber("Gravity Y",
                                      moduleFloatBinding(index, fallback: 0, get: {
                                          if case let .forces(module) = $0 { return module.gravity.y }
@@ -1076,6 +1560,22 @@ struct InspectorPanel: View {
                                      max: 100,
                                      step: 0.1,
                                      enabled: isEnabled),
+                        moduleNumber("Gravity Z",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .forces(module) = $0 { return module.gravity.z }
+                                         return nil
+                                     }, set: {
+                                         if case var .forces(module) = $0 {
+                                             module.gravity.z = $1
+                                             $0 = .forces(module)
+                                         }
+                                     }),
+                                     min: -100,
+                                     max: 100,
+                                     step: 0.1,
+                                     enabled: isEnabled),
+                    ],
+                    [
                         moduleNumber("Noise",
                                      moduleFloatBinding(index, fallback: 0, get: {
                                          if case let .forces(module) = $0 { return module.noiseStrength }
@@ -1090,6 +1590,36 @@ struct InspectorPanel: View {
                                      max: 100,
                                      step: 0.1,
                                      enabled: isEnabled),
+                        moduleNumber("Noise Scale",
+                                     moduleFloatBinding(index, fallback: 1, get: {
+                                         if case let .forces(module) = $0 { return module.noiseScale }
+                                         return nil
+                                     }, set: {
+                                         if case var .forces(module) = $0 {
+                                             module.noiseScale = $1
+                                             $0 = .forces(module)
+                                         }
+                                     }),
+                                     min: 0.0001,
+                                     max: 100,
+                                     step: 0.1,
+                                     enabled: isEnabled),
+                        moduleNumber("Noise Speed",
+                                     moduleFloatBinding(index, fallback: 1, get: {
+                                         if case let .forces(module) = $0 { return module.noiseSpeed }
+                                         return nil
+                                     }, set: {
+                                         if case var .forces(module) = $0 {
+                                             module.noiseSpeed = $1
+                                             $0 = .forces(module)
+                                         }
+                                     }),
+                                     min: 0,
+                                     max: 100,
+                                     step: 0.1,
+                                     enabled: isEnabled),
+                    ],
+                    [
                         moduleNumber("Force",
                                      moduleFloatBinding(index, fallback: 0, get: {
                                          if case let .forces(module) = $0 { return module.forceStrength }
@@ -1097,6 +1627,78 @@ struct InspectorPanel: View {
                                      }, set: {
                                          if case var .forces(module) = $0 {
                                              module.forceStrength = $1
+                                             $0 = .forces(module)
+                                         }
+                                     }),
+                                     min: -1000,
+                                     max: 1000,
+                                     step: 0.1,
+                                     enabled: isEnabled),
+                        moduleNumber("Radius",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .forces(module) = $0 { return module.forceRadius }
+                                         return nil
+                                     }, set: {
+                                         if case var .forces(module) = $0 {
+                                             module.forceRadius = $1
+                                             $0 = .forces(module)
+                                         }
+                                     }),
+                                     min: 0,
+                                     max: 1000,
+                                     step: 0.1,
+                                     enabled: isEnabled),
+                        moduleNumber("Falloff",
+                                     moduleFloatBinding(index, fallback: 1, get: {
+                                         if case let .forces(module) = $0 { return module.forceFalloff }
+                                         return nil
+                                     }, set: {
+                                         if case var .forces(module) = $0 {
+                                             module.forceFalloff = $1
+                                             $0 = .forces(module)
+                                         }
+                                     }),
+                                     min: 0,
+                                     max: 32,
+                                     step: 0.1,
+                                     enabled: isEnabled),
+                    ],
+                    [
+                        moduleNumber("Center X",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .forces(module) = $0 { return module.forceCenter.x }
+                                         return nil
+                                     }, set: {
+                                         if case var .forces(module) = $0 {
+                                             module.forceCenter.x = $1
+                                             $0 = .forces(module)
+                                         }
+                                     }),
+                                     min: -1000,
+                                     max: 1000,
+                                     step: 0.1,
+                                     enabled: isEnabled),
+                        moduleNumber("Center Y",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .forces(module) = $0 { return module.forceCenter.y }
+                                         return nil
+                                     }, set: {
+                                         if case var .forces(module) = $0 {
+                                             module.forceCenter.y = $1
+                                             $0 = .forces(module)
+                                         }
+                                     }),
+                                     min: -1000,
+                                     max: 1000,
+                                     step: 0.1,
+                                     enabled: isEnabled),
+                        moduleNumber("Center Z",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .forces(module) = $0 { return module.forceCenter.z }
+                                         return nil
+                                     }, set: {
+                                         if case var .forces(module) = $0 {
+                                             module.forceCenter.z = $1
                                              $0 = .forces(module)
                                          }
                                      }),
@@ -1273,6 +1875,96 @@ struct InspectorPanel: View {
                                      step: 0.1,
                                      enabled: isEnabled),
                     ],
+                    [
+                        moduleNumber("Life Rand",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .appearance(module) = $0 { return module.lifetimeRandomness }
+                                         return nil
+                                     }, set: {
+                                         if case var .appearance(module) = $0 {
+                                             module.lifetimeRandomness = $1
+                                             $0 = .appearance(module)
+                                         }
+                                     }),
+                                     min: 0,
+                                     max: 60,
+                                     step: 0.05,
+                                     enabled: isEnabled),
+                        moduleNumber("Size Rand",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .appearance(module) = $0 { return module.sizeRandomness }
+                                         return nil
+                                     }, set: {
+                                         if case var .appearance(module) = $0 {
+                                             module.sizeRandomness = $1
+                                             $0 = .appearance(module)
+                                         }
+                                     }),
+                                     min: 0,
+                                     max: 100,
+                                     step: 0.05,
+                                     enabled: isEnabled),
+                    ],
+                    [
+                        moduleNumber("Rotation",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .appearance(module) = $0 { return module.startRotation }
+                                         return nil
+                                     }, set: {
+                                         if case var .appearance(module) = $0 {
+                                             module.startRotation = $1
+                                             $0 = .appearance(module)
+                                         }
+                                     }),
+                                     min: -360,
+                                     max: 360,
+                                     step: 1,
+                                     enabled: isEnabled),
+                        moduleNumber("Rot Rand",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .appearance(module) = $0 { return module.rotationRandomness }
+                                         return nil
+                                     }, set: {
+                                         if case var .appearance(module) = $0 {
+                                             module.rotationRandomness = $1
+                                             $0 = .appearance(module)
+                                         }
+                                     }),
+                                     min: 0,
+                                     max: 360,
+                                     step: 1,
+                                     enabled: isEnabled),
+                    ],
+                    [
+                        moduleNumber("Spin",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .appearance(module) = $0 { return module.angularVelocity }
+                                         return nil
+                                     }, set: {
+                                         if case var .appearance(module) = $0 {
+                                             module.angularVelocity = $1
+                                             $0 = .appearance(module)
+                                         }
+                                     }),
+                                     min: -3600,
+                                     max: 3600,
+                                     step: 1,
+                                     enabled: isEnabled),
+                        moduleNumber("Spin Rand",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .appearance(module) = $0 { return module.angularVelocityRandomness }
+                                         return nil
+                                     }, set: {
+                                         if case var .appearance(module) = $0 {
+                                             module.angularVelocityRandomness = $1
+                                             $0 = .appearance(module)
+                                         }
+                                     }),
+                                     min: 0,
+                                     max: 3600,
+                                     step: 1,
+                                     enabled: isEnabled),
+                    ],
                 ]))
             case .textureSheet:
                 return AnyView(moduleEditorRows([
@@ -1345,6 +2037,36 @@ struct InspectorPanel: View {
                                          }
                                      }),
                                      min: 1,
+                                     max: 4096,
+                                     step: 1,
+                                     enabled: isEnabled),
+                    ],
+                    [
+                        moduleNumber("Start Frame",
+                                     moduleIntBinding(index, fallback: 0, get: {
+                                         if case let .textureSheet(module) = $0 { return module.startFrame }
+                                         return nil
+                                     }, set: {
+                                         if case var .textureSheet(module) = $0 {
+                                             module.startFrame = $1
+                                             $0 = .textureSheet(module)
+                                         }
+                                     }),
+                                     min: 0,
+                                     max: 4096,
+                                     step: 1,
+                                     enabled: isEnabled),
+                        moduleNumber("Frame Rand",
+                                     moduleIntBinding(index, fallback: 0, get: {
+                                         if case let .textureSheet(module) = $0 { return module.frameRandomness }
+                                         return nil
+                                     }, set: {
+                                         if case var .textureSheet(module) = $0 {
+                                             module.frameRandomness = $1
+                                             $0 = .textureSheet(module)
+                                         }
+                                     }),
+                                     min: 0,
                                      max: 4096,
                                      step: 1,
                                      enabled: isEnabled),
@@ -1452,6 +2174,80 @@ struct InspectorPanel: View {
                                      step: 0.05,
                                      enabled: isEnabled),
                     ],
+                    [
+                        moduleNumber("LOD Start",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .renderer(module) = $0 { return module.renderLODStartDistance }
+                                         return nil
+                                     }, set: {
+                                         if case var .renderer(module) = $0 {
+                                             module.renderLODStartDistance = $1
+                                             $0 = .renderer(module)
+                                         }
+                                     }),
+                                     min: 0,
+                                     max: 100_000,
+                                     step: 1,
+                                     enabled: isEnabled),
+                        moduleNumber("LOD End",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .renderer(module) = $0 { return module.renderLODEndDistance }
+                                         return nil
+                                     }, set: {
+                                         if case var .renderer(module) = $0 {
+                                             module.renderLODEndDistance = $1
+                                             $0 = .renderer(module)
+                                         }
+                                     }),
+                                     min: 0,
+                                     max: 100_000,
+                                     step: 1,
+                                     enabled: isEnabled),
+                        moduleNumber("Bounds R",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .renderer(module) = $0 { return module.renderBoundsRadius }
+                                         return nil
+                                     }, set: {
+                                         if case var .renderer(module) = $0 {
+                                             module.renderBoundsRadius = $1
+                                             $0 = .renderer(module)
+                                         }
+                                     }),
+                                     min: 0,
+                                     max: 100_000,
+                                     step: 1,
+                                     enabled: isEnabled),
+                    ],
+                    [
+                        moduleNumber("Stretch",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .renderer(module) = $0 { return module.velocityStretchScale }
+                                         return nil
+                                     }, set: {
+                                         if case var .renderer(module) = $0 {
+                                             module.velocityStretchScale = $1
+                                             $0 = .renderer(module)
+                                         }
+                                     }),
+                                     min: 0,
+                                     max: 100,
+                                     step: 0.05,
+                                     enabled: isEnabled),
+                        moduleNumber("Stretch Max",
+                                     moduleFloatBinding(index, fallback: 8, get: {
+                                         if case let .renderer(module) = $0 { return module.velocityStretchMax }
+                                         return nil
+                                     }, set: {
+                                         if case var .renderer(module) = $0 {
+                                             module.velocityStretchMax = $1
+                                             $0 = .renderer(module)
+                                         }
+                                     }),
+                                     min: 1,
+                                     max: 1000,
+                                     step: 0.1,
+                                     enabled: isEnabled),
+                    ],
                 ]))
             case .trails:
                 return AnyView(moduleEditorRows([
@@ -1543,108 +2339,201 @@ struct InspectorPanel: View {
                                      step: 0.05,
                                      enabled: isEnabled),
                     ],
-                ]))
-            case .subEmitters:
-                return AnyView(moduleEditorRows([
                     [
-                        moduleEnum("Trigger",
-                                   moduleValueBinding(index, fallback: .none, get: {
-                                       if case let .subEmitters(module) = $0 { return module.legacyTrigger }
-                                       return nil
-                                   }, set: {
-                                       if case var .subEmitters(module) = $0 {
-                                           module.legacyTrigger = $1
-                                           $0 = .subEmitters(module)
-                                       }
-                                   }),
-                                   width: 132,
-                                   enabled: isEnabled,
-                                   label: particleSubEmitterTriggerLabel),
-                        moduleNumber("Burst",
-                                     moduleIntBinding(index, fallback: 0, get: {
-                                         if case let .subEmitters(module) = $0 { return module.legacyBurstCount }
+                        moduleNumber("End Size",
+                                     moduleFloatBinding(index, fallback: 0.5, get: {
+                                         if case let .trails(module) = $0 { return module.trailEndSizeScale }
                                          return nil
                                      }, set: {
-                                         if case var .subEmitters(module) = $0 {
-                                             module.legacyBurstCount = $1
-                                             $0 = .subEmitters(module)
+                                         if case var .trails(module) = $0 {
+                                             module.trailEndSizeScale = $1
+                                             $0 = .trails(module)
                                          }
                                      }),
                                      min: 0,
-                                     max: 100_000,
-                                     step: 1,
+                                     max: 100,
+                                     step: 0.05,
                                      enabled: isEnabled),
-                        moduleNumber("Probability",
+                        moduleNumber("Tail Alpha",
                                      moduleFloatBinding(index, fallback: 1, get: {
-                                         if case let .subEmitters(module) = $0 { return module.legacyProbability }
+                                         if case let .trails(module) = $0 { return module.ribbonTailAlphaScale }
                                          return nil
                                      }, set: {
-                                         if case var .subEmitters(module) = $0 {
-                                             module.legacyProbability = $1
-                                             $0 = .subEmitters(module)
+                                         if case var .trails(module) = $0 {
+                                             module.ribbonTailAlphaScale = $1
+                                             $0 = .trails(module)
                                          }
                                      }),
                                      min: 0,
                                      max: 1,
                                      step: 0.05,
                                      enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("Max Depth",
-                                     moduleIntBinding(index, fallback: 0, get: {
-                                         if case let .subEmitters(module) = $0 { return module.legacyMaxDepth }
+                        moduleNumber("Offset",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .trails(module) = $0 { return module.ribbonTextureOffset }
                                          return nil
                                      }, set: {
-                                         if case var .subEmitters(module) = $0 {
-                                             module.legacyMaxDepth = $1
-                                             $0 = .subEmitters(module)
+                                         if case var .trails(module) = $0 {
+                                             module.ribbonTextureOffset = $1
+                                             $0 = .trails(module)
+                                         }
+                                     }),
+                                     min: -100,
+                                     max: 100,
+                                     step: 0.05,
+                                     enabled: isEnabled),
+                    ],
+                    [
+                        moduleNumber("Max Segment",
+                                     moduleFloatBinding(index, fallback: 0, get: {
+                                         if case let .trails(module) = $0 { return module.ribbonMaxSegmentLength }
+                                         return nil
+                                     }, set: {
+                                         if case var .trails(module) = $0 {
+                                             module.ribbonMaxSegmentLength = $1
+                                             $0 = .trails(module)
                                          }
                                      }),
                                      min: 0,
-                                     max: 16,
-                                     step: 1,
+                                     max: 1000,
+                                     step: 0.1,
                                      enabled: isEnabled),
-                        moduleNumber("Inherit",
+                        moduleNumber("Join",
                                      moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .subEmitters(module) = $0 { return module.legacyInheritVelocity }
+                                         if case let .trails(module) = $0 { return module.ribbonJoinOverlapScale }
                                          return nil
                                      }, set: {
-                                         if case var .subEmitters(module) = $0 {
-                                             module.legacyInheritVelocity = $1
-                                             $0 = .subEmitters(module)
+                                         if case var .trails(module) = $0 {
+                                             module.ribbonJoinOverlapScale = $1
+                                             $0 = .trails(module)
                                          }
                                      }),
                                      min: 0,
                                      max: 10,
                                      step: 0.05,
                                      enabled: isEnabled),
-                        moduleNumber("Life",
-                                     moduleFloatBinding(index, fallback: 1, get: {
-                                         if case let .subEmitters(module) = $0 { return module.legacyLifetime }
+                        moduleNumber("Smooth",
+                                     moduleIntBinding(index, fallback: 1, get: {
+                                         if case let .trails(module) = $0 { return module.ribbonSmoothingSegments }
                                          return nil
                                      }, set: {
-                                         if case var .subEmitters(module) = $0 {
-                                             module.legacyLifetime = $1
-                                             $0 = .subEmitters(module)
+                                         if case var .trails(module) = $0 {
+                                             module.ribbonSmoothingSegments = $1
+                                             $0 = .trails(module)
                                          }
                                      }),
-                                     min: 0.0001,
-                                     max: 60,
-                                     step: 0.1,
+                                     min: 1,
+                                     max: 16,
+                                     step: 1,
                                      enabled: isEnabled),
                     ],
-                    [
-                        moduleNumber("Rules",
-                                     moduleIntBinding(index, fallback: 0, get: {
-                                         if case let .subEmitters(module) = $0 { return module.rules.count }
-                                         return nil
-                                     }, set: { _, _ in }),
-                                     min: 0,
-                                     max: 1024,
-                                     step: 1,
-                                     enabled: false),
-                    ],
                 ]))
+            case .subEmitters:
+                return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 5) {
+                    moduleEditorRows([
+                        [
+                            moduleEnum("Trigger",
+                                       moduleValueBinding(index, fallback: .none, get: {
+                                           if case let .subEmitters(module) = $0 { return module.legacyTrigger }
+                                           return nil
+                                       }, set: {
+                                           if case var .subEmitters(module) = $0 {
+                                               module.legacyTrigger = $1
+                                               $0 = .subEmitters(module)
+                                           }
+                                       }),
+                                       width: 132,
+                                       enabled: isEnabled,
+                                       label: particleSubEmitterTriggerLabel),
+                            moduleNumber("Burst",
+                                         moduleIntBinding(index, fallback: 0, get: {
+                                             if case let .subEmitters(module) = $0 { return module.legacyBurstCount }
+                                             return nil
+                                         }, set: {
+                                             if case var .subEmitters(module) = $0 {
+                                                 module.legacyBurstCount = $1
+                                                 $0 = .subEmitters(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 100_000,
+                                         step: 1,
+                                         enabled: isEnabled),
+                            moduleNumber("Probability",
+                                         moduleFloatBinding(index, fallback: 1, get: {
+                                             if case let .subEmitters(module) = $0 { return module.legacyProbability }
+                                             return nil
+                                         }, set: {
+                                             if case var .subEmitters(module) = $0 {
+                                                 module.legacyProbability = $1
+                                                 $0 = .subEmitters(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 1,
+                                         step: 0.05,
+                                         enabled: isEnabled),
+                        ],
+                        [
+                            moduleNumber("Max Depth",
+                                         moduleIntBinding(index, fallback: 0, get: {
+                                             if case let .subEmitters(module) = $0 { return module.legacyMaxDepth }
+                                             return nil
+                                         }, set: {
+                                             if case var .subEmitters(module) = $0 {
+                                                 module.legacyMaxDepth = $1
+                                                 $0 = .subEmitters(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 16,
+                                         step: 1,
+                                         enabled: isEnabled),
+                            moduleNumber("Inherit",
+                                         moduleFloatBinding(index, fallback: 0, get: {
+                                             if case let .subEmitters(module) = $0 { return module.legacyInheritVelocity }
+                                             return nil
+                                         }, set: {
+                                             if case var .subEmitters(module) = $0 {
+                                                 module.legacyInheritVelocity = $1
+                                                 $0 = .subEmitters(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 10,
+                                         step: 0.05,
+                                         enabled: isEnabled),
+                            moduleNumber("Life",
+                                         moduleFloatBinding(index, fallback: 1, get: {
+                                             if case let .subEmitters(module) = $0 { return module.legacyLifetime }
+                                             return nil
+                                         }, set: {
+                                             if case var .subEmitters(module) = $0 {
+                                                 module.legacyLifetime = $1
+                                                 $0 = .subEmitters(module)
+                                             }
+                                         }),
+                                         min: 0.0001,
+                                         max: 60,
+                                         step: 0.1,
+                                         enabled: isEnabled),
+                        ],
+                    ])
+
+                    Box(direction: .column, alignItems: .stretch, spacing: 4) {
+                        Row(alignment: .center, spacing: 0) {
+                            Spacer(minLength: 0)
+                                .frame(width: 28)
+                            Text(L("Rules"))
+                                .lineLimit(1)
+                                .font(.caption)
+                                .foregroundColor(.onSurfaceMuted)
+                                .flex()
+                        }
+                        InspectorParticleSubEmittersValue(binding: moduleSubEmitterRulesBinding(index))
+                            .opacity(isEnabled ? 1 : 0.66)
+                    }
+                })
             case .gpuSimulation:
                 return AnyView(moduleEditorRows([
                     [
@@ -1809,6 +2698,28 @@ struct InspectorPanel: View {
                     var stack = binding.wrappedValue
                     guard stack.modules.indices.contains(index) else { return }
                     set(&stack.modules[index].settings, next)
+                    binding.wrappedValue = stack
+                }
+            )
+        }
+
+        private func moduleSubEmitterRulesBinding(_ index: Int) -> Binding<[ParticleSubEmitter]> {
+            Binding(
+                get: {
+                    guard binding.wrappedValue.modules.indices.contains(index),
+                          case let .subEmitters(module) = binding.wrappedValue.modules[index].settings else {
+                        return []
+                    }
+                    return module.rules
+                },
+                set: { next in
+                    var stack = binding.wrappedValue
+                    guard stack.modules.indices.contains(index),
+                          case var .subEmitters(module) = stack.modules[index].settings else {
+                        return
+                    }
+                    module.rules = next
+                    stack.modules[index].settings = .subEmitters(module)
                     binding.wrappedValue = stack
                 }
             )
@@ -2925,21 +3836,40 @@ private extension EditorInspectorFieldValue {
             let groupHeaderHeight: Float = 24
             let rowHeight: Float = 47
             let moduleEditorRowHeight: Float = 50
-            let moduleExpandedHeaderHeight: Float = 22
-            let moduleExpandedDiagnosticsHeight: Float = 28
+            let moduleExpandedHeaderHeight: Float = 58
+            let moduleGPUBackendPanelHeight: Float = 90
+            let moduleExpandedDiagnosticsHeight: Float = 43
+            let moduleIssueHeaderHeight: Float = 18
+            let moduleIssueRowHeight: Float = 30
             let advancedModuleIDs: Set<String> = [
                 "textureSheet",
                 "trails",
                 "subEmitters",
                 "gpuSimulation",
             ]
+            let stackIssueCounts = Dictionary(
+                grouping: stack.validationIssues(),
+                by: \.moduleID
+            ).mapValues(\.count)
             let groupCount: Float = stack.modules.contains { advancedModuleIDs.contains($0.id) } ? 2 : 1
             let expandedEditorHeight = stack.modules.reduce(Float(0)) { total, module in
                 guard module.isExpanded else { return total }
+                let issueCount = Float(stackIssueCounts[module.id] ?? 0)
+                let issueHeight = issueCount > 0
+                    ? moduleIssueHeaderHeight + issueCount * moduleIssueRowHeight
+                    : 0
+                let gpuBackendHeight: Float
+                if case .gpuSimulation = module.settings {
+                    gpuBackendHeight = moduleGPUBackendPanelHeight
+                } else {
+                    gpuBackendHeight = 0
+                }
                 return total
                     + 8
                     + moduleExpandedHeaderHeight
-                    + Float(particleModuleEditorRowCount(module.settings)) * moduleEditorRowHeight
+                    + particleModuleEditorHeight(module.settings, rowHeight: moduleEditorRowHeight)
+                    + gpuBackendHeight
+                    + issueHeight
                     + moduleExpandedDiagnosticsHeight
             }
             let groupSpacing: Float = max(0, groupCount - 1) * 4
@@ -2963,11 +3893,31 @@ private extension EditorInspectorFieldValue {
     }
 }
 
+private func particleModuleEditorHeight(_ settings: ParticleEmitterModuleSettings,
+                                        rowHeight: Float) -> Float {
+    if case let .subEmitters(module) = settings {
+        return 2 * rowHeight
+            + 5
+            + ParticleSubEmitterEditorLayout.propertyGridLabelHeight
+            + 4
+            + ParticleSubEmitterEditorLayout.valueHeight(ruleCount: module.rules.count)
+    }
+    return Float(particleModuleEditorRowCount(settings)) * rowHeight
+}
+
 private func particleModuleEditorRowCount(_ settings: ParticleEmitterModuleSettings) -> Int {
     switch settings {
-    case .forces, .renderer, .subEmitters:
+    case .forces:
+        return 6
+    case .appearance:
+        return 5
+    case .renderer, .trails:
+        return 5
+    case .shape:
+        return 4
+    case .textureSheet:
         return 3
-    case .shape, .collision, .appearance, .textureSheet, .trails, .gpuSimulation, .velocity:
+    case .collision, .gpuSimulation, .subEmitters, .velocity:
         return 2
     default:
         return 1

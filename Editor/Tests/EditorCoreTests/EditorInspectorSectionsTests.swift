@@ -294,7 +294,9 @@ struct EditorInspectorSectionsTests {
         stack.modules[shapeIndex].isExpanded = true
         if case var .shape(module) = stack.modules[shapeIndex].settings {
             module.emissionShape = .cone
+            module.originOffset = SIMD3<Float>(0.5, 1.5, -2.5)
             module.spawnRadius = 2.25
+            module.boxHalfExtents = SIMD3<Float>(4, 5, 6)
             module.coneRadius = 3.5
             module.coneHeight = 7
             stack.modules[shapeIndex].settings = .shape(module)
@@ -307,8 +309,13 @@ struct EditorInspectorSectionsTests {
         if case var .forces(module) = stack.modules[forcesIndex].settings {
             module.forceMode = .radial
             module.vectorFieldMode = .curl
-            module.gravity.y = -4
+            module.gravity = SIMD3<Float>(1, -4, 2)
             module.noiseStrength = 2.5
+            module.noiseScale = 1.75
+            module.noiseSpeed = 0.6
+            module.forceCenter = SIMD3<Float>(3, 4, 5)
+            module.forceRadius = 11
+            module.forceFalloff = 1.5
             module.vectorFieldStrength = 8.5
             module.vectorFieldScale = 3
             module.vectorFieldScrollSpeed = 0.75
@@ -345,6 +352,14 @@ struct EditorInspectorSectionsTests {
         if case var .appearance(module) = stack.modules[appearanceIndex].settings {
             module.blendMode = .additive
             module.lifetime = 2.5
+            module.lifetimeRandomness = 0.4
+            module.startSize = 1.2
+            module.endSize = 0.3
+            module.sizeRandomness = 0.25
+            module.startRotation = 15
+            module.rotationRandomness = 45
+            module.angularVelocity = 120
+            module.angularVelocityRandomness = 30
             stack.modules[appearanceIndex].settings = .appearance(module)
         } else {
             Issue.record("expected appearance module settings")
@@ -358,6 +373,8 @@ struct EditorInspectorSectionsTests {
             module.columns = 4
             module.rows = 2
             module.frameCount = 8
+            module.startFrame = 2
+            module.frameRandomness = 3
             stack.modules[textureSheetIndex].settings = .textureSheet(module)
         } else {
             Issue.record("expected texture sheet module settings")
@@ -372,6 +389,12 @@ struct EditorInspectorSectionsTests {
             module.renderBoundsMode = .manual
             module.maxRenderDistance = 123
             module.renderDistanceFadeRange = 9
+            module.renderLODStartDistance = 30
+            module.renderLODEndDistance = 120
+            module.renderLODMinParticleScale = 0.35
+            module.renderBoundsRadius = 42
+            module.velocityStretchScale = 0.5
+            module.velocityStretchMax = 9
             stack.modules[rendererIndex].settings = .renderer(module)
         } else {
             Issue.record("expected renderer module settings")
@@ -385,7 +408,13 @@ struct EditorInspectorSectionsTests {
             module.trailEndAlphaScale = 0.3
             module.ribbonWidthScale = 1.6
             module.ribbonTailWidthScale = 0.2
+            module.ribbonTailAlphaScale = 0.4
+            module.ribbonMaxSegmentLength = 5
+            module.ribbonJoinOverlapScale = 0.15
+            module.ribbonSmoothingSegments = 4
             module.ribbonTextureTiling = 4
+            module.ribbonTextureOffset = 0.75
+            module.trailEndSizeScale = 0.45
             stack.modules[trailsIndex].settings = .trails(module)
         } else {
             Issue.record("expected trails module settings")
@@ -400,6 +429,20 @@ struct EditorInspectorSectionsTests {
             module.legacyMaxDepth = 2
             module.legacyInheritVelocity = 0.25
             module.legacyLifetime = 1.75
+            module.rules = [
+                ParticleSubEmitter(trigger: .death,
+                                   burstCount: 5,
+                                   probability: 0.75,
+                                   maxDepth: 3,
+                                   inheritVelocity: 0.5,
+                                   lifetime: 0.9,
+                                   startVelocity: SIMD3<Float>(0, 2, 0),
+                                   velocityRandomness: SIMD3<Float>(0.1, 0.2, 0.3),
+                                   startSize: 0.4,
+                                   endSize: 0.1,
+                                   startColor: SIMD4<Float>(1, 0.5, 0.25, 1),
+                                   endColor: SIMD4<Float>(1, 0.1, 0, 0)),
+            ]
             stack.modules[subEmittersIndex].settings = .subEmitters(module)
         } else {
             Issue.record("expected sub emitters module settings")
@@ -422,13 +465,20 @@ struct EditorInspectorSectionsTests {
         #expect(emitter.emissionRate == 77)
         #expect(emitter.maxParticles == 512)
         #expect(emitter.emissionShape == .cone)
+        #expect(emitter.originOffset == SIMD3<Float>(0.5, 1.5, -2.5))
         #expect(emitter.spawnRadius == 2.25)
+        #expect(emitter.boxHalfExtents == SIMD3<Float>(4, 5, 6))
         #expect(emitter.coneRadius == 3.5)
         #expect(emitter.coneHeight == 7)
         #expect(emitter.forceMode == .radial)
         #expect(emitter.vectorFieldMode == .curl)
-        #expect(emitter.gravity.y == -4)
+        #expect(emitter.gravity == SIMD3<Float>(1, -4, 2))
         #expect(emitter.noiseStrength == 2.5)
+        #expect(emitter.noiseScale == 1.75)
+        #expect(emitter.noiseSpeed == 0.6)
+        #expect(emitter.forceCenter == SIMD3<Float>(3, 4, 5))
+        #expect(emitter.forceRadius == 11)
+        #expect(emitter.forceFalloff == 1.5)
         #expect(emitter.vectorFieldStrength == 8.5)
         #expect(emitter.vectorFieldScale == 3)
         #expect(emitter.vectorFieldScrollSpeed == 0.75)
@@ -441,29 +491,65 @@ struct EditorInspectorSectionsTests {
         #expect(emitter.collisionDamping == 0.35)
         #expect(emitter.blendMode == .additive)
         #expect(emitter.lifetime == 2.5)
+        #expect(emitter.lifetimeRandomness == 0.4)
+        #expect(emitter.startSize == 1.2)
+        #expect(emitter.endSize == 0.3)
+        #expect(emitter.sizeRandomness == 0.25)
+        #expect(emitter.startRotation == 15)
+        #expect(emitter.rotationRandomness == 45)
+        #expect(emitter.angularVelocity == 120)
+        #expect(emitter.angularVelocityRandomness == 30)
         #expect(emitter.textureSheetPlaybackMode == .loop)
         #expect(emitter.textureSheetFrameRate == 24)
         #expect(emitter.textureSheetColumns == 4)
         #expect(emitter.textureSheetRows == 2)
         #expect(emitter.textureSheetFrameCount == 8)
+        #expect(emitter.textureSheetStartFrame == 2)
+        #expect(emitter.textureSheetFrameRandomness == 3)
         #expect(emitter.renderMode == .ribbon)
         #expect(emitter.sortMode == .oldestFirst)
         #expect(emitter.renderAlignment == .velocity)
         #expect(emitter.renderBoundsMode == .manual)
         #expect(emitter.maxRenderDistance == 123)
         #expect(emitter.renderDistanceFadeRange == 9)
+        #expect(emitter.renderLODStartDistance == 30)
+        #expect(emitter.renderLODEndDistance == 120)
+        #expect(emitter.renderLODMinParticleScale == 0.35)
+        #expect(emitter.renderBoundsRadius == 42)
+        #expect(emitter.velocityStretchScale == 0.5)
+        #expect(emitter.velocityStretchMax == 9)
         #expect(emitter.trailLength == 1.25)
         #expect(emitter.trailSegments == 7)
         #expect(emitter.trailEndAlphaScale == 0.3)
+        #expect(emitter.trailEndSizeScale == 0.45)
         #expect(emitter.ribbonWidthScale == 1.6)
         #expect(emitter.ribbonTailWidthScale == 0.2)
+        #expect(emitter.ribbonTailAlphaScale == 0.4)
+        #expect(emitter.ribbonMaxSegmentLength == 5)
+        #expect(emitter.ribbonJoinOverlapScale == 0.15)
+        #expect(emitter.ribbonSmoothingSegments == 4)
         #expect(emitter.ribbonTextureTiling == 4)
+        #expect(emitter.ribbonTextureOffset == 0.75)
         #expect(emitter.subEmitterTrigger == .collision)
         #expect(emitter.subEmitterBurstCount == 3)
         #expect(emitter.subEmitterProbability == 0.6)
         #expect(emitter.subEmitterMaxDepth == 2)
         #expect(emitter.subEmitterInheritVelocity == 0.25)
         #expect(emitter.subEmitterLifetime == 1.75)
+        #expect(emitter.subEmitters == [
+            ParticleSubEmitter(trigger: .death,
+                               burstCount: 5,
+                               probability: 0.75,
+                               maxDepth: 3,
+                               inheritVelocity: 0.5,
+                               lifetime: 0.9,
+                               startVelocity: SIMD3<Float>(0, 2, 0),
+                               velocityRandomness: SIMD3<Float>(0.1, 0.2, 0.3),
+                               startSize: 0.4,
+                               endSize: 0.1,
+                               startColor: SIMD4<Float>(1, 0.5, 0.25, 1),
+                               endColor: SIMD4<Float>(1, 0.1, 0, 0)),
+        ])
         #expect(emitter.simulationSpace == .world)
         #expect(emitter.simulationBackend == .gpuIfSupported)
         #expect(emitter.gpuSimulationWorkgroupSize == 96)

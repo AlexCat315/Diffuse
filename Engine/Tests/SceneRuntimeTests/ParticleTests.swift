@@ -204,6 +204,70 @@ struct ParticleTests {
         #expect(reset.modules.allSatisfy { !$0.isExpanded })
     }
 
+    @Test("module stack validation reports authoring issues before runtime clamping")
+    func moduleStackValidationReportsAuthoringIssues() throws {
+        var emitter = ParticleEmitter(emissionRate: 8,
+                                      maxParticles: 64,
+                                      lifetime: 1,
+                                      simulationBackend: .gpuRequired)
+        var stack = emitter.moduleStack
+        try editModule(&stack, id: "emission") { settings in
+            guard case var .emission(module) = settings else { return }
+            module.isEmitting = true
+            module.emissionRate = 0
+            module.distanceEmissionRate = 0
+            module.burstCount = 0
+            module.maxParticles = 0
+            settings = .emission(module)
+        }
+        try editModule(&stack, id: "appearance") { settings in
+            guard case var .appearance(module) = settings else { return }
+            module.lifetime = 0
+            settings = .appearance(module)
+        }
+        try editModule(&stack, id: "textureSheet") { settings in
+            guard case var .textureSheet(module) = settings else { return }
+            module.columns = 2
+            module.rows = 2
+            module.frameCount = 8
+            settings = .textureSheet(module)
+        }
+        try editModule(&stack, id: "gpuSimulation") { settings in
+            guard case var .gpuSimulation(module) = settings else { return }
+            module.workgroupSize = ParticleGPUSimulationPlan.maximumWorkgroupSize + 1
+            settings = .gpuSimulation(module)
+        }
+
+        let stackIssueCodes = stack.validationIssues().map(\.code)
+
+        #expect(stackIssueCodes.contains("noParticleCapacity"))
+        #expect(stackIssueCodes.contains("noSpawnSource"))
+        #expect(stackIssueCodes.contains("invalidLifetime"))
+        #expect(stackIssueCodes.contains("frameCountExceedsCells"))
+        #expect(stackIssueCodes.contains("gpuWorkgroupClamped"))
+
+        emitter.apply(stack)
+        let emitterIssues = emitter.moduleValidationIssues
+
+        #expect(emitterIssues.contains {
+            $0.moduleID == "gpuSimulation" && $0.code == "gpuRequiredButUnsupported"
+        })
+
+        stack.repairValidationIssues()
+        let repairedIssueCodes = stack.validationIssues().map(\.code)
+
+        #expect(!repairedIssueCodes.contains("noParticleCapacity"))
+        #expect(repairedIssueCodes.contains("noSpawnSource"))
+        #expect(!repairedIssueCodes.contains("invalidLifetime"))
+        #expect(!repairedIssueCodes.contains("frameCountExceedsCells"))
+        #expect(!repairedIssueCodes.contains("gpuWorkgroupClamped"))
+
+        emitter.apply(stack)
+        #expect(!emitter.moduleValidationIssues.contains {
+            $0.moduleID == "gpuSimulation" && $0.code == "gpuRequiredButUnsupported"
+        })
+    }
+
     @Test("continuous emission spawns at the configured rate")
     func continuousEmission() {
         var emitter = ParticleEmitter(emissionRate: 10, maxParticles: 1000, lifetime: 1000,
