@@ -102,6 +102,9 @@ public struct ParticleModuleStack: Codable, Sendable, Equatable {
             if var refreshed = currentByID[authored.id] {
                 refreshed.isEnabled = authored.isEnabled
                 refreshed.isExpanded = authored.isExpanded
+                if !authored.isEnabled {
+                    refreshed.settings = authored.settings
+                }
                 modules.append(refreshed)
                 usedIDs.insert(authored.id)
             } else {
