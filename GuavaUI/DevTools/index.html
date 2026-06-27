@@ -32,14 +32,14 @@
 
       <section class="mainPane">
         <div class="mirrorHeader">
-          <span>Mirror</span>
+          <span>Mirror <span id="mirrorStatus" class="panelStatus">Idle</span></span>
           <div class="mirrorControls">
             <button id="startMirror" disabled>Start</button>
             <button id="stopMirror" disabled>Stop</button>
           </div>
         </div>
-        <div id="mirror" class="mirror">
-          <div class="empty">No mirror frame.</div>
+        <div id="mirror" class="mirror" tabindex="0">
+          <div id="mirrorState" class="empty">No mirror frame. Click Start after connecting.</div>
           <img id="mirrorImage" alt="GuavaUI mirror frame">
         </div>
       </section>
@@ -49,6 +49,10 @@
           <span>Selection</span>
         </div>
         <pre id="details" class="details empty">Select a node in the tree.</pre>
+        <div class="paneHeader">
+          <span>Runtime</span>
+        </div>
+        <pre id="runtime" class="details empty">No tree snapshot.</pre>
         <div class="paneHeader">
           <span>Timing</span>
         </div>
