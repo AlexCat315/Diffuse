@@ -767,6 +767,78 @@ struct SceneSerializerTests {
         #expect(restoredEmitter.gpuSimulationWorkgroupSize == 128)
     }
 
+    @Test("round-trip: disabled particle modules preserve authored settings")
+    func disabledParticleModuleAuthoringRoundTrip() throws {
+        var original = SceneRuntime()
+        let entity = original.createEntity()
+
+        var emitter = ParticleEmitter(textureSheetColumns: 1,
+                                      textureSheetRows: 1,
+                                      textureSheetFrameCount: 1,
+                                      textureSheetPlaybackMode: .automatic)
+        var stack = emitter.moduleStack
+        let textureSheetIndex = try #require(stack.modules.firstIndex { $0.id == "textureSheet" })
+        stack.modules[textureSheetIndex].isEnabled = false
+        stack.modules[textureSheetIndex].isExpanded = true
+        if case var .textureSheet(settings) = stack.modules[textureSheetIndex].settings {
+            settings.textureAssetID = "Assets/Textures/fire-sheet.png"
+            settings.texturePath = "/tmp/fire-sheet.png"
+            settings.columns = 8
+            settings.rows = 4
+            settings.frameCount = 24
+            settings.frameRate = 30
+            settings.playbackMode = .loop
+            settings.startFrame = 5
+            settings.frameRandomness = 3
+            stack.modules[textureSheetIndex].settings = .textureSheet(settings)
+        } else {
+            Issue.record("expected texture sheet module settings")
+        }
+        emitter.apply(stack)
+        _ = original.setComponent(emitter, for: entity)
+
+        let data = try SceneSerializer.serialize(original)
+        var restored = SceneRuntime()
+        try SceneSerializer.deserialize(data, into: &restored)
+
+        var restoredEmitter = try #require(restored.component(ParticleEmitter.self, for: restored.entities()[0]))
+        #expect(restoredEmitter.textureSheetColumns == 1)
+        #expect(restoredEmitter.textureSheetRows == 1)
+        #expect(restoredEmitter.textureSheetFrameCount == 1)
+        #expect(restoredEmitter.textureSheetPlaybackMode == .automatic)
+
+        var restoredStack = restoredEmitter.moduleStack
+        let restoredTextureSheetIndex = try #require(restoredStack.modules.firstIndex { $0.id == "textureSheet" })
+        let restoredTextureSheet = restoredStack.modules[restoredTextureSheetIndex]
+        #expect(!restoredTextureSheet.isEnabled)
+        #expect(restoredTextureSheet.isExpanded)
+        if case let .textureSheet(settings) = restoredTextureSheet.settings {
+            #expect(settings.textureAssetID == "Assets/Textures/fire-sheet.png")
+            #expect(settings.texturePath == "/tmp/fire-sheet.png")
+            #expect(settings.columns == 8)
+            #expect(settings.rows == 4)
+            #expect(settings.frameCount == 24)
+            #expect(settings.frameRate == 30)
+            #expect(settings.playbackMode == .loop)
+            #expect(settings.startFrame == 5)
+            #expect(settings.frameRandomness == 3)
+        } else {
+            Issue.record("expected texture sheet module settings")
+        }
+
+        restoredStack.modules[restoredTextureSheetIndex].isEnabled = true
+        restoredEmitter.apply(restoredStack)
+        #expect(restoredEmitter.textureAssetID == "Assets/Textures/fire-sheet.png")
+        #expect(restoredEmitter.texturePath == "/tmp/fire-sheet.png")
+        #expect(restoredEmitter.textureSheetColumns == 8)
+        #expect(restoredEmitter.textureSheetRows == 4)
+        #expect(restoredEmitter.textureSheetFrameCount == 24)
+        #expect(restoredEmitter.textureSheetFrameRate == 30)
+        #expect(restoredEmitter.textureSheetPlaybackMode == .loop)
+        #expect(restoredEmitter.textureSheetStartFrame == 5)
+        #expect(restoredEmitter.textureSheetFrameRandomness == 3)
+    }
+
     // MARK: - Constraint
 
     @Test("round-trip: constraint reconnects to remapped entities")
