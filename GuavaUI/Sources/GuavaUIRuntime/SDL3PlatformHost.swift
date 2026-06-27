@@ -338,7 +338,7 @@ public final class SDL3PlatformHost: PlatformHost {
         session.requestDisplay()
     }
 
-    public func enqueueMainThreadWork(_ work: @escaping () -> Void) {
+    public nonisolated func enqueueMainThreadWork(_ work: @escaping () -> Void) {
         mainThreadInbox.enqueue(work)
     }
 

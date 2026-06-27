@@ -47,9 +47,8 @@ public struct MirrorInputPayload: Codable, Sendable {
 }
 
 /// Translates `MirrorInputPayload` into `InputEvent` and injects them into
-/// the host's main `PlatformWindowSession`. v1 supports the most common
-/// pointer + wheel + textual key path; full keyboard mapping is intentionally
-/// limited because the wire format does not yet carry SDL3 scancodes.
+/// the host's main `PlatformWindowSession`. Keyboard support maps common Web
+/// `KeyboardEvent.code` values to SDL/USB-HID scancodes used by GuavaUI.
 public enum InputBridge {
 
     public static func event(from payload: MirrorInputPayload) -> InputEvent? {
@@ -87,6 +86,18 @@ public enum InputBridge {
         case "text":
             guard let text = payload.text, !text.isEmpty else { return nil }
             return .textInput(text)
+        case "keyDown":
+            guard let scancode = keyScancode(from: payload.key) else { return nil }
+            return .keyDown(KeyEvent(scancode: scancode,
+                                     keycode: UInt32(max(0, payload.keyCode ?? 0)),
+                                     modifiers: keyModifiers(payload.modifiers ?? 0),
+                                     isRepeat: payload.isRepeat ?? false))
+        case "keyUp":
+            guard let scancode = keyScancode(from: payload.key) else { return nil }
+            return .keyUp(KeyEvent(scancode: scancode,
+                                   keycode: UInt32(max(0, payload.keyCode ?? 0)),
+                                   modifiers: keyModifiers(payload.modifiers ?? 0),
+                                   isRepeat: payload.isRepeat ?? false))
         default:
             return nil
         }
@@ -111,5 +122,72 @@ public enum InputBridge {
         if raw & 4 != 0 { mods.insert(.alt) }
         if raw & 8 != 0 { mods.insert(.gui) }
         return mods
+    }
+
+    private static func keyScancode(from webCode: String?) -> UInt32? {
+        guard let webCode, !webCode.isEmpty else { return nil }
+        if webCode.count == 4,
+           webCode.hasPrefix("Key"),
+           let scalar = webCode.dropFirst(3).unicodeScalars.first,
+           scalar.value >= 65,
+           scalar.value <= 90 {
+            return 4 + scalar.value - 65
+        }
+        if webCode.hasPrefix("Digit"),
+           let value = UInt32(String(webCode.dropFirst(5))),
+           value <= 9 {
+            return value == 0 ? 39 : 29 + value
+        }
+        if webCode.hasPrefix("F"),
+           let value = UInt32(String(webCode.dropFirst())),
+           value >= 1,
+           value <= 12 {
+            return 57 + value
+        }
+        if webCode.hasPrefix("Numpad"),
+           let value = UInt32(String(webCode.dropFirst(6))),
+           value <= 9 {
+            return value == 0 ? 98 : 88 + value
+        }
+        switch webCode {
+        case "Enter", "NumpadEnter":
+            return webCode == "NumpadEnter" ? 88 : 40
+        case "Escape": return 41
+        case "Backspace": return 42
+        case "Tab": return 43
+        case "Space": return 44
+        case "Minus": return 45
+        case "Equal": return 46
+        case "BracketLeft": return 47
+        case "BracketRight": return 48
+        case "Backslash": return 49
+        case "Semicolon": return 51
+        case "Quote": return 52
+        case "Backquote": return 53
+        case "Comma": return 54
+        case "Period": return 55
+        case "Slash": return 56
+        case "CapsLock": return 57
+        case "PrintScreen": return 70
+        case "ScrollLock": return 71
+        case "Pause": return 72
+        case "Insert": return 73
+        case "Home": return 74
+        case "PageUp": return 75
+        case "Delete": return 76
+        case "End": return 77
+        case "PageDown": return 78
+        case "ArrowRight": return 79
+        case "ArrowLeft": return 80
+        case "ArrowDown": return 81
+        case "ArrowUp": return 82
+        case "NumLock": return 83
+        case "NumpadDivide": return 84
+        case "NumpadMultiply": return 85
+        case "NumpadSubtract": return 86
+        case "NumpadAdd": return 87
+        case "NumpadDecimal": return 99
+        default: return nil
+        }
     }
 }

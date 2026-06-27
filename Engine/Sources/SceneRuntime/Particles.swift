@@ -353,6 +353,7 @@ public struct ParticleEmitterFrameStats: Sendable, Equatable {
 
 public struct ParticleFrameStatsResource: Sendable, Equatable {
     public var simulatedDeltaTime: Float
+    public var emitterStatsByEntity: [UInt64: ParticleEmitterFrameStats]
     public var emitterCount: Int
     public var activeEmitterCount: Int
     public var liveParticleCount: Int
@@ -368,8 +369,10 @@ public struct ParticleFrameStatsResource: Sendable, Equatable {
     public var capacityLimitedSpawnCount: Int
 
     public init(simulatedDeltaTime: Float = 0,
-                emitterStats: [ParticleEmitterFrameStats] = []) {
+                emitterStats: [ParticleEmitterFrameStats] = [],
+                emitterStatsByEntity: [UInt64: ParticleEmitterFrameStats] = [:]) {
         self.simulatedDeltaTime = max(0, simulatedDeltaTime)
+        self.emitterStatsByEntity = emitterStatsByEntity
         self.emitterCount = emitterStats.count
         self.activeEmitterCount = emitterStats.filter {
             $0.liveParticleCount > 0 || $0.spawnedParticleCount > 0
@@ -388,6 +391,10 @@ public struct ParticleFrameStatsResource: Sendable, Equatable {
     }
 
     public static let empty = ParticleFrameStatsResource()
+
+    public func emitterStats(for rawEntityID: UInt64?) -> ParticleEmitterFrameStats? {
+        rawEntityID.flatMap { emitterStatsByEntity[$0] }
+    }
 }
 
 public struct ParticleSimulationEventApplyReport: Sendable, Equatable {
@@ -404,6 +411,7 @@ public struct ParticleSimulationEventApplyReport: Sendable, Equatable {
     public var subEmitterSpawnedCount: Int
     public var spawnedParticleCount: Int
     public var capacityLimitedSpawnCount: Int
+    public var emitterStatsByEntity: [UInt64: ParticleEmitterFrameStats]
 
     public init(requestedEmitterCount: Int = 0,
                 appliedEmitterCount: Int = 0,
@@ -417,7 +425,8 @@ public struct ParticleSimulationEventApplyReport: Sendable, Equatable {
                 deathEventCount: Int = 0,
                 subEmitterSpawnedCount: Int = 0,
                 spawnedParticleCount: Int = 0,
-                capacityLimitedSpawnCount: Int = 0) {
+                capacityLimitedSpawnCount: Int = 0,
+                emitterStatsByEntity: [UInt64: ParticleEmitterFrameStats] = [:]) {
         self.requestedEmitterCount = max(0, requestedEmitterCount)
         self.appliedEmitterCount = max(0, appliedEmitterCount)
         self.missingEmitterCount = max(0, missingEmitterCount)
@@ -431,9 +440,14 @@ public struct ParticleSimulationEventApplyReport: Sendable, Equatable {
         self.subEmitterSpawnedCount = max(0, subEmitterSpawnedCount)
         self.spawnedParticleCount = max(0, spawnedParticleCount)
         self.capacityLimitedSpawnCount = max(0, capacityLimitedSpawnCount)
+        self.emitterStatsByEntity = emitterStatsByEntity
     }
 
     public static let empty = ParticleSimulationEventApplyReport()
+
+    public func emitterStats(for rawEntityID: UInt64?) -> ParticleEmitterFrameStats? {
+        rawEntityID.flatMap { emitterStatsByEntity[$0] }
+    }
 }
 
 public struct ParticleCurveKeyframe: Codable, Sendable, Equatable, Hashable {
@@ -2206,15 +2220,19 @@ public extension SceneRuntime {
         setResource(scalabilityState)
         let effectiveOptions = scalabilityState.applying(to: options)
         var particleStats: [ParticleEmitterFrameStats] = []
+        var particleStatsByEntity: [UInt64: ParticleEmitterFrameStats] = [:]
         particleStats.reserveCapacity(particleEntities.count)
+        particleStatsByEntity.reserveCapacity(particleEntities.count)
         let stepped = updateComponents(ParticleEmitter.self) { entity, emitter in
             emitter.advance(deltaTime: deltaTime,
                             worldTransform: worldTransforms[entity] ?? matrix_identity_float4x4,
                             options: effectiveOptions)
             particleStats.append(emitter.lastFrameStats)
+            particleStatsByEntity[entity.rawValue] = emitter.lastFrameStats
         }
         setResource(ParticleFrameStatsResource(simulatedDeltaTime: Float(max(0, deltaTime)),
-                                               emitterStats: particleStats))
+                                               emitterStats: particleStats,
+                                               emitterStatsByEntity: particleStatsByEntity))
         return stepped
     }
 
@@ -2237,7 +2255,9 @@ public extension SceneRuntime {
             eventCount: eventsByEntity.values.reduce(0) { $0 + $1.count }
         )
         var emitterStats: [ParticleEmitterFrameStats] = []
+        var emitterStatsByEntity: [UInt64: ParticleEmitterFrameStats] = [:]
         emitterStats.reserveCapacity(eventsByEntity.count)
+        emitterStatsByEntity.reserveCapacity(eventsByEntity.count)
         for (entity, events) in eventsByEntity {
             guard !events.isEmpty else {
                 report.emptyEventEmitterCount += 1
@@ -2248,6 +2268,7 @@ public extension SceneRuntime {
                 let stats = emitter.applySimulationEvents(events)
                 appliedStats = stats
                 emitterStats.append(stats)
+                emitterStatsByEntity[entity.rawValue] = stats
             }
             if updated, let appliedStats {
                 report.appliedEmitterCount += 1
@@ -2264,9 +2285,11 @@ public extension SceneRuntime {
         if !emitterStats.isEmpty {
             setResource(
                 ParticleFrameStatsResource(simulatedDeltaTime: 0,
-                                           emitterStats: emitterStats)
+                                           emitterStats: emitterStats,
+                                           emitterStatsByEntity: emitterStatsByEntity)
             )
         }
+        report.emitterStatsByEntity = emitterStatsByEntity
         return report
     }
 }
