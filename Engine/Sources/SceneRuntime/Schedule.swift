@@ -378,16 +378,20 @@ public struct RuntimeWorldSchedule {
                     let particleEntities = world.entities(with: ParticleEmitter.self)
                     let worldTransforms = world.worldTransformSnapshot(matching: particleEntities)
                     var particleStats: [ParticleEmitterFrameStats] = []
+                    var particleStatsByEntity: [UInt64: ParticleEmitterFrameStats] = [:]
                     particleStats.reserveCapacity(particleEntities.count)
+                    particleStatsByEntity.reserveCapacity(particleEntities.count)
                     world.updateComponents(ParticleEmitter.self) { entity, emitter in
                         emitter.advance(deltaTime: deltaTimeSeconds,
                                         worldTransform: worldTransforms[entity]?.matrix,
                                         options: particleOptions)
                         particleStats.append(emitter.lastFrameStats)
+                        particleStatsByEntity[entity.rawValue] = emitter.lastFrameStats
                     }
                     world.setDerivedResource(
                         ParticleFrameStatsResource(simulatedDeltaTime: Float(deltaTimeSeconds),
-                                                   emitterStats: particleStats)
+                                                   emitterStats: particleStats,
+                                                   emitterStatsByEntity: particleStatsByEntity)
                     )
                 } else {
                     world.setDerivedResource(ParticleFrameStatsResource.empty)

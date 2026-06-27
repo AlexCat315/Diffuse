@@ -88,6 +88,12 @@ button:not(:disabled):hover {
   color: var(--error);
 }
 
+.panelStatus {
+  margin-left: 6px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
 .endpoint {
   display: flex;
   align-items: center;
@@ -167,14 +173,23 @@ button:not(:disabled):hover {
 .treeNode {
   display: flex;
   align-items: center;
+  gap: 6px;
   min-height: 24px;
   width: 100%;
+  min-width: 0;
   padding: 2px 6px;
   border: 0;
   border-radius: 4px;
   color: var(--text);
   background: transparent;
   text-align: left;
+}
+
+.nodeLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .treeNode:hover {
@@ -187,6 +202,7 @@ button:not(:disabled):hover {
 }
 
 .nodeMuted {
+  flex: none;
   color: var(--muted);
 }
 
@@ -196,6 +212,15 @@ button:not(:disabled):hover {
   min-height: 0;
   overflow: hidden;
   background: #111216;
+  touch-action: none;
+  user-select: none;
+}
+
+.mirror .empty {
+  max-width: 360px;
+  padding: 0 18px;
+  text-align: center;
+  line-height: 1.5;
 }
 
 .mirror img {
@@ -204,6 +229,7 @@ button:not(:disabled):hover {
   max-height: 100%;
   object-fit: contain;
   image-rendering: auto;
+  pointer-events: none;
 }
 
 .mirror.hasFrame .empty {
@@ -214,8 +240,18 @@ button:not(:disabled):hover {
   display: block;
 }
 
+.mirror:focus {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.detailsPane {
+  display: grid;
+  grid-template-rows: 38px minmax(0, 1.2fr) 38px minmax(0, 1fr) 38px minmax(0, 0.8fr);
+}
+
 .details {
-  height: calc((100vh - 48px - 180px - 76px) / 2);
+  min-height: 0;
   white-space: pre-wrap;
   font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
