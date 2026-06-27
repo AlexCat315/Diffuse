@@ -839,6 +839,51 @@ struct SceneSerializerTests {
         #expect(restoredEmitter.textureSheetFrameRandomness == 3)
     }
 
+    @Test("round-trip: particle module validation and repair survive serialization")
+    func particleModuleValidationAndRepairRoundTrip() throws {
+        var original = SceneRuntime()
+        let entity = original.createEntity()
+        _ = original.setComponent(
+            ParticleEmitter(emissionRate: 1,
+                            maxParticles: 0,
+                            lifetime: 0,
+                            simulationBackend: .gpuRequired,
+                            gpuSimulationWorkgroupSize: ParticleGPUSimulationPlan.maximumWorkgroupSize + 1,
+                            renderLODStartDistance: 20,
+                            renderLODEndDistance: 10,
+                            textureSheetColumns: 2,
+                            textureSheetRows: 2,
+                            textureSheetFrameCount: 8),
+            for: entity
+        )
+
+        let data = try SceneSerializer.serialize(original)
+        var restored = SceneRuntime()
+        try SceneSerializer.deserialize(data, into: &restored)
+
+        var restoredEmitter = try #require(restored.component(ParticleEmitter.self, for: restored.entities()[0]))
+        let restoredCodes = Set(restoredEmitter.moduleValidationIssues.map(\.code))
+        #expect(restoredCodes.contains("noParticleCapacity"))
+        #expect(restoredCodes.contains("invalidLifetime"))
+        #expect(restoredCodes.contains("frameCountExceedsCells"))
+        #expect(restoredCodes.contains("invalidLODRange"))
+        #expect(restoredCodes.contains("gpuWorkgroupClamped"))
+        #expect(restoredCodes.contains("gpuRequiredButUnsupported"))
+
+        var repairedStack = restoredEmitter.moduleStack
+        repairedStack.repairValidationIssues()
+        restoredEmitter.apply(repairedStack)
+
+        let repairedCodes = Set(restoredEmitter.moduleValidationIssues.map(\.code))
+        #expect(!repairedCodes.contains("noParticleCapacity"))
+        #expect(!repairedCodes.contains("invalidLifetime"))
+        #expect(!repairedCodes.contains("frameCountExceedsCells"))
+        #expect(!repairedCodes.contains("invalidLODRange"))
+        #expect(!repairedCodes.contains("gpuWorkgroupClamped"))
+        #expect(!repairedCodes.contains("gpuRequiredButUnsupported"))
+        #expect(ParticleGPUSimulationPlan(emitter: restoredEmitter).status == .supported)
+    }
+
     // MARK: - Constraint
 
     @Test("round-trip: constraint reconnects to remapped entities")
