@@ -55,6 +55,34 @@ struct EditorSceneAdapterTests {
         #expect(stats.maxParticleCount >= 100)
     }
 
+    @Test("Editor scene adapter exposes selected particle GPU simulation plan")
+    func editorSceneAdapterExposesSelectedParticleGPUPlan() throws {
+        let adapter = EditorSceneAdapter()
+        let entity = adapter.scene.createEntity()
+        var emitter = ParticleEmitter(emissionRate: 10,
+                                      maxParticles: 128,
+                                      lifetime: 1,
+                                      gravity: .zero)
+        emitter.distanceEmissionRate = 4
+        emitter.simulationBackend = .gpuRequired
+        emitter.gpuSimulationWorkgroupSize = 32
+        _ = adapter.scene.setComponent(emitter, for: entity)
+
+        let plan = try #require(adapter.currentParticleGPUSimulationPlan(for: entity.rawValue))
+
+        #expect(plan.status == .requiredButUnsupported)
+        #expect(plan.dispatchWorkgroups == 4)
+        #expect(plan.workgroupSize == 32)
+        #expect(plan.unsupportedReasons == [.distanceEmission])
+        #expect(adapter.currentParticleGPUSimulationPlan(for: nil) == nil)
+
+        let issues = adapter.currentParticleModuleValidationIssues(for: entity.rawValue)
+        #expect(issues.contains {
+            $0.moduleID == "gpuSimulation" && $0.code == "gpuRequiredButUnsupported"
+        })
+        #expect(adapter.currentParticleModuleValidationIssues(for: nil).isEmpty)
+    }
+
     @Test("Scene manifest restores preview hierarchy and runtime components")
     func sceneManifestRestoresPreviewHierarchyAndComponents() {
         let source = EditorSceneAdapter()
