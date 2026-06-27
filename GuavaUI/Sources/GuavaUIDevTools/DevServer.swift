@@ -43,6 +43,11 @@ public typealias SceneSnapshotProvider = @MainActor () -> TreeSnapshotPayload
 /// runtime decides what "selecting" means (e.g. drawing an overlay).
 public typealias NodeSelectionHandler = @MainActor (_ id: String) -> Void
 
+/// Schedules DevTools callbacks onto the host's UI thread. AppRuntime uses its
+/// own main-thread inbox because its SDL loop is synchronous and may not yield
+/// to Swift Concurrency `MainActor` tasks while running.
+public typealias HostMainExecutor = (@escaping @MainActor () -> Void) -> Void
+
 #if canImport(Network)
 
 /// Lightweight WebSocket server that exposes the GuavaUI DevTools
@@ -78,6 +83,10 @@ public final class DevServer: @unchecked Sendable {
     public var stateCheckpointHandler: (@MainActor () -> [String: String])?
     /// Forwarded state.restore request → host runtime.
     public var stateRestoreHandler: (@MainActor ([String: String]) -> Void)?
+
+    /// Optional host scheduler for callbacks that need UI-thread state.
+    /// Falls back to `Task { @MainActor ... }` for tests and non-SDL hosts.
+    public var hostMainExecutor: HostMainExecutor?
 
     #if canImport(Logging)
     private let log = Logger(label: "guava.devtools")
@@ -240,7 +249,7 @@ public final class DevServer: @unchecked Sendable {
             break
 
         case "tree.subscribe":
-            Task { @MainActor [weak self] in
+            runOnHostMain { [weak self] in
                 guard let self else { return }
                 let snap = self.snapshotProvider?() ?? TreeSnapshotPayload(root: nil)
                 let response = DevToolsEnvelope(
@@ -258,7 +267,7 @@ public final class DevServer: @unchecked Sendable {
         case "select.node":
             let nodeId = env.payload?.objectValue?["id"]?.stringValue
             if let nodeId {
-                Task { @MainActor [weak self] in
+                runOnHostMain { [weak self] in
                     self?.selectionHandler?(nodeId)
                 }
                 sendOK(for: env, on: conn)
@@ -284,21 +293,21 @@ public final class DevServer: @unchecked Sendable {
             let payload = decodePayload(MirrorStartPayload.self, from: env.payload)
                 ?? MirrorStartPayload(fps: nil, quality: nil)
             log.info("recv mirror.start fps=\(payload.fps ?? -1) quality=\(payload.quality ?? -1)")
-            Task { @MainActor [weak self] in
+            runOnHostMain { [weak self] in
                 self?.mirrorStartHandler?(payload)
             }
             sendOK(for: env, on: conn)
 
         case "mirror.stop":
             log.info("recv mirror.stop handlerWired=\(mirrorStopHandler != nil)")
-            Task { @MainActor [weak self] in
+            runOnHostMain { [weak self] in
                 self?.mirrorStopHandler?()
             }
             sendOK(for: env, on: conn)
 
         case "mirror.input":
             if let input = decodePayload(MirrorInputPayload.self, from: env.payload) {
-                Task { @MainActor [weak self] in
+                runOnHostMain { [weak self] in
                     self?.mirrorInputHandler?(input)
                 }
             } else {
@@ -308,7 +317,7 @@ public final class DevServer: @unchecked Sendable {
             }
 
         case "state.checkpoint":
-            Task { @MainActor [weak self] in
+            runOnHostMain { [weak self] in
                 guard let self else { return }
                 let snapshot = self.stateCheckpointHandler?() ?? [:]
                 let response = DevToolsEnvelope(
@@ -321,7 +330,7 @@ public final class DevServer: @unchecked Sendable {
 
         case "state.restore":
             let snapshot = (env.payload?.objectValue ?? [:]).compactMapValues { $0.stringValue }
-            Task { @MainActor [weak self] in
+            runOnHostMain { [weak self] in
                 self?.stateRestoreHandler?(snapshot)
             }
             sendOK(for: env, on: conn)
@@ -396,6 +405,16 @@ public final class DevServer: @unchecked Sendable {
 
     // MARK: - Misc
 
+    private func runOnHostMain(_ operation: @escaping @MainActor () -> Void) {
+        if let hostMainExecutor {
+            hostMainExecutor(operation)
+        } else {
+            Task { @MainActor in
+                operation()
+            }
+        }
+    }
+
     private func log(_ message: String) {
         #if canImport(Logging)
         log.info("\(message)")
@@ -455,6 +474,7 @@ public final class DevServer: @unchecked Sendable {
     public var mirrorInputHandler: (@MainActor (MirrorInputPayload) -> Void)?
     public var stateCheckpointHandler: (@MainActor () -> [String: String])?
     public var stateRestoreHandler: (@MainActor ([String: String]) -> Void)?
+    public var hostMainExecutor: HostMainExecutor?
 
     public init(config: DevToolsConfig) {}
     public func start() throws {}

@@ -150,21 +150,34 @@ struct ParticleTests {
         #expect(applied.gpuSimulationWorkgroupSize == 1)
     }
 
-    @Test("module stack preserves authored enabled states while rebasing settings")
-    func moduleStackPreservesEnabledStateWhileRebasingSettings() throws {
+    @Test("module stack preserves disabled authored settings while rebasing enabled modules")
+    func moduleStackPreservesDisabledAuthoredSettingsWhileRebasingEnabledModules() throws {
         var emitter = ParticleEmitter(gravity: SIMD3<Float>(0, -9.81, 0))
         var stack = emitter.moduleStack
         let forcesIndex = try #require(stack.modules.firstIndex { $0.id == "forces" })
         stack.modules[forcesIndex].isEnabled = false
+        if case var .forces(settings) = stack.modules[forcesIndex].settings {
+            settings.gravity = SIMD3<Float>(4, 5, 6)
+            stack.modules[forcesIndex].settings = .forces(settings)
+        } else {
+            Issue.record("expected forces module settings")
+        }
 
         emitter.apply(stack)
+        emitter.emissionRate = 24
         emitter.gravity = SIMD3<Float>(1, 2, 3)
 
         let rebased = emitter.moduleStack
+        let emission = try #require(rebased.modules.first { $0.id == "emission" })
+        if case let .emission(settings) = emission.settings {
+            #expect(settings.emissionRate == 24)
+        } else {
+            Issue.record("expected emission module settings")
+        }
         let forces = try #require(rebased.modules.first { $0.id == "forces" })
         #expect(!forces.isEnabled)
         if case let .forces(settings) = forces.settings {
-            #expect(settings.gravity == SIMD3<Float>(1, 2, 3))
+            #expect(settings.gravity == SIMD3<Float>(4, 5, 6))
         } else {
             Issue.record("expected forces module settings")
         }
@@ -649,6 +662,10 @@ struct ParticleTests {
         #expect(emitter?.lastFrameEvents == [event, collision])
         #expect(scene.particleFrameStats.subEmitterSpawnedCount == 1)
         #expect(scene.particleFrameStats.capacityLimitedSpawnCount == 1)
+        #expect(report.emitterStats(for: entity.rawValue)?.subEmitterSpawnedCount == 1)
+        #expect(report.emitterStats(for: entity.rawValue)?.capacityLimitedSpawnCount == 1)
+        #expect(scene.particleFrameStats.emitterStats(for: entity.rawValue)?.subEmitterSpawnedCount == 1)
+        #expect(scene.particleFrameStats.emitterStats(for: missing.rawValue) == nil)
     }
 
     @Test("gravity and velocity integrate with semi-implicit Euler")
@@ -1437,6 +1454,10 @@ struct ParticleTests {
         #expect(stats.spawnedParticleCount == 14)
         #expect(stats.liveParticleCount == 14)
         #expect(stats.maxParticleCount == 200)
+        #expect(stats.emitterStats(for: a.rawValue)?.spawnedParticleCount == 10)
+        #expect(stats.emitterStats(for: a.rawValue)?.liveParticleCount == 10)
+        #expect(stats.emitterStats(for: b.rawValue)?.spawnedParticleCount == 4)
+        #expect(stats.emitterStats(for: b.rawValue)?.liveParticleCount == 4)
     }
 
     @Test("particle scalability policy throttles simulation from previous frame pressure")

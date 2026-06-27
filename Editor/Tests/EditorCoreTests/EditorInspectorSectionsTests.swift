@@ -183,8 +183,8 @@ struct EditorInspectorSectionsTests {
         ])
     }
 
-    @Test("particle module stack binding writes module enabled state")
-    func particleModuleStackBindingWritesEnabledState() throws {
+    @Test("particle module stack binding preserves disabled module authoring state")
+    func particleModuleStackBindingPreservesDisabledModuleAuthoringState() throws {
         let adapter = EditorSceneAdapter()
         let id = makeEntity(in: adapter)
         _ = adapter.addComponent(.particleEmitter, to: id)
@@ -199,11 +199,22 @@ struct EditorInspectorSectionsTests {
         var stack = binding.wrappedValue
         let forcesIndex = try #require(stack.modules.firstIndex { $0.id == "forces" })
         stack.modules[forcesIndex].isEnabled = false
+        if case var .forces(settings) = stack.modules[forcesIndex].settings {
+            settings.gravity.y = -7
+            stack.modules[forcesIndex].settings = .forces(settings)
+        } else {
+            Issue.record("expected forces module settings")
+        }
         binding.wrappedValue = stack
 
         let storedStack = try #require(adapter.scene.component(ParticleEmitter.self, for: entity)?.moduleStack)
         let forces = try #require(storedStack.modules.first { $0.id == "forces" })
         #expect(!forces.isEnabled)
+        if case let .forces(settings) = forces.settings {
+            #expect(settings.gravity.y == -7)
+        } else {
+            Issue.record("expected forces module settings")
+        }
 
         if case let .vector3(_, gravityY, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-gravity") {
@@ -212,11 +223,12 @@ struct EditorInspectorSectionsTests {
             Issue.record("missing gravity field")
         }
 
+        #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.gravity.y == -3)
         let rebasedStack = try #require(adapter.scene.component(ParticleEmitter.self, for: entity)?.moduleStack)
         let rebasedForces = try #require(rebasedStack.modules.first { $0.id == "forces" })
         #expect(!rebasedForces.isEnabled)
         if case let .forces(settings) = rebasedForces.settings {
-            #expect(settings.gravity.y == -3)
+            #expect(settings.gravity.y == -7)
         } else {
             Issue.record("expected forces module settings")
         }
@@ -278,9 +290,23 @@ struct EditorInspectorSectionsTests {
             Issue.record("expected emission module settings")
         }
 
+        let shapeIndex = try #require(stack.modules.firstIndex { $0.id == "shape" })
+        stack.modules[shapeIndex].isExpanded = true
+        if case var .shape(module) = stack.modules[shapeIndex].settings {
+            module.emissionShape = .cone
+            module.spawnRadius = 2.25
+            module.coneRadius = 3.5
+            module.coneHeight = 7
+            stack.modules[shapeIndex].settings = .shape(module)
+        } else {
+            Issue.record("expected shape module settings")
+        }
+
         let forcesIndex = try #require(stack.modules.firstIndex { $0.id == "forces" })
         stack.modules[forcesIndex].isExpanded = true
         if case var .forces(module) = stack.modules[forcesIndex].settings {
+            module.forceMode = .radial
+            module.vectorFieldMode = .curl
             module.gravity.y = -4
             module.noiseStrength = 2.5
             module.vectorFieldStrength = 8.5
@@ -305,12 +331,50 @@ struct EditorInspectorSectionsTests {
         let collisionIndex = try #require(stack.modules.firstIndex { $0.id == "collision" })
         stack.modules[collisionIndex].isExpanded = true
         if case var .collision(module) = stack.modules[collisionIndex].settings {
+            module.collisionMode = .worldPlane
             module.collisionPlaneY = -2
             module.collisionRestitution = 0.8
             module.collisionDamping = 0.35
             stack.modules[collisionIndex].settings = .collision(module)
         } else {
             Issue.record("expected collision module settings")
+        }
+
+        let appearanceIndex = try #require(stack.modules.firstIndex { $0.id == "appearance" })
+        stack.modules[appearanceIndex].isExpanded = true
+        if case var .appearance(module) = stack.modules[appearanceIndex].settings {
+            module.blendMode = .additive
+            module.lifetime = 2.5
+            stack.modules[appearanceIndex].settings = .appearance(module)
+        } else {
+            Issue.record("expected appearance module settings")
+        }
+
+        let textureSheetIndex = try #require(stack.modules.firstIndex { $0.id == "textureSheet" })
+        stack.modules[textureSheetIndex].isExpanded = true
+        if case var .textureSheet(module) = stack.modules[textureSheetIndex].settings {
+            module.playbackMode = .loop
+            module.frameRate = 24
+            module.columns = 4
+            module.rows = 2
+            module.frameCount = 8
+            stack.modules[textureSheetIndex].settings = .textureSheet(module)
+        } else {
+            Issue.record("expected texture sheet module settings")
+        }
+
+        let rendererIndex = try #require(stack.modules.firstIndex { $0.id == "renderer" })
+        stack.modules[rendererIndex].isExpanded = true
+        if case var .renderer(module) = stack.modules[rendererIndex].settings {
+            module.renderMode = .ribbon
+            module.sortMode = .oldestFirst
+            module.renderAlignment = .velocity
+            module.renderBoundsMode = .manual
+            module.maxRenderDistance = 123
+            module.renderDistanceFadeRange = 9
+            stack.modules[rendererIndex].settings = .renderer(module)
+        } else {
+            Issue.record("expected renderer module settings")
         }
 
         let trailsIndex = try #require(stack.modules.firstIndex { $0.id == "trails" })
@@ -330,6 +394,7 @@ struct EditorInspectorSectionsTests {
         let subEmittersIndex = try #require(stack.modules.firstIndex { $0.id == "subEmitters" })
         stack.modules[subEmittersIndex].isExpanded = true
         if case var .subEmitters(module) = stack.modules[subEmittersIndex].settings {
+            module.legacyTrigger = .collision
             module.legacyBurstCount = 3
             module.legacyProbability = 0.6
             module.legacyMaxDepth = 2
@@ -340,11 +405,28 @@ struct EditorInspectorSectionsTests {
             Issue.record("expected sub emitters module settings")
         }
 
+        let gpuIndex = try #require(stack.modules.firstIndex { $0.id == "gpuSimulation" })
+        stack.modules[gpuIndex].isExpanded = true
+        if case var .gpuSimulation(module) = stack.modules[gpuIndex].settings {
+            module.simulationSpace = .world
+            module.simulationBackend = .gpuIfSupported
+            module.workgroupSize = 96
+            stack.modules[gpuIndex].settings = .gpuSimulation(module)
+        } else {
+            Issue.record("expected gpu simulation module settings")
+        }
+
         binding.wrappedValue = stack
 
         let emitter = try #require(adapter.scene.component(ParticleEmitter.self, for: entity))
         #expect(emitter.emissionRate == 77)
         #expect(emitter.maxParticles == 512)
+        #expect(emitter.emissionShape == .cone)
+        #expect(emitter.spawnRadius == 2.25)
+        #expect(emitter.coneRadius == 3.5)
+        #expect(emitter.coneHeight == 7)
+        #expect(emitter.forceMode == .radial)
+        #expect(emitter.vectorFieldMode == .curl)
         #expect(emitter.gravity.y == -4)
         #expect(emitter.noiseStrength == 2.5)
         #expect(emitter.vectorFieldStrength == 8.5)
@@ -353,28 +435,51 @@ struct EditorInspectorSectionsTests {
         #expect(emitter.startVelocity == SIMD3<Float>(1, 2, 3))
         #expect(emitter.velocityRandomness == SIMD3<Float>(0.25, 0.5, 0.75))
         #expect(emitter.velocityInheritance == 0.4)
+        #expect(emitter.collisionMode == .worldPlane)
         #expect(emitter.collisionPlaneY == -2)
         #expect(emitter.collisionRestitution == 0.8)
         #expect(emitter.collisionDamping == 0.35)
+        #expect(emitter.blendMode == .additive)
+        #expect(emitter.lifetime == 2.5)
+        #expect(emitter.textureSheetPlaybackMode == .loop)
+        #expect(emitter.textureSheetFrameRate == 24)
+        #expect(emitter.textureSheetColumns == 4)
+        #expect(emitter.textureSheetRows == 2)
+        #expect(emitter.textureSheetFrameCount == 8)
+        #expect(emitter.renderMode == .ribbon)
+        #expect(emitter.sortMode == .oldestFirst)
+        #expect(emitter.renderAlignment == .velocity)
+        #expect(emitter.renderBoundsMode == .manual)
+        #expect(emitter.maxRenderDistance == 123)
+        #expect(emitter.renderDistanceFadeRange == 9)
         #expect(emitter.trailLength == 1.25)
         #expect(emitter.trailSegments == 7)
         #expect(emitter.trailEndAlphaScale == 0.3)
         #expect(emitter.ribbonWidthScale == 1.6)
         #expect(emitter.ribbonTailWidthScale == 0.2)
         #expect(emitter.ribbonTextureTiling == 4)
+        #expect(emitter.subEmitterTrigger == .collision)
         #expect(emitter.subEmitterBurstCount == 3)
         #expect(emitter.subEmitterProbability == 0.6)
         #expect(emitter.subEmitterMaxDepth == 2)
         #expect(emitter.subEmitterInheritVelocity == 0.25)
         #expect(emitter.subEmitterLifetime == 1.75)
+        #expect(emitter.simulationSpace == .world)
+        #expect(emitter.simulationBackend == .gpuIfSupported)
+        #expect(emitter.gpuSimulationWorkgroupSize == 96)
 
         let storedStack = emitter.moduleStack
         #expect(storedStack.modules.first { $0.id == "emission" }?.isExpanded == true)
+        #expect(storedStack.modules.first { $0.id == "shape" }?.isExpanded == true)
         #expect(storedStack.modules.first { $0.id == "forces" }?.isExpanded == true)
         #expect(storedStack.modules.first { $0.id == "velocity" }?.isExpanded == true)
         #expect(storedStack.modules.first { $0.id == "collision" }?.isExpanded == true)
+        #expect(storedStack.modules.first { $0.id == "appearance" }?.isExpanded == true)
+        #expect(storedStack.modules.first { $0.id == "textureSheet" }?.isExpanded == true)
+        #expect(storedStack.modules.first { $0.id == "renderer" }?.isExpanded == true)
         #expect(storedStack.modules.first { $0.id == "trails" }?.isExpanded == true)
         #expect(storedStack.modules.first { $0.id == "subEmitters" }?.isExpanded == true)
+        #expect(storedStack.modules.first { $0.id == "gpuSimulation" }?.isExpanded == true)
     }
 
     @Test("particle scalability bindings write scene resources")

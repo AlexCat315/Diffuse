@@ -112,7 +112,84 @@ final class DevServerInputAndStateTests: XCTestCase {
         XCTAssertEqual(restored.snapshot, ["foo": "bar", "scroll": "42"])
     }
 
+    func test_keyboard_input_maps_web_codes_to_scancodes() throws {
+        let keyDown = InputBridge.event(from: MirrorInputPayload(
+            kind: "keyDown",
+            x: nil, y: nil,
+            deltaX: nil, deltaY: nil,
+            button: nil,
+            key: "KeyA",
+            keyCode: 65,
+            text: nil,
+            modifiers: 8,
+            clickCount: nil,
+            isRepeat: true
+        ))
+        guard case let .keyDown(down)? = keyDown else {
+            return XCTFail("expected keyDown")
+        }
+        XCTAssertEqual(down.scancode, 4)
+        XCTAssertEqual(down.keycode, 65)
+        XCTAssertTrue(down.modifiers.hasGui)
+        XCTAssertTrue(down.isRepeat)
+
+        let keyUp = InputBridge.event(from: MirrorInputPayload(
+            kind: "keyUp",
+            x: nil, y: nil,
+            deltaX: nil, deltaY: nil,
+            button: nil,
+            key: "ArrowLeft",
+            keyCode: 37,
+            text: nil,
+            modifiers: 0,
+            clickCount: nil,
+            isRepeat: false
+        ))
+        guard case let .keyUp(up)? = keyUp else {
+            return XCTFail("expected keyUp")
+        }
+        XCTAssertEqual(up.scancode, 80)
+        XCTAssertEqual(up.keycode, 37)
+    }
+
+    func test_keyboard_input_maps_common_editing_codes() throws {
+        XCTAssertEqual(Self.scancode(for: "Slash"), 56)
+        XCTAssertEqual(Self.scancode(for: "F5"), 62)
+        XCTAssertEqual(Self.scancode(for: "PageDown"), 78)
+        XCTAssertEqual(Self.scancode(for: "Numpad0"), 98)
+        XCTAssertEqual(Self.scancode(for: "NumpadAdd"), 87)
+        XCTAssertNil(InputBridge.event(from: MirrorInputPayload(
+            kind: "keyDown",
+            x: nil, y: nil,
+            deltaX: nil, deltaY: nil,
+            button: nil,
+            key: "UnknownKey",
+            keyCode: 0,
+            text: nil,
+            modifiers: nil,
+            clickCount: nil,
+            isRepeat: nil
+        )))
+    }
+
     // MARK: - Helpers
+
+    private static func scancode(for webCode: String) -> UInt32? {
+        let event = InputBridge.event(from: MirrorInputPayload(
+            kind: "keyDown",
+            x: nil, y: nil,
+            deltaX: nil, deltaY: nil,
+            button: nil,
+            key: webCode,
+            keyCode: 0,
+            text: nil,
+            modifiers: nil,
+            clickCount: nil,
+            isRepeat: nil
+        ))
+        guard case let .keyDown(key)? = event else { return nil }
+        return key.scancode
+    }
 
     /// Open a websocket, wait for `hello`, run the body, then close.
     private static func connect(port: UInt16,

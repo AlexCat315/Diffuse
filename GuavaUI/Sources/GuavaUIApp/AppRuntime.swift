@@ -165,6 +165,13 @@ public final class AppRuntime {
             // so the first records also reach the client.
             LogTapInstaller.bootstrapIfNeeded(sink: dev.logSink)
             dev.attachFrameTap(backend: backend, renderer: renderer)
+            dev.server.hostMainExecutor = { [weak self] operation in
+                self?.host.enqueueMainThreadWork {
+                    MainActor.assumeIsolated {
+                        operation()
+                    }
+                }
+            }
             dev.inputDelivery = { [weak self] event in
                 self?.host.mainSession?.injectEvent(event)
             }
