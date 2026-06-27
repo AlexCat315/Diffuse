@@ -37,6 +37,20 @@ extension EditorSceneAdapter {
         scene.particleScalabilityState
     }
 
+    public func currentParticleGPUSimulationPlan(for rawID: UInt64?) -> ParticleGPUSimulationPlan? {
+        guard let rawID, let entity = makeEntityID(rawID) else { return nil }
+        return scene.component(ParticleEmitter.self, for: entity)?.gpuSimulationPlan
+    }
+
+    public func currentParticleModuleValidationIssues(for rawID: UInt64?) -> [ParticleModuleIssue] {
+        guard let rawID, let entity = makeEntityID(rawID),
+              let emitter = scene.component(ParticleEmitter.self, for: entity)
+        else {
+            return []
+        }
+        return emitter.moduleValidationIssues
+    }
+
     public func entityWorldPosition(_ rawID: UInt64) -> SIMD3<Float>? {
         guard let entity = makeEntityID(rawID) else { return nil }
         return scene.worldTransform(for: entity)?.translation
