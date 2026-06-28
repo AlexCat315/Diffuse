@@ -63,12 +63,18 @@ private struct PerformanceDiagnosticsView: View {
 
     var body: some View {
         ScrollView(.vertical) {
+            if stats.isFramePacingDominated {
+                FramePacingNotice(stats: stats)
+                    .padding(horizontal: 12, vertical: 10)
+            }
+
             Row(alignment: .top, spacing: 12) {
                 StatGroup(title: L("Frame")) {
-                    StatRow(label: "Tick FPS", value: formatFPS(stats.fps))
+                    StatRow(label: "Observed FPS", value: formatFPS(stats.fps))
                     StatRow(label: "Tick Gap", value: formatMs(stats.frameMs))
                     StatRow(label: "Work", value: formatMs(stats.workMs))
                     StatRow(label: "Work FPS", value: formatFPS(stats.workFPS))
+                    StatRow(label: "Pacing Gap", value: formatMs(stats.pacingGapMs))
                     StatRow(label: "Sample", value: "#\(timingRevision)")
                 }
                 .flex(1, shrink: 1)
@@ -99,7 +105,7 @@ private struct PerformanceDiagnosticsView: View {
                     StatRow(label: "Work @60 FPS", value: budgetStatus(frameMs: stats.workMs, targetMs: 16.7))
                     StatRow(label: "Work @30 FPS", value: budgetStatus(frameMs: stats.workMs, targetMs: 33.3))
                     StatRow(label: "Work Headroom @60", value: formatSignedMs(16.7 - stats.workMs))
-                    StatRow(label: "Tick Gap", value: formatMs(stats.frameMs))
+                    StatRow(label: "Pacing Gap", value: formatMs(stats.pacingGapMs))
                 }
                 .flex(1, shrink: 1)
 
@@ -108,7 +114,7 @@ private struct PerformanceDiagnosticsView: View {
                     StatRow(label: "CPU Total", value: formatMs(cpuMs(stats)))
                     StatRow(label: "GPU Present", value: formatMs(stats.gpuPresentSeconds * 1000))
                     StatRow(label: "Work", value: formatMs(stats.workMs))
-                    StatRow(label: "Tick Gap", value: formatMs(stats.frameMs))
+                    StatRow(label: "Pacing Gap", value: formatMs(stats.pacingGapMs))
                 }
                 .flex(1, shrink: 1)
 
@@ -496,20 +502,64 @@ private struct StatGroup<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        Column(alignment: .leading, spacing: 0) {
-            Text(title)
-                .font(.bodyStrong)
-                .foregroundColor(.onSurface)
-                .padding(horizontal: 8, vertical: 5)
-                .frame(maxWidth: .infinity)
-                .background(.surfaceVariant)
+        Column(alignment: .leading, spacing: 6) {
+            Row(alignment: .center, spacing: 6) {
+                Box()
+                    .frame(width: 3, height: 16)
+                    .background(.accent)
+                    .cornerRadius(2)
+                Text(title)
+                    .font(.bodyStrong)
+                    .foregroundColor(.onSurface)
+                    .lineLimit(1)
+                    .flex(1, shrink: 1)
+            }
+            .padding(horizontal: 10, vertical: 7)
 
             Column(alignment: .leading, spacing: 0) {
                 content
             }
-            .padding(vertical: 4)
+            .padding(horizontal: 4, vertical: 6)
         }
-        .border(Color(r: 1, g: 1, b: 1, a: 0.08), width: 1)
+        .background(.surfaceSunken)
+        .cornerRadius(6)
+        .border(.border, width: 1)
+    }
+}
+
+private struct FramePacingNotice: View {
+    let stats: EditorFrameStats
+
+    var body: some View {
+        Row(alignment: .center, spacing: 10) {
+            Box()
+                .frame(width: 8, height: 8)
+                .background(.warning)
+                .cornerRadius(4)
+
+            Column(alignment: .leading, spacing: 2) {
+                Text("Frame pacing gap")
+                    .font(.bodyStrong)
+                    .foregroundColor(.onSurface)
+                Text("Observed \(formatMs(stats.frameMs)) tick gap; actual work is \(formatMs(stats.workMs)), with \(formatMs(stats.pacingGapMs)) waiting/idle.")
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                    .lineLimit(2)
+            }
+            .flex(1, shrink: 1)
+
+            Text(bottleneck(stats))
+                .font(.bodyStrong)
+                .foregroundColor(.warning)
+                .padding(horizontal: 8, vertical: 4)
+                .background(.surface)
+                .cornerRadius(4)
+                .border(.warning.opacity(0.25), width: 1)
+        }
+        .padding(horizontal: 12, vertical: 10)
+        .background(.surfaceSunken)
+        .cornerRadius(6)
+        .border(.warning.opacity(0.35), width: 1)
     }
 }
 
