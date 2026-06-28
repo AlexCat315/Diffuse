@@ -42,12 +42,32 @@ private struct InspectorParticleRuntimeDiagnostics {
         selectedFrameStats?.liveParticleCount ?? frameStats.liveParticleCount
     }
 
+    var liveBudgetLimit: Int {
+        selectedFrameStats?.liveParticleBudgetLimit ?? frameStats.liveParticleBudgetLimit
+    }
+
+    var liveBudgetText: String {
+        liveBudgetLimit > 0 ? "\(liveParticleCount)/\(liveBudgetLimit)" : "\(liveParticleCount)"
+    }
+
+    var liveBudgetPressure: Float {
+        selectedFrameStats?.liveParticleBudgetUtilization ?? frameStats.liveParticleBudgetUtilization
+    }
+
+    var runtimePressureLevel: ParticleRuntimePressureLevel {
+        selectedFrameStats?.runtimePressureLevel ?? frameStats.runtimePressureLevel
+    }
+
+    var simulatedDeltaTime: Float {
+        selectedFrameStats?.simulatedDeltaTime ?? frameStats.simulatedDeltaTime
+    }
+
     var spawnedParticleCount: Int {
         selectedFrameStats?.spawnedParticleCount ?? frameStats.spawnedParticleCount
     }
 
     var capacityLimitedSpawnCount: Int {
-        selectedFrameStats?.capacityLimitedSpawnCount ?? frameStats.capacityLimitedSpawnCount
+        selectedFrameStats?.droppedSpawnCount ?? frameStats.droppedSpawnCount
     }
 
     var collisionCount: Int {
@@ -66,6 +86,12 @@ private struct InspectorParticleRuntimeDiagnostics {
 
     var eventCapacityLimitedSpawnCount: Int {
         selectedEventStats?.capacityLimitedSpawnCount ?? eventReport.capacityLimitedSpawnCount
+    }
+
+    var runtimeDropCount: Int {
+        capacityLimitedSpawnCount
+            + eventCapacityLimitedSpawnCount
+            + eventReport.droppedReadbackEventCount
     }
 
     var hasGPUSimulationWork: Bool {
@@ -280,11 +306,43 @@ struct InspectorPanel: View {
                 case .error: return .error
                 }
             }
+
+            var isAlert: Bool {
+                self == .warning || self == .error
+            }
+
+            var isActive: Bool {
+                self == .info || self == .success
+            }
         }
 
         private struct ModuleRuntimeStatus {
             let text: String
             let tone: ModuleRuntimeTone
+        }
+
+        private struct ModuleStatusCard {
+            let label: String
+            let value: String
+            let detail: String
+            let tone: ModuleRuntimeTone
+        }
+
+        private struct ModuleHealthSnapshot {
+            let authoring: ModuleStatusCard
+            let runtime: ModuleStatusCard
+            let backend: ModuleStatusCard
+            let pressure: ModuleStatusCard
+            let issues: ModuleStatusCard
+
+            var primaryStatus: ModuleStatusCard {
+                if issues.tone.isAlert { return issues }
+                if pressure.tone.isAlert { return pressure }
+                if runtime.tone.isActive { return runtime }
+                if backend.tone.isActive { return backend }
+                if pressure.tone.isActive { return pressure }
+                return runtime
+            }
         }
 
         private var stack: ParticleModuleStack {
@@ -311,10 +369,24 @@ struct InspectorPanel: View {
             stack.modules.indices.filter { isAdvancedModule(stack.modules[$0]) }
         }
 
+        private var modifiedModuleCount: Int {
+            stack.modifiedModuleIDs.count
+        }
+
         private var hasRepairableValidationIssues: Bool {
             var repaired = stack
             repaired.repairValidationIssues()
             return repaired != stack
+        }
+
+        private func hasRepairableValidationIssues(for module: ParticleEmitterModule) -> Bool {
+            var repaired = stack
+            repaired.repairValidationIssues(for: module.id)
+            return repaired != stack
+        }
+
+        private func hasResettableSettings(for module: ParticleEmitterModule) -> Bool {
+            stack.moduleSettingsDifferFromDefault(module.id)
         }
 
         var body: some View {
@@ -361,6 +433,11 @@ struct InspectorPanel: View {
                                     background: validationSummaryStatus.tone.background)
                         summaryChip("\(L("Core")) \(coreModuleCount)")
                         summaryChip("\(L("Advanced")) \(advancedModuleCount)")
+                        if modifiedModuleCount > 0 {
+                            summaryChip("\(L("Modified")) \(modifiedModuleCount)",
+                                        foreground: .info,
+                                        background: .info.opacity(0.12))
+                        }
                         summaryChip(diagnostics.statsScopeLabel)
                         summaryChip(gpuSummaryText,
                                     foreground: gpuSummaryForeground,
@@ -494,7 +571,8 @@ struct InspectorPanel: View {
         private func moduleRow(_ index: Int, groupIndices: [Int]) -> AnyView {
             let module = stack.modules[index]
             let localIndex = groupIndices.firstIndex(of: index) ?? 0
-            let status = moduleStatus(module)
+            let health = moduleHealthSnapshot(module)
+            let isModified = stack.moduleSettingsDifferFromDefault(module.id)
             return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 6) {
                 Row(alignment: .center, spacing: 8) {
                     Spacer(minLength: 0)
@@ -514,6 +592,14 @@ struct InspectorPanel: View {
                     Box(direction: .column, alignItems: .stretch, spacing: 2) {
                         Row(alignment: .center, spacing: 6) {
                             badge(module.stage.rawValue.uppercased())
+                            badge(module.isEnabled ? L("ON") : L("OFF"),
+                                  foreground: module.isEnabled ? .success : .onSurfaceMuted,
+                                  background: module.isEnabled ? .success.opacity(0.12) : .surfaceSunken)
+                            if isModified {
+                                badge(L("Modified"),
+                                      foreground: .info,
+                                      background: .info.opacity(0.12))
+                            }
 
                             Text(module.displayName)
                                 .lineLimit(1)
@@ -521,17 +607,19 @@ struct InspectorPanel: View {
                                 .foregroundColor(module.isEnabled ? .onSurface : .onSurfaceMuted)
                                 .flex()
 
-                            if let status {
-                                badge(status.text,
-                                      foreground: status.tone.foreground,
-                                      background: status.tone.background)
-                            }
+                            badge(health.primaryStatus.value,
+                                  foreground: health.primaryStatus.tone.foreground,
+                                  background: health.primaryStatus.tone.background)
                         }
 
-                        Text(moduleDetail(module.settings))
-                            .lineLimit(1)
-                            .font(.caption)
-                            .foregroundColor(module.isEnabled ? .onSurfaceVariant : .onSurfaceMuted)
+                        Row(alignment: .center, spacing: 6) {
+                            Text(moduleDetail(module.settings))
+                                .lineLimit(1)
+                                .font(.caption)
+                                .foregroundColor(module.isEnabled ? .onSurfaceVariant : .onSurfaceMuted)
+                                .flex()
+                            moduleInlineHealthStrip(health)
+                        }
                     }
                     .flex()
                     .opacity(module.isEnabled ? 1 : 0.62)
@@ -604,6 +692,107 @@ struct InspectorPanel: View {
                 .padding(horizontal: 5, vertical: 1)
                 .background(background)
                 .cornerRadius(3)
+        }
+
+        private func moduleInlineHealthStrip(_ health: ModuleHealthSnapshot) -> AnyView {
+            AnyView(Row(alignment: .center, spacing: 4) {
+                miniStatusPill("BE", compactBackendValue(health.backend), tone: health.backend.tone)
+                miniStatusPill("PR", compactPressureValue(health.pressure), tone: health.pressure.tone)
+                miniStatusPill("IS", compactIssueValue(health.issues), tone: health.issues.tone)
+                pressureMeter(health.pressure)
+            })
+        }
+
+        private func miniStatusPill(_ prefix: String,
+                                    _ value: String,
+                                    tone: ModuleRuntimeTone) -> AnyView {
+            AnyView(Row(alignment: .center, spacing: 3) {
+                Text(prefix)
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                Text(value)
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(tone.foreground)
+            }
+            .padding(horizontal: 4, vertical: 1)
+            .background(tone.background)
+            .cornerRadius(3))
+        }
+
+        private func compactBackendValue(_ card: ModuleStatusCard) -> String {
+            switch card.tone {
+            case .error:
+                return L("ERR")
+            case .warning:
+                return card.value.contains("GPU") ? L("GPU!") : L("CPU!")
+            case .success:
+                return card.value.contains("Render") ? L("DRAW") : L("GPU")
+            case .info:
+                return L("RDY")
+            case .muted:
+                return card.value.contains("CPU") ? L("CPU") : L("--")
+            }
+        }
+
+        private func compactPressureValue(_ card: ModuleStatusCard) -> String {
+            switch card.tone {
+            case .error:
+                return L("CRIT")
+            case .warning:
+                return L("NEAR")
+            case .success:
+                return L("OK")
+            case .info:
+                return L("SCALE")
+            case .muted:
+                return L("IDLE")
+            }
+        }
+
+        private func compactIssueValue(_ card: ModuleStatusCard) -> String {
+            switch card.tone {
+            case .error:
+                return L("ERR")
+            case .warning:
+                return L("WARN")
+            case .success:
+                return L("OK")
+            case .info:
+                return L("INFO")
+            case .muted:
+                return L("--")
+            }
+        }
+
+        private func pressureMeter(_ card: ModuleStatusCard) -> AnyView {
+            let fillWidth = 34 * pressureMeterFraction(card.tone)
+            let restWidth = 34 - fillWidth
+            return AnyView(Row(alignment: .center, spacing: 0) {
+                Box { EmptyView() }
+                    .frame(width: fillWidth, height: 3)
+                    .background(card.tone.foreground)
+                Box { EmptyView() }
+                    .frame(width: restWidth, height: 3)
+                    .background(.surfaceVariant)
+            }
+            .cornerRadius(2))
+        }
+
+        private func pressureMeterFraction(_ tone: ModuleRuntimeTone) -> Float {
+            switch tone {
+            case .muted:
+                return 0.08
+            case .info:
+                return 0.38
+            case .success:
+                return 0.54
+            case .warning:
+                return 0.78
+            case .error:
+                return 1
+            }
         }
 
         private func moduleStatus(_ module: ParticleEmitterModule) -> ModuleRuntimeStatus? {
@@ -730,25 +919,27 @@ struct InspectorPanel: View {
         }
 
         private func moduleBackground(_ module: ParticleEmitterModule) -> SemanticColorRef {
+            let health = moduleHealthSnapshot(module)
             if !module.isEnabled { return .surfaceSunken }
-            if moduleStatus(module)?.tone == .error {
+            if health.primaryStatus.tone == .error {
                 return .error.opacity(0.08)
             }
-            if moduleStatus(module)?.tone == .warning {
+            if health.primaryStatus.tone == .warning {
                 return .warning.opacity(0.08)
             }
             return module.isExpanded ? .surfaceRaised : .surface
         }
 
         private func moduleBorder(_ module: ParticleEmitterModule) -> SemanticColorRef {
+            let health = moduleHealthSnapshot(module)
             if !module.isEnabled { return .divider }
-            if moduleStatus(module)?.tone == .error {
+            if health.primaryStatus.tone == .error {
                 return .error
             }
-            if moduleStatus(module)?.tone == .warning {
+            if health.primaryStatus.tone == .warning {
                 return .warning
             }
-            if moduleStatus(module)?.tone == .success {
+            if health.primaryStatus.tone == .success {
                 return module.isExpanded ? .success : .divider
             }
             return module.isExpanded ? .borderStrong : .divider
@@ -777,10 +968,13 @@ struct InspectorPanel: View {
 
         private func expandedModuleEditor(index: Int, module: ParticleEmitterModule) -> AnyView {
             let issues = diagnostics.validationIssues(for: module.id)
+            let health = moduleHealthSnapshot(module, issues: issues)
             return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 7) {
-                expandedModuleHeader(index: index, module: module)
+                expandedModuleHeader(index: index, module: module, health: health)
+                moduleStatusDeck(health)
+                runtimeSnapshotPanel(module)
 
-                moduleEditor(index: index, module: module)
+                moduleParameterSurface(index: index, module: module)
 
                 if case .gpuSimulation = module.settings {
                     gpuBackendStatusPanel(module)
@@ -812,6 +1006,132 @@ struct InspectorPanel: View {
             .background(.surfaceSunken)
             .cornerRadius(4)
             .border(.divider, width: 1))
+        }
+
+        private func moduleHealthSnapshot(_ module: ParticleEmitterModule,
+                                          issues: [ParticleModuleIssue]? = nil) -> ModuleHealthSnapshot {
+            let resolvedIssues = issues ?? diagnostics.validationIssues(for: module.id)
+            return ModuleHealthSnapshot(authoring: moduleAuthoringCard(module),
+                                        runtime: moduleRuntimeCard(module),
+                                        backend: moduleBackendCard(module),
+                                        pressure: modulePressureCard(module),
+                                        issues: moduleIssueCard(resolvedIssues))
+        }
+
+        private func moduleStatusDeck(_ health: ModuleHealthSnapshot) -> AnyView {
+            AnyView(Box(direction: .column, alignItems: .stretch, spacing: 6) {
+                Box(direction: .row, alignItems: .stretch, spacing: 6) {
+                    moduleStatusCard(health.authoring)
+                    moduleStatusCard(health.runtime)
+                    moduleStatusCard(health.backend)
+                }
+                Box(direction: .row, alignItems: .stretch, spacing: 6) {
+                    moduleStatusCard(health.pressure)
+                    moduleStatusCard(health.issues)
+                }
+            })
+        }
+
+        private func moduleAuthoringCard(_ module: ParticleEmitterModule) -> ModuleStatusCard {
+            let isModified = stack.moduleSettingsDifferFromDefault(module.id)
+            return ModuleStatusCard(label: L("Authoring"),
+                                    value: isModified ? L("Modified") : L("Default"),
+                                    detail: module.isEnabled ? L("enabled") : L("disabled"),
+                                    tone: isModified ? .info : .muted)
+        }
+
+        private func moduleRuntimeCard(_ module: ParticleEmitterModule) -> ModuleStatusCard {
+            let status = moduleStatus(module) ?? ModuleRuntimeStatus(text: module.isEnabled ? L("Idle") : L("Off"),
+                                                                     tone: .muted)
+            return ModuleStatusCard(label: L("Runtime"),
+                                    value: status.text,
+                                    detail: diagnostics.statsScopeLabel,
+                                    tone: status.tone)
+        }
+
+        private func moduleBackendCard(_ module: ParticleEmitterModule) -> ModuleStatusCard {
+            let status = moduleBackendStatus(module)
+            let detail: String
+            if case .gpuSimulation = module.settings,
+               let plan = diagnostics.selectedGPUSimulationPlan {
+                detail = "\(plan.dispatchWorkgroups)x\(plan.workgroupSize)"
+            } else if diagnostics.hasGPUSimulationWork {
+                detail = L("simulation active")
+            } else {
+                detail = L("editor linked")
+            }
+            return ModuleStatusCard(label: L("Backend"),
+                                    value: status.text,
+                                    detail: detail,
+                                    tone: status.tone)
+        }
+
+        private func modulePressureCard(_ module: ParticleEmitterModule) -> ModuleStatusCard {
+            guard module.isEnabled else {
+                return ModuleStatusCard(label: L("Pressure"),
+                                        value: L("Inactive"),
+                                        detail: L("module disabled"),
+                                        tone: .muted)
+            }
+            if diagnostics.runtimeDropCount > 0 {
+                return ModuleStatusCard(label: L("Pressure"),
+                                        value: particleRuntimePressureLevelLabel(.critical),
+                                        detail: "\(diagnostics.runtimeDropCount) \(L("drops"))",
+                                        tone: particleRuntimePressureLevelTone(.critical))
+            }
+            if diagnostics.scalability.pressure > 0 || diagnostics.scalability.appliedScale < 1 {
+                return ModuleStatusCard(label: L("Pressure"),
+                                        value: particlePressureReasonLabel(diagnostics.scalability.reason),
+                                        detail: "\(L("scale")) \(fmt(diagnostics.scalability.appliedScale))",
+                                        tone: diagnostics.scalability.pressure > 0 ? .warning : .info)
+            }
+            return ModuleStatusCard(label: L("Pressure"),
+                                    value: particleRuntimePressureLevelLabel(diagnostics.runtimePressureLevel),
+                                    detail: diagnostics.liveBudgetText,
+                                    tone: particleRuntimePressureLevelTone(diagnostics.runtimePressureLevel))
+        }
+
+        private func moduleIssueCard(_ issues: [ParticleModuleIssue]) -> ModuleStatusCard {
+            let errors = issues.filter { $0.severity == .error }.count
+            let warnings = issues.filter { $0.severity == .warning }.count
+            if errors > 0 {
+                return ModuleStatusCard(label: L("Issues"),
+                                        value: "\(errors) \(L("Errors"))",
+                                        detail: warnings > 0 ? "\(warnings) \(L("warnings"))" : L("repair required"),
+                                        tone: .error)
+            }
+            if warnings > 0 {
+                return ModuleStatusCard(label: L("Issues"),
+                                        value: "\(warnings) \(L("Warnings"))",
+                                        detail: L("repairable"),
+                                        tone: .warning)
+            }
+            return ModuleStatusCard(label: L("Issues"),
+                                    value: L("Clean"),
+                                    detail: L("no validation issues"),
+                                    tone: .success)
+        }
+
+        private func moduleStatusCard(_ card: ModuleStatusCard) -> AnyView {
+            AnyView(Box(direction: .column, alignItems: .stretch, spacing: 2) {
+                Text(card.label)
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                Text(card.value)
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(card.tone.foreground)
+                Text(card.detail)
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
+            .padding(horizontal: 7, vertical: 5)
+            .background(card.tone.background)
+            .cornerRadius(4)
+            .border(card.tone.foreground.opacity(0.25), width: 1)
+            .flex())
         }
 
         private func gpuBackendStatusPanel(_ module: ParticleEmitterModule) -> AnyView {
@@ -911,8 +1231,12 @@ struct InspectorPanel: View {
             .cornerRadius(4))
         }
 
-        private func expandedModuleHeader(index: Int, module: ParticleEmitterModule) -> AnyView {
-            let status = moduleStatus(module)
+        private func expandedModuleHeader(index: Int,
+                                          module: ParticleEmitterModule,
+                                          health: ModuleHealthSnapshot) -> AnyView {
+            let canRepair = hasRepairableValidationIssues(for: module)
+            let canResetSettings = hasResettableSettings(for: module)
+            let isModified = stack.moduleSettingsDifferFromDefault(module.id)
             return AnyView(Row(alignment: .center, spacing: 8) {
                 Spacer(minLength: 0)
                     .frame(width: 3, height: 42)
@@ -925,11 +1249,24 @@ struct InspectorPanel: View {
                         badge(module.stage.rawValue.uppercased(),
                               foreground: moduleAccent(module),
                               background: moduleAccent(module).opacity(0.10))
-                        if let status {
-                            badge(status.text,
-                                  foreground: status.tone.foreground,
-                                  background: status.tone.background)
+                        if isModified {
+                            badge(L("Modified"),
+                                  foreground: .info,
+                                  background: .info.opacity(0.12))
+                        } else {
+                            badge(L("Default"),
+                                  foreground: .onSurfaceMuted,
+                                  background: .surfaceSunken)
                         }
+                        badge(health.primaryStatus.value,
+                              foreground: health.primaryStatus.tone.foreground,
+                              background: health.primaryStatus.tone.background)
+                        badge(health.backend.value,
+                              foreground: health.backend.tone.foreground,
+                              background: health.backend.tone.background)
+                        badge(health.pressure.value,
+                              foreground: health.pressure.tone.foreground,
+                              background: health.pressure.tone.background)
                     }
 
                     Text(module.displayName)
@@ -945,6 +1282,26 @@ struct InspectorPanel: View {
                 .flex()
                 .opacity(module.isEnabled ? 1 : 0.66)
 
+                if canRepair {
+                    Button(L("Repair"),
+                           tooltip: L("Repair this module")) {
+                        var stack = binding.wrappedValue
+                        stack.repairValidationIssues(for: module.id)
+                        binding.wrappedValue = stack
+                    }
+                    .buttonStyle(GhostButtonStyle())
+                }
+
+                if canResetSettings {
+                    Button(L("Default"),
+                           tooltip: L("Reset this module to default settings")) {
+                        var stack = binding.wrappedValue
+                        stack.resetModuleSettings(for: module.id)
+                        binding.wrappedValue = stack
+                    }
+                    .buttonStyle(GhostButtonStyle())
+                }
+
                 Box(direction: .column, alignItems: .center, spacing: 3) {
                     Toggle(isOn: moduleEnabledBinding(index))
                     Text(module.isEnabled ? L("Enabled") : L("Disabled"))
@@ -956,7 +1313,128 @@ struct InspectorPanel: View {
             }
             .padding(horizontal: 5, vertical: 5)
             .background(module.isEnabled ? .surface : .surfaceSunken)
-            .cornerRadius(4))
+            .cornerRadius(4)
+            .border(moduleBorder(module), width: 1))
+        }
+
+        private func runtimeSnapshotPanel(_ module: ParticleEmitterModule) -> AnyView {
+            let backendStatus = moduleBackendStatus(module)
+            let stateStatus = moduleStatus(module) ?? ModuleRuntimeStatus(text: module.isEnabled ? L("Idle") : L("Disabled"),
+                                                                          tone: .muted)
+            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 5) {
+                Row(alignment: .center, spacing: 6) {
+                    Text(L("Runtime Snapshot"))
+                        .lineLimit(1)
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                    Spacer(minLength: 0)
+                        .flex()
+                    badge(stateStatus.text,
+                          foreground: stateStatus.tone.foreground,
+                          background: stateStatus.tone.background)
+                    badge(backendStatus.text,
+                          foreground: backendStatus.tone.foreground,
+                          background: backendStatus.tone.background)
+                }
+
+                Row(alignment: .center, spacing: 6) {
+                    backendMetricCard(L("Live"),
+                                      "\(diagnostics.liveParticleCount)",
+                                      tone: diagnostics.liveParticleCount > 0 ? .info : .muted)
+                    backendMetricCard(L("Spawn"),
+                                      "\(diagnostics.spawnedParticleCount)",
+                                      tone: diagnostics.spawnedParticleCount > 0 ? .success : .muted)
+                    backendMetricCard(L("Frame"),
+                                      formatMs(diagnostics.simulatedDeltaTime),
+                                      tone: diagnostics.simulatedDeltaTime > 0 ? .info : .muted)
+                    backendMetricCard(L("Scale"),
+                                      fmt(diagnostics.scalability.appliedScale),
+                                      tone: diagnostics.scalability.pressure > 0 || diagnostics.scalability.appliedScale < 1
+                                          ? .warning
+                                          : .muted)
+                }
+                Row(alignment: .center, spacing: 6) {
+                    backendMetricCard(L("Limit"),
+                                      diagnostics.liveBudgetText,
+                                      tone: diagnostics.liveBudgetPressure >= 0.95 ? .warning : .muted)
+                    backendMetricCard(L("Drop"),
+                                      "\(diagnostics.runtimeDropCount)",
+                                      tone: diagnostics.runtimeDropCount > 0 ? .warning : .muted)
+                    backendMetricCard(L("Events"),
+                                      "\(diagnostics.eventReport.appliedEventCount)/\(diagnostics.eventReport.eventCount)",
+                                      tone: diagnostics.eventReport.eventCount > 0 ? .info : .muted)
+                    backendMetricCard(L("GPU"),
+                                      "\(diagnostics.renderStats.gpuParticleSimulationParticleCount)",
+                                      tone: diagnostics.hasGPUSimulationWork ? .success : .muted)
+                }
+            }
+            .padding(horizontal: 6, vertical: 6)
+            .background(module.isEnabled ? .surface : .surfaceSunken)
+            .cornerRadius(4)
+            .border(moduleBorder(module), width: 1))
+        }
+
+        private func moduleParameterSurface(index: Int, module: ParticleEmitterModule) -> AnyView {
+            let status = moduleStatus(module) ?? moduleBackendStatus(module)
+            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 7) {
+                Row(alignment: .center, spacing: 7) {
+                    Spacer(minLength: 0)
+                        .frame(width: 3, height: 30)
+                        .background(moduleAccent(module))
+                        .cornerRadius(2)
+                        .opacity(module.isEnabled ? 1 : 0.45)
+
+                    Box(direction: .column, alignItems: .stretch, spacing: 1) {
+                        Text(L("Parameters"))
+                            .lineLimit(1)
+                            .font(.caption)
+                            .foregroundColor(.onSurface)
+                        Text(moduleParameterSummary(module))
+                            .lineLimit(1)
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                    }
+                    .flex()
+
+                    badge(module.isEnabled ? L("Editable") : L("Disabled"),
+                          foreground: module.isEnabled ? status.tone.foreground : .onSurfaceMuted,
+                          background: module.isEnabled ? status.tone.background : .surfaceSunken)
+                }
+
+                moduleEditor(index: index, module: module)
+                    .opacity(module.isEnabled ? 1 : 0.66)
+            }
+            .padding(horizontal: 7, vertical: 7)
+            .background(.surface)
+            .cornerRadius(4)
+            .border(status.tone.background, width: 1))
+        }
+
+        private func moduleParameterSummary(_ module: ParticleEmitterModule) -> String {
+            switch module.settings {
+            case .emission:
+                return L("Spawn rate, bursts, prewarm, and simulation speed")
+            case .shape:
+                return L("Emitter volume and local spawn offset")
+            case .velocity:
+                return L("Initial velocity, randomness, and inheritance")
+            case .forces:
+                return L("Gravity, noise, force fields, and vector fields")
+            case .collision:
+                return L("Collision surface and response")
+            case .appearance:
+                return L("Lifetime, size, color, spin, and curves")
+            case .textureSheet:
+                return L("Atlas playback and frame window")
+            case .renderer:
+                return L("Draw mode, culling, LOD, bounds, and stretch")
+            case .trails:
+                return L("Trail cache, ribbon shape, and quality")
+            case .subEmitters:
+                return L("Event driven child particle rules")
+            case .gpuSimulation:
+                return L("Simulation backend and dispatch size")
+            }
         }
 
         private func moduleDiagnosticChips(_ module: ParticleEmitterModule) -> [ModuleDiagnosticChip] {
@@ -1082,6 +1560,60 @@ struct InspectorPanel: View {
             }
         }
 
+        private func moduleBackendStatus(_ module: ParticleEmitterModule) -> ModuleRuntimeStatus {
+            guard module.isEnabled else {
+                return ModuleRuntimeStatus(text: L("Disabled"), tone: .muted)
+            }
+
+            if case let .gpuSimulation(settings) = module.settings {
+                if diagnostics.eventReport.droppedReadbackEventCount > 0 {
+                    return ModuleRuntimeStatus(text: L("GPU Readback Drop"), tone: .warning)
+                }
+                if diagnostics.hasGPUSimulationWork {
+                    return ModuleRuntimeStatus(text: L("GPU Active"), tone: .success)
+                }
+                if let plan = diagnostics.selectedGPUSimulationPlan {
+                    return gpuPlanStatus(plan)
+                }
+                switch settings.simulationBackend {
+                case .cpu:
+                    return ModuleRuntimeStatus(text: L("CPU"), tone: .muted)
+                case .gpuIfSupported:
+                    return ModuleRuntimeStatus(text: L("GPU Preferred"), tone: .info)
+                case .gpuRequired:
+                    return ModuleRuntimeStatus(text: L("GPU Required"), tone: .warning)
+                }
+            }
+
+            if let plan = diagnostics.selectedGPUSimulationPlan {
+                switch plan.status {
+                case .supported where diagnostics.hasGPUSimulationWork:
+                    return ModuleRuntimeStatus(text: L("GPU Sim"), tone: .success)
+                case .supported:
+                    return ModuleRuntimeStatus(text: L("GPU Ready"), tone: .info)
+                case .fallbackToCPU:
+                    return ModuleRuntimeStatus(text: L("CPU Fallback"), tone: .warning)
+                case .requiredButUnsupported:
+                    return ModuleRuntimeStatus(text: L("GPU Blocked"), tone: .warning)
+                case .disabled:
+                    break
+                }
+            }
+
+            switch module.settings {
+            case .renderer, .textureSheet, .trails:
+                return diagnostics.renderStats.gpuParticleRenderInstanceCount > 0
+                    ? ModuleRuntimeStatus(text: L("Render GPU"), tone: .success)
+                    : ModuleRuntimeStatus(text: L("Render"), tone: .muted)
+            case .subEmitters:
+                return diagnostics.eventReport.totalReadbackEventCount > 0
+                    ? ModuleRuntimeStatus(text: L("GPU Events"), tone: .info)
+                    : ModuleRuntimeStatus(text: L("CPU Events"), tone: .muted)
+            default:
+                return ModuleRuntimeStatus(text: L("CPU Sim"), tone: .muted)
+            }
+        }
+
         private func gpuPlanUnsupportedReasonList(_ reasons: [ParticleGPUSimulationUnsupportedReason]) -> String {
             guard !reasons.isEmpty else { return L("None") }
             return reasons.map(gpuPlanUnsupportedReasonLabel).joined(separator: ", ")
@@ -1105,6 +1637,45 @@ struct InspectorPanel: View {
                 return L("collisions")
             case .angularVelocity:
                 return L("angular velocity")
+            }
+        }
+
+        private func particlePressureReasonLabel(_ reason: ParticleScalabilityPressureReason) -> String {
+            switch reason {
+            case .none:
+                return L("Recovering")
+            case .liveBudget:
+                return L("Live Budget")
+            case .spawnBudget:
+                return L("Spawn Budget")
+            case .capacityLimited:
+                return L("Capacity")
+            }
+        }
+
+        private func particleRuntimePressureLevelLabel(_ level: ParticleRuntimePressureLevel) -> String {
+            switch level {
+            case .idle:
+                return L("Idle")
+            case .nominal:
+                return L("Healthy")
+            case .warning:
+                return L("Near Limit")
+            case .critical:
+                return L("Critical")
+            }
+        }
+
+        private func particleRuntimePressureLevelTone(_ level: ParticleRuntimePressureLevel) -> ModuleRuntimeTone {
+            switch level {
+            case .idle:
+                return .muted
+            case .nominal:
+                return .success
+            case .warning:
+                return .warning
+            case .critical:
+                return .error
             }
         }
 
@@ -1188,6 +1759,22 @@ struct InspectorPanel: View {
                 return L("Workgroup")
             case "gpuWorkgroupClamped":
                 return L("Clamped")
+            case "negativeVelocityStretch", "invalidVelocityStretch":
+                return L("Stretch")
+            case "invalidLODRange", "negativeLODDistance", "lodScaleOutOfRange":
+                return L("LOD")
+            case "negativeMaxRenderDistance", "negativeFadeRange", "fadeRangeExceedsDistance":
+                return L("Distance")
+            case "negativeRenderBoundsRadius", "invalidRenderBounds":
+                return L("Bounds")
+            case "negativeTrailSettings", "trailWithoutSamples":
+                return L("Trails")
+            case "invalidRibbonSmoothing", "negativeRibbonWidth", "negativeRibbonSegment", "negativeRibbonTiling":
+                return L("Ribbon")
+            case "tailAlphaOutOfRange", "trailEndAlphaOutOfRange":
+                return L("Alpha")
+            case "negativeTrailEndSize":
+                return L("Trail Size")
             default:
                 return issue.code
             }
@@ -1202,1057 +1789,590 @@ struct InspectorPanel: View {
             let isEnabled = module.isEnabled
             switch module.settings {
             case .emission:
-                return AnyView(moduleEditorRow([
-                    moduleNumber("Rate",
-                                 moduleFloatBinding(index, fallback: 0, get: {
-                                     if case let .emission(module) = $0 { return module.emissionRate }
-                                     return nil
-                                 }, set: {
-                                     if case var .emission(module) = $0 {
-                                         module.emissionRate = $1
-                                         $0 = .emission(module)
-                                     }
-                                 }),
-                                 min: 0,
-                                 max: 1000,
-                                 step: 1,
-                                 enabled: isEnabled),
-                    moduleNumber("Max",
-                                 moduleIntBinding(index, fallback: 0, get: {
-                                     if case let .emission(module) = $0 { return module.maxParticles }
-                                     return nil
-                                 }, set: {
-                                     if case var .emission(module) = $0 {
-                                         module.maxParticles = $1
-                                         $0 = .emission(module)
-                                     }
-                                 }),
-                                 min: 0,
-                                 max: 100_000,
-                                 step: 16,
-                                 enabled: isEnabled),
-                    moduleNumber("Burst",
-                                 moduleIntBinding(index, fallback: 0, get: {
-                                     if case let .emission(module) = $0 { return module.burstCount }
-                                     return nil
-                                 }, set: {
-                                     if case var .emission(module) = $0 {
-                                         module.burstCount = $1
-                                         $0 = .emission(module)
-                                     }
-                                 }),
-                                 min: 0,
-                                 max: 100_000,
-                                 step: 1,
-                                 enabled: isEnabled),
-                ]))
+                return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                    moduleEditorRows([
+                        [
+                            moduleNumber("Rate",
+                                         moduleFloatBinding(index, fallback: 0, get: {
+                                             if case let .emission(module) = $0 { return module.emissionRate }
+                                             return nil
+                                         }, set: {
+                                             if case var .emission(module) = $0 {
+                                                 module.emissionRate = $1
+                                                 $0 = .emission(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 1000,
+                                         step: 1,
+                                         enabled: isEnabled),
+                            moduleNumber("Max",
+                                         moduleIntBinding(index, fallback: 0, get: {
+                                             if case let .emission(module) = $0 { return module.maxParticles }
+                                             return nil
+                                         }, set: {
+                                             if case var .emission(module) = $0 {
+                                                 module.maxParticles = $1
+                                                 $0 = .emission(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 100_000,
+                                         step: 16,
+                                         enabled: isEnabled),
+                            moduleNumber("Speed",
+                                         moduleFloatBinding(index, fallback: 1, get: {
+                                             if case let .emission(module) = $0 { return module.simulationSpeed }
+                                             return nil
+                                         }, set: {
+                                             if case var .emission(module) = $0 {
+                                                 module.simulationSpeed = $1
+                                                 $0 = .emission(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 16,
+                                         step: 0.05,
+                                         enabled: isEnabled),
+                        ],
+                        [
+                            moduleNumber("Duration",
+                                         moduleFloatBinding(index, fallback: 0, get: {
+                                             if case let .emission(module) = $0 { return module.duration }
+                                             return nil
+                                         }, set: {
+                                             if case var .emission(module) = $0 {
+                                                 module.duration = $1
+                                                 $0 = .emission(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 600,
+                                         step: 0.1,
+                                         enabled: isEnabled),
+                            moduleNumber("Dist Rate",
+                                         moduleFloatBinding(index, fallback: 0, get: {
+                                             if case let .emission(module) = $0 { return module.distanceEmissionRate }
+                                             return nil
+                                         }, set: {
+                                             if case var .emission(module) = $0 {
+                                                 module.distanceEmissionRate = $1
+                                                 $0 = .emission(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 1000,
+                                         step: 1,
+                                         enabled: isEnabled),
+                            moduleNumber("Burst",
+                                         moduleIntBinding(index, fallback: 0, get: {
+                                             if case let .emission(module) = $0 { return module.burstCount }
+                                             return nil
+                                         }, set: {
+                                             if case var .emission(module) = $0 {
+                                                 module.burstCount = $1
+                                                 $0 = .emission(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 100_000,
+                                         step: 1,
+                                         enabled: isEnabled),
+                        ],
+                        [
+                            moduleNumber("Burst Int",
+                                         moduleFloatBinding(index, fallback: 0, get: {
+                                             if case let .emission(module) = $0 { return module.burstInterval }
+                                             return nil
+                                         }, set: {
+                                             if case var .emission(module) = $0 {
+                                                 module.burstInterval = $1
+                                                 $0 = .emission(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 600,
+                                         step: 0.05,
+                                         enabled: isEnabled),
+                            moduleNumber("Prewarm",
+                                         moduleFloatBinding(index, fallback: 0, get: {
+                                             if case let .emission(module) = $0 { return module.prewarmTime }
+                                             return nil
+                                         }, set: {
+                                             if case var .emission(module) = $0 {
+                                                 module.prewarmTime = $1
+                                                 $0 = .emission(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 600,
+                                         step: 0.1,
+                                         enabled: isEnabled),
+                            moduleNumber("Pre Step",
+                                         moduleFloatBinding(index, fallback: 1.0 / 30.0, get: {
+                                             if case let .emission(module) = $0 { return module.prewarmStep }
+                                             return nil
+                                         }, set: {
+                                             if case var .emission(module) = $0 {
+                                                 module.prewarmStep = $1
+                                                 $0 = .emission(module)
+                                             }
+                                         }),
+                                         min: 1.0 / 240.0,
+                                         max: 1,
+                                         step: 0.01,
+                                         enabled: isEnabled),
+                        ],
+                    ])
+                    moduleCurveEditor("Rate Curve",
+                                      moduleValueBinding(index, fallback: .constant(1), get: {
+                                          if case let .emission(module) = $0 { return module.emissionRateCurve }
+                                          return nil
+                                      }, set: {
+                                          if case var .emission(module) = $0 {
+                                              module.emissionRateCurve = $1
+                                              $0 = .emission(module)
+                                          }
+                                      }),
+                                      enabled: isEnabled)
+                    moduleCurveEditor("Distance Curve",
+                                      moduleValueBinding(index, fallback: .constant(1), get: {
+                                          if case let .emission(module) = $0 { return module.distanceEmissionRateCurve }
+                                          return nil
+                                      }, set: {
+                                          if case var .emission(module) = $0 {
+                                              module.distanceEmissionRateCurve = $1
+                                              $0 = .emission(module)
+                                          }
+                                      }),
+                                      enabled: isEnabled)
+                })
             case .shape:
-                return AnyView(moduleEditorRows([
-                    [
-                        moduleEnum("Shape",
-                                   moduleValueBinding(index, fallback: .sphere, get: {
-                                       if case let .shape(module) = $0 { return module.emissionShape }
-                                       return nil
-                                   }, set: {
-                                       if case var .shape(module) = $0 {
-                                           module.emissionShape = $1
-                                           $0 = .shape(module)
-                                       }
-                                   }),
-                                   width: 132,
-                                   enabled: isEnabled,
-                                   label: particleEmissionShapeLabel),
-                        moduleNumber("Radius",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .shape(module) = $0 { return module.spawnRadius }
-                                         return nil
-                                     }, set: {
-                                         if case var .shape(module) = $0 {
-                                             module.spawnRadius = $1
-                                             $0 = .shape(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 100,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("Origin X",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .shape(module) = $0 { return module.originOffset.x }
-                                         return nil
-                                     }, set: {
-                                         if case var .shape(module) = $0 {
-                                             module.originOffset.x = $1
-                                             $0 = .shape(module)
-                                         }
-                                     }),
-                                     min: -1000,
-                                     max: 1000,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("Origin Y",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .shape(module) = $0 { return module.originOffset.y }
-                                         return nil
-                                     }, set: {
-                                         if case var .shape(module) = $0 {
-                                             module.originOffset.y = $1
-                                             $0 = .shape(module)
-                                         }
-                                     }),
-                                     min: -1000,
-                                     max: 1000,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("Origin Z",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .shape(module) = $0 { return module.originOffset.z }
-                                         return nil
-                                     }, set: {
-                                         if case var .shape(module) = $0 {
-                                             module.originOffset.z = $1
-                                             $0 = .shape(module)
-                                         }
-                                     }),
-                                     min: -1000,
-                                     max: 1000,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("Box X",
-                                     moduleFloatBinding(index, fallback: 0.5, get: {
-                                         if case let .shape(module) = $0 { return module.boxHalfExtents.x }
-                                         return nil
-                                     }, set: {
-                                         if case var .shape(module) = $0 {
-                                             module.boxHalfExtents.x = $1
-                                             $0 = .shape(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 1000,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("Box Y",
-                                     moduleFloatBinding(index, fallback: 0.5, get: {
-                                         if case let .shape(module) = $0 { return module.boxHalfExtents.y }
-                                         return nil
-                                     }, set: {
-                                         if case var .shape(module) = $0 {
-                                             module.boxHalfExtents.y = $1
-                                             $0 = .shape(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 1000,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("Box Z",
-                                     moduleFloatBinding(index, fallback: 0.5, get: {
-                                         if case let .shape(module) = $0 { return module.boxHalfExtents.z }
-                                         return nil
-                                     }, set: {
-                                         if case var .shape(module) = $0 {
-                                             module.boxHalfExtents.z = $1
-                                             $0 = .shape(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 1000,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("Cone R",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .shape(module) = $0 { return module.coneRadius }
-                                         return nil
-                                     }, set: {
-                                         if case var .shape(module) = $0 {
-                                             module.coneRadius = $1
-                                             $0 = .shape(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 100,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("Cone H",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .shape(module) = $0 { return module.coneHeight }
-                                         return nil
-                                     }, set: {
-                                         if case var .shape(module) = $0 {
-                                             module.coneHeight = $1
-                                             $0 = .shape(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 100,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                    ],
-                ]))
+                return shapeModuleEditor(index: index, module: module, isEnabled: isEnabled)
             case .velocity:
-                return AnyView(moduleEditorRows([
-                    [
-                        moduleNumber("Vel X",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .velocity(module) = $0 { return module.startVelocity.x }
-                                         return nil
-                                     }, set: {
-                                         if case var .velocity(module) = $0 {
-                                             module.startVelocity.x = $1
-                                             $0 = .velocity(module)
-                                         }
-                                     }),
-                                     min: -1000,
-                                     max: 1000,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("Vel Y",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .velocity(module) = $0 { return module.startVelocity.y }
-                                         return nil
-                                     }, set: {
-                                         if case var .velocity(module) = $0 {
-                                             module.startVelocity.y = $1
-                                             $0 = .velocity(module)
-                                         }
-                                     }),
-                                     min: -1000,
-                                     max: 1000,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("Vel Z",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .velocity(module) = $0 { return module.startVelocity.z }
-                                         return nil
-                                     }, set: {
-                                         if case var .velocity(module) = $0 {
-                                             module.startVelocity.z = $1
-                                             $0 = .velocity(module)
-                                         }
-                                     }),
-                                     min: -1000,
-                                     max: 1000,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("Rand X",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .velocity(module) = $0 { return module.velocityRandomness.x }
-                                         return nil
-                                     }, set: {
-                                         if case var .velocity(module) = $0 {
-                                             module.velocityRandomness.x = $1
-                                             $0 = .velocity(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 1000,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("Rand Y",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .velocity(module) = $0 { return module.velocityRandomness.y }
-                                         return nil
-                                     }, set: {
-                                         if case var .velocity(module) = $0 {
-                                             module.velocityRandomness.y = $1
-                                             $0 = .velocity(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 1000,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("Rand Z",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .velocity(module) = $0 { return module.velocityRandomness.z }
-                                         return nil
-                                     }, set: {
-                                         if case var .velocity(module) = $0 {
-                                             module.velocityRandomness.z = $1
-                                             $0 = .velocity(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 1000,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("Inherit",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .velocity(module) = $0 { return module.velocityInheritance }
-                                         return nil
-                                     }, set: {
-                                         if case var .velocity(module) = $0 {
-                                             module.velocityInheritance = $1
-                                             $0 = .velocity(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 10,
-                                     step: 0.05,
-                                     enabled: isEnabled),
-                    ],
-                ]))
+                return velocityModuleEditor(index: index, module: module, isEnabled: isEnabled)
             case .forces:
-                return AnyView(moduleEditorRows([
-                    [
-                        moduleEnum("Force",
-                                   moduleValueBinding(index, fallback: .none, get: {
-                                       if case let .forces(module) = $0 { return module.forceMode }
-                                       return nil
-                                   }, set: {
-                                       if case var .forces(module) = $0 {
-                                           module.forceMode = $1
-                                           $0 = .forces(module)
-                                       }
-                                   }),
-                                   width: 132,
-                                   enabled: isEnabled,
-                                   label: particleForceModeLabel),
-                        moduleEnum("Vector Field",
-                                   moduleValueBinding(index, fallback: .none, get: {
-                                       if case let .forces(module) = $0 { return module.vectorFieldMode }
-                                       return nil
-                                   }, set: {
-                                       if case var .forces(module) = $0 {
-                                           module.vectorFieldMode = $1
-                                           $0 = .forces(module)
-                                       }
-                                   }),
-                                   width: 132,
-                                   enabled: isEnabled,
-                                   label: particleVectorFieldModeLabel),
-                    ],
-                    [
-                        moduleNumber("Gravity X",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .forces(module) = $0 { return module.gravity.x }
-                                         return nil
-                                     }, set: {
-                                         if case var .forces(module) = $0 {
-                                             module.gravity.x = $1
-                                             $0 = .forces(module)
-                                         }
-                                     }),
-                                     min: -100,
-                                     max: 100,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("Gravity Y",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .forces(module) = $0 { return module.gravity.y }
-                                         return nil
-                                     }, set: {
-                                         if case var .forces(module) = $0 {
-                                             module.gravity.y = $1
-                                             $0 = .forces(module)
-                                         }
-                                     }),
-                                     min: -100,
-                                     max: 100,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("Gravity Z",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .forces(module) = $0 { return module.gravity.z }
-                                         return nil
-                                     }, set: {
-                                         if case var .forces(module) = $0 {
-                                             module.gravity.z = $1
-                                             $0 = .forces(module)
-                                         }
-                                     }),
-                                     min: -100,
-                                     max: 100,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("Noise",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .forces(module) = $0 { return module.noiseStrength }
-                                         return nil
-                                     }, set: {
-                                         if case var .forces(module) = $0 {
-                                             module.noiseStrength = $1
-                                             $0 = .forces(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 100,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("Noise Scale",
-                                     moduleFloatBinding(index, fallback: 1, get: {
-                                         if case let .forces(module) = $0 { return module.noiseScale }
-                                         return nil
-                                     }, set: {
-                                         if case var .forces(module) = $0 {
-                                             module.noiseScale = $1
-                                             $0 = .forces(module)
-                                         }
-                                     }),
-                                     min: 0.0001,
-                                     max: 100,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("Noise Speed",
-                                     moduleFloatBinding(index, fallback: 1, get: {
-                                         if case let .forces(module) = $0 { return module.noiseSpeed }
-                                         return nil
-                                     }, set: {
-                                         if case var .forces(module) = $0 {
-                                             module.noiseSpeed = $1
-                                             $0 = .forces(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 100,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("Force",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .forces(module) = $0 { return module.forceStrength }
-                                         return nil
-                                     }, set: {
-                                         if case var .forces(module) = $0 {
-                                             module.forceStrength = $1
-                                             $0 = .forces(module)
-                                         }
-                                     }),
-                                     min: -1000,
-                                     max: 1000,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("Radius",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .forces(module) = $0 { return module.forceRadius }
-                                         return nil
-                                     }, set: {
-                                         if case var .forces(module) = $0 {
-                                             module.forceRadius = $1
-                                             $0 = .forces(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 1000,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("Falloff",
-                                     moduleFloatBinding(index, fallback: 1, get: {
-                                         if case let .forces(module) = $0 { return module.forceFalloff }
-                                         return nil
-                                     }, set: {
-                                         if case var .forces(module) = $0 {
-                                             module.forceFalloff = $1
-                                             $0 = .forces(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 32,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("Center X",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .forces(module) = $0 { return module.forceCenter.x }
-                                         return nil
-                                     }, set: {
-                                         if case var .forces(module) = $0 {
-                                             module.forceCenter.x = $1
-                                             $0 = .forces(module)
-                                         }
-                                     }),
-                                     min: -1000,
-                                     max: 1000,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("Center Y",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .forces(module) = $0 { return module.forceCenter.y }
-                                         return nil
-                                     }, set: {
-                                         if case var .forces(module) = $0 {
-                                             module.forceCenter.y = $1
-                                             $0 = .forces(module)
-                                         }
-                                     }),
-                                     min: -1000,
-                                     max: 1000,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("Center Z",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .forces(module) = $0 { return module.forceCenter.z }
-                                         return nil
-                                     }, set: {
-                                         if case var .forces(module) = $0 {
-                                             module.forceCenter.z = $1
-                                             $0 = .forces(module)
-                                         }
-                                     }),
-                                     min: -1000,
-                                     max: 1000,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("VF Strength",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .forces(module) = $0 { return module.vectorFieldStrength }
-                                         return nil
-                                     }, set: {
-                                         if case var .forces(module) = $0 {
-                                             module.vectorFieldStrength = $1
-                                             $0 = .forces(module)
-                                         }
-                                     }),
-                                     min: -1000,
-                                     max: 1000,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("VF Scale",
-                                     moduleFloatBinding(index, fallback: 1, get: {
-                                         if case let .forces(module) = $0 { return module.vectorFieldScale }
-                                         return nil
-                                     }, set: {
-                                         if case var .forces(module) = $0 {
-                                             module.vectorFieldScale = $1
-                                             $0 = .forces(module)
-                                         }
-                                     }),
-                                     min: 0.0001,
-                                     max: 100,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("VF Scroll",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .forces(module) = $0 { return module.vectorFieldScrollSpeed }
-                                         return nil
-                                     }, set: {
-                                         if case var .forces(module) = $0 {
-                                             module.vectorFieldScrollSpeed = $1
-                                             $0 = .forces(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 100,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                    ],
-                ]))
+                return forcesModuleEditor(index: index, module: module, isEnabled: isEnabled)
             case .collision:
-                return AnyView(moduleEditorRows([
-                    [
-                        moduleEnum("Mode",
-                                   moduleValueBinding(index, fallback: .none, get: {
-                                       if case let .collision(module) = $0 { return module.collisionMode }
-                                       return nil
-                                   }, set: {
-                                       if case var .collision(module) = $0 {
-                                           module.collisionMode = $1
-                                           $0 = .collision(module)
-                                       }
-                                   }),
-                                   width: 132,
-                                   enabled: isEnabled,
-                                   label: particleCollisionModeLabel),
-                        moduleNumber("Plane Y",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .collision(module) = $0 { return module.collisionPlaneY }
-                                         return nil
-                                     }, set: {
-                                         if case var .collision(module) = $0 {
-                                             module.collisionPlaneY = $1
-                                             $0 = .collision(module)
-                                         }
-                                     }),
-                                     min: -1000,
-                                     max: 1000,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("Bounce",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .collision(module) = $0 { return module.collisionRestitution }
-                                         return nil
-                                     }, set: {
-                                         if case var .collision(module) = $0 {
-                                             module.collisionRestitution = $1
-                                             $0 = .collision(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 1,
-                                     step: 0.05,
-                                     enabled: isEnabled),
-                        moduleNumber("Damping",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .collision(module) = $0 { return module.collisionDamping }
-                                         return nil
-                                     }, set: {
-                                         if case var .collision(module) = $0 {
-                                             module.collisionDamping = $1
-                                             $0 = .collision(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 1,
-                                     step: 0.05,
-                                     enabled: isEnabled),
-                    ],
-                ]))
+                return collisionModuleEditor(index: index, module: module, isEnabled: isEnabled)
             case .appearance:
-                return AnyView(moduleEditorRows([
-                    [
-                        moduleEnum("Blend",
-                                   moduleValueBinding(index, fallback: .alpha, get: {
-                                       if case let .appearance(module) = $0 { return module.blendMode }
-                                       return nil
-                                   }, set: {
-                                       if case var .appearance(module) = $0 {
-                                           module.blendMode = $1
-                                           $0 = .appearance(module)
-                                       }
-                                   }),
-                                   width: 132,
-                                   enabled: isEnabled,
-                                   label: particleBlendModeLabel),
-                        moduleNumber("Life",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .appearance(module) = $0 { return module.lifetime }
-                                         return nil
-                                     }, set: {
-                                         if case var .appearance(module) = $0 {
-                                             module.lifetime = $1
-                                             $0 = .appearance(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 60,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("Start",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .appearance(module) = $0 { return module.startSize }
-                                         return nil
-                                     }, set: {
-                                         if case var .appearance(module) = $0 {
-                                             module.startSize = $1
-                                             $0 = .appearance(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 100,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                        moduleNumber("End",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .appearance(module) = $0 { return module.endSize }
-                                         return nil
-                                     }, set: {
-                                         if case var .appearance(module) = $0 {
-                                             module.endSize = $1
-                                             $0 = .appearance(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 100,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("Life Rand",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .appearance(module) = $0 { return module.lifetimeRandomness }
-                                         return nil
-                                     }, set: {
-                                         if case var .appearance(module) = $0 {
-                                             module.lifetimeRandomness = $1
-                                             $0 = .appearance(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 60,
-                                     step: 0.05,
-                                     enabled: isEnabled),
-                        moduleNumber("Size Rand",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .appearance(module) = $0 { return module.sizeRandomness }
-                                         return nil
-                                     }, set: {
-                                         if case var .appearance(module) = $0 {
-                                             module.sizeRandomness = $1
-                                             $0 = .appearance(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 100,
-                                     step: 0.05,
-                                     enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("Rotation",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .appearance(module) = $0 { return module.startRotation }
-                                         return nil
-                                     }, set: {
-                                         if case var .appearance(module) = $0 {
-                                             module.startRotation = $1
-                                             $0 = .appearance(module)
-                                         }
-                                     }),
-                                     min: -360,
-                                     max: 360,
-                                     step: 1,
-                                     enabled: isEnabled),
-                        moduleNumber("Rot Rand",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .appearance(module) = $0 { return module.rotationRandomness }
-                                         return nil
-                                     }, set: {
-                                         if case var .appearance(module) = $0 {
-                                             module.rotationRandomness = $1
-                                             $0 = .appearance(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 360,
-                                     step: 1,
-                                     enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("Spin",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .appearance(module) = $0 { return module.angularVelocity }
-                                         return nil
-                                     }, set: {
-                                         if case var .appearance(module) = $0 {
-                                             module.angularVelocity = $1
-                                             $0 = .appearance(module)
-                                         }
-                                     }),
-                                     min: -3600,
-                                     max: 3600,
-                                     step: 1,
-                                     enabled: isEnabled),
-                        moduleNumber("Spin Rand",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .appearance(module) = $0 { return module.angularVelocityRandomness }
-                                         return nil
-                                     }, set: {
-                                         if case var .appearance(module) = $0 {
-                                             module.angularVelocityRandomness = $1
-                                             $0 = .appearance(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 3600,
-                                     step: 1,
-                                     enabled: isEnabled),
-                    ],
-                ]))
+                return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                    moduleEditorRows([
+                        [
+                            moduleEnum("Blend",
+                                       moduleValueBinding(index, fallback: .alpha, get: {
+                                           if case let .appearance(module) = $0 { return module.blendMode }
+                                           return nil
+                                       }, set: {
+                                           if case var .appearance(module) = $0 {
+                                               module.blendMode = $1
+                                               $0 = .appearance(module)
+                                           }
+                                       }),
+                                       width: 132,
+                                       enabled: isEnabled,
+                                       label: particleBlendModeLabel),
+                            moduleNumber("Life",
+                                         moduleFloatBinding(index, fallback: 0, get: {
+                                             if case let .appearance(module) = $0 { return module.lifetime }
+                                             return nil
+                                         }, set: {
+                                             if case var .appearance(module) = $0 {
+                                                 module.lifetime = $1
+                                                 $0 = .appearance(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 60,
+                                         step: 0.1,
+                                         enabled: isEnabled),
+                        ],
+                        [
+                            moduleNumber("Start",
+                                         moduleFloatBinding(index, fallback: 0, get: {
+                                             if case let .appearance(module) = $0 { return module.startSize }
+                                             return nil
+                                         }, set: {
+                                             if case var .appearance(module) = $0 {
+                                                 module.startSize = $1
+                                                 $0 = .appearance(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 100,
+                                         step: 0.1,
+                                         enabled: isEnabled),
+                            moduleNumber("End",
+                                         moduleFloatBinding(index, fallback: 0, get: {
+                                             if case let .appearance(module) = $0 { return module.endSize }
+                                             return nil
+                                         }, set: {
+                                             if case var .appearance(module) = $0 {
+                                                 module.endSize = $1
+                                                 $0 = .appearance(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 100,
+                                         step: 0.1,
+                                         enabled: isEnabled),
+                        ],
+                        [
+                            moduleNumber("Life Rand",
+                                         moduleFloatBinding(index, fallback: 0, get: {
+                                             if case let .appearance(module) = $0 { return module.lifetimeRandomness }
+                                             return nil
+                                         }, set: {
+                                             if case var .appearance(module) = $0 {
+                                                 module.lifetimeRandomness = $1
+                                                 $0 = .appearance(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 60,
+                                         step: 0.05,
+                                         enabled: isEnabled),
+                            moduleNumber("Size Rand",
+                                         moduleFloatBinding(index, fallback: 0, get: {
+                                             if case let .appearance(module) = $0 { return module.sizeRandomness }
+                                             return nil
+                                         }, set: {
+                                             if case var .appearance(module) = $0 {
+                                                 module.sizeRandomness = $1
+                                                 $0 = .appearance(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 100,
+                                         step: 0.05,
+                                         enabled: isEnabled),
+                        ],
+                        [
+                            moduleNumber("Rotation",
+                                         moduleFloatBinding(index, fallback: 0, get: {
+                                             if case let .appearance(module) = $0 { return module.startRotation }
+                                             return nil
+                                         }, set: {
+                                             if case var .appearance(module) = $0 {
+                                                 module.startRotation = $1
+                                                 $0 = .appearance(module)
+                                             }
+                                         }),
+                                         min: -360,
+                                         max: 360,
+                                         step: 1,
+                                         enabled: isEnabled),
+                            moduleNumber("Rot Rand",
+                                         moduleFloatBinding(index, fallback: 0, get: {
+                                             if case let .appearance(module) = $0 { return module.rotationRandomness }
+                                             return nil
+                                         }, set: {
+                                             if case var .appearance(module) = $0 {
+                                                 module.rotationRandomness = $1
+                                                 $0 = .appearance(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 360,
+                                         step: 1,
+                                         enabled: isEnabled),
+                        ],
+                        [
+                            moduleNumber("Spin",
+                                         moduleFloatBinding(index, fallback: 0, get: {
+                                             if case let .appearance(module) = $0 { return module.angularVelocity }
+                                             return nil
+                                         }, set: {
+                                             if case var .appearance(module) = $0 {
+                                                 module.angularVelocity = $1
+                                                 $0 = .appearance(module)
+                                             }
+                                         }),
+                                         min: -3600,
+                                         max: 3600,
+                                         step: 1,
+                                         enabled: isEnabled),
+                            moduleNumber("Spin Rand",
+                                         moduleFloatBinding(index, fallback: 0, get: {
+                                             if case let .appearance(module) = $0 { return module.angularVelocityRandomness }
+                                             return nil
+                                         }, set: {
+                                             if case var .appearance(module) = $0 {
+                                                 module.angularVelocityRandomness = $1
+                                                 $0 = .appearance(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 3600,
+                                         step: 1,
+                                         enabled: isEnabled),
+                        ],
+                    ])
+                    moduleColorRow([
+                        moduleColorEditor("Start Color",
+                                          moduleColorBinding(index, fallback: SIMD4<Float>(1, 1, 1, 1), get: {
+                                              if case let .appearance(module) = $0 { return module.startColor }
+                                              return nil
+                                          }, set: {
+                                              if case var .appearance(module) = $0 {
+                                                  module.startColor = $1
+                                                  $0 = .appearance(module)
+                                              }
+                                          }),
+                                          enabled: isEnabled),
+                        moduleColorEditor("End Color",
+                                          moduleColorBinding(index, fallback: SIMD4<Float>(1, 1, 1, 0), get: {
+                                              if case let .appearance(module) = $0 { return module.endColor }
+                                              return nil
+                                          }, set: {
+                                              if case var .appearance(module) = $0 {
+                                                  module.endColor = $1
+                                                  $0 = .appearance(module)
+                                              }
+                                          }),
+                                          enabled: isEnabled),
+                    ])
+                    moduleCurveEditor("Size Curve",
+                                      moduleValueBinding(index, fallback: .linear, get: {
+                                          if case let .appearance(module) = $0 { return module.sizeCurve }
+                                          return nil
+                                      }, set: {
+                                          if case var .appearance(module) = $0 {
+                                              module.sizeCurve = $1
+                                              $0 = .appearance(module)
+                                          }
+                                      }),
+                                      enabled: isEnabled)
+                    moduleCurveEditor("Color Curve",
+                                      moduleValueBinding(index, fallback: .linear, get: {
+                                          if case let .appearance(module) = $0 { return module.colorCurve }
+                                          return nil
+                                      }, set: {
+                                          if case var .appearance(module) = $0 {
+                                              module.colorCurve = $1
+                                              $0 = .appearance(module)
+                                          }
+                                      }),
+                                      enabled: isEnabled)
+                })
             case .textureSheet:
-                return AnyView(moduleEditorRows([
-                    [
-                        moduleEnum("Playback",
-                                   moduleValueBinding(index, fallback: .automatic, get: {
-                                       if case let .textureSheet(module) = $0 { return module.playbackMode }
-                                       return nil
-                                   }, set: {
-                                       if case var .textureSheet(module) = $0 {
-                                           module.playbackMode = $1
-                                           $0 = .textureSheet(module)
-                                       }
-                                   }),
-                                   width: 140,
-                                   enabled: isEnabled,
-                                   label: particleTextureSheetPlaybackModeLabel),
-                        moduleNumber("Frame Rate",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .textureSheet(module) = $0 { return module.frameRate }
-                                         return nil
-                                     }, set: {
-                                         if case var .textureSheet(module) = $0 {
-                                             module.frameRate = $1
-                                             $0 = .textureSheet(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 240,
-                                     step: 1,
-                                     enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("Cols",
-                                     moduleIntBinding(index, fallback: 1, get: {
-                                         if case let .textureSheet(module) = $0 { return module.columns }
-                                         return nil
-                                     }, set: {
-                                         if case var .textureSheet(module) = $0 {
-                                             module.columns = $1
-                                             $0 = .textureSheet(module)
-                                         }
-                                     }),
-                                     min: 1,
-                                     max: 64,
-                                     step: 1,
-                                     enabled: isEnabled),
-                        moduleNumber("Rows",
-                                     moduleIntBinding(index, fallback: 1, get: {
-                                         if case let .textureSheet(module) = $0 { return module.rows }
-                                         return nil
-                                     }, set: {
-                                         if case var .textureSheet(module) = $0 {
-                                             module.rows = $1
-                                             $0 = .textureSheet(module)
-                                         }
-                                     }),
-                                     min: 1,
-                                     max: 64,
-                                     step: 1,
-                                     enabled: isEnabled),
-                        moduleNumber("Frames",
-                                     moduleIntBinding(index, fallback: 1, get: {
-                                         if case let .textureSheet(module) = $0 { return module.frameCount }
-                                         return nil
-                                     }, set: {
-                                         if case var .textureSheet(module) = $0 {
-                                             module.frameCount = $1
-                                             $0 = .textureSheet(module)
-                                         }
-                                     }),
-                                     min: 1,
-                                     max: 4096,
-                                     step: 1,
-                                     enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("Start Frame",
-                                     moduleIntBinding(index, fallback: 0, get: {
-                                         if case let .textureSheet(module) = $0 { return module.startFrame }
-                                         return nil
-                                     }, set: {
-                                         if case var .textureSheet(module) = $0 {
-                                             module.startFrame = $1
-                                             $0 = .textureSheet(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 4096,
-                                     step: 1,
-                                     enabled: isEnabled),
-                        moduleNumber("Frame Rand",
-                                     moduleIntBinding(index, fallback: 0, get: {
-                                         if case let .textureSheet(module) = $0 { return module.frameRandomness }
-                                         return nil
-                                     }, set: {
-                                         if case var .textureSheet(module) = $0 {
-                                             module.frameRandomness = $1
-                                             $0 = .textureSheet(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 4096,
-                                     step: 1,
-                                     enabled: isEnabled),
-                    ],
-                ]))
+                return textureSheetModuleEditor(index: index, module: module, isEnabled: isEnabled)
             case .renderer:
-                return AnyView(moduleEditorRows([
-                    [
-                        moduleEnum("Mode",
-                                   moduleValueBinding(index, fallback: .billboard, get: {
-                                       if case let .renderer(module) = $0 { return module.renderMode }
-                                       return nil
-                                   }, set: {
-                                       if case var .renderer(module) = $0 {
-                                           module.renderMode = $1
-                                           $0 = .renderer(module)
-                                       }
-                                   }),
-                                   width: 132,
-                                   enabled: isEnabled,
-                                   label: particleRenderModeLabel),
-                        moduleEnum("Sort",
-                                   moduleValueBinding(index, fallback: .distanceDescending, get: {
-                                       if case let .renderer(module) = $0 { return module.sortMode }
-                                       return nil
-                                   }, set: {
-                                       if case var .renderer(module) = $0 {
-                                           module.sortMode = $1
-                                           $0 = .renderer(module)
-                                       }
-                                   }),
-                                   width: 150,
-                                   enabled: isEnabled,
-                                   label: particleSortModeLabel),
-                    ],
-                    [
-                        moduleEnum("Align",
-                                   moduleValueBinding(index, fallback: .billboard, get: {
-                                       if case let .renderer(module) = $0 { return module.renderAlignment }
-                                       return nil
-                                   }, set: {
-                                       if case var .renderer(module) = $0 {
-                                           module.renderAlignment = $1
-                                           $0 = .renderer(module)
-                                       }
-                                   }),
-                                   width: 132,
-                                   enabled: isEnabled,
-                                   label: particleRenderAlignmentLabel),
-                        moduleEnum("Bounds",
-                                   moduleValueBinding(index, fallback: .automatic, get: {
-                                       if case let .renderer(module) = $0 { return module.renderBoundsMode }
-                                       return nil
-                                   }, set: {
-                                       if case var .renderer(module) = $0 {
-                                           module.renderBoundsMode = $1
-                                           $0 = .renderer(module)
-                                       }
-                                   }),
-                                   width: 132,
-                                   enabled: isEnabled,
-                                   label: particleRenderBoundsModeLabel),
-                    ],
-                    [
-                        moduleNumber("Max Dist",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .renderer(module) = $0 { return module.maxRenderDistance }
-                                         return nil
-                                     }, set: {
-                                         if case var .renderer(module) = $0 {
-                                             module.maxRenderDistance = $1
-                                             $0 = .renderer(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 100_000,
-                                     step: 1,
-                                     enabled: isEnabled),
-                        moduleNumber("Fade",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .renderer(module) = $0 { return module.renderDistanceFadeRange }
-                                         return nil
-                                     }, set: {
-                                         if case var .renderer(module) = $0 {
-                                             module.renderDistanceFadeRange = $1
-                                             $0 = .renderer(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 100_000,
-                                     step: 1,
-                                     enabled: isEnabled),
-                        moduleNumber("LOD Min",
-                                     moduleFloatBinding(index, fallback: 1, get: {
-                                         if case let .renderer(module) = $0 { return module.renderLODMinParticleScale }
-                                         return nil
-                                     }, set: {
-                                         if case var .renderer(module) = $0 {
-                                             module.renderLODMinParticleScale = $1
-                                             $0 = .renderer(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 1,
-                                     step: 0.05,
-                                     enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("LOD Start",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .renderer(module) = $0 { return module.renderLODStartDistance }
-                                         return nil
-                                     }, set: {
-                                         if case var .renderer(module) = $0 {
-                                             module.renderLODStartDistance = $1
-                                             $0 = .renderer(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 100_000,
-                                     step: 1,
-                                     enabled: isEnabled),
-                        moduleNumber("LOD End",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .renderer(module) = $0 { return module.renderLODEndDistance }
-                                         return nil
-                                     }, set: {
-                                         if case var .renderer(module) = $0 {
-                                             module.renderLODEndDistance = $1
-                                             $0 = .renderer(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 100_000,
-                                     step: 1,
-                                     enabled: isEnabled),
-                        moduleNumber("Bounds R",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .renderer(module) = $0 { return module.renderBoundsRadius }
-                                         return nil
-                                     }, set: {
-                                         if case var .renderer(module) = $0 {
-                                             module.renderBoundsRadius = $1
-                                             $0 = .renderer(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 100_000,
-                                     step: 1,
-                                     enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("Stretch",
-                                     moduleFloatBinding(index, fallback: 0, get: {
-                                         if case let .renderer(module) = $0 { return module.velocityStretchScale }
-                                         return nil
-                                     }, set: {
-                                         if case var .renderer(module) = $0 {
-                                             module.velocityStretchScale = $1
-                                             $0 = .renderer(module)
-                                         }
-                                     }),
-                                     min: 0,
-                                     max: 100,
-                                     step: 0.05,
-                                     enabled: isEnabled),
-                        moduleNumber("Stretch Max",
-                                     moduleFloatBinding(index, fallback: 8, get: {
-                                         if case let .renderer(module) = $0 { return module.velocityStretchMax }
-                                         return nil
-                                     }, set: {
-                                         if case var .renderer(module) = $0 {
-                                             module.velocityStretchMax = $1
-                                             $0 = .renderer(module)
-                                         }
-                                     }),
-                                     min: 1,
-                                     max: 1000,
-                                     step: 0.1,
-                                     enabled: isEnabled),
-                    ],
-                ]))
+                let status = moduleBackendStatus(module)
+                return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                    moduleEditorSection("Draw",
+                                        detail: L("Render mode, sort, and alignment"),
+                                        tone: status.tone,
+                                        content: moduleEditorRows([
+                                            [
+                                                moduleEnum("Mode",
+                                                           moduleValueBinding(index, fallback: .billboard, get: {
+                                                               if case let .renderer(module) = $0 { return module.renderMode }
+                                                               return nil
+                                                           }, set: {
+                                                               if case var .renderer(module) = $0 {
+                                                                   module.renderMode = $1
+                                                                   $0 = .renderer(module)
+                                                               }
+                                                           }),
+                                                           width: 132,
+                                                           enabled: isEnabled,
+                                                           label: particleRenderModeLabel),
+                                                moduleEnum("Sort",
+                                                           moduleValueBinding(index, fallback: .distanceDescending, get: {
+                                                               if case let .renderer(module) = $0 { return module.sortMode }
+                                                               return nil
+                                                           }, set: {
+                                                               if case var .renderer(module) = $0 {
+                                                                   module.sortMode = $1
+                                                                   $0 = .renderer(module)
+                                                               }
+                                                           }),
+                                                           width: 150,
+                                                           enabled: isEnabled,
+                                                           label: particleSortModeLabel),
+                                                moduleNumber("Priority",
+                                                             moduleIntBinding(index, fallback: 0, get: {
+                                                                 if case let .renderer(module) = $0 { return module.renderSortPriority }
+                                                                 return nil
+                                                             }, set: {
+                                                                 if case var .renderer(module) = $0 {
+                                                                     module.renderSortPriority = $1
+                                                                     $0 = .renderer(module)
+                                                                 }
+                                                             }),
+                                                             min: -10_000,
+                                                             max: 10_000,
+                                                             step: 1,
+                                                             enabled: isEnabled),
+                                            ],
+                                            [
+                                                moduleEnum("Align",
+                                                           moduleValueBinding(index, fallback: .billboard, get: {
+                                                               if case let .renderer(module) = $0 { return module.renderAlignment }
+                                                               return nil
+                                                           }, set: {
+                                                               if case var .renderer(module) = $0 {
+                                                                   module.renderAlignment = $1
+                                                                   $0 = .renderer(module)
+                                                               }
+                                                           }),
+                                                           width: 132,
+                                                           enabled: isEnabled,
+                                                           label: particleRenderAlignmentLabel),
+                                                moduleEnum("Bounds",
+                                                           moduleValueBinding(index, fallback: .automatic, get: {
+                                                               if case let .renderer(module) = $0 { return module.renderBoundsMode }
+                                                               return nil
+                                                           }, set: {
+                                                               if case var .renderer(module) = $0 {
+                                                                   module.renderBoundsMode = $1
+                                                                   $0 = .renderer(module)
+                                                               }
+                                                           }),
+                                                           width: 132,
+                                                           enabled: isEnabled,
+                                                           label: particleRenderBoundsModeLabel),
+                                            ],
+                                        ]))
+                    moduleEditorSection("Culling",
+                                        detail: L("Distance fade, LOD, and render bounds"),
+                                        tone: status.tone,
+                                        content: moduleEditorRows([
+                                            [
+                                                moduleNumber("Max Dist",
+                                                             moduleFloatBinding(index, fallback: 0, get: {
+                                                                 if case let .renderer(module) = $0 { return module.maxRenderDistance }
+                                                                 return nil
+                                                             }, set: {
+                                                                 if case var .renderer(module) = $0 {
+                                                                     module.maxRenderDistance = $1
+                                                                     $0 = .renderer(module)
+                                                                 }
+                                                             }),
+                                                             min: 0,
+                                                             max: 100_000,
+                                                             step: 1,
+                                                             enabled: isEnabled),
+                                                moduleNumber("Fade",
+                                                             moduleFloatBinding(index, fallback: 0, get: {
+                                                                 if case let .renderer(module) = $0 { return module.renderDistanceFadeRange }
+                                                                 return nil
+                                                             }, set: {
+                                                                 if case var .renderer(module) = $0 {
+                                                                     module.renderDistanceFadeRange = $1
+                                                                     $0 = .renderer(module)
+                                                                 }
+                                                             }),
+                                                             min: 0,
+                                                             max: 100_000,
+                                                             step: 1,
+                                                             enabled: isEnabled),
+                                                moduleNumber("LOD Min",
+                                                             moduleFloatBinding(index, fallback: 1, get: {
+                                                                 if case let .renderer(module) = $0 { return module.renderLODMinParticleScale }
+                                                                 return nil
+                                                             }, set: {
+                                                                 if case var .renderer(module) = $0 {
+                                                                     module.renderLODMinParticleScale = $1
+                                                                     $0 = .renderer(module)
+                                                                 }
+                                                             }),
+                                                             min: 0,
+                                                             max: 1,
+                                                             step: 0.05,
+                                                             enabled: isEnabled),
+                                            ],
+                                            [
+                                                moduleNumber("LOD Start",
+                                                             moduleFloatBinding(index, fallback: 0, get: {
+                                                                 if case let .renderer(module) = $0 { return module.renderLODStartDistance }
+                                                                 return nil
+                                                             }, set: {
+                                                                 if case var .renderer(module) = $0 {
+                                                                     module.renderLODStartDistance = $1
+                                                                     $0 = .renderer(module)
+                                                                 }
+                                                             }),
+                                                             min: 0,
+                                                             max: 100_000,
+                                                             step: 1,
+                                                             enabled: isEnabled),
+                                                moduleNumber("LOD End",
+                                                             moduleFloatBinding(index, fallback: 0, get: {
+                                                                 if case let .renderer(module) = $0 { return module.renderLODEndDistance }
+                                                                 return nil
+                                                             }, set: {
+                                                                 if case var .renderer(module) = $0 {
+                                                                     module.renderLODEndDistance = $1
+                                                                     $0 = .renderer(module)
+                                                                 }
+                                                             }),
+                                                             min: 0,
+                                                             max: 100_000,
+                                                             step: 1,
+                                                             enabled: isEnabled),
+                                                moduleNumber("Bounds R",
+                                                             moduleFloatBinding(index, fallback: 0, get: {
+                                                                 if case let .renderer(module) = $0 { return module.renderBoundsRadius }
+                                                                 return nil
+                                                             }, set: {
+                                                                 if case var .renderer(module) = $0 {
+                                                                     module.renderBoundsRadius = $1
+                                                                     $0 = .renderer(module)
+                                                                 }
+                                                             }),
+                                                             min: 0,
+                                                             max: 100_000,
+                                                             step: 1,
+                                                             enabled: isEnabled),
+                                            ],
+                                        ]))
+                    moduleEditorSection("Velocity Stretch",
+                                        detail: L("Billboard elongation driven by particle velocity"),
+                                        tone: status.tone,
+                                        content: moduleEditorRows([
+                                            [
+                                                moduleNumber("Stretch",
+                                                             moduleFloatBinding(index, fallback: 0, get: {
+                                                                 if case let .renderer(module) = $0 { return module.velocityStretchScale }
+                                                                 return nil
+                                                             }, set: {
+                                                                 if case var .renderer(module) = $0 {
+                                                                     module.velocityStretchScale = $1
+                                                                     $0 = .renderer(module)
+                                                                 }
+                                                             }),
+                                                             min: 0,
+                                                             max: 100,
+                                                             step: 0.05,
+                                                             enabled: isEnabled),
+                                                moduleNumber("Stretch Max",
+                                                             moduleFloatBinding(index, fallback: 8, get: {
+                                                                 if case let .renderer(module) = $0 { return module.velocityStretchMax }
+                                                                 return nil
+                                                             }, set: {
+                                                                 if case var .renderer(module) = $0 {
+                                                                     module.velocityStretchMax = $1
+                                                                     $0 = .renderer(module)
+                                                                 }
+                                                             }),
+                                                             min: 1,
+                                                             max: 1000,
+                                                             step: 0.1,
+                                                             enabled: isEnabled),
+                                            ],
+                                        ]))
+                })
             case .trails:
-                return AnyView(moduleEditorRows([
-                    [
-                        moduleNumber("Length",
+                let status = moduleBackendStatus(module)
+                return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                    moduleEditorSection("Trail Cache",
+                                        detail: L("History length and sampling budget"),
+                                        tone: status.tone,
+                                        content: moduleEditorRows([
+                                            [
+                                                moduleNumber("Length",
                                      moduleFloatBinding(index, fallback: 0, get: {
                                          if case let .trails(module) = $0 { return module.trailLength }
                                          return nil
@@ -2266,7 +2386,7 @@ struct InspectorPanel: View {
                                      max: 60,
                                      step: 0.05,
                                      enabled: isEnabled),
-                        moduleNumber("Segments",
+                                                moduleNumber("Segments",
                                      moduleIntBinding(index, fallback: 0, get: {
                                          if case let .trails(module) = $0 { return module.trailSegments }
                                          return nil
@@ -2280,7 +2400,7 @@ struct InspectorPanel: View {
                                      max: 128,
                                      step: 1,
                                      enabled: isEnabled),
-                        moduleNumber("End Alpha",
+                                                moduleNumber("End Alpha",
                                      moduleFloatBinding(index, fallback: 0, get: {
                                          if case let .trails(module) = $0 { return module.trailEndAlphaScale }
                                          return nil
@@ -2294,9 +2414,14 @@ struct InspectorPanel: View {
                                      max: 1,
                                      step: 0.05,
                                      enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("Width",
+                                            ],
+                                        ]))
+                    moduleEditorSection("Ribbon Shape",
+                                        detail: L("Width, taper, and alpha falloff"),
+                                        tone: status.tone,
+                                        content: moduleEditorRows([
+                                            [
+                                                moduleNumber("Width",
                                      moduleFloatBinding(index, fallback: 1, get: {
                                          if case let .trails(module) = $0 { return module.ribbonWidthScale }
                                          return nil
@@ -2310,7 +2435,7 @@ struct InspectorPanel: View {
                                      max: 100,
                                      step: 0.05,
                                      enabled: isEnabled),
-                        moduleNumber("Tail Width",
+                                                moduleNumber("Tail Width",
                                      moduleFloatBinding(index, fallback: 1, get: {
                                          if case let .trails(module) = $0 { return module.ribbonTailWidthScale }
                                          return nil
@@ -2324,7 +2449,7 @@ struct InspectorPanel: View {
                                      max: 100,
                                      step: 0.05,
                                      enabled: isEnabled),
-                        moduleNumber("Tiling",
+                                                moduleNumber("Tiling",
                                      moduleFloatBinding(index, fallback: 1, get: {
                                          if case let .trails(module) = $0 { return module.ribbonTextureTiling }
                                          return nil
@@ -2338,9 +2463,9 @@ struct InspectorPanel: View {
                                      max: 100,
                                      step: 0.05,
                                      enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("End Size",
+                                            ],
+                                            [
+                                                moduleNumber("End Size",
                                      moduleFloatBinding(index, fallback: 0.5, get: {
                                          if case let .trails(module) = $0 { return module.trailEndSizeScale }
                                          return nil
@@ -2354,7 +2479,7 @@ struct InspectorPanel: View {
                                      max: 100,
                                      step: 0.05,
                                      enabled: isEnabled),
-                        moduleNumber("Tail Alpha",
+                                                moduleNumber("Tail Alpha",
                                      moduleFloatBinding(index, fallback: 1, get: {
                                          if case let .trails(module) = $0 { return module.ribbonTailAlphaScale }
                                          return nil
@@ -2368,7 +2493,7 @@ struct InspectorPanel: View {
                                      max: 1,
                                      step: 0.05,
                                      enabled: isEnabled),
-                        moduleNumber("Offset",
+                                                moduleNumber("Offset",
                                      moduleFloatBinding(index, fallback: 0, get: {
                                          if case let .trails(module) = $0 { return module.ribbonTextureOffset }
                                          return nil
@@ -2382,9 +2507,14 @@ struct InspectorPanel: View {
                                      max: 100,
                                      step: 0.05,
                                      enabled: isEnabled),
-                    ],
-                    [
-                        moduleNumber("Max Segment",
+                                            ],
+                                        ]))
+                    moduleEditorSection("Ribbon Quality",
+                                        detail: L("Segment clamp, joins, and smoothing"),
+                                        tone: status.tone,
+                                        content: moduleEditorRows([
+                                            [
+                                                moduleNumber("Max Segment",
                                      moduleFloatBinding(index, fallback: 0, get: {
                                          if case let .trails(module) = $0 { return module.ribbonMaxSegmentLength }
                                          return nil
@@ -2398,7 +2528,7 @@ struct InspectorPanel: View {
                                      max: 1000,
                                      step: 0.1,
                                      enabled: isEnabled),
-                        moduleNumber("Join",
+                                                moduleNumber("Join",
                                      moduleFloatBinding(index, fallback: 0, get: {
                                          if case let .trails(module) = $0 { return module.ribbonJoinOverlapScale }
                                          return nil
@@ -2412,7 +2542,7 @@ struct InspectorPanel: View {
                                      max: 10,
                                      step: 0.05,
                                      enabled: isEnabled),
-                        moduleNumber("Smooth",
+                                                moduleNumber("Smooth",
                                      moduleIntBinding(index, fallback: 1, get: {
                                          if case let .trails(module) = $0 { return module.ribbonSmoothingSegments }
                                          return nil
@@ -2426,162 +2556,987 @@ struct InspectorPanel: View {
                                      max: 16,
                                      step: 1,
                                      enabled: isEnabled),
-                    ],
-                ]))
-            case .subEmitters:
-                return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 5) {
-                    moduleEditorRows([
-                        [
-                            moduleEnum("Trigger",
-                                       moduleValueBinding(index, fallback: .none, get: {
-                                           if case let .subEmitters(module) = $0 { return module.legacyTrigger }
-                                           return nil
-                                       }, set: {
-                                           if case var .subEmitters(module) = $0 {
-                                               module.legacyTrigger = $1
-                                               $0 = .subEmitters(module)
-                                           }
-                                       }),
-                                       width: 132,
-                                       enabled: isEnabled,
-                                       label: particleSubEmitterTriggerLabel),
-                            moduleNumber("Burst",
-                                         moduleIntBinding(index, fallback: 0, get: {
-                                             if case let .subEmitters(module) = $0 { return module.legacyBurstCount }
-                                             return nil
-                                         }, set: {
-                                             if case var .subEmitters(module) = $0 {
-                                                 module.legacyBurstCount = $1
-                                                 $0 = .subEmitters(module)
-                                             }
-                                         }),
-                                         min: 0,
-                                         max: 100_000,
-                                         step: 1,
-                                         enabled: isEnabled),
-                            moduleNumber("Probability",
-                                         moduleFloatBinding(index, fallback: 1, get: {
-                                             if case let .subEmitters(module) = $0 { return module.legacyProbability }
-                                             return nil
-                                         }, set: {
-                                             if case var .subEmitters(module) = $0 {
-                                                 module.legacyProbability = $1
-                                                 $0 = .subEmitters(module)
-                                             }
-                                         }),
-                                         min: 0,
-                                         max: 1,
-                                         step: 0.05,
-                                         enabled: isEnabled),
-                        ],
-                        [
-                            moduleNumber("Max Depth",
-                                         moduleIntBinding(index, fallback: 0, get: {
-                                             if case let .subEmitters(module) = $0 { return module.legacyMaxDepth }
-                                             return nil
-                                         }, set: {
-                                             if case var .subEmitters(module) = $0 {
-                                                 module.legacyMaxDepth = $1
-                                                 $0 = .subEmitters(module)
-                                             }
-                                         }),
-                                         min: 0,
-                                         max: 16,
-                                         step: 1,
-                                         enabled: isEnabled),
-                            moduleNumber("Inherit",
-                                         moduleFloatBinding(index, fallback: 0, get: {
-                                             if case let .subEmitters(module) = $0 { return module.legacyInheritVelocity }
-                                             return nil
-                                         }, set: {
-                                             if case var .subEmitters(module) = $0 {
-                                                 module.legacyInheritVelocity = $1
-                                                 $0 = .subEmitters(module)
-                                             }
-                                         }),
-                                         min: 0,
-                                         max: 10,
-                                         step: 0.05,
-                                         enabled: isEnabled),
-                            moduleNumber("Life",
-                                         moduleFloatBinding(index, fallback: 1, get: {
-                                             if case let .subEmitters(module) = $0 { return module.legacyLifetime }
-                                             return nil
-                                         }, set: {
-                                             if case var .subEmitters(module) = $0 {
-                                                 module.legacyLifetime = $1
-                                                 $0 = .subEmitters(module)
-                                             }
-                                         }),
-                                         min: 0.0001,
-                                         max: 60,
-                                         step: 0.1,
-                                         enabled: isEnabled),
-                        ],
-                    ])
-
-                    Box(direction: .column, alignItems: .stretch, spacing: 4) {
-                        Row(alignment: .center, spacing: 0) {
-                            Spacer(minLength: 0)
-                                .frame(width: 28)
-                            Text(L("Rules"))
-                                .lineLimit(1)
-                                .font(.caption)
-                                .foregroundColor(.onSurfaceMuted)
-                                .flex()
-                        }
-                        InspectorParticleSubEmittersValue(binding: moduleSubEmitterRulesBinding(index))
-                            .opacity(isEnabled ? 1 : 0.66)
-                    }
+                                            ],
+                                        ]))
                 })
+            case .subEmitters:
+                return subEmittersModuleEditor(index: index, module: module, isEnabled: isEnabled)
             case .gpuSimulation:
-                return AnyView(moduleEditorRows([
-                    [
-                        moduleEnum("Space",
-                                   moduleValueBinding(index, fallback: .local, get: {
-                                       if case let .gpuSimulation(module) = $0 { return module.simulationSpace }
-                                       return nil
-                                   }, set: {
-                                       if case var .gpuSimulation(module) = $0 {
-                                           module.simulationSpace = $1
-                                           $0 = .gpuSimulation(module)
-                                       }
-                                   }),
-                                   width: 132,
-                                   enabled: isEnabled,
-                                   label: particleSimulationSpaceLabel),
-                        moduleEnum("Backend",
-                                   moduleValueBinding(index, fallback: .cpu, get: {
-                                       if case let .gpuSimulation(module) = $0 { return module.simulationBackend }
-                                       return nil
-                                   }, set: {
-                                       if case var .gpuSimulation(module) = $0 {
-                                           module.simulationBackend = $1
-                                           $0 = .gpuSimulation(module)
-                                       }
-                                   }),
-                                   width: 150,
-                                   enabled: isEnabled,
-                                   label: particleSimulationBackendLabel),
-                    ],
-                    [
-                        moduleNumber("Group",
-                                     moduleIntBinding(index, fallback: 64, get: {
-                                         if case let .gpuSimulation(module) = $0 { return module.workgroupSize }
-                                         return nil
-                                     }, set: {
-                                         if case var .gpuSimulation(module) = $0 {
-                                             module.workgroupSize = $1
-                                             $0 = .gpuSimulation(module)
-                                         }
-                                     }),
-                                     min: 1,
-                                     max: Float(ParticleGPUSimulationPlan.maximumWorkgroupSize),
-                                     step: 1,
-                                     enabled: isEnabled),
-                    ],
-                ]))
+                let status = moduleBackendStatus(module)
+                return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                    moduleEditorSection("Backend",
+                                        detail: L("Simulation space and GPU/CPU preference"),
+                                        tone: status.tone,
+                                        content: moduleEditorRows([
+                                            [
+                                                moduleEnum("Space",
+                                                           moduleValueBinding(index, fallback: .local, get: {
+                                                               if case let .gpuSimulation(module) = $0 { return module.simulationSpace }
+                                                               return nil
+                                                           }, set: {
+                                                               if case var .gpuSimulation(module) = $0 {
+                                                                   module.simulationSpace = $1
+                                                                   $0 = .gpuSimulation(module)
+                                                               }
+                                                           }),
+                                                           width: 132,
+                                                           enabled: isEnabled,
+                                                           label: particleSimulationSpaceLabel),
+                                                moduleEnum("Backend",
+                                                           moduleValueBinding(index, fallback: .cpu, get: {
+                                                               if case let .gpuSimulation(module) = $0 { return module.simulationBackend }
+                                                               return nil
+                                                           }, set: {
+                                                               if case var .gpuSimulation(module) = $0 {
+                                                                   module.simulationBackend = $1
+                                                                   $0 = .gpuSimulation(module)
+                                                               }
+                                                           }),
+                                                           width: 150,
+                                                           enabled: isEnabled,
+                                                           label: particleSimulationBackendLabel),
+                                            ],
+                                        ]))
+                    moduleEditorSection("Dispatch",
+                                        detail: L("Thread group size used by the GPU simulator"),
+                                        tone: status.tone,
+                                        content: moduleEditorRows([
+                                            [
+                                                moduleNumber("Group",
+                                                             moduleIntBinding(index, fallback: 64, get: {
+                                                                 if case let .gpuSimulation(module) = $0 { return module.workgroupSize }
+                                                                 return nil
+                                                             }, set: {
+                                                                 if case var .gpuSimulation(module) = $0 {
+                                                                     module.workgroupSize = $1
+                                                                     $0 = .gpuSimulation(module)
+                                                                 }
+                                                             }),
+                                                             min: 1,
+                                                             max: Float(ParticleGPUSimulationPlan.maximumWorkgroupSize),
+                                                             step: 1,
+                                                             enabled: isEnabled),
+                                            ],
+                                        ]))
+                })
             }
+        }
+
+        private func shapeModuleEditor(index: Int,
+                                       module: ParticleEmitterModule,
+                                       isEnabled: Bool) -> AnyView {
+            let status = moduleBackendStatus(module)
+            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                moduleEditorSection("Emitter Volume",
+                                    detail: L("Spawn primitive and sphere radius"),
+                                    tone: status.tone,
+                                    content: moduleEditorRows([
+                                        [
+                                            moduleEnum("Shape",
+                                                       moduleValueBinding(index, fallback: .sphere, get: {
+                                                           if case let .shape(module) = $0 { return module.emissionShape }
+                                                           return nil
+                                                       }, set: {
+                                                           if case var .shape(module) = $0 {
+                                                               module.emissionShape = $1
+                                                               $0 = .shape(module)
+                                                           }
+                                                       }),
+                                                       width: 132,
+                                                       enabled: isEnabled,
+                                                       label: particleEmissionShapeLabel),
+                                            moduleNumber("Radius",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .shape(module) = $0 { return module.spawnRadius }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .shape(module) = $0 {
+                                                                 module.spawnRadius = $1
+                                                                 $0 = .shape(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 100,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                        ],
+                                    ]))
+                moduleEditorSection("Local Offset",
+                                    detail: L("Emitter-space spawn offset"),
+                                    tone: status.tone,
+                                    content: moduleEditorRows([
+                                        [
+                                            moduleNumber("Origin X",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .shape(module) = $0 { return module.originOffset.x }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .shape(module) = $0 {
+                                                                 module.originOffset.x = $1
+                                                                 $0 = .shape(module)
+                                                             }
+                                                         }),
+                                                         min: -1000,
+                                                         max: 1000,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Origin Y",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .shape(module) = $0 { return module.originOffset.y }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .shape(module) = $0 {
+                                                                 module.originOffset.y = $1
+                                                                 $0 = .shape(module)
+                                                             }
+                                                         }),
+                                                         min: -1000,
+                                                         max: 1000,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Origin Z",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .shape(module) = $0 { return module.originOffset.z }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .shape(module) = $0 {
+                                                                 module.originOffset.z = $1
+                                                                 $0 = .shape(module)
+                                                             }
+                                                         }),
+                                                         min: -1000,
+                                                         max: 1000,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                        ],
+                                    ]))
+                moduleEditorSection("Box Volume",
+                                    detail: L("Half extents for box emission"),
+                                    tone: status.tone,
+                                    content: moduleEditorRows([
+                                        [
+                                            moduleNumber("Box X",
+                                                         moduleFloatBinding(index, fallback: 0.5, get: {
+                                                             if case let .shape(module) = $0 { return module.boxHalfExtents.x }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .shape(module) = $0 {
+                                                                 module.boxHalfExtents.x = $1
+                                                                 $0 = .shape(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 1000,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Box Y",
+                                                         moduleFloatBinding(index, fallback: 0.5, get: {
+                                                             if case let .shape(module) = $0 { return module.boxHalfExtents.y }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .shape(module) = $0 {
+                                                                 module.boxHalfExtents.y = $1
+                                                                 $0 = .shape(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 1000,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Box Z",
+                                                         moduleFloatBinding(index, fallback: 0.5, get: {
+                                                             if case let .shape(module) = $0 { return module.boxHalfExtents.z }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .shape(module) = $0 {
+                                                                 module.boxHalfExtents.z = $1
+                                                                 $0 = .shape(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 1000,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                        ],
+                                    ]))
+                moduleEditorSection("Cone Volume",
+                                    detail: L("Cone radius and height"),
+                                    tone: status.tone,
+                                    content: moduleEditorRows([
+                                        [
+                                            moduleNumber("Cone R",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .shape(module) = $0 { return module.coneRadius }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .shape(module) = $0 {
+                                                                 module.coneRadius = $1
+                                                                 $0 = .shape(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 100,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Cone H",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .shape(module) = $0 { return module.coneHeight }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .shape(module) = $0 {
+                                                                 module.coneHeight = $1
+                                                                 $0 = .shape(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 100,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                        ],
+                                    ]))
+            })
+        }
+
+        private func velocityModuleEditor(index: Int,
+                                          module: ParticleEmitterModule,
+                                          isEnabled: Bool) -> AnyView {
+            let status = moduleBackendStatus(module)
+            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                moduleEditorSection("Initial Velocity",
+                                    detail: L("Base launch vector applied at spawn"),
+                                    tone: status.tone,
+                                    content: moduleEditorRows([
+                                        [
+                                            moduleNumber("Vel X",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .velocity(module) = $0 { return module.startVelocity.x }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .velocity(module) = $0 {
+                                                                 module.startVelocity.x = $1
+                                                                 $0 = .velocity(module)
+                                                             }
+                                                         }),
+                                                         min: -1000,
+                                                         max: 1000,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Vel Y",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .velocity(module) = $0 { return module.startVelocity.y }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .velocity(module) = $0 {
+                                                                 module.startVelocity.y = $1
+                                                                 $0 = .velocity(module)
+                                                             }
+                                                         }),
+                                                         min: -1000,
+                                                         max: 1000,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Vel Z",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .velocity(module) = $0 { return module.startVelocity.z }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .velocity(module) = $0 {
+                                                                 module.startVelocity.z = $1
+                                                                 $0 = .velocity(module)
+                                                             }
+                                                         }),
+                                                         min: -1000,
+                                                         max: 1000,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                        ],
+                                    ]))
+                moduleEditorSection("Variation",
+                                    detail: L("Random velocity spread and inherited motion"),
+                                    tone: status.tone,
+                                    content: moduleEditorRows([
+                                        [
+                                            moduleNumber("Rand X",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .velocity(module) = $0 { return module.velocityRandomness.x }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .velocity(module) = $0 {
+                                                                 module.velocityRandomness.x = $1
+                                                                 $0 = .velocity(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 1000,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Rand Y",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .velocity(module) = $0 { return module.velocityRandomness.y }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .velocity(module) = $0 {
+                                                                 module.velocityRandomness.y = $1
+                                                                 $0 = .velocity(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 1000,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Rand Z",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .velocity(module) = $0 { return module.velocityRandomness.z }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .velocity(module) = $0 {
+                                                                 module.velocityRandomness.z = $1
+                                                                 $0 = .velocity(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 1000,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Inherit",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .velocity(module) = $0 { return module.velocityInheritance }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .velocity(module) = $0 {
+                                                                 module.velocityInheritance = $1
+                                                                 $0 = .velocity(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 10,
+                                                         step: 0.05,
+                                                         enabled: isEnabled),
+                                        ],
+                                    ]))
+            })
+        }
+
+        private func forcesModuleEditor(index: Int,
+                                        module: ParticleEmitterModule,
+                                        isEnabled: Bool) -> AnyView {
+            let status = moduleBackendStatus(module)
+            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                moduleEditorSection("Force Sources",
+                                    detail: L("Choose analytic force and vector field source"),
+                                    tone: status.tone,
+                                    content: moduleEditorRows([
+                                        [
+                                            moduleEnum("Force",
+                                                       moduleValueBinding(index, fallback: .none, get: {
+                                                           if case let .forces(module) = $0 { return module.forceMode }
+                                                           return nil
+                                                       }, set: {
+                                                           if case var .forces(module) = $0 {
+                                                               module.forceMode = $1
+                                                               $0 = .forces(module)
+                                                           }
+                                                       }),
+                                                       width: 132,
+                                                       enabled: isEnabled,
+                                                       label: particleForceModeLabel),
+                                            moduleEnum("Vector Field",
+                                                       moduleValueBinding(index, fallback: .none, get: {
+                                                           if case let .forces(module) = $0 { return module.vectorFieldMode }
+                                                           return nil
+                                                       }, set: {
+                                                           if case var .forces(module) = $0 {
+                                                               module.vectorFieldMode = $1
+                                                               $0 = .forces(module)
+                                                           }
+                                                       }),
+                                                       width: 132,
+                                                       enabled: isEnabled,
+                                                       label: particleVectorFieldModeLabel),
+                                        ],
+                                    ]))
+                moduleEditorSection("Gravity",
+                                    detail: L("Constant acceleration applied every simulation step"),
+                                    tone: status.tone,
+                                    content: moduleEditorRows([
+                                        [
+                                            moduleNumber("Gravity X",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .forces(module) = $0 { return module.gravity.x }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .forces(module) = $0 {
+                                                                 module.gravity.x = $1
+                                                                 $0 = .forces(module)
+                                                             }
+                                                         }),
+                                                         min: -100,
+                                                         max: 100,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Gravity Y",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .forces(module) = $0 { return module.gravity.y }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .forces(module) = $0 {
+                                                                 module.gravity.y = $1
+                                                                 $0 = .forces(module)
+                                                             }
+                                                         }),
+                                                         min: -100,
+                                                         max: 100,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Gravity Z",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .forces(module) = $0 { return module.gravity.z }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .forces(module) = $0 {
+                                                                 module.gravity.z = $1
+                                                                 $0 = .forces(module)
+                                                             }
+                                                         }),
+                                                         min: -100,
+                                                         max: 100,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                        ],
+                                    ]))
+                moduleEditorSection("Noise",
+                                    detail: L("Procedural turbulence strength and frequency"),
+                                    tone: status.tone,
+                                    content: moduleEditorRows([
+                                        [
+                                            moduleNumber("Noise",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .forces(module) = $0 { return module.noiseStrength }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .forces(module) = $0 {
+                                                                 module.noiseStrength = $1
+                                                                 $0 = .forces(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 100,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Noise Scale",
+                                                         moduleFloatBinding(index, fallback: 1, get: {
+                                                             if case let .forces(module) = $0 { return module.noiseScale }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .forces(module) = $0 {
+                                                                 module.noiseScale = $1
+                                                                 $0 = .forces(module)
+                                                             }
+                                                         }),
+                                                         min: 0.0001,
+                                                         max: 100,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Noise Speed",
+                                                         moduleFloatBinding(index, fallback: 1, get: {
+                                                             if case let .forces(module) = $0 { return module.noiseSpeed }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .forces(module) = $0 {
+                                                                 module.noiseSpeed = $1
+                                                                 $0 = .forces(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 100,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                        ],
+                                    ]))
+                moduleEditorSection("Radial / Vortex",
+                                    detail: L("Force magnitude, radius, falloff, and local center"),
+                                    tone: status.tone,
+                                    content: moduleEditorRows([
+                                        [
+                                            moduleNumber("Force",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .forces(module) = $0 { return module.forceStrength }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .forces(module) = $0 {
+                                                                 module.forceStrength = $1
+                                                                 $0 = .forces(module)
+                                                             }
+                                                         }),
+                                                         min: -1000,
+                                                         max: 1000,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Radius",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .forces(module) = $0 { return module.forceRadius }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .forces(module) = $0 {
+                                                                 module.forceRadius = $1
+                                                                 $0 = .forces(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 1000,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Falloff",
+                                                         moduleFloatBinding(index, fallback: 1, get: {
+                                                             if case let .forces(module) = $0 { return module.forceFalloff }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .forces(module) = $0 {
+                                                                 module.forceFalloff = $1
+                                                                 $0 = .forces(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 32,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                        ],
+                                        [
+                                            moduleNumber("Center X",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .forces(module) = $0 { return module.forceCenter.x }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .forces(module) = $0 {
+                                                                 module.forceCenter.x = $1
+                                                                 $0 = .forces(module)
+                                                             }
+                                                         }),
+                                                         min: -1000,
+                                                         max: 1000,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Center Y",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .forces(module) = $0 { return module.forceCenter.y }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .forces(module) = $0 {
+                                                                 module.forceCenter.y = $1
+                                                                 $0 = .forces(module)
+                                                             }
+                                                         }),
+                                                         min: -1000,
+                                                         max: 1000,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Center Z",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .forces(module) = $0 { return module.forceCenter.z }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .forces(module) = $0 {
+                                                                 module.forceCenter.z = $1
+                                                                 $0 = .forces(module)
+                                                             }
+                                                         }),
+                                                         min: -1000,
+                                                         max: 1000,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                        ],
+                                    ]))
+                moduleEditorSection("Vector Field",
+                                    detail: L("Field strength, scale, and scroll speed"),
+                                    tone: status.tone,
+                                    content: moduleEditorRows([
+                                        [
+                                            moduleNumber("VF Strength",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .forces(module) = $0 { return module.vectorFieldStrength }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .forces(module) = $0 {
+                                                                 module.vectorFieldStrength = $1
+                                                                 $0 = .forces(module)
+                                                             }
+                                                         }),
+                                                         min: -1000,
+                                                         max: 1000,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("VF Scale",
+                                                         moduleFloatBinding(index, fallback: 1, get: {
+                                                             if case let .forces(module) = $0 { return module.vectorFieldScale }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .forces(module) = $0 {
+                                                                 module.vectorFieldScale = $1
+                                                                 $0 = .forces(module)
+                                                             }
+                                                         }),
+                                                         min: 0.0001,
+                                                         max: 100,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("VF Scroll",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .forces(module) = $0 { return module.vectorFieldScrollSpeed }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .forces(module) = $0 {
+                                                                 module.vectorFieldScrollSpeed = $1
+                                                                 $0 = .forces(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 100,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                        ],
+                                    ]))
+            })
+        }
+
+        private func collisionModuleEditor(index: Int,
+                                           module: ParticleEmitterModule,
+                                           isEnabled: Bool) -> AnyView {
+            let status = moduleStatus(module) ?? moduleBackendStatus(module)
+            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                moduleEditorSection("Surface",
+                                    detail: L("Collision mode and plane position"),
+                                    tone: status.tone,
+                                    content: moduleEditorRows([
+                                        [
+                                            moduleEnum("Mode",
+                                                       moduleValueBinding(index, fallback: .none, get: {
+                                                           if case let .collision(module) = $0 { return module.collisionMode }
+                                                           return nil
+                                                       }, set: {
+                                                           if case var .collision(module) = $0 {
+                                                               module.collisionMode = $1
+                                                               $0 = .collision(module)
+                                                           }
+                                                       }),
+                                                       width: 132,
+                                                       enabled: isEnabled,
+                                                       label: particleCollisionModeLabel),
+                                            moduleNumber("Plane Y",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .collision(module) = $0 { return module.collisionPlaneY }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .collision(module) = $0 {
+                                                                 module.collisionPlaneY = $1
+                                                                 $0 = .collision(module)
+                                                             }
+                                                         }),
+                                                         min: -1000,
+                                                         max: 1000,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                        ],
+                                    ]))
+                moduleEditorSection("Response",
+                                    detail: L("Bounce and tangent damping"),
+                                    tone: status.tone,
+                                    content: moduleEditorRows([
+                                        [
+                                            moduleNumber("Bounce",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .collision(module) = $0 { return module.collisionRestitution }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .collision(module) = $0 {
+                                                                 module.collisionRestitution = $1
+                                                                 $0 = .collision(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 1,
+                                                         step: 0.05,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Damping",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .collision(module) = $0 { return module.collisionDamping }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .collision(module) = $0 {
+                                                                 module.collisionDamping = $1
+                                                                 $0 = .collision(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 1,
+                                                         step: 0.05,
+                                                         enabled: isEnabled),
+                                        ],
+                                    ]))
+            })
+        }
+
+        private func textureSheetModuleEditor(index: Int,
+                                              module: ParticleEmitterModule,
+                                              isEnabled: Bool) -> AnyView {
+            let status = moduleStatus(module) ?? moduleBackendStatus(module)
+            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                moduleEditorSection("Playback",
+                                    detail: L("Frame selection mode and playback rate"),
+                                    tone: status.tone,
+                                    content: moduleEditorRows([
+                                        [
+                                            moduleEnum("Playback",
+                                                       moduleValueBinding(index, fallback: .automatic, get: {
+                                                           if case let .textureSheet(module) = $0 { return module.playbackMode }
+                                                           return nil
+                                                       }, set: {
+                                                           if case var .textureSheet(module) = $0 {
+                                                               module.playbackMode = $1
+                                                               $0 = .textureSheet(module)
+                                                           }
+                                                       }),
+                                                       width: 140,
+                                                       enabled: isEnabled,
+                                                       label: particleTextureSheetPlaybackModeLabel),
+                                            moduleNumber("Frame Rate",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .textureSheet(module) = $0 { return module.frameRate }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .textureSheet(module) = $0 {
+                                                                 module.frameRate = $1
+                                                                 $0 = .textureSheet(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 240,
+                                                         step: 1,
+                                                         enabled: isEnabled),
+                                        ],
+                                    ]))
+                moduleEditorSection("Sheet Grid",
+                                    detail: L("Texture atlas rows, columns, and frame count"),
+                                    tone: status.tone,
+                                    content: moduleEditorRows([
+                                        [
+                                            moduleNumber("Cols",
+                                                         moduleIntBinding(index, fallback: 1, get: {
+                                                             if case let .textureSheet(module) = $0 { return module.columns }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .textureSheet(module) = $0 {
+                                                                 module.columns = $1
+                                                                 $0 = .textureSheet(module)
+                                                             }
+                                                         }),
+                                                         min: 1,
+                                                         max: 64,
+                                                         step: 1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Rows",
+                                                         moduleIntBinding(index, fallback: 1, get: {
+                                                             if case let .textureSheet(module) = $0 { return module.rows }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .textureSheet(module) = $0 {
+                                                                 module.rows = $1
+                                                                 $0 = .textureSheet(module)
+                                                             }
+                                                         }),
+                                                         min: 1,
+                                                         max: 64,
+                                                         step: 1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Frames",
+                                                         moduleIntBinding(index, fallback: 1, get: {
+                                                             if case let .textureSheet(module) = $0 { return module.frameCount }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .textureSheet(module) = $0 {
+                                                                 module.frameCount = $1
+                                                                 $0 = .textureSheet(module)
+                                                             }
+                                                         }),
+                                                         min: 1,
+                                                         max: 4096,
+                                                         step: 1,
+                                                         enabled: isEnabled),
+                                        ],
+                                    ]))
+                moduleEditorSection("Frame Window",
+                                    detail: L("Start frame and randomized offset"),
+                                    tone: status.tone,
+                                    content: moduleEditorRows([
+                                        [
+                                            moduleNumber("Start Frame",
+                                                         moduleIntBinding(index, fallback: 0, get: {
+                                                             if case let .textureSheet(module) = $0 { return module.startFrame }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .textureSheet(module) = $0 {
+                                                                 module.startFrame = $1
+                                                                 $0 = .textureSheet(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 4096,
+                                                         step: 1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Frame Rand",
+                                                         moduleIntBinding(index, fallback: 0, get: {
+                                                             if case let .textureSheet(module) = $0 { return module.frameRandomness }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .textureSheet(module) = $0 {
+                                                                 module.frameRandomness = $1
+                                                                 $0 = .textureSheet(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 4096,
+                                                         step: 1,
+                                                         enabled: isEnabled),
+                                        ],
+                                    ]))
+            })
+        }
+
+        private func subEmittersModuleEditor(index: Int,
+                                             module: ParticleEmitterModule,
+                                             isEnabled: Bool) -> AnyView {
+            let status = moduleStatus(module) ?? moduleBackendStatus(module)
+            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                moduleEditorSection("Legacy Trigger",
+                                    detail: L("Single child emitter trigger kept for compatibility"),
+                                    tone: status.tone,
+                                    content: moduleEditorRows([
+                                        [
+                                            moduleEnum("Trigger",
+                                                       moduleValueBinding(index, fallback: .none, get: {
+                                                           if case let .subEmitters(module) = $0 { return module.legacyTrigger }
+                                                           return nil
+                                                       }, set: {
+                                                           if case var .subEmitters(module) = $0 {
+                                                               module.legacyTrigger = $1
+                                                               $0 = .subEmitters(module)
+                                                           }
+                                                       }),
+                                                       width: 132,
+                                                       enabled: isEnabled,
+                                                       label: particleSubEmitterTriggerLabel),
+                                            moduleNumber("Burst",
+                                                         moduleIntBinding(index, fallback: 0, get: {
+                                                             if case let .subEmitters(module) = $0 { return module.legacyBurstCount }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .subEmitters(module) = $0 {
+                                                                 module.legacyBurstCount = $1
+                                                                 $0 = .subEmitters(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 100_000,
+                                                         step: 1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Probability",
+                                                         moduleFloatBinding(index, fallback: 1, get: {
+                                                             if case let .subEmitters(module) = $0 { return module.legacyProbability }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .subEmitters(module) = $0 {
+                                                                 module.legacyProbability = $1
+                                                                 $0 = .subEmitters(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 1,
+                                                         step: 0.05,
+                                                         enabled: isEnabled),
+                                        ],
+                                        [
+                                            moduleNumber("Max Depth",
+                                                         moduleIntBinding(index, fallback: 0, get: {
+                                                             if case let .subEmitters(module) = $0 { return module.legacyMaxDepth }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .subEmitters(module) = $0 {
+                                                                 module.legacyMaxDepth = $1
+                                                                 $0 = .subEmitters(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 16,
+                                                         step: 1,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Inherit",
+                                                         moduleFloatBinding(index, fallback: 0, get: {
+                                                             if case let .subEmitters(module) = $0 { return module.legacyInheritVelocity }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .subEmitters(module) = $0 {
+                                                                 module.legacyInheritVelocity = $1
+                                                                 $0 = .subEmitters(module)
+                                                             }
+                                                         }),
+                                                         min: 0,
+                                                         max: 10,
+                                                         step: 0.05,
+                                                         enabled: isEnabled),
+                                            moduleNumber("Life",
+                                                         moduleFloatBinding(index, fallback: 1, get: {
+                                                             if case let .subEmitters(module) = $0 { return module.legacyLifetime }
+                                                             return nil
+                                                         }, set: {
+                                                             if case var .subEmitters(module) = $0 {
+                                                                 module.legacyLifetime = $1
+                                                                 $0 = .subEmitters(module)
+                                                             }
+                                                         }),
+                                                         min: 0.0001,
+                                                         max: 60,
+                                                         step: 0.1,
+                                                         enabled: isEnabled),
+                                        ],
+                                    ]))
+                moduleEditorSection("Child Rules",
+                                    detail: L("Event driven sub-emitter rule list"),
+                                    tone: status.tone,
+                                    content: AnyView(InspectorParticleSubEmittersValue(binding: moduleSubEmitterRulesBinding(index))
+                                        .opacity(isEnabled ? 1 : 0.66)))
+            })
+        }
+
+        private func moduleEditorSection(_ title: String,
+                                         detail: String,
+                                         tone: ModuleRuntimeTone,
+                                         content: AnyView) -> AnyView {
+            AnyView(Box(direction: .column, alignItems: .stretch, spacing: 6) {
+                Row(alignment: .center, spacing: 7) {
+                    Spacer(minLength: 0)
+                        .frame(width: 3, height: 28)
+                        .background(tone.foreground)
+                        .cornerRadius(2)
+                    Box(direction: .column, alignItems: .stretch, spacing: 1) {
+                        Text(L(title))
+                            .lineLimit(1)
+                            .font(.caption)
+                            .foregroundColor(.onSurface)
+                        Text(detail)
+                            .lineLimit(1)
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                    }
+                    .flex()
+                    badge(tone == .muted ? L("Settings") : L("Linked"),
+                          foreground: tone.foreground,
+                          background: tone.background)
+                }
+                content
+            }
+            .padding(horizontal: 7, vertical: 7)
+            .background(.surface)
+            .cornerRadius(4)
+            .border(tone.background, width: 1))
         }
 
         private func moduleEditorRows(_ rows: [[AnyView]]) -> AnyView {
@@ -2622,6 +3577,49 @@ struct InspectorPanel: View {
                             step: step,
                             showsStepper: true)
                     .frame(minWidth: 70)
+            }
+            .flex())
+        }
+
+        private func moduleCurveEditor(_ label: String,
+                                       _ value: Binding<ParticleCurve>,
+                                       enabled: Bool) -> AnyView {
+            AnyView(Box(direction: .column, alignItems: .stretch, spacing: 3) {
+                Text(L(label))
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                InspectorParticleCurveValue(binding: value, isEnabled: enabled)
+                    .opacity(enabled ? 1 : 0.72)
+            }
+            .padding(horizontal: 28, vertical: 0))
+        }
+
+        private func moduleColorRow(_ fields: [AnyView]) -> AnyView {
+            AnyView(Row(alignment: .center, spacing: 8) {
+                Spacer(minLength: 0)
+                    .frame(width: 28)
+                for field in fields {
+                    field
+                }
+            })
+        }
+
+        private func moduleColorEditor(_ label: String,
+                                       _ value: Binding<Color>,
+                                       enabled: Bool) -> AnyView {
+            AnyView(Box(direction: .column, alignItems: .stretch, spacing: 2) {
+                Text(L(label))
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                ColorField(color: value,
+                           isEnabled: enabled,
+                           showAlpha: true,
+                           showsInlineValues: false)
+                    .frame(height: 26)
+                    .clipped()
+                    .opacity(enabled ? 1 : 0.72)
             }
             .flex())
         }
@@ -2701,6 +3699,36 @@ struct InspectorPanel: View {
                     binding.wrappedValue = stack
                 }
             )
+        }
+
+        private func moduleColorBinding(_ index: Int,
+                                        fallback: SIMD4<Float>,
+                                        get: @escaping (ParticleEmitterModuleSettings) -> SIMD4<Float>?,
+                                        set: @escaping (inout ParticleEmitterModuleSettings, SIMD4<Float>) -> Void)
+            -> Binding<Color> {
+            Binding(
+                get: {
+                    guard binding.wrappedValue.modules.indices.contains(index) else {
+                        return Color(r: fallback.x, g: fallback.y, b: fallback.z, a: fallback.w)
+                    }
+                    let color = get(binding.wrappedValue.modules[index].settings) ?? fallback
+                    return Color(r: color.x, g: color.y, b: color.z, a: color.w)
+                },
+                set: { next in
+                    var stack = binding.wrappedValue
+                    guard stack.modules.indices.contains(index) else { return }
+                    let color = SIMD4<Float>(clamp01(next.r),
+                                             clamp01(next.g),
+                                             clamp01(next.b),
+                                             clamp01(next.a))
+                    set(&stack.modules[index].settings, color)
+                    binding.wrappedValue = stack
+                }
+            )
+        }
+
+        private func clamp01(_ value: Float) -> Float {
+            max(0, min(1, value))
         }
 
         private func moduleSubEmitterRulesBinding(_ index: Int) -> Binding<[ParticleSubEmitter]> {
@@ -2831,7 +3859,7 @@ struct InspectorPanel: View {
         private func moduleDetail(_ settings: ParticleEmitterModuleSettings) -> String {
             switch settings {
             case let .emission(module):
-                return "\(fmt(module.emissionRate))/s · max \(module.maxParticles)"
+                return "\(fmt(module.emissionRate))/s · speed \(fmt(module.simulationSpeed)) · max \(module.maxParticles)"
             case let .shape(module):
                 return "\(module.emissionShape.rawValue) · r \(fmt(module.spawnRadius))"
             case let .velocity(module):
@@ -2845,7 +3873,7 @@ struct InspectorPanel: View {
             case let .textureSheet(module):
                 return "\(module.columns)x\(module.rows) · \(module.playbackMode.rawValue)"
             case let .renderer(module):
-                return "\(module.renderMode.rawValue) · \(module.sortMode.rawValue)"
+                return "\(module.renderMode.rawValue) · \(module.sortMode.rawValue) · p\(module.renderSortPriority)"
             case let .trails(module):
                 return "trail \(fmt(module.trailLength))s · \(module.trailSegments) samples"
             case let .subEmitters(module):
@@ -3045,17 +4073,21 @@ struct InspectorPanel: View {
 
     private struct InspectorParticleCurveValue: View {
         let binding: Binding<ParticleCurve>
+        var isEnabled: Bool = true
         @State private var selectedKeyIndex: Int? = nil
 
         var body: some View {
             Box(direction: .column, alignItems: .stretch, spacing: 7) {
                 toolbar
                 if case .keyframes(let keyframes) = binding.wrappedValue {
-                    ParticleCurvePreview(binding: binding, selectedKeyIndex: $selectedKeyIndex)
+                    ParticleCurvePreview(binding: binding,
+                                         selectedKeyIndex: $selectedKeyIndex,
+                                         isEnabled: isEnabled)
                         .frame(height: ParticleCurveEditorLayout.previewHeight)
                     ParticleCurveKeyframeRows(binding: binding,
                                               keyframes: keyframes,
-                                              selectedKeyIndex: $selectedKeyIndex)
+                                              selectedKeyIndex: $selectedKeyIndex,
+                                              isEnabled: isEnabled)
                 }
             }
             .padding(horizontal: 8, vertical: 8)
@@ -3077,12 +4109,13 @@ struct InspectorPanel: View {
             Row(alignment: .center, spacing: 8) {
                 Select(selection: binding,
                        options: options,
+                       isEnabled: isEnabled,
                        width: 170)
                 if case .keyframes(let keyframes) = binding.wrappedValue {
-                    Button(L("Add")) { appendKeyframe(to: keyframes) }
+                    Button(L("Add"), isEnabled: isEnabled) { appendKeyframe(to: keyframes) }
                         .buttonStyle(.secondary)
                         .frame(width: 52, height: 24)
-                    Button(L("Reset")) {
+                    Button(L("Reset"), isEnabled: isEnabled) {
                         binding.wrappedValue = .keyframes(Self.defaultKeyframes)
                         selectedKeyIndex = nil
                     }
@@ -3837,6 +4870,7 @@ private extension EditorInspectorFieldValue {
             let rowHeight: Float = 47
             let moduleEditorRowHeight: Float = 50
             let moduleExpandedHeaderHeight: Float = 58
+            let moduleRuntimeSnapshotHeight: Float = 72
             let moduleGPUBackendPanelHeight: Float = 90
             let moduleExpandedDiagnosticsHeight: Float = 43
             let moduleIssueHeaderHeight: Float = 18
@@ -3867,6 +4901,7 @@ private extension EditorInspectorFieldValue {
                 return total
                     + 8
                     + moduleExpandedHeaderHeight
+                    + moduleRuntimeSnapshotHeight
                     + particleModuleEditorHeight(module.settings, rowHeight: moduleEditorRowHeight)
                     + gpuBackendHeight
                     + issueHeight
@@ -3895,18 +4930,114 @@ private extension EditorInspectorFieldValue {
 
 private func particleModuleEditorHeight(_ settings: ParticleEmitterModuleSettings,
                                         rowHeight: Float) -> Float {
+    let sectionHeaderHeight: Float = 32
+    let sectionPadding: Float = 14
+    let sectionSpacing: Float = 8
+    func sectionHeight(rowCount: Int) -> Float {
+        sectionHeaderHeight
+            + sectionPadding
+            + Float(rowCount) * rowHeight
+            + Float(max(0, rowCount - 1)) * 5
+            + 6
+    }
+
+    if case let .emission(module) = settings {
+        return 3 * rowHeight
+            + 2 * 5
+            + 2 * 8
+            + particleModuleCurveEditorHeight(module.emissionRateCurve)
+            + particleModuleCurveEditorHeight(module.distanceEmissionRateCurve)
+    }
+    if case let .appearance(module) = settings {
+        return 5 * rowHeight
+            + 4 * 5
+            + 3 * 8
+            + rowHeight
+            + particleModuleCurveEditorHeight(module.sizeCurve)
+            + particleModuleCurveEditorHeight(module.colorCurve)
+    }
     if case let .subEmitters(module) = settings {
-        return 2 * rowHeight
-            + 5
-            + ParticleSubEmitterEditorLayout.propertyGridLabelHeight
-            + 4
+        let rulesSectionHeight = sectionHeaderHeight
+            + sectionPadding
             + ParticleSubEmitterEditorLayout.valueHeight(ruleCount: module.rules.count)
+            + 6
+        return sectionHeight(rowCount: 2)
+            + sectionSpacing
+            + rulesSectionHeight
+    }
+    if case .shape = settings {
+        return sectionHeight(rowCount: 1)
+            + sectionSpacing
+            + sectionHeight(rowCount: 1)
+            + sectionSpacing
+            + sectionHeight(rowCount: 1)
+            + sectionSpacing
+            + sectionHeight(rowCount: 1)
+    }
+    if case .velocity = settings {
+        return sectionHeight(rowCount: 1)
+            + sectionSpacing
+            + sectionHeight(rowCount: 1)
+    }
+    if case .forces = settings {
+        return sectionHeight(rowCount: 1)
+            + sectionSpacing
+            + sectionHeight(rowCount: 1)
+            + sectionSpacing
+            + sectionHeight(rowCount: 1)
+            + sectionSpacing
+            + sectionHeight(rowCount: 2)
+            + sectionSpacing
+            + sectionHeight(rowCount: 1)
+    }
+    if case .collision = settings {
+        return sectionHeight(rowCount: 1)
+            + sectionSpacing
+            + sectionHeight(rowCount: 1)
+    }
+    if case .textureSheet = settings {
+        return sectionHeight(rowCount: 1)
+            + sectionSpacing
+            + sectionHeight(rowCount: 1)
+            + sectionSpacing
+            + sectionHeight(rowCount: 1)
+    }
+    if case .renderer = settings {
+        return sectionHeight(rowCount: 2)
+            + sectionSpacing
+            + sectionHeight(rowCount: 2)
+            + sectionSpacing
+            + sectionHeight(rowCount: 1)
+    }
+    if case .trails = settings {
+        return sectionHeight(rowCount: 1)
+            + sectionSpacing
+            + sectionHeight(rowCount: 2)
+            + sectionSpacing
+            + sectionHeight(rowCount: 1)
+    }
+    if case .gpuSimulation = settings {
+        return sectionHeight(rowCount: 1)
+            + sectionSpacing
+            + sectionHeight(rowCount: 1)
     }
     return Float(particleModuleEditorRowCount(settings)) * rowHeight
 }
 
+private func particleModuleCurveEditorHeight(_ curve: ParticleCurve) -> Float {
+    let valueHeight: Float
+    if case let .keyframes(keyframes) = curve {
+        valueHeight = ParticleCurveEditorLayout.valueHeight(keyframeCount: keyframes.count)
+    } else {
+        valueHeight = ParticleCurveEditorLayout.linearValueHeight
+    }
+    return ParticleCurveEditorLayout.propertyGridLabelHeight + 3 + valueHeight
+}
+
 private func particleModuleEditorRowCount(_ settings: ParticleEmitterModuleSettings) -> Int {
     switch settings {
+    case .emission:
+        return 3
     case .forces:
         return 6
     case .appearance:
@@ -4005,13 +5136,14 @@ private enum ParticleSubEmitterEditorLayout {
     }
 }
 
-private struct ParticleCurveKeyframeRows: View {
-    let binding: Binding<ParticleCurve>
-    let keyframes: [ParticleCurveKeyframe]
-    let selectedKeyIndex: Binding<Int?>
+    private struct ParticleCurveKeyframeRows: View {
+        let binding: Binding<ParticleCurve>
+        let keyframes: [ParticleCurveKeyframe]
+        let selectedKeyIndex: Binding<Int?>
+        let isEnabled: Bool
 
-    var body: some View {
-        Box(direction: .column, alignItems: .stretch, spacing: ParticleCurveEditorLayout.keyframeRowGap) {
+        var body: some View {
+            Box(direction: .column, alignItems: .stretch, spacing: ParticleCurveEditorLayout.keyframeRowGap) {
             Row(alignment: .center, spacing: 6) {
                 Text("")
                     .frame(width: 30)
@@ -4028,7 +5160,8 @@ private struct ParticleCurveKeyframeRows: View {
             .frame(height: ParticleCurveEditorLayout.keyframeHeaderHeight)
             ParticleCurveKeyframeEntryList(binding: binding,
                                            keyframes: keyframes,
-                                           selectedKeyIndex: selectedKeyIndex)
+                                           selectedKeyIndex: selectedKeyIndex,
+                                           isEnabled: isEnabled)
         }
         .frame(height: ParticleCurveEditorLayout.keyframeRowsHeight(keyframeCount: keyframes.count))
         .padding(horizontal: 1, vertical: 0)
@@ -4036,10 +5169,11 @@ private struct ParticleCurveKeyframeRows: View {
     }
 }
 
-private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
-    let binding: Binding<ParticleCurve>
-    let keyframes: [ParticleCurveKeyframe]
-    let selectedKeyIndex: Binding<Int?>
+    private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
+        let binding: Binding<ParticleCurve>
+        let keyframes: [ParticleCurveKeyframe]
+        let selectedKeyIndex: Binding<Int?>
+        let isEnabled: Bool
 
     func _makeNode() -> Node {
         let node = Node()
@@ -4069,7 +5203,8 @@ private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
         (0..<keyframes.count).map { index in
             AnyView(
                 Row(alignment: .center, spacing: 6) {
-                    Button(isSelected: selectedKeyIndex.wrappedValue == index,
+                    Button(isEnabled: isEnabled,
+                           isSelected: selectedKeyIndex.wrappedValue == index,
                            tooltip: L("Select keyframe"),
                            action: { selectedKeyIndex.wrappedValue = index }) {
                         Text("\(index + 1)")
@@ -4079,6 +5214,7 @@ private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
                     NumberField(value: keyTimeBinding(index: index),
                                 decimals: 2,
                                 size: .small,
+                                isEnabled: isEnabled,
                                 minValue: 0,
                                 maxValue: 1,
                                 step: 0.01,
@@ -4087,6 +5223,7 @@ private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
                     NumberField(value: keyValueBinding(index: index),
                                 decimals: 2,
                                 size: .small,
+                                isEnabled: isEnabled,
                                 minValue: -4,
                                 maxValue: 4,
                                 step: 0.05,
@@ -4094,7 +5231,7 @@ private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
                     .frame(width: 74)
                     Button(icon: .resource(UICommonIcons.close),
                            size: 10,
-                           isEnabled: keyframes.count > 2,
+                           isEnabled: isEnabled && keyframes.count > 2,
                            tooltip: L("Remove keyframe"),
                            action: { removeKeyframe(at: index) })
                     .buttonStyle(.ghost)
@@ -4138,9 +5275,10 @@ private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
         )
     }
 
-    private func updateKeyframe(at index: Int,
-                                mutate: (inout ParticleCurveKeyframe) -> Void) {
-        guard case .keyframes(var keys) = binding.wrappedValue,
+        private func updateKeyframe(at index: Int,
+                                    mutate: (inout ParticleCurveKeyframe) -> Void) {
+        guard isEnabled,
+              case .keyframes(var keys) = binding.wrappedValue,
               keys.indices.contains(index)
         else { return }
         mutate(&keys[index])
@@ -4151,7 +5289,7 @@ private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
     }
 
     private func removeKeyframe(at index: Int) {
-        guard keyframes.count > 2, keyframes.indices.contains(index) else { return }
+        guard isEnabled, keyframes.count > 2, keyframes.indices.contains(index) else { return }
         var next = keyframes
         next.remove(at: index)
         binding.wrappedValue = .keyframes(next.sortedByTimeStable())
@@ -4162,9 +5300,12 @@ private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
 private struct ParticleCurvePreview: View {
     let binding: Binding<ParticleCurve>
     let selectedKeyIndex: Binding<Int?>
+    let isEnabled: Bool
 
     var body: some View {
-        ParticleCurvePreviewHost(binding: binding, selectedKeyIndex: selectedKeyIndex)
+        ParticleCurvePreviewHost(binding: binding,
+                                 selectedKeyIndex: selectedKeyIndex,
+                                 isEnabled: isEnabled)
             .frame(minWidth: 120, minHeight: 44)
     }
 }
@@ -4172,18 +5313,20 @@ private struct ParticleCurvePreview: View {
 private struct ParticleCurvePreviewHost: _PrimitiveView {
     let binding: Binding<ParticleCurve>
     let selectedKeyIndex: Binding<Int?>
+    let isEnabled: Bool
 
     private static let activeKeyIndex = "__particle_curve_active_key_index"
 
     func _makeNode() -> Node {
         let node = Node()
-        node.isHitTestable = true
+        node.isHitTestable = isEnabled
         return node
     }
 
     func _updateNode(_ node: Node) {
         let snapshot = self
-        node.cursor = .pointer
+        node.isHitTestable = isEnabled
+        node.cursor = isEnabled ? .pointer : .notAllowed
         node.draw = { list, origin in
             snapshot.render(node: node, origin: origin, list: list)
         }
@@ -4193,7 +5336,7 @@ private struct ParticleCurvePreviewHost: _PrimitiveView {
             return
         }
         registry.setPointer(node) { event, phase, _ in
-            guard event.button == .left else { return .ignored }
+            guard snapshot.isEnabled, event.button == .left else { return .ignored }
             switch phase {
             case .down:
                 PointerCaptureHolder.current?.acquire(node)
@@ -4218,7 +5361,8 @@ private struct ParticleCurvePreviewHost: _PrimitiveView {
             }
         }
         registry.setMotion(node) { event, _ in
-            guard PointerCaptureHolder.current?.target === node,
+            guard snapshot.isEnabled,
+                  PointerCaptureHolder.current?.target === node,
                   let index = node.attachments[Self.activeKeyIndex] as? Int
             else { return .ignored }
             if let nextIndex = snapshot.writeKey(at: index,

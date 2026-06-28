@@ -83,6 +83,23 @@ struct EditorSceneAdapterTests {
         #expect(adapter.currentParticleModuleValidationIssues(for: nil).isEmpty)
     }
 
+    @Test("Editor scene adapter exposes particle module topology diagnostics")
+    func editorSceneAdapterExposesParticleModuleTopologyDiagnostics() throws {
+        let adapter = EditorSceneAdapter()
+        let entity = adapter.scene.createEntity()
+        var emitter = ParticleEmitter()
+        var stack = emitter.moduleStack
+        let renderer = try #require(stack.modules.first { $0.id == "renderer" })
+        stack.modules.append(renderer)
+        emitter.authoredModuleStack = stack
+        _ = adapter.scene.setComponent(emitter, for: entity)
+
+        let issues = adapter.currentParticleModuleValidationIssues(for: entity.rawValue)
+        #expect(issues.contains {
+            $0.moduleID == "renderer" && $0.code == "duplicateModule"
+        })
+    }
+
     @Test("Scene manifest restores preview hierarchy and runtime components")
     func sceneManifestRestoresPreviewHierarchyAndComponents() {
         let source = EditorSceneAdapter()
@@ -283,6 +300,7 @@ struct EditorSceneAdapterTests {
         ]
         _ = source.scene.setComponent(
             ParticleEmitter(looping: false, duration: 3.25,
+                            simulationSpeed: 1.4,
                             prewarmTime: 0.75,
                             prewarmStep: 0.04,
                             emissionRate: 24,
@@ -347,6 +365,7 @@ struct EditorSceneAdapterTests {
                                 ParticleCurveKeyframe(time: 1, value: 0),
                             ]),
                             blendMode: .additive,
+                            renderSortPriority: 14,
                             renderAlignment: .velocity,
                             velocityStretchScale: 0.3,
                             velocityStretchMax: 7,
@@ -376,6 +395,7 @@ struct EditorSceneAdapterTests {
 
         let manifest = source.manifest(selectedEntityID: hero.id)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.prewarmTime == 0.75)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.simulationSpeed == 1.4)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.prewarmStep == 0.04)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.emissionRate == 24)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.maxRenderedParticles == 32)
@@ -404,6 +424,7 @@ struct EditorSceneAdapterTests {
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.vectorFieldScrollSpeed == 0.25)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.simulationBackend == .gpuIfSupported)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.gpuSimulationWorkgroupSize == 128)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.renderSortPriority == 14)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.maxRenderDistance == 96)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.renderDistanceFadeRange == 16)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.renderLODStartDistance == 32)
@@ -454,6 +475,7 @@ struct EditorSceneAdapterTests {
         ]))
         #expect(e!.looping == false)
         #expect(e!.duration == 3.25)
+        #expect(e!.simulationSpeed == 1.4)
         #expect(e!.prewarmTime == 0.75)
         #expect(e!.prewarmStep == 0.04)
         #expect(e!.burstCount == 5)
@@ -516,6 +538,7 @@ struct EditorSceneAdapterTests {
             ParticleCurveKeyframe(time: 1, value: 0),
         ]))
         #expect(e!.blendMode == .additive)
+        #expect(e!.renderSortPriority == 14)
         #expect(e!.renderAlignment == .velocity)
         #expect(e!.velocityStretchScale == 0.3)
         #expect(e!.velocityStretchMax == 7)
