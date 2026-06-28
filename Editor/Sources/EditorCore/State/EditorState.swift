@@ -625,6 +625,22 @@ public struct EditorFrameStats: Sendable, Equatable, Codable {
     /// Time spent in CPU post-process encoding (nanoseconds).
     public var cpuPostProcessEncodeNS: UInt64
 
+    public var cpuWorkSeconds: Double {
+        inputSeconds + simulationSeconds + renderPrepareSeconds + renderSubmitSeconds
+    }
+
+    public var workSeconds: Double {
+        cpuWorkSeconds + gpuPresentSeconds
+    }
+
+    public var workMs: Double {
+        workSeconds * 1000
+    }
+
+    public var workFPS: Double {
+        workSeconds > 0 ? 1.0 / workSeconds : 0
+    }
+
     public init(
         frameSeconds: Double = 0,
         inputSeconds: Double = 0,

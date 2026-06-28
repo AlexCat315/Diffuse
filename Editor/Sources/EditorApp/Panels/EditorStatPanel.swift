@@ -65,11 +65,11 @@ private struct PerformanceDiagnosticsView: View {
         ScrollView(.vertical) {
             Row(alignment: .top, spacing: 12) {
                 StatGroup(title: L("Frame")) {
-                    StatRow(label: "FPS", value: formatFPS(stats.fps))
-                    StatRow(label: "Frame", value: formatMs(stats.frameMs))
+                    StatRow(label: "Tick FPS", value: formatFPS(stats.fps))
+                    StatRow(label: "Tick Gap", value: formatMs(stats.frameMs))
+                    StatRow(label: "Work", value: formatMs(stats.workMs))
+                    StatRow(label: "Work FPS", value: formatFPS(stats.workFPS))
                     StatRow(label: "Sample", value: "#\(timingRevision)")
-                    StatRow(label: "16.7ms Budget", value: stats.frameMs <= 16.7 ? "OK" : "MISS")
-                    StatRow(label: "33.3ms Budget", value: stats.frameMs <= 33.3 ? "OK" : "MISS")
                 }
                 .flex(1, shrink: 1)
 
@@ -96,10 +96,10 @@ private struct PerformanceDiagnosticsView: View {
 
             Row(alignment: .top, spacing: 12) {
                 StatGroup(title: "Budget") {
-                    StatRow(label: "Target 60 FPS", value: budgetStatus(frameMs: stats.frameMs, targetMs: 16.7))
-                    StatRow(label: "Target 30 FPS", value: budgetStatus(frameMs: stats.frameMs, targetMs: 33.3))
-                    StatRow(label: "Headroom @60", value: formatSignedMs(16.7 - stats.frameMs))
-                    StatRow(label: "Headroom @30", value: formatSignedMs(33.3 - stats.frameMs))
+                    StatRow(label: "Work @60 FPS", value: budgetStatus(frameMs: stats.workMs, targetMs: 16.7))
+                    StatRow(label: "Work @30 FPS", value: budgetStatus(frameMs: stats.workMs, targetMs: 33.3))
+                    StatRow(label: "Work Headroom @60", value: formatSignedMs(16.7 - stats.workMs))
+                    StatRow(label: "Tick Gap", value: formatMs(stats.frameMs))
                 }
                 .flex(1, shrink: 1)
 
@@ -107,7 +107,8 @@ private struct PerformanceDiagnosticsView: View {
                     StatRow(label: "Likely", value: bottleneck(stats))
                     StatRow(label: "CPU Total", value: formatMs(cpuMs(stats)))
                     StatRow(label: "GPU Present", value: formatMs(stats.gpuPresentSeconds * 1000))
-                    StatRow(label: "Frame", value: formatMs(stats.frameMs))
+                    StatRow(label: "Work", value: formatMs(stats.workMs))
+                    StatRow(label: "Tick Gap", value: formatMs(stats.frameMs))
                 }
                 .flex(1, shrink: 1)
 
@@ -600,10 +601,7 @@ private func formatScale(_ value: Float) -> String {
 }
 
 private func cpuMs(_ stats: EditorFrameStats) -> Double {
-    (stats.inputSeconds
-     + stats.simulationSeconds
-     + stats.renderPrepareSeconds
-     + stats.renderSubmitSeconds) * 1000
+    stats.cpuWorkSeconds * 1000
 }
 
 private func budgetStatus(frameMs: Double, targetMs: Double) -> String {
@@ -615,8 +613,11 @@ private func budgetStatus(frameMs: Double, targetMs: Double) -> String {
 private func bottleneck(_ stats: EditorFrameStats) -> String {
     let cpu = cpuMs(stats)
     let gpu = stats.gpuPresentSeconds * 1000
-    guard stats.frameMs > 0 else { return "--" }
+    guard stats.workMs > 0 else { return "--" }
     if cpu <= 0, gpu <= 0 { return "Frame pacing" }
+    if stats.frameMs > max(stats.workMs * 2, stats.workMs + 16.7) {
+        return "Frame pacing"
+    }
     if cpu > gpu * 1.25 { return "CPU" }
     if gpu > cpu * 1.25 { return "GPU / present" }
     return "Mixed"
