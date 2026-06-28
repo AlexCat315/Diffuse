@@ -191,6 +191,9 @@ public final class EditorApplication: @unchecked Sendable {
         let drawableSize = effectiveViewportDrawableSize()
         let jointPalettes = scene.currentJointPaletteMap()
         let state = store.state
+        let wantsContinuousFrames = state.viewportRealtimeEnabled
+            || state.playbackState == .playing
+            || scene.hasActiveParticles()
         let renderViewport = renderGate.shouldRender(
             signature: EditorViewportRenderGate.Signature(
                 sceneRevision: scene.revision,
@@ -199,8 +202,7 @@ public final class EditorApplication: @unchecked Sendable {
                 settingsGeneration: renderSettingsGeneration,
                 jointPalettes: jointPalettes
             ),
-            forceContinuous: state.viewportRealtimeEnabled || state.playbackState == .playing
-                || scene.hasActiveParticles(),
+            forceContinuous: wantsContinuousFrames,
             hasViewportInput: !inputEvents.isEmpty,
             temporalEffectsActive: lastQueuedRenderSettings.enableTAA,
             now: monotonicNow()
@@ -221,6 +223,9 @@ public final class EditorApplication: @unchecked Sendable {
         }
         if didUpdateStats {
             store.dispatch(.frameTimingUpdated)
+        }
+        if wantsContinuousFrames {
+            displayInvalidationHandler?()
         }
     }
 

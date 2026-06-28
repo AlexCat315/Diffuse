@@ -83,4 +83,19 @@ struct EditorStoreTests {
         #expect(notifications == 1)
         #expect(store.capabilitySettings.releasePhase == .experimental)
     }
+
+    @Test("Frame stats separate tick gap from actual frame work")
+    func frameStatsSeparateTickGapFromWork() {
+        let stats = EditorFrameStats(frameSeconds: 0.410,
+                                     inputSeconds: 0,
+                                     simulationSeconds: 0.00069,
+                                     renderPrepareSeconds: 0,
+                                     renderSubmitSeconds: 0.00862,
+                                     gpuPresentSeconds: 0.00862)
+
+        #expect(abs(stats.frameMs - 410) < 0.001)
+        #expect(abs(stats.workMs - 17.93) < 0.001)
+        #expect(stats.fps < 3)
+        #expect(stats.workFPS > 55)
+    }
 }
