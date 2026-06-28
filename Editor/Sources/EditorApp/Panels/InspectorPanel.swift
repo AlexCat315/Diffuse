@@ -379,6 +379,14 @@ struct InspectorPanel: View {
             return repaired != stack
         }
 
+        private var hasValidationIssues: Bool {
+            !diagnostics.moduleValidationIssues.isEmpty || !stack.validationIssues().isEmpty
+        }
+
+        private var hasExpandedModules: Bool {
+            !stack.expandedModuleIDs.isEmpty
+        }
+
         private func hasRepairableValidationIssues(for module: ParticleEmitterModule) -> Bool {
             var repaired = stack
             repaired.repairValidationIssues(for: module.id)
@@ -404,6 +412,38 @@ struct InspectorPanel: View {
                                 .foregroundColor(.onSurfaceMuted)
                         }
                         .flex()
+
+                        if hasValidationIssues {
+                            Button(L("Issues"),
+                                   tooltip: L("Expand modules with validation issues")) {
+                                var stack = binding.wrappedValue
+                                let issueModuleIDs = diagnostics.moduleValidationIssues.map(\.moduleID)
+                                    + stack.validationIssues().map(\.moduleID)
+                                stack.expandModules(withIDs: issueModuleIDs, collapseOthers: true)
+                                binding.wrappedValue = stack
+                            }
+                            .buttonStyle(GhostButtonStyle())
+                        }
+
+                        if modifiedModuleCount > 0 {
+                            Button(L("Modified"),
+                                   tooltip: L("Expand modified modules")) {
+                                var stack = binding.wrappedValue
+                                stack.expandModifiedModules(collapseOthers: true)
+                                binding.wrappedValue = stack
+                            }
+                            .buttonStyle(GhostButtonStyle())
+                        }
+
+                        if hasExpandedModules {
+                            Button(L("Collapse"),
+                                   tooltip: L("Collapse all modules")) {
+                                var stack = binding.wrappedValue
+                                stack.collapseAllModules()
+                                binding.wrappedValue = stack
+                            }
+                            .buttonStyle(GhostButtonStyle())
+                        }
 
                         if hasRepairableValidationIssues {
                             Button(L("Repair"),
@@ -446,6 +486,8 @@ struct InspectorPanel: View {
                 }
                 .padding(horizontal: 2, vertical: 1)
 
+                runtimeOverviewPanel()
+
                 Box(direction: .column, alignItems: .stretch, spacing: 4) {
                     moduleGroup(title: L("Core"),
                                 subtitle: "\(enabledCount(in: coreModuleIndices))/\(coreModuleIndices.count)",
@@ -463,6 +505,104 @@ struct InspectorPanel: View {
             .cornerRadius(7)
             .border(.border, width: 1)
             .clipped()
+        }
+
+        private func runtimeOverviewPanel() -> AnyView {
+            let status = stackRuntimeStatus
+            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 5) {
+                Row(alignment: .center, spacing: 6) {
+                    Text(L("Runtime Overview"))
+                        .lineLimit(1)
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                    badge(diagnostics.statsScopeLabel)
+                    Spacer(minLength: 0)
+                        .flex()
+                    badge(status.text,
+                          foreground: status.tone.foreground,
+                          background: status.tone.background)
+                }
+
+                Row(alignment: .center, spacing: 5) {
+                    overviewMetricCard(L("Live"),
+                                       diagnostics.liveBudgetText,
+                                       tone: diagnostics.liveBudgetPressure >= 0.95 ? .warning
+                                           : diagnostics.liveParticleCount > 0 ? .info : .muted)
+                    overviewMetricCard(L("Spawn"),
+                                       "\(diagnostics.spawnedParticleCount)",
+                                       tone: diagnostics.spawnedParticleCount > 0 ? .success : .muted)
+                    overviewMetricCard(L("Drop"),
+                                       "\(diagnostics.runtimeDropCount)",
+                                       tone: diagnostics.runtimeDropCount > 0 ? .warning : .muted)
+                    overviewMetricCard(L("GPU"),
+                                       gpuOverviewValue,
+                                       tone: diagnostics.hasGPUSimulationWork ? .success : gpuSummaryStatus.tone)
+                    overviewMetricCard(L("Scale"),
+                                       fmt(diagnostics.scalability.appliedScale),
+                                       tone: diagnostics.scalability.pressure > 0 || diagnostics.scalability.appliedScale < 1
+                                           ? .warning
+                                           : .muted)
+                    overviewMetricCard(L("Events"),
+                                       "\(diagnostics.eventReport.appliedEventCount)/\(diagnostics.eventReport.eventCount)",
+                                       tone: diagnostics.eventReport.eventCount > 0 ? .info : .muted)
+                }
+            }
+            .padding(horizontal: 7, vertical: 6)
+            .background(status.tone.background)
+            .cornerRadius(5)
+            .border(status.tone.foreground.opacity(0.25), width: 1))
+        }
+
+        private var stackRuntimeStatus: ModuleRuntimeStatus {
+            if diagnostics.moduleValidationIssues.contains(where: { $0.severity == .error }) {
+                return ModuleRuntimeStatus(text: L("Needs Repair"), tone: .error)
+            }
+            if diagnostics.runtimeDropCount > 0 {
+                return ModuleRuntimeStatus(text: L("Dropping"), tone: .warning)
+            }
+            if diagnostics.scalability.pressure > 0 || diagnostics.scalability.appliedScale < 1 {
+                return ModuleRuntimeStatus(text: L("Scaled"), tone: .warning)
+            }
+            if diagnostics.hasGPUSimulationWork {
+                return ModuleRuntimeStatus(text: L("GPU Active"), tone: .success)
+            }
+            if diagnostics.liveParticleCount > 0 || diagnostics.spawnedParticleCount > 0 {
+                return ModuleRuntimeStatus(text: L("Simulating"), tone: .success)
+            }
+            if diagnostics.moduleValidationIssues.contains(where: { $0.severity == .warning }) {
+                return ModuleRuntimeStatus(text: L("Warnings"), tone: .warning)
+            }
+            return ModuleRuntimeStatus(text: L("Idle"), tone: .muted)
+        }
+
+        private var gpuOverviewValue: String {
+            if diagnostics.hasGPUSimulationWork {
+                return "\(diagnostics.renderStats.gpuParticleSimulationParticleCount)"
+            }
+            if let plan = diagnostics.selectedGPUSimulationPlan {
+                return gpuPlanStatus(plan).text
+            }
+            return gpuSummaryStatus.text
+        }
+
+        private func overviewMetricCard(_ label: String,
+                                        _ value: String,
+                                        tone: ModuleRuntimeTone) -> AnyView {
+            AnyView(Box(direction: .column, alignItems: .stretch, spacing: 1) {
+                Text(label)
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                Text(value)
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(tone.foreground)
+            }
+            .padding(horizontal: 6, vertical: 4)
+            .background(.surface)
+            .cornerRadius(4)
+            .border(tone.background, width: 1)
+            .flex())
         }
 
         private var gpuSummaryText: String {
@@ -1850,6 +1990,33 @@ struct InspectorPanel: View {
                                          max: 1,
                                          step: 0.01,
                                          enabled: isEnabled),
+                        ],
+                        [
+                            moduleNumber("Max Rendered",
+                                         moduleIntBinding(index, fallback: 0, get: {
+                                             if case let .emission(module) = $0 { return module.maxRenderedParticles }
+                                             return nil
+                                         }, set: {
+                                             if case var .emission(module) = $0 {
+                                                 module.maxRenderedParticles = $1
+                                                 $0 = .emission(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 100_000,
+                                         step: 16,
+                                         enabled: isEnabled),
+                            moduleText("Seed",
+                                       moduleUInt64StringBinding(index, fallback: 0x9E3779B9, get: {
+                                           if case let .emission(module) = $0 { return module.seed }
+                                           return nil
+                                       }, set: {
+                                           if case var .emission(module) = $0 {
+                                               module.seed = $1
+                                               $0 = .emission(module)
+                                           }
+                                       }),
+                                       enabled: isEnabled),
                         ],
                     ])
                     moduleCurveEditor("Rate Curve",
@@ -3509,6 +3676,20 @@ struct InspectorPanel: View {
             .flex())
         }
 
+        private func moduleText(_ label: String,
+                                _ value: Binding<String>,
+                                enabled: Bool) -> AnyView {
+            AnyView(Box(direction: .column, alignItems: .stretch, spacing: 2) {
+                Text(L(label))
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                TextField("", text: value, size: .small, disabled: !enabled, maxLength: 20)
+                    .frame(minWidth: 110)
+            }
+            .flex())
+        }
+
         private func moduleCurveEditor(_ label: String,
                                        _ value: Binding<ParticleCurve>,
                                        enabled: Bool) -> AnyView {
@@ -3605,6 +3786,27 @@ struct InspectorPanel: View {
                     var stack = binding.wrappedValue
                     guard stack.modules.indices.contains(index) else { return }
                     set(&stack.modules[index].settings, max(0, Int(next.rounded())))
+                    binding.wrappedValue = stack
+                }
+            )
+        }
+
+        private func moduleUInt64StringBinding(_ index: Int,
+                                               fallback: UInt64,
+                                               get: @escaping (ParticleEmitterModuleSettings) -> UInt64?,
+                                               set: @escaping (inout ParticleEmitterModuleSettings, UInt64) -> Void)
+            -> Binding<String> {
+            Binding(
+                get: {
+                    guard binding.wrappedValue.modules.indices.contains(index) else { return "\(fallback)" }
+                    return "\(get(binding.wrappedValue.modules[index].settings) ?? fallback)"
+                },
+                set: { next in
+                    let trimmed = next.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard let value = UInt64(trimmed) else { return }
+                    var stack = binding.wrappedValue
+                    guard stack.modules.indices.contains(index) else { return }
+                    set(&stack.modules[index].settings, value)
                     binding.wrappedValue = stack
                 }
             )
@@ -4584,25 +4786,62 @@ struct InspectorPanel: View {
                                   collapsedIDs: Set<String>,
                                   entityID: UInt64?,
                                   particleDiagnostics: InspectorParticleRuntimeDiagnostics) -> [PropertyGridSection] {
-        sections.map { section in
-            let startsCollapsed = collapsedIDs.contains(section.id)
-            return PropertyGridSection(
-                id: section.id,
-                title: section.title,
-                rows: section.fields.map { field in
-                    PropertyGridRow(id: field.id,
-                                    label: field.label,
-                                    rowHeight: field.value.preferredRowHeight(defaultHeight: 28),
-                                    layout: field.value.preferredRowLayout) {
-                        fieldView(field.value,
-                                  identity: "\(entityID.map(String.init) ?? "none")/\(section.id)/\(field.id)",
-                                  particleDiagnostics: particleDiagnostics)
-                    }
-                },
-                isCollapsible: true,
-                startsCollapsed: startsCollapsed
-            )
+        func row(for field: EditorInspectorField, sectionID: String) -> PropertyGridRow {
+            PropertyGridRow(id: field.id,
+                            label: field.label,
+                            rowHeight: field.value.preferredRowHeight(defaultHeight: 28),
+                            layout: field.value.preferredRowLayout) {
+                fieldView(field.value,
+                          identity: "\(entityID.map(String.init) ?? "none")/\(sectionID)/\(field.id)",
+                          particleDiagnostics: particleDiagnostics)
+            }
         }
+
+        return sections.flatMap { section -> [PropertyGridSection] in
+            let startsCollapsed = collapsedIDs.contains(section.id)
+            if section.id == "particle-emitter",
+               let moduleStackField = section.fields.first(where: { $0.id == Self.particleModuleStackFieldID }) {
+                let legacyFields = section.fields.filter(Self.isLegacyParticleInspectorField)
+                var result = [
+                    PropertyGridSection(
+                        id: section.id,
+                        title: section.title,
+                        rows: [row(for: moduleStackField, sectionID: section.id)],
+                        isCollapsible: true,
+                        startsCollapsed: startsCollapsed
+                    )
+                ]
+                if !legacyFields.isEmpty {
+                    let compatibilityID = "\(section.id)-compatibility"
+                    result.append(
+                        PropertyGridSection(
+                            id: compatibilityID,
+                            title: L("Advanced Compatibility"),
+                            rows: legacyFields.map { row(for: $0, sectionID: compatibilityID) },
+                            isCollapsible: true,
+                            startsCollapsed: true
+                        )
+                    )
+                }
+                return result
+            }
+
+            return [
+                PropertyGridSection(
+                    id: section.id,
+                    title: section.title,
+                    rows: section.fields.map { row(for: $0, sectionID: section.id) },
+                    isCollapsible: true,
+                    startsCollapsed: startsCollapsed
+                )
+            ]
+        }
+    }
+
+    private static let particleModuleStackFieldID = "particle-module-stack"
+
+    private static func isLegacyParticleInspectorField(_ field: EditorInspectorField) -> Bool {
+        field.id.hasPrefix("particle-") && field.id != particleModuleStackFieldID
     }
 
     private func fieldView(_ value: EditorInspectorFieldValue,
@@ -4794,6 +5033,7 @@ private extension EditorInspectorFieldValue {
             let stack = binding.wrappedValue
             let headerHeight: Float = 43
             let summaryHeight: Float = 23
+            let runtimeOverviewHeight: Float = 70
             let groupHeaderHeight: Float = 24
             let rowHeight: Float = 47
             let moduleEditorRowHeight: Float = 50
@@ -4841,6 +5081,7 @@ private extension EditorInspectorFieldValue {
             return max(defaultHeight,
                        headerHeight
                        + summaryHeight
+                       + runtimeOverviewHeight
                        + groupCount * groupHeaderHeight
                        + Float(stack.modules.count) * rowHeight
                        + expandedEditorHeight
@@ -4870,8 +5111,8 @@ private func particleModuleEditorHeight(_ settings: ParticleEmitterModuleSetting
     }
 
     if case let .emission(module) = settings {
-        return 3 * rowHeight
-            + 2 * 5
+        return 4 * rowHeight
+            + 3 * 5
             + 2 * 8
             + particleModuleCurveEditorHeight(module.emissionRateCurve)
             + particleModuleCurveEditorHeight(module.distanceEmissionRateCurve)

@@ -179,3 +179,19 @@ file(WRITE \"${OCIO_OPENEXR_BUNDLE}/info.json\"
 }
 \")
 ")
+
+guava_git_revision(IMATH_SOURCE_REVISION "${CMAKE_SOURCE_DIR}/imath")
+guava_git_revision(OPENEXR_SOURCE_REVISION "${CMAKE_SOURCE_DIR}/openexr")
+guava_add_artifact_build_manifest(
+    ARTIFACT_NAME "ocio_openexr"
+    VERSION "3.4.0"
+    BUNDLE_DIR ${OCIO_OPENEXR_BUNDLE}
+    LIB_REL_PATH "${GUAVA_TRIPLE}/lib/${OPENEXR_COMBINED_LIB_NAME}"
+    BUILD_SYSTEM "CMake ExternalProject"
+    SOURCE_KIND "git-submodule"
+    SOURCE_URL "Engine/third-party/openexr,Engine/third-party/imath"
+    SOURCE_REF "OpenEXR 3.4.0 + Imath"
+    SOURCE_REVISION "openexr=${OPENEXR_SOURCE_REVISION},imath=${IMATH_SOURCE_REVISION}"
+    NOTES "combined static archive produced from OpenEXR, Imath, Iex, IlmThread, OpenEXRCore, OpenEXRUtil, and openjph"
+    DEPENDS stage_ocio_openexr
+)
