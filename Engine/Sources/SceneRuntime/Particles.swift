@@ -1403,6 +1403,11 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     /// Number of currently-alive particles.
     public var aliveCount: Int { particles.count }
 
+    public mutating func reseed(_ newSeed: UInt64) {
+        seed = newSeed
+        rngState = newSeed
+    }
+
     public var gpuSimulationPlan: ParticleGPUSimulationPlan {
         ParticleGPUSimulationPlan(emitter: self)
     }

@@ -95,6 +95,8 @@ struct EditorStoreTests {
 
         #expect(abs(stats.frameMs - 410) < 0.001)
         #expect(abs(stats.workMs - 17.93) < 0.001)
+        #expect(abs(stats.pacingGapMs - 392.07) < 0.001)
+        #expect(stats.isFramePacingDominated)
         #expect(stats.fps < 3)
         #expect(stats.workFPS > 55)
     }
