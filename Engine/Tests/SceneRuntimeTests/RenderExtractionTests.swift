@@ -318,6 +318,50 @@ struct RenderExtractionTests {
         #expect(try extractedZPositions(sortMode: .youngestFirst) == [-20, -5])
     }
 
+    @Test("renderExtract applies emitter render sort priority before particle sort mode")
+    func renderExtractAppliesEmitterRenderSortPriority() throws {
+        var runtime = SceneRuntime()
+
+        let camera = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+        _ = runtime.setComponent(CameraComponent(isActive: true), for: camera)
+
+        let lowPriorityNear = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -5)), for: lowPriorityNear)
+        var nearEmitter = ParticleEmitter(isEmitting: false,
+                                          emissionRate: 0,
+                                          maxParticles: 4,
+                                          lifetime: 10,
+                                          spawnRadius: 0,
+                                          startVelocity: .zero,
+                                          gravity: .zero,
+                                          startSize: 0.5,
+                                          endSize: 0.5,
+                                          renderSortPriority: -5)
+        nearEmitter.emit(1)
+        _ = runtime.setComponent(nearEmitter, for: lowPriorityNear)
+
+        let highPriorityFar = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -20)), for: highPriorityFar)
+        var farEmitter = ParticleEmitter(isEmitting: false,
+                                         emissionRate: 0,
+                                         maxParticles: 4,
+                                         lifetime: 10,
+                                         spawnRadius: 0,
+                                         startVelocity: .zero,
+                                         gravity: .zero,
+                                         startSize: 0.5,
+                                         endSize: 0.5,
+                                         renderSortPriority: 5)
+        farEmitter.emit(1)
+        _ = runtime.setComponent(farEmitter, for: highPriorityFar)
+
+        _ = runtime.tick()
+
+        let particles = try #require(runtime.extractedRenderScene?.scene.particles)
+        #expect(particles.map(\.position.z) == [-5, -20])
+    }
+
     @Test("renderExtract carries GPU particle simulation batches")
     func renderExtractCarriesGPUParticleSimulationBatches() throws {
         var runtime = SceneRuntime()
@@ -329,6 +373,7 @@ struct RenderExtractionTests {
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -4)), for: entity)
         var emitter = ParticleEmitter(isEmitting: false,
+                                      simulationSpeed: 1.75,
                                       emissionRate: 0,
                                       maxParticles: 8,
                                       lifetime: 10,
@@ -356,6 +401,7 @@ struct RenderExtractionTests {
                                       collisionRestitution: 0.7,
                                       collisionDamping: 0.2,
                                       sortMode: .oldestFirst,
+                                      renderSortPriority: 9,
                                       renderAlignment: .velocity,
                                       velocityStretchScale: 0.25,
                                       velocityStretchMax: 3,
@@ -382,6 +428,7 @@ struct RenderExtractionTests {
         #expect(batch.plan.workgroupSize == 64)
         #expect(batch.particles.count == 2)
         #expect(batch.spawnParticles.isEmpty)
+        #expect(batch.simulationSpeed == 1.75)
         #expect(batch.gravity == SIMD3<Float>(0, -4, 0))
         #expect(batch.noiseStrength == 1.5)
         #expect(batch.noiseScale == 0.75)
@@ -415,7 +462,51 @@ struct RenderExtractionTests {
         #expect(batch.velocityStretchScale == 0.25)
         #expect(batch.velocityStretchMax == 3)
         #expect(batch.sortMode == .oldestFirst)
+        #expect(batch.renderSortPriority == 9)
         #expect(extracted.scene.particles.isEmpty)
+    }
+
+    @Test("renderExtract sorts GPU particle simulation batches by render priority")
+    func renderExtractSortsGPUParticleSimulationBatchesByRenderPriority() throws {
+        var runtime = SceneRuntime()
+
+        let camera = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+        _ = runtime.setComponent(CameraComponent(isActive: true), for: camera)
+
+        let highPriority = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -12)), for: highPriority)
+        var highEmitter = ParticleEmitter(isEmitting: false,
+                                          emissionRate: 0,
+                                          maxParticles: 8,
+                                          lifetime: 10,
+                                          spawnRadius: 0,
+                                          startVelocity: .zero,
+                                          gravity: .zero,
+                                          simulationBackend: .gpuIfSupported,
+                                          renderSortPriority: 20)
+        highEmitter.emit(1)
+        _ = runtime.setComponent(highEmitter, for: highPriority)
+
+        let lowPriority = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -4)), for: lowPriority)
+        var lowEmitter = ParticleEmitter(isEmitting: false,
+                                         emissionRate: 0,
+                                         maxParticles: 8,
+                                         lifetime: 10,
+                                         spawnRadius: 0,
+                                         startVelocity: .zero,
+                                         gravity: .zero,
+                                         simulationBackend: .gpuIfSupported,
+                                         renderSortPriority: -20)
+        lowEmitter.emit(1)
+        _ = runtime.setComponent(lowEmitter, for: lowPriority)
+
+        _ = runtime.tick()
+
+        let batches = try #require(runtime.extractedRenderScene?.scene.particleSimulationBatches)
+        #expect(batches.map(\.emitterEntity) == [lowPriority, highPriority])
+        #expect(batches.map(\.renderSortPriority) == [-20, 20])
     }
 
     @Test("renderExtract keeps event sub-emitter particles on the GPU simulation path")

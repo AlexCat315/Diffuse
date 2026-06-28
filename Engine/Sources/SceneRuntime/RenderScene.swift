@@ -359,6 +359,7 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
     public var particles: [Particle]
     /// Newly spawned particles appended by the GPU before this frame's simulation pass.
     public var spawnParticles: [Particle]
+    public var simulationSpeed: Float
     public var gravity: SIMD3<Float>
     public var noiseStrength: Float
     public var noiseScale: Float
@@ -395,6 +396,7 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
     public var velocityStretchScale: Float
     public var velocityStretchMax: Float
     public var sortMode: ParticleSortMode
+    public var renderSortPriority: Int
     /// Effective number of simulated particles to submit for rendering. A zero
     /// value keeps every live simulated particle visible.
     public var renderParticleLimit: Int
@@ -408,6 +410,7 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
                 plan: ParticleGPUSimulationPlan,
                 particles: [Particle],
                 spawnParticles: [Particle] = [],
+                simulationSpeed: Float = 1,
                 gravity: SIMD3<Float>,
                 noiseStrength: Float = 0,
                 noiseScale: Float = 1,
@@ -444,6 +447,7 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
                 velocityStretchScale: Float = 0,
                 velocityStretchMax: Float = 8,
                 sortMode: ParticleSortMode = .distanceDescending,
+                renderSortPriority: Int = 0,
                 renderParticleLimit: Int = 0,
                 renderAlphaScale: Float = 1,
                 trailLength: Float = 0,
@@ -454,6 +458,7 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
         self.plan = plan
         self.particles = particles
         self.spawnParticles = spawnParticles
+        self.simulationSpeed = max(0, simulationSpeed)
         self.gravity = gravity
         self.noiseStrength = max(0, noiseStrength)
         self.noiseScale = max(0.0001, noiseScale)
@@ -490,6 +495,7 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
         self.velocityStretchScale = max(0, velocityStretchScale)
         self.velocityStretchMax = max(1, velocityStretchMax)
         self.sortMode = sortMode
+        self.renderSortPriority = renderSortPriority
         self.renderParticleLimit = max(0, renderParticleLimit)
         self.renderAlphaScale = simd_clamp(renderAlphaScale, 0, 1)
         self.trailLength = max(0, trailLength)
