@@ -218,6 +218,7 @@ struct ParticleTests {
             module.distanceEmissionRate = 0
             module.burstCount = 0
             module.maxParticles = 0
+            module.simulationSpeed = -1
             settings = .emission(module)
         }
         try editModule(&stack, id: "appearance") { settings in
@@ -232,6 +233,32 @@ struct ParticleTests {
             module.frameCount = 8
             settings = .textureSheet(module)
         }
+        try editModule(&stack, id: "renderer") { settings in
+            guard case var .renderer(module) = settings else { return }
+            module.velocityStretchScale = -1
+            module.velocityStretchMax = 0
+            module.maxRenderDistance = 10
+            module.renderDistanceFadeRange = 20
+            module.renderLODStartDistance = 30
+            module.renderLODEndDistance = 10
+            module.renderLODMinParticleScale = 1.5
+            module.renderBoundsMode = .manual
+            module.renderBoundsRadius = -1
+            settings = .renderer(module)
+        }
+        try editModule(&stack, id: "trails") { settings in
+            guard case var .trails(module) = settings else { return }
+            module.trailLength = -1
+            module.trailSegments = -2
+            module.ribbonSmoothingSegments = 0
+            module.ribbonTailAlphaScale = 2
+            module.ribbonWidthScale = -1
+            module.ribbonMaxSegmentLength = -4
+            module.ribbonTextureTiling = -1
+            module.trailEndSizeScale = -0.5
+            module.trailEndAlphaScale = -0.25
+            settings = .trails(module)
+        }
         try editModule(&stack, id: "gpuSimulation") { settings in
             guard case var .gpuSimulation(module) = settings else { return }
             module.workgroupSize = ParticleGPUSimulationPlan.maximumWorkgroupSize + 1
@@ -242,8 +269,22 @@ struct ParticleTests {
 
         #expect(stackIssueCodes.contains("noParticleCapacity"))
         #expect(stackIssueCodes.contains("noSpawnSource"))
+        #expect(stackIssueCodes.contains("negativeSimulationSpeed"))
         #expect(stackIssueCodes.contains("invalidLifetime"))
         #expect(stackIssueCodes.contains("frameCountExceedsCells"))
+        #expect(stackIssueCodes.contains("negativeVelocityStretch"))
+        #expect(stackIssueCodes.contains("fadeRangeExceedsDistance"))
+        #expect(stackIssueCodes.contains("invalidLODRange"))
+        #expect(stackIssueCodes.contains("lodScaleOutOfRange"))
+        #expect(stackIssueCodes.contains("negativeRenderBoundsRadius"))
+        #expect(stackIssueCodes.contains("negativeTrailSettings"))
+        #expect(stackIssueCodes.contains("invalidRibbonSmoothing"))
+        #expect(stackIssueCodes.contains("tailAlphaOutOfRange"))
+        #expect(stackIssueCodes.contains("negativeRibbonWidth"))
+        #expect(stackIssueCodes.contains("negativeRibbonSegment"))
+        #expect(stackIssueCodes.contains("negativeRibbonTiling"))
+        #expect(stackIssueCodes.contains("negativeTrailEndSize"))
+        #expect(stackIssueCodes.contains("trailEndAlphaOutOfRange"))
         #expect(stackIssueCodes.contains("gpuWorkgroupClamped"))
 
         emitter.apply(stack)
@@ -257,9 +298,23 @@ struct ParticleTests {
         let repairedIssueCodes = stack.validationIssues().map(\.code)
 
         #expect(!repairedIssueCodes.contains("noParticleCapacity"))
+        #expect(!repairedIssueCodes.contains("negativeSimulationSpeed"))
         #expect(repairedIssueCodes.contains("noSpawnSource"))
         #expect(!repairedIssueCodes.contains("invalidLifetime"))
         #expect(!repairedIssueCodes.contains("frameCountExceedsCells"))
+        #expect(!repairedIssueCodes.contains("negativeVelocityStretch"))
+        #expect(!repairedIssueCodes.contains("fadeRangeExceedsDistance"))
+        #expect(!repairedIssueCodes.contains("invalidLODRange"))
+        #expect(!repairedIssueCodes.contains("lodScaleOutOfRange"))
+        #expect(!repairedIssueCodes.contains("negativeRenderBoundsRadius"))
+        #expect(!repairedIssueCodes.contains("negativeTrailSettings"))
+        #expect(!repairedIssueCodes.contains("invalidRibbonSmoothing"))
+        #expect(!repairedIssueCodes.contains("tailAlphaOutOfRange"))
+        #expect(!repairedIssueCodes.contains("negativeRibbonWidth"))
+        #expect(!repairedIssueCodes.contains("negativeRibbonSegment"))
+        #expect(!repairedIssueCodes.contains("negativeRibbonTiling"))
+        #expect(!repairedIssueCodes.contains("negativeTrailEndSize"))
+        #expect(!repairedIssueCodes.contains("trailEndAlphaOutOfRange"))
         #expect(!repairedIssueCodes.contains("gpuWorkgroupClamped"))
 
         emitter.apply(stack)
@@ -268,12 +323,184 @@ struct ParticleTests {
         })
     }
 
+    @Test("module stack repair removes duplicate modules and restores missing defaults")
+    func moduleStackRepairNormalizesTopology() throws {
+        var stack = ParticleEmitter().moduleStack
+        let emission = try #require(stack.modules.first { $0.id == "emission" })
+        stack.modules[0].displayName = "Legacy Emission"
+        stack.modules[0].stage = .render
+        stack.modules[0].isEnabled = false
+        stack.modules.insert(emission, at: 1)
+        stack.modules.removeAll { $0.id == "trails" }
+
+        let issueCodes = stack.validationIssues().map(\.code)
+        #expect(issueCodes.contains("duplicateModule"))
+        #expect(issueCodes.contains("missingModule"))
+
+        stack.repairValidationIssues()
+
+        let repairedIssueCodes = stack.validationIssues().map(\.code)
+        #expect(!repairedIssueCodes.contains("duplicateModule"))
+        #expect(!repairedIssueCodes.contains("missingModule"))
+        #expect(stack.version == ParticleModuleStack.currentVersion)
+        #expect(stack.modules.filter { $0.id == "emission" }.count == 1)
+        #expect(stack.modules.filter { $0.id == "trails" }.count == 1)
+        #expect(Set(stack.modules.map(\.id)).isSuperset(of: ParticleModuleStack.defaultModuleIDs))
+
+        let repairedEmission = try #require(stack.modules.first { $0.id == "emission" })
+        #expect(repairedEmission.displayName == "Emission")
+        #expect(repairedEmission.stage == .spawn)
+        #expect(!repairedEmission.isEnabled)
+
+        let repairedTrails = try #require(stack.modules.first { $0.id == "trails" })
+        #expect(repairedTrails.displayName == "Trails")
+        #expect(repairedTrails.isEnabled)
+    }
+
+    @Test("module stack can repair a single authored module")
+    func moduleStackRepairsSingleModule() throws {
+        var stack = ParticleEmitter().moduleStack
+        try editModule(&stack, id: "emission") { settings in
+            guard case var .emission(module) = settings else { return }
+            module.maxParticles = 0
+            module.simulationSpeed = -1
+            settings = .emission(module)
+        }
+        try editModule(&stack, id: "renderer") { settings in
+            guard case var .renderer(module) = settings else { return }
+            module.velocityStretchScale = -1
+            module.renderLODStartDistance = 20
+            module.renderLODEndDistance = 10
+            settings = .renderer(module)
+        }
+
+        stack.repairValidationIssues(for: "renderer")
+        let issueCodes = stack.validationIssues().map(\.code)
+
+        #expect(issueCodes.contains("noParticleCapacity"))
+        #expect(issueCodes.contains("negativeSimulationSpeed"))
+        #expect(!issueCodes.contains("negativeVelocityStretch"))
+        #expect(!issueCodes.contains("invalidLODRange"))
+    }
+
+    @Test("module stack can reset a single module to default settings")
+    func moduleStackResetsSingleModuleSettings() throws {
+        var stack = ParticleEmitter().moduleStack
+        let rendererIndex = try #require(stack.modules.firstIndex { $0.id == "renderer" })
+        stack.modules[rendererIndex].isEnabled = false
+        stack.modules[rendererIndex].isExpanded = true
+        if case var .renderer(module) = stack.modules[rendererIndex].settings {
+            module.renderMode = .ribbon
+            module.renderSortPriority = 42
+            module.renderBoundsMode = .manual
+            module.renderBoundsRadius = 99
+            stack.modules[rendererIndex].settings = .renderer(module)
+        } else {
+            Issue.record("expected renderer module settings")
+        }
+
+        #expect(stack.moduleSettingsDifferFromDefault("renderer"))
+        stack.resetModuleSettings(for: "renderer")
+
+        let resetRenderer = try #require(stack.modules.first { $0.id == "renderer" })
+        let defaultRenderer = try #require(ParticleModuleStack(emitter: ParticleEmitter()).modules.first { $0.id == "renderer" })
+        #expect(!resetRenderer.isEnabled)
+        #expect(resetRenderer.isExpanded)
+        #expect(resetRenderer.stage == defaultRenderer.stage)
+        #expect(resetRenderer.displayName == defaultRenderer.displayName)
+        #expect(resetRenderer.settings == defaultRenderer.settings)
+        #expect(!stack.moduleSettingsDifferFromDefault("renderer"))
+    }
+
+    @Test("module stack reports modules modified from defaults")
+    func moduleStackReportsModifiedModules() throws {
+        var stack = ParticleEmitter().moduleStack
+        #expect(stack.modifiedModuleIDs.isEmpty)
+
+        try editModule(&stack, id: "emission") { settings in
+            guard case var .emission(module) = settings else { return }
+            module.emissionRate = 123
+            settings = .emission(module)
+        }
+        try editModule(&stack, id: "renderer") { settings in
+            guard case var .renderer(module) = settings else { return }
+            module.renderSortPriority = 5
+            settings = .renderer(module)
+        }
+
+        #expect(stack.modifiedModuleIDs == ["emission", "renderer"])
+        stack.resetModuleSettings(for: "emission")
+        #expect(stack.modifiedModuleIDs == ["renderer"])
+        stack.resetModuleSettings(for: "renderer")
+        #expect(stack.modifiedModuleIDs.isEmpty)
+    }
+
+    @Test("module modified state ignores enabled and expansion authoring flags")
+    func moduleModifiedStateIgnoresEnabledAndExpansionFlags() throws {
+        var stack = ParticleEmitter().moduleStack
+        let rendererIndex = try #require(stack.modules.firstIndex { $0.id == "renderer" })
+
+        stack.modules[rendererIndex].isEnabled = false
+        stack.modules[rendererIndex].isExpanded = true
+
+        #expect(!stack.moduleSettingsDifferFromDefault("renderer"))
+        #expect(stack.modifiedModuleIDs.isEmpty)
+    }
+
     @Test("continuous emission spawns at the configured rate")
     func continuousEmission() {
         var emitter = ParticleEmitter(emissionRate: 10, maxParticles: 1000, lifetime: 1000,
                                       startVelocity: .zero, gravity: .zero)
         for _ in 0..<10 { emitter.advance(deltaTime: 0.1) } // 10 * (10/s * 0.1s) = 10
         #expect(emitter.aliveCount == 10)
+    }
+
+    @Test("simulation speed scales particle aging and emission")
+    func simulationSpeedScalesAgingAndEmission() {
+        var slow = ParticleEmitter(simulationSpeed: 0.5,
+                                   emissionRate: 10,
+                                   maxParticles: 100,
+                                   lifetime: 100,
+                                   startVelocity: .zero,
+                                   gravity: .zero)
+        slow.advance(deltaTime: 1)
+        #expect(slow.aliveCount == 5)
+        #expect(slow.lastFrameStats.simulatedDeltaTime == 0.5)
+
+        var fast = ParticleEmitter(simulationSpeed: 2,
+                                   emissionRate: 10,
+                                   maxParticles: 100,
+                                   lifetime: 100,
+                                   startVelocity: .zero,
+                                   gravity: .zero)
+        fast.advance(deltaTime: 1)
+        #expect(fast.aliveCount == 20)
+        #expect(fast.lastFrameStats.simulatedDeltaTime == 2)
+    }
+
+    @Test("zero simulation speed pauses particle aging and distance emission")
+    func zeroSimulationSpeedPausesParticles() {
+        var emitter = ParticleEmitter(simulationSpeed: 0,
+                                      emissionRate: 0,
+                                      distanceEmissionRate: 10,
+                                      maxParticles: 100,
+                                      lifetime: 10,
+                                      startVelocity: SIMD3<Float>(1, 0, 0),
+                                      gravity: .zero)
+        emitter.emit(1)
+        var start = matrix_identity_float4x4
+        start.columns.3 = SIMD4<Float>(0, 0, 0, 1)
+        emitter.advance(deltaTime: 1, worldTransform: start)
+
+        var moved = matrix_identity_float4x4
+        moved.columns.3 = SIMD4<Float>(5, 0, 0, 1)
+        emitter.advance(deltaTime: 1, worldTransform: moved)
+
+        #expect(emitter.aliveCount == 1)
+        #expect(emitter.particles[0].age == 0)
+        #expect(emitter.particles[0].position == .zero)
+        #expect(emitter.lastFrameStats.simulatedDeltaTime == 0)
+        #expect(emitter.lastFrameStats.distanceSpawnedCount == 0)
     }
 
     @Test("frame spawned particles track accepted advance emissions")
@@ -1570,6 +1797,98 @@ struct ParticleTests {
         #expect(abs(state.appliedScale - 0.7) < 0.0001)
         #expect(state.reason == .none)
         #expect(state.pressure == 0)
+    }
+
+    @Test("particle scalability policy reports dominant pressure reason")
+    func particleScalabilityPolicyReportsDominantPressureReason() {
+        let policy = ParticleScalabilityPolicyResource(isEnabled: true,
+                                                       targetLiveParticles: 100,
+                                                       targetSpawnedParticlesPerFrame: 20,
+                                                       minimumScale: 0.25,
+                                                       pressureStep: 0.2,
+                                                       recoveryStep: 0.1)
+
+        let livePressure = policy.updatedState(previousStats: ParticleFrameStatsResource(emitterStats: [
+            ParticleEmitterFrameStats(liveParticleCount: 180, maxParticleCount: 200, liveParticleLimit: 200,
+                                      continuousSpawnedCount: 24),
+        ]))
+        #expect(livePressure.reason == .liveBudget)
+        #expect(abs(livePressure.pressure - 0.8) < 0.0001)
+
+        let spawnPressure = policy.updatedState(previousStats: ParticleFrameStatsResource(emitterStats: [
+            ParticleEmitterFrameStats(liveParticleCount: 120, maxParticleCount: 200, liveParticleLimit: 200,
+                                      continuousSpawnedCount: 50),
+        ]))
+        #expect(spawnPressure.reason == .spawnBudget)
+        #expect(abs(spawnPressure.pressure - 1.5) < 0.0001)
+
+        let capacityPressure = policy.updatedState(previousStats: ParticleFrameStatsResource(emitterStats: [
+            ParticleEmitterFrameStats(liveParticleCount: 10, maxParticleCount: 10, liveParticleLimit: 10,
+                                      capacityLimitedSpawnCount: 1),
+        ]))
+        #expect(capacityPressure.reason == .capacityLimited)
+        #expect(capacityPressure.pressure == 1)
+    }
+
+    @Test("particle frame stats expose live budget utilization and dropped spawns")
+    func particleFrameStatsExposeLiveBudgetUtilizationAndDroppedSpawns() {
+        let a = ParticleEmitterFrameStats(liveParticleCount: 45,
+                                          maxParticleCount: 100,
+                                          liveParticleLimit: 50,
+                                          continuousSpawnedCount: 10,
+                                          capacityLimitedSpawnCount: 2)
+        let b = ParticleEmitterFrameStats(liveParticleCount: 25,
+                                          maxParticleCount: 200,
+                                          liveParticleLimit: 0,
+                                          burstSpawnedCount: 5,
+                                          capacityLimitedSpawnCount: 3)
+        let aggregate = ParticleFrameStatsResource(emitterStats: [a, b],
+                                                   emitterStatsByEntity: [11: a, 22: b])
+
+        #expect(a.liveParticleBudgetLimit == 50)
+        #expect(abs(a.liveParticleBudgetUtilization - 0.9) < 0.0001)
+        #expect(a.droppedSpawnCount == 2)
+        #expect(a.runtimePressureLevel == .critical)
+        #expect(b.liveParticleBudgetLimit == 200)
+        #expect(abs(b.liveParticleBudgetUtilization - 0.125) < 0.0001)
+        #expect(b.droppedSpawnCount == 3)
+        #expect(b.runtimePressureLevel == .critical)
+
+        #expect(aggregate.liveParticleBudgetLimit == 250)
+        #expect(abs(aggregate.liveParticleBudgetUtilization - 0.28) < 0.0001)
+        #expect(aggregate.droppedSpawnCount == 5)
+        #expect(aggregate.runtimePressureLevel == .critical)
+        #expect(aggregate.emitterStats(for: 11)?.liveParticleBudgetLimit == 50)
+    }
+
+    @Test("particle frame stats classify runtime pressure levels")
+    func particleFrameStatsClassifyRuntimePressureLevels() {
+        let idle = ParticleEmitterFrameStats(maxParticleCount: 100)
+        #expect(idle.runtimePressureLevel == .idle)
+
+        let nominal = ParticleEmitterFrameStats(liveParticleCount: 25,
+                                                maxParticleCount: 100,
+                                                liveParticleLimit: 100)
+        #expect(nominal.runtimePressureLevel == .nominal)
+
+        let warning = ParticleEmitterFrameStats(liveParticleCount: 90,
+                                                maxParticleCount: 100,
+                                                liveParticleLimit: 100)
+        #expect(warning.runtimePressureLevel == .warning)
+
+        let overBudget = ParticleEmitterFrameStats(liveParticleCount: 100,
+                                                   maxParticleCount: 100,
+                                                   liveParticleLimit: 100)
+        #expect(overBudget.runtimePressureLevel == .critical)
+
+        let dropped = ParticleEmitterFrameStats(liveParticleCount: 10,
+                                                maxParticleCount: 100,
+                                                liveParticleLimit: 100,
+                                                capacityLimitedSpawnCount: 1)
+        #expect(dropped.runtimePressureLevel == .critical)
+
+        let aggregate = ParticleFrameStatsResource(emitterStats: [nominal, warning])
+        #expect(aggregate.runtimePressureLevel == .warning)
     }
 
     @Test("noise force deterministically accelerates particles")

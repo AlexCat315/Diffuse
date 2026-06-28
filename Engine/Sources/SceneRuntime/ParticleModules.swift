@@ -141,6 +141,36 @@ public struct ParticleModuleStack: Codable, Sendable, Equatable {
             modules[index].isExpanded = false
         }
     }
+
+    public mutating func resetModuleSettings(for moduleID: String) {
+        guard let index = modules.firstIndex(where: { $0.id == moduleID }),
+              var defaultModule = Self.defaultModule(for: moduleID) else {
+            return
+        }
+        defaultModule.isEnabled = modules[index].isEnabled
+        defaultModule.isExpanded = modules[index].isExpanded
+        modules[index] = defaultModule
+    }
+
+    public func moduleSettingsDifferFromDefault(_ moduleID: String) -> Bool {
+        guard let module = modules.first(where: { $0.id == moduleID }),
+              var defaultModule = Self.defaultModule(for: moduleID) else {
+            return false
+        }
+        defaultModule.isEnabled = module.isEnabled
+        defaultModule.isExpanded = module.isExpanded
+        return module != defaultModule
+    }
+
+    public var modifiedModuleIDs: [String] {
+        modules.compactMap { module in
+            moduleSettingsDifferFromDefault(module.id) ? module.id : nil
+        }
+    }
+
+    private static func defaultModule(for moduleID: String) -> ParticleEmitterModule? {
+        ParticleModuleStack(emitter: ParticleEmitter()).modules.first { $0.id == moduleID }
+    }
 }
 
 public struct ParticleEmitterModule: Codable, Sendable, Equatable {
@@ -322,6 +352,7 @@ public struct ParticleEmissionModule: Codable, Sendable, Equatable {
     public var isEmitting: Bool
     public var looping: Bool
     public var duration: Float
+    public var simulationSpeed: Float
     public var prewarmTime: Float
     public var prewarmStep: Float
     public var emissionRate: Float
@@ -337,6 +368,7 @@ public struct ParticleEmissionModule: Codable, Sendable, Equatable {
         self.isEmitting = emitter.isEmitting
         self.looping = emitter.looping
         self.duration = emitter.duration
+        self.simulationSpeed = emitter.simulationSpeed
         self.prewarmTime = emitter.prewarmTime
         self.prewarmStep = emitter.prewarmStep
         self.emissionRate = emitter.emissionRate
@@ -347,6 +379,42 @@ public struct ParticleEmissionModule: Codable, Sendable, Equatable {
         self.burstInterval = emitter.burstInterval
         self.maxParticles = emitter.maxParticles
         self.maxRenderedParticles = emitter.maxRenderedParticles
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case isEmitting
+        case looping
+        case duration
+        case simulationSpeed
+        case prewarmTime
+        case prewarmStep
+        case emissionRate
+        case emissionRateCurve
+        case distanceEmissionRate
+        case distanceEmissionRateCurve
+        case burstCount
+        case burstInterval
+        case maxParticles
+        case maxRenderedParticles
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        isEmitting = try container.decodeIfPresent(Bool.self, forKey: .isEmitting) ?? true
+        looping = try container.decodeIfPresent(Bool.self, forKey: .looping) ?? true
+        duration = try container.decodeIfPresent(Float.self, forKey: .duration) ?? 0
+        simulationSpeed = try container.decodeIfPresent(Float.self, forKey: .simulationSpeed) ?? 1
+        prewarmTime = try container.decodeIfPresent(Float.self, forKey: .prewarmTime) ?? 0
+        prewarmStep = try container.decodeIfPresent(Float.self, forKey: .prewarmStep) ?? (1.0 / 30.0)
+        emissionRate = try container.decodeIfPresent(Float.self, forKey: .emissionRate) ?? 10
+        emissionRateCurve = try container.decodeIfPresent(ParticleCurve.self, forKey: .emissionRateCurve) ?? .constant(1)
+        distanceEmissionRate = try container.decodeIfPresent(Float.self, forKey: .distanceEmissionRate) ?? 0
+        distanceEmissionRateCurve = try container.decodeIfPresent(ParticleCurve.self,
+                                                                  forKey: .distanceEmissionRateCurve) ?? .constant(1)
+        burstCount = try container.decodeIfPresent(Int.self, forKey: .burstCount) ?? 0
+        burstInterval = try container.decodeIfPresent(Float.self, forKey: .burstInterval) ?? 0
+        maxParticles = try container.decodeIfPresent(Int.self, forKey: .maxParticles) ?? 256
+        maxRenderedParticles = try container.decodeIfPresent(Int.self, forKey: .maxRenderedParticles) ?? 0
     }
 }
 
@@ -491,6 +559,7 @@ public struct ParticleTextureSheetModule: Codable, Sendable, Equatable {
 public struct ParticleRendererModule: Codable, Sendable, Equatable {
     public var renderMode: ParticleRenderMode
     public var sortMode: ParticleSortMode
+    public var renderSortPriority: Int
     public var renderAlignment: ParticleRenderAlignment
     public var velocityStretchScale: Float
     public var velocityStretchMax: Float
@@ -505,6 +574,7 @@ public struct ParticleRendererModule: Codable, Sendable, Equatable {
     public init(_ emitter: ParticleEmitter) {
         self.renderMode = emitter.renderMode
         self.sortMode = emitter.sortMode
+        self.renderSortPriority = emitter.renderSortPriority
         self.renderAlignment = emitter.renderAlignment
         self.velocityStretchScale = emitter.velocityStretchScale
         self.velocityStretchMax = emitter.velocityStretchMax
@@ -515,6 +585,39 @@ public struct ParticleRendererModule: Codable, Sendable, Equatable {
         self.renderLODMinParticleScale = emitter.renderLODMinParticleScale
         self.renderBoundsMode = emitter.renderBoundsMode
         self.renderBoundsRadius = emitter.renderBoundsRadius
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case renderMode
+        case sortMode
+        case renderSortPriority
+        case renderAlignment
+        case velocityStretchScale
+        case velocityStretchMax
+        case maxRenderDistance
+        case renderDistanceFadeRange
+        case renderLODStartDistance
+        case renderLODEndDistance
+        case renderLODMinParticleScale
+        case renderBoundsMode
+        case renderBoundsRadius
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        renderMode = try container.decodeIfPresent(ParticleRenderMode.self, forKey: .renderMode) ?? .billboard
+        sortMode = try container.decodeIfPresent(ParticleSortMode.self, forKey: .sortMode) ?? .distanceDescending
+        renderSortPriority = try container.decodeIfPresent(Int.self, forKey: .renderSortPriority) ?? 0
+        renderAlignment = try container.decodeIfPresent(ParticleRenderAlignment.self, forKey: .renderAlignment) ?? .billboard
+        velocityStretchScale = try container.decodeIfPresent(Float.self, forKey: .velocityStretchScale) ?? 0
+        velocityStretchMax = try container.decodeIfPresent(Float.self, forKey: .velocityStretchMax) ?? 8
+        maxRenderDistance = try container.decodeIfPresent(Float.self, forKey: .maxRenderDistance) ?? 0
+        renderDistanceFadeRange = try container.decodeIfPresent(Float.self, forKey: .renderDistanceFadeRange) ?? 0
+        renderLODStartDistance = try container.decodeIfPresent(Float.self, forKey: .renderLODStartDistance) ?? 0
+        renderLODEndDistance = try container.decodeIfPresent(Float.self, forKey: .renderLODEndDistance) ?? 0
+        renderLODMinParticleScale = try container.decodeIfPresent(Float.self, forKey: .renderLODMinParticleScale) ?? 1
+        renderBoundsMode = try container.decodeIfPresent(ParticleRenderBoundsMode.self, forKey: .renderBoundsMode) ?? .disabled
+        renderBoundsRadius = try container.decodeIfPresent(Float.self, forKey: .renderBoundsRadius) ?? 0
     }
 }
 
@@ -621,9 +724,45 @@ public extension ParticleModuleStack {
     }
 
     mutating func repairValidationIssues() {
+        repairModuleTopology()
         for index in modules.indices where modules[index].isEnabled {
             modules[index].settings.repairValidationIssues()
         }
+    }
+
+    mutating func repairValidationIssues(for moduleID: String) {
+        repairModuleTopology()
+        guard let index = modules.firstIndex(where: { $0.id == moduleID && $0.isEnabled }) else {
+            return
+        }
+        modules[index].settings.repairValidationIssues()
+    }
+
+    private mutating func repairModuleTopology() {
+        let defaultModules = ParticleModuleStack(emitter: ParticleEmitter()).modules
+        let defaultsByID = Dictionary(uniqueKeysWithValues: defaultModules.map { ($0.id, $0) })
+        let defaultIDs = Set(Self.defaultModuleIDs)
+        var seenIDs: Set<String> = []
+        var repaired: [ParticleEmitterModule] = []
+        repaired.reserveCapacity(max(modules.count, defaultModules.count))
+
+        for module in modules {
+            guard seenIDs.insert(module.id).inserted else { continue }
+            var normalized = module
+            if defaultIDs.contains(module.id), let defaultModule = defaultsByID[module.id] {
+                normalized.stage = defaultModule.stage
+                normalized.displayName = defaultModule.displayName
+            }
+            repaired.append(normalized)
+        }
+
+        for defaultModule in defaultModules where !seenIDs.contains(defaultModule.id) {
+            repaired.append(defaultModule)
+            seenIDs.insert(defaultModule.id)
+        }
+
+        version = Self.currentVersion
+        modules = repaired
     }
 }
 
@@ -693,6 +832,7 @@ private extension ParticleEmitterModuleSettings {
     mutating func repairValidationIssues() {
         switch self {
         case var .emission(settings):
+            settings.simulationSpeed = max(0, settings.simulationSpeed)
             settings.maxParticles = max(1, settings.maxParticles)
             settings.maxRenderedParticles = max(0, min(settings.maxRenderedParticles, settings.maxParticles))
             settings.prewarmTime = max(0, settings.prewarmTime)
@@ -858,6 +998,10 @@ private func validateEmission(_ settings: ParticleEmissionModule,
         issues.append(issue(moduleID, .error, "noParticleCapacity",
                             "Max particles must be greater than zero."))
     }
+    if settings.simulationSpeed < 0 {
+        issues.append(issue(moduleID, .warning, "negativeSimulationSpeed",
+                            "Simulation speed is negative and will be clamped."))
+    }
     if settings.isEmitting
         && settings.emissionRate <= 0
         && settings.distanceEmissionRate <= 0
@@ -985,15 +1129,39 @@ private func validateTextureSheet(_ settings: ParticleTextureSheetModule,
 private func validateRenderer(_ settings: ParticleRendererModule,
                               moduleID: String) -> [ParticleModuleIssue] {
     var issues: [ParticleModuleIssue] = []
+    if settings.velocityStretchScale < 0 {
+        issues.append(issue(moduleID, .warning, "negativeVelocityStretch",
+                            "Velocity stretch scale is negative and will be clamped."))
+    }
     if settings.renderLODEndDistance > 0
         && settings.renderLODStartDistance > settings.renderLODEndDistance {
         issues.append(issue(moduleID, .warning, "invalidLODRange",
                             "LOD start distance should not exceed LOD end distance."))
     }
+    if settings.renderLODStartDistance < 0 || settings.renderLODEndDistance < 0 {
+        issues.append(issue(moduleID, .warning, "negativeLODDistance",
+                            "LOD distances should not be negative."))
+    }
+    if settings.renderLODMinParticleScale < 0 || settings.renderLODMinParticleScale > 1 {
+        issues.append(issue(moduleID, .warning, "lodScaleOutOfRange",
+                            "LOD minimum particle scale should be between 0 and 1."))
+    }
+    if settings.maxRenderDistance < 0 {
+        issues.append(issue(moduleID, .warning, "negativeMaxRenderDistance",
+                            "Max render distance should not be negative."))
+    }
+    if settings.renderDistanceFadeRange < 0 {
+        issues.append(issue(moduleID, .warning, "negativeFadeRange",
+                            "Distance fade range should not be negative."))
+    }
     if settings.maxRenderDistance > 0
         && settings.renderDistanceFadeRange > settings.maxRenderDistance {
         issues.append(issue(moduleID, .warning, "fadeRangeExceedsDistance",
                             "Distance fade range exceeds max render distance."))
+    }
+    if settings.renderBoundsRadius < 0 {
+        issues.append(issue(moduleID, .warning, "negativeRenderBoundsRadius",
+                            "Render bounds radius should not be negative."))
     }
     if settings.renderBoundsMode != .disabled && settings.renderBoundsRadius <= 0 {
         issues.append(issue(moduleID, .warning, "invalidRenderBounds",
@@ -1009,6 +1177,10 @@ private func validateRenderer(_ settings: ParticleRendererModule,
 private func validateTrails(_ settings: ParticleTrailsModule,
                             moduleID: String) -> [ParticleModuleIssue] {
     var issues: [ParticleModuleIssue] = []
+    if settings.trailLength < 0 || settings.trailSegments < 0 {
+        issues.append(issue(moduleID, .warning, "negativeTrailSettings",
+                            "Trail length and segment count should not be negative."))
+    }
     if settings.trailLength > 0 && settings.trailSegments <= 0 {
         issues.append(issue(moduleID, .warning, "trailWithoutSamples",
                             "Trail length is active but trail segments is zero."))
@@ -1020,6 +1192,26 @@ private func validateTrails(_ settings: ParticleTrailsModule,
     if settings.ribbonTailAlphaScale < 0 || settings.ribbonTailAlphaScale > 1 {
         issues.append(issue(moduleID, .warning, "tailAlphaOutOfRange",
                             "Ribbon tail alpha should be between 0 and 1."))
+    }
+    if settings.ribbonWidthScale < 0 || settings.ribbonTailWidthScale < 0 {
+        issues.append(issue(moduleID, .warning, "negativeRibbonWidth",
+                            "Ribbon width scales should not be negative."))
+    }
+    if settings.ribbonMaxSegmentLength < 0 || settings.ribbonJoinOverlapScale < 0 {
+        issues.append(issue(moduleID, .warning, "negativeRibbonSegment",
+                            "Ribbon segment and join settings should not be negative."))
+    }
+    if settings.ribbonTextureTiling < 0 {
+        issues.append(issue(moduleID, .warning, "negativeRibbonTiling",
+                            "Ribbon texture tiling should not be negative."))
+    }
+    if settings.trailEndSizeScale < 0 {
+        issues.append(issue(moduleID, .warning, "negativeTrailEndSize",
+                            "Trail end size scale should not be negative."))
+    }
+    if settings.trailEndAlphaScale < 0 || settings.trailEndAlphaScale > 1 {
+        issues.append(issue(moduleID, .warning, "trailEndAlphaOutOfRange",
+                            "Trail end alpha should be between 0 and 1."))
     }
     return issues
 }
@@ -1087,6 +1279,7 @@ public extension ParticleEmitter {
                 isEmitting = settings.isEmitting
                 looping = settings.looping
                 duration = max(0, settings.duration)
+                simulationSpeed = max(0, settings.simulationSpeed)
                 prewarmTime = max(0, settings.prewarmTime)
                 prewarmStep = max(1.0 / 240.0, settings.prewarmStep)
                 emissionRate = max(0, settings.emissionRate)
@@ -1161,6 +1354,7 @@ public extension ParticleEmitter {
             case let .renderer(settings):
                 renderMode = settings.renderMode
                 sortMode = settings.sortMode
+                renderSortPriority = settings.renderSortPriority
                 renderAlignment = settings.renderAlignment
                 velocityStretchScale = max(0, settings.velocityStretchScale)
                 velocityStretchMax = max(1, settings.velocityStretchMax)
