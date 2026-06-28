@@ -49,3 +49,18 @@ add_custom_target(stage_freetype ALL
 )
 
 write_artifactbundle_info(${FREETYPE_BUNDLE} "CFreeType" "${GUAVA_TRIPLE}/lib/${FREETYPE_LIB_FILENAME}")
+
+guava_git_revision(FREETYPE_SOURCE_REVISION "${CMAKE_SOURCE_DIR}/freetype")
+guava_add_artifact_build_manifest(
+    ARTIFACT_NAME "CFreeType"
+    VERSION "1.0.0"
+    BUNDLE_DIR ${FREETYPE_BUNDLE}
+    LIB_REL_PATH "${GUAVA_TRIPLE}/lib/${FREETYPE_LIB_FILENAME}"
+    BUILD_SYSTEM "CMake ExternalProject"
+    SOURCE_KIND "git-submodule"
+    SOURCE_URL "GuavaUI/third-party/freetype"
+    SOURCE_REF "1.0.0"
+    SOURCE_REVISION ${FREETYPE_SOURCE_REVISION}
+    NOTES "FT_DISABLE_ZLIB=ON, FT_DISABLE_PNG=ON, FT_DISABLE_HARFBUZZ=ON, static library"
+    DEPENDS stage_freetype
+)

@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(guava-third-party LANGUAGES C CXX)
 
+include(${CMAKE_SOURCE_DIR}/../../cmake/ArtifactBundleManifest.cmake)
+
 # ============================================================================
 # Determine target triple for SPM artifact bundle layout
 # ============================================================================

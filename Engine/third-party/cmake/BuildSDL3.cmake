@@ -86,3 +86,18 @@ install(CODE "
 # stage_ocio_openexr). The install() rules above then copy it into the bundle.
 add_custom_target(stage_sdl3 ALL COMMENT "Building SDL3-static")
 add_dependencies(stage_sdl3 SDL3-static)
+
+guava_git_revision(SDL3_SOURCE_REVISION "${CMAKE_SOURCE_DIR}/sdl3")
+guava_add_artifact_build_manifest(
+    ARTIFACT_NAME "SDL3"
+    VERSION "3.4.8"
+    BUNDLE_DIR ${SDL3_BUNDLE}
+    LIB_REL_PATH "${GUAVA_TRIPLE}/lib/${SDL3_LIB_FILENAME}"
+    BUILD_SYSTEM "CMake"
+    SOURCE_KIND "git-submodule"
+    SOURCE_URL "Engine/third-party/sdl3"
+    SOURCE_REF "3.4.8"
+    SOURCE_REVISION ${SDL3_SOURCE_REVISION}
+    NOTES "static library staged from SDL3-static"
+    DEPENDS stage_sdl3
+)
