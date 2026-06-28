@@ -131,6 +131,7 @@ public struct RuntimeWorldSchedule {
     private struct SortableRenderParticle {
         var particle: RenderParticle
         var sortMode: ParticleSortMode
+        var sortPriority: Int
         var distanceSquared: Float
         var age: Float
         var sourceOrder: Int
@@ -626,6 +627,7 @@ public struct RuntimeWorldSchedule {
                     plan: plan,
                     particles: persistedParticles,
                     spawnParticles: spawnParticles,
+                    simulationSpeed: emitter.simulationSpeed,
                     gravity: emitter.gravity,
                     noiseStrength: emitter.noiseStrength,
                     noiseScale: emitter.noiseScale,
@@ -662,6 +664,7 @@ public struct RuntimeWorldSchedule {
                     velocityStretchScale: emitter.velocityStretchScale,
                     velocityStretchMax: emitter.velocityStretchMax,
                     sortMode: emitter.sortMode,
+                    renderSortPriority: emitter.renderSortPriority,
                     renderParticleLimit: renderParticleLimit,
                     renderAlphaScale: renderAlphaScale,
                     trailLength: emitter.trailLength,
@@ -670,6 +673,12 @@ public struct RuntimeWorldSchedule {
                     trailEndAlphaScale: emitter.trailEndAlphaScale
                 )
             )
+        }
+        result.sort { lhs, rhs in
+            if lhs.renderSortPriority != rhs.renderSortPriority {
+                return lhs.renderSortPriority < rhs.renderSortPriority
+            }
+            return (lhs.emitterEntity?.rawValue ?? 0) < (rhs.emitterEntity?.rawValue ?? 0)
         }
         return result
     }
@@ -794,6 +803,7 @@ public struct RuntimeWorldSchedule {
             SortableRenderParticle(
                 particle: particle,
                 sortMode: emitter.sortMode,
+                sortPriority: emitter.renderSortPriority,
                 distanceSquared: simd_length_squared(particle.position - cameraEye),
                 age: max(0, age),
                 sourceOrder: nextSourceOrder
@@ -806,6 +816,9 @@ public struct RuntimeWorldSchedule {
         _ lhs: SortableRenderParticle,
         _ rhs: SortableRenderParticle
     ) -> Bool {
+        if lhs.sortPriority != rhs.sortPriority {
+            return lhs.sortPriority < rhs.sortPriority
+        }
         if lhs.sortMode != rhs.sortMode {
             return tieBreakSortableParticles(lhs, rhs)
         }

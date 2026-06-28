@@ -1056,7 +1056,7 @@ extension WGPURenderer {
                 encoder: encoder,
                 plan: batch.plan,
                 particles: batch.particles,
-                deltaTime: deltaTime,
+                deltaTime: deltaTime * batch.simulationSpeed,
                 gravity: batch.gravity,
                 noiseStrength: batch.noiseStrength,
                 noiseScale: batch.noiseScale,
