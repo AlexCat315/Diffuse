@@ -168,6 +168,40 @@ public struct ParticleModuleStack: Codable, Sendable, Equatable {
         }
     }
 
+    public var expandedModuleIDs: [String] {
+        modules.compactMap { $0.isExpanded ? $0.id : nil }
+    }
+
+    public mutating func collapseAllModules() {
+        for index in modules.indices {
+            modules[index].isExpanded = false
+        }
+    }
+
+    public mutating func expandModules(withIDs moduleIDs: some Sequence<String>,
+                                       collapseOthers: Bool = false) {
+        let targetIDs = Set(moduleIDs)
+        guard !targetIDs.isEmpty || collapseOthers else { return }
+        for index in modules.indices {
+            if targetIDs.contains(modules[index].id) {
+                modules[index].isExpanded = true
+            } else if collapseOthers {
+                modules[index].isExpanded = false
+            }
+        }
+    }
+
+    public mutating func expandModifiedModules(collapseOthers: Bool = false) {
+        expandModules(withIDs: modifiedModuleIDs, collapseOthers: collapseOthers)
+    }
+
+    @discardableResult
+    public mutating func expandModulesWithValidationIssues(collapseOthers: Bool = false) -> [String] {
+        let moduleIDs = validationIssues().map(\.moduleID)
+        expandModules(withIDs: moduleIDs, collapseOthers: collapseOthers)
+        return expandedModuleIDs
+    }
+
     private static func defaultModule(for moduleID: String) -> ParticleEmitterModule? {
         ParticleModuleStack(emitter: ParticleEmitter()).modules.first { $0.id == moduleID }
     }
@@ -363,6 +397,7 @@ public struct ParticleEmissionModule: Codable, Sendable, Equatable {
     public var burstInterval: Float
     public var maxParticles: Int
     public var maxRenderedParticles: Int
+    public var seed: UInt64
 
     public init(_ emitter: ParticleEmitter) {
         self.isEmitting = emitter.isEmitting
@@ -379,6 +414,7 @@ public struct ParticleEmissionModule: Codable, Sendable, Equatable {
         self.burstInterval = emitter.burstInterval
         self.maxParticles = emitter.maxParticles
         self.maxRenderedParticles = emitter.maxRenderedParticles
+        self.seed = emitter.seed
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -396,6 +432,7 @@ public struct ParticleEmissionModule: Codable, Sendable, Equatable {
         case burstInterval
         case maxParticles
         case maxRenderedParticles
+        case seed
     }
 
     public init(from decoder: Decoder) throws {
@@ -415,6 +452,7 @@ public struct ParticleEmissionModule: Codable, Sendable, Equatable {
         burstInterval = try container.decodeIfPresent(Float.self, forKey: .burstInterval) ?? 0
         maxParticles = try container.decodeIfPresent(Int.self, forKey: .maxParticles) ?? 256
         maxRenderedParticles = try container.decodeIfPresent(Int.self, forKey: .maxRenderedParticles) ?? 0
+        seed = try container.decodeIfPresent(UInt64.self, forKey: .seed) ?? 0x9E3779B9
     }
 }
 
@@ -1290,6 +1328,9 @@ public extension ParticleEmitter {
                 burstInterval = max(0, settings.burstInterval)
                 maxParticles = max(0, settings.maxParticles)
                 maxRenderedParticles = max(0, settings.maxRenderedParticles)
+                if seed != settings.seed {
+                    reseed(settings.seed)
+                }
             case let .shape(settings):
                 originOffset = settings.originOffset
                 spawnRadius = max(0, settings.spawnRadius)

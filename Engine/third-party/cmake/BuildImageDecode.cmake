@@ -110,3 +110,62 @@ write_static_artifact_bundle(${LUNASVG_BUNDLE} "lunasvg" "3.5.0" ${GUAVA_TRIPLE}
 write_static_artifact_bundle(${PLUTOVG_BUNDLE} "plutovg" "1.0.0" ${GUAVA_TRIPLE} ${GUAVA_SPM_TRIPLE} ${PLUTOVG_LIB_FILENAME})
 write_static_artifact_bundle(${WEBP_BUNDLE} "webp" "1.6.0" ${GUAVA_TRIPLE} ${GUAVA_SPM_TRIPLE} ${WEBP_LIB_FILENAME})
 write_static_artifact_bundle(${SHARPYUV_BUNDLE} "sharpyuv" "1.6.0" ${GUAVA_TRIPLE} ${GUAVA_SPM_TRIPLE} ${SHARPYUV_LIB_FILENAME})
+
+guava_git_revision(LUNASVG_SOURCE_REVISION "${lunasvg_SOURCE_DIR}")
+guava_git_revision(LIBWEBP_SOURCE_REVISION "${libwebp_SOURCE_DIR}")
+
+guava_add_artifact_build_manifest(
+    ARTIFACT_NAME "lunasvg"
+    VERSION "3.5.0"
+    BUNDLE_DIR ${LUNASVG_BUNDLE}
+    LIB_REL_PATH "${GUAVA_TRIPLE}/lib/${LUNASVG_LIB_FILENAME}"
+    BUILD_SYSTEM "CMake FetchContent"
+    SOURCE_KIND "git"
+    SOURCE_URL "https://github.com/sammycage/lunasvg.git"
+    SOURCE_REF ${LUNASVG_VERSION}
+    SOURCE_REVISION ${LUNASVG_SOURCE_REVISION}
+    NOTES "static library staged from FetchContent target lunasvg"
+    DEPENDS stage_image_decode
+)
+
+guava_add_artifact_build_manifest(
+    ARTIFACT_NAME "plutovg"
+    VERSION "1.0.0"
+    BUNDLE_DIR ${PLUTOVG_BUNDLE}
+    LIB_REL_PATH "${GUAVA_TRIPLE}/lib/${PLUTOVG_LIB_FILENAME}"
+    BUILD_SYSTEM "CMake FetchContent"
+    SOURCE_KIND "git-subdirectory"
+    SOURCE_URL "https://github.com/sammycage/lunasvg.git"
+    SOURCE_REF ${LUNASVG_VERSION}
+    SOURCE_REVISION ${LUNASVG_SOURCE_REVISION}
+    NOTES "plutovg target is vendored by lunasvg"
+    DEPENDS stage_image_decode
+)
+
+guava_add_artifact_build_manifest(
+    ARTIFACT_NAME "webp"
+    VERSION "1.6.0"
+    BUNDLE_DIR ${WEBP_BUNDLE}
+    LIB_REL_PATH "${GUAVA_TRIPLE}/lib/${WEBP_LIB_FILENAME}"
+    BUILD_SYSTEM "CMake FetchContent"
+    SOURCE_KIND "git"
+    SOURCE_URL "https://chromium.googlesource.com/webm/libwebp"
+    SOURCE_REF ${LIBWEBP_VERSION}
+    SOURCE_REVISION ${LIBWEBP_SOURCE_REVISION}
+    NOTES "WEBP_ENABLE_SIMD=${WEBP_ENABLE_SIMD}"
+    DEPENDS stage_image_decode
+)
+
+guava_add_artifact_build_manifest(
+    ARTIFACT_NAME "sharpyuv"
+    VERSION "1.6.0"
+    BUNDLE_DIR ${SHARPYUV_BUNDLE}
+    LIB_REL_PATH "${GUAVA_TRIPLE}/lib/${SHARPYUV_LIB_FILENAME}"
+    BUILD_SYSTEM "CMake FetchContent"
+    SOURCE_KIND "git-subdirectory"
+    SOURCE_URL "https://chromium.googlesource.com/webm/libwebp"
+    SOURCE_REF ${LIBWEBP_VERSION}
+    SOURCE_REVISION ${LIBWEBP_SOURCE_REVISION}
+    NOTES "sharpyuv target is built from libwebp"
+    DEPENDS stage_image_decode
+)
