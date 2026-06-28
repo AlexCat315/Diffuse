@@ -665,8 +665,8 @@ private func bottleneck(_ stats: EditorFrameStats) -> String {
     let gpu = stats.gpuPresentSeconds * 1000
     guard stats.workMs > 0 else { return "--" }
     if cpu <= 0, gpu <= 0 { return "Frame pacing" }
-    if stats.frameMs > max(stats.workMs * 2, stats.workMs + 16.7) {
-        return "Frame pacing"
+    if stats.isFramePacingDominated {
+        return "Frame pacing / idle"
     }
     if cpu > gpu * 1.25 { return "CPU" }
     if gpu > cpu * 1.25 { return "GPU / present" }
