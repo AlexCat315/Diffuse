@@ -637,6 +637,19 @@ public struct EditorFrameStats: Sendable, Equatable, Codable {
         workSeconds * 1000
     }
 
+    public var pacingGapSeconds: Double {
+        max(0, frameSeconds - workSeconds)
+    }
+
+    public var pacingGapMs: Double {
+        pacingGapSeconds * 1000
+    }
+
+    public var isFramePacingDominated: Bool {
+        guard workSeconds > 0 else { return frameSeconds > 0.05 }
+        return pacingGapSeconds > max(workSeconds, 1.0 / 60.0)
+    }
+
     public var workFPS: Double {
         workSeconds > 0 ? 1.0 / workSeconds : 0
     }
