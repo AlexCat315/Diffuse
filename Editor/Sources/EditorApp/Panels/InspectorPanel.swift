@@ -591,7 +591,7 @@ struct InspectorPanel: View {
 
                     Box(direction: .column, alignItems: .stretch, spacing: 2) {
                         Row(alignment: .center, spacing: 6) {
-                            badge(module.stage.rawValue.uppercased())
+                            moduleStageBadge(module)
                             badge(module.isEnabled ? L("ON") : L("OFF"),
                                   foreground: module.isEnabled ? .success : .onSurfaceMuted,
                                   background: module.isEnabled ? .success.opacity(0.12) : .surfaceSunken)
@@ -618,7 +618,8 @@ struct InspectorPanel: View {
                                 .font(.caption)
                                 .foregroundColor(module.isEnabled ? .onSurfaceVariant : .onSurfaceMuted)
                                 .flex()
-                            moduleInlineHealthStrip(health)
+                            moduleBackendPill(health.backend)
+                            moduleHealthDot(health.primaryStatus.tone)
                         }
                     }
                     .flex()
@@ -694,105 +695,32 @@ struct InspectorPanel: View {
                 .cornerRadius(3)
         }
 
-        private func moduleInlineHealthStrip(_ health: ModuleHealthSnapshot) -> AnyView {
-            AnyView(Row(alignment: .center, spacing: 4) {
-                miniStatusPill("BE", compactBackendValue(health.backend), tone: health.backend.tone)
-                miniStatusPill("PR", compactPressureValue(health.pressure), tone: health.pressure.tone)
-                miniStatusPill("IS", compactIssueValue(health.issues), tone: health.issues.tone)
-                pressureMeter(health.pressure)
-            })
+        private func moduleStageBadge(_ module: ParticleEmitterModule) -> AnyView {
+            AnyView(Text(module.stage.rawValue.uppercased())
+                .lineLimit(1)
+                .font(.caption)
+                .foregroundColor(moduleAccent(module))
+                .padding(horizontal: 9, vertical: 3)
+                .background(moduleAccent(module).opacity(0.14))
+                .cornerRadius(4)
+                .frame(width: 86))
         }
 
-        private func miniStatusPill(_ prefix: String,
-                                    _ value: String,
-                                    tone: ModuleRuntimeTone) -> AnyView {
-            AnyView(Row(alignment: .center, spacing: 3) {
-                Text(prefix)
-                    .lineLimit(1)
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
-                Text(value)
-                    .lineLimit(1)
-                    .font(.caption)
-                    .foregroundColor(tone.foreground)
-            }
-            .padding(horizontal: 4, vertical: 1)
-            .background(tone.background)
-            .cornerRadius(3))
+        private func moduleBackendPill(_ card: ModuleStatusCard) -> AnyView {
+            AnyView(Text(card.value)
+                .lineLimit(1)
+                .font(.caption)
+                .foregroundColor(card.tone.foreground)
+                .padding(horizontal: 7, vertical: 2)
+                .background(card.tone.background)
+                .cornerRadius(4))
         }
 
-        private func compactBackendValue(_ card: ModuleStatusCard) -> String {
-            switch card.tone {
-            case .error:
-                return L("ERR")
-            case .warning:
-                return card.value.contains("GPU") ? L("GPU!") : L("CPU!")
-            case .success:
-                return card.value.contains("Render") ? L("DRAW") : L("GPU")
-            case .info:
-                return L("RDY")
-            case .muted:
-                return card.value.contains("CPU") ? L("CPU") : L("--")
-            }
-        }
-
-        private func compactPressureValue(_ card: ModuleStatusCard) -> String {
-            switch card.tone {
-            case .error:
-                return L("CRIT")
-            case .warning:
-                return L("NEAR")
-            case .success:
-                return L("OK")
-            case .info:
-                return L("SCALE")
-            case .muted:
-                return L("IDLE")
-            }
-        }
-
-        private func compactIssueValue(_ card: ModuleStatusCard) -> String {
-            switch card.tone {
-            case .error:
-                return L("ERR")
-            case .warning:
-                return L("WARN")
-            case .success:
-                return L("OK")
-            case .info:
-                return L("INFO")
-            case .muted:
-                return L("--")
-            }
-        }
-
-        private func pressureMeter(_ card: ModuleStatusCard) -> AnyView {
-            let fillWidth = 34 * pressureMeterFraction(card.tone)
-            let restWidth = 34 - fillWidth
-            return AnyView(Row(alignment: .center, spacing: 0) {
-                Box { EmptyView() }
-                    .frame(width: fillWidth, height: 3)
-                    .background(card.tone.foreground)
-                Box { EmptyView() }
-                    .frame(width: restWidth, height: 3)
-                    .background(.surfaceVariant)
-            }
-            .cornerRadius(2))
-        }
-
-        private func pressureMeterFraction(_ tone: ModuleRuntimeTone) -> Float {
-            switch tone {
-            case .muted:
-                return 0.08
-            case .info:
-                return 0.38
-            case .success:
-                return 0.54
-            case .warning:
-                return 0.78
-            case .error:
-                return 1
-            }
+        private func moduleHealthDot(_ tone: ModuleRuntimeTone) -> AnyView {
+            AnyView(Box { EmptyView() }
+                .frame(width: 7, height: 7)
+                .background(tone.foreground)
+                .cornerRadius(4))
         }
 
         private func moduleStatus(_ module: ParticleEmitterModule) -> ModuleRuntimeStatus? {
