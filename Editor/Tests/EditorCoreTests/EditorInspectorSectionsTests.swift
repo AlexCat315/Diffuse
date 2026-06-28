@@ -336,6 +336,7 @@ struct EditorInspectorSectionsTests {
                 ParticleCurveKeyframe(time: 1, value: 1.5),
             ])
             module.burstInterval = 0.25
+            module.seed = 123_456_789
             stack.modules[emissionIndex].settings = .emission(module)
         } else {
             Issue.record("expected emission module settings")
@@ -532,6 +533,7 @@ struct EditorInspectorSectionsTests {
             ParticleCurveKeyframe(time: 1, value: 1.5),
         ]))
         #expect(emitter.burstInterval == 0.25)
+        #expect(emitter.seed == 123_456_789)
         #expect(emitter.emissionShape == .cone)
         #expect(emitter.originOffset == SIMD3<Float>(0.5, 1.5, -2.5))
         #expect(emitter.spawnRadius == 2.25)

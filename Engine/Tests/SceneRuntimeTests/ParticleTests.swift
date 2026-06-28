@@ -62,7 +62,8 @@ struct ParticleTests {
                                       textureSheetStartFrame: 3,
                                       textureSheetFrameRandomness: 2,
                                       trailLength: 0.75,
-                                      trailSegments: 5)
+                                      trailSegments: 5,
+                                      seed: 987_654_321)
 
         var stack = emitter.moduleStack
 
@@ -86,6 +87,7 @@ struct ParticleTests {
             #expect(settings.emissionRate == 12)
             #expect(settings.distanceEmissionRate == 3)
             #expect(settings.maxRenderedParticles == 32)
+            #expect(settings.seed == 987_654_321)
         } else {
             Issue.record("expected emission module settings")
         }
@@ -106,6 +108,7 @@ struct ParticleTests {
             if case var .emission(module) = settings {
                 module.emissionRate = -4
                 module.maxParticles = -8
+                module.seed = 42
                 settings = .emission(module)
             }
         }
@@ -139,6 +142,7 @@ struct ParticleTests {
 
         #expect(applied.emissionRate == 0)
         #expect(applied.maxParticles == 0)
+        #expect(applied.seed == 42)
         #expect(applied.collisionRestitution == 1)
         #expect(applied.collisionDamping == 0)
         #expect(applied.textureAssetID == nil)
@@ -181,6 +185,37 @@ struct ParticleTests {
         } else {
             Issue.record("expected forces module settings")
         }
+    }
+
+    @Test("module stack applies seed and reseeds the random stream")
+    func moduleStackAppliesSeedAndReseedsRandomStream() throws {
+        var applied = ParticleEmitter(emissionRate: 0,
+                                      maxParticles: 8,
+                                      lifetime: 1,
+                                      spawnRadius: 2,
+                                      sizeRandomness: 0.5,
+                                      textureSheetFrameRandomness: 3,
+                                      seed: 1)
+        var stack = applied.moduleStack
+        try editModule(&stack, id: "emission") { settings in
+            guard case var .emission(module) = settings else { return }
+            module.seed = 77
+            settings = .emission(module)
+        }
+
+        var expected = ParticleEmitter(emissionRate: 0,
+                                       maxParticles: 8,
+                                       lifetime: 1,
+                                       spawnRadius: 2,
+                                       sizeRandomness: 0.5,
+                                       textureSheetFrameRandomness: 3,
+                                       seed: 77)
+        applied.apply(stack)
+        applied.emit(4)
+        expected.emit(4)
+
+        #expect(applied.seed == 77)
+        #expect(applied.particles == expected.particles)
     }
 
     @Test("module stack preserves custom order and reset restores default authoring")
@@ -445,6 +480,32 @@ struct ParticleTests {
 
         #expect(!stack.moduleSettingsDifferFromDefault("renderer"))
         #expect(stack.modifiedModuleIDs.isEmpty)
+    }
+
+    @Test("module stack can focus modified and invalid modules")
+    func moduleStackCanFocusModifiedAndInvalidModules() throws {
+        var stack = ParticleEmitter().moduleStack
+        try editModule(&stack, id: "emission") { settings in
+            guard case var .emission(module) = settings else { return }
+            module.emissionRate = 123
+            settings = .emission(module)
+        }
+        try editModule(&stack, id: "renderer") { settings in
+            guard case var .renderer(module) = settings else { return }
+            module.renderLODStartDistance = 40
+            module.renderLODEndDistance = 10
+            settings = .renderer(module)
+        }
+
+        stack.expandModifiedModules(collapseOthers: true)
+        #expect(stack.expandedModuleIDs == ["emission", "renderer"])
+
+        stack.collapseAllModules()
+        #expect(stack.expandedModuleIDs.isEmpty)
+
+        let focusedIssueIDs = stack.expandModulesWithValidationIssues(collapseOthers: true)
+        #expect(focusedIssueIDs == ["renderer"])
+        #expect(stack.expandedModuleIDs == ["renderer"])
     }
 
     @Test("continuous emission spawns at the configured rate")
