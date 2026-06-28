@@ -213,6 +213,31 @@ public enum ParticleScalabilityPressureReason: String, CaseIterable, Sendable, E
     case capacityLimited
 }
 
+public enum ParticleRuntimePressureLevel: String, CaseIterable, Sendable, Equatable {
+    case idle
+    case nominal
+    case warning
+    case critical
+}
+
+private func dominantParticleRuntimePressureLevel(_ lhs: ParticleRuntimePressureLevel,
+                                                  _ rhs: ParticleRuntimePressureLevel) -> ParticleRuntimePressureLevel {
+    particleRuntimePressureRank(lhs) >= particleRuntimePressureRank(rhs) ? lhs : rhs
+}
+
+private func particleRuntimePressureRank(_ level: ParticleRuntimePressureLevel) -> Int {
+    switch level {
+    case .idle:
+        return 0
+    case .nominal:
+        return 1
+    case .warning:
+        return 2
+    case .critical:
+        return 3
+    }
+}
+
 public struct ParticleScalabilityStateResource: Sendable, Equatable {
     public var appliedScale: Float
     public var pressure: Float
@@ -349,6 +374,32 @@ public struct ParticleEmitterFrameStats: Sendable, Equatable {
     public var spawnedParticleCount: Int {
         continuousSpawnedCount + burstSpawnedCount + distanceSpawnedCount + subEmitterSpawnedCount
     }
+
+    public var liveParticleBudgetLimit: Int {
+        liveParticleLimit > 0 ? liveParticleLimit : maxParticleCount
+    }
+
+    public var liveParticleBudgetUtilization: Float {
+        guard liveParticleBudgetLimit > 0 else { return 0 }
+        return Float(liveParticleCount) / Float(liveParticleBudgetLimit)
+    }
+
+    public var droppedSpawnCount: Int {
+        capacityLimitedSpawnCount
+    }
+
+    public var runtimePressureLevel: ParticleRuntimePressureLevel {
+        if droppedSpawnCount > 0 || liveParticleBudgetUtilization >= 1 {
+            return .critical
+        }
+        if liveParticleBudgetUtilization >= 0.9 {
+            return .warning
+        }
+        if liveParticleCount > 0 || spawnedParticleCount > 0 {
+            return .nominal
+        }
+        return .idle
+    }
 }
 
 public struct ParticleFrameStatsResource: Sendable, Equatable {
@@ -359,6 +410,7 @@ public struct ParticleFrameStatsResource: Sendable, Equatable {
     public var liveParticleCount: Int
     public var maxParticleCount: Int
     public var liveParticleLimit: Int
+    public var liveParticleBudgetLimit: Int
     public var spawnedParticleCount: Int
     public var continuousSpawnedCount: Int
     public var burstSpawnedCount: Int
@@ -367,6 +419,7 @@ public struct ParticleFrameStatsResource: Sendable, Equatable {
     public var expiredParticleCount: Int
     public var collisionCount: Int
     public var capacityLimitedSpawnCount: Int
+    public var runtimePressureLevel: ParticleRuntimePressureLevel
 
     public init(simulatedDeltaTime: Float = 0,
                 emitterStats: [ParticleEmitterFrameStats] = [],
@@ -380,6 +433,7 @@ public struct ParticleFrameStatsResource: Sendable, Equatable {
         self.liveParticleCount = emitterStats.reduce(0) { $0 + $1.liveParticleCount }
         self.maxParticleCount = emitterStats.reduce(0) { $0 + $1.maxParticleCount }
         self.liveParticleLimit = emitterStats.reduce(0) { $0 + $1.liveParticleLimit }
+        self.liveParticleBudgetLimit = emitterStats.reduce(0) { $0 + $1.liveParticleBudgetLimit }
         self.spawnedParticleCount = emitterStats.reduce(0) { $0 + $1.spawnedParticleCount }
         self.continuousSpawnedCount = emitterStats.reduce(0) { $0 + $1.continuousSpawnedCount }
         self.burstSpawnedCount = emitterStats.reduce(0) { $0 + $1.burstSpawnedCount }
@@ -388,6 +442,9 @@ public struct ParticleFrameStatsResource: Sendable, Equatable {
         self.expiredParticleCount = emitterStats.reduce(0) { $0 + $1.expiredParticleCount }
         self.collisionCount = emitterStats.reduce(0) { $0 + $1.collisionCount }
         self.capacityLimitedSpawnCount = emitterStats.reduce(0) { $0 + $1.capacityLimitedSpawnCount }
+        self.runtimePressureLevel = emitterStats.reduce(.idle) {
+            dominantParticleRuntimePressureLevel($0, $1.runtimePressureLevel)
+        }
     }
 
     public static let empty = ParticleFrameStatsResource()
@@ -395,6 +452,16 @@ public struct ParticleFrameStatsResource: Sendable, Equatable {
     public func emitterStats(for rawEntityID: UInt64?) -> ParticleEmitterFrameStats? {
         rawEntityID.flatMap { emitterStatsByEntity[$0] }
     }
+
+    public var liveParticleBudgetUtilization: Float {
+        guard liveParticleBudgetLimit > 0 else { return 0 }
+        return Float(liveParticleCount) / Float(liveParticleBudgetLimit)
+    }
+
+    public var droppedSpawnCount: Int {
+        capacityLimitedSpawnCount
+    }
+
 }
 
 public struct ParticleSimulationEventApplyReport: Sendable, Equatable {
@@ -748,6 +815,8 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public var looping: Bool
     /// Seconds the emitter can produce particles before a non-looping emitter stops. Zero means infinite.
     public var duration: Float
+    /// Multiplier applied to active simulation time. Zero pauses this emitter; one is real time.
+    public var simulationSpeed: Float
     /// Seconds of simulation to run before the first active tick. Useful for ambient effects that should start warm.
     public var prewarmTime: Float
     /// Simulation step used while prewarming; smaller values are more accurate but cost more at startup.
@@ -873,6 +942,8 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     public var renderMode: ParticleRenderMode
     /// Controls CPU render submission ordering for transparent particle pools.
     public var sortMode: ParticleSortMode
+    /// Emitter-level transparent sort priority. Lower values submit earlier; higher values draw later.
+    public var renderSortPriority: Int
     /// Multiplier applied to the generated ribbon width. One keeps particle size as width.
     public var ribbonWidthScale: Float
     /// Width multiplier at the oldest ribbon end. One keeps a constant-width ribbon.
@@ -960,6 +1031,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         isEmitting: Bool = true,
         looping: Bool = true,
         duration: Float = 0,
+        simulationSpeed: Float = 1,
         prewarmTime: Float = 0,
         prewarmStep: Float = 1.0 / 30.0,
         emissionRate: Float = 10,
@@ -1030,6 +1102,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         blendMode: ParticleBlendMode = .alpha,
         renderMode: ParticleRenderMode = .billboard,
         sortMode: ParticleSortMode = .distanceDescending,
+        renderSortPriority: Int = 0,
         ribbonWidthScale: Float = 1,
         ribbonTailWidthScale: Float = 1,
         ribbonTailAlphaScale: Float = 1,
@@ -1067,6 +1140,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.isEmitting = isEmitting
         self.looping = looping
         self.duration = max(0, duration)
+        self.simulationSpeed = max(0, simulationSpeed)
         self.prewarmTime = max(0, prewarmTime)
         self.prewarmStep = max(1.0 / 240.0, prewarmStep)
         self.emissionRate = max(0, emissionRate)
@@ -1154,6 +1228,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         self.blendMode = blendMode
         self.renderMode = renderMode
         self.sortMode = sortMode
+        self.renderSortPriority = renderSortPriority
         self.ribbonWidthScale = max(0, ribbonWidthScale)
         self.ribbonTailWidthScale = max(0, ribbonTailWidthScale)
         self.ribbonTailAlphaScale = simd_clamp(ribbonTailAlphaScale, 0, 1)
@@ -1404,7 +1479,21 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
                                  options: ParticleAdvanceOptions = .default) {
         guard deltaTime > 0 else { return }
         runPrewarmIfNeeded(worldTransform: worldTransform, options: options)
-        advanceStep(deltaTime: Float(deltaTime), worldTransform: worldTransform, options: options)
+        let scaledDeltaTime = Float(deltaTime) * max(0, simulationSpeed)
+        guard scaledDeltaTime > 0 else {
+            lastFrameSpawnedParticles.removeAll(keepingCapacity: true)
+            lastFrameEvents.removeAll(keepingCapacity: true)
+            previousEmitterPosition = distanceEmitterPosition(worldTransform: worldTransform)
+            lastFrameStats = ParticleEmitterFrameStats(
+                simulatedDeltaTime: 0,
+                startingLiveParticleCount: particles.count,
+                liveParticleCount: particles.count,
+                maxParticleCount: maxParticles,
+                liveParticleLimit: options.liveParticleLimit(configuredMaxParticles: maxParticles)
+            )
+            return
+        }
+        advanceStep(deltaTime: scaledDeltaTime, worldTransform: worldTransform, options: options)
     }
 
     private mutating func advanceStep(deltaTime dt: Float,

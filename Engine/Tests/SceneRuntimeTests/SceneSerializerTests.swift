@@ -464,6 +464,7 @@ struct SceneSerializerTests {
         ]
         _ = original.setComponent(
             ParticleEmitter(looping: false, duration: 4.5,
+                            simulationSpeed: 1.5,
                             prewarmTime: 1.25,
                             prewarmStep: 0.05,
                             emissionRate: 33,
@@ -531,6 +532,7 @@ struct SceneSerializerTests {
                             blendMode: .additive,
                             renderMode: .ribbon,
                             sortMode: .youngestFirst,
+                            renderSortPriority: 12,
                             ribbonWidthScale: 1.75,
                             ribbonTailWidthScale: 0.25,
                             ribbonTailAlphaScale: 0.15,
@@ -675,6 +677,7 @@ struct SceneSerializerTests {
         #expect(e!.blendMode == .additive)
         #expect(e!.renderMode == .ribbon)
         #expect(e!.sortMode == .youngestFirst)
+        #expect(e!.renderSortPriority == 12)
         #expect(e!.ribbonWidthScale == 1.75)
         #expect(e!.ribbonTailWidthScale == 0.25)
         #expect(e!.ribbonTailAlphaScale == 0.15)
@@ -702,6 +705,7 @@ struct SceneSerializerTests {
         #expect(e!.textureSheetPlaybackMode == .loop)
         #expect(e!.textureSheetStartFrame == 3)
         #expect(e!.textureSheetFrameRandomness == 2)
+        #expect(e!.simulationSpeed == 1.5)
         #expect(e!.trailLength == 0.75)
         #expect(e!.trailSegments == 5)
         #expect(e!.trailEndSizeScale == 0.25)
@@ -837,6 +841,38 @@ struct SceneSerializerTests {
         #expect(restoredEmitter.textureSheetPlaybackMode == .loop)
         #expect(restoredEmitter.textureSheetStartFrame == 5)
         #expect(restoredEmitter.textureSheetFrameRandomness == 3)
+    }
+
+    @Test("round-trip: duplicated particle modules remain diagnosable and repairable")
+    func duplicatedParticleModuleStackRepairRoundTrip() throws {
+        var original = SceneRuntime()
+        let entity = original.createEntity()
+
+        var emitter = ParticleEmitter()
+        var malformedStack = emitter.moduleStack
+        let rendererModule = try #require(malformedStack.modules.first { $0.id == "renderer" })
+        malformedStack.modules.insert(rendererModule, at: 0)
+        emitter.authoredModuleStack = malformedStack
+        _ = original.setComponent(emitter, for: entity)
+
+        let data = try SceneSerializer.serialize(original)
+        var restored = SceneRuntime()
+        try SceneSerializer.deserialize(data, into: &restored)
+
+        var restoredEmitter = try #require(restored.component(ParticleEmitter.self, for: restored.entities()[0]))
+        #expect(restoredEmitter.moduleValidationIssues.contains {
+            $0.moduleID == "renderer" && $0.code == "duplicateModule"
+        })
+
+        var repairedStack = restoredEmitter.moduleStack
+        repairedStack.repairValidationIssues()
+        restoredEmitter.apply(repairedStack)
+
+        #expect(!restoredEmitter.moduleValidationIssues.contains {
+            $0.code == "duplicateModule"
+        })
+        #expect(restoredEmitter.moduleStack.modules.filter { $0.id == "renderer" }.count == 1)
+        #expect(restoredEmitter.moduleStack.modules.map(\.id).contains("trails"))
     }
 
     @Test("round-trip: particle module validation and repair survive serialization")

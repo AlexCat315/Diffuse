@@ -266,6 +266,49 @@ struct EditorInspectorSectionsTests {
         #expect(reset.modules.allSatisfy { !$0.isExpanded })
     }
 
+    @Test("particle module stack binding writes single module default reset")
+    func particleModuleStackBindingWritesSingleModuleDefaultReset() throws {
+        let adapter = EditorSceneAdapter()
+        let id = makeEntity(in: adapter)
+        _ = adapter.addComponent(.particleEmitter, to: id)
+        let entity = try #require(EntityID(rawValue: id))
+
+        guard case let .particleModuleStack(binding) =
+            field(adapter, id, section: "particle-emitter", field: "particle-module-stack") else {
+            Issue.record("expected particle module stack field")
+            return
+        }
+
+        var stack = binding.wrappedValue
+        let rendererIndex = try #require(stack.modules.firstIndex { $0.id == "renderer" })
+        stack.modules[rendererIndex].isExpanded = true
+        if case var .renderer(module) = stack.modules[rendererIndex].settings {
+            module.renderMode = .ribbon
+            module.renderSortPriority = 9
+            module.renderBoundsMode = .manual
+            module.renderBoundsRadius = 12
+            stack.modules[rendererIndex].settings = .renderer(module)
+        } else {
+            Issue.record("expected renderer module settings")
+        }
+        binding.wrappedValue = stack
+        #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.renderMode == .ribbon)
+
+        var stored = try #require(adapter.scene.component(ParticleEmitter.self, for: entity)?.moduleStack)
+        #expect(stored.moduleSettingsDifferFromDefault("renderer"))
+        stored.resetModuleSettings(for: "renderer")
+        binding.wrappedValue = stored
+
+        let resetEmitter = try #require(adapter.scene.component(ParticleEmitter.self, for: entity))
+        let resetStack = resetEmitter.moduleStack
+        let resetRenderer = try #require(resetStack.modules.first { $0.id == "renderer" })
+        #expect(resetEmitter.renderMode == .billboard)
+        #expect(resetEmitter.renderSortPriority == 0)
+        #expect(resetEmitter.renderBoundsMode == .disabled)
+        #expect(resetRenderer.isExpanded)
+        #expect(!resetStack.moduleSettingsDifferFromDefault("renderer"))
+    }
+
     @Test("particle module stack binding writes inline module settings")
     func particleModuleStackBindingWritesInlineModuleSettings() throws {
         let adapter = EditorSceneAdapter()
@@ -285,6 +328,14 @@ struct EditorInspectorSectionsTests {
         if case var .emission(module) = stack.modules[emissionIndex].settings {
             module.emissionRate = 77
             module.maxParticles = 512
+            module.simulationSpeed = 1.75
+            module.distanceEmissionRate = 9
+            module.emissionRateCurve = .easeInOut
+            module.distanceEmissionRateCurve = .keyframes([
+                ParticleCurveKeyframe(time: 0, value: 0.25),
+                ParticleCurveKeyframe(time: 1, value: 1.5),
+            ])
+            module.burstInterval = 0.25
             stack.modules[emissionIndex].settings = .emission(module)
         } else {
             Issue.record("expected emission module settings")
@@ -356,6 +407,14 @@ struct EditorInspectorSectionsTests {
             module.startSize = 1.2
             module.endSize = 0.3
             module.sizeRandomness = 0.25
+            module.sizeCurve = .easeOut
+            module.startColor = SIMD4<Float>(0.9, 0.25, 0.1, 0.8)
+            module.endColor = SIMD4<Float>(0.1, 0.35, 1, 0.2)
+            module.colorCurve = .keyframes([
+                ParticleCurveKeyframe(time: 0, value: 0),
+                ParticleCurveKeyframe(time: 0.65, value: 0.9),
+                ParticleCurveKeyframe(time: 1, value: 1),
+            ])
             module.startRotation = 15
             module.rotationRandomness = 45
             module.angularVelocity = 120
@@ -385,6 +444,7 @@ struct EditorInspectorSectionsTests {
         if case var .renderer(module) = stack.modules[rendererIndex].settings {
             module.renderMode = .ribbon
             module.sortMode = .oldestFirst
+            module.renderSortPriority = 12
             module.renderAlignment = .velocity
             module.renderBoundsMode = .manual
             module.maxRenderDistance = 123
@@ -464,6 +524,14 @@ struct EditorInspectorSectionsTests {
         let emitter = try #require(adapter.scene.component(ParticleEmitter.self, for: entity))
         #expect(emitter.emissionRate == 77)
         #expect(emitter.maxParticles == 512)
+        #expect(emitter.simulationSpeed == 1.75)
+        #expect(emitter.distanceEmissionRate == 9)
+        #expect(emitter.emissionRateCurve == .easeInOut)
+        #expect(emitter.distanceEmissionRateCurve == .keyframes([
+            ParticleCurveKeyframe(time: 0, value: 0.25),
+            ParticleCurveKeyframe(time: 1, value: 1.5),
+        ]))
+        #expect(emitter.burstInterval == 0.25)
         #expect(emitter.emissionShape == .cone)
         #expect(emitter.originOffset == SIMD3<Float>(0.5, 1.5, -2.5))
         #expect(emitter.spawnRadius == 2.25)
@@ -495,6 +563,14 @@ struct EditorInspectorSectionsTests {
         #expect(emitter.startSize == 1.2)
         #expect(emitter.endSize == 0.3)
         #expect(emitter.sizeRandomness == 0.25)
+        #expect(emitter.sizeCurve == .easeOut)
+        #expect(emitter.startColor == SIMD4<Float>(0.9, 0.25, 0.1, 0.8))
+        #expect(emitter.endColor == SIMD4<Float>(0.1, 0.35, 1, 0.2))
+        #expect(emitter.colorCurve == .keyframes([
+            ParticleCurveKeyframe(time: 0, value: 0),
+            ParticleCurveKeyframe(time: 0.65, value: 0.9),
+            ParticleCurveKeyframe(time: 1, value: 1),
+        ]))
         #expect(emitter.startRotation == 15)
         #expect(emitter.rotationRandomness == 45)
         #expect(emitter.angularVelocity == 120)
@@ -508,6 +584,7 @@ struct EditorInspectorSectionsTests {
         #expect(emitter.textureSheetFrameRandomness == 3)
         #expect(emitter.renderMode == .ribbon)
         #expect(emitter.sortMode == .oldestFirst)
+        #expect(emitter.renderSortPriority == 12)
         #expect(emitter.renderAlignment == .velocity)
         #expect(emitter.renderBoundsMode == .manual)
         #expect(emitter.maxRenderDistance == 123)
@@ -633,6 +710,12 @@ struct EditorInspectorSectionsTests {
             duration.wrappedValue = 2.5
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.duration == 2.5)
         } else { Issue.record("missing duration field") }
+
+        if case let .constrainedNumber(speed, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-simulation-speed") {
+            speed.wrappedValue = 0.25
+            #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.simulationSpeed == 0.25)
+        } else { Issue.record("missing speed field") }
 
         if case let .constrainedNumber(prewarm, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-prewarm-time") {

@@ -948,6 +948,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let isEmitting: Bool
     public let looping: Bool
     public let duration: Float
+    public let simulationSpeed: Float
     public let prewarmTime: Float
     public let prewarmStep: Float
     public let emissionRate: Float
@@ -1018,6 +1019,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let blendMode: ParticleBlendMode
     public let renderMode: ParticleRenderMode
     public let sortMode: ParticleSortMode
+    public let renderSortPriority: Int
     public let ribbonWidthScale: Float
     public let ribbonTailWidthScale: Float
     public let ribbonTailAlphaScale: Float
@@ -1056,6 +1058,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.isEmitting = component.isEmitting
         self.looping = component.looping
         self.duration = component.duration
+        self.simulationSpeed = component.simulationSpeed
         self.prewarmTime = component.prewarmTime
         self.prewarmStep = component.prewarmStep
         self.emissionRate = component.emissionRate
@@ -1126,6 +1129,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.blendMode = component.blendMode
         self.renderMode = component.renderMode
         self.sortMode = component.sortMode
+        self.renderSortPriority = component.renderSortPriority
         self.ribbonWidthScale = component.ribbonWidthScale
         self.ribbonTailWidthScale = component.ribbonTailWidthScale
         self.ribbonTailAlphaScale = component.ribbonTailAlphaScale
@@ -1163,6 +1167,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
 
     var component: ParticleEmitter {
         var emitter = ParticleEmitter(isEmitting: isEmitting, looping: looping, duration: duration,
+                                      simulationSpeed: simulationSpeed,
                                       prewarmTime: prewarmTime,
                                       prewarmStep: prewarmStep,
                                       emissionRate: emissionRate,
@@ -1220,6 +1225,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
                                       colorCurve: colorCurve, blendMode: blendMode,
                                       renderMode: renderMode,
                                       sortMode: sortMode,
+                                      renderSortPriority: renderSortPriority,
                                       ribbonWidthScale: ribbonWidthScale,
                                       ribbonTailWidthScale: ribbonTailWidthScale,
                                       ribbonTailAlphaScale: ribbonTailAlphaScale,
@@ -1258,7 +1264,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case isEmitting, looping, duration, prewarmTime, prewarmStep, emissionRate, emissionRateCurve
+        case isEmitting, looping, duration, simulationSpeed, prewarmTime, prewarmStep, emissionRate, emissionRateCurve
         case distanceEmissionRate, distanceEmissionRateCurve, burstCount, burstInterval
         case maxParticles, maxRenderedParticles, lifetime, lifetimeRandomness
         case subEmitterTrigger, subEmitterBurstCount, subEmitterProbability, subEmitterMaxDepth
@@ -1275,7 +1281,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         case collisionPlaneY, collisionRestitution, collisionDamping
         case startSize, endSize, sizeRandomness
         case startRotation, rotationRandomness, angularVelocity, angularVelocityRandomness
-        case sizeCurve, startColor, endColor, colorCurve, blendMode, renderMode, sortMode
+        case sizeCurve, startColor, endColor, colorCurve, blendMode, renderMode, sortMode, renderSortPriority
         case ribbonWidthScale, ribbonTailWidthScale, ribbonTailAlphaScale, ribbonMaxSegmentLength
         case ribbonJoinOverlapScale, ribbonSmoothingSegments
         case ribbonTextureTiling, ribbonTextureOffset
@@ -1294,6 +1300,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.isEmitting = try c.decodeIfPresent(Bool.self, forKey: .isEmitting) ?? true
         self.looping = try c.decodeIfPresent(Bool.self, forKey: .looping) ?? true
         self.duration = try c.decodeIfPresent(Float.self, forKey: .duration) ?? 0
+        self.simulationSpeed = try c.decodeIfPresent(Float.self, forKey: .simulationSpeed) ?? 1
         self.prewarmTime = try c.decodeIfPresent(Float.self, forKey: .prewarmTime) ?? 0
         self.prewarmStep = try c.decodeIfPresent(Float.self, forKey: .prewarmStep) ?? (1.0 / 30.0)
         self.emissionRate = try c.decodeIfPresent(Float.self, forKey: .emissionRate) ?? 10
@@ -1387,6 +1394,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.blendMode = try c.decodeIfPresent(ParticleBlendMode.self, forKey: .blendMode) ?? .alpha
         self.renderMode = try c.decodeIfPresent(ParticleRenderMode.self, forKey: .renderMode) ?? .billboard
         self.sortMode = try c.decodeIfPresent(ParticleSortMode.self, forKey: .sortMode) ?? .distanceDescending
+        self.renderSortPriority = try c.decodeIfPresent(Int.self, forKey: .renderSortPriority) ?? 0
         self.ribbonWidthScale = try c.decodeIfPresent(Float.self, forKey: .ribbonWidthScale) ?? 1
         self.ribbonTailWidthScale = try c.decodeIfPresent(Float.self, forKey: .ribbonTailWidthScale) ?? 1
         self.ribbonTailAlphaScale = try c.decodeIfPresent(Float.self, forKey: .ribbonTailAlphaScale) ?? 1
@@ -2545,6 +2553,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.duration,
                                                                                     summary: "Update particle duration"),
                                                                min: 0, max: 600, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "particle-simulation-speed", label: L("Speed"),
+                                     value: .constrainedNumber(particleFloatBinding(for: entity, \.simulationSpeed,
+                                                                                    summary: "Update particle simulation speed"),
+                                                               min: 0, max: 16, step: 0.05, showsStepper: true)),
                 EditorInspectorField(id: "particle-prewarm-time", label: L("Prewarm"),
                                      value: .constrainedNumber(particleFloatBinding(for: entity, \.prewarmTime,
                                                                                     summary: "Update particle prewarm"),
