@@ -504,14 +504,14 @@ private struct StatGroup<Content: View>: View {
     var body: some View {
         Column(alignment: .leading, spacing: 6) {
             Row(alignment: .center, spacing: 6) {
-                Box()
+                Box { EmptyView() }
                     .frame(width: 3, height: 16)
                     .background(.accent)
                     .cornerRadius(2)
                 Text(title)
+                    .lineLimit(1)
                     .font(.bodyStrong)
                     .foregroundColor(.onSurface)
-                    .lineLimit(1)
                     .flex(1, shrink: 1)
             }
             .padding(horizontal: 10, vertical: 7)
@@ -532,7 +532,7 @@ private struct FramePacingNotice: View {
 
     var body: some View {
         Row(alignment: .center, spacing: 10) {
-            Box()
+            Box { EmptyView() }
                 .frame(width: 8, height: 8)
                 .background(.warning)
                 .cornerRadius(4)
@@ -542,9 +542,9 @@ private struct FramePacingNotice: View {
                     .font(.bodyStrong)
                     .foregroundColor(.onSurface)
                 Text("Observed \(formatMs(stats.frameMs)) tick gap; actual work is \(formatMs(stats.workMs)), with \(formatMs(stats.pacingGapMs)) waiting/idle.")
+                    .lineLimit(2)
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
-                    .lineLimit(2)
             }
             .flex(1, shrink: 1)
 
