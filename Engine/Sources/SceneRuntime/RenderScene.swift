@@ -295,6 +295,9 @@ public struct ParticleRenderBatchPlan: Sendable, Equatable {
 }
 
 public struct ParticleRenderSummary: Sendable, Equatable {
+    public var sourceParticleCount: Int
+    public var submittedSourceParticleCount: Int
+    public var renderBudgetSkippedSourceParticleCount: Int
     public var particleCount: Int
     public var cpuRenderInstanceCount: Int
     public var gpuRenderInstanceCount: Int
@@ -308,6 +311,8 @@ public struct ParticleRenderSummary: Sendable, Equatable {
     public var bounds: RenderBounds
 
     public init(particleCount: Int = 0,
+                sourceParticleCount: Int? = nil,
+                submittedSourceParticleCount: Int? = nil,
                 cpuRenderInstanceCount: Int? = nil,
                 gpuRenderInstanceCount: Int = 0,
                 alphaCount: Int = 0,
@@ -322,6 +327,20 @@ public struct ParticleRenderSummary: Sendable, Equatable {
         let safeGPURenderInstanceCount = max(0, gpuRenderInstanceCount)
         let safeBatchCount = max(0, batchCount)
         let safeGPUBatchCount = max(0, gpuBatchCount)
+        let safeSubmittedSourceParticleCount = max(
+            0,
+            submittedSourceParticleCount ?? safeParticleCount
+        )
+        let safeSourceParticleCount = max(
+            safeSubmittedSourceParticleCount,
+            sourceParticleCount ?? safeSubmittedSourceParticleCount
+        )
+        self.sourceParticleCount = safeSourceParticleCount
+        self.submittedSourceParticleCount = safeSubmittedSourceParticleCount
+        self.renderBudgetSkippedSourceParticleCount = max(
+            0,
+            safeSourceParticleCount - safeSubmittedSourceParticleCount
+        )
         self.particleCount = safeParticleCount
         self.cpuRenderInstanceCount = max(
             0,
@@ -343,13 +362,20 @@ public struct ParticleRenderSummary: Sendable, Equatable {
     }
 
     public init(particles: [RenderParticle],
-                simulationBatches: [RenderParticleSimulationBatch]) {
+                simulationBatches: [RenderParticleSimulationBatch],
+                cpuSourceParticleCount: Int? = nil,
+                cpuSubmittedSourceParticleCount: Int? = nil) {
         var alphaCount = 0
         var additiveCount = 0
         var texturedCount = 0
         var bounds = RenderBounds()
         var uniqueTextures = Set<String>()
         let cpuRenderInstanceCount = particles.count
+        var sourceParticleCount = max(0, cpuSourceParticleCount ?? particles.count)
+        var submittedSourceParticleCount = max(
+            0,
+            cpuSubmittedSourceParticleCount ?? particles.count
+        )
         var cpuBatchCount = 0
         var currentCPUKey: ParticleRenderBatchKey?
         var gpuRenderInstanceCount = 0
@@ -376,6 +402,11 @@ public struct ParticleRenderSummary: Sendable, Equatable {
         }
 
         for batch in simulationBatches where batch.renderOnGPU {
+            let sourceCount = batch.particleCount
+            if sourceCount > 0 {
+                sourceParticleCount += sourceCount
+                submittedSourceParticleCount += batch.renderParticleCount
+            }
             let renderInstanceCount = batch.renderInstanceCount
             guard renderInstanceCount > 0 else { continue }
             gpuRenderInstanceCount += renderInstanceCount
@@ -394,6 +425,8 @@ public struct ParticleRenderSummary: Sendable, Equatable {
         }
 
         self.init(particleCount: cpuRenderInstanceCount + gpuRenderInstanceCount,
+                  sourceParticleCount: sourceParticleCount,
+                  submittedSourceParticleCount: submittedSourceParticleCount,
                   cpuRenderInstanceCount: cpuRenderInstanceCount,
                   gpuRenderInstanceCount: gpuRenderInstanceCount,
                   alphaCount: alphaCount,
