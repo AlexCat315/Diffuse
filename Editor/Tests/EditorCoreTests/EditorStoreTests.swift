@@ -138,4 +138,57 @@ struct EditorStoreTests {
         #expect(!json.contains("frameStatsHistory"))
         #expect(decoded.frameStatsHistory.isEmpty)
     }
+
+    @Test("Particle diagnostics maintain a bounded transient history")
+    func particleDiagnosticsHistoryIsBoundedAndTransient() throws {
+        let store = EditorStore()
+        var notifications = 0
+        _ = store.subscribe { _ in notifications += 1 }
+
+        let sampleCount = EditorState.maxParticleDiagnosticsHistorySamples + 3
+        for index in 1...sampleCount {
+            store.dispatch(.tickFrame(UInt64(index)))
+            store.dispatch(.updateParticleDiagnostics(
+                EditorParticleDiagnosticsSample(sampleIndex: UInt64(index),
+                                                frameIndex: UInt64(index),
+                                                simulatedDeltaTime: 1.0 / 60.0,
+                                                emitterCount: 1,
+                                                activeEmitterCount: 1,
+                                                liveParticleCount: index,
+                                                liveParticleLimit: 1_000,
+                                                requestedSpawnCount: index,
+                                                spawnedParticleCount: index,
+                                                droppedSpawnCount: 0,
+                                                capacityLimitedSpawnCount: 0,
+                                                spawnBudgetLimitedCount: 0,
+                                                spawnBudgetConsumedCount: index,
+                                                spawnBudgetLimit: 0,
+                                                eventRequestedSpawnCount: 0,
+                                                eventDroppedSpawnCount: 0,
+                                                droppedReadbackEventCount: 0,
+                                                cpuRenderInstanceCount: index,
+                                                gpuRenderInstanceCount: 0,
+                                                cpuBatchCount: 1,
+                                                gpuBatchCount: 0,
+                                                gpuSimulationParticleCount: 0,
+                                                gpuWorkgroupCount: 0,
+                                                gpuSortItemCount: 0,
+                                                gpuSortPaddedItemCount: 0)
+            ))
+        }
+
+        #expect(store.particleDiagnosticsHistory.count == EditorState.maxParticleDiagnosticsHistorySamples)
+        #expect(store.particleDiagnosticsHistory.first?.sampleIndex == 4)
+        #expect(store.particleDiagnosticsHistory.first?.frameIndex == 4)
+        #expect(store.particleDiagnosticsHistory.last?.sampleIndex == UInt64(sampleCount))
+        #expect(store.particleDiagnosticsHistory.last?.liveParticleCount == sampleCount)
+        #expect(notifications == sampleCount)
+
+        let data = try JSONEncoder().encode(store.state)
+        let json = String(decoding: data, as: UTF8.self)
+        let decoded = try JSONDecoder().decode(EditorState.self, from: data)
+
+        #expect(!json.contains("particleDiagnosticsHistory"))
+        #expect(decoded.particleDiagnosticsHistory.isEmpty)
+    }
 }
