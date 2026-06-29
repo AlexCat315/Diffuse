@@ -27,6 +27,7 @@ public final class EditorStore: @unchecked Sendable {
         case frameTimingRevision
         case frameStats
         case frameStatsHistory
+        case particleDiagnosticsHistory
         case viewportSurfaceRevision
         case windowFocused
         case windowMinimized
@@ -224,6 +225,10 @@ public final class EditorStore: @unchecked Sendable {
         case .updateFrameStats:
             mark(.frameStats, old.frameStats, new.frameStats)
             mark(.frameStatsHistory, old.frameStatsHistory, new.frameStatsHistory)
+        case .updateParticleDiagnostics:
+            mark(.particleDiagnosticsHistory,
+                 old.particleDiagnosticsHistory,
+                 new.particleDiagnosticsHistory)
         }
 
         if old.shouldRender != new.shouldRender {
@@ -261,6 +266,9 @@ extension EditorStore {
     public var frameIndex: UInt64 { read(.frameIndex, storage.frameIndex) }
     public var frameTimingRevision: UInt64 { read(.frameTimingRevision, storage.frameTimingRevision) }
     public var frameStatsHistory: [EditorFrameStatsHistorySample] { read(.frameStatsHistory, storage.frameStatsHistory) }
+    public var particleDiagnosticsHistory: [EditorParticleDiagnosticsSample] {
+        read(.particleDiagnosticsHistory, storage.particleDiagnosticsHistory)
+    }
     public var viewportSurfaceRevision: UInt64 { read(.viewportSurfaceRevision, storage.viewportSurfaceRevision) }
     public var windowFocused: Bool { read(.windowFocused, storage.windowFocused) }
     public var windowMinimized: Bool { read(.windowMinimized, storage.windowMinimized) }

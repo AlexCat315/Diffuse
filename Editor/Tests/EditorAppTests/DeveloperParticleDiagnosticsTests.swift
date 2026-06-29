@@ -250,4 +250,121 @@ struct DeveloperParticleDiagnosticsTests {
     func emptyFrameTrendHistoryHasNoSummary() {
         #expect(makeDeveloperFrameTrendSummary(history: []) == nil)
     }
+
+    @Test("particle trend summary reports sustained pressure and GPU peaks")
+    func particleTrendSummaryReportsPressureAndGPUPeaks() {
+        let history = [
+            particleSample(index: 1,
+                           live: 50,
+                           limit: 100,
+                           requested: 10,
+                           spawned: 10,
+                           dropped: 0,
+                           gpuRender: 20,
+                           gpuWorkgroups: 2,
+                           sortItems: 32,
+                           sortPaddedItems: 64),
+            particleSample(index: 2,
+                           live: 95,
+                           limit: 100,
+                           requested: 80,
+                           spawned: 60,
+                           dropped: 20,
+                           capacityDrops: 5,
+                           budgetDrops: 15,
+                           eventDrops: 3,
+                           readbackDrops: 1,
+                           cpuRender: 12,
+                           gpuRender: 140,
+                           gpuSimParticles: 180,
+                           gpuWorkgroups: 9,
+                           sortItems: 64,
+                           sortPaddedItems: 128),
+            particleSample(index: 3,
+                           live: 90,
+                           limit: 100,
+                           requested: 30,
+                           spawned: 20,
+                           dropped: 10,
+                           budgetDrops: 10,
+                           gpuRender: 80,
+                           gpuWorkgroups: 4,
+                           sortItems: 96,
+                           sortPaddedItems: 128),
+        ]
+
+        let summary = makeDeveloperParticleTrendSummary(history: history)
+
+        #expect(summary?.sampleCount == 3)
+        #expect(summary?.firstSampleIndex == 1)
+        #expect(summary?.lastSampleIndex == 3)
+        #expect(abs((summary?.averageLiveParticleCount ?? 0) - 78.333) < 0.01)
+        #expect(summary?.maxLiveParticleCount == 95)
+        #expect(summary?.peakLiveSampleIndex == 2)
+        #expect(summary?.liveBudgetPressureSamples == 2)
+        #expect(summary?.totalRequestedSpawnCount == 120)
+        #expect(summary?.totalSpawnedParticleCount == 90)
+        #expect(summary?.totalDroppedSpawnCount == 30)
+        #expect(summary?.totalCapacityLimitedSpawnCount == 5)
+        #expect(summary?.totalSpawnBudgetLimitedCount == 25)
+        #expect(summary?.totalEventDroppedSpawnCount == 3)
+        #expect(summary?.totalDroppedReadbackEventCount == 1)
+        #expect(summary?.peakDropSampleIndex == 2)
+        #expect(summary?.maxDroppedSpawnCount == 20)
+        #expect(summary?.peakSpawnRequestSampleIndex == 2)
+        #expect(summary?.maxRequestedSpawnCount == 80)
+        #expect(summary?.maxCPURenderInstanceCount == 12)
+        #expect(summary?.maxGPURenderInstanceCount == 140)
+        #expect(summary?.maxGPUSimulationParticleCount == 180)
+        #expect(summary?.maxGPUWorkgroupCount == 9)
+        #expect(abs((summary?.maxSortPaddingOverhead ?? 0) - 0.5) < 0.001)
+    }
+
+    @Test("empty particle trend history has no summary")
+    func emptyParticleTrendHistoryHasNoSummary() {
+        #expect(makeDeveloperParticleTrendSummary(history: []) == nil)
+    }
+
+    private func particleSample(index: UInt64,
+                                live: Int,
+                                limit: Int,
+                                requested: Int,
+                                spawned: Int,
+                                dropped: Int,
+                                capacityDrops: Int = 0,
+                                budgetDrops: Int = 0,
+                                eventDrops: Int = 0,
+                                readbackDrops: Int = 0,
+                                cpuRender: Int = 0,
+                                gpuRender: Int = 0,
+                                gpuSimParticles: Int = 0,
+                                gpuWorkgroups: Int = 0,
+                                sortItems: Int = 0,
+                                sortPaddedItems: Int = 0) -> EditorParticleDiagnosticsSample {
+        EditorParticleDiagnosticsSample(sampleIndex: index,
+                                        frameIndex: index * 10,
+                                        simulatedDeltaTime: 1.0 / 60.0,
+                                        emitterCount: 1,
+                                        activeEmitterCount: live > 0 ? 1 : 0,
+                                        liveParticleCount: live,
+                                        liveParticleLimit: limit,
+                                        requestedSpawnCount: requested,
+                                        spawnedParticleCount: spawned,
+                                        droppedSpawnCount: dropped,
+                                        capacityLimitedSpawnCount: capacityDrops,
+                                        spawnBudgetLimitedCount: budgetDrops,
+                                        spawnBudgetConsumedCount: spawned,
+                                        spawnBudgetLimit: 0,
+                                        eventRequestedSpawnCount: eventDrops,
+                                        eventDroppedSpawnCount: eventDrops,
+                                        droppedReadbackEventCount: readbackDrops,
+                                        cpuRenderInstanceCount: cpuRender,
+                                        gpuRenderInstanceCount: gpuRender,
+                                        cpuBatchCount: cpuRender > 0 ? 1 : 0,
+                                        gpuBatchCount: gpuRender > 0 ? 1 : 0,
+                                        gpuSimulationParticleCount: gpuSimParticles,
+                                        gpuWorkgroupCount: gpuWorkgroups,
+                                        gpuSortItemCount: sortItems,
+                                        gpuSortPaddedItemCount: sortPaddedItems)
+    }
 }

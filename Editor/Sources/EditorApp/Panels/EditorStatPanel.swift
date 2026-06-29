@@ -15,6 +15,7 @@ struct DeveloperToolsPanel: View {
             let timingRevision = store.frameTimingRevision
             let frameStats = store.state.frameStats
             let frameStatsHistory = store.frameStatsHistory
+            let particleDiagnosticsHistory = store.particleDiagnosticsHistory
             let renderStats = app.currentRenderStats()
             let particleStats = app.currentParticleFrameStats()
             let particleEventReport = app.currentParticleSimulationEventApplyReport()
@@ -41,6 +42,7 @@ struct DeveloperToolsPanel: View {
                                             scalability: particleScalability,
                                             renderSummary: particleRenderSummary,
                                             renderStats: renderStats,
+                                            history: particleDiagnosticsHistory,
                                             selectedEntityID: store.selectedEntityID)
                 },
                 TabItem(L("Console"), id: DeveloperToolTab.console) {
@@ -397,6 +399,111 @@ struct DeveloperParticleEmitterHotspot: Equatable {
     var spawnBudgetText: String
 }
 
+struct DeveloperParticleTrendSummary: Equatable {
+    var sampleCount: Int
+    var firstSampleIndex: UInt64
+    var lastSampleIndex: UInt64
+    var averageLiveParticleCount: Double
+    var maxLiveParticleCount: Int
+    var peakLiveSampleIndex: UInt64
+    var liveBudgetPressureSamples: Int
+    var totalRequestedSpawnCount: Int
+    var totalSpawnedParticleCount: Int
+    var totalDroppedSpawnCount: Int
+    var totalCapacityLimitedSpawnCount: Int
+    var totalSpawnBudgetLimitedCount: Int
+    var totalEventDroppedSpawnCount: Int
+    var totalDroppedReadbackEventCount: Int
+    var peakDropSampleIndex: UInt64
+    var maxDroppedSpawnCount: Int
+    var maxRequestedSpawnCount: Int
+    var peakSpawnRequestSampleIndex: UInt64
+    var maxCPURenderInstanceCount: Int
+    var maxGPURenderInstanceCount: Int
+    var maxGPUSimulationParticleCount: Int
+    var maxGPUWorkgroupCount: Int
+    var maxSortPaddingOverhead: Double
+}
+
+func makeDeveloperParticleTrendSummary(
+    history: [EditorParticleDiagnosticsSample]
+) -> DeveloperParticleTrendSummary? {
+    guard !history.isEmpty else { return nil }
+
+    var liveTotal = 0
+    var liveBudgetPressureSamples = 0
+    var totalRequested = 0
+    var totalSpawned = 0
+    var totalDropped = 0
+    var totalCapacityDropped = 0
+    var totalBudgetDropped = 0
+    var totalEventDropped = 0
+    var totalReadbackDropped = 0
+    var peakLiveSample = history[0]
+    var peakDropSample = history[0]
+    var peakRequestSample = history[0]
+    var maxCPURenderInstanceCount = 0
+    var maxGPURenderInstanceCount = 0
+    var maxGPUSimulationParticleCount = 0
+    var maxGPUWorkgroupCount = 0
+    var maxSortPaddingOverhead = 0.0
+
+    for sample in history {
+        liveTotal += sample.liveParticleCount
+        if sample.liveParticleLimit > 0
+            && Double(sample.liveParticleCount) / Double(sample.liveParticleLimit) >= 0.9 {
+            liveBudgetPressureSamples += 1
+        }
+        totalRequested += sample.requestedSpawnCount
+        totalSpawned += sample.spawnedParticleCount
+        totalDropped += sample.droppedSpawnCount
+        totalCapacityDropped += sample.capacityLimitedSpawnCount
+        totalBudgetDropped += sample.spawnBudgetLimitedCount
+        totalEventDropped += sample.eventDroppedSpawnCount
+        totalReadbackDropped += sample.droppedReadbackEventCount
+        if sample.liveParticleCount > peakLiveSample.liveParticleCount {
+            peakLiveSample = sample
+        }
+        if sample.droppedSpawnCount > peakDropSample.droppedSpawnCount {
+            peakDropSample = sample
+        }
+        if sample.requestedSpawnCount > peakRequestSample.requestedSpawnCount {
+            peakRequestSample = sample
+        }
+        maxCPURenderInstanceCount = max(maxCPURenderInstanceCount, sample.cpuRenderInstanceCount)
+        maxGPURenderInstanceCount = max(maxGPURenderInstanceCount, sample.gpuRenderInstanceCount)
+        maxGPUSimulationParticleCount = max(maxGPUSimulationParticleCount, sample.gpuSimulationParticleCount)
+        maxGPUWorkgroupCount = max(maxGPUWorkgroupCount, sample.gpuWorkgroupCount)
+        maxSortPaddingOverhead = max(maxSortPaddingOverhead, particleSortPaddingOverhead(sample))
+    }
+
+    return DeveloperParticleTrendSummary(
+        sampleCount: history.count,
+        firstSampleIndex: history[0].sampleIndex,
+        lastSampleIndex: history[history.count - 1].sampleIndex,
+        averageLiveParticleCount: Double(liveTotal) / Double(history.count),
+        maxLiveParticleCount: peakLiveSample.liveParticleCount,
+        peakLiveSampleIndex: peakLiveSample.sampleIndex,
+        liveBudgetPressureSamples: liveBudgetPressureSamples,
+        totalRequestedSpawnCount: totalRequested,
+        totalSpawnedParticleCount: totalSpawned,
+        totalDroppedSpawnCount: totalDropped,
+        totalCapacityLimitedSpawnCount: totalCapacityDropped,
+        totalSpawnBudgetLimitedCount: totalBudgetDropped,
+        totalEventDroppedSpawnCount: totalEventDropped,
+        totalDroppedReadbackEventCount: totalReadbackDropped,
+        peakDropSampleIndex: peakDropSample.sampleIndex,
+        maxDroppedSpawnCount: peakDropSample.droppedSpawnCount,
+        maxRequestedSpawnCount: peakRequestSample.requestedSpawnCount,
+        peakSpawnRequestSampleIndex: peakRequestSample.sampleIndex,
+        maxCPURenderInstanceCount: maxCPURenderInstanceCount,
+        maxGPURenderInstanceCount: maxGPURenderInstanceCount,
+        maxGPUSimulationParticleCount: maxGPUSimulationParticleCount,
+        maxGPUWorkgroupCount: maxGPUWorkgroupCount,
+        maxSortPaddingOverhead: maxSortPaddingOverhead
+    )
+}
+
 func makeDeveloperParticleEmitterHotspots(stats: ParticleFrameStatsResource,
                                           eventReport: ParticleSimulationEventApplyReport,
                                           limit: Int = 8) -> [DeveloperParticleEmitterHotspot] {
@@ -629,6 +736,7 @@ private struct ParticleDiagnosticsView: View {
     let scalability: ParticleScalabilityStateResource
     let renderSummary: ParticleRenderSummary
     let renderStats: RenderFrameStats
+    let history: [EditorParticleDiagnosticsSample]
     let selectedEntityID: UInt64?
 
     var body: some View {
@@ -637,6 +745,7 @@ private struct ParticleDiagnosticsView: View {
                                                              scalability: scalability,
                                                              renderSummary: renderSummary,
                                                              renderStats: renderStats)
+        let trend = makeDeveloperParticleTrendSummary(history: history)
         let hotspots = makeDeveloperParticleEmitterHotspots(stats: stats,
                                                             eventReport: eventReport)
         let selectedHotspot = selectedEntityID.flatMap { entityID -> DeveloperParticleEmitterHotspot? in
@@ -657,6 +766,13 @@ private struct ParticleDiagnosticsView: View {
                 .padding(horizontal: 12, vertical: 10)
 
             Divider()
+
+            if let trend {
+                ParticleTrendOverview(trend: trend)
+                    .padding(horizontal: 12, vertical: 10)
+
+                Divider()
+            }
 
             ParticleEmitterHotspotsView(hotspots: hotspots,
                                         selectedHotspot: selectedHotspot,
@@ -864,6 +980,46 @@ private struct ParticleHealthOverview: View {
                 } else {
                     StatWrappedValue(label: "Detail", value: summary.details.joined(separator: " | "))
                 }
+            }
+            .flex(1, shrink: 1)
+        }
+    }
+}
+
+private struct ParticleTrendOverview: View {
+    let trend: DeveloperParticleTrendSummary
+
+    var body: some View {
+        Row(alignment: .top, spacing: 12) {
+            StatGroup(title: "Particle Trend") {
+                StatRow(label: "Samples", value: "\(trend.sampleCount)")
+                StatRow(label: "Window", value: "#\(trend.firstSampleIndex)-#\(trend.lastSampleIndex)")
+                StatRow(label: "Avg Live", value: formatDecimal(trend.averageLiveParticleCount))
+                StatRow(label: "Max Live", value: "\(trend.maxLiveParticleCount)")
+                StatRow(label: "Peak Live Sample", value: "#\(trend.peakLiveSampleIndex)")
+                StatRow(label: "Live Pressure", value: "\(trend.liveBudgetPressureSamples)/\(trend.sampleCount)")
+            }
+            .flex(1, shrink: 1)
+
+            StatGroup(title: "Spawn Trend") {
+                StatRow(label: "Requests", value: "\(trend.totalRequestedSpawnCount)")
+                StatRow(label: "Accepted", value: "\(trend.totalSpawnedParticleCount)")
+                StatRow(label: "Drops", value: "\(trend.totalDroppedSpawnCount)")
+                StatRow(label: "Capacity Drops", value: "\(trend.totalCapacityLimitedSpawnCount)")
+                StatRow(label: "Budget Drops", value: "\(trend.totalSpawnBudgetLimitedCount)")
+                StatRow(label: "Peak Drop", value: "#\(trend.peakDropSampleIndex) / \(trend.maxDroppedSpawnCount)")
+                StatRow(label: "Peak Request", value: "#\(trend.peakSpawnRequestSampleIndex) / \(trend.maxRequestedSpawnCount)")
+            }
+            .flex(1, shrink: 1)
+
+            StatGroup(title: "GPU / Events") {
+                StatRow(label: "Event Drops", value: "\(trend.totalEventDroppedSpawnCount)")
+                StatRow(label: "Readback Drops", value: "\(trend.totalDroppedReadbackEventCount)")
+                StatRow(label: "Max CPU Render", value: "\(trend.maxCPURenderInstanceCount)")
+                StatRow(label: "Max GPU Render", value: "\(trend.maxGPURenderInstanceCount)")
+                StatRow(label: "Max GPU Sim", value: "\(trend.maxGPUSimulationParticleCount)")
+                StatRow(label: "Max GPU Workgroups", value: "\(trend.maxGPUWorkgroupCount)")
+                StatRow(label: "Max Sort Padding", value: formatPercentFraction(trend.maxSortPaddingOverhead))
             }
             .flex(1, shrink: 1)
         }
@@ -1235,6 +1391,14 @@ func particleSortPaddingOverhead(_ stats: RenderFrameStats) -> Double {
     return Double(padding) / Double(stats.gpuParticleSortPaddedItemCount)
 }
 
+func particleSortPaddingOverhead(_ sample: EditorParticleDiagnosticsSample) -> Double {
+    guard sample.gpuSortPaddedItemCount > 0,
+          sample.gpuSortPaddedItemCount >= sample.gpuSortItemCount
+    else { return 0 }
+    let padding = sample.gpuSortPaddedItemCount - sample.gpuSortItemCount
+    return Double(padding) / Double(sample.gpuSortPaddedItemCount)
+}
+
 func percentile(_ values: [Double], fraction: Double) -> Double {
     guard !values.isEmpty else { return 0 }
     let clampedFraction = min(max(fraction, 0), 1)
@@ -1277,6 +1441,13 @@ private func particleSeverityBackground(_ severity: DeveloperParticleDiagnosticS
 private func formatPercent(_ numerator: Int, _ denominator: Int) -> String {
     guard denominator > 0 else { return "--" }
     let percent = Double(numerator) / Double(denominator) * 100
+    if percent < 10 { return String(format: "%.1f%%", percent) }
+    return String(format: "%.0f%%", percent)
+}
+
+private func formatPercentFraction(_ value: Double) -> String {
+    guard value.isFinite else { return "--" }
+    let percent = value * 100
     if percent < 10 { return String(format: "%.1f%%", percent) }
     return String(format: "%.0f%%", percent)
 }
