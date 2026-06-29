@@ -14,6 +14,7 @@ struct ParticleTests {
                                       distanceEmissionRate: 3,
                                       burstCount: 2,
                                       maxParticles: 128,
+                                      maxSpawnedParticlesPerFrame: 16,
                                       maxRenderedParticles: 32,
                                       lifetime: 1.5,
                                       subEmitters: [
@@ -86,6 +87,7 @@ struct ParticleTests {
         if case let .emission(settings) = emission.settings {
             #expect(settings.emissionRate == 12)
             #expect(settings.distanceEmissionRate == 3)
+            #expect(settings.maxSpawnedParticlesPerFrame == 16)
             #expect(settings.maxRenderedParticles == 32)
             #expect(settings.seed == 987_654_321)
         } else {
@@ -108,6 +110,7 @@ struct ParticleTests {
             if case var .emission(module) = settings {
                 module.emissionRate = -4
                 module.maxParticles = -8
+                module.maxSpawnedParticlesPerFrame = -3
                 module.seed = 42
                 settings = .emission(module)
             }
@@ -142,6 +145,7 @@ struct ParticleTests {
 
         #expect(applied.emissionRate == 0)
         #expect(applied.maxParticles == 0)
+        #expect(applied.maxSpawnedParticlesPerFrame == 0)
         #expect(applied.seed == 42)
         #expect(applied.collisionRestitution == 1)
         #expect(applied.collisionDamping == 0)
@@ -253,6 +257,7 @@ struct ParticleTests {
             module.distanceEmissionRate = 0
             module.burstCount = 0
             module.maxParticles = 0
+            module.maxSpawnedParticlesPerFrame = -1
             module.simulationSpeed = -1
             settings = .emission(module)
         }
@@ -303,6 +308,7 @@ struct ParticleTests {
         let stackIssueCodes = stack.validationIssues().map(\.code)
 
         #expect(stackIssueCodes.contains("noParticleCapacity"))
+        #expect(stackIssueCodes.contains("negativeSpawnBudget"))
         #expect(stackIssueCodes.contains("noSpawnSource"))
         #expect(stackIssueCodes.contains("negativeSimulationSpeed"))
         #expect(stackIssueCodes.contains("invalidLifetime"))
@@ -333,6 +339,7 @@ struct ParticleTests {
         let repairedIssueCodes = stack.validationIssues().map(\.code)
 
         #expect(!repairedIssueCodes.contains("noParticleCapacity"))
+        #expect(!repairedIssueCodes.contains("negativeSpawnBudget"))
         #expect(!repairedIssueCodes.contains("negativeSimulationSpeed"))
         #expect(repairedIssueCodes.contains("noSpawnSource"))
         #expect(!repairedIssueCodes.contains("invalidLifetime"))
@@ -587,6 +594,62 @@ struct ParticleTests {
         #expect(emitter.lastFrameSpawnedParticles.isEmpty)
     }
 
+    @Test("per-frame spawn budget throttles continuous emission")
+    func perFrameSpawnBudgetThrottlesContinuousEmission() {
+        var emitter = ParticleEmitter(emissionRate: 100,
+                                      maxParticles: 100,
+                                      maxSpawnedParticlesPerFrame: 3,
+                                      lifetime: 10,
+                                      startVelocity: .zero,
+                                      gravity: .zero)
+
+        emitter.advance(deltaTime: 0.1)
+
+        #expect(emitter.aliveCount == 3)
+        #expect(emitter.lastFrameStats.requestedSpawnCount == 10)
+        #expect(emitter.lastFrameStats.continuousSpawnedCount == 3)
+        #expect(emitter.lastFrameStats.spawnBudgetLimit == 3)
+        #expect(emitter.lastFrameStats.spawnBudgetConsumedCount == 3)
+        #expect(abs(emitter.lastFrameStats.spawnBudgetUtilization - 1) < 0.0001)
+        #expect(emitter.lastFrameStats.capacityLimitedSpawnCount == 0)
+        #expect(emitter.lastFrameStats.spawnBudgetLimitedCount == 7)
+        #expect(emitter.lastFrameStats.droppedSpawnCount == 7)
+
+        emitter.advance(deltaTime: 0.1)
+
+        #expect(emitter.aliveCount == 6)
+        #expect(emitter.lastFrameStats.continuousSpawnedCount == 3)
+        #expect(emitter.lastFrameStats.spawnBudgetLimitedCount == 7)
+    }
+
+    @Test("per-frame spawn budget throttles event sub-emitters")
+    func perFrameSpawnBudgetThrottlesEventSubEmitters() {
+        var emitter = ParticleEmitter(isEmitting: false,
+                                      emissionRate: 0,
+                                      distanceEmissionRate: 100,
+                                      maxParticles: 100,
+                                      maxSpawnedParticlesPerFrame: 2,
+                                      lifetime: 0.1,
+                                      subEmitterTrigger: .death,
+                                      subEmitterBurstCount: 4,
+                                      subEmitterMaxDepth: 1,
+                                      subEmitterLifetime: 1,
+                                      startVelocity: .zero,
+                                      gravity: .zero,
+                                      simulationSpace: .world)
+        emitter.emit(1)
+        emitter.advance(deltaTime: 0.2)
+
+        #expect(emitter.aliveCount == 2)
+        #expect(emitter.lastFrameStats.requestedSpawnCount == 4)
+        #expect(emitter.lastFrameStats.subEmitterSpawnedCount == 2)
+        #expect(emitter.lastFrameStats.distanceSpawnedCount == 0)
+        #expect(emitter.lastFrameStats.spawnBudgetLimit == 2)
+        #expect(emitter.lastFrameStats.spawnBudgetConsumedCount == 2)
+        #expect(emitter.lastFrameStats.spawnBudgetLimitedCount == 2)
+        #expect(emitter.lastFrameStats.capacityLimitedSpawnCount == 0)
+    }
+
     @Test("scheduled bursts spawn particles at configured intervals")
     func scheduledBursts() {
         var emitter = ParticleEmitter(emissionRate: 0, burstCount: 3, burstInterval: 0.5,
@@ -642,6 +705,34 @@ struct ParticleTests {
         start.columns.3 = SIMD4<Float>(0.5, 0, 0, 1)
         emitter.advance(deltaTime: 0.1, worldTransform: start)
         #expect(emitter.aliveCount == 1)
+    }
+
+    @Test("per-frame spawn budget caps distance emission")
+    func perFrameSpawnBudgetCapsDistanceEmission() {
+        let start = matrix_identity_float4x4
+        var moved = matrix_identity_float4x4
+        moved.columns.3 = SIMD4<Float>(1, 0, 0, 1)
+        var emitter = ParticleEmitter(emissionRate: 0,
+                                      distanceEmissionRate: 10,
+                                      maxParticles: 100,
+                                      maxSpawnedParticlesPerFrame: 3,
+                                      lifetime: 10,
+                                      startVelocity: .zero,
+                                      gravity: .zero,
+                                      simulationSpace: .world)
+
+        emitter.advance(deltaTime: 0.1, worldTransform: start)
+        emitter.advance(deltaTime: 0.1, worldTransform: moved)
+
+        #expect(emitter.aliveCount == 3)
+        #expect(emitter.lastFrameStats.requestedSpawnCount == 10)
+        #expect(emitter.lastFrameStats.distanceSpawnedCount == 3)
+        #expect(emitter.lastFrameStats.spawnBudgetLimit == 3)
+        #expect(emitter.lastFrameStats.spawnBudgetConsumedCount == 3)
+        #expect(emitter.lastFrameStats.spawnBudgetLimitedCount == 7)
+        #expect(abs(emitter.particles[0].position.x - 0.16666667) < 0.0001)
+        #expect(abs(emitter.particles[1].position.x - 0.5) < 0.0001)
+        #expect(abs(emitter.particles[2].position.x - 0.8333334) < 0.0001)
     }
 
     @Test("spawned particles can inherit emitter velocity")
@@ -1008,13 +1099,20 @@ struct ParticleTests {
         #expect(report.collisionEventCount == 1)
         #expect(report.subEmitterSpawnedCount == 1)
         #expect(report.spawnedParticleCount == 1)
+        #expect(report.requestedSpawnCount == 2)
+        #expect(report.spawnBudgetLimit == 0)
+        #expect(report.spawnBudgetConsumedCount == 2)
         #expect(report.capacityLimitedSpawnCount == 1)
+        #expect(report.droppedSpawnCount == 1)
         let emitter = scene.component(ParticleEmitter.self, for: entity)
         #expect(emitter?.particles.count == 1)
         #expect(emitter?.lastFrameEvents == [event, collision])
         #expect(scene.particleFrameStats.subEmitterSpawnedCount == 1)
+        #expect(scene.particleFrameStats.requestedSpawnCount == 2)
+        #expect(scene.particleFrameStats.spawnBudgetConsumedCount == 2)
         #expect(scene.particleFrameStats.capacityLimitedSpawnCount == 1)
         #expect(report.emitterStats(for: entity.rawValue)?.subEmitterSpawnedCount == 1)
+        #expect(report.emitterStats(for: entity.rawValue)?.requestedSpawnCount == 2)
         #expect(report.emitterStats(for: entity.rawValue)?.capacityLimitedSpawnCount == 1)
         #expect(scene.particleFrameStats.emitterStats(for: entity.rawValue)?.subEmitterSpawnedCount == 1)
         #expect(scene.particleFrameStats.emitterStats(for: missing.rawValue) == nil)
@@ -1889,6 +1987,13 @@ struct ParticleTests {
         ]))
         #expect(capacityPressure.reason == .capacityLimited)
         #expect(capacityPressure.pressure == 1)
+
+        let spawnBudgetLimitedPressure = policy.updatedState(previousStats: ParticleFrameStatsResource(emitterStats: [
+            ParticleEmitterFrameStats(liveParticleCount: 10, maxParticleCount: 100, liveParticleLimit: 100,
+                                      spawnBudgetLimitedCount: 3),
+        ]))
+        #expect(spawnBudgetLimitedPressure.reason == .spawnBudget)
+        #expect(spawnBudgetLimitedPressure.pressure == 1)
     }
 
     @Test("particle frame stats expose live budget utilization and dropped spawns")
@@ -1897,29 +2002,48 @@ struct ParticleTests {
                                           maxParticleCount: 100,
                                           liveParticleLimit: 50,
                                           continuousSpawnedCount: 10,
-                                          capacityLimitedSpawnCount: 2)
+                                          requestedSpawnCount: 16,
+                                          spawnBudgetLimit: 20,
+                                          spawnBudgetConsumedCount: 12,
+                                          capacityLimitedSpawnCount: 2,
+                                          spawnBudgetLimitedCount: 4)
         let b = ParticleEmitterFrameStats(liveParticleCount: 25,
                                           maxParticleCount: 200,
                                           liveParticleLimit: 0,
                                           burstSpawnedCount: 5,
+                                          requestedSpawnCount: 8,
                                           capacityLimitedSpawnCount: 3)
         let aggregate = ParticleFrameStatsResource(emitterStats: [a, b],
                                                    emitterStatsByEntity: [11: a, 22: b])
+        let eventReport = ParticleSimulationEventApplyReport(requestedSpawnCount: 9,
+                                                             spawnBudgetLimit: 10,
+                                                             spawnBudgetConsumedCount: 6,
+                                                             capacityLimitedSpawnCount: 2,
+                                                             spawnBudgetLimitedCount: 3)
 
         #expect(a.liveParticleBudgetLimit == 50)
         #expect(abs(a.liveParticleBudgetUtilization - 0.9) < 0.0001)
-        #expect(a.droppedSpawnCount == 2)
+        #expect(abs(a.spawnBudgetUtilization - 0.6) < 0.0001)
+        #expect(a.droppedSpawnCount == 6)
         #expect(a.runtimePressureLevel == .critical)
         #expect(b.liveParticleBudgetLimit == 200)
         #expect(abs(b.liveParticleBudgetUtilization - 0.125) < 0.0001)
+        #expect(b.spawnBudgetUtilization == 0)
         #expect(b.droppedSpawnCount == 3)
         #expect(b.runtimePressureLevel == .critical)
 
         #expect(aggregate.liveParticleBudgetLimit == 250)
         #expect(abs(aggregate.liveParticleBudgetUtilization - 0.28) < 0.0001)
-        #expect(aggregate.droppedSpawnCount == 5)
+        #expect(aggregate.requestedSpawnCount == 24)
+        #expect(aggregate.spawnBudgetLimit == 20)
+        #expect(aggregate.spawnBudgetConsumedCount == 12)
+        #expect(abs(aggregate.spawnBudgetUtilization - 0.6) < 0.0001)
+        #expect(aggregate.spawnBudgetLimitedCount == 4)
+        #expect(aggregate.droppedSpawnCount == 9)
         #expect(aggregate.runtimePressureLevel == .critical)
         #expect(aggregate.emitterStats(for: 11)?.liveParticleBudgetLimit == 50)
+        #expect(eventReport.droppedSpawnCount == 5)
+        #expect(abs(eventReport.spawnBudgetUtilization - 0.6) < 0.0001)
     }
 
     @Test("particle frame stats classify runtime pressure levels")

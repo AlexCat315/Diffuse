@@ -328,6 +328,7 @@ struct EditorInspectorSectionsTests {
         if case var .emission(module) = stack.modules[emissionIndex].settings {
             module.emissionRate = 77
             module.maxParticles = 512
+            module.maxSpawnedParticlesPerFrame = 96
             module.simulationSpeed = 1.75
             module.distanceEmissionRate = 9
             module.emissionRateCurve = .easeInOut
@@ -525,6 +526,7 @@ struct EditorInspectorSectionsTests {
         let emitter = try #require(adapter.scene.component(ParticleEmitter.self, for: entity))
         #expect(emitter.emissionRate == 77)
         #expect(emitter.maxParticles == 512)
+        #expect(emitter.maxSpawnedParticlesPerFrame == 96)
         #expect(emitter.simulationSpeed == 1.75)
         #expect(emitter.distanceEmissionRate == 9)
         #expect(emitter.emissionRateCurve == .easeInOut)
@@ -736,6 +738,13 @@ struct EditorInspectorSectionsTests {
             maxP.wrappedValue = 128
             #expect(adapter.scene.component(ParticleEmitter.self, for: entity)?.maxParticles == 128)
         } else { Issue.record("missing max field") }
+
+        if case let .constrainedNumber(maxSpawned, _, _, _, _) =
+            field(adapter, id, section: "particle-emitter", field: "particle-max-spawned-per-frame") {
+            maxSpawned.wrappedValue = 48
+            #expect(adapter.scene.component(ParticleEmitter.self,
+                                            for: entity)?.maxSpawnedParticlesPerFrame == 48)
+        } else { Issue.record("missing max spawned per frame field") }
 
         if case let .constrainedNumber(maxRendered, _, _, _, _) =
             field(adapter, id, section: "particle-emitter", field: "particle-max-rendered") {
