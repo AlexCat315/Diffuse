@@ -373,45 +373,47 @@ struct InspectorPanel: View {
             stack.modifiedModuleIDs.count
         }
 
-        private var hasRepairableValidationIssues: Bool {
-            var repaired = stack
-            repaired.repairValidationIssues()
-            return repaired != stack
-        }
-
         private var hasValidationIssues: Bool {
             !diagnostics.moduleValidationIssues.isEmpty || !stack.validationIssues().isEmpty
         }
 
-        private var hasExpandedModules: Bool {
-            !stack.expandedModuleIDs.isEmpty
-        }
-
-        private func hasRepairableValidationIssues(for module: ParticleEmitterModule) -> Bool {
-            var repaired = stack
-            repaired.repairValidationIssues(for: module.id)
-            return repaired != stack
-        }
-
-        private func hasResettableSettings(for module: ParticleEmitterModule) -> Bool {
-            stack.moduleSettingsDifferFromDefault(module.id)
-        }
-
         var body: some View {
-            Box(direction: .column, alignItems: .stretch, spacing: 8) {
-                Box(direction: .column, alignItems: .stretch, spacing: 5) {
+            Box(direction: .column, alignItems: .stretch, spacing: 10) {
+                Box(direction: .column, alignItems: .stretch, spacing: 8) {
                     Row(alignment: .center, spacing: 8) {
-                        Box(direction: .column, alignItems: .stretch, spacing: 1) {
-                            Text(L("Module Stack"))
-                                .lineLimit(1)
-                                .font(.body)
-                                .foregroundColor(.onSurface)
-                            Text("\(stack.modules.count) \(L("modules")) · v\(stack.version)")
-                                .lineLimit(1)
-                                .font(.caption)
-                                .foregroundColor(.onSurfaceMuted)
+                        Text(L("Modules"))
+                            .lineLimit(1)
+                            .font(.title)
+                            .foregroundColor(.onSurface)
+                            .flex()
+
+                        Button(L("Reset"),
+                               tooltip: L("Reset module order and enabled states")) {
+                            var stack = binding.wrappedValue
+                            stack.resetAuthoringState()
+                            binding.wrappedValue = stack
                         }
-                        .flex()
+                        .buttonStyle(GhostButtonStyle())
+                    }
+
+                    Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 6) {
+                        summaryChip("\(L("Active"))  \(enabledModuleCount) / \(stack.modules.count)",
+                                    foreground: .info,
+                                    background: .info.opacity(0.12))
+                        summaryChip(gpuSummaryText,
+                                    foreground: gpuSummaryForeground,
+                                    background: gpuSummaryBackground)
+                        summaryChip("\(L("Advanced"))  \(advancedModuleCount)")
+
+                        if modifiedModuleCount > 0 {
+                            Button(L("Modified"),
+                                   tooltip: L("Expand modified modules")) {
+                                var stack = binding.wrappedValue
+                                stack.expandModifiedModules(collapseOthers: true)
+                                binding.wrappedValue = stack
+                            }
+                            .buttonStyle(GhostButtonStyle())
+                        }
 
                         if hasValidationIssues {
                             Button(L("Issues"),
@@ -424,69 +426,8 @@ struct InspectorPanel: View {
                             }
                             .buttonStyle(GhostButtonStyle())
                         }
-
-                        if modifiedModuleCount > 0 {
-                            Button(L("Modified"),
-                                   tooltip: L("Expand modified modules")) {
-                                var stack = binding.wrappedValue
-                                stack.expandModifiedModules(collapseOthers: true)
-                                binding.wrappedValue = stack
-                            }
-                            .buttonStyle(GhostButtonStyle())
-                        }
-
-                        if hasExpandedModules {
-                            Button(L("Collapse"),
-                                   tooltip: L("Collapse all modules")) {
-                                var stack = binding.wrappedValue
-                                stack.collapseAllModules()
-                                binding.wrappedValue = stack
-                            }
-                            .buttonStyle(GhostButtonStyle())
-                        }
-
-                        if hasRepairableValidationIssues {
-                            Button(L("Repair"),
-                                   tooltip: L("Clamp repairable particle module settings")) {
-                                var stack = binding.wrappedValue
-                                stack.repairValidationIssues()
-                                binding.wrappedValue = stack
-                            }
-                            .buttonStyle(GhostButtonStyle())
-                        }
-
-                        Button(L("Reset"),
-                               tooltip: L("Reset module order and enabled states")) {
-                            var stack = binding.wrappedValue
-                            stack.resetAuthoringState()
-                            binding.wrappedValue = stack
-                        }
-                        .buttonStyle(GhostButtonStyle())
-                    }
-
-                    Row(alignment: .center, spacing: 5) {
-                        summaryChip("\(L("Active")) \(enabledModuleCount)/\(stack.modules.count)",
-                                    foreground: .onSurfaceVariant,
-                                    background: .surfaceVariant)
-                        summaryChip(validationSummaryStatus.text,
-                                    foreground: validationSummaryStatus.tone.foreground,
-                                    background: validationSummaryStatus.tone.background)
-                        summaryChip("\(L("Core")) \(coreModuleCount)")
-                        summaryChip("\(L("Advanced")) \(advancedModuleCount)")
-                        if modifiedModuleCount > 0 {
-                            summaryChip("\(L("Modified")) \(modifiedModuleCount)",
-                                        foreground: .info,
-                                        background: .info.opacity(0.12))
-                        }
-                        summaryChip(diagnostics.statsScopeLabel)
-                        summaryChip(gpuSummaryText,
-                                    foreground: gpuSummaryForeground,
-                                    background: gpuSummaryBackground)
                     }
                 }
-                .padding(horizontal: 2, vertical: 1)
-
-                runtimeOverviewPanel()
 
                 Box(direction: .column, alignItems: .stretch, spacing: 4) {
                     moduleGroup(title: L("Core"),
@@ -499,130 +440,20 @@ struct InspectorPanel: View {
                                     indices: advancedModuleIndices)
                     }
                 }
+                .padding(horizontal: 6, vertical: 6)
+                .background(.surface)
+                .cornerRadius(6)
+                .border(.border, width: 1)
             }
-            .padding(horizontal: 8, vertical: 8)
+            .padding(horizontal: 12, vertical: 12)
             .background(.surfaceSunken)
             .cornerRadius(7)
             .border(.border, width: 1)
             .clipped()
         }
 
-        private func runtimeOverviewPanel() -> AnyView {
-            let status = stackRuntimeStatus
-            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 5) {
-                Row(alignment: .center, spacing: 6) {
-                    Text(L("Runtime Overview"))
-                        .lineLimit(1)
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
-                    badge(diagnostics.statsScopeLabel)
-                    Spacer(minLength: 0)
-                        .flex()
-                    badge(status.text,
-                          foreground: status.tone.foreground,
-                          background: status.tone.background)
-                }
-
-                Row(alignment: .center, spacing: 5) {
-                    overviewMetricCard(L("Live"),
-                                       diagnostics.liveBudgetText,
-                                       tone: diagnostics.liveBudgetPressure >= 0.95 ? .warning
-                                           : diagnostics.liveParticleCount > 0 ? .info : .muted)
-                    overviewMetricCard(L("Spawn"),
-                                       "\(diagnostics.spawnedParticleCount)",
-                                       tone: diagnostics.spawnedParticleCount > 0 ? .success : .muted)
-                    overviewMetricCard(L("Drop"),
-                                       "\(diagnostics.runtimeDropCount)",
-                                       tone: diagnostics.runtimeDropCount > 0 ? .warning : .muted)
-                    overviewMetricCard(L("GPU"),
-                                       gpuOverviewValue,
-                                       tone: diagnostics.hasGPUSimulationWork ? .success : gpuSummaryStatus.tone)
-                    overviewMetricCard(L("Scale"),
-                                       fmt(diagnostics.scalability.appliedScale),
-                                       tone: diagnostics.scalability.pressure > 0 || diagnostics.scalability.appliedScale < 1
-                                           ? .warning
-                                           : .muted)
-                    overviewMetricCard(L("Events"),
-                                       "\(diagnostics.eventReport.appliedEventCount)/\(diagnostics.eventReport.eventCount)",
-                                       tone: diagnostics.eventReport.eventCount > 0 ? .info : .muted)
-                }
-            }
-            .padding(horizontal: 7, vertical: 6)
-            .background(status.tone.background)
-            .cornerRadius(5)
-            .border(status.tone.foreground.opacity(0.25), width: 1))
-        }
-
-        private var stackRuntimeStatus: ModuleRuntimeStatus {
-            if diagnostics.moduleValidationIssues.contains(where: { $0.severity == .error }) {
-                return ModuleRuntimeStatus(text: L("Needs Repair"), tone: .error)
-            }
-            if diagnostics.runtimeDropCount > 0 {
-                return ModuleRuntimeStatus(text: L("Dropping"), tone: .warning)
-            }
-            if diagnostics.scalability.pressure > 0 || diagnostics.scalability.appliedScale < 1 {
-                return ModuleRuntimeStatus(text: L("Scaled"), tone: .warning)
-            }
-            if diagnostics.hasGPUSimulationWork {
-                return ModuleRuntimeStatus(text: L("GPU Active"), tone: .success)
-            }
-            if diagnostics.liveParticleCount > 0 || diagnostics.spawnedParticleCount > 0 {
-                return ModuleRuntimeStatus(text: L("Simulating"), tone: .success)
-            }
-            if diagnostics.moduleValidationIssues.contains(where: { $0.severity == .warning }) {
-                return ModuleRuntimeStatus(text: L("Warnings"), tone: .warning)
-            }
-            return ModuleRuntimeStatus(text: L("Idle"), tone: .muted)
-        }
-
-        private var gpuOverviewValue: String {
-            if diagnostics.hasGPUSimulationWork {
-                return "\(diagnostics.renderStats.gpuParticleSimulationParticleCount)"
-            }
-            if let plan = diagnostics.selectedGPUSimulationPlan {
-                return gpuPlanStatus(plan).text
-            }
-            return gpuSummaryStatus.text
-        }
-
-        private func overviewMetricCard(_ label: String,
-                                        _ value: String,
-                                        tone: ModuleRuntimeTone) -> AnyView {
-            AnyView(Box(direction: .column, alignItems: .stretch, spacing: 1) {
-                Text(label)
-                    .lineLimit(1)
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
-                Text(value)
-                    .lineLimit(1)
-                    .font(.caption)
-                    .foregroundColor(tone.foreground)
-            }
-            .padding(horizontal: 6, vertical: 4)
-            .background(.surface)
-            .cornerRadius(4)
-            .border(tone.background, width: 1)
-            .flex())
-        }
-
         private var gpuSummaryText: String {
             gpuSummaryStatus.text
-        }
-
-        private var validationSummaryStatus: ModuleRuntimeStatus {
-            let errors = diagnostics.moduleValidationIssues.filter { $0.severity == .error }.count
-            if errors > 0 {
-                return ModuleRuntimeStatus(text: "\(errors) \(L("Errors"))", tone: .error)
-            }
-            let warnings = diagnostics.moduleValidationIssues.filter { $0.severity == .warning }.count
-            if warnings > 0 {
-                return ModuleRuntimeStatus(text: "\(warnings) \(L("Warnings"))", tone: .warning)
-            }
-            let info = diagnostics.moduleValidationIssues.filter { $0.severity == .info }.count
-            if info > 0 {
-                return ModuleRuntimeStatus(text: "\(info) \(L("Notes"))", tone: .info)
-            }
-            return ModuleRuntimeStatus(text: L("Clean"), tone: .success)
         }
 
         private var gpuSummaryStatus: ModuleRuntimeStatus {
@@ -674,31 +505,31 @@ struct InspectorPanel: View {
                 .lineLimit(1)
                 .font(.caption)
                 .foregroundColor(foreground)
-                .padding(horizontal: 6, vertical: 2)
+                .padding(horizontal: 10, vertical: 5)
                 .background(background)
-                .cornerRadius(3)
+                .cornerRadius(4)
+                .border(foreground.opacity(0.18), width: 1)
         }
 
         private func moduleGroup(title: String, subtitle: String, indices: [Int]) -> AnyView {
             AnyView(Box(direction: .column, alignItems: .stretch, spacing: 4) {
-                Row(alignment: .center, spacing: 6) {
-                    Text(title.uppercased())
-                        .lineLimit(1)
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
-
-                    Text(subtitle)
-                        .lineLimit(1)
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
-                        .padding(horizontal: 5, vertical: 1)
-                        .background(.surface)
-                        .cornerRadius(3)
-
-                    Spacer(minLength: 0)
-                        .flex()
+                if isAdvancedGroup(title: title) {
+                    Row(alignment: .center, spacing: 10) {
+                        Box { EmptyView() }
+                            .frame(height: 1)
+                            .background(.divider)
+                            .flex()
+                        Text(title)
+                            .lineLimit(1)
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                        Box { EmptyView() }
+                            .frame(height: 1)
+                            .background(.divider)
+                            .flex()
+                    }
+                    .padding(horizontal: 14, vertical: 8)
                 }
-                .padding(horizontal: 3, vertical: 2)
 
                 Box(direction: .column, alignItems: .stretch, spacing: 3) {
                     for index in indices {
@@ -713,13 +544,9 @@ struct InspectorPanel: View {
             let localIndex = groupIndices.firstIndex(of: index) ?? 0
             let health = moduleHealthSnapshot(module)
             let isModified = stack.moduleSettingsDifferFromDefault(module.id)
-            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 6) {
-                Row(alignment: .center, spacing: 8) {
-                    Spacer(minLength: 0)
-                        .frame(width: 3, height: module.isExpanded ? 36 : 31)
-                        .background(moduleAccent(module))
-                        .cornerRadius(2)
-                        .opacity(module.isEnabled ? 1 : 0.45)
+            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 7) {
+                Row(alignment: .center, spacing: 7) {
+                    dragHandle()
 
                     Button(icon: .resource(module.isExpanded ? UICommonIcons.chevronDown : UICommonIcons.chevronRight),
                            size: 9,
@@ -729,44 +556,40 @@ struct InspectorPanel: View {
                     .frame(width: 24)
                     .buttonStyle(GhostButtonStyle())
 
-                    Box(direction: .column, alignItems: .stretch, spacing: 2) {
-                        Row(alignment: .center, spacing: 6) {
-                            moduleStageBadge(module)
-                            badge(module.isEnabled ? L("ON") : L("OFF"),
-                                  foreground: module.isEnabled ? .success : .onSurfaceMuted,
-                                  background: module.isEnabled ? .success.opacity(0.12) : .surfaceSunken)
-                            if isModified {
-                                badge(L("Modified"),
-                                      foreground: .info,
-                                      background: .info.opacity(0.12))
-                            }
+                    Checkbox(isOn: moduleEnabledBinding(index))
+                        .frame(width: 24)
 
+                    Box(direction: .column, alignItems: .stretch, spacing: 5) {
+                        Row(alignment: .center, spacing: 7) {
                             Text(module.displayName)
                                 .lineLimit(1)
-                                .font(.body)
+                                .font(.bodyStrong)
                                 .foregroundColor(module.isEnabled ? .onSurface : .onSurfaceMuted)
                                 .flex()
 
-                            badge(health.primaryStatus.value,
-                                  foreground: health.primaryStatus.tone.foreground,
-                                  background: health.primaryStatus.tone.background)
+                            if module.id == "gpuSimulation" || health.primaryStatus.tone.isAlert {
+                                moduleBackendPill(health.primaryStatus)
+                            } else {
+                                moduleHealthDot(health.primaryStatus.tone)
+                            }
                         }
 
                         Row(alignment: .center, spacing: 6) {
+                            moduleStageBadge(module)
                             Text(moduleDetail(module.settings))
                                 .lineLimit(1)
                                 .font(.caption)
                                 .foregroundColor(module.isEnabled ? .onSurfaceVariant : .onSurfaceMuted)
                                 .flex()
-                            moduleBackendPill(health.backend)
-                            moduleHealthDot(health.primaryStatus.tone)
+                            if isModified {
+                                badge(L("Modified"),
+                                      foreground: .info,
+                                      background: .info.opacity(0.12))
+                            }
                         }
                     }
                     .flex()
                     .opacity(module.isEnabled ? 1 : 0.62)
-
-                    Toggle(isOn: moduleEnabledBinding(index))
-                        .frame(width: 42)
 
                     Row(alignment: .center, spacing: 0) {
                         Button(icon: .resource(UICommonIcons.chevronUp),
@@ -789,15 +612,52 @@ struct InspectorPanel: View {
                     }
                     .frame(width: 36)
                 }
+                .padding(horizontal: 10, vertical: 8)
+                .background(moduleHeaderBackground(module))
+                .border(module.isExpanded ? moduleBorder(module) : .divider.opacity(0), width: 1)
 
                 if module.isExpanded {
                     expandedModuleEditor(index: index, module: module)
                 }
             }
-            .padding(horizontal: 6, vertical: 6)
             .background(moduleBackground(module))
             .cornerRadius(5)
             .border(moduleBorder(module), width: 1))
+        }
+
+        private func isAdvancedGroup(title: String) -> Bool {
+            title == L("Advanced")
+        }
+
+        private func dragHandle() -> AnyView {
+            AnyView(Box(direction: .column, alignItems: .center, spacing: 3) {
+                Row(alignment: .center, spacing: 3) {
+                    gripDot()
+                    gripDot()
+                }
+                Row(alignment: .center, spacing: 3) {
+                    gripDot()
+                    gripDot()
+                }
+                Row(alignment: .center, spacing: 3) {
+                    gripDot()
+                    gripDot()
+                }
+            }
+            .frame(width: 20))
+        }
+
+        private func gripDot() -> AnyView {
+            AnyView(Box { EmptyView() }
+                .frame(width: 3, height: 3)
+                .background(.onSurfaceMuted)
+                .cornerRadius(2))
+        }
+
+        private func moduleHeaderBackground(_ module: ParticleEmitterModule) -> SemanticColorRef {
+            if !module.isEnabled { return .surfaceSunken }
+            if module.isExpanded { return moduleAccent(module).opacity(0.05) }
+            return .surface
         }
 
         private func isAdvancedModule(_ module: ParticleEmitterModule) -> Bool {
@@ -836,14 +696,44 @@ struct InspectorPanel: View {
         }
 
         private func moduleStageBadge(_ module: ParticleEmitterModule) -> AnyView {
-            AnyView(Text(module.stage.rawValue.uppercased())
+            let accent = moduleStageAccent(module.stage)
+            return AnyView(Text(moduleStageLabel(module.stage))
                 .lineLimit(1)
                 .font(.caption)
-                .foregroundColor(moduleAccent(module))
-                .padding(horizontal: 9, vertical: 3)
-                .background(moduleAccent(module).opacity(0.14))
-                .cornerRadius(4)
-                .frame(width: 86))
+                .foregroundColor(accent)
+                .padding(horizontal: 7, vertical: 2)
+                .background(accent.opacity(0.14))
+                .cornerRadius(4))
+        }
+
+        private func moduleStageLabel(_ stage: ParticleModuleStage) -> String {
+            switch stage {
+            case .spawn:
+                return L("SPAWN")
+            case .initialize:
+                return L("INITIALIZE")
+            case .update:
+                return L("UPDATE")
+            case .render:
+                return L("RENDER")
+            case .event:
+                return L("EVENT")
+            case .simulation:
+                return L("SYSTEM")
+            }
+        }
+
+        private func moduleStageAccent(_ stage: ParticleModuleStage) -> SemanticColorRef {
+            switch stage {
+            case .spawn, .simulation:
+                return .accentSecondary
+            case .initialize, .event:
+                return .info
+            case .update:
+                return .success
+            case .render:
+                return .warning
+            }
         }
 
         private func moduleBackendPill(_ card: ModuleStatusCard) -> AnyView {
@@ -1036,12 +926,7 @@ struct InspectorPanel: View {
 
         private func expandedModuleEditor(index: Int, module: ParticleEmitterModule) -> AnyView {
             let issues = diagnostics.validationIssues(for: module.id)
-            let health = moduleHealthSnapshot(module, issues: issues)
-            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 7) {
-                expandedModuleHeader(index: index, module: module, health: health)
-                moduleStatusDeck(health)
-                runtimeSnapshotPanel(module)
-
+            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 8) {
                 moduleParameterSurface(index: index, module: module)
 
                 if case .gpuSimulation = module.settings {
@@ -1070,7 +955,7 @@ struct InspectorPanel: View {
                     }
                 }
             }
-            .padding(horizontal: 7, vertical: 7)
+            .padding(horizontal: 8, vertical: 0)
             .background(.surfaceSunken)
             .cornerRadius(4)
             .border(.divider, width: 1))
@@ -1084,20 +969,6 @@ struct InspectorPanel: View {
                                         backend: moduleBackendCard(module),
                                         pressure: modulePressureCard(module),
                                         issues: moduleIssueCard(resolvedIssues))
-        }
-
-        private func moduleStatusDeck(_ health: ModuleHealthSnapshot) -> AnyView {
-            AnyView(Box(direction: .column, alignItems: .stretch, spacing: 6) {
-                Box(direction: .row, alignItems: .stretch, spacing: 6) {
-                    moduleStatusCard(health.authoring)
-                    moduleStatusCard(health.runtime)
-                    moduleStatusCard(health.backend)
-                }
-                Box(direction: .row, alignItems: .stretch, spacing: 6) {
-                    moduleStatusCard(health.pressure)
-                    moduleStatusCard(health.issues)
-                }
-            })
         }
 
         private func moduleAuthoringCard(_ module: ParticleEmitterModule) -> ModuleStatusCard {
@@ -1178,28 +1049,6 @@ struct InspectorPanel: View {
                                     value: L("Clean"),
                                     detail: L("no validation issues"),
                                     tone: .success)
-        }
-
-        private func moduleStatusCard(_ card: ModuleStatusCard) -> AnyView {
-            AnyView(Box(direction: .column, alignItems: .stretch, spacing: 2) {
-                Text(card.label)
-                    .lineLimit(1)
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
-                Text(card.value)
-                    .lineLimit(1)
-                    .font(.caption)
-                    .foregroundColor(card.tone.foreground)
-                Text(card.detail)
-                    .lineLimit(1)
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
-            }
-            .padding(horizontal: 7, vertical: 5)
-            .background(card.tone.background)
-            .cornerRadius(4)
-            .border(card.tone.foreground.opacity(0.25), width: 1)
-            .flex())
         }
 
         private func gpuBackendStatusPanel(_ module: ParticleEmitterModule) -> AnyView {
@@ -1297,149 +1146,6 @@ struct InspectorPanel: View {
             .padding(horizontal: 5, vertical: 4)
             .background(tone.background)
             .cornerRadius(4))
-        }
-
-        private func expandedModuleHeader(index: Int,
-                                          module: ParticleEmitterModule,
-                                          health: ModuleHealthSnapshot) -> AnyView {
-            let canRepair = hasRepairableValidationIssues(for: module)
-            let canResetSettings = hasResettableSettings(for: module)
-            let isModified = stack.moduleSettingsDifferFromDefault(module.id)
-            return AnyView(Row(alignment: .center, spacing: 8) {
-                Spacer(minLength: 0)
-                    .frame(width: 3, height: 42)
-                    .background(moduleAccent(module))
-                    .cornerRadius(2)
-                    .opacity(module.isEnabled ? 1 : 0.45)
-
-                Box(direction: .column, alignItems: .stretch, spacing: 3) {
-                    Row(alignment: .center, spacing: 5) {
-                        badge(module.stage.rawValue.uppercased(),
-                              foreground: moduleAccent(module),
-                              background: moduleAccent(module).opacity(0.10))
-                        if isModified {
-                            badge(L("Modified"),
-                                  foreground: .info,
-                                  background: .info.opacity(0.12))
-                        } else {
-                            badge(L("Default"),
-                                  foreground: .onSurfaceMuted,
-                                  background: .surfaceSunken)
-                        }
-                        badge(health.primaryStatus.value,
-                              foreground: health.primaryStatus.tone.foreground,
-                              background: health.primaryStatus.tone.background)
-                        badge(health.backend.value,
-                              foreground: health.backend.tone.foreground,
-                              background: health.backend.tone.background)
-                        badge(health.pressure.value,
-                              foreground: health.pressure.tone.foreground,
-                              background: health.pressure.tone.background)
-                    }
-
-                    Text(module.displayName)
-                        .lineLimit(1)
-                        .font(.body)
-                        .foregroundColor(module.isEnabled ? .onSurface : .onSurfaceMuted)
-
-                    Text(moduleDetail(module.settings))
-                        .lineLimit(1)
-                        .font(.caption)
-                        .foregroundColor(module.isEnabled ? .onSurfaceVariant : .onSurfaceMuted)
-                }
-                .flex()
-                .opacity(module.isEnabled ? 1 : 0.66)
-
-                if canRepair {
-                    Button(L("Repair"),
-                           tooltip: L("Repair this module")) {
-                        var stack = binding.wrappedValue
-                        stack.repairValidationIssues(for: module.id)
-                        binding.wrappedValue = stack
-                    }
-                    .buttonStyle(GhostButtonStyle())
-                }
-
-                if canResetSettings {
-                    Button(L("Default"),
-                           tooltip: L("Reset this module to default settings")) {
-                        var stack = binding.wrappedValue
-                        stack.resetModuleSettings(for: module.id)
-                        binding.wrappedValue = stack
-                    }
-                    .buttonStyle(GhostButtonStyle())
-                }
-
-                Box(direction: .column, alignItems: .center, spacing: 3) {
-                    Toggle(isOn: moduleEnabledBinding(index))
-                    Text(module.isEnabled ? L("Enabled") : L("Disabled"))
-                        .lineLimit(1)
-                        .font(.caption)
-                        .foregroundColor(module.isEnabled ? .onSurfaceVariant : .onSurfaceMuted)
-                }
-                .frame(width: 58)
-            }
-            .padding(horizontal: 5, vertical: 5)
-            .background(module.isEnabled ? .surface : .surfaceSunken)
-            .cornerRadius(4)
-            .border(moduleBorder(module), width: 1))
-        }
-
-        private func runtimeSnapshotPanel(_ module: ParticleEmitterModule) -> AnyView {
-            let backendStatus = moduleBackendStatus(module)
-            let stateStatus = moduleStatus(module) ?? ModuleRuntimeStatus(text: module.isEnabled ? L("Idle") : L("Disabled"),
-                                                                          tone: .muted)
-            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 5) {
-                Row(alignment: .center, spacing: 6) {
-                    Text(L("Runtime Snapshot"))
-                        .lineLimit(1)
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
-                    Spacer(minLength: 0)
-                        .flex()
-                    badge(stateStatus.text,
-                          foreground: stateStatus.tone.foreground,
-                          background: stateStatus.tone.background)
-                    badge(backendStatus.text,
-                          foreground: backendStatus.tone.foreground,
-                          background: backendStatus.tone.background)
-                }
-
-                Row(alignment: .center, spacing: 6) {
-                    backendMetricCard(L("Live"),
-                                      "\(diagnostics.liveParticleCount)",
-                                      tone: diagnostics.liveParticleCount > 0 ? .info : .muted)
-                    backendMetricCard(L("Spawn"),
-                                      "\(diagnostics.spawnedParticleCount)",
-                                      tone: diagnostics.spawnedParticleCount > 0 ? .success : .muted)
-                    backendMetricCard(L("Frame"),
-                                      formatMs(diagnostics.simulatedDeltaTime),
-                                      tone: diagnostics.simulatedDeltaTime > 0 ? .info : .muted)
-                    backendMetricCard(L("Scale"),
-                                      fmt(diagnostics.scalability.appliedScale),
-                                      tone: diagnostics.scalability.pressure > 0 || diagnostics.scalability.appliedScale < 1
-                                          ? .warning
-                                          : .muted)
-                }
-                Row(alignment: .center, spacing: 6) {
-                    backendMetricCard(L("Limit"),
-                                      diagnostics.liveBudgetText,
-                                      tone: diagnostics.liveBudgetPressure >= 0.95 ? .warning : .muted)
-                    backendMetricCard(L("Drop"),
-                                      "\(diagnostics.runtimeDropCount)",
-                                      tone: diagnostics.runtimeDropCount > 0 ? .warning : .muted)
-                    backendMetricCard(L("Events"),
-                                      "\(diagnostics.eventReport.appliedEventCount)/\(diagnostics.eventReport.eventCount)",
-                                      tone: diagnostics.eventReport.eventCount > 0 ? .info : .muted)
-                    backendMetricCard(L("GPU"),
-                                      "\(diagnostics.renderStats.gpuParticleSimulationParticleCount)",
-                                      tone: diagnostics.hasGPUSimulationWork ? .success : .muted)
-                }
-            }
-            .padding(horizontal: 6, vertical: 6)
-            .background(module.isEnabled ? .surface : .surfaceSunken)
-            .cornerRadius(4)
-            .border(moduleBorder(module), width: 1))
         }
 
         private func moduleParameterSurface(index: Int, module: ParticleEmitterModule) -> AnyView {
@@ -5031,14 +4737,12 @@ private extension EditorInspectorFieldValue {
             return max(defaultHeight, ParticleSubEmitterEditorLayout.rowHeight(ruleCount: binding.wrappedValue.count))
         case let .particleModuleStack(binding):
             let stack = binding.wrappedValue
-            let headerHeight: Float = 43
-            let summaryHeight: Float = 23
-            let runtimeOverviewHeight: Float = 70
-            let groupHeaderHeight: Float = 24
-            let rowHeight: Float = 47
+            let headerHeight: Float = 88
+            let listPaddingHeight: Float = 12
+            let advancedSeparatorHeight: Float = 34
+            let rowHeight: Float = 76
             let moduleEditorRowHeight: Float = 50
-            let moduleExpandedHeaderHeight: Float = 58
-            let moduleRuntimeSnapshotHeight: Float = 72
+            let moduleParameterChromeHeight: Float = 58
             let moduleGPUBackendPanelHeight: Float = 90
             let moduleExpandedDiagnosticsHeight: Float = 43
             let moduleIssueHeaderHeight: Float = 18
@@ -5068,8 +4772,7 @@ private extension EditorInspectorFieldValue {
                 }
                 return total
                     + 8
-                    + moduleExpandedHeaderHeight
-                    + moduleRuntimeSnapshotHeight
+                    + moduleParameterChromeHeight
                     + particleModuleEditorHeight(module.settings, rowHeight: moduleEditorRowHeight)
                     + gpuBackendHeight
                     + issueHeight
@@ -5077,12 +4780,11 @@ private extension EditorInspectorFieldValue {
             }
             let groupSpacing: Float = max(0, groupCount - 1) * 4
             let rowSpacing: Float = Float(max(0, stack.modules.count - Int(groupCount))) * 3
-            let cardPadding: Float = 16
+            let cardPadding: Float = 24
             return max(defaultHeight,
                        headerHeight
-                       + summaryHeight
-                       + runtimeOverviewHeight
-                       + groupCount * groupHeaderHeight
+                       + listPaddingHeight
+                       + (groupCount > 1 ? advancedSeparatorHeight : 0)
                        + Float(stack.modules.count) * rowHeight
                        + expandedEditorHeight
                        + groupSpacing
@@ -5219,8 +4921,6 @@ private func particleModuleEditorRowCount(_ settings: ParticleEmitterModuleSetti
         return 3
     case .collision, .gpuSimulation, .subEmitters, .velocity:
         return 2
-    default:
-        return 1
     }
 }
 
