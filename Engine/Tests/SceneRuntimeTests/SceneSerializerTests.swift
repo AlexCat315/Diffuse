@@ -476,6 +476,7 @@ struct SceneSerializerTests {
                             ]),
                             burstCount: 7, burstInterval: 0.25,
                             maxParticles: 128,
+                            maxSpawnedParticlesPerFrame: 48,
                             maxRenderedParticles: 64,
                             lifetime: 1.5,
                             subEmitterTrigger: .collision,
@@ -573,6 +574,7 @@ struct SceneSerializerTests {
         let serializedEntities = try #require(json["entities"] as? [[String: Any]])
         let serializedComponents = try #require(serializedEntities.first?["components"] as? [String: Any])
         let serializedEmitter = try #require(serializedComponents["particleEmitter"] as? [String: Any])
+        #expect(serializedEmitter["maxSpawnedParticlesPerFrame"] as? Int == 48)
         let moduleStack = try #require(serializedEmitter["moduleStack"] as? [String: Any])
         let modules = try #require(moduleStack["modules"] as? [[String: Any]])
         #expect(moduleStack["version"] as? Int == ParticleModuleStack.currentVersion)
@@ -589,6 +591,11 @@ struct SceneSerializerTests {
             "subEmitters",
             "gpuSimulation",
         ])
+        let emissionModule = try #require(modules.first { $0["id"] as? String == "emission" })
+        let emissionSettings = try #require(emissionModule["settings"] as? [String: Any])
+        #expect(emissionSettings["type"] as? String == "emission")
+        let emissionPayload = try #require(emissionSettings["payload"] as? [String: Any])
+        #expect(emissionPayload["maxSpawnedParticlesPerFrame"] as? Int == 48)
         let textureSheetModule = try #require(modules.first { $0["id"] as? String == "textureSheet" })
         let textureSheetSettings = try #require(textureSheetModule["settings"] as? [String: Any])
         #expect(textureSheetSettings["type"] as? String == "textureSheet")
@@ -617,6 +624,7 @@ struct SceneSerializerTests {
         #expect(e!.burstCount == 7)
         #expect(e!.burstInterval == 0.25)
         #expect(e!.maxParticles == 128)
+        #expect(e!.maxSpawnedParticlesPerFrame == 48)
         #expect(e!.maxRenderedParticles == 64)
         #expect(e!.lifetime == 1.5)
         #expect(e!.subEmitterTrigger == .collision)

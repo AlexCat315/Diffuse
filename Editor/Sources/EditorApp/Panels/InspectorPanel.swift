@@ -66,7 +66,31 @@ private struct InspectorParticleRuntimeDiagnostics {
         selectedFrameStats?.spawnedParticleCount ?? frameStats.spawnedParticleCount
     }
 
+    var requestedSpawnCount: Int {
+        selectedFrameStats?.requestedSpawnCount ?? frameStats.requestedSpawnCount
+    }
+
+    var spawnBudgetLimit: Int {
+        selectedFrameStats?.spawnBudgetLimit ?? frameStats.spawnBudgetLimit
+    }
+
+    var spawnBudgetConsumedCount: Int {
+        selectedFrameStats?.spawnBudgetConsumedCount ?? frameStats.spawnBudgetConsumedCount
+    }
+
+    var spawnBudgetText: String {
+        spawnBudgetLimit > 0 ? "\(spawnBudgetConsumedCount)/\(spawnBudgetLimit)" : "\(spawnBudgetConsumedCount)/unlimited"
+    }
+
     var capacityLimitedSpawnCount: Int {
+        selectedFrameStats?.capacityLimitedSpawnCount ?? frameStats.capacityLimitedSpawnCount
+    }
+
+    var spawnBudgetLimitedCount: Int {
+        selectedFrameStats?.spawnBudgetLimitedCount ?? frameStats.spawnBudgetLimitedCount
+    }
+
+    var droppedSpawnCount: Int {
         selectedFrameStats?.droppedSpawnCount ?? frameStats.droppedSpawnCount
     }
 
@@ -88,9 +112,35 @@ private struct InspectorParticleRuntimeDiagnostics {
         selectedEventStats?.capacityLimitedSpawnCount ?? eventReport.capacityLimitedSpawnCount
     }
 
+    var eventSpawnBudgetLimitedCount: Int {
+        selectedEventStats?.spawnBudgetLimitedCount ?? eventReport.spawnBudgetLimitedCount
+    }
+
+    var eventDroppedSpawnCount: Int {
+        selectedEventStats?.droppedSpawnCount ?? eventReport.droppedSpawnCount
+    }
+
+    var eventRequestedSpawnCount: Int {
+        selectedEventStats?.requestedSpawnCount ?? eventReport.requestedSpawnCount
+    }
+
+    var eventSpawnBudgetLimit: Int {
+        selectedEventStats?.spawnBudgetLimit ?? eventReport.spawnBudgetLimit
+    }
+
+    var eventSpawnBudgetConsumedCount: Int {
+        selectedEventStats?.spawnBudgetConsumedCount ?? eventReport.spawnBudgetConsumedCount
+    }
+
+    var eventSpawnBudgetText: String {
+        eventSpawnBudgetLimit > 0
+            ? "\(eventSpawnBudgetConsumedCount)/\(eventSpawnBudgetLimit)"
+            : "\(eventSpawnBudgetConsumedCount)/unlimited"
+    }
+
     var runtimeDropCount: Int {
-        capacityLimitedSpawnCount
-            + eventCapacityLimitedSpawnCount
+        droppedSpawnCount
+            + eventDroppedSpawnCount
             + eventReport.droppedReadbackEventCount
     }
 
@@ -742,8 +792,10 @@ struct InspectorPanel: View {
 
             switch module.settings {
             case .emission:
-                if diagnostics.capacityLimitedSpawnCount > 0 {
-                    return ModuleRuntimeStatus(text: L("Dropping"), tone: .warning)
+                if let status = spawnDropStatus(total: diagnostics.droppedSpawnCount,
+                                                budget: diagnostics.spawnBudgetLimitedCount,
+                                                capacity: diagnostics.capacityLimitedSpawnCount) {
+                    return status
                 }
                 if diagnostics.spawnedParticleCount > 0 {
                     return ModuleRuntimeStatus(text: L("Spawning"), tone: .success)
@@ -766,7 +818,12 @@ struct InspectorPanel: View {
                 }
                 return nil
             case .appearance:
-                if diagnostics.capacityLimitedSpawnCount > 0 || diagnostics.scalability.pressure > 0 {
+                if let status = spawnDropStatus(total: diagnostics.droppedSpawnCount,
+                                                budget: diagnostics.spawnBudgetLimitedCount,
+                                                capacity: diagnostics.capacityLimitedSpawnCount) {
+                    return status
+                }
+                if diagnostics.scalability.pressure > 0 {
                     return ModuleRuntimeStatus(text: L("Scaled"), tone: .warning)
                 }
                 if diagnostics.expiredParticleCount > 0 {
@@ -789,8 +846,10 @@ struct InspectorPanel: View {
                 }
                 return nil
             case .subEmitters:
-                if diagnostics.eventCapacityLimitedSpawnCount > 0 {
-                    return ModuleRuntimeStatus(text: L("Dropping"), tone: .warning)
+                if let status = spawnDropStatus(total: diagnostics.eventDroppedSpawnCount,
+                                                budget: diagnostics.eventSpawnBudgetLimitedCount,
+                                                capacity: diagnostics.eventCapacityLimitedSpawnCount) {
+                    return status
                 }
                 if diagnostics.subEmitterSpawnedCount > 0 {
                     return ModuleRuntimeStatus(text: L("Spawned"), tone: .success)
@@ -827,6 +886,22 @@ struct InspectorPanel: View {
                     return ModuleRuntimeStatus(text: L("Waiting"), tone: .warning)
                 }
             }
+        }
+
+        private func spawnDropStatus(total: Int,
+                                     budget: Int,
+                                     capacity: Int) -> ModuleRuntimeStatus? {
+            guard total > 0 else { return nil }
+            if budget > 0 && capacity > 0 {
+                return ModuleRuntimeStatus(text: L("Mixed Drop"), tone: .warning)
+            }
+            if budget > 0 {
+                return ModuleRuntimeStatus(text: L("Budget Drop"), tone: .warning)
+            }
+            if capacity > 0 {
+                return ModuleRuntimeStatus(text: L("Capacity Drop"), tone: .warning)
+            }
+            return ModuleRuntimeStatus(text: L("Dropping"), tone: .warning)
         }
 
         private func moduleAccent(_ module: ParticleEmitterModule) -> SemanticColorRef {
@@ -1188,8 +1263,24 @@ struct InspectorPanel: View {
                 runtimeChips = [
                     ModuleDiagnosticChip(L("Scope"), diagnostics.statsScopeLabel),
                     runtimeMetricChip(L("Live"), diagnostics.liveParticleCount, tone: .info),
+                    runtimeMetricChip(L("Request"), diagnostics.requestedSpawnCount, tone: .info),
                     runtimeMetricChip(L("Spawn"), diagnostics.spawnedParticleCount, tone: .success),
-                    ModuleDiagnosticChip(L("Dropped"), "\(diagnostics.capacityLimitedSpawnCount)",
+                    ModuleDiagnosticChip(L("Budget Use"), diagnostics.spawnBudgetText,
+                                         foreground: diagnostics.spawnBudgetLimit > 0
+                                            && diagnostics.spawnBudgetConsumedCount >= diagnostics.spawnBudgetLimit
+                                                ? .warning
+                                                : .onSurfaceVariant,
+                                         background: diagnostics.spawnBudgetLimit > 0
+                                            && diagnostics.spawnBudgetConsumedCount >= diagnostics.spawnBudgetLimit
+                                                ? .warning.opacity(0.12)
+                                                : .surface),
+                    ModuleDiagnosticChip(L("Drops"), "\(diagnostics.droppedSpawnCount)",
+                                         foreground: diagnostics.droppedSpawnCount > 0 ? .warning : .onSurfaceVariant,
+                                         background: diagnostics.droppedSpawnCount > 0 ? .warning.opacity(0.12) : .surface),
+                    ModuleDiagnosticChip(L("Budget Drops"), "\(diagnostics.spawnBudgetLimitedCount)",
+                                         foreground: diagnostics.spawnBudgetLimitedCount > 0 ? .warning : .onSurfaceVariant,
+                                         background: diagnostics.spawnBudgetLimitedCount > 0 ? .warning.opacity(0.12) : .surface),
+                    ModuleDiagnosticChip(L("Capacity"), "\(diagnostics.capacityLimitedSpawnCount)",
                                          foreground: diagnostics.capacityLimitedSpawnCount > 0 ? .warning : .onSurfaceVariant,
                                          background: diagnostics.capacityLimitedSpawnCount > 0 ? .warning.opacity(0.12) : .surface),
                 ]
@@ -1230,8 +1321,24 @@ struct InspectorPanel: View {
                 runtimeChips = [
                     ModuleDiagnosticChip(L("Events"), "\(diagnostics.eventReport.appliedEventCount)/\(diagnostics.eventReport.eventCount)"),
                     ModuleDiagnosticChip(L("Scope"), diagnostics.statsScopeLabel),
+                    runtimeMetricChip(L("Request"), diagnostics.eventRequestedSpawnCount, tone: .info),
                     runtimeMetricChip(L("Spawned"), diagnostics.subEmitterSpawnedCount, tone: .success),
-                    ModuleDiagnosticChip(L("Dropped"), "\(diagnostics.eventCapacityLimitedSpawnCount)",
+                    ModuleDiagnosticChip(L("Budget Use"), diagnostics.eventSpawnBudgetText,
+                                         foreground: diagnostics.eventSpawnBudgetLimit > 0
+                                            && diagnostics.eventSpawnBudgetConsumedCount >= diagnostics.eventSpawnBudgetLimit
+                                                ? .warning
+                                                : .onSurfaceVariant,
+                                         background: diagnostics.eventSpawnBudgetLimit > 0
+                                            && diagnostics.eventSpawnBudgetConsumedCount >= diagnostics.eventSpawnBudgetLimit
+                                                ? .warning.opacity(0.12)
+                                                : .surface),
+                    ModuleDiagnosticChip(L("Drops"), "\(diagnostics.eventDroppedSpawnCount)",
+                                         foreground: diagnostics.eventDroppedSpawnCount > 0 ? .warning : .onSurfaceVariant,
+                                         background: diagnostics.eventDroppedSpawnCount > 0 ? .warning.opacity(0.12) : .surface),
+                    ModuleDiagnosticChip(L("Budget Drops"), "\(diagnostics.eventSpawnBudgetLimitedCount)",
+                                         foreground: diagnostics.eventSpawnBudgetLimitedCount > 0 ? .warning : .onSurfaceVariant,
+                                         background: diagnostics.eventSpawnBudgetLimitedCount > 0 ? .warning.opacity(0.12) : .surface),
+                    ModuleDiagnosticChip(L("Capacity"), "\(diagnostics.eventCapacityLimitedSpawnCount)",
                                          foreground: diagnostics.eventCapacityLimitedSpawnCount > 0 ? .warning : .onSurfaceVariant,
                                          background: diagnostics.eventCapacityLimitedSpawnCount > 0 ? .warning.opacity(0.12) : .surface),
                 ]
@@ -1659,6 +1766,20 @@ struct InspectorPanel: View {
                                          enabled: isEnabled),
                         ],
                         [
+                            moduleNumber("Spawn Cap",
+                                         moduleIntBinding(index, fallback: 0, get: {
+                                             if case let .emission(module) = $0 { return module.maxSpawnedParticlesPerFrame }
+                                             return nil
+                                         }, set: {
+                                             if case var .emission(module) = $0 {
+                                                 module.maxSpawnedParticlesPerFrame = $1
+                                                 $0 = .emission(module)
+                                             }
+                                         }),
+                                         min: 0,
+                                         max: 100_000,
+                                         step: 16,
+                                         enabled: isEnabled),
                             moduleNumber("Max Rendered",
                                          moduleIntBinding(index, fallback: 0, get: {
                                              if case let .emission(module) = $0 { return module.maxRenderedParticles }

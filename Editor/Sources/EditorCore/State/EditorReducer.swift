@@ -205,6 +205,7 @@ public enum EditorReducer {
             state.viewportSurfaceRevision &+= 1
         case let .updateFrameStats(stats):
             state.frameStats = stats
+            state.appendFrameStatsHistory(stats)
         }
     }
 }
