@@ -52,6 +52,7 @@ public enum EditorAction: Sendable {
     /// the newest `currentViewportSurfaceState()`.
     case viewportSurfaceUpdated
     case updateFrameStats(EditorFrameStats)
+    case updateParticleDiagnostics(EditorParticleDiagnosticsSample)
 }
 
 public enum EditorReducer {
@@ -206,6 +207,8 @@ public enum EditorReducer {
         case let .updateFrameStats(stats):
             state.frameStats = stats
             state.appendFrameStatsHistory(stats)
+        case let .updateParticleDiagnostics(sample):
+            state.appendParticleDiagnosticsHistory(sample)
         }
     }
 }
