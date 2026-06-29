@@ -222,6 +222,8 @@ public struct EditorAssetDragPayload: Codable, Sendable, Equatable, Hashable {
 }
 
 public struct EditorState: Codable, Sendable {
+    public static let maxFrameStatsHistorySamples = 240
+
     public var connected: Bool
     public var selectedEntityID: UInt64?
     public var selectedEntityIDs: Set<UInt64>
@@ -238,6 +240,7 @@ public struct EditorState: Codable, Sendable {
     public var frameIndex: UInt64
     public var frameTimingRevision: UInt64
     public var frameStats: EditorFrameStats
+    public var frameStatsHistory: [EditorFrameStatsHistorySample]
     public var viewportSurfaceRevision: UInt64
     public var windowFocused: Bool
     public var windowMinimized: Bool
@@ -291,6 +294,7 @@ public struct EditorState: Codable, Sendable {
         frameIndex: UInt64 = 0,
         frameTimingRevision: UInt64 = 0,
         frameStats: EditorFrameStats = .init(),
+        frameStatsHistory: [EditorFrameStatsHistorySample] = [],
         viewportSurfaceRevision: UInt64 = 0,
         windowFocused: Bool = true,
         windowMinimized: Bool = false,
@@ -373,6 +377,7 @@ public struct EditorState: Codable, Sendable {
         self.nextConsoleEntryID = max(nextConsoleEntryID, (consoleEntries.map(\.id).max() ?? 0) &+ 1)
         self.frameIndex = frameIndex
         self.frameStats = frameStats
+        self.frameStatsHistory = Array(frameStatsHistory.suffix(Self.maxFrameStatsHistorySamples))
         self.commandPaletteVisible = commandPaletteVisible
     }
 
@@ -571,6 +576,18 @@ public struct EditorState: Codable, Sendable {
     public static func sanitizedRenderScalePercent(_ value: Int) -> Int {
         min(max(value, 25), 200)
     }
+
+    mutating func appendFrameStatsHistory(_ stats: EditorFrameStats) {
+        let sampleIndex = (frameStatsHistory.last?.sampleIndex ?? 0) &+ 1
+        frameStatsHistory.append(
+            EditorFrameStatsHistorySample(sampleIndex: sampleIndex,
+                                          frameIndex: frameIndex,
+                                          stats: stats)
+        )
+        if frameStatsHistory.count > Self.maxFrameStatsHistorySamples {
+            frameStatsHistory.removeFirst(frameStatsHistory.count - Self.maxFrameStatsHistorySamples)
+        }
+    }
 }
 
 public struct EditorPendingCloseRequest: Equatable, Sendable {
@@ -688,5 +705,19 @@ public struct EditorFrameStats: Sendable, Equatable, Codable {
         self.cpuSkyboxEncodeNS = cpuSkyboxEncodeNS
         self.cpuBaseEncodeNS = cpuBaseEncodeNS
         self.cpuPostProcessEncodeNS = cpuPostProcessEncodeNS
+    }
+}
+
+public struct EditorFrameStatsHistorySample: Sendable, Equatable, Codable {
+    public var sampleIndex: UInt64
+    public var frameIndex: UInt64
+    public var stats: EditorFrameStats
+
+    public init(sampleIndex: UInt64,
+                frameIndex: UInt64,
+                stats: EditorFrameStats) {
+        self.sampleIndex = sampleIndex
+        self.frameIndex = frameIndex
+        self.stats = stats
     }
 }
