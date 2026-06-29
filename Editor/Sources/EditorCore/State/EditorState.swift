@@ -223,6 +223,7 @@ public struct EditorAssetDragPayload: Codable, Sendable, Equatable, Hashable {
 
 public struct EditorState: Codable, Sendable {
     public static let maxFrameStatsHistorySamples = 240
+    public static let maxParticleDiagnosticsHistorySamples = 240
 
     public var connected: Bool
     public var selectedEntityID: UInt64?
@@ -241,6 +242,7 @@ public struct EditorState: Codable, Sendable {
     public var frameTimingRevision: UInt64
     public var frameStats: EditorFrameStats
     public var frameStatsHistory: [EditorFrameStatsHistorySample]
+    public var particleDiagnosticsHistory: [EditorParticleDiagnosticsSample]
     public var viewportSurfaceRevision: UInt64
     public var windowFocused: Bool
     public var windowMinimized: Bool
@@ -295,6 +297,7 @@ public struct EditorState: Codable, Sendable {
         frameTimingRevision: UInt64 = 0,
         frameStats: EditorFrameStats = .init(),
         frameStatsHistory: [EditorFrameStatsHistorySample] = [],
+        particleDiagnosticsHistory: [EditorParticleDiagnosticsSample] = [],
         viewportSurfaceRevision: UInt64 = 0,
         windowFocused: Bool = true,
         windowMinimized: Bool = false,
@@ -378,6 +381,9 @@ public struct EditorState: Codable, Sendable {
         self.frameIndex = frameIndex
         self.frameStats = frameStats
         self.frameStatsHistory = Array(frameStatsHistory.suffix(Self.maxFrameStatsHistorySamples))
+        self.particleDiagnosticsHistory = Array(
+            particleDiagnosticsHistory.suffix(Self.maxParticleDiagnosticsHistorySamples)
+        )
         self.commandPaletteVisible = commandPaletteVisible
     }
 
@@ -588,6 +594,15 @@ public struct EditorState: Codable, Sendable {
             frameStatsHistory.removeFirst(frameStatsHistory.count - Self.maxFrameStatsHistorySamples)
         }
     }
+
+    mutating func appendParticleDiagnosticsHistory(_ sample: EditorParticleDiagnosticsSample) {
+        particleDiagnosticsHistory.append(sample)
+        if particleDiagnosticsHistory.count > Self.maxParticleDiagnosticsHistorySamples {
+            particleDiagnosticsHistory.removeFirst(
+                particleDiagnosticsHistory.count - Self.maxParticleDiagnosticsHistorySamples
+            )
+        }
+    }
 }
 
 public struct EditorPendingCloseRequest: Equatable, Sendable {
@@ -719,5 +734,85 @@ public struct EditorFrameStatsHistorySample: Sendable, Equatable, Codable {
         self.sampleIndex = sampleIndex
         self.frameIndex = frameIndex
         self.stats = stats
+    }
+}
+
+public struct EditorParticleDiagnosticsSample: Sendable, Equatable, Codable {
+    public var sampleIndex: UInt64
+    public var frameIndex: UInt64
+    public var simulatedDeltaTime: Float
+    public var emitterCount: Int
+    public var activeEmitterCount: Int
+    public var liveParticleCount: Int
+    public var liveParticleLimit: Int
+    public var requestedSpawnCount: Int
+    public var spawnedParticleCount: Int
+    public var droppedSpawnCount: Int
+    public var capacityLimitedSpawnCount: Int
+    public var spawnBudgetLimitedCount: Int
+    public var spawnBudgetConsumedCount: Int
+    public var spawnBudgetLimit: Int
+    public var eventRequestedSpawnCount: Int
+    public var eventDroppedSpawnCount: Int
+    public var droppedReadbackEventCount: Int
+    public var cpuRenderInstanceCount: Int
+    public var gpuRenderInstanceCount: Int
+    public var cpuBatchCount: Int
+    public var gpuBatchCount: Int
+    public var gpuSimulationParticleCount: Int
+    public var gpuWorkgroupCount: Int
+    public var gpuSortItemCount: Int
+    public var gpuSortPaddedItemCount: Int
+
+    public init(sampleIndex: UInt64,
+                frameIndex: UInt64,
+                simulatedDeltaTime: Float,
+                emitterCount: Int,
+                activeEmitterCount: Int,
+                liveParticleCount: Int,
+                liveParticleLimit: Int,
+                requestedSpawnCount: Int,
+                spawnedParticleCount: Int,
+                droppedSpawnCount: Int,
+                capacityLimitedSpawnCount: Int,
+                spawnBudgetLimitedCount: Int,
+                spawnBudgetConsumedCount: Int,
+                spawnBudgetLimit: Int,
+                eventRequestedSpawnCount: Int,
+                eventDroppedSpawnCount: Int,
+                droppedReadbackEventCount: Int,
+                cpuRenderInstanceCount: Int,
+                gpuRenderInstanceCount: Int,
+                cpuBatchCount: Int,
+                gpuBatchCount: Int,
+                gpuSimulationParticleCount: Int,
+                gpuWorkgroupCount: Int,
+                gpuSortItemCount: Int,
+                gpuSortPaddedItemCount: Int) {
+        self.sampleIndex = sampleIndex
+        self.frameIndex = frameIndex
+        self.simulatedDeltaTime = simulatedDeltaTime
+        self.emitterCount = max(0, emitterCount)
+        self.activeEmitterCount = max(0, activeEmitterCount)
+        self.liveParticleCount = max(0, liveParticleCount)
+        self.liveParticleLimit = max(0, liveParticleLimit)
+        self.requestedSpawnCount = max(0, requestedSpawnCount)
+        self.spawnedParticleCount = max(0, spawnedParticleCount)
+        self.droppedSpawnCount = max(0, droppedSpawnCount)
+        self.capacityLimitedSpawnCount = max(0, capacityLimitedSpawnCount)
+        self.spawnBudgetLimitedCount = max(0, spawnBudgetLimitedCount)
+        self.spawnBudgetConsumedCount = max(0, spawnBudgetConsumedCount)
+        self.spawnBudgetLimit = max(0, spawnBudgetLimit)
+        self.eventRequestedSpawnCount = max(0, eventRequestedSpawnCount)
+        self.eventDroppedSpawnCount = max(0, eventDroppedSpawnCount)
+        self.droppedReadbackEventCount = max(0, droppedReadbackEventCount)
+        self.cpuRenderInstanceCount = max(0, cpuRenderInstanceCount)
+        self.gpuRenderInstanceCount = max(0, gpuRenderInstanceCount)
+        self.cpuBatchCount = max(0, cpuBatchCount)
+        self.gpuBatchCount = max(0, gpuBatchCount)
+        self.gpuSimulationParticleCount = max(0, gpuSimulationParticleCount)
+        self.gpuWorkgroupCount = max(0, gpuWorkgroupCount)
+        self.gpuSortItemCount = max(0, gpuSortItemCount)
+        self.gpuSortPaddedItemCount = max(0, gpuSortPaddedItemCount)
     }
 }
