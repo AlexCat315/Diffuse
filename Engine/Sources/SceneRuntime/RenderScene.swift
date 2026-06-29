@@ -296,56 +296,113 @@ public struct ParticleRenderBatchPlan: Sendable, Equatable {
 
 public struct ParticleRenderSummary: Sendable, Equatable {
     public var particleCount: Int
+    public var cpuRenderInstanceCount: Int
+    public var gpuRenderInstanceCount: Int
     public var alphaCount: Int
     public var additiveCount: Int
     public var texturedCount: Int
     public var uniqueTextureCount: Int
     public var batchCount: Int
+    public var cpuBatchCount: Int
+    public var gpuBatchCount: Int
     public var bounds: RenderBounds
 
     public init(particleCount: Int = 0,
+                cpuRenderInstanceCount: Int? = nil,
+                gpuRenderInstanceCount: Int = 0,
                 alphaCount: Int = 0,
                 additiveCount: Int = 0,
                 texturedCount: Int = 0,
                 uniqueTextureCount: Int = 0,
                 batchCount: Int = 0,
+                cpuBatchCount: Int? = nil,
+                gpuBatchCount: Int = 0,
                 bounds: RenderBounds = RenderBounds()) {
-        self.particleCount = max(0, particleCount)
+        let safeParticleCount = max(0, particleCount)
+        let safeGPURenderInstanceCount = max(0, gpuRenderInstanceCount)
+        let safeBatchCount = max(0, batchCount)
+        let safeGPUBatchCount = max(0, gpuBatchCount)
+        self.particleCount = safeParticleCount
+        self.cpuRenderInstanceCount = max(
+            0,
+            cpuRenderInstanceCount ?? (safeParticleCount - safeGPURenderInstanceCount)
+        )
+        self.gpuRenderInstanceCount = safeGPURenderInstanceCount
         self.alphaCount = max(0, alphaCount)
         self.additiveCount = max(0, additiveCount)
         self.texturedCount = max(0, texturedCount)
         self.uniqueTextureCount = max(0, uniqueTextureCount)
-        self.batchCount = max(0, batchCount)
+        self.batchCount = safeBatchCount
+        self.cpuBatchCount = max(0, cpuBatchCount ?? (safeBatchCount - safeGPUBatchCount))
+        self.gpuBatchCount = safeGPUBatchCount
         self.bounds = bounds
     }
 
     public init(particles: [RenderParticle]) {
+        self.init(particles: particles, simulationBatches: [])
+    }
+
+    public init(particles: [RenderParticle],
+                simulationBatches: [RenderParticleSimulationBatch]) {
         var alphaCount = 0
         var additiveCount = 0
         var texturedCount = 0
         var bounds = RenderBounds()
-        let batchPlan = ParticleRenderBatchPlan(particles: particles)
+        var uniqueTextures = Set<String>()
+        let cpuRenderInstanceCount = particles.count
+        var cpuBatchCount = 0
+        var currentCPUKey: ParticleRenderBatchKey?
+        var gpuRenderInstanceCount = 0
+        var gpuBatchCount = 0
 
         for particle in particles {
+            let key = ParticleRenderBatchKey(particle: particle)
+            if currentCPUKey != key {
+                cpuBatchCount += 1
+                currentCPUKey = key
+            }
             switch particle.blendMode {
             case .alpha:
                 alphaCount += 1
             case .additive:
                 additiveCount += 1
             }
-            if normalizedParticleTexturePath(particle.texturePath) != nil {
+            if let texturePath = key.texturePath {
                 texturedCount += 1
+                uniqueTextures.insert(texturePath)
             }
             bounds.include(center: particle.position,
                            radius: particle.conservativeRadius)
         }
 
-        self.init(particleCount: particles.count,
+        for batch in simulationBatches where batch.renderOnGPU {
+            let renderInstanceCount = batch.renderInstanceCount
+            guard renderInstanceCount > 0 else { continue }
+            gpuRenderInstanceCount += renderInstanceCount
+            gpuBatchCount += 1
+            switch batch.blendMode {
+            case .alpha:
+                alphaCount += renderInstanceCount
+            case .additive:
+                additiveCount += renderInstanceCount
+            }
+            if let texturePath = normalizedParticleTexturePath(batch.texturePath) {
+                texturedCount += renderInstanceCount
+                uniqueTextures.insert(texturePath)
+            }
+            includeRenderedGPUParticleBounds(for: batch, in: &bounds)
+        }
+
+        self.init(particleCount: cpuRenderInstanceCount + gpuRenderInstanceCount,
+                  cpuRenderInstanceCount: cpuRenderInstanceCount,
+                  gpuRenderInstanceCount: gpuRenderInstanceCount,
                   alphaCount: alphaCount,
                   additiveCount: additiveCount,
                   texturedCount: texturedCount,
-                  uniqueTextureCount: batchPlan.uniqueTextureCount,
-                  batchCount: batchPlan.batches.count,
+                  uniqueTextureCount: uniqueTextures.count,
+                  batchCount: cpuBatchCount + gpuBatchCount,
+                  cpuBatchCount: cpuBatchCount,
+                  gpuBatchCount: gpuBatchCount,
                   bounds: bounds)
     }
 }
@@ -530,11 +587,83 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
     }
 }
 
+private func includeRenderedGPUParticleBounds(for batch: RenderParticleSimulationBatch,
+                                              in bounds: inout RenderBounds) {
+    let renderStart = batch.renderParticleStartIndex
+    let renderEnd = renderStart + batch.renderParticleCount
+    guard renderStart < renderEnd else { return }
+
+    let capacity = max(0, batch.plan.particleCapacity)
+    let persistedCount = min(batch.particles.count, capacity)
+    let spawnCount = min(batch.spawnParticles.count, max(0, capacity - persistedCount))
+    var particleIndex = 0
+
+    for index in 0..<persistedCount {
+        if particleIndex >= renderEnd { return }
+        if particleIndex >= renderStart {
+            includeGPUParticle(batch.particles[index], batch: batch, in: &bounds)
+        }
+        particleIndex += 1
+    }
+
+    for index in 0..<spawnCount {
+        if particleIndex >= renderEnd { return }
+        if particleIndex >= renderStart {
+            includeGPUParticle(batch.spawnParticles[index], batch: batch, in: &bounds)
+        }
+        particleIndex += 1
+    }
+}
+
+private func includeGPUParticle(_ particle: Particle,
+                                batch: RenderParticleSimulationBatch,
+                                in bounds: inout RenderBounds) {
+    let center = transformPoint(particle.position, by: batch.worldTransform)
+    let worldVelocity = transformDirection(particle.velocity, by: batch.worldTransform)
+    let radius = gpuParticleConservativeRadius(size: particle.size,
+                                               velocityMagnitude: simd_length(worldVelocity),
+                                               batch: batch)
+    bounds.include(center: center, radius: radius)
+}
+
 private func normalizedParticleTexturePath(_ path: String?) -> String? {
     guard let path = path?.trimmingCharacters(in: .whitespacesAndNewlines),
           !path.isEmpty
     else { return nil }
     return path
+}
+
+private func gpuParticleConservativeRadius(size: Float,
+                                           velocityMagnitude: Float,
+                                           batch: RenderParticleSimulationBatch) -> Float {
+    let safeVelocity = velocityMagnitude.isFinite ? max(0, velocityMagnitude) : 0
+    let stretch: Float
+    switch batch.renderAlignment {
+    case .billboard:
+        stretch = 1
+    case .velocity:
+        stretch = min(batch.velocityStretchMax, max(1, 1 + safeVelocity * batch.velocityStretchScale))
+    }
+    let billboardRadius = max(0, size) * max(1, stretch) * 0.70710678
+    let trailRadius = batch.trailLength > 0 ? safeVelocity * batch.trailLength : 0
+    return billboardRadius + trailRadius
+}
+
+private func transformDirection(_ direction: SIMD3<Float>, by matrix: simd_float4x4) -> SIMD3<Float> {
+    let transformed = matrix * SIMD4<Float>(direction, 0)
+    return SIMD3<Float>(transformed.x, transformed.y, transformed.z)
+}
+
+private func transformPoint(_ point: SIMD3<Float>, by matrix: simd_float4x4) -> SIMD3<Float> {
+    let transformed = matrix * SIMD4<Float>(point, 1)
+    if abs(transformed.w) > 0.0001 {
+        return SIMD3<Float>(
+            transformed.x / transformed.w,
+            transformed.y / transformed.w,
+            transformed.z / transformed.w
+        )
+    }
+    return SIMD3<Float>(transformed.x, transformed.y, transformed.z)
 }
 
 private extension RenderParticle {
@@ -594,6 +723,8 @@ public struct RenderScene: Sendable {
         self.environment = environment
         self.particles = particles
         self.particleSimulationBatches = particleSimulationBatches
-        self.particleSummary = particleSummary ?? ParticleRenderSummary(particles: particles)
+        self.particleSummary = particleSummary
+            ?? ParticleRenderSummary(particles: particles,
+                                     simulationBatches: particleSimulationBatches)
     }
 }
