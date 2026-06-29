@@ -1461,6 +1461,15 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     /// Number of currently-alive particles.
     public var aliveCount: Int { particles.count }
 
+    /// True while this emitter can still produce new particles from its authored
+    /// emission controls. Non-looping emitters become inactive once `duration`
+    /// is exhausted, even if `isEmitting` remains enabled for authoring.
+    public var isEmissionActive: Bool {
+        guard isEmitting else { return false }
+        guard duration > 0 else { return true }
+        return looping || emitterAge < duration
+    }
+
     public mutating func reseed(_ newSeed: UInt64) {
         seed = newSeed
         rngState = newSeed
@@ -1654,7 +1663,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
             lastFrameStats = frameStats
             return
         }
-        let emissionRateMultiplier = max(0, emissionRateCurve.evaluate(at: emissionStep.normalizedAge))
+        let emissionRateMultiplier = emissionStep.averageMultiplier(for: emissionRateCurve)
         let scaledEmissionRateMultiplier = emissionRateMultiplier * options.emissionScale
         if emissionRate > 0, scaledEmissionRateMultiplier > 0 {
             emissionAccumulator += emissionRate * scaledEmissionRateMultiplier * emissionStep.delta
@@ -1693,7 +1702,7 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
                 }
             }
         }
-        let distanceRateMultiplier = max(0, distanceEmissionRateCurve.evaluate(at: emissionStep.normalizedAge))
+        let distanceRateMultiplier = emissionStep.averageMultiplier(for: distanceEmissionRateCurve)
         let distanceSpawnResult = spawnDistanceEmission(
             from: previousEmitterPosition,
             to: currentEmitterPosition,
@@ -1887,24 +1896,70 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     private struct ActiveEmissionStep {
         var delta: Float
         var normalizedAge: Float
+        var startAge: Float
+        var duration: Float
+        var looping: Bool
+
+        func averageMultiplier(for curve: ParticleCurve) -> Float {
+            guard duration > 0, delta > 0 else {
+                return max(0, curve.evaluate(at: normalizedAge))
+            }
+            let samples = Self.averageCurveSampleCount(delta: delta, duration: duration)
+            guard samples > 1 else {
+                return max(0, curve.evaluate(at: normalizedAge))
+            }
+
+            var total: Float = 0
+            for index in 0..<samples {
+                let t = (Float(index) + 0.5) / Float(samples)
+                var age = startAge + delta * t
+                if looping {
+                    age = age.truncatingRemainder(dividingBy: duration)
+                    if age < 0 { age += duration }
+                } else {
+                    age = min(max(0, age), duration)
+                }
+                total += max(0, curve.evaluate(at: simd_clamp(age / duration, 0, 1)))
+            }
+            return total / Float(samples)
+        }
+
+        private static func averageCurveSampleCount(delta: Float, duration: Float) -> Int {
+            guard delta > 0, duration > 0 else { return 1 }
+            let samplesPerCycle: Float = 8
+            let rawSamples = Int(ceil((delta / duration) * samplesPerCycle))
+            return min(32, max(1, rawSamples))
+        }
     }
 
     private mutating func activeEmissionStep(_ dt: Float) -> ActiveEmissionStep {
         guard duration > 0 else {
-            return ActiveEmissionStep(delta: dt, normalizedAge: 1)
+            return ActiveEmissionStep(delta: dt,
+                                      normalizedAge: 1,
+                                      startAge: 0,
+                                      duration: 0,
+                                      looping: false)
         }
         let startAge = emitterAge
         if looping {
             emitterAge = (emitterAge + dt).truncatingRemainder(dividingBy: duration)
             let sampleAge = (startAge + dt * 0.5).truncatingRemainder(dividingBy: duration)
-            return ActiveEmissionStep(delta: dt, normalizedAge: simd_clamp(sampleAge / duration, 0, 1))
+            return ActiveEmissionStep(delta: dt,
+                                      normalizedAge: simd_clamp(sampleAge / duration, 0, 1),
+                                      startAge: startAge,
+                                      duration: duration,
+                                      looping: true)
         }
 
         let remaining = max(0, duration - emitterAge)
         let activeDelta = min(dt, remaining)
         emitterAge += dt
         let sampleAge = startAge + activeDelta * 0.5
-        return ActiveEmissionStep(delta: activeDelta, normalizedAge: simd_clamp(sampleAge / duration, 0, 1))
+        return ActiveEmissionStep(delta: activeDelta,
+                                  normalizedAge: simd_clamp(sampleAge / duration, 0, 1),
+                                  startAge: startAge,
+                                  duration: duration,
+                                  looping: false)
     }
 
     @discardableResult
