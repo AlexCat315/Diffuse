@@ -958,6 +958,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     public let burstCount: Int
     public let burstInterval: Float
     public let maxParticles: Int
+    public let maxSpawnedParticlesPerFrame: Int
     public let maxRenderedParticles: Int
     public let lifetime: Float
     public let lifetimeRandomness: Float
@@ -1068,6 +1069,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.burstCount = component.burstCount
         self.burstInterval = component.burstInterval
         self.maxParticles = component.maxParticles
+        self.maxSpawnedParticlesPerFrame = component.maxSpawnedParticlesPerFrame
         self.maxRenderedParticles = component.maxRenderedParticles
         self.lifetime = component.lifetime
         self.lifetimeRandomness = component.lifetimeRandomness
@@ -1176,6 +1178,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
                                       distanceEmissionRateCurve: distanceEmissionRateCurve,
                                       burstCount: burstCount, burstInterval: burstInterval,
                                       maxParticles: maxParticles,
+                                      maxSpawnedParticlesPerFrame: maxSpawnedParticlesPerFrame,
                                       maxRenderedParticles: maxRenderedParticles,
                                       lifetime: lifetime,
                                       lifetimeRandomness: lifetimeRandomness,
@@ -1266,7 +1269,7 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case isEmitting, looping, duration, simulationSpeed, prewarmTime, prewarmStep, emissionRate, emissionRateCurve
         case distanceEmissionRate, distanceEmissionRateCurve, burstCount, burstInterval
-        case maxParticles, maxRenderedParticles, lifetime, lifetimeRandomness
+        case maxParticles, maxSpawnedParticlesPerFrame, maxRenderedParticles, lifetime, lifetimeRandomness
         case subEmitterTrigger, subEmitterBurstCount, subEmitterProbability, subEmitterMaxDepth
         case subEmitterInheritVelocity, subEmitterLifetime
         case subEmitterStartVelocity, subEmitterVelocityRandomness
@@ -1311,6 +1314,8 @@ public struct EditorSceneManifestParticleEmitter: Codable, Sendable, Equatable {
         self.burstCount = try c.decodeIfPresent(Int.self, forKey: .burstCount) ?? 0
         self.burstInterval = try c.decodeIfPresent(Float.self, forKey: .burstInterval) ?? 0
         self.maxParticles = try c.decodeIfPresent(Int.self, forKey: .maxParticles) ?? 256
+        self.maxSpawnedParticlesPerFrame = try c.decodeIfPresent(Int.self,
+                                                                  forKey: .maxSpawnedParticlesPerFrame) ?? 0
         self.maxRenderedParticles = try c.decodeIfPresent(Int.self, forKey: .maxRenderedParticles) ?? 0
         self.lifetime = try c.decodeIfPresent(Float.self, forKey: .lifetime) ?? 2
         self.lifetimeRandomness = try c.decodeIfPresent(Float.self, forKey: .lifetimeRandomness) ?? 0
@@ -2589,6 +2594,11 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                                                min: 0, max: 60, step: 0.1, showsStepper: true)),
                 EditorInspectorField(id: "particle-max", label: L("Max Particles"),
                                      value: .constrainedNumber(particleMaxBinding(for: entity),
+                                                               min: 0, max: 100_000, step: 16, showsStepper: true)),
+                EditorInspectorField(id: "particle-max-spawned-per-frame", label: L("Max Spawn / Frame"),
+                                     value: .constrainedNumber(particleIntBinding(for: entity,
+                                                                                  \.maxSpawnedParticlesPerFrame,
+                                                                                  summary: "Update particle spawn budget"),
                                                                min: 0, max: 100_000, step: 16, showsStepper: true)),
                 EditorInspectorField(id: "particle-max-rendered", label: L("Max Rendered"),
                                      value: .constrainedNumber(particleIntBinding(for: entity, \.maxRenderedParticles,

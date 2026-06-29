@@ -396,6 +396,7 @@ public struct ParticleEmissionModule: Codable, Sendable, Equatable {
     public var burstCount: Int
     public var burstInterval: Float
     public var maxParticles: Int
+    public var maxSpawnedParticlesPerFrame: Int
     public var maxRenderedParticles: Int
     public var seed: UInt64
 
@@ -413,6 +414,7 @@ public struct ParticleEmissionModule: Codable, Sendable, Equatable {
         self.burstCount = emitter.burstCount
         self.burstInterval = emitter.burstInterval
         self.maxParticles = emitter.maxParticles
+        self.maxSpawnedParticlesPerFrame = emitter.maxSpawnedParticlesPerFrame
         self.maxRenderedParticles = emitter.maxRenderedParticles
         self.seed = emitter.seed
     }
@@ -431,6 +433,7 @@ public struct ParticleEmissionModule: Codable, Sendable, Equatable {
         case burstCount
         case burstInterval
         case maxParticles
+        case maxSpawnedParticlesPerFrame
         case maxRenderedParticles
         case seed
     }
@@ -451,6 +454,10 @@ public struct ParticleEmissionModule: Codable, Sendable, Equatable {
         burstCount = try container.decodeIfPresent(Int.self, forKey: .burstCount) ?? 0
         burstInterval = try container.decodeIfPresent(Float.self, forKey: .burstInterval) ?? 0
         maxParticles = try container.decodeIfPresent(Int.self, forKey: .maxParticles) ?? 256
+        maxSpawnedParticlesPerFrame = try container.decodeIfPresent(
+            Int.self,
+            forKey: .maxSpawnedParticlesPerFrame
+        ) ?? 0
         maxRenderedParticles = try container.decodeIfPresent(Int.self, forKey: .maxRenderedParticles) ?? 0
         seed = try container.decodeIfPresent(UInt64.self, forKey: .seed) ?? 0x9E3779B9
     }
@@ -872,6 +879,7 @@ private extension ParticleEmitterModuleSettings {
         case var .emission(settings):
             settings.simulationSpeed = max(0, settings.simulationSpeed)
             settings.maxParticles = max(1, settings.maxParticles)
+            settings.maxSpawnedParticlesPerFrame = max(0, settings.maxSpawnedParticlesPerFrame)
             settings.maxRenderedParticles = max(0, min(settings.maxRenderedParticles, settings.maxParticles))
             settings.prewarmTime = max(0, settings.prewarmTime)
             if settings.prewarmTime > 0 {
@@ -1050,6 +1058,10 @@ private func validateEmission(_ settings: ParticleEmissionModule,
     if settings.maxParticles > 0 && settings.maxRenderedParticles > settings.maxParticles {
         issues.append(issue(moduleID, .info, "renderCapExceedsCapacity",
                             "Max rendered particles exceeds simulation capacity and will have no extra effect."))
+    }
+    if settings.maxSpawnedParticlesPerFrame < 0 {
+        issues.append(issue(moduleID, .warning, "negativeSpawnBudget",
+                            "Max spawned particles per frame is negative and will be clamped."))
     }
     if settings.prewarmTime > 0 && settings.prewarmStep <= 0 {
         issues.append(issue(moduleID, .error, "invalidPrewarmStep",
@@ -1327,6 +1339,7 @@ public extension ParticleEmitter {
                 burstCount = max(0, settings.burstCount)
                 burstInterval = max(0, settings.burstInterval)
                 maxParticles = max(0, settings.maxParticles)
+                maxSpawnedParticlesPerFrame = max(0, settings.maxSpawnedParticlesPerFrame)
                 maxRenderedParticles = max(0, settings.maxRenderedParticles)
                 if seed != settings.seed {
                     reseed(settings.seed)
