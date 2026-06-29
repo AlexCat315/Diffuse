@@ -771,6 +771,42 @@ struct ParticleTests {
         #expect(emitter.aliveCount == 1)
     }
 
+    @Test("non-looping emitter reports inactive once duration is exhausted")
+    func nonLoopingEmitterReportsInactiveAfterDuration() {
+        var emitter = ParticleEmitter(looping: false,
+                                      duration: 0.25,
+                                      emissionRate: 4,
+                                      maxParticles: 8,
+                                      lifetime: 0.1,
+                                      startVelocity: .zero,
+                                      gravity: .zero)
+
+        #expect(emitter.isEmissionActive)
+        emitter.advance(deltaTime: 0.25)
+        #expect(!emitter.isEmissionActive)
+        #expect(emitter.aliveCount == 1)
+
+        emitter.advance(deltaTime: 0.2)
+        #expect(!emitter.isEmissionActive)
+        #expect(emitter.aliveCount == 0)
+
+        emitter.clear()
+        #expect(emitter.isEmissionActive)
+    }
+
+    @Test("looping emitter remains active after duration wraps")
+    func loopingEmitterRemainsActiveAfterDurationWraps() {
+        var emitter = ParticleEmitter(looping: true,
+                                      duration: 0.25,
+                                      emissionRate: 0,
+                                      startVelocity: .zero,
+                                      gravity: .zero)
+
+        emitter.advance(deltaTime: 2)
+
+        #expect(emitter.isEmissionActive)
+    }
+
     @Test("particles are culled once they exceed their lifetime")
     func lifetimeCulling() {
         var emitter = ParticleEmitter(emissionRate: 0, lifetime: 0.5, gravity: .zero)
@@ -1605,6 +1641,29 @@ struct ParticleTests {
         #expect(emitter.aliveCount == 20)
     }
 
+    @Test("looping emission curves are averaged across long frames")
+    func loopingEmissionCurvesAreAveragedAcrossLongFrames() {
+        var emitter = ParticleEmitter(
+            looping: true,
+            duration: 1,
+            emissionRate: 10,
+            emissionRateCurve: .keyframes([
+                ParticleCurveKeyframe(time: 0, value: 0),
+                ParticleCurveKeyframe(time: 1, value: 2),
+            ]),
+            maxParticles: 100,
+            lifetime: 10,
+            startVelocity: .zero,
+            gravity: .zero
+        )
+
+        emitter.advance(deltaTime: 2)
+
+        #expect(emitter.aliveCount == 20)
+        #expect(emitter.lastFrameStats.requestedSpawnCount == 20)
+        #expect(emitter.lastFrameStats.continuousSpawnedCount == 20)
+    }
+
     @Test("distance emission rate curve modulates movement-based spawn rate")
     func distanceEmissionRateCurveModulatesDistanceEmission() {
         var emitter = ParticleEmitter(
@@ -1631,6 +1690,34 @@ struct ParticleTests {
         transform.columns.3.x = 2
         emitter.advance(deltaTime: 1, worldTransform: transform)
         #expect(emitter.aliveCount == 20)
+    }
+
+    @Test("looping distance emission curves are averaged across long frames")
+    func loopingDistanceEmissionCurvesAreAveragedAcrossLongFrames() {
+        var emitter = ParticleEmitter(
+            looping: true,
+            duration: 1,
+            emissionRate: 0,
+            distanceEmissionRate: 10,
+            distanceEmissionRateCurve: .keyframes([
+                ParticleCurveKeyframe(time: 0, value: 0),
+                ParticleCurveKeyframe(time: 1, value: 2),
+            ]),
+            maxParticles: 100,
+            lifetime: 10,
+            startVelocity: .zero,
+            gravity: .zero,
+            simulationSpace: .world
+        )
+        var transform = matrix_identity_float4x4
+
+        emitter.advance(deltaTime: 0.01, worldTransform: transform)
+        transform.columns.3.x = 2
+        emitter.advance(deltaTime: 2, worldTransform: transform)
+
+        #expect(emitter.aliveCount == 20)
+        #expect(emitter.lastFrameStats.requestedSpawnCount == 20)
+        #expect(emitter.lastFrameStats.distanceSpawnedCount == 20)
     }
 
     @Test("prewarm simulates once before the first active tick")

@@ -131,6 +131,122 @@ struct DeveloperParticleDiagnosticsTests {
         #expect(summary.details.contains("GPU workgroups 15"))
     }
 
+    @Test("render budget skips are reported as particle tuning diagnostics")
+    func renderBudgetSkipsAreReportedAsTuningDiagnostics() {
+        let stats = ParticleFrameStatsResource(emitterStats: [
+            ParticleEmitterFrameStats(liveParticleCount: 8,
+                                      maxParticleCount: 16,
+                                      liveParticleLimit: 16),
+        ])
+        let renderSummary = ParticleRenderSummary(particleCount: 5,
+                                                  sourceParticleCount: 8,
+                                                  submittedSourceParticleCount: 5,
+                                                  cpuRenderInstanceCount: 5,
+                                                  batchCount: 1,
+                                                  cpuBatchCount: 1)
+
+        let summary = makeDeveloperParticleDiagnosticSummary(
+            stats: stats,
+            eventReport: .empty,
+            scalability: .default,
+            renderSummary: renderSummary,
+            renderStats: .init()
+        )
+
+        #expect(summary.severity == .info)
+        #expect(summary.status == "Particle render budget limiting")
+        #expect(summary.primarySignal == "3 source particles skipped before render")
+        #expect(summary.recommendation.contains("Max Rendered Particles"))
+        #expect(summary.details.contains("Source 8, submitted 5"))
+    }
+
+    @Test("emitter labels preserve hierarchy paths")
+    func emitterLabelsPreserveHierarchyPaths() {
+        let roots = [
+            EditorSceneNode(id: 1,
+                            name: "World",
+                            kind: "Scene",
+                            children: [
+                                EditorSceneNode(id: 2,
+                                                name: "FX Rig",
+                                                kind: "Entity",
+                                                children: [
+                                                    EditorSceneNode(id: 3,
+                                                                    name: "Muzzle Sparks",
+                                                                    kind: "Particle Emitter",
+                                                                    children: []),
+                                                ]),
+                            ]),
+        ]
+
+        let labels = makeDeveloperParticleEmitterLabels(roots: roots)
+
+        #expect(labels[1]?.path == "World")
+        #expect(labels[2]?.path == "World / FX Rig")
+        #expect(labels[3]?.name == "Muzzle Sparks")
+        #expect(labels[3]?.kind == "Particle Emitter")
+        #expect(labels[3]?.path == "World / FX Rig / Muzzle Sparks")
+    }
+
+    @Test("authoring diagnostics report GPU-required blockers")
+    func authoringDiagnosticsReportGPURequiredBlockers() {
+        let emitter = ParticleEmitter(distanceEmissionRate: 12,
+                                      maxParticles: 256,
+                                      simulationBackend: .gpuRequired)
+        let issue = ParticleModuleIssue(moduleID: "gpuSimulation",
+                                        severity: .error,
+                                        code: "gpuRequiredButUnsupported",
+                                        message: "GPU simulation is required but unsupported: distance emission.")
+
+        let summary = makeDeveloperParticleAuthoringDiagnosticSummary(
+            gpuPlan: emitter.gpuSimulationPlan,
+            moduleIssues: [issue]
+        )
+
+        #expect(summary.severity == .critical)
+        #expect(summary.status == "Authoring blocked")
+        #expect(summary.primarySignal == "1 module error")
+        #expect(summary.recommendation.contains("blocked GPU-required"))
+        #expect(summary.details.contains { $0.contains("gpuSimulation [error]") })
+        #expect(summary.details.contains { $0.contains("Unsupported distance emission") })
+    }
+
+    @Test("authoring diagnostics explain GPU fallback reasons")
+    func authoringDiagnosticsExplainGPUFallbackReasons() {
+        let emitter = ParticleEmitter(distanceEmissionRate: 8,
+                                      maxParticles: 128,
+                                      simulationBackend: .gpuIfSupported)
+
+        let summary = makeDeveloperParticleAuthoringDiagnosticSummary(
+            gpuPlan: emitter.gpuSimulationPlan,
+            moduleIssues: []
+        )
+
+        #expect(summary.severity == .warning)
+        #expect(summary.status == "GPU fallback to CPU")
+        #expect(summary.primarySignal == "Unsupported: distance emission")
+        #expect(summary.recommendation.contains("Remove unsupported features"))
+        #expect(summary.details.contains("GPU plan Fallback"))
+    }
+
+    @Test("authoring diagnostics summarize ready GPU dispatch")
+    func authoringDiagnosticsSummarizeReadyGPUDispatch() {
+        let emitter = ParticleEmitter(maxParticles: 512,
+                                      simulationBackend: .gpuIfSupported,
+                                      gpuSimulationWorkgroupSize: 128)
+
+        let summary = makeDeveloperParticleAuthoringDiagnosticSummary(
+            gpuPlan: emitter.gpuSimulationPlan,
+            moduleIssues: []
+        )
+
+        #expect(summary.severity == .nominal)
+        #expect(summary.status == "GPU simulation ready")
+        #expect(summary.primarySignal == "Dispatch 4x128 for 512 capacity")
+        #expect(summary.details.contains("GPU plan Ready"))
+        #expect(summary.details.contains("Capacity 512, dispatch 4x128"))
+    }
+
     @Test("emitter hotspots prioritize drops and merge event feedback")
     func emitterHotspotsPrioritizeDropsAndMergeEventFeedback() {
         let noisyButHealthy = ParticleEmitterFrameStats(liveParticleCount: 40,
@@ -169,9 +285,33 @@ struct DeveloperParticleDiagnosticsTests {
         #expect(hotspots.map(\.entityID) == [20, 10])
         #expect(hotspots[0].severity == .critical)
         #expect(hotspots[0].reason == "Capacity drops")
+        #expect(hotspots[0].primarySignal == "2 capacity-limited spawns")
+        #expect(hotspots[0].recommendation.contains("max particles"))
+        #expect(hotspots[0].details.contains("Frame drops 8, event drops 2"))
         #expect(hotspots[0].requestedSpawnCount == 15)
         #expect(hotspots[0].droppedSpawnCount == 10)
         #expect(hotspots[1].severity == .info)
+        #expect(hotspots[1].primarySignal == "40 spawn requests")
+        #expect(hotspots[1].recommendation.contains("emission curves"))
+    }
+
+    @Test("emitter hotspot explains live-budget pressure")
+    func emitterHotspotExplainsLiveBudgetPressure() {
+        let stats = ParticleEmitterFrameStats(liveParticleCount: 95,
+                                              maxParticleCount: 100,
+                                              liveParticleLimit: 100,
+                                              requestedSpawnCount: 0,
+                                              spawnBudgetLimit: 20,
+                                              spawnBudgetConsumedCount: 0)
+
+        let hotspot = makeDeveloperParticleEmitterHotspot(entityID: 42,
+                                                          frameStats: stats)
+
+        #expect(hotspot.severity == .warning)
+        #expect(hotspot.reason == "Live budget")
+        #expect(hotspot.primarySignal == "95% live budget used")
+        #expect(hotspot.recommendation.contains("Reduce lifetime"))
+        #expect(hotspot.details.contains("Live 95/100"))
     }
 
     @Test("emitter hotspots respect the requested limit")
@@ -194,6 +334,46 @@ struct DeveloperParticleDiagnosticsTests {
                                                             limit: 2)
 
         #expect(hotspots.map(\.entityID) == [3, 2])
+    }
+
+    @Test("emitter hotspots sort severity before raw pressure score")
+    func emitterHotspotsSortSeverityBeforeRawPressureScore() {
+        let highRequestInfo = ParticleEmitterFrameStats(liveParticleCount: 10,
+                                                        maxParticleCount: 1_000,
+                                                        liveParticleLimit: 1_000,
+                                                        continuousSpawnedCount: 50_000,
+                                                        requestedSpawnCount: 50_000,
+                                                        spawnBudgetConsumedCount: 50_000)
+        let budgetWarning = ParticleEmitterFrameStats(liveParticleCount: 4,
+                                                      maxParticleCount: 1_000,
+                                                      liveParticleLimit: 1_000,
+                                                      requestedSpawnCount: 8,
+                                                      spawnBudgetLimit: 4,
+                                                      spawnBudgetConsumedCount: 4,
+                                                      spawnBudgetLimitedCount: 4)
+        let capacityCritical = ParticleEmitterFrameStats(liveParticleCount: 4,
+                                                        maxParticleCount: 4,
+                                                        liveParticleLimit: 4,
+                                                        requestedSpawnCount: 5,
+                                                        capacityLimitedSpawnCount: 1)
+        let stats = ParticleFrameStatsResource(
+            emitterStats: [highRequestInfo, budgetWarning, capacityCritical],
+            emitterStatsByEntity: [
+                1: highRequestInfo,
+                2: budgetWarning,
+                3: capacityCritical,
+            ]
+        )
+
+        let hotspots = makeDeveloperParticleEmitterHotspots(stats: stats,
+                                                            eventReport: .empty)
+
+        #expect(hotspots.map { $0.entityID } == [3, 2, 1])
+        #expect(hotspots.map { $0.severity } == [
+            DeveloperParticleDiagnosticSeverity.critical,
+            DeveloperParticleDiagnosticSeverity.warning,
+            DeveloperParticleDiagnosticSeverity.info,
+        ])
     }
 
     @Test("frame trend summary reports recent pacing and peak work")

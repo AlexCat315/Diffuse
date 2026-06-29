@@ -564,17 +564,24 @@ public struct RuntimeWorldSchedule {
         let lightCollection = collectRenderLights(from: view)
         let instances = instanceCollection.instances
         let lights = lightCollection.lights
-        let particles = collectRenderParticles(in: world, camera: cameraSelection.camera)
+        let particleCollection = collectRenderParticles(in: world, camera: cameraSelection.camera)
         let particleSimulationBatches = collectParticleSimulationBatches(in: world,
                                                                          camera: cameraSelection.camera)
+        let particleSummary = ParticleRenderSummary(
+            particles: particleCollection.particles,
+            simulationBatches: particleSimulationBatches,
+            cpuSourceParticleCount: particleCollection.sourceParticleCount,
+            cpuSubmittedSourceParticleCount: particleCollection.submittedSourceParticleCount
+        )
         return (
             ExtractedRenderSceneResource(
                 scene: RenderScene(
                     camera: cameraSelection.camera,
                     instances: instances.map(\.instance),
                     lights: lights.map(\.light),
-                    particles: particles,
-                    particleSimulationBatches: particleSimulationBatches
+                    particles: particleCollection.particles,
+                    particleSimulationBatches: particleSimulationBatches,
+                    particleSummary: particleSummary
                 ),
                 activeCameraEntity: cameraSelection.entity,
                 instanceEntities: instances.map(\.entity),
@@ -696,12 +703,20 @@ public struct RuntimeWorldSchedule {
     /// by the entity's world matrix; world-space particles are already stored in
     /// render space. The result is sorted back-to-front for the camera so alpha
     /// blending composites correctly.
+    private struct CollectedRenderParticles {
+        var particles: [RenderParticle]
+        var sourceParticleCount: Int
+        var submittedSourceParticleCount: Int
+    }
+
     private func collectRenderParticles(
         in world: RuntimeWorld,
         camera: RenderCamera
-    ) -> [RenderParticle] {
+    ) -> CollectedRenderParticles {
         var sortableParticles: [SortableRenderParticle] = []
         var nextSourceOrder = 0
+        var sourceParticleCount = 0
+        var submittedSourceParticleCount = 0
         for entity in world.entities(with: ParticleEmitter.self) {
             guard let emitter = world.component(ParticleEmitter.self, for: entity),
                   !emitter.particles.isEmpty
@@ -726,6 +741,8 @@ public struct RuntimeWorldSchedule {
                                                        cameraEye: camera.eye)
             let sourceParticles = renderSourceParticles(for: emitter,
                                                         cameraDistance: cameraDistance)
+            sourceParticleCount += emitter.particles.count
+            submittedSourceParticleCount += sourceParticles.count
             if emitter.renderMode == .ribbon {
                 appendRibbonParticles(sourceParticles,
                                       emitter: emitter,
@@ -773,7 +790,11 @@ public struct RuntimeWorldSchedule {
             }
         }
         sortableParticles.sort(by: compareSortableParticles)
-        return sortableParticles.map(\.particle)
+        return CollectedRenderParticles(
+            particles: sortableParticles.map(\.particle),
+            sourceParticleCount: sourceParticleCount,
+            submittedSourceParticleCount: submittedSourceParticleCount
+        )
     }
 
     private func renderSourceParticles(
