@@ -33,6 +33,29 @@ struct EditorSceneAdapterTests {
         #expect(scene.hasActiveParticles())
     }
 
+    @Test("Non-looping particles stop driving preview frames after they expire")
+    func nonLoopingParticlesStopDrivingPreviewFramesAfterExpiry() {
+        let adapter = EditorSceneAdapter()
+        adapter.scene = SceneRuntime()
+        let entity = adapter.scene.createEntity()
+        _ = adapter.scene.setComponent(
+            ParticleEmitter(looping: false,
+                            duration: 0.1,
+                            emissionRate: 10,
+                            maxParticles: 8,
+                            lifetime: 0.1,
+                            startVelocity: .zero,
+                            gravity: .zero),
+            for: entity
+        )
+
+        #expect(adapter.hasActiveParticles())
+        adapter.tickScene(deltaTime: 0.1)
+        #expect(adapter.hasActiveParticles())
+        adapter.tickScene(deltaTime: 0.2)
+        #expect(!adapter.hasActiveParticles())
+    }
+
     @Test("Editor scene adapter exposes particle frame stats after ticking")
     func editorSceneAdapterExposesParticleFrameStats() {
         let adapter = EditorSceneAdapter()
