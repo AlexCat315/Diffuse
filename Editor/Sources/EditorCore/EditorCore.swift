@@ -222,6 +222,7 @@ public final class EditorApplication: @unchecked Sendable {
             store.dispatch(.viewportSurfaceUpdated)
         }
         if didUpdateStats {
+            store.dispatch(.updateParticleDiagnostics(makeParticleDiagnosticsSample()))
             store.dispatch(.frameTimingUpdated)
         }
         if wantsContinuousFrames {
@@ -889,6 +890,48 @@ public final class EditorApplication: @unchecked Sendable {
 
     public func currentFrameStats() -> EditorFrameStats {
         store.state.frameStats
+    }
+
+    private func makeParticleDiagnosticsSample() -> EditorParticleDiagnosticsSample {
+        let stats = scene.currentParticleFrameStats()
+        let eventReport = engine.currentParticleSimulationEventApplyReport()
+        let renderSummary = scene.currentRenderScene().particleSummary
+        let renderStats = engine.currentRenderStats()
+        let nextSampleIndex = (store.state.particleDiagnosticsHistory.last?.sampleIndex ?? 0) &+ 1
+        return EditorParticleDiagnosticsSample(
+            sampleIndex: nextSampleIndex,
+            frameIndex: store.state.frameIndex,
+            simulatedDeltaTime: stats.simulatedDeltaTime,
+            emitterCount: stats.emitterCount,
+            activeEmitterCount: stats.activeEmitterCount,
+            liveParticleCount: stats.liveParticleCount,
+            liveParticleLimit: stats.liveParticleLimit,
+            requestedSpawnCount: stats.requestedSpawnCount,
+            spawnedParticleCount: stats.spawnedParticleCount,
+            droppedSpawnCount: stats.droppedSpawnCount,
+            capacityLimitedSpawnCount: stats.capacityLimitedSpawnCount,
+            spawnBudgetLimitedCount: stats.spawnBudgetLimitedCount,
+            spawnBudgetConsumedCount: stats.spawnBudgetConsumedCount,
+            spawnBudgetLimit: stats.spawnBudgetLimit,
+            eventRequestedSpawnCount: eventReport.requestedSpawnCount,
+            eventDroppedSpawnCount: eventReport.droppedSpawnCount,
+            droppedReadbackEventCount: eventReport.droppedReadbackEventCount,
+            cpuRenderInstanceCount: renderSummary.cpuRenderInstanceCount,
+            gpuRenderInstanceCount: renderSummary.gpuRenderInstanceCount,
+            cpuBatchCount: renderSummary.cpuBatchCount,
+            gpuBatchCount: renderSummary.gpuBatchCount,
+            gpuSimulationParticleCount: renderStats.gpuParticleSimulationParticleCount,
+            gpuWorkgroupCount: particleGPUWorkgroupTotal(renderStats),
+            gpuSortItemCount: renderStats.gpuParticleSortItemCount,
+            gpuSortPaddedItemCount: renderStats.gpuParticleSortPaddedItemCount
+        )
+    }
+
+    private func particleGPUWorkgroupTotal(_ stats: RenderFrameStats) -> Int {
+        stats.gpuParticleSimulationDispatchWorkgroups
+            + stats.gpuParticleSortDispatchWorkgroups
+            + stats.gpuParticleInstanceDispatchWorkgroups
+            + stats.gpuParticleCullDispatchWorkgroups
     }
 
     public func currentSelectedEntityTranslation() -> SIMD3<Float>? {
