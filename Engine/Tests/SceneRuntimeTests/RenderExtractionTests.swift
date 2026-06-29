@@ -35,6 +35,9 @@ struct RenderExtractionTests {
         #expect(summary.cpuBatchCount == 3)
         #expect(summary.gpuBatchCount == 0)
         #expect(summary.particleCount == 3)
+        #expect(summary.sourceParticleCount == 3)
+        #expect(summary.submittedSourceParticleCount == 3)
+        #expect(summary.renderBudgetSkippedSourceParticleCount == 0)
         #expect(summary.cpuRenderInstanceCount == 3)
         #expect(summary.gpuRenderInstanceCount == 0)
         #expect(summary.uniqueTextureCount == 2)
@@ -682,6 +685,9 @@ struct RenderExtractionTests {
 
         #expect(extracted.scene.particles.count == 2)
         #expect(extracted.scene.particleSummary.particleCount == 2)
+        #expect(extracted.scene.particleSummary.sourceParticleCount == 5)
+        #expect(extracted.scene.particleSummary.submittedSourceParticleCount == 2)
+        #expect(extracted.scene.particleSummary.renderBudgetSkippedSourceParticleCount == 3)
         #expect(simulated.aliveCount == 5)
     }
 
@@ -714,6 +720,9 @@ struct RenderExtractionTests {
 
         #expect(extracted.scene.particles.count == 5)
         #expect(extracted.scene.particleSummary.particleCount == 5)
+        #expect(extracted.scene.particleSummary.sourceParticleCount == 8)
+        #expect(extracted.scene.particleSummary.submittedSourceParticleCount == 5)
+        #expect(extracted.scene.particleSummary.renderBudgetSkippedSourceParticleCount == 3)
         #expect(simulated.aliveCount == 8)
     }
 
@@ -1236,6 +1245,9 @@ struct RenderExtractionTests {
         #expect(batch.renderParticleStartIndex == 3)
         #expect(batch.renderInstanceCount == 3)
         #expect(scene.particleSummary.particleCount == 3)
+        #expect(scene.particleSummary.sourceParticleCount == 6)
+        #expect(scene.particleSummary.submittedSourceParticleCount == 3)
+        #expect(scene.particleSummary.renderBudgetSkippedSourceParticleCount == 3)
         #expect(scene.particleSummary.cpuRenderInstanceCount == 0)
         #expect(scene.particleSummary.gpuRenderInstanceCount == 3)
         #expect(scene.particleSummary.alphaCount == 3)

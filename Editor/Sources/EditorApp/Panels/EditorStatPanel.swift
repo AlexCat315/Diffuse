@@ -15,12 +15,9 @@ struct DeveloperToolsPanel: View {
             let timingRevision = store.frameTimingRevision
             let frameStats = store.state.frameStats
             let frameStatsHistory = store.frameStatsHistory
-            let particleDiagnosticsHistory = store.particleDiagnosticsHistory
-            let renderStats = app.currentRenderStats()
-            let particleStats = app.currentParticleFrameStats()
-            let particleEventReport = app.currentParticleSimulationEventApplyReport()
-            let particleScalability = app.currentParticleScalabilityState()
-            let particleRenderSummary = app.currentRenderScene().particleSummary
+            let renderStats: RenderFrameStats = selectedTab == .render
+                ? app.currentRenderStats()
+                : .init()
 
             TabView(selection: $selectedTab, tabs: [
                 TabItem(L("Performance"), id: DeveloperToolTab.performance) {
@@ -37,13 +34,8 @@ struct DeveloperToolsPanel: View {
                                            timingRevision: timingRevision)
                 },
                 TabItem("Particles", id: DeveloperToolTab.particles) {
-                    ParticleDiagnosticsView(stats: particleStats,
-                                            eventReport: particleEventReport,
-                                            scalability: particleScalability,
-                                            renderSummary: particleRenderSummary,
-                                            renderStats: renderStats,
-                                            history: particleDiagnosticsHistory,
-                                            selectedEntityID: store.selectedEntityID)
+                    ParticleDiagnosticsTabView(app: app,
+                                               store: store)
                 },
                 TabItem(L("Console"), id: DeveloperToolTab.console) {
                     ConsoleDiagnosticsView(store: store)
@@ -383,10 +375,20 @@ struct DeveloperParticleDiagnosticSummary: Equatable {
     var details: [String]
 }
 
+struct DeveloperParticleEmitterLabel: Equatable {
+    var entityID: UInt64
+    var name: String
+    var kind: String
+    var path: String
+}
+
 struct DeveloperParticleEmitterHotspot: Equatable {
     var entityID: UInt64
     var severity: DeveloperParticleDiagnosticSeverity
     var reason: String
+    var primarySignal: String
+    var recommendation: String
+    var details: [String]
     var score: Int
     var liveParticleCount: Int
     var requestedSpawnCount: Int
@@ -397,6 +399,209 @@ struct DeveloperParticleEmitterHotspot: Equatable {
     var eventDroppedSpawnCount: Int
     var liveBudgetText: String
     var spawnBudgetText: String
+}
+
+func makeDeveloperParticleEmitterLabels(roots: [EditorSceneNode]) -> [UInt64: DeveloperParticleEmitterLabel] {
+    var labels: [UInt64: DeveloperParticleEmitterLabel] = [:]
+
+    func visit(_ node: EditorSceneNode, parentPath: String?) {
+        let path = parentPath.map { "\($0) / \(node.name)" } ?? node.name
+        labels[node.id] = DeveloperParticleEmitterLabel(
+            entityID: node.id,
+            name: node.name,
+            kind: node.kind,
+            path: path
+        )
+        for child in node.children {
+            visit(child, parentPath: path)
+        }
+    }
+
+    for root in roots {
+        visit(root, parentPath: nil)
+    }
+    return labels
+}
+
+func makeDeveloperParticleAuthoringDiagnosticSummary(
+    gpuPlan: ParticleGPUSimulationPlan?,
+    moduleIssues: [ParticleModuleIssue]
+) -> DeveloperParticleDiagnosticSummary {
+    let sortedIssues = moduleIssues.sorted(by: developerParticleModuleIssuePrecedes)
+    let errorCount = sortedIssues.filter { $0.severity == .error }.count
+    let warningCount = sortedIssues.filter { $0.severity == .warning }.count
+    let infoCount = sortedIssues.filter { $0.severity == .info }.count
+    let issueDetails = developerParticleModuleIssueDetails(sortedIssues)
+    let gpuDetails = developerParticleGPUPlanDetails(gpuPlan)
+
+    if errorCount > 0 {
+        return DeveloperParticleDiagnosticSummary(
+            severity: .critical,
+            status: "Authoring blocked",
+            primarySignal: "\(errorCount) module \(errorCount == 1 ? "error" : "errors")",
+            recommendation: "Fix module errors before profiling runtime pressure; blocked GPU-required emitters cannot execute as authored.",
+            details: issueDetails + gpuDetails
+        )
+    }
+
+    if let gpuPlan, gpuPlan.status == .requiredButUnsupported {
+        return DeveloperParticleDiagnosticSummary(
+            severity: .critical,
+            status: "GPU simulation blocked",
+            primarySignal: "Unsupported: \(developerParticleGPUUnsupportedReasonList(gpuPlan.unsupportedReasons))",
+            recommendation: "Remove unsupported modules or switch the backend to GPU If Supported/CPU before relying on this effect.",
+            details: gpuDetails
+        )
+    }
+
+    if warningCount > 0 {
+        return DeveloperParticleDiagnosticSummary(
+            severity: .warning,
+            status: "Authoring warnings",
+            primarySignal: "\(warningCount) module \(warningCount == 1 ? "warning" : "warnings")",
+            recommendation: "Resolve warnings before chasing frame-time regressions; they often explain CPU fallback or clamped behavior.",
+            details: issueDetails + gpuDetails
+        )
+    }
+
+    if let gpuPlan {
+        switch gpuPlan.status {
+        case .disabled:
+            return DeveloperParticleDiagnosticSummary(
+                severity: .nominal,
+                status: "CPU simulation selected",
+                primarySignal: "Backend CPU",
+                recommendation: "Keep CPU for low-volume emitters; move high-volume compatible effects to GPU If Supported.",
+                details: gpuDetails
+            )
+        case .supported:
+            return DeveloperParticleDiagnosticSummary(
+                severity: .nominal,
+                status: "GPU simulation ready",
+                primarySignal: "Dispatch \(gpuPlan.dispatchWorkgroups)x\(gpuPlan.workgroupSize) for \(gpuPlan.particleCapacity) capacity",
+                recommendation: "Track GPU workgroup split, sort padding, and readback drops as effect complexity grows.",
+                details: gpuDetails
+            )
+        case .fallbackToCPU:
+            return DeveloperParticleDiagnosticSummary(
+                severity: .warning,
+                status: "GPU fallback to CPU",
+                primarySignal: "Unsupported: \(developerParticleGPUUnsupportedReasonList(gpuPlan.unsupportedReasons))",
+                recommendation: "Remove unsupported features from this emitter or accept CPU simulation for this effect.",
+                details: gpuDetails
+            )
+        case .requiredButUnsupported:
+            return DeveloperParticleDiagnosticSummary(
+                severity: .critical,
+                status: "GPU simulation blocked",
+                primarySignal: "Unsupported: \(developerParticleGPUUnsupportedReasonList(gpuPlan.unsupportedReasons))",
+                recommendation: "Remove unsupported modules or switch the backend to GPU If Supported/CPU before relying on this effect.",
+                details: gpuDetails
+            )
+        }
+    }
+
+    if infoCount > 0 {
+        return DeveloperParticleDiagnosticSummary(
+            severity: .info,
+            status: "Authoring notes",
+            primarySignal: "\(infoCount) module \(infoCount == 1 ? "note" : "notes")",
+            recommendation: "Review module notes when tuning the selected particle emitter.",
+            details: issueDetails
+        )
+    }
+
+    return DeveloperParticleDiagnosticSummary(
+        severity: .idle,
+        status: "No selected particle emitter",
+        primarySignal: "No GPU plan or module issues",
+        recommendation: "Select a particle emitter to inspect authored backend and module health.",
+        details: []
+    )
+}
+
+func developerParticleGPUUnsupportedReasonList(_ reasons: [ParticleGPUSimulationUnsupportedReason]) -> String {
+    guard !reasons.isEmpty else { return "none" }
+    return reasons.map(developerParticleGPUUnsupportedReasonLabel).joined(separator: ", ")
+}
+
+func developerParticleGPUUnsupportedReasonLabel(_ reason: ParticleGPUSimulationUnsupportedReason) -> String {
+    switch reason {
+    case .backendCPU:
+        return "CPU backend"
+    case .noParticleCapacity:
+        return "no capacity"
+    case .eventSubEmitters:
+        return "sub-emitters"
+    case .distanceEmission:
+        return "distance emission"
+    case .noise:
+        return "noise"
+    case .forceFields:
+        return "force fields"
+    case .collisions:
+        return "collisions"
+    case .angularVelocity:
+        return "angular velocity"
+    }
+}
+
+private func developerParticleGPUPlanDetails(_ plan: ParticleGPUSimulationPlan?) -> [String] {
+    guard let plan else { return [] }
+    var details = [
+        "GPU plan \(developerParticleGPUPlanStatusLabel(plan.status))",
+        "Capacity \(plan.particleCapacity), dispatch \(plan.dispatchWorkgroups)x\(plan.workgroupSize)",
+    ]
+    if !plan.unsupportedReasons.isEmpty {
+        details.append("Unsupported \(developerParticleGPUUnsupportedReasonList(plan.unsupportedReasons))")
+    }
+    return details
+}
+
+private func developerParticleGPUPlanStatusLabel(_ status: ParticleGPUSimulationPlanStatus) -> String {
+    switch status {
+    case .disabled:
+        return "CPU"
+    case .supported:
+        return "Ready"
+    case .fallbackToCPU:
+        return "Fallback"
+    case .requiredButUnsupported:
+        return "Blocked"
+    }
+}
+
+private func developerParticleModuleIssueDetails(_ issues: [ParticleModuleIssue],
+                                                 limit: Int = 4) -> [String] {
+    guard !issues.isEmpty else { return [] }
+    let clippedLimit = max(0, limit)
+    var details = issues.prefix(clippedLimit).map { issue in
+        "\(issue.moduleID) [\(issue.severity.rawValue)]: \(issue.message)"
+    }
+    if issues.count > clippedLimit {
+        details.append("\(issues.count - clippedLimit) more module issues")
+    }
+    return details
+}
+
+private func developerParticleModuleIssuePrecedes(_ lhs: ParticleModuleIssue,
+                                                  _ rhs: ParticleModuleIssue) -> Bool {
+    let lhsRank = developerParticleModuleIssueSeverityRank(lhs.severity)
+    let rhsRank = developerParticleModuleIssueSeverityRank(rhs.severity)
+    if lhsRank != rhsRank { return lhsRank > rhsRank }
+    if lhs.moduleID != rhs.moduleID { return lhs.moduleID < rhs.moduleID }
+    return lhs.code < rhs.code
+}
+
+private func developerParticleModuleIssueSeverityRank(_ severity: ParticleModuleIssueSeverity) -> Int {
+    switch severity {
+    case .error:
+        return 3
+    case .warning:
+        return 2
+    case .info:
+        return 1
+    }
 }
 
 struct DeveloperParticleTrendSummary: Equatable {
@@ -516,11 +721,24 @@ func makeDeveloperParticleEmitterHotspots(stats: ParticleFrameStatsResource,
     }
     return hotspots
         .sorted {
+            let lhsSeverity = particleDiagnosticSeverityRank($0.severity)
+            let rhsSeverity = particleDiagnosticSeverityRank($1.severity)
+            if lhsSeverity != rhsSeverity { return lhsSeverity > rhsSeverity }
             if $0.score != $1.score { return $0.score > $1.score }
             return $0.entityID < $1.entityID
         }
         .prefix(max(0, limit))
         .map { $0 }
+}
+
+private func particleDiagnosticSeverityRank(_ severity: DeveloperParticleDiagnosticSeverity) -> Int {
+    switch severity {
+    case .critical: 4
+    case .warning: 3
+    case .info: 2
+    case .nominal: 1
+    case .idle: 0
+    }
 }
 
 func makeDeveloperParticleEmitterHotspot(entityID: UInt64,
@@ -531,6 +749,9 @@ func makeDeveloperParticleEmitterHotspot(entityID: UInt64,
             entityID: entityID,
             severity: .idle,
             reason: "Idle",
+            primarySignal: "No particle frame or event stats",
+            recommendation: "Select an active particle emitter or play the scene to collect runtime diagnostics.",
+            details: [],
             score: 0,
             liveParticleCount: 0,
             requestedSpawnCount: 0,
@@ -553,6 +774,11 @@ func makeDeveloperParticleEmitterHotspot(entityID: UInt64,
     let liveCount = frameStats?.liveParticleCount ?? baseStats.liveParticleCount
     let livePressure = frameStats?.liveParticleBudgetUtilization ?? baseStats.liveParticleBudgetUtilization
     let livePressureScore = Int((livePressure * 10_000).rounded())
+    let liveBudgetText = formatBudget(liveCount, baseStats.liveParticleBudgetLimit)
+    let spawnBudgetText = formatBudget(
+        (frameStats?.spawnBudgetConsumedCount ?? 0) + (eventStats?.spawnBudgetConsumedCount ?? 0),
+        baseStats.spawnBudgetLimit
+    )
     let score = totalDrops * 1_000_000
         + livePressureScore
         + requested * 100
@@ -560,30 +786,72 @@ func makeDeveloperParticleEmitterHotspot(entityID: UInt64,
 
     let severity: DeveloperParticleDiagnosticSeverity
     let reason: String
+    let primarySignal: String
+    let recommendation: String
+    let details: [String]
     if capacityDrops > 0 {
         severity = .critical
         reason = "Capacity drops"
+        primarySignal = "\(capacityDrops) capacity-limited spawns"
+        recommendation = "Raise this emitter's max particles/effective budget or lower lifetime and high-rate spawn sources."
+        details = [
+            "Live \(liveBudgetText)",
+            "Frame drops \(frameDrops), event drops \(eventDrops)",
+        ]
     } else if budgetDrops > 0 {
         severity = .warning
         reason = "Spawn budget drops"
+        primarySignal = "\(budgetDrops) spawn-budget drops"
+        recommendation = "Raise Max Spawn / Frame for this emitter or reduce burst, distance, and sub-emitter rates."
+        details = [
+            "Spawn budget \(spawnBudgetText)",
+            "Requested \(requested), accepted \(spawned)",
+        ]
     } else if livePressure >= 0.9 {
         severity = .warning
         reason = "Live budget"
+        primarySignal = "\(formatPercent(liveCount, baseStats.liveParticleBudgetLimit)) live budget used"
+        recommendation = "Reduce lifetime or spawn rate before this emitter starts dropping new particles."
+        details = [
+            "Live \(liveBudgetText)",
+            "Requested \(requested), accepted \(spawned)",
+        ]
     } else if requested > 0 {
         severity = .info
         reason = "High spawn requests"
+        primarySignal = "\(requested) spawn requests"
+        recommendation = "Audit emission curves, bursts, and distance emission if this emitter becomes a frame hotspot."
+        details = [
+            "Accepted \(spawned)",
+            "Live \(liveBudgetText)",
+        ]
     } else if liveCount > 0 {
         severity = .nominal
         reason = "Live particles"
+        primarySignal = "\(liveCount) live particles"
+        recommendation = "Emitter is active without spawn pressure in the latest frame."
+        details = [
+            "Live \(liveBudgetText)",
+            "Spawn budget \(spawnBudgetText)",
+        ]
     } else {
         severity = .idle
         reason = "Idle"
+        primarySignal = "No live particles or spawn requests"
+        recommendation = "Emitter has no particle workload in the latest frame."
+        details = [
+            "Live \(liveBudgetText)",
+            "Spawn budget \(spawnBudgetText)",
+        ]
     }
 
     return DeveloperParticleEmitterHotspot(
         entityID: entityID,
         severity: severity,
         reason: reason,
+        primarySignal: primarySignal,
+        recommendation: recommendation,
+        details: details,
         score: score,
         liveParticleCount: liveCount,
         requestedSpawnCount: requested,
@@ -592,9 +860,8 @@ func makeDeveloperParticleEmitterHotspot(entityID: UInt64,
         capacityLimitedSpawnCount: capacityDrops,
         spawnBudgetLimitedCount: budgetDrops,
         eventDroppedSpawnCount: eventDrops,
-        liveBudgetText: formatBudget(liveCount, baseStats.liveParticleBudgetLimit),
-        spawnBudgetText: formatBudget((frameStats?.spawnBudgetConsumedCount ?? 0) + (eventStats?.spawnBudgetConsumedCount ?? 0),
-                                      baseStats.spawnBudgetLimit)
+        liveBudgetText: liveBudgetText,
+        spawnBudgetText: spawnBudgetText
     )
 }
 
@@ -678,6 +945,19 @@ func makeDeveloperParticleDiagnosticSummary(stats: ParticleFrameStatsResource,
         )
     }
 
+    if renderSummary.renderBudgetSkippedSourceParticleCount > 0 {
+        return DeveloperParticleDiagnosticSummary(
+            severity: .info,
+            status: "Particle render budget limiting",
+            primarySignal: "\(renderSummary.renderBudgetSkippedSourceParticleCount) source particles skipped before render",
+            recommendation: "Tune Max Rendered Particles and render LOD so simulation cost and visual density stay balanced.",
+            details: [
+                "Source \(renderSummary.sourceParticleCount), submitted \(renderSummary.submittedSourceParticleCount)",
+                "Render instances \(renderSummary.particleCount)",
+            ]
+        )
+    }
+
     let averageBatchSize = particleAverageBatchSize(renderSummary)
     if renderSummary.batchCount >= 8 && averageBatchSize < 4 {
         return DeveloperParticleDiagnosticSummary(
@@ -730,6 +1010,26 @@ func makeDeveloperParticleDiagnosticSummary(stats: ParticleFrameStatsResource,
     )
 }
 
+private struct ParticleDiagnosticsTabView: View {
+    let app: EditorApplication
+    let store: EditorStore
+
+    var body: some View {
+        ParticleDiagnosticsView(
+            stats: app.currentParticleFrameStats(),
+            eventReport: app.currentParticleSimulationEventApplyReport(),
+            scalability: app.currentParticleScalabilityState(),
+            renderSummary: app.currentRenderScene().particleSummary,
+            renderStats: app.currentRenderStats(),
+            history: store.particleDiagnosticsHistory,
+            selectedEntityID: store.selectedEntityID,
+            emitterLabels: makeDeveloperParticleEmitterLabels(roots: app.scene.roots),
+            selectedGPUSimulationPlan: app.scene.currentParticleGPUSimulationPlan(for: store.selectedEntityID),
+            selectedModuleValidationIssues: app.scene.currentParticleModuleValidationIssues(for: store.selectedEntityID)
+        )
+    }
+}
+
 private struct ParticleDiagnosticsView: View {
     let stats: ParticleFrameStatsResource
     let eventReport: ParticleSimulationEventApplyReport
@@ -738,6 +1038,9 @@ private struct ParticleDiagnosticsView: View {
     let renderStats: RenderFrameStats
     let history: [EditorParticleDiagnosticsSample]
     let selectedEntityID: UInt64?
+    let emitterLabels: [UInt64: DeveloperParticleEmitterLabel]
+    let selectedGPUSimulationPlan: ParticleGPUSimulationPlan?
+    let selectedModuleValidationIssues: [ParticleModuleIssue]
 
     var body: some View {
         let summary = makeDeveloperParticleDiagnosticSummary(stats: stats,
@@ -746,6 +1049,10 @@ private struct ParticleDiagnosticsView: View {
                                                              renderSummary: renderSummary,
                                                              renderStats: renderStats)
         let trend = makeDeveloperParticleTrendSummary(history: history)
+        let authoringSummary = makeDeveloperParticleAuthoringDiagnosticSummary(
+            gpuPlan: selectedGPUSimulationPlan,
+            moduleIssues: selectedModuleValidationIssues
+        )
         let hotspots = makeDeveloperParticleEmitterHotspots(stats: stats,
                                                             eventReport: eventReport)
         let selectedHotspot = selectedEntityID.flatMap { entityID -> DeveloperParticleEmitterHotspot? in
@@ -776,7 +1083,9 @@ private struct ParticleDiagnosticsView: View {
 
             ParticleEmitterHotspotsView(hotspots: hotspots,
                                         selectedHotspot: selectedHotspot,
-                                        selectedEntityID: selectedEntityID)
+                                        selectedEntityID: selectedEntityID,
+                                        emitterLabels: emitterLabels,
+                                        authoringSummary: authoringSummary)
                 .padding(horizontal: 12, vertical: 10)
 
             Divider()
@@ -861,6 +1170,9 @@ private struct ParticleDiagnosticsView: View {
 
                 StatGroup(title: "Render Batches") {
                     StatRow(label: "Submitted", value: "\(renderSummary.particleCount)")
+                    StatRow(label: "Source", value: "\(renderSummary.sourceParticleCount)")
+                    StatRow(label: "Submitted Source", value: "\(renderSummary.submittedSourceParticleCount)")
+                    StatRow(label: "Render Skips", value: "\(renderSummary.renderBudgetSkippedSourceParticleCount)")
                     StatRow(label: "CPU Submitted", value: "\(renderSummary.cpuRenderInstanceCount)")
                     StatRow(label: "GPU Submitted", value: "\(renderSummary.gpuRenderInstanceCount)")
                     StatRow(label: "Batches", value: "\(renderSummary.batchCount)")
@@ -1030,19 +1342,31 @@ private struct ParticleEmitterHotspotsView: View {
     let hotspots: [DeveloperParticleEmitterHotspot]
     let selectedHotspot: DeveloperParticleEmitterHotspot?
     let selectedEntityID: UInt64?
+    let emitterLabels: [UInt64: DeveloperParticleEmitterLabel]
+    let authoringSummary: DeveloperParticleDiagnosticSummary
 
     var body: some View {
         Row(alignment: .top, spacing: 12) {
             StatGroup(title: "Selected Emitter") {
                 if let selectedHotspot {
-                    ParticleEmitterHotspotDetail(hotspot: selectedHotspot)
+                    ParticleEmitterHotspotDetail(hotspot: selectedHotspot,
+                                                 label: emitterLabels[selectedHotspot.entityID])
                 } else if let selectedEntityID {
-                    StatRow(label: "Entity", value: "\(selectedEntityID)")
+                    if let label = emitterLabels[selectedEntityID] {
+                        StatRow(label: "Entity", value: label.name)
+                        StatRow(label: "ID", value: "#\(selectedEntityID)")
+                        StatWrappedValue(label: "Path", value: label.path)
+                    } else {
+                        StatRow(label: "Entity", value: "#\(selectedEntityID)")
+                    }
                     StatWrappedValue(label: "Status",
                                      value: "Selected entity has no particle runtime stats in the latest frame.")
                 } else {
                     StatWrappedValue(label: "Status",
                                      value: "Select a particle emitter to inspect per-emitter runtime pressure.")
+                }
+                if selectedEntityID != nil {
+                    ParticleAuthoringDiagnosticRows(summary: authoringSummary)
                 }
             }
             .flex(1, shrink: 1)
@@ -1054,6 +1378,7 @@ private struct ParticleEmitterHotspotsView: View {
                 } else {
                     for hotspot in hotspots {
                         ParticleEmitterHotspotRow(hotspot: hotspot,
+                                                  label: emitterLabels[hotspot.entityID],
                                                   isSelected: hotspot.entityID == selectedEntityID)
                     }
                 }
@@ -1063,12 +1388,39 @@ private struct ParticleEmitterHotspotsView: View {
     }
 }
 
-private struct ParticleEmitterHotspotDetail: View {
-    let hotspot: DeveloperParticleEmitterHotspot
+private struct ParticleAuthoringDiagnosticRows: View {
+    let summary: DeveloperParticleDiagnosticSummary
 
     var body: some View {
-        StatRow(label: "Entity", value: "\(hotspot.entityID)")
+        StatRow(label: "Authoring", value: summary.status)
+        ParticleSeverityRow(severity: summary.severity)
+        StatWrappedValue(label: "Author Signal", value: summary.primarySignal)
+        StatWrappedValue(label: "Author Action", value: summary.recommendation)
+        if !summary.details.isEmpty {
+            StatWrappedValue(label: "Author Details", value: summary.details.joined(separator: " | "))
+        }
+    }
+}
+
+private struct ParticleEmitterHotspotDetail: View {
+    let hotspot: DeveloperParticleEmitterHotspot
+    let label: DeveloperParticleEmitterLabel?
+
+    var body: some View {
+        if let label {
+            StatRow(label: "Entity", value: label.name)
+            StatRow(label: "Kind", value: label.kind)
+            StatRow(label: "ID", value: "#\(hotspot.entityID)")
+            StatWrappedValue(label: "Path", value: label.path)
+        } else {
+            StatRow(label: "Entity", value: "#\(hotspot.entityID)")
+        }
         StatRow(label: "Reason", value: hotspot.reason)
+        StatWrappedValue(label: "Signal", value: hotspot.primarySignal)
+        StatWrappedValue(label: "Action", value: hotspot.recommendation)
+        if !hotspot.details.isEmpty {
+            StatWrappedValue(label: "Details", value: hotspot.details.joined(separator: " | "))
+        }
         StatRow(label: "Live", value: hotspot.liveBudgetText)
         StatRow(label: "Requests", value: "\(hotspot.requestedSpawnCount)")
         StatRow(label: "Accepted", value: "\(hotspot.spawnedParticleCount)")
@@ -1081,6 +1433,7 @@ private struct ParticleEmitterHotspotDetail: View {
 
 private struct ParticleEmitterHotspotRow: View {
     let hotspot: DeveloperParticleEmitterHotspot
+    let label: DeveloperParticleEmitterLabel?
     let isSelected: Bool
 
     var body: some View {
@@ -1091,11 +1444,11 @@ private struct ParticleEmitterHotspotRow: View {
                 .foregroundColor(.accent)
                 .frame(width: 8)
 
-            Text("#\(hotspot.entityID)")
+            Text(label?.name ?? "#\(hotspot.entityID)")
                 .lineLimit(1)
                 .font(.mono)
                 .foregroundColor(.onSurface)
-                .frame(width: 64)
+                .frame(width: 112)
 
             Text(hotspot.severity.rawValue)
                 .lineLimit(1)
@@ -1111,7 +1464,13 @@ private struct ParticleEmitterHotspotRow: View {
                 .foregroundColor(.onSurface)
                 .flex(1, shrink: 1)
 
-            Text("live \(hotspot.liveParticleCount) req \(hotspot.requestedSpawnCount) drop \(hotspot.droppedSpawnCount)")
+            Text(hotspot.primarySignal)
+                .lineLimit(1)
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+                .flex(1, shrink: 1)
+
+            Text("#\(hotspot.entityID)")
                 .lineLimit(1)
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
