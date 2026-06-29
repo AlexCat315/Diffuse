@@ -312,6 +312,7 @@ struct EditorSceneAdapterTests {
                             ]),
                             burstCount: 5, burstInterval: 0.4,
                             maxParticles: 64,
+                            maxSpawnedParticlesPerFrame: 12,
                             maxRenderedParticles: 32,
                             lifetime: 1.25,
                             subEmitterTrigger: .death,
@@ -398,6 +399,7 @@ struct EditorSceneAdapterTests {
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.simulationSpeed == 1.4)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.prewarmStep == 0.04)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.emissionRate == 24)
+        #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.maxSpawnedParticlesPerFrame == 12)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.maxRenderedParticles == 32)
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.emissionRateCurve == .constant(1.25))
         #expect(findNode(in: manifest.roots, id: hero.id)?.particleEmitter?.distanceEmissionRate == 9)
@@ -467,6 +469,7 @@ struct EditorSceneAdapterTests {
         let e = restored.scene.component(ParticleEmitter.self, for: restoredID)
         #expect(e != nil)
         #expect(e!.emissionRate == 24)
+        #expect(e!.maxSpawnedParticlesPerFrame == 12)
         #expect(e!.emissionRateCurve == .constant(1.25))
         #expect(e!.distanceEmissionRate == 9)
         #expect(e!.distanceEmissionRateCurve == .keyframes([

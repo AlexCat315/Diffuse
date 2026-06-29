@@ -100,4 +100,42 @@ struct EditorStoreTests {
         #expect(stats.fps < 3)
         #expect(stats.workFPS > 55)
     }
+
+    @Test("Frame stats updates maintain a bounded diagnostic history")
+    func frameStatsHistoryIsBounded() {
+        let store = EditorStore()
+        var notifications = 0
+        _ = store.subscribe { _ in notifications += 1 }
+
+        let sampleCount = EditorState.maxFrameStatsHistorySamples + 5
+        for index in 1...sampleCount {
+            store.dispatch(.tickFrame(UInt64(index)))
+            store.dispatch(.updateFrameStats(EditorFrameStats(frameSeconds: Double(index) / 1_000,
+                                                              drawCallCount: index)))
+        }
+
+        #expect(store.frameStatsHistory.count == EditorState.maxFrameStatsHistorySamples)
+        #expect(store.frameStatsHistory.first?.sampleIndex == 6)
+        #expect(store.frameStatsHistory.first?.frameIndex == 6)
+        #expect(store.frameStatsHistory.last?.sampleIndex == UInt64(sampleCount))
+        #expect(store.frameStatsHistory.last?.frameIndex == UInt64(sampleCount))
+        #expect(store.frameStatsHistory.last?.stats.drawCallCount == sampleCount)
+        #expect(notifications == sampleCount)
+    }
+
+    @Test("Frame stats history is transient editor state")
+    func frameStatsHistoryIsTransient() throws {
+        let state = EditorState(frameStatsHistory: [
+            EditorFrameStatsHistorySample(sampleIndex: 1,
+                                          frameIndex: 10,
+                                          stats: EditorFrameStats(frameSeconds: 0.016)),
+        ])
+
+        let data = try JSONEncoder().encode(state)
+        let json = String(decoding: data, as: UTF8.self)
+        let decoded = try JSONDecoder().decode(EditorState.self, from: data)
+
+        #expect(!json.contains("frameStatsHistory"))
+        #expect(decoded.frameStatsHistory.isEmpty)
+    }
 }

@@ -14,6 +14,7 @@ struct DeveloperToolsPanel: View {
         StoreScope(app.store) { store in
             let timingRevision = store.frameTimingRevision
             let frameStats = store.state.frameStats
+            let frameStatsHistory = store.frameStatsHistory
             let renderStats = app.currentRenderStats()
             let particleStats = app.currentParticleFrameStats()
             let particleEventReport = app.currentParticleSimulationEventApplyReport()
@@ -23,6 +24,7 @@ struct DeveloperToolsPanel: View {
             TabView(selection: $selectedTab, tabs: [
                 TabItem(L("Performance"), id: DeveloperToolTab.performance) {
                     PerformanceDiagnosticsView(stats: frameStats,
+                                               history: frameStatsHistory,
                                                timingRevision: timingRevision)
                 },
                 TabItem(L("Render Stats"), id: DeveloperToolTab.render) {
@@ -38,7 +40,8 @@ struct DeveloperToolsPanel: View {
                                             eventReport: particleEventReport,
                                             scalability: particleScalability,
                                             renderSummary: particleRenderSummary,
-                                            renderStats: renderStats)
+                                            renderStats: renderStats,
+                                            selectedEntityID: store.selectedEntityID)
                 },
                 TabItem(L("Console"), id: DeveloperToolTab.console) {
                     ConsoleDiagnosticsView(store: store)
@@ -57,11 +60,88 @@ private enum DeveloperToolTab: Hashable {
     case console
 }
 
+struct DeveloperFrameTrendSummary: Equatable {
+    var sampleCount: Int
+    var firstSampleIndex: UInt64
+    var lastSampleIndex: UInt64
+    var averageObservedFPS: Double
+    var averageWorkFPS: Double
+    var averageWorkMs: Double
+    var p95WorkMs: Double
+    var maxWorkMs: Double
+    var averagePacingGapMs: Double
+    var maxPacingGapMs: Double
+    var pacingDominatedSamples: Int
+    var peakWorkSampleIndex: UInt64
+    var maxDrawCallCount: Int
+    var maxPassCount: Int
+    var maxRenderBundleCount: Int
+}
+
+func makeDeveloperFrameTrendSummary(
+    history: [EditorFrameStatsHistorySample]
+) -> DeveloperFrameTrendSummary? {
+    guard !history.isEmpty else { return nil }
+
+    var observedFPSTotal = 0.0
+    var workFPSTotal = 0.0
+    var workMsTotal = 0.0
+    var pacingGapMsTotal = 0.0
+    var maxPacingGapMs = 0.0
+    var pacingDominatedSamples = 0
+    var maxDrawCallCount = 0
+    var maxPassCount = 0
+    var maxRenderBundleCount = 0
+    var peakWorkSample = history[0]
+    var workMsValues: [Double] = []
+    workMsValues.reserveCapacity(history.count)
+
+    for sample in history {
+        let stats = sample.stats
+        observedFPSTotal += stats.fps
+        workFPSTotal += stats.workFPS
+        workMsTotal += stats.workMs
+        pacingGapMsTotal += stats.pacingGapMs
+        maxPacingGapMs = max(maxPacingGapMs, stats.pacingGapMs)
+        if stats.isFramePacingDominated {
+            pacingDominatedSamples += 1
+        }
+        if stats.workMs > peakWorkSample.stats.workMs {
+            peakWorkSample = sample
+        }
+        maxDrawCallCount = max(maxDrawCallCount, stats.drawCallCount)
+        maxPassCount = max(maxPassCount, stats.passCount)
+        maxRenderBundleCount = max(maxRenderBundleCount, stats.renderBundleCount)
+        workMsValues.append(stats.workMs)
+    }
+
+    let count = Double(history.count)
+    return DeveloperFrameTrendSummary(
+        sampleCount: history.count,
+        firstSampleIndex: history[0].sampleIndex,
+        lastSampleIndex: history[history.count - 1].sampleIndex,
+        averageObservedFPS: observedFPSTotal / count,
+        averageWorkFPS: workFPSTotal / count,
+        averageWorkMs: workMsTotal / count,
+        p95WorkMs: percentile(workMsValues, fraction: 0.95),
+        maxWorkMs: peakWorkSample.stats.workMs,
+        averagePacingGapMs: pacingGapMsTotal / count,
+        maxPacingGapMs: maxPacingGapMs,
+        pacingDominatedSamples: pacingDominatedSamples,
+        peakWorkSampleIndex: peakWorkSample.sampleIndex,
+        maxDrawCallCount: maxDrawCallCount,
+        maxPassCount: maxPassCount,
+        maxRenderBundleCount: maxRenderBundleCount
+    )
+}
+
 private struct PerformanceDiagnosticsView: View {
     let stats: EditorFrameStats
+    let history: [EditorFrameStatsHistorySample]
     let timingRevision: UInt64
 
     var body: some View {
+        let trend = makeDeveloperFrameTrendSummary(history: history)
         ScrollView(.vertical) {
             if stats.isFramePacingDominated {
                 FramePacingNotice(stats: stats)
@@ -99,6 +179,41 @@ private struct PerformanceDiagnosticsView: View {
             .padding(horizontal: 12, vertical: 10)
 
             Divider()
+
+            if let trend {
+                Row(alignment: .top, spacing: 12) {
+                    StatGroup(title: "Recent Trend") {
+                        StatRow(label: "Samples", value: "\(trend.sampleCount)")
+                        StatRow(label: "Window", value: "#\(trend.firstSampleIndex)-#\(trend.lastSampleIndex)")
+                        StatRow(label: "Avg Observed FPS", value: formatFPS(trend.averageObservedFPS))
+                        StatRow(label: "Avg Work FPS", value: formatFPS(trend.averageWorkFPS))
+                        StatRow(label: "Avg Work", value: formatMs(trend.averageWorkMs))
+                    }
+                    .flex(1, shrink: 1)
+
+                    StatGroup(title: "Stability") {
+                        StatRow(label: "Pacing Samples", value: "\(trend.pacingDominatedSamples)/\(trend.sampleCount)")
+                        StatRow(label: "Pacing Share", value: formatPercent(trend.pacingDominatedSamples,
+                                                                             trend.sampleCount))
+                        StatRow(label: "Avg Gap", value: formatMs(trend.averagePacingGapMs))
+                        StatRow(label: "Max Gap", value: formatMs(trend.maxPacingGapMs))
+                        StatRow(label: "P95 Work", value: formatMs(trend.p95WorkMs))
+                    }
+                    .flex(1, shrink: 1)
+
+                    StatGroup(title: "Peak Load") {
+                        StatRow(label: "Peak Sample", value: "#\(trend.peakWorkSampleIndex)")
+                        StatRow(label: "Max Work", value: formatMs(trend.maxWorkMs))
+                        StatRow(label: "Max Draw Calls", value: "\(trend.maxDrawCallCount)")
+                        StatRow(label: "Max Passes", value: "\(trend.maxPassCount)")
+                        StatRow(label: "Max Bundles", value: "\(trend.maxRenderBundleCount)")
+                    }
+                    .flex(1, shrink: 1)
+                }
+                .padding(horizontal: 12, vertical: 10)
+
+                Divider()
+            }
 
             Row(alignment: .top, spacing: 12) {
                 StatGroup(title: "Budget") {
@@ -250,15 +365,306 @@ private struct RuntimeDiagnosticsView: View {
     }
 }
 
+enum DeveloperParticleDiagnosticSeverity: String, Equatable {
+    case idle = "Idle"
+    case nominal = "Nominal"
+    case info = "Info"
+    case warning = "Warning"
+    case critical = "Critical"
+}
+
+struct DeveloperParticleDiagnosticSummary: Equatable {
+    var severity: DeveloperParticleDiagnosticSeverity
+    var status: String
+    var primarySignal: String
+    var recommendation: String
+    var details: [String]
+}
+
+struct DeveloperParticleEmitterHotspot: Equatable {
+    var entityID: UInt64
+    var severity: DeveloperParticleDiagnosticSeverity
+    var reason: String
+    var score: Int
+    var liveParticleCount: Int
+    var requestedSpawnCount: Int
+    var spawnedParticleCount: Int
+    var droppedSpawnCount: Int
+    var capacityLimitedSpawnCount: Int
+    var spawnBudgetLimitedCount: Int
+    var eventDroppedSpawnCount: Int
+    var liveBudgetText: String
+    var spawnBudgetText: String
+}
+
+func makeDeveloperParticleEmitterHotspots(stats: ParticleFrameStatsResource,
+                                          eventReport: ParticleSimulationEventApplyReport,
+                                          limit: Int = 8) -> [DeveloperParticleEmitterHotspot] {
+    let entityIDs = Set(stats.emitterStatsByEntity.keys)
+        .union(eventReport.emitterStatsByEntity.keys)
+    let hotspots = entityIDs.compactMap { entityID -> DeveloperParticleEmitterHotspot? in
+        return makeDeveloperParticleEmitterHotspot(entityID: entityID,
+                                                   frameStats: stats.emitterStats(for: entityID),
+                                                   eventStats: eventReport.emitterStats(for: entityID))
+    }
+    return hotspots
+        .sorted {
+            if $0.score != $1.score { return $0.score > $1.score }
+            return $0.entityID < $1.entityID
+        }
+        .prefix(max(0, limit))
+        .map { $0 }
+}
+
+func makeDeveloperParticleEmitterHotspot(entityID: UInt64,
+                                         frameStats: ParticleEmitterFrameStats?,
+                                         eventStats: ParticleEmitterFrameStats? = nil) -> DeveloperParticleEmitterHotspot {
+    guard let baseStats = frameStats ?? eventStats else {
+        return DeveloperParticleEmitterHotspot(
+            entityID: entityID,
+            severity: .idle,
+            reason: "Idle",
+            score: 0,
+            liveParticleCount: 0,
+            requestedSpawnCount: 0,
+            spawnedParticleCount: 0,
+            droppedSpawnCount: 0,
+            capacityLimitedSpawnCount: 0,
+            spawnBudgetLimitedCount: 0,
+            eventDroppedSpawnCount: 0,
+            liveBudgetText: formatBudget(0, 0),
+            spawnBudgetText: formatBudget(0, 0)
+        )
+    }
+    let eventDrops = eventStats?.droppedSpawnCount ?? 0
+    let frameDrops = frameStats?.droppedSpawnCount ?? 0
+    let capacityDrops = (frameStats?.capacityLimitedSpawnCount ?? 0) + (eventStats?.capacityLimitedSpawnCount ?? 0)
+    let budgetDrops = (frameStats?.spawnBudgetLimitedCount ?? 0) + (eventStats?.spawnBudgetLimitedCount ?? 0)
+    let totalDrops = frameDrops + eventDrops
+    let requested = (frameStats?.requestedSpawnCount ?? 0) + (eventStats?.requestedSpawnCount ?? 0)
+    let spawned = (frameStats?.spawnedParticleCount ?? 0) + (eventStats?.spawnedParticleCount ?? 0)
+    let liveCount = frameStats?.liveParticleCount ?? baseStats.liveParticleCount
+    let livePressure = frameStats?.liveParticleBudgetUtilization ?? baseStats.liveParticleBudgetUtilization
+    let livePressureScore = Int((livePressure * 10_000).rounded())
+    let score = totalDrops * 1_000_000
+        + livePressureScore
+        + requested * 100
+        + liveCount
+
+    let severity: DeveloperParticleDiagnosticSeverity
+    let reason: String
+    if capacityDrops > 0 {
+        severity = .critical
+        reason = "Capacity drops"
+    } else if budgetDrops > 0 {
+        severity = .warning
+        reason = "Spawn budget drops"
+    } else if livePressure >= 0.9 {
+        severity = .warning
+        reason = "Live budget"
+    } else if requested > 0 {
+        severity = .info
+        reason = "High spawn requests"
+    } else if liveCount > 0 {
+        severity = .nominal
+        reason = "Live particles"
+    } else {
+        severity = .idle
+        reason = "Idle"
+    }
+
+    return DeveloperParticleEmitterHotspot(
+        entityID: entityID,
+        severity: severity,
+        reason: reason,
+        score: score,
+        liveParticleCount: liveCount,
+        requestedSpawnCount: requested,
+        spawnedParticleCount: spawned,
+        droppedSpawnCount: totalDrops,
+        capacityLimitedSpawnCount: capacityDrops,
+        spawnBudgetLimitedCount: budgetDrops,
+        eventDroppedSpawnCount: eventDrops,
+        liveBudgetText: formatBudget(liveCount, baseStats.liveParticleBudgetLimit),
+        spawnBudgetText: formatBudget((frameStats?.spawnBudgetConsumedCount ?? 0) + (eventStats?.spawnBudgetConsumedCount ?? 0),
+                                      baseStats.spawnBudgetLimit)
+    )
+}
+
+func makeDeveloperParticleDiagnosticSummary(stats: ParticleFrameStatsResource,
+                                            eventReport: ParticleSimulationEventApplyReport,
+                                            scalability: ParticleScalabilityStateResource,
+                                            renderSummary: ParticleRenderSummary,
+                                            renderStats: RenderFrameStats) -> DeveloperParticleDiagnosticSummary {
+    let frameCapacityDrops = stats.capacityLimitedSpawnCount
+    let eventCapacityDrops = eventReport.capacityLimitedSpawnCount
+    let frameBudgetDrops = stats.spawnBudgetLimitedCount
+    let eventBudgetDrops = eventReport.spawnBudgetLimitedCount
+    let hasCapacityDrops = frameCapacityDrops > 0 || eventCapacityDrops > 0
+    let hasBudgetDrops = frameBudgetDrops > 0 || eventBudgetDrops > 0
+    let hasReadbackDrops = eventReport.droppedReadbackEventCount > 0
+    let livePressure = stats.liveParticleBudgetUtilization
+
+    if hasReadbackDrops {
+        return DeveloperParticleDiagnosticSummary(
+            severity: .critical,
+            status: "GPU event readback overflow",
+            primarySignal: "\(eventReport.droppedReadbackEventCount) dropped readback events",
+            recommendation: "Reduce event-heavy GPU particles or raise the GPU event readback capacity.",
+            details: [
+                "Readback \(eventReport.appliedEventCount)/\(eventReport.totalReadbackEventCount) events applied",
+                "Sub-emitter spawns \(eventReport.subEmitterSpawnedCount)",
+            ]
+        )
+    }
+
+    if hasCapacityDrops {
+        return DeveloperParticleDiagnosticSummary(
+            severity: .critical,
+            status: "Particle capacity saturated",
+            primarySignal: "\(frameCapacityDrops + eventCapacityDrops) capacity-limited spawns",
+            recommendation: "Raise max particles/effective budget or reduce lifetime and high-rate spawn sources.",
+            details: [
+                "Live \(stats.liveParticleCount)/\(stats.liveParticleBudgetLimit)",
+                "Frame drops \(stats.droppedSpawnCount), event drops \(eventReport.droppedSpawnCount)",
+            ]
+        )
+    }
+
+    if hasBudgetDrops {
+        return DeveloperParticleDiagnosticSummary(
+            severity: .warning,
+            status: "Spawn budget throttling",
+            primarySignal: "\(frameBudgetDrops + eventBudgetDrops) budget-limited spawns",
+            recommendation: "Raise Max Spawn / Frame for bursty emitters or reduce burst, distance, and sub-emitter rates.",
+            details: [
+                "Frame budget \(formatBudget(stats.spawnBudgetConsumedCount, stats.spawnBudgetLimit))",
+                "Event budget \(formatBudget(eventReport.spawnBudgetConsumedCount, eventReport.spawnBudgetLimit))",
+            ]
+        )
+    }
+
+    if livePressure >= 0.9 {
+        return DeveloperParticleDiagnosticSummary(
+            severity: .warning,
+            status: "Live particle budget near full",
+            primarySignal: "\(formatPercent(stats.liveParticleCount, stats.liveParticleBudgetLimit)) live budget used",
+            recommendation: "Reduce lifetime/spawn rates or raise the live-particle scalability budget before drops start.",
+            details: [
+                "Live \(stats.liveParticleCount)/\(stats.liveParticleBudgetLimit)",
+                "Scalability \(scalability.reason.rawValue) @ \(formatScale(scalability.pressure))",
+            ]
+        )
+    }
+
+    let sortPaddingOverhead = particleSortPaddingOverhead(renderStats)
+    if sortPaddingOverhead >= 0.5 && renderStats.gpuParticleSortItemCount >= 512 {
+        return DeveloperParticleDiagnosticSummary(
+            severity: .warning,
+            status: "GPU sort padding overhead",
+            primarySignal: "\(formatPercent(renderStats.gpuParticleSortPaddedItemCount - renderStats.gpuParticleSortItemCount, renderStats.gpuParticleSortPaddedItemCount)) padding",
+            recommendation: "Reduce sorted GPU particles or split effects so sort passes work on tighter batches.",
+            details: [
+                "Sort items \(renderStats.gpuParticleSortItemCount)",
+                "Sort workgroups \(renderStats.gpuParticleSortDispatchWorkgroups)",
+            ]
+        )
+    }
+
+    let averageBatchSize = particleAverageBatchSize(renderSummary)
+    if renderSummary.batchCount >= 8 && averageBatchSize < 4 {
+        return DeveloperParticleDiagnosticSummary(
+            severity: .info,
+            status: "Particle batches fragmented",
+            primarySignal: "\(renderSummary.batchCount) batches for \(renderSummary.particleCount) particles",
+            recommendation: "Align blend mode, texture, and sort priority across related emitters to improve batching.",
+            details: [
+                "Average \(formatDecimal(averageBatchSize)) particles/batch",
+                "Textures \(renderSummary.uniqueTextureCount), CPU/GPU \(renderSummary.cpuBatchCount)/\(renderSummary.gpuBatchCount)",
+            ]
+        )
+    }
+
+    if stats.activeEmitterCount == 0 && renderSummary.particleCount == 0 {
+        return DeveloperParticleDiagnosticSummary(
+            severity: .idle,
+            status: "No active particle workload",
+            primarySignal: "No live particles or submitted batches",
+            recommendation: "Select or enable a particle emitter to inspect runtime behavior.",
+            details: [
+                "Emitters \(stats.emitterCount)",
+                "Frame sample \(formatMs(Double(stats.simulatedDeltaTime) * 1000))",
+            ]
+        )
+    }
+
+    if renderSummary.gpuRenderInstanceCount > 0 {
+        return DeveloperParticleDiagnosticSummary(
+            severity: .nominal,
+            status: "GPU particle path active",
+            primarySignal: "\(renderSummary.gpuRenderInstanceCount) GPU render instances",
+            recommendation: "Watch sort padding, readback drops, and GPU workgroup split as effect complexity grows.",
+            details: [
+                "GPU batches \(renderSummary.gpuBatchCount)",
+                "GPU workgroups \(gpuParticleWorkgroupTotal(renderStats))",
+            ]
+        )
+    }
+
+    return DeveloperParticleDiagnosticSummary(
+        severity: .nominal,
+        status: "CPU particle path active",
+        primarySignal: "\(renderSummary.cpuRenderInstanceCount) CPU render instances",
+        recommendation: "Move high-volume compatible emitters to GPU simulation when CPU particles become a bottleneck.",
+        details: [
+            "CPU batches \(renderSummary.cpuBatchCount)",
+            "Live particles \(stats.liveParticleCount)",
+        ]
+    )
+}
+
 private struct ParticleDiagnosticsView: View {
     let stats: ParticleFrameStatsResource
     let eventReport: ParticleSimulationEventApplyReport
     let scalability: ParticleScalabilityStateResource
     let renderSummary: ParticleRenderSummary
     let renderStats: RenderFrameStats
+    let selectedEntityID: UInt64?
 
     var body: some View {
+        let summary = makeDeveloperParticleDiagnosticSummary(stats: stats,
+                                                             eventReport: eventReport,
+                                                             scalability: scalability,
+                                                             renderSummary: renderSummary,
+                                                             renderStats: renderStats)
+        let hotspots = makeDeveloperParticleEmitterHotspots(stats: stats,
+                                                            eventReport: eventReport)
+        let selectedHotspot = selectedEntityID.flatMap { entityID -> DeveloperParticleEmitterHotspot? in
+            let frameStats = stats.emitterStats(for: entityID)
+            let eventStats = eventReport.emitterStats(for: entityID)
+            guard frameStats != nil || eventStats != nil else {
+                return nil
+            }
+            return makeDeveloperParticleEmitterHotspot(entityID: entityID,
+                                                       frameStats: frameStats,
+                                                       eventStats: eventStats)
+        }
         ScrollView(.vertical) {
+            ParticleHealthOverview(summary: summary,
+                                   stats: stats,
+                                   eventReport: eventReport,
+                                   renderSummary: renderSummary)
+                .padding(horizontal: 12, vertical: 10)
+
+            Divider()
+
+            ParticleEmitterHotspotsView(hotspots: hotspots,
+                                        selectedHotspot: selectedHotspot,
+                                        selectedEntityID: selectedEntityID)
+                .padding(horizontal: 12, vertical: 10)
+
+            Divider()
+
             Row(alignment: .top, spacing: 12) {
                 StatGroup(title: "Emitters") {
                     StatRow(label: "Total", value: "\(stats.emitterCount)")
@@ -271,12 +677,15 @@ private struct ParticleDiagnosticsView: View {
                 .flex(1, shrink: 1)
 
                 StatGroup(title: "Spawned") {
+                    StatRow(label: "Requested", value: "\(stats.requestedSpawnCount)")
                     StatRow(label: "Total", value: "\(stats.spawnedParticleCount)")
                     StatRow(label: "Continuous", value: "\(stats.continuousSpawnedCount)")
                     StatRow(label: "Burst", value: "\(stats.burstSpawnedCount)")
                     StatRow(label: "Distance", value: "\(stats.distanceSpawnedCount)")
                     StatRow(label: "Sub-Emitter", value: "\(stats.subEmitterSpawnedCount)")
+                    StatRow(label: "Total Drops", value: "\(stats.droppedSpawnCount)")
                     StatRow(label: "Capacity Drops", value: "\(stats.capacityLimitedSpawnCount)")
+                    StatRow(label: "Spawn Budget Drops", value: "\(stats.spawnBudgetLimitedCount)")
                 }
                 .flex(1, shrink: 1)
 
@@ -287,9 +696,13 @@ private struct ParticleDiagnosticsView: View {
                                                                           stats.maxParticleCount))
                     StatRow(label: "Live / Effective", value: formatPercent(stats.liveParticleCount,
                                                                              stats.liveParticleLimit))
-                    StatRow(label: "Drop Rate", value: formatPercent(stats.capacityLimitedSpawnCount,
+                    StatRow(label: "Spawn Budget", value: formatBudget(stats.spawnBudgetConsumedCount,
+                                                                        stats.spawnBudgetLimit))
+                    StatRow(label: "Spawn Budget Use", value: formatPercent(stats.spawnBudgetConsumedCount,
+                                                                             stats.spawnBudgetLimit))
+                    StatRow(label: "Drop Rate", value: formatPercent(stats.droppedSpawnCount,
                                                                       stats.spawnedParticleCount
-                                                                        + stats.capacityLimitedSpawnCount))
+                                                                        + stats.droppedSpawnCount))
                 }
                 .flex(1, shrink: 1)
             }
@@ -304,7 +717,7 @@ private struct ParticleDiagnosticsView: View {
                     StatRow(label: "Reason", value: scalability.reason.rawValue)
                     StatRow(label: "At Effective Cap", value: stats.liveParticleLimit > 0
                             && stats.liveParticleCount >= stats.liveParticleLimit ? "YES" : "NO")
-                    StatRow(label: "Spawn Pressure", value: stats.capacityLimitedSpawnCount > 0 ? "YES" : "NO")
+                    StatRow(label: "Spawn Pressure", value: stats.droppedSpawnCount > 0 ? "YES" : "NO")
                     StatRow(label: "Event Activity", value: stats.subEmitterSpawnedCount > 0
                             || stats.collisionCount > 0 ? "YES" : "NO")
                     StatRow(label: "Idle", value: stats.activeEmitterCount == 0 ? "YES" : "NO")
@@ -318,8 +731,13 @@ private struct ParticleDiagnosticsView: View {
                     StatRow(label: "Dropped Events", value: "\(eventReport.droppedReadbackEventCount)")
                     StatRow(label: "Deaths", value: "\(eventReport.deathEventCount)")
                     StatRow(label: "Collisions", value: "\(eventReport.collisionEventCount)")
+                    StatRow(label: "Spawn Requests", value: "\(eventReport.requestedSpawnCount)")
+                    StatRow(label: "Spawn Budget", value: formatBudget(eventReport.spawnBudgetConsumedCount,
+                                                                        eventReport.spawnBudgetLimit))
                     StatRow(label: "Sub-Emitter Spawns", value: "\(eventReport.subEmitterSpawnedCount)")
+                    StatRow(label: "Total Drops", value: "\(eventReport.droppedSpawnCount)")
                     StatRow(label: "Capacity Drops", value: "\(eventReport.capacityLimitedSpawnCount)")
+                    StatRow(label: "Spawn Budget Drops", value: "\(eventReport.spawnBudgetLimitedCount)")
                     StatRow(label: "Missing Emitters", value: "\(eventReport.missingEmitterCount)")
                     StatRow(label: "Empty Buckets", value: "\(eventReport.emptyEventEmitterCount)")
                 }
@@ -327,7 +745,11 @@ private struct ParticleDiagnosticsView: View {
 
                 StatGroup(title: "Render Batches") {
                     StatRow(label: "Submitted", value: "\(renderSummary.particleCount)")
+                    StatRow(label: "CPU Submitted", value: "\(renderSummary.cpuRenderInstanceCount)")
+                    StatRow(label: "GPU Submitted", value: "\(renderSummary.gpuRenderInstanceCount)")
                     StatRow(label: "Batches", value: "\(renderSummary.batchCount)")
+                    StatRow(label: "CPU Batches", value: "\(renderSummary.cpuBatchCount)")
+                    StatRow(label: "GPU Batches", value: "\(renderSummary.gpuBatchCount)")
                     StatRow(label: "Alpha", value: "\(renderSummary.alphaCount)")
                     StatRow(label: "Additive", value: "\(renderSummary.additiveCount)")
                     StatRow(label: "Textured", value: "\(renderSummary.texturedCount)")
@@ -399,6 +821,168 @@ private struct ParticleDiagnosticsView: View {
             }
             .padding(horizontal: 12, vertical: 10)
         }
+    }
+}
+
+private struct ParticleHealthOverview: View {
+    let summary: DeveloperParticleDiagnosticSummary
+    let stats: ParticleFrameStatsResource
+    let eventReport: ParticleSimulationEventApplyReport
+    let renderSummary: ParticleRenderSummary
+
+    var body: some View {
+        Row(alignment: .top, spacing: 12) {
+            StatGroup(title: "Particle Health") {
+                StatRow(label: "Status", value: summary.status)
+                ParticleSeverityRow(severity: summary.severity)
+                StatWrappedValue(label: "Signal", value: summary.primarySignal)
+                StatWrappedValue(label: "Action", value: summary.recommendation)
+            }
+            .flex(1.25, shrink: 1)
+
+            StatGroup(title: "Spawn Throughput") {
+                StatRow(label: "Requests", value: "\(stats.requestedSpawnCount)")
+                StatRow(label: "Accepted", value: "\(stats.spawnedParticleCount)")
+                StatRow(label: "Drop Rate", value: formatPercent(stats.droppedSpawnCount,
+                                                                  stats.spawnedParticleCount
+                                                                    + stats.droppedSpawnCount))
+                StatRow(label: "Budget", value: formatBudget(stats.spawnBudgetConsumedCount,
+                                                              stats.spawnBudgetLimit))
+                StatRow(label: "Event Requests", value: "\(eventReport.requestedSpawnCount)")
+                StatRow(label: "Event Drops", value: "\(eventReport.droppedSpawnCount)")
+            }
+            .flex(1, shrink: 1)
+
+            StatGroup(title: "Render Path") {
+                StatRow(label: "Submitted", value: "\(renderSummary.particleCount)")
+                StatRow(label: "CPU / GPU", value: "\(renderSummary.cpuRenderInstanceCount)/\(renderSummary.gpuRenderInstanceCount)")
+                StatRow(label: "Batches", value: "\(renderSummary.batchCount)")
+                StatRow(label: "Avg / Batch", value: formatDecimal(particleAverageBatchSize(renderSummary)))
+                StatRow(label: "Textures", value: "\(renderSummary.uniqueTextureCount)")
+                if summary.details.isEmpty {
+                    StatRow(label: "Detail", value: "--")
+                } else {
+                    StatWrappedValue(label: "Detail", value: summary.details.joined(separator: " | "))
+                }
+            }
+            .flex(1, shrink: 1)
+        }
+    }
+}
+
+private struct ParticleEmitterHotspotsView: View {
+    let hotspots: [DeveloperParticleEmitterHotspot]
+    let selectedHotspot: DeveloperParticleEmitterHotspot?
+    let selectedEntityID: UInt64?
+
+    var body: some View {
+        Row(alignment: .top, spacing: 12) {
+            StatGroup(title: "Selected Emitter") {
+                if let selectedHotspot {
+                    ParticleEmitterHotspotDetail(hotspot: selectedHotspot)
+                } else if let selectedEntityID {
+                    StatRow(label: "Entity", value: "\(selectedEntityID)")
+                    StatWrappedValue(label: "Status",
+                                     value: "Selected entity has no particle runtime stats in the latest frame.")
+                } else {
+                    StatWrappedValue(label: "Status",
+                                     value: "Select a particle emitter to inspect per-emitter runtime pressure.")
+                }
+            }
+            .flex(1, shrink: 1)
+
+            StatGroup(title: "Emitter Hotspots") {
+                if hotspots.isEmpty {
+                    StatWrappedValue(label: "Hotspots",
+                                     value: "No particle emitters reported runtime activity in the latest frame.")
+                } else {
+                    for hotspot in hotspots {
+                        ParticleEmitterHotspotRow(hotspot: hotspot,
+                                                  isSelected: hotspot.entityID == selectedEntityID)
+                    }
+                }
+            }
+            .flex(1.4, shrink: 1)
+        }
+    }
+}
+
+private struct ParticleEmitterHotspotDetail: View {
+    let hotspot: DeveloperParticleEmitterHotspot
+
+    var body: some View {
+        StatRow(label: "Entity", value: "\(hotspot.entityID)")
+        StatRow(label: "Reason", value: hotspot.reason)
+        StatRow(label: "Live", value: hotspot.liveBudgetText)
+        StatRow(label: "Requests", value: "\(hotspot.requestedSpawnCount)")
+        StatRow(label: "Accepted", value: "\(hotspot.spawnedParticleCount)")
+        StatRow(label: "Drops", value: "\(hotspot.droppedSpawnCount)")
+        StatRow(label: "Capacity Drops", value: "\(hotspot.capacityLimitedSpawnCount)")
+        StatRow(label: "Budget Drops", value: "\(hotspot.spawnBudgetLimitedCount)")
+        StatRow(label: "Spawn Budget", value: hotspot.spawnBudgetText)
+    }
+}
+
+private struct ParticleEmitterHotspotRow: View {
+    let hotspot: DeveloperParticleEmitterHotspot
+    let isSelected: Bool
+
+    var body: some View {
+        Row(alignment: .center, spacing: 8) {
+            Text(isSelected ? "*" : "")
+                .lineLimit(1)
+                .font(.caption)
+                .foregroundColor(.accent)
+                .frame(width: 8)
+
+            Text("#\(hotspot.entityID)")
+                .lineLimit(1)
+                .font(.mono)
+                .foregroundColor(.onSurface)
+                .frame(width: 64)
+
+            Text(hotspot.severity.rawValue)
+                .lineLimit(1)
+                .font(.caption)
+                .foregroundColor(particleSeverityForeground(hotspot.severity))
+                .padding(horizontal: 6, vertical: 2)
+                .background(particleSeverityBackground(hotspot.severity))
+                .cornerRadius(4)
+
+            Text(hotspot.reason)
+                .lineLimit(1)
+                .font(.caption)
+                .foregroundColor(.onSurface)
+                .flex(1, shrink: 1)
+
+            Text("live \(hotspot.liveParticleCount) req \(hotspot.requestedSpawnCount) drop \(hotspot.droppedSpawnCount)")
+                .lineLimit(1)
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+        }
+        .padding(horizontal: 8, vertical: 3)
+    }
+}
+
+private struct ParticleSeverityRow: View {
+    let severity: DeveloperParticleDiagnosticSeverity
+
+    var body: some View {
+        Row(alignment: .center, spacing: 0) {
+            Text("Severity")
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+                .flex(1, shrink: 1)
+
+            Text(severity.rawValue)
+                .lineLimit(1)
+                .font(.caption)
+                .foregroundColor(particleSeverityForeground(severity))
+                .padding(horizontal: 7, vertical: 2)
+                .background(particleSeverityBackground(severity))
+                .cornerRadius(4)
+        }
+        .padding(horizontal: 8, vertical: 2)
     }
 }
 
@@ -638,11 +1222,73 @@ private func gpuParticleWorkgroupTotal(_ stats: RenderFrameStats) -> Int {
         + stats.gpuParticleCullDispatchWorkgroups
 }
 
+func particleAverageBatchSize(_ summary: ParticleRenderSummary) -> Double {
+    guard summary.batchCount > 0 else { return 0 }
+    return Double(summary.particleCount) / Double(summary.batchCount)
+}
+
+func particleSortPaddingOverhead(_ stats: RenderFrameStats) -> Double {
+    guard stats.gpuParticleSortPaddedItemCount > 0,
+          stats.gpuParticleSortPaddedItemCount >= stats.gpuParticleSortItemCount
+    else { return 0 }
+    let padding = stats.gpuParticleSortPaddedItemCount - stats.gpuParticleSortItemCount
+    return Double(padding) / Double(stats.gpuParticleSortPaddedItemCount)
+}
+
+func percentile(_ values: [Double], fraction: Double) -> Double {
+    guard !values.isEmpty else { return 0 }
+    let clampedFraction = min(max(fraction, 0), 1)
+    let sortedValues = values.sorted()
+    let rawIndex = clampedFraction * Double(sortedValues.count - 1)
+    let index = Int(rawIndex.rounded(.up))
+    return sortedValues[min(max(index, 0), sortedValues.count - 1)]
+}
+
+private func particleSeverityForeground(_ severity: DeveloperParticleDiagnosticSeverity) -> SemanticColorRef {
+    switch severity {
+    case .idle:
+        return .onSurfaceMuted
+    case .nominal:
+        return .success
+    case .info:
+        return .info
+    case .warning:
+        return .warning
+    case .critical:
+        return .error
+    }
+}
+
+private func particleSeverityBackground(_ severity: DeveloperParticleDiagnosticSeverity) -> SemanticColorRef {
+    switch severity {
+    case .idle:
+        return .surface
+    case .nominal:
+        return .success.opacity(0.12)
+    case .info:
+        return .info.opacity(0.12)
+    case .warning:
+        return .warning.opacity(0.12)
+    case .critical:
+        return .error.opacity(0.12)
+    }
+}
+
 private func formatPercent(_ numerator: Int, _ denominator: Int) -> String {
     guard denominator > 0 else { return "--" }
     let percent = Double(numerator) / Double(denominator) * 100
     if percent < 10 { return String(format: "%.1f%%", percent) }
     return String(format: "%.0f%%", percent)
+}
+
+private func formatBudget(_ used: Int, _ limit: Int) -> String {
+    limit > 0 ? "\(used)/\(limit)" : "\(used)/unlimited"
+}
+
+private func formatDecimal(_ value: Double) -> String {
+    guard value.isFinite else { return "--" }
+    if value >= 10 { return String(format: "%.0f", value) }
+    return String(format: "%.1f", value)
 }
 
 private func formatScale(_ value: Float) -> String {
