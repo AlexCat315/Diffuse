@@ -124,6 +124,9 @@ jobs:
             exit 1
           fi
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Build native dependencies
         run: python3 bootstrap.py --force
 
@@ -193,6 +196,9 @@ jobs:
           if ($actual -notlike "*Swift version $env:GUAVA_SWIFT_VERSION *") {
             Write-Error "Expected Swift $env:GUAVA_SWIFT_VERSION; selected toolchain was: $actual"
           }
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Build native dependencies
         shell: pwsh
@@ -308,6 +314,9 @@ jobs:
             echo "Expected Swift ${GUAVA_SWIFT_VERSION}; selected toolchain was: $actual" >&2
             exit 1
           fi
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Build native dependencies
         shell: bash
