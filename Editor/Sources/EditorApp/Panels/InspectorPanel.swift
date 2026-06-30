@@ -253,20 +253,12 @@ struct InspectorPanel: View {
         return sections.flatMap { section -> [PropertyGridSection] in
             let startsCollapsed = collapsedIDs.contains(section.id)
             if section.id == "particle-emitter" {
-                let primaryFields = section.fields.filter(Self.isPrimaryParticleInspectorField)
-                let remainingFields = section.fields.filter {
-                    $0.id != Self.particleModuleStackFieldID
-                        && !Self.isPrimaryParticleInspectorField($0)
-                }
-                return [
-                    PropertyGridSection(
-                        id: section.id,
-                        title: section.title,
-                        rows: (primaryFields + remainingFields).map { row(for: $0, sectionID: section.id) },
-                        isCollapsible: true,
-                        startsCollapsed: startsCollapsed
-                    )
-                ]
+                return InspectorParticlePropertyLayout.sections(
+                    for: section,
+                    collapsedIDs: collapsedIDs,
+                    parentStartsCollapsed: startsCollapsed,
+                    rowBuilder: row
+                )
             }
 
             return [
@@ -279,15 +271,6 @@ struct InspectorPanel: View {
                 )
             ]
         }
-    }
-
-    private static let particleModuleStackFieldID = "particle-module-stack"
-    private static let primaryParticleInspectorFieldIDs: Set<String> = [
-        "particle-texture",
-    ]
-
-    private static func isPrimaryParticleInspectorField(_ field: EditorInspectorField) -> Bool {
-        primaryParticleInspectorFieldIDs.contains(field.id)
     }
 
     private func fieldView(_ value: EditorInspectorFieldValue,
