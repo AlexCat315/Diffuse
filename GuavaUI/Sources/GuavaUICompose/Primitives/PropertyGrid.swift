@@ -112,6 +112,7 @@ private struct _StatefulPropertyGrid: View {
 
     // Keyed by section id; true = collapsed
     @State var collapsed: [String: Bool] = [:]
+    @State var hoveredRowID: String? = nil
 
     var body: some View {
         scrollContainer {
@@ -166,15 +167,15 @@ private struct _StatefulPropertyGrid: View {
         }
     }
 
-    private func rowViews(_ rows: [PropertyGridRow]) -> [AnyView] {
-        rows.map { row in
-            AnyView(rowView(row))
+    private func rowViews(_ rows: [PropertyGridRow], sectionID: String) -> [AnyView] {
+        rows.enumerated().map { index, row in
+            AnyView(rowView(row, sectionID: sectionID, index: index))
         }
     }
 
     private func sectionView(_ section: PropertyGridSection,
                               isCollapsed: Bool) -> some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 2) {
+        Box(direction: .column, alignItems: .stretch, spacing: 0) {
             Button(role: .normal,
                    isEnabled: section.isCollapsible,
                    action: {
@@ -185,20 +186,27 @@ private struct _StatefulPropertyGrid: View {
             }) {
                 Row(alignment: .center, spacing: 6) {
                     if section.isCollapsible {
-                        Icon(isCollapsed ? PropertyGridIcons.chevronRight : PropertyGridIcons.chevronDown, size: 12, color: .onSurfaceVariant)
+                        Icon(isCollapsed ? PropertyGridIcons.chevronRight : PropertyGridIcons.chevronDown,
+                             size: 12,
+                             color: .onSurfaceVariant)
                     }
                     Text(section.title)
                         .font(.label)
                         .foregroundColor(.onSurface)
                         .flex()
+                    if !section.rows.isEmpty {
+                        Text("\(section.rows.count)")
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                    }
                 }
-                .padding(horizontal: 7, vertical: 3)
+                .padding(horizontal: 8, vertical: 3)
                 .frame(height: 26)
                 .flex()
             }
             .buttonStyle(.plain)
             .frame(height: 26)
-            .background(.surface)
+            .background(.surfaceVariant)
 
             if !isCollapsed {
                 Box(direction: .column, alignItems: .stretch, spacing: grid.rowSpacing) {
@@ -208,22 +216,50 @@ private struct _StatefulPropertyGrid: View {
                             .foregroundColor(.onSurfaceMuted)
                             .padding(horizontal: 8, vertical: 8)
                     } else {
-                        rowViews(section.rows)
+                        rowViews(section.rows, sectionID: section.id)
                     }
                 }
-                .padding(horizontal: 1, vertical: 2)
+                .padding(horizontal: 2, vertical: 3)
+                .background(.surface)
             }
+        }
+        .background(.surface)
+        .cornerRadius(6)
+        .border(.divider, width: 1)
+    }
+
+    private func rowView(_ row: PropertyGridRow, sectionID: String, index: Int) -> some View {
+        let rowHeight = row.rowHeight ?? grid.rowHeight
+        let rowKey = "\(sectionID)/\(row.id)"
+        switch row.layout {
+        case .twoColumn:
+            return AnyView(decoratedRow(rowKey, index: index) {
+                twoColumnRowView(row, rowHeight: rowHeight)
+            })
+        case .fullWidth:
+            return AnyView(decoratedRow(rowKey, index: index) {
+                fullWidthRowView(row, rowHeight: rowHeight)
+            })
         }
     }
 
-    private func rowView(_ row: PropertyGridRow) -> some View {
-        let rowHeight = row.rowHeight ?? grid.rowHeight
-        switch row.layout {
-        case .twoColumn:
-            return AnyView(twoColumnRowView(row, rowHeight: rowHeight))
-        case .fullWidth:
-            return AnyView(fullWidthRowView(row, rowHeight: rowHeight))
-        }
+    private func decoratedRow<Content: View>(_ id: String,
+                                             index: Int,
+                                             @ViewBuilder content: () -> Content) -> some View {
+        let isHovered = hoveredRowID == id
+        let background: SemanticColorRef = isHovered
+            ? .stateLayerHover
+            : (index.isMultiple(of: 2) ? .surface : .surfaceOverlay)
+        return content()
+            .background(background)
+            .cornerRadius(4)
+            .onHover { hovered in
+                if hovered {
+                    hoveredRowID = id
+                } else if hoveredRowID == id {
+                    hoveredRowID = nil
+                }
+            }
     }
 
     private func twoColumnRowView(_ row: PropertyGridRow, rowHeight: Float) -> some View {
