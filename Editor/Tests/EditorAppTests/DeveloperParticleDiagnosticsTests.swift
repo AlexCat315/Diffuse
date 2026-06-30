@@ -505,6 +505,73 @@ struct DeveloperParticleDiagnosticsTests {
         #expect(makeDeveloperParticleTrendSummary(history: []) == nil)
     }
 
+    @Test("workbench diagnostics promote console errors ahead of frame warnings")
+    func workbenchDiagnosticsPrioritizeCriticalConsoleErrors() {
+        let issues = makeDeveloperWorkbenchIssues(
+            frameStats: EditorFrameStats(frameSeconds: 0.100,
+                                         simulationSeconds: 0.001),
+            frameHistory: [],
+            renderStats: .init(),
+            particleSummary: nil,
+            particleAuthoringSummary: nil,
+            particleHotspots: [],
+            selectedEntityID: nil,
+            consoleEntries: [
+                EditorConsoleEntry(id: 1,
+                                   severity: .error,
+                                   message: "Renderer failed to create test resource"),
+            ]
+        )
+
+        #expect(issues.first?.scope == .console)
+        #expect(issues.first?.severity == .critical)
+        #expect(issues.contains { $0.id == "frame.pacing" })
+    }
+
+    @Test("workbench diagnostics convert particle health summaries into actionable issues")
+    func workbenchDiagnosticsSurfaceParticleHealth() {
+        let summary = DeveloperParticleDiagnosticSummary(
+            severity: .warning,
+            status: "Spawn budget throttling",
+            primarySignal: "12 budget-limited spawns",
+            recommendation: "Raise Max Spawn / Frame for bursty emitters.",
+            details: ["Frame budget 24/24"]
+        )
+
+        let issues = makeDeveloperWorkbenchIssues(
+            frameStats: EditorFrameStats(frameSeconds: 1.0 / 60.0,
+                                         simulationSeconds: 0.001),
+            frameHistory: [],
+            renderStats: .init(),
+            particleSummary: summary,
+            particleAuthoringSummary: nil,
+            particleHotspots: [],
+            selectedEntityID: nil,
+            consoleEntries: []
+        )
+
+        let issue = issues.first { $0.scope == .particles }
+        #expect(issue?.severity == .warning)
+        #expect(issue?.title == "Spawn budget throttling")
+        #expect(issue?.target.tab == .particles)
+        #expect(issue?.recommendation.contains("Max Spawn / Frame") == true)
+    }
+
+    @Test("render pass breakdown ranks the expensive pass first")
+    func renderPassBreakdownRanksExpensivePassesFirst() {
+        let renderStats = RenderFrameStats(
+            passDrawCallCounts: [.basePass: 12, .particles: 3],
+            activePasses: [.basePass, .particles],
+            passEncodeNS: [.basePass: 1_000_000, .particles: 17_000_000]
+        )
+
+        let passes = makeDeveloperRenderPassBreakdown(renderStats: renderStats)
+
+        #expect(passes.first?.name == RenderPassKind.particles.rawValue)
+        #expect(passes.first?.encodeNS == 17_000_000)
+        #expect(passes.first?.recommendation.contains("Inspect") == true)
+    }
+
     private func particleSample(index: UInt64,
                                 live: Int,
                                 limit: Int,
