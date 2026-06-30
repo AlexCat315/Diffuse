@@ -572,6 +572,177 @@ struct DeveloperParticleDiagnosticsTests {
         #expect(passes.first?.recommendation.contains("Inspect") == true)
     }
 
+    @Test("trace creates frame samples and spike markers from frame history")
+    func traceCreatesFrameTrackAndSpikeMarker() {
+        let history = [
+            EditorFrameStatsHistorySample(
+                sampleIndex: 1,
+                frameIndex: 11,
+                stats: EditorFrameStats(frameSeconds: 1.0 / 60.0,
+                                        simulationSeconds: 0.002,
+                                        renderSubmitSeconds: 0.002)
+            ),
+            EditorFrameStatsHistorySample(
+                sampleIndex: 2,
+                frameIndex: 12,
+                stats: EditorFrameStats(frameSeconds: 0.040,
+                                        simulationSeconds: 0.020,
+                                        renderSubmitSeconds: 0.010)
+            ),
+        ]
+
+        let trace = makeDeveloperTrace(
+            frameStats: history[1].stats,
+            frameHistory: history,
+            particleHistory: [],
+            renderStats: .init(),
+            issues: [],
+            consoleEntries: []
+        )
+
+        #expect(trace.samples.map(\.sampleIndex) == [1, 2])
+        let spike = trace.events.first { $0.id == "frame.2" }
+        #expect(spike?.track == .frame)
+        #expect(spike?.severity == .warning)
+        #expect(spike?.target.tab == .frame)
+        #expect(trace.samples.last?.issueIDs.contains("frame.2") == true)
+    }
+
+    @Test("trace promotes console errors above warnings")
+    func tracePromotesConsoleErrorsAboveWarnings() {
+        let stats = EditorFrameStats(frameSeconds: 1.0 / 60.0,
+                                     simulationSeconds: 0.001)
+
+        let trace = makeDeveloperTrace(
+            frameStats: stats,
+            frameHistory: [
+                EditorFrameStatsHistorySample(sampleIndex: 7,
+                                              frameIndex: 70,
+                                              stats: stats),
+            ],
+            particleHistory: [],
+            renderStats: .init(),
+            issues: [],
+            consoleEntries: [
+                EditorConsoleEntry(id: 1,
+                                   severity: .warning,
+                                   message: "Shader variant missing"),
+                EditorConsoleEntry(id: 2,
+                                   severity: .error,
+                                   message: "Pipeline creation failed"),
+            ]
+        )
+
+        let console = trace.events.first { $0.track == .console }
+        #expect(console?.severity == .critical)
+        #expect(console?.primarySignal == "1 error")
+        #expect(console?.target.tab == .console)
+        #expect(trace.samples.last?.consoleSeverity == .critical)
+    }
+
+    @Test("trace creates particle markers from drop summaries")
+    func traceCreatesParticleDropMarkers() {
+        let stats = EditorFrameStats(frameSeconds: 1.0 / 60.0,
+                                     simulationSeconds: 0.001)
+        let particleHistory = [
+            particleSample(index: 4,
+                           live: 90,
+                           limit: 100,
+                           requested: 40,
+                           spawned: 20,
+                           dropped: 20,
+                           budgetDrops: 20,
+                           cpuRender: 20),
+        ]
+
+        let trace = makeDeveloperTrace(
+            frameStats: stats,
+            frameHistory: [
+                EditorFrameStatsHistorySample(sampleIndex: 4,
+                                              frameIndex: 40,
+                                              stats: stats),
+            ],
+            particleHistory: particleHistory,
+            renderStats: .init(),
+            issues: [],
+            consoleEntries: []
+        )
+
+        let event = trace.events.first { $0.track == .particles }
+        #expect(event?.severity == .warning)
+        #expect(event?.title == "Particle spawn drops")
+        #expect(event?.primarySignal == "40 dropped spawns")
+        #expect(event?.target.tab == .particles)
+        #expect(trace.samples.first?.particleDroppedCount == 40)
+    }
+
+    @Test("trace projects render pass cost onto the render pass track")
+    func traceProjectsRenderPassCost() {
+        let stats = EditorFrameStats(frameSeconds: 1.0 / 60.0,
+                                     simulationSeconds: 0.001)
+        let renderStats = RenderFrameStats(
+            passDrawCallCounts: [.basePass: 2, .particles: 4],
+            activePasses: [.basePass, .particles],
+            passEncodeNS: [.basePass: 2_000_000, .particles: 18_000_000]
+        )
+
+        let trace = makeDeveloperTrace(
+            frameStats: stats,
+            frameHistory: [
+                EditorFrameStatsHistorySample(sampleIndex: 9,
+                                              frameIndex: 90,
+                                              stats: stats),
+            ],
+            particleHistory: [],
+            renderStats: renderStats,
+            issues: [],
+            consoleEntries: []
+        )
+
+        #expect(trace.renderPasses.first?.name == RenderPassKind.particles.rawValue)
+        let event = trace.events.first { $0.track == .renderPass }
+        #expect(event?.severity == .critical)
+        #expect(event?.target.tab == .render)
+        #expect(event?.sampleIndex == 9)
+    }
+
+    @Test("trace preserves issue targets for drilldown routing")
+    func tracePreservesIssueTargetsForRouting() {
+        let stats = EditorFrameStats(frameSeconds: 1.0 / 60.0,
+                                     simulationSeconds: 0.001)
+        let issue = DeveloperDiagnosticIssue(
+            id: "particles.test",
+            severity: .warning,
+            scope: .particles,
+            title: "Particle budget",
+            primarySignal: "10 dropped spawns",
+            evidence: ["Requested 20, spawned 10"],
+            recommendation: "Open particle diagnostics.",
+            target: DeveloperDiagnosticTarget(tab: .particles,
+                                              frameSampleIndex: 13,
+                                              label: "Open Particles")
+        )
+
+        let trace = makeDeveloperTrace(
+            frameStats: stats,
+            frameHistory: [
+                EditorFrameStatsHistorySample(sampleIndex: 13,
+                                              frameIndex: 130,
+                                              stats: stats),
+            ],
+            particleHistory: [],
+            renderStats: .init(),
+            issues: [issue],
+            consoleEntries: []
+        )
+
+        let event = trace.events.first { $0.id == "issue.particles.test" }
+        #expect(event?.track == .particles)
+        #expect(event?.target.tab == .particles)
+        #expect(event?.target.frameSampleIndex == 13)
+        #expect(event?.target.label == "Open Particles")
+    }
+
     private func particleSample(index: UInt64,
                                 live: Int,
                                 limit: Int,
