@@ -8,28 +8,98 @@ import SceneRuntime
 struct DeveloperToolsPanel: View {
     let app: EditorApplication
 
-    @State private var selectedTab: DeveloperToolTab = .performance
+    @State private var selectedTab: DeveloperToolTab = .overview
+    @State private var selectedFrameSampleIndex: UInt64?
 
     var body: some View {
         StoreScope(app.store) { store in
             let timingRevision = store.frameTimingRevision
             let frameStats = store.state.frameStats
             let frameStatsHistory = store.frameStatsHistory
-            let renderStats: RenderFrameStats = selectedTab == .render
+            let needsRenderSnapshot = selectedTab == .overview
+                || selectedTab == .render
+                || selectedTab == .particles
+            let needsParticleSnapshot = selectedTab == .overview
+                || selectedTab == .particles
+            let renderStats: RenderFrameStats = needsRenderSnapshot
                 ? app.currentRenderStats()
                 : .init()
+            let particleStats = needsParticleSnapshot
+                ? app.currentParticleFrameStats()
+                : ParticleFrameStatsResource.empty
+            let particleEventReport = needsParticleSnapshot
+                ? app.currentParticleSimulationEventApplyReport()
+                : ParticleSimulationEventApplyReport.empty
+            let particleScalability = needsParticleSnapshot
+                ? app.currentParticleScalabilityState()
+                : ParticleScalabilityStateResource.default
+            let particleRenderSummary = needsParticleSnapshot
+                ? app.currentRenderScene().particleSummary
+                : ParticleRenderSummary()
+            let selectedGPUSimulationPlan = needsParticleSnapshot
+                ? app.scene.currentParticleGPUSimulationPlan(for: store.selectedEntityID)
+                : nil
+            let selectedModuleIssues = needsParticleSnapshot
+                ? app.scene.currentParticleModuleValidationIssues(for: store.selectedEntityID)
+                : []
+            let particleSummary = needsParticleSnapshot
+                ? makeDeveloperParticleDiagnosticSummary(stats: particleStats,
+                                                         eventReport: particleEventReport,
+                                                         scalability: particleScalability,
+                                                         renderSummary: particleRenderSummary,
+                                                         renderStats: renderStats)
+                : nil
+            let particleAuthoringSummary = needsParticleSnapshot
+                ? makeDeveloperParticleAuthoringDiagnosticSummary(
+                    gpuPlan: selectedGPUSimulationPlan,
+                    moduleIssues: selectedModuleIssues
+                )
+                : nil
+            let particleHotspots = needsParticleSnapshot
+                ? makeDeveloperParticleEmitterHotspots(stats: particleStats,
+                                                       eventReport: particleEventReport)
+                : []
+            let diagnostics = makeDeveloperWorkbenchIssues(
+                frameStats: frameStats,
+                frameHistory: frameStatsHistory,
+                renderStats: renderStats,
+                particleSummary: particleSummary,
+                particleAuthoringSummary: particleAuthoringSummary,
+                particleHotspots: particleHotspots,
+                selectedEntityID: store.selectedEntityID,
+                consoleEntries: store.consoleEntries
+            )
 
             TabView(selection: $selectedTab, tabs: [
-                TabItem(L("Performance"), id: DeveloperToolTab.performance) {
-                    PerformanceDiagnosticsView(stats: frameStats,
-                                               history: frameStatsHistory,
-                                               timingRevision: timingRevision)
+                TabItem("Overview", id: DeveloperToolTab.overview) {
+                    DeveloperWorkbenchOverview(
+                        issues: diagnostics,
+                        frameStats: frameStats,
+                        frameHistory: frameStatsHistory,
+                        renderStats: renderStats,
+                        particleSummary: particleSummary,
+                        consoleEntries: store.consoleEntries,
+                        onOpenTarget: { target in
+                            selectedTab = target.tab
+                            if let sampleIndex = target.frameSampleIndex {
+                                selectedFrameSampleIndex = sampleIndex
+                            }
+                        }
+                    )
                 },
-                TabItem(L("Render Stats"), id: DeveloperToolTab.render) {
-                    RenderDiagnosticsView(frameStats: frameStats,
-                                          renderStats: renderStats)
+                TabItem("Frame", id: DeveloperToolTab.frame) {
+                    FrameWorkbenchView(stats: frameStats,
+                                       history: frameStatsHistory,
+                                       timingRevision: timingRevision,
+                                       selectedSampleIndex: $selectedFrameSampleIndex,
+                                       issues: diagnostics.filter { $0.target.tab == .frame })
                 },
-                TabItem(L("Runtime"), id: DeveloperToolTab.runtime) {
+                TabItem("Render", id: DeveloperToolTab.render) {
+                    RenderFrameDebuggerView(frameStats: frameStats,
+                                            renderStats: renderStats,
+                                            issues: diagnostics.filter { $0.target.tab == .render })
+                },
+                TabItem("State", id: DeveloperToolTab.state) {
                     RuntimeDiagnosticsView(store: store,
                                            timingRevision: timingRevision)
                 },
@@ -46,12 +116,319 @@ struct DeveloperToolsPanel: View {
     }
 }
 
-private enum DeveloperToolTab: Hashable {
-    case performance
+enum DeveloperToolTab: Hashable {
+    case overview
+    case frame
     case render
-    case runtime
+    case state
     case particles
     case console
+}
+
+enum DeveloperDiagnosticSeverity: String, Equatable {
+    case nominal = "Nominal"
+    case info = "Info"
+    case warning = "Warning"
+    case critical = "Critical"
+}
+
+enum DeveloperDiagnosticScope: String, Equatable {
+    case frame = "Frame"
+    case render = "Render"
+    case particles = "Particles"
+    case console = "Console"
+    case state = "State"
+}
+
+struct DeveloperDiagnosticTarget: Equatable {
+    var tab: DeveloperToolTab
+    var frameSampleIndex: UInt64?
+    var label: String
+}
+
+struct DeveloperDiagnosticIssue: Equatable {
+    var id: String
+    var severity: DeveloperDiagnosticSeverity
+    var scope: DeveloperDiagnosticScope
+    var title: String
+    var primarySignal: String
+    var evidence: [String]
+    var recommendation: String
+    var target: DeveloperDiagnosticTarget
+}
+
+struct DeveloperDiagnosticCounts: Equatable {
+    var critical: Int
+    var warning: Int
+    var info: Int
+    var nominal: Int
+}
+
+func makeDeveloperDiagnosticCounts(_ issues: [DeveloperDiagnosticIssue]) -> DeveloperDiagnosticCounts {
+    DeveloperDiagnosticCounts(
+        critical: issues.filter { $0.severity == .critical }.count,
+        warning: issues.filter { $0.severity == .warning }.count,
+        info: issues.filter { $0.severity == .info }.count,
+        nominal: issues.filter { $0.severity == .nominal }.count
+    )
+}
+
+func makeDeveloperWorkbenchIssues(
+    frameStats: EditorFrameStats,
+    frameHistory: [EditorFrameStatsHistorySample],
+    renderStats: RenderFrameStats,
+    particleSummary: DeveloperParticleDiagnosticSummary?,
+    particleAuthoringSummary: DeveloperParticleDiagnosticSummary?,
+    particleHotspots: [DeveloperParticleEmitterHotspot],
+    selectedEntityID: UInt64?,
+    consoleEntries: [EditorConsoleEntry]
+) -> [DeveloperDiagnosticIssue] {
+    var issues: [DeveloperDiagnosticIssue] = []
+    let latestSampleIndex = frameHistory.last?.sampleIndex
+
+    if frameStats.isFramePacingDominated {
+        issues.append(DeveloperDiagnosticIssue(
+            id: "frame.pacing",
+            severity: .warning,
+            scope: .frame,
+            title: "Frame pacing gap",
+            primarySignal: "\(formatMs(frameStats.pacingGapMs)) waiting/idle in latest tick",
+            evidence: [
+                "Observed FPS \(formatFPS(frameStats.fps))",
+                "Work FPS \(formatFPS(frameStats.workFPS))",
+                "Work \(formatMs(frameStats.workMs))",
+            ],
+            recommendation: "Treat this as event-loop or viewport pacing first; rendering work is not the primary explanation until work time rises.",
+            target: DeveloperDiagnosticTarget(tab: .frame,
+                                              frameSampleIndex: latestSampleIndex,
+                                              label: "Open Frame")
+        ))
+    } else if frameStats.workMs > 33.3 {
+        issues.append(DeveloperDiagnosticIssue(
+            id: "frame.work.30fps",
+            severity: .critical,
+            scope: .frame,
+            title: "Frame work exceeds 30 FPS budget",
+            primarySignal: "Work \(formatMs(frameStats.workMs))",
+            evidence: [
+                "CPU \(formatMs(cpuMs(frameStats)))",
+                "GPU / present \(formatMs(frameStats.gpuPresentSeconds * 1000))",
+                "Likely \(bottleneck(frameStats))",
+            ],
+            recommendation: "Inspect the selected frame breakdown before changing quality settings; the bottleneck label only points to the first layer.",
+            target: DeveloperDiagnosticTarget(tab: .frame,
+                                              frameSampleIndex: latestSampleIndex,
+                                              label: "Open Frame")
+        ))
+    } else if frameStats.workMs > 16.7 {
+        issues.append(DeveloperDiagnosticIssue(
+            id: "frame.work.60fps",
+            severity: .warning,
+            scope: .frame,
+            title: "Frame work exceeds 60 FPS budget",
+            primarySignal: "Work \(formatMs(frameStats.workMs))",
+            evidence: [
+                "Headroom @60 \(formatSignedMs(16.7 - frameStats.workMs))",
+                "Likely \(bottleneck(frameStats))",
+            ],
+            recommendation: "Use the frame timeline to find whether this is a one-frame spike or sustained frame pressure.",
+            target: DeveloperDiagnosticTarget(tab: .frame,
+                                              frameSampleIndex: latestSampleIndex,
+                                              label: "Open Frame")
+        ))
+    }
+
+    if let trend = makeDeveloperFrameTrendSummary(history: frameHistory),
+       trend.sampleCount >= 8,
+       trend.p95WorkMs > 16.7 {
+        issues.append(DeveloperDiagnosticIssue(
+            id: "frame.trend.p95",
+            severity: trend.p95WorkMs > 33.3 ? .critical : .warning,
+            scope: .frame,
+            title: "Sustained frame-time pressure",
+            primarySignal: "P95 work \(formatMs(trend.p95WorkMs)) over \(trend.sampleCount) samples",
+            evidence: [
+                "Average work \(formatMs(trend.averageWorkMs))",
+                "Peak sample #\(trend.peakWorkSampleIndex)",
+                "Pacing-dominated \(trend.pacingDominatedSamples)/\(trend.sampleCount)",
+            ],
+            recommendation: "Open the peak sample and compare it with the latest frame before tuning render or simulation settings.",
+            target: DeveloperDiagnosticTarget(tab: .frame,
+                                              frameSampleIndex: trend.peakWorkSampleIndex,
+                                              label: "Open Peak Frame")
+        ))
+    }
+
+    if renderStats.cpuEncodeNS > 16_700_000 {
+        issues.append(DeveloperDiagnosticIssue(
+            id: "render.encode",
+            severity: renderStats.cpuEncodeNS > 33_300_000 ? .critical : .warning,
+            scope: .render,
+            title: "Render encode exceeds frame budget",
+            primarySignal: "Encode \(formatNs(renderStats.cpuEncodeNS))",
+            evidence: [
+                "Draw calls \(renderStats.drawCallCount)",
+                "Passes \(renderStats.passCount)",
+                "Bundles \(renderStats.renderBundleCount)",
+            ],
+            recommendation: "Open the render debugger and inspect pass encode time before reducing scene content broadly.",
+            target: DeveloperDiagnosticTarget(tab: .render,
+                                              frameSampleIndex: nil,
+                                              label: "Open Render")
+        ))
+    }
+
+    let passBreakdown = makeDeveloperRenderPassBreakdown(renderStats: renderStats)
+    if let slowPass = passBreakdown.first(where: { $0.encodeNS > 8_000_000 }) {
+        issues.append(DeveloperDiagnosticIssue(
+            id: "render.pass.\(slowPass.name)",
+            severity: slowPass.encodeNS > 16_700_000 ? .critical : .warning,
+            scope: .render,
+            title: "\(slowPass.name) pass is expensive",
+            primarySignal: "Encode \(formatNs(slowPass.encodeNS))",
+            evidence: [
+                "Draw calls \(slowPass.drawCallCount)",
+                slowPass.signal,
+            ],
+            recommendation: slowPass.recommendation,
+            target: DeveloperDiagnosticTarget(tab: .render,
+                                              frameSampleIndex: nil,
+                                              label: "Open Render")
+        ))
+    }
+
+    if let particleSummary,
+       particleSummary.severity != .nominal,
+       particleSummary.severity != .idle {
+        issues.append(DeveloperDiagnosticIssue(
+            id: "particles.health.\(particleSummary.status)",
+            severity: developerDiagnosticSeverity(from: particleSummary.severity),
+            scope: .particles,
+            title: particleSummary.status,
+            primarySignal: particleSummary.primarySignal,
+            evidence: particleSummary.details,
+            recommendation: particleSummary.recommendation,
+            target: DeveloperDiagnosticTarget(tab: .particles,
+                                              frameSampleIndex: nil,
+                                              label: "Open Particles")
+        ))
+    }
+
+    if let particleAuthoringSummary,
+       selectedEntityID != nil,
+       particleAuthoringSummary.severity != .nominal,
+       particleAuthoringSummary.severity != .idle {
+        issues.append(DeveloperDiagnosticIssue(
+            id: "particles.authoring.\(particleAuthoringSummary.status)",
+            severity: developerDiagnosticSeverity(from: particleAuthoringSummary.severity),
+            scope: .particles,
+            title: particleAuthoringSummary.status,
+            primarySignal: particleAuthoringSummary.primarySignal,
+            evidence: particleAuthoringSummary.details,
+            recommendation: particleAuthoringSummary.recommendation,
+            target: DeveloperDiagnosticTarget(tab: .particles,
+                                              frameSampleIndex: nil,
+                                              label: "Open Particles")
+        ))
+    }
+
+    if let hotspot = particleHotspots.first,
+       hotspot.severity == .critical || hotspot.severity == .warning {
+        issues.append(DeveloperDiagnosticIssue(
+            id: "particles.hotspot.\(hotspot.entityID)",
+            severity: developerDiagnosticSeverity(from: hotspot.severity),
+            scope: .particles,
+            title: "Emitter hotspot #\(hotspot.entityID)",
+            primarySignal: hotspot.primarySignal,
+            evidence: hotspot.details,
+            recommendation: hotspot.recommendation,
+            target: DeveloperDiagnosticTarget(tab: .particles,
+                                              frameSampleIndex: nil,
+                                              label: "Open Particles")
+        ))
+    }
+
+    let errorCount = consoleEntries.filter { $0.severity == .error }.count
+    let warningCount = consoleEntries.filter { $0.severity == .warning }.count
+    if errorCount > 0 {
+        issues.append(DeveloperDiagnosticIssue(
+            id: "console.errors",
+            severity: .critical,
+            scope: .console,
+            title: "Console errors",
+            primarySignal: "\(errorCount) error\(errorCount == 1 ? "" : "s") recorded",
+            evidence: consoleEntries.reversed().filter { $0.severity == .error }.prefix(3).map(\.message),
+            recommendation: "Open the console and resolve the newest errors before interpreting downstream runtime symptoms.",
+            target: DeveloperDiagnosticTarget(tab: .console,
+                                              frameSampleIndex: nil,
+                                              label: "Open Console")
+        ))
+    } else if warningCount > 0 {
+        issues.append(DeveloperDiagnosticIssue(
+            id: "console.warnings",
+            severity: .warning,
+            scope: .console,
+            title: "Console warnings",
+            primarySignal: "\(warningCount) warning\(warningCount == 1 ? "" : "s") recorded",
+            evidence: consoleEntries.reversed().filter { $0.severity == .warning }.prefix(3).map(\.message),
+            recommendation: "Review the newest warnings and correlate them with the active scene or selected entity.",
+            target: DeveloperDiagnosticTarget(tab: .console,
+                                              frameSampleIndex: nil,
+                                              label: "Open Console")
+        ))
+    }
+
+    if issues.isEmpty {
+        issues.append(DeveloperDiagnosticIssue(
+            id: "workbench.nominal",
+            severity: .nominal,
+            scope: .state,
+            title: "No blocking diagnostics",
+            primarySignal: "Latest frame, render, particles, and console signals are nominal",
+            evidence: [
+                "Work \(formatMs(frameStats.workMs))",
+                "Draw calls \(frameStats.drawCallCount)",
+                "Console entries \(consoleEntries.count)",
+            ],
+            recommendation: "Use Frame or Render when validating a specific scene change; Overview will promote regressions as they appear.",
+            target: DeveloperDiagnosticTarget(tab: .frame,
+                                              frameSampleIndex: latestSampleIndex,
+                                              label: "Open Frame")
+        ))
+    }
+
+    return issues.sorted(by: developerDiagnosticIssuePrecedes)
+}
+
+private func developerDiagnosticSeverity(from severity: DeveloperParticleDiagnosticSeverity) -> DeveloperDiagnosticSeverity {
+    switch severity {
+    case .critical:
+        return .critical
+    case .warning:
+        return .warning
+    case .info:
+        return .info
+    case .nominal, .idle:
+        return .nominal
+    }
+}
+
+private func developerDiagnosticIssuePrecedes(_ lhs: DeveloperDiagnosticIssue,
+                                              _ rhs: DeveloperDiagnosticIssue) -> Bool {
+    let lhsRank = developerDiagnosticSeverityRank(lhs.severity)
+    let rhsRank = developerDiagnosticSeverityRank(rhs.severity)
+    if lhsRank != rhsRank { return lhsRank > rhsRank }
+    if lhs.scope.rawValue != rhs.scope.rawValue { return lhs.scope.rawValue < rhs.scope.rawValue }
+    return lhs.id < rhs.id
+}
+
+private func developerDiagnosticSeverityRank(_ severity: DeveloperDiagnosticSeverity) -> Int {
+    switch severity {
+    case .critical: 4
+    case .warning: 3
+    case .info: 2
+    case .nominal: 1
+    }
 }
 
 struct DeveloperFrameTrendSummary: Equatable {
@@ -129,143 +506,624 @@ func makeDeveloperFrameTrendSummary(
     )
 }
 
-private struct PerformanceDiagnosticsView: View {
+struct DeveloperRenderPassInspection: Equatable {
+    var name: String
+    var drawCallCount: Int
+    var encodeNS: UInt64
+    var signal: String
+    var recommendation: String
+}
+
+func makeDeveloperRenderPassBreakdown(renderStats: RenderFrameStats) -> [DeveloperRenderPassInspection] {
+    var passNames: [RenderPassKind] = []
+    for pass in renderStats.activePasses {
+        if !passNames.contains(pass) {
+            passNames.append(pass)
+        }
+    }
+    for pass in renderStats.passDrawCallCounts.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
+        if !passNames.contains(pass) {
+            passNames.append(pass)
+        }
+    }
+    for pass in renderStats.passEncodeNS.keys.sorted(by: { $0.rawValue < $1.rawValue }) {
+        if !passNames.contains(pass) {
+            passNames.append(pass)
+        }
+    }
+
+    return passNames.map { pass in
+        let draws = renderStats.passDrawCallCounts[pass] ?? 0
+        let encodeNS = renderStats.passEncodeNS[pass] ?? 0
+        return DeveloperRenderPassInspection(
+            name: pass.rawValue,
+            drawCallCount: draws,
+            encodeNS: encodeNS,
+            signal: developerRenderPassSignal(pass: pass,
+                                              draws: draws,
+                                              encodeNS: encodeNS,
+                                              renderStats: renderStats),
+            recommendation: developerRenderPassRecommendation(pass: pass,
+                                                              draws: draws,
+                                                              encodeNS: encodeNS,
+                                                              renderStats: renderStats)
+        )
+    }
+    .sorted {
+        if $0.encodeNS != $1.encodeNS { return $0.encodeNS > $1.encodeNS }
+        if $0.drawCallCount != $1.drawCallCount { return $0.drawCallCount > $1.drawCallCount }
+        return $0.name < $1.name
+    }
+}
+
+private func developerRenderPassSignal(pass: RenderPassKind,
+                                       draws: Int,
+                                       encodeNS: UInt64,
+                                       renderStats: RenderFrameStats) -> String {
+    if encodeNS > 0 {
+        return "\(formatNs(encodeNS)) encode, \(draws) draws"
+    }
+    if draws > 0 {
+        return "\(draws) draws"
+    }
+    if pass == .particles && renderStats.gpuParticleRenderInstanceCount > 0 {
+        return "\(renderStats.gpuParticleRenderInstanceCount) GPU particle instances"
+    }
+    return "No measured work"
+}
+
+private func developerRenderPassRecommendation(pass: RenderPassKind,
+                                               draws: Int,
+                                               encodeNS: UInt64,
+                                               renderStats: RenderFrameStats) -> String {
+    if encodeNS > 16_700_000 {
+        return "Inspect resources and draw submission in this pass before changing global viewport quality."
+    }
+    if pass == .particles && renderStats.gpuParticleSortPaddedItemCount > renderStats.gpuParticleSortItemCount {
+        return "Check particle sort padding, GPU work split, and render-budget skips in the Particles tool."
+    }
+    if draws > 1_000 {
+        return "Look for batching, instancing, or culling opportunities tied to this pass."
+    }
+    if draws == 0 {
+        return "The pass is active but has no submitted draws; verify whether it is required for this frame."
+    }
+    return "Pass work is measurable; compare it against adjacent passes before tuning content."
+}
+
+private struct DeveloperWorkbenchOverview: View {
+    let issues: [DeveloperDiagnosticIssue]
+    let frameStats: EditorFrameStats
+    let frameHistory: [EditorFrameStatsHistorySample]
+    let renderStats: RenderFrameStats
+    let particleSummary: DeveloperParticleDiagnosticSummary?
+    let consoleEntries: [EditorConsoleEntry]
+    let onOpenTarget: (DeveloperDiagnosticTarget) -> Void
+
+    var body: some View {
+        let counts = makeDeveloperDiagnosticCounts(issues)
+        let trend = makeDeveloperFrameTrendSummary(history: frameHistory)
+        ScrollView(.vertical) {
+            DeveloperWorkbenchHeader(counts: counts,
+                                     primaryIssue: issues.first,
+                                     frameStats: frameStats)
+                .padding(horizontal: 12, vertical: 10)
+
+            Row(alignment: .top, spacing: 12) {
+                DeveloperIssueQueue(issues: issues,
+                                    title: "Issue Queue",
+                                    onOpenTarget: onOpenTarget)
+                    .flex(1.45, shrink: 1)
+
+                DeveloperOperationalContext(frameStats: frameStats,
+                                            trend: trend,
+                                            renderStats: renderStats,
+                                            particleSummary: particleSummary,
+                                            consoleEntries: consoleEntries)
+                    .flex(1, shrink: 1)
+            }
+            .padding(horizontal: 12, vertical: 0)
+
+            Divider()
+                .padding(horizontal: 12, vertical: 10)
+
+            DeveloperWorkflowLauncher(onOpenTarget: onOpenTarget)
+                .padding(horizontal: 12, vertical: 0)
+        }
+    }
+}
+
+private struct DeveloperWorkbenchHeader: View {
+    let counts: DeveloperDiagnosticCounts
+    let primaryIssue: DeveloperDiagnosticIssue?
+    let frameStats: EditorFrameStats
+
+    var body: some View {
+        Column(alignment: .leading, spacing: 8) {
+            Row(alignment: .center, spacing: 10) {
+                Text("Developer Workbench")
+                    .font(.bodyStrong)
+                    .foregroundColor(.onSurface)
+                DeveloperSeverityBadge(
+                    severity: primaryIssue?.severity ?? .nominal,
+                    text: primaryIssue?.severity.rawValue ?? "Nominal"
+                )
+                Spacer(minLength: 0)
+                Text("Observed \(formatFPS(frameStats.fps)) FPS")
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
+
+            Text(primaryIssue?.title ?? "No active diagnostics")
+                .font(.bodyStrong)
+                .foregroundColor(.onSurface)
+            Text(primaryIssue?.primarySignal ?? "Latest frame, render, particle, and console signals are nominal.")
+                .lineLimit(2)
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+
+            Row(alignment: .center, spacing: 8) {
+                DeveloperMetricPill(label: "Critical", value: "\(counts.critical)", severity: .critical)
+                DeveloperMetricPill(label: "Warning", value: "\(counts.warning)", severity: .warning)
+                DeveloperMetricPill(label: "Info", value: "\(counts.info)", severity: .info)
+                DeveloperMetricPill(label: "Work", value: formatMs(frameStats.workMs), severity: .nominal)
+                DeveloperMetricPill(label: "Pacing Gap", value: formatMs(frameStats.pacingGapMs), severity: .nominal)
+            }
+        }
+        .padding(horizontal: 12, vertical: 10)
+        .background(.surfaceSunken)
+        .cornerRadius(6)
+        .border(developerDiagnosticBorder(primaryIssue?.severity ?? .nominal), width: 1)
+    }
+}
+
+private struct DeveloperMetricPill: View {
+    let label: String
+    let value: String
+    let severity: DeveloperDiagnosticSeverity
+
+    var body: some View {
+        Row(alignment: .center, spacing: 5) {
+            Text(label)
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+            Text(value)
+                .font(.mono)
+                .foregroundColor(developerDiagnosticForeground(severity))
+        }
+        .padding(horizontal: 8, vertical: 4)
+        .background(developerDiagnosticBackground(severity))
+        .cornerRadius(4)
+    }
+}
+
+private struct DeveloperIssueQueue: View {
+    let issues: [DeveloperDiagnosticIssue]
+    let title: String
+    let onOpenTarget: (DeveloperDiagnosticTarget) -> Void
+
+    var body: some View {
+        Column(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.bodyStrong)
+                .foregroundColor(.onSurface)
+                .padding(horizontal: 10, vertical: 8)
+
+            Column(alignment: .leading, spacing: 6) {
+                for issue in issues {
+                    DeveloperIssueRow(issue: issue,
+                                      onOpenTarget: onOpenTarget)
+                }
+            }
+            .padding(horizontal: 8, vertical: 0)
+        }
+    }
+}
+
+private struct DeveloperIssueRow: View {
+    let issue: DeveloperDiagnosticIssue
+    let onOpenTarget: (DeveloperDiagnosticTarget) -> Void
+
+    var body: some View {
+        Button(action: { onOpenTarget(issue.target) }) {
+            Column(alignment: .leading, spacing: 5) {
+                Row(alignment: .center, spacing: 8) {
+                    DeveloperSeverityBadge(severity: issue.severity,
+                                           text: issue.severity.rawValue)
+                    Text(issue.scope.rawValue)
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                    Text(issue.title)
+                        .lineLimit(1)
+                        .font(.bodyStrong)
+                        .foregroundColor(.onSurface)
+                        .flex(1, shrink: 1)
+                    Text(issue.target.label)
+                        .font(.caption)
+                        .foregroundColor(.accent)
+                }
+
+                Text(issue.primarySignal)
+                    .lineLimit(2)
+                    .font(.caption)
+                    .foregroundColor(.onSurface)
+
+                if !issue.evidence.isEmpty {
+                    Text(issue.evidence.prefix(3).joined(separator: " | "))
+                        .lineLimit(2)
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                }
+
+                Text(issue.recommendation)
+                    .lineLimit(2)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
+            .padding(horizontal: 10, vertical: 8)
+            .background(.surfaceSunken)
+            .cornerRadius(6)
+            .border(developerDiagnosticBorder(issue.severity), width: 1)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct DeveloperSeverityBadge: View {
+    let severity: DeveloperDiagnosticSeverity
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .lineLimit(1)
+            .font(.caption)
+            .foregroundColor(developerDiagnosticForeground(severity))
+            .padding(horizontal: 7, vertical: 2)
+            .background(developerDiagnosticBackground(severity))
+            .cornerRadius(4)
+    }
+}
+
+private struct DeveloperOperationalContext: View {
+    let frameStats: EditorFrameStats
+    let trend: DeveloperFrameTrendSummary?
+    let renderStats: RenderFrameStats
+    let particleSummary: DeveloperParticleDiagnosticSummary?
+    let consoleEntries: [EditorConsoleEntry]
+
+    var body: some View {
+        Column(alignment: .leading, spacing: 8) {
+            StatGroup(title: "Current Frame") {
+                StatRow(label: "Observed FPS", value: formatFPS(frameStats.fps))
+                StatRow(label: "Work FPS", value: formatFPS(frameStats.workFPS))
+                StatRow(label: "Work", value: formatMs(frameStats.workMs))
+                StatRow(label: "Pacing Gap", value: formatMs(frameStats.pacingGapMs))
+                StatRow(label: "Likely", value: bottleneck(frameStats))
+            }
+
+            StatGroup(title: "Recent Window") {
+                if let trend {
+                    StatRow(label: "Samples", value: "\(trend.sampleCount)")
+                    StatRow(label: "P95 Work", value: formatMs(trend.p95WorkMs))
+                    StatRow(label: "Peak Sample", value: "#\(trend.peakWorkSampleIndex)")
+                    StatRow(label: "Pacing Samples", value: "\(trend.pacingDominatedSamples)/\(trend.sampleCount)")
+                } else {
+                    StatWrappedValue(label: "Window", value: "No frame history samples yet.")
+                }
+            }
+
+            StatGroup(title: "Render / Runtime") {
+                StatRow(label: "Frame", value: renderStats.frameIndex >= 0 ? "\(renderStats.frameIndex)" : "--")
+                StatRow(label: "Passes", value: "\(renderStats.passCount)")
+                StatRow(label: "Draw Calls", value: "\(renderStats.drawCallCount)")
+                StatRow(label: "Encode", value: formatNs(renderStats.cpuEncodeNS))
+                StatRow(label: "Console", value: "\(consoleEntries.count)")
+            }
+
+            StatGroup(title: "Particle Signal") {
+                if let particleSummary {
+                    StatRow(label: "Status", value: particleSummary.status)
+                    StatWrappedValue(label: "Signal", value: particleSummary.primarySignal)
+                    StatWrappedValue(label: "Action", value: particleSummary.recommendation)
+                } else {
+                    StatWrappedValue(label: "Status", value: "Particle diagnostics are loaded in Overview or Particles.")
+                }
+            }
+        }
+    }
+}
+
+private struct DeveloperWorkflowLauncher: View {
+    let onOpenTarget: (DeveloperDiagnosticTarget) -> Void
+
+    var body: some View {
+        Row(alignment: .top, spacing: 12) {
+            DeveloperWorkflowButton(title: "Frame",
+                                    signal: "Pick a frame, inspect CPU/GPU/pacing, compare trend.",
+                                    target: DeveloperDiagnosticTarget(tab: .frame,
+                                                                      frameSampleIndex: nil,
+                                                                      label: "Open Frame"),
+                                    onOpenTarget: onOpenTarget)
+            DeveloperWorkflowButton(title: "Render",
+                                    signal: "Inspect pass cost, draw submission, GPU particle work split.",
+                                    target: DeveloperDiagnosticTarget(tab: .render,
+                                                                      frameSampleIndex: nil,
+                                                                      label: "Open Render"),
+                                    onOpenTarget: onOpenTarget)
+            DeveloperWorkflowButton(title: "Particles",
+                                    signal: "Rank emitter hotspots, budget drops, GPU fallback, render skips.",
+                                    target: DeveloperDiagnosticTarget(tab: .particles,
+                                                                      frameSampleIndex: nil,
+                                                                      label: "Open Particles"),
+                                    onOpenTarget: onOpenTarget)
+            DeveloperWorkflowButton(title: "Console",
+                                    signal: "Review errors and warnings as first-class diagnostic inputs.",
+                                    target: DeveloperDiagnosticTarget(tab: .console,
+                                                                      frameSampleIndex: nil,
+                                                                      label: "Open Console"),
+                                    onOpenTarget: onOpenTarget)
+        }
+    }
+}
+
+private struct DeveloperWorkflowButton: View {
+    let title: String
+    let signal: String
+    let target: DeveloperDiagnosticTarget
+    let onOpenTarget: (DeveloperDiagnosticTarget) -> Void
+
+    var body: some View {
+        Button(action: { onOpenTarget(target) }) {
+            Column(alignment: .leading, spacing: 5) {
+                Text(title)
+                    .font(.bodyStrong)
+                    .foregroundColor(.onSurface)
+                Text(signal)
+                    .lineLimit(3)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
+            .padding(horizontal: 10, vertical: 8)
+            .background(.surfaceSunken)
+            .cornerRadius(6)
+            .border(.border, width: 1)
+        }
+        .buttonStyle(.plain)
+        .flex(1, shrink: 1)
+    }
+}
+
+private struct FrameWorkbenchView: View {
     let stats: EditorFrameStats
     let history: [EditorFrameStatsHistorySample]
     let timingRevision: UInt64
+    let selectedSampleIndex: Binding<UInt64?>
+    let issues: [DeveloperDiagnosticIssue]
 
     var body: some View {
-        let trend = makeDeveloperFrameTrendSummary(history: history)
+        let selectedSample = selectedFrameSample(history: history,
+                                                 selectedSampleIndex: selectedSampleIndex.wrappedValue)
+        let selectedStats = selectedSample?.stats ?? stats
         ScrollView(.vertical) {
-            if stats.isFramePacingDominated {
-                FramePacingNotice(stats: stats)
-                    .padding(horizontal: 12, vertical: 10)
-            }
-
             Row(alignment: .top, spacing: 12) {
-                StatGroup(title: L("Frame")) {
-                    StatRow(label: "Observed FPS", value: formatFPS(stats.fps))
-                    StatRow(label: "Tick Gap", value: formatMs(stats.frameMs))
-                    StatRow(label: "Work", value: formatMs(stats.workMs))
-                    StatRow(label: "Work FPS", value: formatFPS(stats.workFPS))
-                    StatRow(label: "Pacing Gap", value: formatMs(stats.pacingGapMs))
-                    StatRow(label: "Sample", value: "#\(timingRevision)")
-                }
-                .flex(1, shrink: 1)
-
-                StatGroup(title: "CPU") {
-                    StatRow(label: "Input", value: formatMs(stats.inputSeconds * 1000))
-                    StatRow(label: "Simulation", value: formatMs(stats.simulationSeconds * 1000))
-                    StatRow(label: "Render Prep", value: formatMs(stats.renderPrepareSeconds * 1000))
-                    StatRow(label: "Render Submit", value: formatMs(stats.renderSubmitSeconds * 1000))
-                    StatRow(label: "Total", value: formatMs(cpuMs(stats)))
-                }
-                .flex(1, shrink: 1)
-
-                StatGroup(title: "GPU") {
-                    StatRow(label: "Present", value: formatMs(stats.gpuPresentSeconds * 1000))
-                    StatRow(label: "Draw Calls", value: "\(stats.drawCallCount)")
-                    StatRow(label: "Passes", value: "\(stats.passCount)")
-                    StatRow(label: "Bundles", value: "\(stats.renderBundleCount)")
-                }
-                .flex(1, shrink: 1)
-            }
-            .padding(horizontal: 12, vertical: 10)
-
-            Divider()
-
-            if let trend {
-                Row(alignment: .top, spacing: 12) {
-                    StatGroup(title: "Recent Trend") {
-                        StatRow(label: "Samples", value: "\(trend.sampleCount)")
-                        StatRow(label: "Window", value: "#\(trend.firstSampleIndex)-#\(trend.lastSampleIndex)")
-                        StatRow(label: "Avg Observed FPS", value: formatFPS(trend.averageObservedFPS))
-                        StatRow(label: "Avg Work FPS", value: formatFPS(trend.averageWorkFPS))
-                        StatRow(label: "Avg Work", value: formatMs(trend.averageWorkMs))
-                    }
+                FrameTimelinePanel(history: history,
+                                   selectedSampleIndex: selectedSampleIndex)
                     .flex(1, shrink: 1)
 
-                    StatGroup(title: "Stability") {
-                        StatRow(label: "Pacing Samples", value: "\(trend.pacingDominatedSamples)/\(trend.sampleCount)")
-                        StatRow(label: "Pacing Share", value: formatPercent(trend.pacingDominatedSamples,
-                                                                             trend.sampleCount))
-                        StatRow(label: "Avg Gap", value: formatMs(trend.averagePacingGapMs))
-                        StatRow(label: "Max Gap", value: formatMs(trend.maxPacingGapMs))
-                        StatRow(label: "P95 Work", value: formatMs(trend.p95WorkMs))
-                    }
-                    .flex(1, shrink: 1)
-
-                    StatGroup(title: "Peak Load") {
-                        StatRow(label: "Peak Sample", value: "#\(trend.peakWorkSampleIndex)")
-                        StatRow(label: "Max Work", value: formatMs(trend.maxWorkMs))
-                        StatRow(label: "Max Draw Calls", value: "\(trend.maxDrawCallCount)")
-                        StatRow(label: "Max Passes", value: "\(trend.maxPassCount)")
-                        StatRow(label: "Max Bundles", value: "\(trend.maxRenderBundleCount)")
-                    }
-                    .flex(1, shrink: 1)
-                }
-                .padding(horizontal: 12, vertical: 10)
-
-                Divider()
-            }
-
-            Row(alignment: .top, spacing: 12) {
-                StatGroup(title: "Budget") {
-                    StatRow(label: "Work @60 FPS", value: budgetStatus(frameMs: stats.workMs, targetMs: 16.7))
-                    StatRow(label: "Work @30 FPS", value: budgetStatus(frameMs: stats.workMs, targetMs: 33.3))
-                    StatRow(label: "Work Headroom @60", value: formatSignedMs(16.7 - stats.workMs))
-                    StatRow(label: "Pacing Gap", value: formatMs(stats.pacingGapMs))
-                }
-                .flex(1, shrink: 1)
-
-                StatGroup(title: "Bottleneck") {
-                    StatRow(label: "Likely", value: bottleneck(stats))
-                    StatRow(label: "CPU Total", value: formatMs(cpuMs(stats)))
-                    StatRow(label: "GPU Present", value: formatMs(stats.gpuPresentSeconds * 1000))
-                    StatRow(label: "Work", value: formatMs(stats.workMs))
-                    StatRow(label: "Pacing Gap", value: formatMs(stats.pacingGapMs))
-                }
-                .flex(1, shrink: 1)
-
-                StatGroup(title: "Render Summary") {
-                    StatRow(label: "Draw / Pass", value: averageDrawsPerPass(stats))
-                    StatRow(label: "Draw Calls", value: "\(stats.drawCallCount)")
-                    StatRow(label: "Passes", value: "\(stats.passCount)")
-                    StatRow(label: "Bundles", value: "\(stats.renderBundleCount)")
-                }
-                .flex(1, shrink: 1)
+                FrameInspectionPanel(stats: selectedStats,
+                                     sample: selectedSample,
+                                     timingRevision: timingRevision,
+                                     issues: issues)
+                    .flex(1.3, shrink: 1)
             }
             .padding(horizontal: 12, vertical: 10)
         }
     }
 }
 
-private struct RenderDiagnosticsView: View {
+private struct FrameTimelinePanel: View {
+    let history: [EditorFrameStatsHistorySample]
+    let selectedSampleIndex: Binding<UInt64?>
+
+    var body: some View {
+        Column(alignment: .leading, spacing: 6) {
+            Row(alignment: .center, spacing: 8) {
+                Text("Frame Timeline")
+                    .font(.bodyStrong)
+                    .foregroundColor(.onSurface)
+                Text("\(history.count)")
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
+            .padding(horizontal: 10, vertical: 8)
+
+            if history.isEmpty {
+                StatWrappedValue(label: "Timeline", value: "No frame history samples yet.")
+            } else {
+                Column(alignment: .leading, spacing: 4) {
+                    for sample in history.suffix(36).reversed() {
+                        FrameTimelineRow(sample: sample,
+                                         isSelected: selectedSampleIndex.wrappedValue == sample.sampleIndex,
+                                         onSelect: { selectedSampleIndex.wrappedValue = sample.sampleIndex })
+                    }
+                }
+                .padding(horizontal: 8, vertical: 0)
+            }
+        }
+    }
+}
+
+private struct FrameTimelineRow: View {
+    let sample: EditorFrameStatsHistorySample
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(isSelected: isSelected, action: onSelect) {
+            Row(alignment: .center, spacing: 8) {
+                Text("#\(sample.sampleIndex)")
+                    .lineLimit(1)
+                    .font(.mono)
+                    .foregroundColor(isSelected ? .accent : .onSurface)
+                    .frame(width: 48)
+                Text(frameBudgetGlyph(sample.stats))
+                    .lineLimit(1)
+                    .font(.mono)
+                    .foregroundColor(frameBudgetColor(sample.stats))
+                    .frame(width: 18)
+                Text("Work \(formatMs(sample.stats.workMs))")
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurface)
+                    .flex(1, shrink: 1)
+                Text("Gap \(formatMs(sample.stats.pacingGapMs))")
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
+            .padding(horizontal: 8, vertical: 4)
+            .background(isSelected ? .accent.opacity(0.10) : .surfaceSunken)
+            .cornerRadius(4)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct FrameInspectionPanel: View {
+    let stats: EditorFrameStats
+    let sample: EditorFrameStatsHistorySample?
+    let timingRevision: UInt64
+    let issues: [DeveloperDiagnosticIssue]
+
+    var body: some View {
+        Column(alignment: .leading, spacing: 8) {
+            if issues.isEmpty {
+                StatGroup(title: "Diagnosis") {
+                    StatRow(label: "Likely", value: bottleneck(stats))
+                    StatWrappedValue(label: "Action",
+                                     value: "No frame issue is currently promoted. Use this view to validate specific changes.")
+                }
+            } else {
+                DeveloperIssueQueue(issues: issues,
+                                    title: "Frame Issues",
+                                    onOpenTarget: { _ in })
+            }
+
+            Row(alignment: .top, spacing: 12) {
+                StatGroup(title: "Selected Frame") {
+                    StatRow(label: "Sample", value: sample.map { "#\($0.sampleIndex)" } ?? "#\(timingRevision)")
+                    StatRow(label: "Frame", value: sample.map { "\($0.frameIndex)" } ?? "--")
+                    StatRow(label: "Observed FPS", value: formatFPS(stats.fps))
+                    StatRow(label: "Work FPS", value: formatFPS(stats.workFPS))
+                    StatRow(label: "Tick Gap", value: formatMs(stats.frameMs))
+                    StatRow(label: "Work", value: formatMs(stats.workMs))
+                    StatRow(label: "Pacing Gap", value: formatMs(stats.pacingGapMs))
+                }
+                .flex(1, shrink: 1)
+
+                StatGroup(title: "CPU / GPU") {
+                    StatRow(label: "Input", value: formatMs(stats.inputSeconds * 1000))
+                    StatRow(label: "Simulation", value: formatMs(stats.simulationSeconds * 1000))
+                    StatRow(label: "Render Prep", value: formatMs(stats.renderPrepareSeconds * 1000))
+                    StatRow(label: "Render Submit", value: formatMs(stats.renderSubmitSeconds * 1000))
+                    StatRow(label: "CPU Total", value: formatMs(cpuMs(stats)))
+                    StatRow(label: "GPU Present", value: formatMs(stats.gpuPresentSeconds * 1000))
+                }
+                .flex(1, shrink: 1)
+            }
+
+            StatGroup(title: "Render Inventory") {
+                StatRow(label: "Draw Calls", value: "\(stats.drawCallCount)")
+                StatRow(label: "Passes", value: "\(stats.passCount)")
+                StatRow(label: "Bundles", value: "\(stats.renderBundleCount)")
+                StatRow(label: "Draw / Pass", value: averageDrawsPerPass(stats))
+                StatRow(label: "Work @60 FPS", value: budgetStatus(frameMs: stats.workMs, targetMs: 16.7))
+                StatRow(label: "Work @30 FPS", value: budgetStatus(frameMs: stats.workMs, targetMs: 33.3))
+            }
+        }
+    }
+}
+
+private struct RenderFrameDebuggerView: View {
+    let frameStats: EditorFrameStats
+    let renderStats: RenderFrameStats
+    let issues: [DeveloperDiagnosticIssue]
+
+    var body: some View {
+        let passes = makeDeveloperRenderPassBreakdown(renderStats: renderStats)
+        ScrollView(.vertical) {
+            Row(alignment: .top, spacing: 12) {
+                Column(alignment: .leading, spacing: 8) {
+                    if !issues.isEmpty {
+                        DeveloperIssueQueue(issues: issues,
+                                            title: "Render Issues",
+                                            onOpenTarget: { _ in })
+                    }
+                    RenderPipelineSummary(frameStats: frameStats,
+                                          renderStats: renderStats)
+                }
+                .flex(1, shrink: 1)
+
+                RenderPassBreakdownView(passes: passes,
+                                        renderStats: renderStats)
+                    .flex(1.25, shrink: 1)
+            }
+            .padding(horizontal: 12, vertical: 10)
+        }
+    }
+}
+
+private struct RenderPipelineSummary: View {
     let frameStats: EditorFrameStats
     let renderStats: RenderFrameStats
 
     var body: some View {
-        ScrollView(.vertical) {
+        Row(alignment: .top, spacing: 12) {
+            StatGroup(title: "Frame Encode") {
+                StatRow(label: "Render Frame", value: renderStats.frameIndex >= 0 ? "\(renderStats.frameIndex)" : "--")
+                StatRow(label: "Prepare", value: formatNs(renderStats.cpuPrepareNS))
+                StatRow(label: "Encode", value: formatNs(renderStats.cpuEncodeNS))
+                StatRow(label: "Submit", value: formatNs(renderStats.cpuSubmitNS))
+                StatRow(label: "Total", value: formatNs(renderStats.cpuFrameTotalNS))
+                StatRow(label: "Present", value: formatMs(frameStats.gpuPresentSeconds * 1000))
+            }
+            .flex(1, shrink: 1)
+
+            StatGroup(title: "Scene Work") {
+                StatRow(label: "Passes", value: "\(renderStats.passCount)")
+                StatRow(label: "Draw Calls", value: "\(renderStats.drawCallCount)")
+                StatRow(label: "Bundles", value: "\(renderStats.renderBundleCount)")
+                StatRow(label: "Bundle Jobs", value: "\(renderStats.renderBundleParallelJobs)")
+                StatRow(label: "Settings Gen", value: "\(renderStats.settingsGeneration)")
+            }
+            .flex(1, shrink: 1)
+        }
+    }
+}
+
+private struct RenderPassBreakdownView: View {
+    let passes: [DeveloperRenderPassInspection]
+    let renderStats: RenderFrameStats
+
+    var body: some View {
+        Column(alignment: .leading, spacing: 8) {
+            Text("Pass Debugger")
+                .font(.bodyStrong)
+                .foregroundColor(.onSurface)
+                .padding(horizontal: 10, vertical: 8)
+
+            if passes.isEmpty {
+                StatWrappedValue(label: "Passes", value: "No render pass stats have been reported for this frame.")
+            } else {
+                Column(alignment: .leading, spacing: 6) {
+                    for pass in passes {
+                        RenderPassInspectionRow(pass: pass)
+                    }
+                }
+                .padding(horizontal: 8, vertical: 0)
+            }
+
             Row(alignment: .top, spacing: 12) {
-                StatGroup(title: L("Render")) {
-                    StatRow(label: "Frame", value: renderStats.frameIndex >= 0 ? "\(renderStats.frameIndex)" : "--")
-                    StatRow(label: "Settings Gen", value: "\(renderStats.settingsGeneration)")
-                    StatRow(label: "Passes", value: "\(renderStats.passCount)")
-                    StatRow(label: "Draw Calls", value: "\(renderStats.drawCallCount)")
-                    StatRow(label: "Bundles", value: "\(renderStats.renderBundleCount)")
-                    StatRow(label: "Bundle Jobs", value: "\(renderStats.renderBundleParallelJobs)")
-                }
-                .flex(1, shrink: 1)
-
-                StatGroup(title: "CPU Encode") {
-                    StatRow(label: "Prepare", value: formatNs(renderStats.cpuPrepareNS))
-                    StatRow(label: "Encode", value: formatNs(renderStats.cpuEncodeNS))
-                    StatRow(label: "Submit", value: formatNs(renderStats.cpuSubmitNS))
-                    StatRow(label: "Total", value: formatNs(renderStats.cpuFrameTotalNS))
-                    StatRow(label: "Present", value: formatMs(frameStats.gpuPresentSeconds * 1000))
-                }
-                .flex(1, shrink: 1)
-
                 StatGroup(title: "Shadow") {
                     StatRow(label: "Lights", value: "\(renderStats.shadowedLightCount)")
                     StatRow(label: "Tiles", value: "\(renderStats.shadowTileCount)")
@@ -274,49 +1132,57 @@ private struct RenderDiagnosticsView: View {
                     StatRow(label: "Atlas", value: renderStats.shadowAtlasResolution > 0 ? "\(renderStats.shadowAtlasResolution)" : "--")
                 }
                 .flex(1, shrink: 1)
-            }
-            .padding(horizontal: 12, vertical: 10)
 
-            Divider()
-
-            Row(alignment: .top, spacing: 12) {
-                StatGroup(title: "Active Passes") {
-                    if renderStats.activePasses.isEmpty {
-                        StatRow(label: "Passes", value: "--")
-                    } else {
-                        StatWrappedValue(label: "Passes",
-                                         value: renderStats.activePasses.map(\.rawValue).joined(separator: ", "))
-                    }
-                }
-                .flex(1, shrink: 1)
-
-                StatGroup(title: "Pass Draw Calls") {
-                    if renderStats.passDrawCallCounts.isEmpty {
-                        StatRow(label: "Passes", value: "--")
-                    } else {
-                        for entry in renderStats.passDrawCallCounts.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
-                            StatRow(label: entry.key.rawValue, value: "\(entry.value)")
-                        }
-                    }
+                StatGroup(title: "GPU Particles") {
+                    StatRow(label: "Sim Batches", value: "\(renderStats.gpuParticleSimulationBatchCount)")
+                    StatRow(label: "Sim Particles", value: "\(renderStats.gpuParticleSimulationParticleCount)")
+                    StatRow(label: "Render Instances", value: "\(renderStats.gpuParticleRenderInstanceCount)")
+                    StatRow(label: "Indirect Draws", value: "\(renderStats.gpuParticleIndirectDrawCount)")
+                    StatRow(label: "Workgroups", value: "\(gpuParticleWorkgroupTotal(renderStats))")
+                    StatRow(label: "Sort Padding", value: formatPercent(
+                        renderStats.gpuParticleSortPaddedItemCount - renderStats.gpuParticleSortItemCount,
+                        renderStats.gpuParticleSortPaddedItemCount
+                    ))
                 }
                 .flex(1, shrink: 1)
             }
-            .padding(horizontal: 12, vertical: 10)
-
-            Row(alignment: .top, spacing: 12) {
-                StatGroup(title: "Pass Encode") {
-                    if renderStats.passEncodeNS.isEmpty {
-                        StatRow(label: "Passes", value: "--")
-                    } else {
-                        for entry in renderStats.passEncodeNS.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
-                            StatRow(label: entry.key.rawValue, value: formatNs(entry.value))
-                        }
-                    }
-                }
-                .flex(1, shrink: 1)
-            }
-            .padding(horizontal: 12, vertical: 10)
         }
+    }
+}
+
+private struct RenderPassInspectionRow: View {
+    let pass: DeveloperRenderPassInspection
+
+    var body: some View {
+        Column(alignment: .leading, spacing: 4) {
+            Row(alignment: .center, spacing: 8) {
+                Text(pass.name)
+                    .lineLimit(1)
+                    .font(.bodyStrong)
+                    .foregroundColor(.onSurface)
+                    .flex(1, shrink: 1)
+                Text(formatNs(pass.encodeNS))
+                    .lineLimit(1)
+                    .font(.mono)
+                    .foregroundColor(renderPassEncodeColor(pass.encodeNS))
+                Text("\(pass.drawCallCount) draws")
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
+            Text(pass.signal)
+                .lineLimit(1)
+                .font(.caption)
+                .foregroundColor(.onSurface)
+            Text(pass.recommendation)
+                .lineLimit(2)
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+        }
+        .padding(horizontal: 10, vertical: 8)
+        .background(.surfaceSunken)
+        .cornerRadius(6)
+        .border(renderPassEncodeBorder(pass.encodeNS), width: 1)
     }
 }
 
@@ -1626,42 +2492,6 @@ private struct StatGroup<Content: View>: View {
     }
 }
 
-private struct FramePacingNotice: View {
-    let stats: EditorFrameStats
-
-    var body: some View {
-        Row(alignment: .center, spacing: 10) {
-            Box { EmptyView() }
-                .frame(width: 8, height: 8)
-                .background(.warning)
-                .cornerRadius(4)
-
-            Column(alignment: .leading, spacing: 2) {
-                Text("Frame pacing gap")
-                    .font(.bodyStrong)
-                    .foregroundColor(.onSurface)
-                Text("Observed \(formatMs(stats.frameMs)) tick gap; actual work is \(formatMs(stats.workMs)), with \(formatMs(stats.pacingGapMs)) waiting/idle.")
-                    .lineLimit(2)
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
-            }
-            .flex(1, shrink: 1)
-
-            Text(bottleneck(stats))
-                .font(.bodyStrong)
-                .foregroundColor(.warning)
-                .padding(horizontal: 8, vertical: 4)
-                .background(.surface)
-                .cornerRadius(4)
-                .border(.warning.opacity(0.25), width: 1)
-        }
-        .padding(horizontal: 12, vertical: 10)
-        .background(.surfaceSunken)
-        .cornerRadius(6)
-        .border(.warning.opacity(0.35), width: 1)
-    }
-}
-
 private struct StatRow: View {
     let label: String
     let value: String
@@ -1854,4 +2684,78 @@ private func averageDrawsPerPass(_ stats: EditorFrameStats) -> String {
     let average = Double(stats.drawCallCount) / Double(stats.passCount)
     if average < 10 { return String(format: "%.1f", average) }
     return String(format: "%.0f", average)
+}
+
+private func selectedFrameSample(history: [EditorFrameStatsHistorySample],
+                                 selectedSampleIndex: UInt64?) -> EditorFrameStatsHistorySample? {
+    if let selectedSampleIndex,
+       let sample = history.first(where: { $0.sampleIndex == selectedSampleIndex }) {
+        return sample
+    }
+    return history.last
+}
+
+private func frameBudgetGlyph(_ stats: EditorFrameStats) -> String {
+    if stats.isFramePacingDominated { return "P" }
+    if stats.workMs > 33.3 { return "!" }
+    if stats.workMs > 16.7 { return "*" }
+    return "OK"
+}
+
+private func frameBudgetColor(_ stats: EditorFrameStats) -> SemanticColorRef {
+    if stats.workMs > 33.3 { return .error }
+    if stats.isFramePacingDominated || stats.workMs > 16.7 { return .warning }
+    return .success
+}
+
+private func developerDiagnosticForeground(_ severity: DeveloperDiagnosticSeverity) -> SemanticColorRef {
+    switch severity {
+    case .nominal:
+        return .success
+    case .info:
+        return .info
+    case .warning:
+        return .warning
+    case .critical:
+        return .error
+    }
+}
+
+private func developerDiagnosticBackground(_ severity: DeveloperDiagnosticSeverity) -> SemanticColorRef {
+    switch severity {
+    case .nominal:
+        return .success.opacity(0.12)
+    case .info:
+        return .info.opacity(0.12)
+    case .warning:
+        return .warning.opacity(0.12)
+    case .critical:
+        return .error.opacity(0.12)
+    }
+}
+
+private func developerDiagnosticBorder(_ severity: DeveloperDiagnosticSeverity) -> SemanticColorRef {
+    switch severity {
+    case .nominal:
+        return .success.opacity(0.25)
+    case .info:
+        return .info.opacity(0.25)
+    case .warning:
+        return .warning.opacity(0.35)
+    case .critical:
+        return .error.opacity(0.40)
+    }
+}
+
+private func renderPassEncodeColor(_ encodeNS: UInt64) -> SemanticColorRef {
+    if encodeNS > 16_700_000 { return .error }
+    if encodeNS > 8_000_000 { return .warning }
+    if encodeNS > 0 { return .onSurface }
+    return .onSurfaceMuted
+}
+
+private func renderPassEncodeBorder(_ encodeNS: UInt64) -> SemanticColorRef {
+    if encodeNS > 16_700_000 { return .error.opacity(0.40) }
+    if encodeNS > 8_000_000 { return .warning.opacity(0.35) }
+    return .border
 }
