@@ -2,7 +2,7 @@ name: GuavaUI CI
 
 on:
   push:
-    branches: [main, guava-next, next]
+    branches: [main,  next]
     paths:
       - 'GuavaUI/**'
       - 'Engine/**'
@@ -26,6 +26,9 @@ jobs:
           sudo xcode-select -s /Applications/Xcode_26.3.app
           xcodebuild -version
           swift --version
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Build Engine native deps via CMake (SDL3 + Imath + OpenEXR + wgpu)
         run: |
