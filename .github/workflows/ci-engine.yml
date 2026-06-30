@@ -2,7 +2,7 @@ name: GuavaEngine CI
 
 on:
   push:
-    branches: [main, guava-next, next]
+    branches: [main, next]
     paths:
       - 'Engine/**'
       - '.github/workflows/ci-engine.yml'
@@ -50,11 +50,14 @@ jobs:
         if: runner.os != 'macOS'
         uses: SwiftyLab/setup-swift@latest
         with:
-          swift-version: "6.1"
+          swift-version: "6.3.2"
 
       - name: Swift version
         shell: bash
         run: swift --version
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
       # Native C/C++ deps build the same way everywhere — CMake is
       # cross-platform; only the Swift toolchain setup differs above.
