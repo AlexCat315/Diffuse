@@ -180,7 +180,6 @@ struct InspectorPanel: View {
     var body: some View {
         StoreScope(store) { store in
             let _ = store.sceneRevision
-            let _ = store.frameTimingRevision
             let selectedEntityID = store.selectedEntityID
             let entity = scene.entitySummary(id: selectedEntityID)
             let sections = scene.inspectorSections(for: selectedEntityID)
@@ -299,27 +298,10 @@ struct InspectorPanel: View {
             "subEmitters",
             "gpuSimulation",
         ]
-        private static let stageBadgeWidth: Float = 78
+        private static let stageBadgeWidth: Float = 58
 
         let binding: Binding<ParticleModuleStack>
         let diagnostics: InspectorParticleRuntimeDiagnostics
-
-        private struct ModuleDiagnosticChip {
-            let label: String
-            let value: String
-            let foreground: SemanticColorRef
-            let background: SemanticColorRef
-
-            init(_ label: String,
-                 _ value: String,
-                 foreground: SemanticColorRef = .onSurfaceVariant,
-                 background: SemanticColorRef = .surface) {
-                self.label = label
-                self.value = value
-                self.foreground = foreground
-                self.background = background
-            }
-        }
 
         private enum ModuleRuntimeTone: Equatable {
             case muted
@@ -347,53 +329,11 @@ struct InspectorPanel: View {
                 case .error: return .error.opacity(0.12)
                 }
             }
-
-            var accent: SemanticColorRef? {
-                switch self {
-                case .muted: return nil
-                case .info: return .info
-                case .success: return .success
-                case .warning: return .warning
-                case .error: return .error
-                }
-            }
-
-            var isAlert: Bool {
-                self == .warning || self == .error
-            }
-
-            var isActive: Bool {
-                self == .info || self == .success
-            }
         }
 
         private struct ModuleRuntimeStatus {
             let text: String
             let tone: ModuleRuntimeTone
-        }
-
-        private struct ModuleStatusCard {
-            let label: String
-            let value: String
-            let detail: String
-            let tone: ModuleRuntimeTone
-        }
-
-        private struct ModuleHealthSnapshot {
-            let authoring: ModuleStatusCard
-            let runtime: ModuleStatusCard
-            let backend: ModuleStatusCard
-            let pressure: ModuleStatusCard
-            let issues: ModuleStatusCard
-
-            var primaryStatus: ModuleStatusCard {
-                if issues.tone.isAlert { return issues }
-                if pressure.tone.isAlert { return pressure }
-                if runtime.tone.isActive { return runtime }
-                if backend.tone.isActive { return backend }
-                if pressure.tone.isActive { return pressure }
-                return runtime
-            }
         }
 
         private var stack: ParticleModuleStack {
@@ -477,25 +417,49 @@ struct InspectorPanel: View {
                     .debugName("particle-module-stack-summary")
                 }
 
-                Box(direction: .column, alignItems: .stretch, spacing: 4) {
-                    moduleGroup(title: L("Core"),
-                                subtitle: "\(enabledCount(in: coreModuleIndices))/\(coreModuleIndices.count)",
-                                indices: coreModuleIndices)
-
-                    if !advancedModuleIndices.isEmpty {
-                        moduleGroup(title: L("Advanced"),
-                                    subtitle: "\(enabledCount(in: advancedModuleIndices))/\(advancedModuleIndices.count)",
-                                    indices: advancedModuleIndices)
-                    }
+                BoundedScrollView(.vertical,
+                                  contentHeight: moduleListContentHeight,
+                                  minHeight: ParticleModuleStackLayout.minListViewportHeight,
+                                  maxHeight: ParticleModuleStackLayout.maxListViewportHeight) {
+                    moduleList()
                 }
-                .debugName("particle-module-stack-list")
+                .background(.surfaceSunken)
+                .cornerRadius(4)
+                .border(.divider, width: 1)
+                .debugName("particle-module-stack-list-scroll")
             }
             .padding(horizontal: 8, vertical: 8)
             .background(.surface)
             .cornerRadius(6)
             .border(.divider, width: 1)
-            .clipped()
             .debugName("particle-module-stack")
+        }
+
+        private var moduleListContentHeight: Float {
+            let issueCounts = Dictionary(
+                grouping: stack.modules.map { module in
+                    (module.id, moduleValidationIssues(for: module.id).count)
+                },
+                by: { $0.0 }
+            ).mapValues { entries in entries.reduce(0) { $0 + $1.1 } }
+            return ParticleModuleStackLayout.listContentHeight(stack: stack,
+                                                               issueCountsByModuleID: issueCounts)
+        }
+
+        private func moduleList() -> some View {
+            Box(direction: .column, alignItems: .stretch, spacing: ParticleModuleStackLayout.groupSpacing) {
+                moduleGroup(title: L("Core"),
+                            subtitle: "\(enabledCount(in: coreModuleIndices))/\(coreModuleIndices.count)",
+                            indices: coreModuleIndices)
+
+                if !advancedModuleIndices.isEmpty {
+                    moduleGroup(title: L("Advanced"),
+                                subtitle: "\(enabledCount(in: advancedModuleIndices))/\(advancedModuleIndices.count)",
+                                indices: advancedModuleIndices)
+                }
+            }
+            .padding(horizontal: 6, vertical: 6)
+            .debugName("particle-module-stack-list")
         }
 
         private var gpuSummaryText: String {
@@ -587,8 +551,8 @@ struct InspectorPanel: View {
 
         private func moduleRow(_ index: Int) -> AnyView {
             let module = stack.modules[index]
-            let health = moduleHealthSnapshot(module)
             let isModified = stack.moduleSettingsDifferFromDefault(module.id)
+            let issues = moduleValidationIssues(for: module.id)
             return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 Row(alignment: .center, spacing: 8) {
                     Button(icon: .resource(module.isExpanded ? UICommonIcons.chevronDown : UICommonIcons.chevronRight),
@@ -619,10 +583,10 @@ struct InspectorPanel: View {
                                 .flex()
                                 .debugName("particle-module-name-\(module.id)")
 
-                            if module.id == "gpuSimulation" || health.primaryStatus.tone.isAlert {
-                                moduleBackendPill(health.primaryStatus)
-                            } else {
-                                moduleHealthDot(health.primaryStatus.tone)
+                            if let badge = moduleRowStatusBadge(module,
+                                                                issues: issues,
+                                                                isModified: isModified) {
+                                badge
                             }
                         }
 
@@ -633,12 +597,6 @@ struct InspectorPanel: View {
                                 .foregroundColor(module.isEnabled ? .onSurfaceVariant : .onSurfaceMuted)
                                 .flex()
                                 .debugName("particle-module-detail-\(module.id)")
-
-                            if isModified {
-                                badge(L("Modified"),
-                                      foreground: .info,
-                                      background: .info.opacity(0.12))
-                            }
                         }
                     }
                     .opacity(module.isEnabled ? 1 : 0.62)
@@ -664,7 +622,6 @@ struct InspectorPanel: View {
 
         private func moduleHeaderBackground(_ module: ParticleEmitterModule) -> SemanticColorRef {
             if !module.isEnabled { return .surfaceSunken }
-            if module.isExpanded { return .surfaceRaised }
             return .surface
         }
 
@@ -717,17 +674,17 @@ struct InspectorPanel: View {
         private func moduleStageLabel(_ stage: ParticleModuleStage) -> String {
             switch stage {
             case .spawn:
-                return L("SPAWN")
+                return L("Spawn")
             case .initialize:
-                return L("INITIALIZE")
+                return L("Init")
             case .update:
-                return L("UPDATE")
+                return L("Update")
             case .render:
-                return L("RENDER")
+                return L("Render")
             case .event:
-                return L("EVENT")
+                return L("Event")
             case .simulation:
-                return L("SYSTEM")
+                return L("System")
             }
         }
 
@@ -744,21 +701,63 @@ struct InspectorPanel: View {
             }
         }
 
-        private func moduleBackendPill(_ card: ModuleStatusCard) -> AnyView {
-            AnyView(Text(card.value)
-                .lineLimit(1)
-                .font(.caption)
-                .foregroundColor(card.tone.foreground)
-                .padding(horizontal: 7, vertical: 2)
-                .background(card.tone.background)
-                .cornerRadius(4))
+        private func moduleRowStatusBadge(_ module: ParticleEmitterModule,
+                                          issues: [ParticleModuleIssue],
+                                          isModified: Bool) -> AnyView? {
+            if let severity = highestIssueSeverity(issues) {
+                let tone = moduleIssueTone(severity)
+                return AnyView(statusBadge(moduleIssueSeverityLabel(severity),
+                                           foreground: tone.foreground,
+                                           background: tone.background))
+            }
+            if !module.isEnabled {
+                return AnyView(statusBadge(L("Off"),
+                                           foreground: .onSurfaceMuted,
+                                           background: .surfaceSunken))
+            }
+            if isModified {
+                return AnyView(statusBadge(L("Modified"),
+                                           foreground: .info,
+                                           background: .info.opacity(0.10)))
+            }
+            if module.id == "gpuSimulation" {
+                let status = moduleBackendStatus(module)
+                return AnyView(statusBadge(status.text,
+                                           foreground: status.tone.foreground,
+                                           background: status.tone.background))
+            }
+            return nil
         }
 
-        private func moduleHealthDot(_ tone: ModuleRuntimeTone) -> AnyView {
-            AnyView(Box { EmptyView() }
-                .frame(width: 7, height: 7)
-                .background(tone.foreground)
-                .cornerRadius(4))
+        private func statusBadge(_ text: String,
+                                 foreground: SemanticColorRef,
+                                 background: SemanticColorRef) -> some View {
+            Text(text)
+                .lineLimit(1)
+                .font(.caption)
+                .foregroundColor(foreground)
+                .padding(horizontal: 6, vertical: 1)
+                .background(background)
+                .cornerRadius(3)
+                .border(foreground.opacity(0.10), width: 1)
+        }
+
+        private func moduleValidationIssues(for moduleID: String) -> [ParticleModuleIssue] {
+            diagnostics.validationIssues(for: moduleID)
+                + stack.validationIssues().filter { $0.moduleID == moduleID }
+        }
+
+        private func highestIssueSeverity(_ issues: [ParticleModuleIssue]) -> ParticleModuleIssueSeverity? {
+            if issues.contains(where: { $0.severity == .error }) {
+                return .error
+            }
+            if issues.contains(where: { $0.severity == .warning }) {
+                return .warning
+            }
+            if issues.contains(where: { $0.severity == .info }) {
+                return .info
+            }
+            return nil
         }
 
         private func moduleStatus(_ module: ParticleEmitterModule) -> ModuleRuntimeStatus? {
@@ -889,12 +888,6 @@ struct InspectorPanel: View {
 
         private func moduleAccent(_ module: ParticleEmitterModule) -> SemanticColorRef {
             guard module.isEnabled else { return .divider }
-            if let accent = moduleStatus(module)?.tone.accent {
-                return accent
-            }
-            if module.id == "gpuSimulation", diagnostics.hasGPUSimulationWork {
-                return .success
-            }
             switch module.stage {
             case .spawn, .initialize:
                 return .accent
@@ -910,28 +903,18 @@ struct InspectorPanel: View {
         }
 
         private func moduleBackground(_ module: ParticleEmitterModule) -> SemanticColorRef {
-            let health = moduleHealthSnapshot(module)
             if !module.isEnabled { return .surfaceSunken }
-            if health.primaryStatus.tone == .error {
-                return .error.opacity(0.08)
-            }
-            if health.primaryStatus.tone == .warning {
-                return .warning.opacity(0.08)
-            }
             return module.isExpanded ? .surfaceRaised : .surface
         }
 
         private func moduleBorder(_ module: ParticleEmitterModule) -> SemanticColorRef {
-            let health = moduleHealthSnapshot(module)
+            let issues = moduleValidationIssues(for: module.id)
             if !module.isEnabled { return .divider }
-            if health.primaryStatus.tone == .error {
+            if issues.contains(where: { $0.severity == .error }) {
                 return .error
             }
-            if health.primaryStatus.tone == .warning {
+            if issues.contains(where: { $0.severity == .warning }) {
                 return .warning
-            }
-            if health.primaryStatus.tone == .success {
-                return module.isExpanded ? .success : .divider
             }
             return module.isExpanded ? .borderStrong : .divider
         }
@@ -944,7 +927,7 @@ struct InspectorPanel: View {
         }
 
         private func expandedModuleEditor(index: Int, module: ParticleEmitterModule) -> AnyView {
-            let issues = diagnostics.validationIssues(for: module.id)
+            let issues = moduleValidationIssues(for: module.id)
             return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 7) {
                 moduleParameterSurface(index: index, module: module)
 
@@ -955,118 +938,10 @@ struct InspectorPanel: View {
                 if !issues.isEmpty {
                     moduleIssueDetails(issues)
                 }
-
-                let chips = moduleDiagnosticChips(module)
-                if !chips.isEmpty {
-                    Box(direction: .column, alignItems: .stretch, spacing: 4) {
-                        Text(L("Runtime"))
-                            .lineLimit(1)
-                            .font(.caption)
-                            .foregroundColor(.onSurfaceMuted)
-                        Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 4) {
-                            for chip in chips {
-                                diagnosticChip(chip.label,
-                                               chip.value,
-                                               foreground: chip.foreground,
-                                               background: chip.background)
-                            }
-                        }
-                    }
-                }
             }
             .padding(horizontal: 8, vertical: 8)
             .background(.surface)
             .border(.divider, width: 1))
-        }
-
-        private func moduleHealthSnapshot(_ module: ParticleEmitterModule,
-                                          issues: [ParticleModuleIssue]? = nil) -> ModuleHealthSnapshot {
-            let resolvedIssues = issues ?? diagnostics.validationIssues(for: module.id)
-            return ModuleHealthSnapshot(authoring: moduleAuthoringCard(module),
-                                        runtime: moduleRuntimeCard(module),
-                                        backend: moduleBackendCard(module),
-                                        pressure: modulePressureCard(module),
-                                        issues: moduleIssueCard(resolvedIssues))
-        }
-
-        private func moduleAuthoringCard(_ module: ParticleEmitterModule) -> ModuleStatusCard {
-            let isModified = stack.moduleSettingsDifferFromDefault(module.id)
-            return ModuleStatusCard(label: L("Authoring"),
-                                    value: isModified ? L("Modified") : L("Default"),
-                                    detail: module.isEnabled ? L("enabled") : L("disabled"),
-                                    tone: isModified ? .info : .muted)
-        }
-
-        private func moduleRuntimeCard(_ module: ParticleEmitterModule) -> ModuleStatusCard {
-            let status = moduleStatus(module) ?? ModuleRuntimeStatus(text: module.isEnabled ? L("Idle") : L("Off"),
-                                                                     tone: .muted)
-            return ModuleStatusCard(label: L("Runtime"),
-                                    value: status.text,
-                                    detail: diagnostics.statsScopeLabel,
-                                    tone: status.tone)
-        }
-
-        private func moduleBackendCard(_ module: ParticleEmitterModule) -> ModuleStatusCard {
-            let status = moduleBackendStatus(module)
-            let detail: String
-            if case .gpuSimulation = module.settings,
-               let plan = diagnostics.selectedGPUSimulationPlan {
-                detail = "\(plan.dispatchWorkgroups)x\(plan.workgroupSize)"
-            } else if diagnostics.hasGPUSimulationWork {
-                detail = L("simulation active")
-            } else {
-                detail = L("editor linked")
-            }
-            return ModuleStatusCard(label: L("Backend"),
-                                    value: status.text,
-                                    detail: detail,
-                                    tone: status.tone)
-        }
-
-        private func modulePressureCard(_ module: ParticleEmitterModule) -> ModuleStatusCard {
-            guard module.isEnabled else {
-                return ModuleStatusCard(label: L("Pressure"),
-                                        value: L("Inactive"),
-                                        detail: L("module disabled"),
-                                        tone: .muted)
-            }
-            if diagnostics.runtimeDropCount > 0 {
-                return ModuleStatusCard(label: L("Pressure"),
-                                        value: particleRuntimePressureLevelLabel(.critical),
-                                        detail: "\(diagnostics.runtimeDropCount) \(L("drops"))",
-                                        tone: particleRuntimePressureLevelTone(.critical))
-            }
-            if diagnostics.scalability.pressure > 0 || diagnostics.scalability.appliedScale < 1 {
-                return ModuleStatusCard(label: L("Pressure"),
-                                        value: particlePressureReasonLabel(diagnostics.scalability.reason),
-                                        detail: "\(L("scale")) \(fmt(diagnostics.scalability.appliedScale))",
-                                        tone: diagnostics.scalability.pressure > 0 ? .warning : .info)
-            }
-            return ModuleStatusCard(label: L("Pressure"),
-                                    value: particleRuntimePressureLevelLabel(diagnostics.runtimePressureLevel),
-                                    detail: diagnostics.liveBudgetText,
-                                    tone: particleRuntimePressureLevelTone(diagnostics.runtimePressureLevel))
-        }
-
-        private func moduleIssueCard(_ issues: [ParticleModuleIssue]) -> ModuleStatusCard {
-            let errors = issues.filter { $0.severity == .error }.count
-            let warnings = issues.filter { $0.severity == .warning }.count
-            if errors > 0 {
-                return ModuleStatusCard(label: L("Issues"),
-                                        value: "\(errors) \(L("Errors"))",
-                                        detail: warnings > 0 ? "\(warnings) \(L("warnings"))" : L("repair required"),
-                                        tone: .error)
-            }
-            if warnings > 0 {
-                return ModuleStatusCard(label: L("Issues"),
-                                        value: "\(warnings) \(L("Warnings"))",
-                                        detail: L("repairable"),
-                                        tone: .warning)
-            }
-            return ModuleStatusCard(label: L("Issues"),
-                                    value: L("Clean"),
-                                    detail: L("no validation issues"),
-                                    tone: .success)
         }
 
         private func gpuBackendStatusPanel(_ module: ParticleEmitterModule) -> AnyView {
@@ -1216,148 +1091,6 @@ struct InspectorPanel: View {
             }
         }
 
-        private func moduleDiagnosticChips(_ module: ParticleEmitterModule) -> [ModuleDiagnosticChip] {
-            let issueChips = moduleIssueChips(module)
-            guard module.isEnabled else {
-                return issueChips + [
-                    ModuleDiagnosticChip(L("State"),
-                                         L("Disabled"),
-                                         foreground: .onSurfaceMuted,
-                                         background: .surface),
-                ]
-            }
-            let runtimeChips: [ModuleDiagnosticChip]
-            switch module.settings {
-            case .emission:
-                runtimeChips = [
-                    ModuleDiagnosticChip(L("Scope"), diagnostics.statsScopeLabel),
-                    runtimeMetricChip(L("Live"), diagnostics.liveParticleCount, tone: .info),
-                    runtimeMetricChip(L("Request"), diagnostics.requestedSpawnCount, tone: .info),
-                    runtimeMetricChip(L("Spawn"), diagnostics.spawnedParticleCount, tone: .success),
-                    ModuleDiagnosticChip(L("Budget Use"), diagnostics.spawnBudgetText,
-                                         foreground: diagnostics.spawnBudgetLimit > 0
-                                            && diagnostics.spawnBudgetConsumedCount >= diagnostics.spawnBudgetLimit
-                                                ? .warning
-                                                : .onSurfaceVariant,
-                                         background: diagnostics.spawnBudgetLimit > 0
-                                            && diagnostics.spawnBudgetConsumedCount >= diagnostics.spawnBudgetLimit
-                                                ? .warning.opacity(0.12)
-                                                : .surface),
-                    ModuleDiagnosticChip(L("Drops"), "\(diagnostics.droppedSpawnCount)",
-                                         foreground: diagnostics.droppedSpawnCount > 0 ? .warning : .onSurfaceVariant,
-                                         background: diagnostics.droppedSpawnCount > 0 ? .warning.opacity(0.12) : .surface),
-                    ModuleDiagnosticChip(L("Budget Drops"), "\(diagnostics.spawnBudgetLimitedCount)",
-                                         foreground: diagnostics.spawnBudgetLimitedCount > 0 ? .warning : .onSurfaceVariant,
-                                         background: diagnostics.spawnBudgetLimitedCount > 0 ? .warning.opacity(0.12) : .surface),
-                    ModuleDiagnosticChip(L("Capacity"), "\(diagnostics.capacityLimitedSpawnCount)",
-                                         foreground: diagnostics.capacityLimitedSpawnCount > 0 ? .warning : .onSurfaceVariant,
-                                         background: diagnostics.capacityLimitedSpawnCount > 0 ? .warning.opacity(0.12) : .surface),
-                ]
-            case .collision:
-                runtimeChips = [
-                    ModuleDiagnosticChip(L("Scope"), diagnostics.statsScopeLabel),
-                    runtimeMetricChip(L("Hits"), diagnostics.collisionCount, tone: .success),
-                    runtimeMetricChip(L("Events"), diagnostics.eventReport.collisionEventCount, tone: .info),
-                    ModuleDiagnosticChip(L("Bounce"), moduleCollisionBounce(module.settings)),
-                ]
-            case .appearance:
-                runtimeChips = [
-                    ModuleDiagnosticChip(L("Scope"), diagnostics.statsScopeLabel),
-                    runtimeMetricChip(L("Expired"), diagnostics.expiredParticleCount, tone: .info),
-                    ModuleDiagnosticChip(L("Scale"), fmt(diagnostics.scalability.appliedScale)),
-                    ModuleDiagnosticChip(L("Pressure"), fmt(diagnostics.scalability.pressure),
-                                         foreground: diagnostics.scalability.pressure > 1 ? .warning : .onSurfaceVariant,
-                                         background: diagnostics.scalability.pressure > 1 ? .warning.opacity(0.12) : .surface),
-                ]
-            case .renderer:
-                runtimeChips = [
-                    runtimeMetricChip(L("Submitted"), diagnostics.renderStats.gpuParticleRenderInstanceCount, tone: .success),
-                    runtimeMetricChip(L("Draws"), diagnostics.renderStats.gpuParticleIndirectDrawCount, tone: .success),
-                    runtimeMetricChip(L("Cull"), diagnostics.renderStats.gpuParticleCullCandidateCount, tone: .info),
-                ]
-            case .textureSheet:
-                runtimeChips = [
-                    runtimeMetricChip(L("Sort"), diagnostics.renderStats.gpuParticleSortItemCount, tone: .info),
-                    runtimeMetricChip(L("Passes"), diagnostics.renderStats.gpuParticleSortPassCount, tone: .info),
-                ]
-            case .trails:
-                runtimeChips = [
-                    ModuleDiagnosticChip(L("Scope"), diagnostics.statsScopeLabel),
-                    runtimeMetricChip(L("Live"), diagnostics.liveParticleCount, tone: .info),
-                    runtimeMetricChip(L("Render"), diagnostics.renderStats.gpuParticleRenderInstanceCount, tone: .success),
-                ]
-            case .subEmitters:
-                runtimeChips = [
-                    ModuleDiagnosticChip(L("Events"), "\(diagnostics.eventReport.appliedEventCount)/\(diagnostics.eventReport.eventCount)"),
-                    ModuleDiagnosticChip(L("Scope"), diagnostics.statsScopeLabel),
-                    runtimeMetricChip(L("Request"), diagnostics.eventRequestedSpawnCount, tone: .info),
-                    runtimeMetricChip(L("Spawned"), diagnostics.subEmitterSpawnedCount, tone: .success),
-                    ModuleDiagnosticChip(L("Budget Use"), diagnostics.eventSpawnBudgetText,
-                                         foreground: diagnostics.eventSpawnBudgetLimit > 0
-                                            && diagnostics.eventSpawnBudgetConsumedCount >= diagnostics.eventSpawnBudgetLimit
-                                                ? .warning
-                                                : .onSurfaceVariant,
-                                         background: diagnostics.eventSpawnBudgetLimit > 0
-                                            && diagnostics.eventSpawnBudgetConsumedCount >= diagnostics.eventSpawnBudgetLimit
-                                                ? .warning.opacity(0.12)
-                                                : .surface),
-                    ModuleDiagnosticChip(L("Drops"), "\(diagnostics.eventDroppedSpawnCount)",
-                                         foreground: diagnostics.eventDroppedSpawnCount > 0 ? .warning : .onSurfaceVariant,
-                                         background: diagnostics.eventDroppedSpawnCount > 0 ? .warning.opacity(0.12) : .surface),
-                    ModuleDiagnosticChip(L("Budget Drops"), "\(diagnostics.eventSpawnBudgetLimitedCount)",
-                                         foreground: diagnostics.eventSpawnBudgetLimitedCount > 0 ? .warning : .onSurfaceVariant,
-                                         background: diagnostics.eventSpawnBudgetLimitedCount > 0 ? .warning.opacity(0.12) : .surface),
-                    ModuleDiagnosticChip(L("Capacity"), "\(diagnostics.eventCapacityLimitedSpawnCount)",
-                                         foreground: diagnostics.eventCapacityLimitedSpawnCount > 0 ? .warning : .onSurfaceVariant,
-                                         background: diagnostics.eventCapacityLimitedSpawnCount > 0 ? .warning.opacity(0.12) : .surface),
-                ]
-            case .gpuSimulation:
-                runtimeChips = gpuSimulationDiagnostics()
-            case .shape, .velocity, .forces:
-                runtimeChips = [
-                    ModuleDiagnosticChip(L("Scope"), diagnostics.statsScopeLabel),
-                    runtimeMetricChip(L("Live"), diagnostics.liveParticleCount, tone: .info),
-                    runtimeMetricChip(L("Spawn"), diagnostics.spawnedParticleCount, tone: .success),
-                    ModuleDiagnosticChip(L("Frame"), formatMs(diagnostics.frameStats.simulatedDeltaTime)),
-                ]
-            }
-            return issueChips + runtimeChips
-        }
-
-        private func gpuSimulationDiagnostics() -> [ModuleDiagnosticChip] {
-            var chips: [ModuleDiagnosticChip] = []
-            if let plan = diagnostics.selectedGPUSimulationPlan {
-                let status = gpuPlanStatus(plan)
-                chips.append(ModuleDiagnosticChip(L("Plan"),
-                                                  status.text,
-                                                  foreground: status.tone.foreground,
-                                                  background: status.tone.background))
-                chips.append(ModuleDiagnosticChip(L("Dispatch"),
-                                                  "\(plan.dispatchWorkgroups)x\(plan.workgroupSize)"))
-                if !plan.unsupportedReasons.isEmpty {
-                    chips.append(ModuleDiagnosticChip(L("Reason"),
-                                                      gpuPlanUnsupportedReasonList(plan.unsupportedReasons),
-                                                      foreground: .warning,
-                                                      background: .warning.opacity(0.12)))
-                }
-            }
-            chips.append(contentsOf: [
-                ModuleDiagnosticChip(L("Batches"), "\(diagnostics.renderStats.gpuParticleSimulationBatchCount)",
-                                     foreground: diagnostics.hasGPUSimulationWork ? .success : .onSurfaceVariant,
-                                     background: diagnostics.hasGPUSimulationWork ? .success.opacity(0.12) : .surface),
-                runtimeMetricChip(L("Particles"), diagnostics.renderStats.gpuParticleSimulationParticleCount, tone: .success),
-                runtimeMetricChip(L("Workgroups"), diagnostics.renderStats.gpuParticleSimulationDispatchWorkgroups, tone: .success),
-                ModuleDiagnosticChip(L("Readback"), "\(diagnostics.eventReport.totalReadbackEventCount)",
-                                     foreground: diagnostics.hasGPUEventPressure ? .info : .onSurfaceVariant,
-                                     background: diagnostics.hasGPUEventPressure ? .info.opacity(0.12) : .surface),
-                ModuleDiagnosticChip(L("Dropped"), "\(diagnostics.eventReport.droppedReadbackEventCount)",
-                                     foreground: diagnostics.eventReport.droppedReadbackEventCount > 0 ? .warning : .onSurfaceVariant,
-                                     background: diagnostics.eventReport.droppedReadbackEventCount > 0 ? .warning.opacity(0.12) : .surface),
-                ModuleDiagnosticChip(L("Buffer"), "\(diagnostics.renderStats.gpuParticleSimulationEventBufferBytes)B"),
-            ])
-            return chips
-        }
-
         private func gpuPlanStatus(_ plan: ParticleGPUSimulationPlan) -> ModuleRuntimeStatus {
             switch plan.status {
             case .disabled:
@@ -1451,83 +1184,6 @@ struct InspectorPanel: View {
             }
         }
 
-        private func particlePressureReasonLabel(_ reason: ParticleScalabilityPressureReason) -> String {
-            switch reason {
-            case .none:
-                return L("Recovering")
-            case .liveBudget:
-                return L("Live Budget")
-            case .spawnBudget:
-                return L("Spawn Budget")
-            case .capacityLimited:
-                return L("Capacity")
-            }
-        }
-
-        private func particleRuntimePressureLevelLabel(_ level: ParticleRuntimePressureLevel) -> String {
-            switch level {
-            case .idle:
-                return L("Idle")
-            case .nominal:
-                return L("Healthy")
-            case .warning:
-                return L("Near Limit")
-            case .critical:
-                return L("Critical")
-            }
-        }
-
-        private func particleRuntimePressureLevelTone(_ level: ParticleRuntimePressureLevel) -> ModuleRuntimeTone {
-            switch level {
-            case .idle:
-                return .muted
-            case .nominal:
-                return .success
-            case .warning:
-                return .warning
-            case .critical:
-                return .error
-            }
-        }
-
-        private func diagnosticChip(_ label: String,
-                                    _ value: String,
-                                    foreground: SemanticColorRef,
-                                    background: SemanticColorRef) -> AnyView {
-            AnyView(Row(alignment: .center, spacing: 4) {
-                Text(label)
-                    .lineLimit(1)
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
-                Text(value)
-                    .lineLimit(1)
-                    .font(.caption)
-                    .foregroundColor(foreground)
-            }
-            .padding(horizontal: 5, vertical: 2)
-            .background(background)
-            .cornerRadius(3))
-        }
-
-        private func runtimeMetricChip(_ label: String,
-                                       _ value: Int,
-                                       tone: ModuleRuntimeTone = .info) -> ModuleDiagnosticChip {
-            ModuleDiagnosticChip(label,
-                                 "\(value)",
-                                 foreground: value > 0 ? tone.foreground : .onSurfaceVariant,
-                                 background: value > 0 ? tone.background : .surface)
-        }
-
-        private func moduleIssueChips(_ module: ParticleEmitterModule) -> [ModuleDiagnosticChip] {
-            diagnostics.validationIssues(for: module.id).map { issue in
-                let tone = moduleIssueTone(issue.severity)
-                return ModuleDiagnosticChip(moduleIssueSeverityLabel(issue.severity),
-                                            moduleIssueTitle(issue),
-                                            foreground: tone.foreground,
-                                            background: tone.background)
-            }
-        }
-
         private func moduleIssueTone(_ severity: ParticleModuleIssueSeverity) -> ModuleRuntimeTone {
             switch severity {
             case .info:
@@ -1589,11 +1245,6 @@ struct InspectorPanel: View {
             default:
                 return issue.code
             }
-        }
-
-        private func moduleCollisionBounce(_ settings: ParticleEmitterModuleSettings) -> String {
-            guard case let .collision(module) = settings else { return "--" }
-            return fmt(module.collisionRestitution)
         }
 
         private func moduleEditor(index: Int, module: ParticleEmitterModule) -> AnyView {
@@ -4784,65 +4435,100 @@ private extension EditorInspectorFieldValue {
             return max(defaultHeight, ParticleSubEmitterEditorLayout.rowHeight(ruleCount: binding.wrappedValue.count))
         case let .particleModuleStack(binding):
             let stack = binding.wrappedValue
-            let headerHeight: Float = 62
-            let listPaddingHeight: Float = 0
-            let advancedSeparatorHeight: Float = 34
-            let rowHeight: Float = 58
-            let moduleEditorRowHeight: Float = 46
-            let moduleParameterChromeHeight: Float = 34
-            let moduleGPUBackendPanelHeight: Float = 90
-            let moduleExpandedDiagnosticsHeight: Float = 36
-            let moduleIssueHeaderHeight: Float = 18
-            let moduleIssueRowHeight: Float = 30
-            let advancedModuleIDs: Set<String> = [
-                "textureSheet",
-                "trails",
-                "subEmitters",
-                "gpuSimulation",
-            ]
             let stackIssueCounts = Dictionary(
                 grouping: stack.validationIssues(),
                 by: \.moduleID
             ).mapValues(\.count)
-            let groupCount: Float = stack.modules.contains { advancedModuleIDs.contains($0.id) } ? 2 : 1
-            let expandedEditorHeight = stack.modules.reduce(Float(0)) { total, module in
-                guard module.isExpanded else { return total }
-                let issueCount = Float(stackIssueCounts[module.id] ?? 0)
-                let issueHeight = issueCount > 0
-                    ? moduleIssueHeaderHeight + issueCount * moduleIssueRowHeight
-                    : 0
-                let gpuBackendHeight: Float
-                if case .gpuSimulation = module.settings {
-                    gpuBackendHeight = moduleGPUBackendPanelHeight
-                } else {
-                    gpuBackendHeight = 0
-                }
-                return total
-                    + 8
-                    + moduleParameterChromeHeight
-                    + particleModuleEditorHeight(module.settings, rowHeight: moduleEditorRowHeight)
-                    + gpuBackendHeight
-                    + issueHeight
-                    + moduleExpandedDiagnosticsHeight
-            }
-            let groupSpacing: Float = max(0, groupCount - 1) * 4
-            let rowSpacing: Float = Float(max(0, stack.modules.count - Int(groupCount))) * 3
-            let cardPadding: Float = 16
+            let listContentHeight = ParticleModuleStackLayout.listContentHeight(
+                stack: stack,
+                issueCountsByModuleID: stackIssueCounts
+            )
             return max(defaultHeight,
-                       headerHeight
-                       + listPaddingHeight
-                       + (groupCount > 1 ? advancedSeparatorHeight : 0)
-                       + Float(stack.modules.count) * rowHeight
-                       + expandedEditorHeight
-                       + groupSpacing
-                       + rowSpacing
-                       + cardPadding
-                       + 8)
+                       ParticleModuleStackLayout.propertyGridRowHeight(listContentHeight: listContentHeight))
         case let .json(_, minHeight):
             return max(defaultHeight, minHeight + 34)
         default:
             return nil
         }
+    }
+}
+
+private enum ParticleModuleStackLayout {
+    static let headerHeight: Float = 58
+    static let cardPadding: Float = 16
+    static let scrollChromeHeight: Float = 2
+    static let listPaddingHeight: Float = 12
+    static let advancedSeparatorHeight: Float = 28
+    static let collapsedModuleRowHeight: Float = 52
+    static let moduleEditorRowHeight: Float = 46
+    static let moduleParameterChromeHeight: Float = 30
+    static let moduleGPUBackendPanelHeight: Float = 90
+    static let moduleIssueHeaderHeight: Float = 18
+    static let moduleIssueRowHeight: Float = 30
+    static let groupSpacing: Float = 4
+    static let rowSpacing: Float = 3
+    static let minListViewportHeight: Float = 220
+    static let maxListViewportHeight: Float = 520
+    static let propertyGridFullWidthLabelHeight: Float = 18
+    static let propertyGridFullWidthLabelValueSpacing: Float = 6
+    static let propertyGridFullWidthVerticalPadding: Float = 12
+
+    static let advancedModuleIDs: Set<String> = [
+        "textureSheet",
+        "trails",
+        "subEmitters",
+        "gpuSimulation",
+    ]
+
+    static func listViewportHeight(contentHeight: Float) -> Float {
+        BoundedScrollView.viewportHeight(contentHeight: contentHeight,
+                                         minHeight: minListViewportHeight,
+                                         maxHeight: maxListViewportHeight)
+    }
+
+    static func rowHeight(listContentHeight: Float) -> Float {
+        headerHeight
+            + listViewportHeight(contentHeight: listContentHeight)
+            + cardPadding
+            + scrollChromeHeight
+    }
+
+    static func propertyGridRowHeight(listContentHeight: Float) -> Float {
+        rowHeight(listContentHeight: listContentHeight)
+            + propertyGridFullWidthLabelHeight
+            + propertyGridFullWidthLabelValueSpacing
+            + propertyGridFullWidthVerticalPadding
+    }
+
+    static func listContentHeight(stack: ParticleModuleStack,
+                                  issueCountsByModuleID: [String: Int]) -> Float {
+        let groupCount: Float = stack.modules.contains { advancedModuleIDs.contains($0.id) } ? 2 : 1
+        let expandedEditorHeight = stack.modules.reduce(Float(0)) { total, module in
+            guard module.isExpanded else { return total }
+            let issueCount = Float(issueCountsByModuleID[module.id] ?? 0)
+            let issueHeight = issueCount > 0
+                ? moduleIssueHeaderHeight + issueCount * moduleIssueRowHeight
+                : 0
+            let gpuBackendHeight: Float
+            if case .gpuSimulation = module.settings {
+                gpuBackendHeight = moduleGPUBackendPanelHeight
+            } else {
+                gpuBackendHeight = 0
+            }
+            return total
+                + 8
+                + moduleParameterChromeHeight
+                + particleModuleEditorHeight(module.settings, rowHeight: moduleEditorRowHeight)
+                + gpuBackendHeight
+                + issueHeight
+        }
+        let rowSpacingTotal = Float(max(0, stack.modules.count - Int(groupCount))) * rowSpacing
+        return listPaddingHeight
+            + (groupCount > 1 ? advancedSeparatorHeight : 0)
+            + Float(stack.modules.count) * collapsedModuleRowHeight
+            + expandedEditorHeight
+            + max(0, groupCount - 1) * groupSpacing
+            + rowSpacingTotal
     }
 }
 

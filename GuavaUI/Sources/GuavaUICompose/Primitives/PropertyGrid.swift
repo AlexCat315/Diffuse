@@ -254,8 +254,9 @@ private struct _StatefulPropertyGrid: View {
     private func fullWidthRowView(_ row: PropertyGridRow, rowHeight: Float) -> some View {
         let labelHeight: Float = 18
         let verticalPadding: Float = 6
-        let valueHeight = max(grid.rowHeight, rowHeight - labelHeight - verticalPadding * 2)
-        return Box(direction: .column, alignItems: .stretch, spacing: 6) {
+        let labelValueSpacing: Float = 6
+        let valueHeight = max(grid.rowHeight, rowHeight - labelHeight - labelValueSpacing - verticalPadding * 2)
+        return Box(direction: .column, alignItems: .stretch, spacing: labelValueSpacing) {
             Text(row.label)
                 .lineLimit(1)
                 .font(.caption)
