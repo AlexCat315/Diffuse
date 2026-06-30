@@ -18,6 +18,7 @@ struct DeveloperToolsPanel: View {
     @State private var traceSearchQuery: String = ""
     @State private var traceTrackFilter: DeveloperTraceTrack?
     @State private var traceSeverityFilter: DeveloperTraceSeverityFilter = .all
+    @State private var traceEventSortOrder: DeveloperTraceEventSortOrder = .newest
 
     var body: some View {
         StoreScope(app.store) { store in
@@ -99,6 +100,7 @@ struct DeveloperToolsPanel: View {
                         searchQuery: $traceSearchQuery,
                         selectedTrackFilter: $traceTrackFilter,
                         severityFilter: $traceSeverityFilter,
+                        eventSortOrder: $traceEventSortOrder,
                         onLive: {
                             traceMode = .live
                         },
@@ -221,6 +223,17 @@ enum DeveloperTraceSeverityFilter: String, Equatable, CaseIterable {
     case warning = "Warnings"
 }
 
+enum DeveloperTraceEventSortOrder: String, Equatable, CaseIterable {
+    case newest = "Newest"
+    case severity = "Severity"
+    case track = "Track"
+}
+
+enum DeveloperTraceNavigationDirection {
+    case previous
+    case next
+}
+
 struct DeveloperTraceSample: Equatable {
     var sampleIndex: UInt64
     var frameIndex: UInt64
@@ -256,6 +269,46 @@ struct DeveloperTraceSnapshot: Equatable {
         copy.mode = nextMode
         return copy
     }
+}
+
+struct DeveloperTraceInvestigationSummary: Equatable {
+    var visibleEventCount: Int
+    var criticalCount: Int
+    var warningCount: Int
+    var hotSampleIndex: UInt64?
+    var hotSampleEventCount: Int
+    var focusEventID: String?
+}
+
+struct DeveloperTraceSampleInvestigation: Equatable {
+    var sampleIndex: UInt64
+    var leadEventID: String?
+    var eventCount: Int
+    var criticalCount: Int
+    var warningCount: Int
+    var tracks: [DeveloperTraceTrack]
+    var drilldownTargets: [DeveloperDiagnosticTarget]
+}
+
+enum DeveloperTraceSampleContextPosition: String, Equatable {
+    case previous = "Previous"
+    case selected = "Selected"
+    case next = "Next"
+}
+
+struct DeveloperTraceSampleContextRow: Equatable {
+    var position: DeveloperTraceSampleContextPosition
+    var sampleIndex: UInt64
+    var workMs: Double
+    var workDeltaFromSelectedMs: Double
+    var eventCount: Int
+    var highestSeverity: DeveloperDiagnosticSeverity
+}
+
+struct DeveloperTraceSampleContext: Equatable {
+    var previous: DeveloperTraceSampleContextRow?
+    var selected: DeveloperTraceSampleContextRow
+    var next: DeveloperTraceSampleContextRow?
 }
 
 func makeDeveloperDiagnosticCounts(_ issues: [DeveloperDiagnosticIssue]) -> DeveloperDiagnosticCounts {
@@ -983,6 +1036,21 @@ private func developerTraceEvents(trace: DeveloperTraceSnapshot,
         .sorted(by: developerTraceEventPrecedes)
 }
 
+func developerTraceSampleEvents(trace: DeveloperTraceSnapshot,
+                                sampleIndex: UInt64,
+                                excluding excludedEventID: String? = nil) -> [DeveloperTraceEvent] {
+    trace.events.filter {
+        $0.sampleIndex == sampleIndex && $0.id != excludedEventID
+    }
+    .sorted {
+        let lhsRank = developerDiagnosticSeverityRank($0.severity)
+        let rhsRank = developerDiagnosticSeverityRank($1.severity)
+        if lhsRank != rhsRank { return lhsRank > rhsRank }
+        if $0.track.rawValue != $1.track.rawValue { return $0.track.rawValue < $1.track.rawValue }
+        return $0.id < $1.id
+    }
+}
+
 private func developerTraceCellSeverity(track: DeveloperTraceTrack,
                                         sample: DeveloperTraceSample,
                                         events: [DeveloperTraceEvent]) -> DeveloperDiagnosticSeverity {
@@ -1088,20 +1156,157 @@ private func developerTraceWindowLabel(_ samples: [DeveloperTraceSample]) -> Str
 func developerTraceVisibleEvents(trace: DeveloperTraceSnapshot,
                                  query: String,
                                  trackFilter: DeveloperTraceTrack?,
-                                 severityFilter: DeveloperTraceSeverityFilter) -> [DeveloperTraceEvent] {
+                                 severityFilter: DeveloperTraceSeverityFilter,
+                                 sortOrder: DeveloperTraceEventSortOrder = .newest) -> [DeveloperTraceEvent] {
     let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
     let events = trace.events.filter {
         developerTraceEvent($0, matchesTrack: trackFilter)
             && developerTraceEvent($0, matchesSeverity: severityFilter)
             && (trimmed.isEmpty || developerTraceEvent($0, matches: trimmed))
     }
-    return events.sorted { lhs, rhs in
+    return events.sorted {
+        developerTraceEventPrecedes($0, $1, sortOrder: sortOrder)
+    }
+}
+
+func developerTraceEventPrecedes(_ lhs: DeveloperTraceEvent,
+                                 _ rhs: DeveloperTraceEvent,
+                                 sortOrder: DeveloperTraceEventSortOrder) -> Bool {
+    switch sortOrder {
+    case .newest:
+        if lhs.sampleIndex != rhs.sampleIndex { return lhs.sampleIndex > rhs.sampleIndex }
+        let lhsRank = developerDiagnosticSeverityRank(lhs.severity)
+        let rhsRank = developerDiagnosticSeverityRank(rhs.severity)
+        if lhsRank != rhsRank { return lhsRank > rhsRank }
+        if lhs.track.rawValue != rhs.track.rawValue { return lhs.track.rawValue < rhs.track.rawValue }
+        return lhs.id < rhs.id
+    case .severity:
+        let lhsRank = developerDiagnosticSeverityRank(lhs.severity)
+        let rhsRank = developerDiagnosticSeverityRank(rhs.severity)
+        if lhsRank != rhsRank { return lhsRank > rhsRank }
+        if lhs.sampleIndex != rhs.sampleIndex { return lhs.sampleIndex > rhs.sampleIndex }
+        if lhs.track.rawValue != rhs.track.rawValue { return lhs.track.rawValue < rhs.track.rawValue }
+        return lhs.id < rhs.id
+    case .track:
+        if lhs.track.rawValue != rhs.track.rawValue { return lhs.track.rawValue < rhs.track.rawValue }
         if lhs.sampleIndex != rhs.sampleIndex { return lhs.sampleIndex > rhs.sampleIndex }
         let lhsRank = developerDiagnosticSeverityRank(lhs.severity)
         let rhsRank = developerDiagnosticSeverityRank(rhs.severity)
         if lhsRank != rhsRank { return lhsRank > rhsRank }
         return lhs.id < rhs.id
     }
+}
+
+func developerTraceAdjacentEventID(events: [DeveloperTraceEvent],
+                                   selectedEventID: String?,
+                                   direction: DeveloperTraceNavigationDirection) -> String? {
+    guard !events.isEmpty else { return nil }
+    guard let selectedEventID,
+          let index = events.firstIndex(where: { $0.id == selectedEventID }) else {
+        return events.first?.id
+    }
+    switch direction {
+    case .previous:
+        return events[max(0, index - 1)].id
+    case .next:
+        return events[min(events.count - 1, index + 1)].id
+    }
+}
+
+func makeDeveloperTraceInvestigationSummary(events: [DeveloperTraceEvent]) -> DeveloperTraceInvestigationSummary {
+    let criticalCount = events.filter { $0.severity == .critical }.count
+    let warningCount = events.filter { $0.severity == .warning }.count
+    let grouped = Dictionary(grouping: events, by: \.sampleIndex)
+    let hotSample = grouped.max { lhs, rhs in
+        if lhs.value.count != rhs.value.count { return lhs.value.count < rhs.value.count }
+        return lhs.key < rhs.key
+    }
+    let focusEventID = events.first { $0.severity == .critical }?.id
+        ?? events.first { $0.severity == .warning }?.id
+        ?? events.first?.id
+    return DeveloperTraceInvestigationSummary(
+        visibleEventCount: events.count,
+        criticalCount: criticalCount,
+        warningCount: warningCount,
+        hotSampleIndex: hotSample?.key,
+        hotSampleEventCount: hotSample?.value.count ?? 0,
+        focusEventID: focusEventID
+    )
+}
+
+func makeDeveloperTraceSampleInvestigation(trace: DeveloperTraceSnapshot,
+                                           sampleIndex: UInt64) -> DeveloperTraceSampleInvestigation {
+    let events = developerTraceSampleEvents(trace: trace,
+                                            sampleIndex: sampleIndex)
+    let targets = developerTraceUniqueTargets(events)
+    return DeveloperTraceSampleInvestigation(
+        sampleIndex: sampleIndex,
+        leadEventID: events.first?.id,
+        eventCount: events.count,
+        criticalCount: events.filter { $0.severity == .critical }.count,
+        warningCount: events.filter { $0.severity == .warning }.count,
+        tracks: developerTraceUniqueTracks(events),
+        drilldownTargets: targets
+    )
+}
+
+func makeDeveloperTraceSampleContext(trace: DeveloperTraceSnapshot,
+                                     sampleIndex: UInt64) -> DeveloperTraceSampleContext? {
+    guard let selectedIndex = trace.samples.firstIndex(where: { $0.sampleIndex == sampleIndex }) else {
+        return nil
+    }
+    let selectedSample = trace.samples[selectedIndex]
+    let selectedWorkMs = selectedSample.frameStats.workMs
+    return DeveloperTraceSampleContext(
+        previous: selectedIndex > trace.samples.startIndex
+            ? developerTraceSampleContextRow(position: .previous,
+                                             sample: trace.samples[trace.samples.index(before: selectedIndex)],
+                                             selectedWorkMs: selectedWorkMs,
+                                             trace: trace)
+            : nil,
+        selected: developerTraceSampleContextRow(position: .selected,
+                                                 sample: selectedSample,
+                                                 selectedWorkMs: selectedWorkMs,
+                                                 trace: trace),
+        next: selectedIndex < trace.samples.index(before: trace.samples.endIndex)
+            ? developerTraceSampleContextRow(position: .next,
+                                             sample: trace.samples[trace.samples.index(after: selectedIndex)],
+                                             selectedWorkMs: selectedWorkMs,
+                                             trace: trace)
+            : nil
+    )
+}
+
+private func developerTraceSampleContextRow(position: DeveloperTraceSampleContextPosition,
+                                            sample: DeveloperTraceSample,
+                                            selectedWorkMs: Double,
+                                            trace: DeveloperTraceSnapshot) -> DeveloperTraceSampleContextRow {
+    let events = developerTraceSampleEvents(trace: trace,
+                                            sampleIndex: sample.sampleIndex)
+    return DeveloperTraceSampleContextRow(
+        position: position,
+        sampleIndex: sample.sampleIndex,
+        workMs: sample.frameStats.workMs,
+        workDeltaFromSelectedMs: sample.frameStats.workMs - selectedWorkMs,
+        eventCount: events.count,
+        highestSeverity: developerTraceHighestSeverity(events)
+    )
+}
+
+private func developerTraceUniqueTracks(_ events: [DeveloperTraceEvent]) -> [DeveloperTraceTrack] {
+    var tracks: [DeveloperTraceTrack] = []
+    for event in events where !tracks.contains(event.track) {
+        tracks.append(event.track)
+    }
+    return tracks
+}
+
+private func developerTraceUniqueTargets(_ events: [DeveloperTraceEvent]) -> [DeveloperDiagnosticTarget] {
+    var targets: [DeveloperDiagnosticTarget] = []
+    for event in events where !targets.contains(event.target) {
+        targets.append(event.target)
+    }
+    return targets
 }
 
 func developerTraceVisibleIssues(trace: DeveloperTraceSnapshot,
@@ -1253,17 +1458,15 @@ private func developerTraceTrackLatestSignal(track: DeveloperTraceTrack,
     }
 }
 
-private func developerTraceStatusText(trace: DeveloperTraceSnapshot,
+private func developerTraceStatusText(summary: DeveloperTraceInvestigationSummary,
                                       trackFilter: DeveloperTraceTrack?,
                                       severityFilter: DeveloperTraceSeverityFilter,
+                                      sortOrder: DeveloperTraceEventSortOrder,
                                       selectedSampleIndex: UInt64?) -> String {
-    let eventCount = developerTraceVisibleEvents(trace: trace,
-                                                query: "",
-                                                trackFilter: trackFilter,
-                                                severityFilter: severityFilter).count
     let trackText = trackFilter?.rawValue ?? "all tracks"
     let selectedText = selectedSampleIndex.map { "selected #\($0)" } ?? "no selection"
-    return "\(eventCount) events | \(trackText) | \(severityFilter.rawValue) | \(selectedText)"
+    let hotText = summary.hotSampleIndex.map { "hot #\($0) x\(summary.hotSampleEventCount)" } ?? "no hot sample"
+    return "\(summary.visibleEventCount) events | \(summary.criticalCount) errors | \(summary.warningCount) warnings | \(hotText) | \(trackText) | \(severityFilter.rawValue) | \(sortOrder.rawValue) | \(selectedText)"
 }
 
 private func developerTraceEmptyFilterText(query: String,
@@ -1301,6 +1504,7 @@ private struct DeveloperTraceWorkbenchView: View {
     let searchQuery: Binding<String>
     let selectedTrackFilter: Binding<DeveloperTraceTrack?>
     let severityFilter: Binding<DeveloperTraceSeverityFilter>
+    let eventSortOrder: Binding<DeveloperTraceEventSortOrder>
     let onLive: () -> Void
     let onPause: () -> Void
     let onCapture: () -> Void
@@ -1313,6 +1517,11 @@ private struct DeveloperTraceWorkbenchView: View {
         let selectedSample = developerSelectedTraceSample(trace: trace,
                                                          selectedSampleIndex: selectedSampleIndex.wrappedValue,
                                                          selectedEvent: selectedEvent)
+        let visibleEvents = developerTraceVisibleEvents(trace: trace,
+                                                       query: searchQuery.wrappedValue,
+                                                       trackFilter: selectedTrackFilter.wrappedValue,
+                                                       severityFilter: severityFilter.wrappedValue,
+                                                       sortOrder: eventSortOrder.wrappedValue)
         Column(alignment: .leading, spacing: 0) {
             DeveloperTraceToolbar(trace: trace,
                                   baselineTrace: baselineTrace,
@@ -1324,15 +1533,24 @@ private struct DeveloperTraceWorkbenchView: View {
                 .padding(horizontal: 12, vertical: 8)
 
             DeveloperTraceFilterBar(trace: trace,
+                                    visibleEvents: visibleEvents,
+                                    selectedEventID: selectedEventID,
                                     selectedTrackFilter: selectedTrackFilter,
                                     severityFilter: severityFilter,
+                                    eventSortOrder: eventSortOrder,
                                     selectedSampleIndex: selectedSampleIndex)
                 .padding(horizontal: 12, vertical: 6)
+
+            DeveloperTraceSelectionStrip(event: selectedEvent,
+                                         sample: selectedSample,
+                                         trace: trace)
+                .padding(horizontal: 12, vertical: 0)
 
             Divider()
 
             SplitView(.horizontal, fraction: 0.20, spacing: 0) {
                 DeveloperTraceNavigator(trace: trace,
+                                        visibleEvents: visibleEvents,
                                         selectedEventID: selectedEventID,
                                         searchQuery: searchQuery,
                                         selectedTrackFilter: selectedTrackFilter,
@@ -1346,18 +1564,21 @@ private struct DeveloperTraceWorkbenchView: View {
                                                    selectedSampleIndex: selectedSampleIndex,
                                                    selectedTrackFilter: selectedTrackFilter)
                     } second: {
-                        DeveloperTraceEventTable(trace: trace,
+                        DeveloperTraceEventTable(events: visibleEvents,
                                                  selectedEventID: selectedEventID,
                                                  selectedSampleIndex: selectedSampleIndex,
                                                  searchQuery: searchQuery,
                                                  selectedTrackFilter: selectedTrackFilter,
-                                                 severityFilter: severityFilter)
+                                                 severityFilter: severityFilter,
+                                                 eventSortOrder: eventSortOrder)
                     }
                 } second: {
                     DeveloperTracePropertiesInspector(event: selectedEvent,
                                                       sample: selectedSample,
                                                       trace: trace,
                                                       baselineTrace: baselineTrace,
+                                                      selectedEventID: selectedEventID,
+                                                      selectedSampleIndex: selectedSampleIndex,
                                                       onOpenTarget: onOpenTarget)
                 }
             }
@@ -1369,11 +1590,15 @@ private struct DeveloperTraceWorkbenchView: View {
 
 private struct DeveloperTraceFilterBar: View {
     let trace: DeveloperTraceSnapshot
+    let visibleEvents: [DeveloperTraceEvent]
+    let selectedEventID: Binding<String?>
     let selectedTrackFilter: Binding<DeveloperTraceTrack?>
     let severityFilter: Binding<DeveloperTraceSeverityFilter>
+    let eventSortOrder: Binding<DeveloperTraceEventSortOrder>
     let selectedSampleIndex: Binding<UInt64?>
 
     var body: some View {
+        let summary = makeDeveloperTraceInvestigationSummary(events: visibleEvents)
         Row(alignment: .center, spacing: 6) {
             Text("Filter")
                 .font(.caption)
@@ -1400,16 +1625,44 @@ private struct DeveloperTraceFilterBar: View {
                                          action: { severityFilter.wrappedValue = filter })
             }
 
+            Button(action: clearStructuredFilters) {
+                Text("Clear")
+                    .font(.caption)
+            }
+            .buttonStyle(.ghost)
+
+            Button(action: { focus(summary.focusEventID) }) {
+                Text("Focus")
+                    .font(.caption)
+            }
+            .buttonStyle(.ghost)
+
             Spacer(minLength: 0)
 
-            Text(developerTraceStatusText(trace: trace,
+            Text(developerTraceStatusText(summary: summary,
                                           trackFilter: selectedTrackFilter.wrappedValue,
                                           severityFilter: severityFilter.wrappedValue,
+                                          sortOrder: eventSortOrder.wrappedValue,
                                           selectedSampleIndex: selectedSampleIndex.wrappedValue))
                 .lineLimit(1)
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
         }
+    }
+
+    private func clearStructuredFilters() {
+        selectedTrackFilter.wrappedValue = nil
+        severityFilter.wrappedValue = .all
+        eventSortOrder.wrappedValue = .newest
+    }
+
+    private func focus(_ eventID: String?) {
+        guard let eventID,
+              let event = visibleEvents.first(where: { $0.id == eventID }) else {
+            return
+        }
+        selectedEventID.wrappedValue = event.id
+        selectedSampleIndex.wrappedValue = event.sampleIndex
     }
 }
 
@@ -1433,6 +1686,62 @@ private struct DeveloperTraceFilterChip: View {
             }
         }
         .buttonStyle(.toggle)
+    }
+}
+
+private struct DeveloperTraceSelectionStrip: View {
+    let event: DeveloperTraceEvent?
+    let sample: DeveloperTraceSample?
+    let trace: DeveloperTraceSnapshot
+
+    var body: some View {
+        Row(alignment: .center, spacing: 8) {
+            Text("Selection")
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+            if let event {
+                DeveloperSeverityBadge(severity: event.severity,
+                                       text: event.severity.rawValue)
+                Text("#\(event.sampleIndex)")
+                    .font(.mono)
+                    .foregroundColor(.onSurfaceMuted)
+                Text(event.track.rawValue)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                Text(event.title)
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurface)
+                    .flex(1, shrink: 1)
+                Text(event.primarySignal)
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            } else if let sample {
+                let markerCount = developerTraceSampleEvents(trace: trace,
+                                                             sampleIndex: sample.sampleIndex).count
+                Text("#\(sample.sampleIndex)")
+                    .font(.mono)
+                    .foregroundColor(.onSurface)
+                Text("Work \(formatMs(sample.frameStats.workMs))")
+                    .font(.caption)
+                    .foregroundColor(.onSurface)
+                Text("Pacing \(formatMs(sample.frameStats.pacingGapMs))")
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                Text("\(markerCount) markers")
+                    .font(.caption)
+                    .foregroundColor(markerCount > 0 ? .warning : .onSurfaceMuted)
+                Spacer(minLength: 0)
+            } else {
+                Text("Select a frame, marker, or event row")
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(horizontal: 8, vertical: 5)
+        .background(.surfaceSunken)
     }
 }
 
@@ -1498,6 +1807,7 @@ private struct DeveloperTraceToolbar: View {
 
 private struct DeveloperTraceNavigator: View {
     let trace: DeveloperTraceSnapshot
+    let visibleEvents: [DeveloperTraceEvent]
     let selectedEventID: Binding<String?>
     let searchQuery: Binding<String>
     let selectedTrackFilter: Binding<DeveloperTraceTrack?>
@@ -1506,15 +1816,15 @@ private struct DeveloperTraceNavigator: View {
 
     var body: some View {
         Column(alignment: .leading, spacing: 0) {
-            let visibleEvents = developerTraceVisibleEvents(trace: trace,
-                                                           query: searchQuery.wrappedValue,
-                                                           trackFilter: selectedTrackFilter.wrappedValue,
-                                                           severityFilter: severityFilter.wrappedValue)
             DeveloperTracePaneHeader(title: "Navigator",
                                      subtitle: "\(visibleEvents.count)/\(trace.events.count) events")
 
             ScrollView(.vertical) {
                 Column(alignment: .leading, spacing: 10) {
+                    DeveloperTraceNavigatorSection(title: "Summary") {
+                        DeveloperTraceInvestigationSummaryView(summary: makeDeveloperTraceInvestigationSummary(events: visibleEvents))
+                    }
+
                     DeveloperTraceNavigatorSection(title: "Tracks") {
                         for track in DeveloperTraceTrack.allCases {
                             DeveloperTraceTrackSummaryRow(track: track,
@@ -1596,6 +1906,51 @@ private struct DeveloperTraceNavigatorSection<Content: View>: View {
                 .padding(horizontal: 4, vertical: 2)
             content
         }
+    }
+}
+
+private struct DeveloperTraceInvestigationSummaryView: View {
+    let summary: DeveloperTraceInvestigationSummary
+
+    var body: some View {
+        Column(alignment: .leading, spacing: 4) {
+            DeveloperTraceSummaryMetricRow(label: "Visible",
+                                           value: "\(summary.visibleEventCount)",
+                                           severity: .nominal)
+            DeveloperTraceSummaryMetricRow(label: "Errors",
+                                           value: "\(summary.criticalCount)",
+                                           severity: summary.criticalCount > 0 ? .critical : .nominal)
+            DeveloperTraceSummaryMetricRow(label: "Warnings",
+                                           value: "\(summary.warningCount)",
+                                           severity: summary.warningCount > 0 ? .warning : .nominal)
+            DeveloperTraceSummaryMetricRow(label: "Hot Sample",
+                                           value: summary.hotSampleIndex.map {
+                                               "#\($0) x\(summary.hotSampleEventCount)"
+                                           } ?? "--",
+                                           severity: summary.hotSampleEventCount > 1 ? .warning : .nominal)
+        }
+    }
+}
+
+private struct DeveloperTraceSummaryMetricRow: View {
+    let label: String
+    let value: String
+    let severity: DeveloperDiagnosticSeverity
+
+    var body: some View {
+        Row(alignment: .center, spacing: 6) {
+            Text(label)
+                .lineLimit(1)
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+                .flex(1, shrink: 1)
+            Text(value)
+                .lineLimit(1)
+                .font(.mono)
+                .foregroundColor(developerDiagnosticForeground(severity))
+        }
+        .padding(horizontal: 8, vertical: 4)
+        .background(.surface)
     }
 }
 
@@ -1805,21 +2160,22 @@ private struct DeveloperTraceLaneCell: View {
 }
 
 private struct DeveloperTraceEventTable: View {
-    let trace: DeveloperTraceSnapshot
+    let events: [DeveloperTraceEvent]
     let selectedEventID: Binding<String?>
     let selectedSampleIndex: Binding<UInt64?>
     let searchQuery: Binding<String>
     let selectedTrackFilter: Binding<DeveloperTraceTrack?>
     let severityFilter: Binding<DeveloperTraceSeverityFilter>
+    let eventSortOrder: Binding<DeveloperTraceEventSortOrder>
 
     var body: some View {
-        let events = developerTraceVisibleEvents(trace: trace,
-                                                query: searchQuery.wrappedValue,
-                                                trackFilter: selectedTrackFilter.wrappedValue,
-                                                severityFilter: severityFilter.wrappedValue)
         Column(alignment: .leading, spacing: 0) {
             DeveloperTracePaneHeader(title: "Event Log",
                                      subtitle: "\(events.count) rows")
+            DeveloperTraceEventTableToolbar(events: events,
+                                            selectedEventID: selectedEventID,
+                                            selectedSampleIndex: selectedSampleIndex,
+                                            sortOrder: eventSortOrder)
             DeveloperTraceEventTableHeader()
             if events.isEmpty {
                 DeveloperTraceEmptyTableState(query: searchQuery.wrappedValue,
@@ -1842,6 +2198,55 @@ private struct DeveloperTraceEventTable: View {
                 .background(.surfaceSunken)
             }
         }
+    }
+}
+
+private struct DeveloperTraceEventTableToolbar: View {
+    let events: [DeveloperTraceEvent]
+    let selectedEventID: Binding<String?>
+    let selectedSampleIndex: Binding<UInt64?>
+    let sortOrder: Binding<DeveloperTraceEventSortOrder>
+
+    var body: some View {
+        Row(alignment: .center, spacing: 6) {
+            Button(action: { selectAdjacent(.previous) }) {
+                Text("Prev")
+                    .font(.caption)
+            }
+            .buttonStyle(.ghost)
+
+            Button(action: { selectAdjacent(.next) }) {
+                Text("Next")
+                    .font(.caption)
+            }
+            .buttonStyle(.ghost)
+
+            Divider(axis: .vertical)
+                .frame(width: 1, height: 20)
+
+            Text("Sort")
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+            for order in DeveloperTraceEventSortOrder.allCases {
+                DeveloperTraceFilterChip(label: order.rawValue,
+                                         isSelected: sortOrder.wrappedValue == order,
+                                         action: { sortOrder.wrappedValue = order })
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(horizontal: 10, vertical: 5)
+        .background(.surfaceSunken)
+    }
+
+    private func selectAdjacent(_ direction: DeveloperTraceNavigationDirection) {
+        guard let nextID = developerTraceAdjacentEventID(events: events,
+                                                        selectedEventID: selectedEventID.wrappedValue,
+                                                        direction: direction),
+              let event = events.first(where: { $0.id == nextID }) else {
+            return
+        }
+        selectedEventID.wrappedValue = event.id
+        selectedSampleIndex.wrappedValue = event.sampleIndex
     }
 }
 
@@ -1942,6 +2347,8 @@ private struct DeveloperTracePropertiesInspector: View {
     let sample: DeveloperTraceSample?
     let trace: DeveloperTraceSnapshot
     let baselineTrace: DeveloperTraceSnapshot?
+    let selectedEventID: Binding<String?>
+    let selectedSampleIndex: Binding<UInt64?>
     let onOpenTarget: (DeveloperDiagnosticTarget) -> Void
 
     var body: some View {
@@ -1952,12 +2359,17 @@ private struct DeveloperTracePropertiesInspector: View {
                 Column(alignment: .leading, spacing: 10) {
                     if let event {
                         DeveloperTraceEventProperties(event: event,
+                                                      trace: trace,
+                                                      selectedEventID: selectedEventID,
+                                                      selectedSampleIndex: selectedSampleIndex,
                                                       onOpenTarget: onOpenTarget)
                     } else if let sample {
                         DeveloperTraceSampleProperties(sample: sample,
                                                        trace: trace,
                                                        baselineSample: developerTraceBaselineSample(for: sample,
                                                                                                     baselineTrace: baselineTrace),
+                                                       selectedEventID: selectedEventID,
+                                                       selectedSampleIndex: selectedSampleIndex,
                                                        onOpenTarget: onOpenTarget)
                     } else {
                         Text("Select a frame, marker, or event row.")
@@ -1975,10 +2387,26 @@ private struct DeveloperTracePropertiesInspector: View {
 
 private struct DeveloperTraceEventProperties: View {
     let event: DeveloperTraceEvent
+    let trace: DeveloperTraceSnapshot
+    let selectedEventID: Binding<String?>
+    let selectedSampleIndex: Binding<UInt64?>
     let onOpenTarget: (DeveloperDiagnosticTarget) -> Void
 
     var body: some View {
+        let relatedEvents = developerTraceSampleEvents(trace: trace,
+                                                       sampleIndex: event.sampleIndex,
+                                                       excluding: event.id)
+        let investigation = makeDeveloperTraceSampleInvestigation(trace: trace,
+                                                                  sampleIndex: event.sampleIndex)
         Column(alignment: .leading, spacing: 10) {
+            DeveloperTracePropertySection(title: "Investigation") {
+                DeveloperTraceSampleInvestigationView(investigation: investigation,
+                                                      trace: trace,
+                                                      selectedEventID: selectedEventID,
+                                                      selectedSampleIndex: selectedSampleIndex,
+                                                      onOpenTarget: onOpenTarget)
+            }
+
             DeveloperTracePropertySection(title: "Event") {
                 DeveloperTracePropertyRow(label: "Severity", value: event.severity.rawValue)
                 DeveloperTracePropertyRow(label: "Track", value: event.track.rawValue)
@@ -2000,6 +2428,18 @@ private struct DeveloperTraceEventProperties: View {
                 }
                 .buttonStyle(.secondary)
             }
+
+            if !relatedEvents.isEmpty {
+                DeveloperTracePropertySection(title: "Same Sample") {
+                    for relatedEvent in relatedEvents.prefix(6) {
+                        DeveloperTraceRelatedEventRow(event: relatedEvent,
+                                                      isSelected: selectedEventID.wrappedValue == relatedEvent.id,
+                                                      onSelect: {
+                                                          selectedEventID.wrappedValue = relatedEvent.id
+                                                      })
+                    }
+                }
+            }
         }
     }
 }
@@ -2008,10 +2448,24 @@ private struct DeveloperTraceSampleProperties: View {
     let sample: DeveloperTraceSample
     let trace: DeveloperTraceSnapshot
     let baselineSample: DeveloperTraceSample?
+    let selectedEventID: Binding<String?>
+    let selectedSampleIndex: Binding<UInt64?>
     let onOpenTarget: (DeveloperDiagnosticTarget) -> Void
 
     var body: some View {
+        let sampleEvents = developerTraceSampleEvents(trace: trace,
+                                                     sampleIndex: sample.sampleIndex)
+        let investigation = makeDeveloperTraceSampleInvestigation(trace: trace,
+                                                                  sampleIndex: sample.sampleIndex)
         Column(alignment: .leading, spacing: 10) {
+            DeveloperTracePropertySection(title: "Investigation") {
+                DeveloperTraceSampleInvestigationView(investigation: investigation,
+                                                      trace: trace,
+                                                      selectedEventID: selectedEventID,
+                                                      selectedSampleIndex: selectedSampleIndex,
+                                                      onOpenTarget: onOpenTarget)
+            }
+
             DeveloperTracePropertySection(title: "Frame") {
                 DeveloperTracePropertyRow(label: "Sample", value: "#\(sample.sampleIndex)")
                 DeveloperTracePropertyRow(label: "Frame", value: "\(sample.frameIndex)")
@@ -2044,6 +2498,18 @@ private struct DeveloperTraceSampleProperties: View {
                 DeveloperTracePropertySection(title: "Latest Render Pass") {
                     DeveloperTracePropertyRow(label: pass.name, value: formatNs(pass.encodeNS))
                     DeveloperTracePropertyText(pass.signal)
+                }
+            }
+
+            if !sampleEvents.isEmpty {
+                DeveloperTracePropertySection(title: "Markers") {
+                    for event in sampleEvents.prefix(8) {
+                        DeveloperTraceRelatedEventRow(event: event,
+                                                      isSelected: selectedEventID.wrappedValue == event.id,
+                                                      onSelect: {
+                                                          selectedEventID.wrappedValue = event.id
+                                                      })
+                    }
                 }
             }
 
@@ -2080,6 +2546,181 @@ private struct DeveloperTracePropertySection<Content: View>: View {
     }
 }
 
+private struct DeveloperTraceSampleInvestigationView: View {
+    let investigation: DeveloperTraceSampleInvestigation
+    let trace: DeveloperTraceSnapshot
+    let selectedEventID: Binding<String?>
+    let selectedSampleIndex: Binding<UInt64?>
+    let onOpenTarget: (DeveloperDiagnosticTarget) -> Void
+
+    var body: some View {
+        let targets = investigation.drilldownTargets
+        let context = makeDeveloperTraceSampleContext(trace: trace,
+                                                      sampleIndex: investigation.sampleIndex)
+        Column(alignment: .leading, spacing: 4) {
+            Row(alignment: .center, spacing: 6) {
+                DeveloperTraceInvestigationBadge(label: "Events",
+                                                 value: "\(investigation.eventCount)",
+                                                 severity: .nominal)
+                DeveloperTraceInvestigationBadge(label: "Errors",
+                                                 value: "\(investigation.criticalCount)",
+                                                 severity: investigation.criticalCount > 0 ? .critical : .nominal)
+                DeveloperTraceInvestigationBadge(label: "Warnings",
+                                                 value: "\(investigation.warningCount)",
+                                                 severity: investigation.warningCount > 0 ? .warning : .nominal)
+            }
+
+            if let leadEvent = trace.events.first(where: { $0.id == investigation.leadEventID }) {
+                DeveloperTraceRelatedEventRow(event: leadEvent,
+                                              isSelected: selectedEventID.wrappedValue == leadEvent.id,
+                                              onSelect: {
+                                                  selectedEventID.wrappedValue = leadEvent.id
+                                              })
+            } else {
+                DeveloperTracePropertyText("No markers projected for this sample.")
+            }
+
+            if !investigation.tracks.isEmpty {
+                DeveloperTracePropertyRow(label: "Tracks",
+                                          value: investigation.tracks.map(\.rawValue).joined(separator: ", "))
+            }
+
+            if let context {
+                DeveloperTraceSampleContextView(context: context,
+                                                selectedEventID: selectedEventID,
+                                                selectedSampleIndex: selectedSampleIndex)
+            }
+
+            if !targets.isEmpty {
+                Column(alignment: .leading, spacing: 4) {
+                    if targets.indices.contains(0) {
+                        DeveloperTraceDrilldownTargetButton(target: targets[0],
+                                                            onOpenTarget: onOpenTarget)
+                    }
+                    if targets.indices.contains(1) {
+                        DeveloperTraceDrilldownTargetButton(target: targets[1],
+                                                            onOpenTarget: onOpenTarget)
+                    }
+                    if targets.indices.contains(2) {
+                        DeveloperTraceDrilldownTargetButton(target: targets[2],
+                                                            onOpenTarget: onOpenTarget)
+                    }
+                    if targets.indices.contains(3) {
+                        DeveloperTraceDrilldownTargetButton(target: targets[3],
+                                                            onOpenTarget: onOpenTarget)
+                    }
+                }
+                .padding(horizontal: 8, vertical: 4)
+                .background(.surface)
+            }
+        }
+    }
+}
+
+private struct DeveloperTraceSampleContextView: View {
+    let context: DeveloperTraceSampleContext
+    let selectedEventID: Binding<String?>
+    let selectedSampleIndex: Binding<UInt64?>
+
+    var body: some View {
+        Column(alignment: .leading, spacing: 3) {
+            if let previous = context.previous {
+                DeveloperTraceSampleContextRowView(row: previous,
+                                                   selectedEventID: selectedEventID,
+                                                   selectedSampleIndex: selectedSampleIndex)
+            }
+            DeveloperTraceSampleContextRowView(row: context.selected,
+                                               selectedEventID: selectedEventID,
+                                               selectedSampleIndex: selectedSampleIndex)
+            if let next = context.next {
+                DeveloperTraceSampleContextRowView(row: next,
+                                                   selectedEventID: selectedEventID,
+                                                   selectedSampleIndex: selectedSampleIndex)
+            }
+        }
+    }
+}
+
+private struct DeveloperTraceSampleContextRowView: View {
+    let row: DeveloperTraceSampleContextRow
+    let selectedEventID: Binding<String?>
+    let selectedSampleIndex: Binding<UInt64?>
+
+    var body: some View {
+        Button(isSelected: row.position == .selected, action: {
+            selectedEventID.wrappedValue = nil
+            selectedSampleIndex.wrappedValue = row.sampleIndex
+        }) {
+            Row(alignment: .center, spacing: 6) {
+                Text(row.position.rawValue)
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                    .frame(width: 56)
+                Text("#\(row.sampleIndex)")
+                    .lineLimit(1)
+                    .font(.mono)
+                    .foregroundColor(.onSurface)
+                    .frame(width: 44)
+                Text(formatMs(row.workMs))
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(developerDiagnosticForeground(row.highestSeverity))
+                    .frame(width: 54)
+                Text(formatSignedMs(row.workDeltaFromSelectedMs))
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                    .frame(width: 54)
+                Text("\(row.eventCount) ev")
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                    .flex(1, shrink: 1)
+            }
+            .padding(horizontal: 8, vertical: 4)
+            .background(row.position == .selected ? .accent.opacity(0.10) : .surface)
+            .border(developerDiagnosticBorder(row.highestSeverity), width: row.highestSeverity == .nominal ? 0 : 1)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct DeveloperTraceDrilldownTargetButton: View {
+    let target: DeveloperDiagnosticTarget
+    let onOpenTarget: (DeveloperDiagnosticTarget) -> Void
+
+    var body: some View {
+        Button(action: { onOpenTarget(target) }) {
+            Text(target.label)
+                .font(.caption)
+        }
+        .buttonStyle(.ghost)
+    }
+}
+
+private struct DeveloperTraceInvestigationBadge: View {
+    let label: String
+    let value: String
+    let severity: DeveloperDiagnosticSeverity
+
+    var body: some View {
+        Row(alignment: .center, spacing: 4) {
+            Text(label)
+                .lineLimit(1)
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+            Text(value)
+                .lineLimit(1)
+                .font(.mono)
+                .foregroundColor(developerDiagnosticForeground(severity))
+        }
+        .padding(horizontal: 7, vertical: 3)
+        .background(developerDiagnosticBackground(severity))
+        .border(developerDiagnosticBorder(severity), width: 1)
+    }
+}
+
 private struct DeveloperTracePropertyRow: View {
     let label: String
     let value: String
@@ -2099,6 +2740,43 @@ private struct DeveloperTracePropertyRow: View {
         }
         .padding(horizontal: 8, vertical: 4)
         .background(.surface)
+    }
+}
+
+private struct DeveloperTraceRelatedEventRow: View {
+    let event: DeveloperTraceEvent
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(isSelected: isSelected, action: onSelect) {
+            Row(alignment: .center, spacing: 6) {
+                Text(developerTraceSeverityGlyph(event.severity))
+                    .font(.mono)
+                    .foregroundColor(developerDiagnosticForeground(event.severity))
+                    .frame(width: 14)
+                Text(event.track.rawValue)
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                    .frame(width: 76)
+                Column(alignment: .leading, spacing: 1) {
+                    Text(event.title)
+                        .lineLimit(1)
+                        .font(.caption)
+                        .foregroundColor(.onSurface)
+                    Text(event.primarySignal)
+                        .lineLimit(1)
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                }
+                .flex(1, shrink: 1)
+            }
+            .padding(horizontal: 8, vertical: 5)
+            .background(isSelected ? .accent.opacity(0.12) : .surface)
+            .border(isSelected ? .accent : .divider, width: isSelected ? 1 : 0)
+        }
+        .buttonStyle(.plain)
     }
 }
 

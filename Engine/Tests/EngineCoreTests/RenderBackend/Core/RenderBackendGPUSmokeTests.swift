@@ -1058,6 +1058,196 @@ struct RenderBackendGPUSmokeTests {
         #expect(abs(instances[0].color.w - 0.75) < 0.001)
     }
 
+    @Test("particle GPU render path evaluates authored appearance palette",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU particle appearance test"))
+    func particleSimulationRenderPathEvaluatesAuthoredAppearancePaletteOnGPU() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+
+        renderer.initialize()
+
+        let plan = ParticleEmitter(
+            maxParticles: 4,
+            simulationBackend: .gpuIfSupported,
+            gpuSimulationWorkgroupSize: 64
+        ).gpuSimulationPlan
+        let ruleParticle = Particle(
+            position: .zero,
+            velocity: .zero,
+            age: 0.75,
+            lifetime: 1,
+            sizeScale: 1,
+            size: 99,
+            color: SIMD4<Float>(1, 1, 1, 1),
+            appearanceIndex: 2
+        )
+        let fallbackParticle = Particle(
+            position: SIMD3<Float>(1, 0, 0),
+            velocity: .zero,
+            age: 0.25,
+            lifetime: 1,
+            sizeScale: 1,
+            size: 99,
+            color: SIMD4<Float>(1, 1, 1, 1),
+            appearanceIndex: 9
+        )
+        let scene = RenderScene(
+            camera: .fallbackPerspective,
+            particleSimulationBatches: [
+                RenderParticleSimulationBatch(
+                    emitterEntity: EntityID(index: 81, generation: 1),
+                    plan: plan,
+                    particles: [ruleParticle, fallbackParticle],
+                    gravity: .zero,
+                    renderOnGPU: true,
+                    sizeCurve: .linear,
+                    colorCurve: .linear,
+                    usesAuthoredAppearance: true,
+                    appearancePalette: [
+                        RenderParticleAppearance(startSize: 0,
+                                                 endSize: 2,
+                                                 startColor: SIMD4<Float>(1, 1, 1, 1),
+                                                 endColor: SIMD4<Float>(1, 1, 1, 0)),
+                        RenderParticleAppearance(startSize: 4,
+                                                 endSize: 8,
+                                                 startColor: SIMD4<Float>(0, 1, 0, 0),
+                                                 endColor: SIMD4<Float>(0, 0, 1, 1)),
+                        RenderParticleAppearance(startSize: 10,
+                                                 endSize: 14,
+                                                 startColor: SIMD4<Float>(1, 0, 0, 0),
+                                                 endColor: SIMD4<Float>(0, 0, 1, 1)),
+                    ],
+                    sortMode: .oldestFirst
+                )
+            ]
+        )
+
+        let encoder = try backend.createCommandEncoder()
+        let report = try renderer.encodeParticleSimulationPrePass(
+            encoder: encoder,
+            scene: scene,
+            deltaTime: 0,
+            elapsedTime: 0
+        )
+        #expect(report.renderInstanceCount == 2)
+        let sourceBuffer = try #require(renderer.particleStorageBuffer)
+        let commandBuffer = try encoder.finish()
+        backend.submit(commandBuffer)
+
+        let instances = try readbackParticleInstances(buffer: sourceBuffer,
+                                                       count: 2,
+                                                       backend: backend)
+        #expect(abs(instances[0].positionSize.w - 13) < 0.001)
+        #expect(abs(instances[0].color.x - 0.25) < 0.001)
+        #expect(abs(instances[0].color.z - 0.75) < 0.001)
+        #expect(abs(instances[0].color.w - 0.75) < 0.001)
+        #expect(abs(instances[1].positionSize.w - 5) < 0.001)
+        #expect(abs(instances[1].color.y - 0.75) < 0.001)
+        #expect(abs(instances[1].color.z - 0.25) < 0.001)
+        #expect(abs(instances[1].color.w - 0.25) < 0.001)
+    }
+
+    @Test("particle GPU render path evaluates authored keyframe curves",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU particle keyframe test"))
+    func particleSimulationRenderPathEvaluatesAuthoredKeyframeCurvesOnGPU() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+
+        renderer.initialize()
+
+        let plan = ParticleEmitter(
+            maxParticles: 4,
+            simulationBackend: .gpuIfSupported,
+            gpuSimulationWorkgroupSize: 64
+        ).gpuSimulationPlan
+        let particle = Particle(
+            position: .zero,
+            velocity: .zero,
+            age: 0.25,
+            lifetime: 1,
+            sizeScale: 1,
+            size: 99,
+            color: SIMD4<Float>(1, 1, 1, 1),
+            appearanceIndex: 0
+        )
+        let scene = RenderScene(
+            camera: .fallbackPerspective,
+            particleSimulationBatches: [
+                RenderParticleSimulationBatch(
+                    emitterEntity: EntityID(index: 82, generation: 1),
+                    plan: plan,
+                    particles: [particle],
+                    gravity: .zero,
+                    renderOnGPU: true,
+                    startSize: 2,
+                    endSize: 6,
+                    sizeCurve: .keyframes([
+                        ParticleCurveKeyframe(time: 1, value: 0),
+                        ParticleCurveKeyframe(time: 0, value: 0),
+                        ParticleCurveKeyframe(time: 0.5, value: 1),
+                    ]),
+                    startColor: SIMD4<Float>(1, 0, 0, 0),
+                    endColor: SIMD4<Float>(0, 0, 1, 1),
+                    colorCurve: .keyframes([
+                        ParticleCurveKeyframe(time: 0, value: 1),
+                        ParticleCurveKeyframe(time: 1, value: 0),
+                    ]),
+                    usesAuthoredAppearance: true
+                )
+            ]
+        )
+
+        let encoder = try backend.createCommandEncoder()
+        let report = try renderer.encodeParticleSimulationPrePass(
+            encoder: encoder,
+            scene: scene,
+            deltaTime: 0,
+            elapsedTime: 0
+        )
+        #expect(report.renderInstanceCount == 1)
+        let sourceBuffer = try #require(renderer.particleStorageBuffer)
+        let commandBuffer = try encoder.finish()
+        backend.submit(commandBuffer)
+
+        let instances = try readbackParticleInstances(buffer: sourceBuffer,
+                                                       count: 1,
+                                                       backend: backend)
+        #expect(abs(instances[0].positionSize.w - 4) < 0.001)
+        #expect(abs(instances[0].color.x - 0.25) < 0.001)
+        #expect(abs(instances[0].color.z - 0.75) < 0.001)
+        #expect(abs(instances[0].color.w - 0.75) < 0.001)
+    }
+
     @Test("particle GPU render path applies texture sheet playback ranges",
           .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU texture sheet test"))
     func particleSimulationRenderPathAppliesTextureSheetPlaybackOnGPU() throws {
@@ -1528,6 +1718,12 @@ struct RenderBackendGPUSmokeTests {
         #expect(firstSnapshot.eventCapacity == 6)
         #expect(firstSnapshot.totalEventCount == 1)
         #expect(firstSnapshot.droppedEventCount == 0)
+        #expect(firstSnapshot.aliveParticleCount == 2)
+        #expect(firstSnapshot.expiredParticleCount == 1)
+        #expect(firstSnapshot.collisionEventCount == 0)
+        #expect(firstSnapshot.gpuSpawnedParticleCount == 0)
+        #expect(firstSnapshot.gpuDroppedSpawnCount == 0)
+        #expect(firstSnapshot.compactedParticleCount == 2)
         let deathEvent = try #require(firstSnapshot.records.first)
         #expect(deathEvent.trigger == .death)
         #expect(deathEvent.sourceIndex == 2)
@@ -1544,6 +1740,12 @@ struct RenderBackendGPUSmokeTests {
         let secondSnapshot = try #require(eventSnapshots.first { $0.slot == 1 })
         #expect(secondSnapshot.eventCapacity == 6)
         #expect(secondSnapshot.totalEventCount == 0)
+        #expect(secondSnapshot.aliveParticleCount == 2)
+        #expect(secondSnapshot.expiredParticleCount == 0)
+        #expect(secondSnapshot.collisionEventCount == 0)
+        #expect(secondSnapshot.gpuSpawnedParticleCount == 0)
+        #expect(secondSnapshot.gpuDroppedSpawnCount == 0)
+        #expect(secondSnapshot.compactedParticleCount == 2)
         #expect(secondSnapshot.records.isEmpty)
         #expect(try renderer.drainGPUParticleSimulationEventSnapshots().isEmpty)
 
@@ -1574,6 +1776,95 @@ struct RenderBackendGPUSmokeTests {
         #expect(abs(visibleInstances[4].axisStretch.y - 1) < 0.001)
         #expect(abs(visibleInstances[4].axisStretch.z) < 0.001)
         #expect(abs(visibleInstances[4].axisStretch.w - 1.25) < 0.001)
+    }
+
+    @Test("particle GPU snapshot reports spawn append drops",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU particle snapshot drop test"))
+    func particleGPUSnapshotReportsSpawnAppendDrops() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+
+        renderer.initialize()
+
+        let emitter = EntityID(index: 9, generation: 1)
+        let plan = ParticleEmitter(maxParticles: 1,
+                                   simulationBackend: .gpuIfSupported).gpuSimulationPlan
+        let scene = RenderScene(
+            camera: RenderCamera(
+                eye: SIMD3<Float>(0, 0, 3),
+                target: .zero,
+                up: SIMD3<Float>(0, 1, 0),
+                fovYRadians: .pi / 4,
+                near: 0.1,
+                far: 20
+            ),
+            particleSimulationBatches: [
+                RenderParticleSimulationBatch(
+                    emitterEntity: emitter,
+                    plan: plan,
+                    particles: [
+                        Particle(position: .zero,
+                                 velocity: .zero,
+                                 age: 0,
+                                 lifetime: 10,
+                                 size: 1,
+                                 color: SIMD4<Float>(1, 1, 1, 1)),
+                    ],
+                    spawnParticles: [
+                        Particle(position: SIMD3<Float>(1, 0, 0),
+                                 velocity: .zero,
+                                 age: 0,
+                                 lifetime: 10,
+                                 size: 1,
+                                 color: SIMD4<Float>(1, 0, 0, 1)),
+                    ],
+                    gravity: .zero,
+                    renderOnGPU: true
+                )
+            ]
+        )
+        let packet = RenderPacket(
+            frameIndex: 43,
+            deltaTime: 0,
+            drawableSize: RenderDrawableSize(width: 64, height: 64),
+            scene: scene,
+            sceneSnapshot: SceneRuntimeSnapshot(entityCount: 1, revision: 1),
+            renderSettings: RenderSettings(
+                stage: .r3ViewportInterop,
+                enableOffscreenViewport: true
+            ),
+            simulationTimeSeconds: 2
+        )
+
+        renderer.render(packet: packet)
+
+        let snapshot = try #require(try renderer.drainGPUParticleSimulationEventSnapshots().first)
+        #expect(snapshot.emitterRawValue == emitter.rawValue)
+        #expect(snapshot.totalEventCount == 0)
+        #expect(snapshot.droppedEventCount == 0)
+        #expect(snapshot.aliveParticleCount == 1)
+        #expect(snapshot.expiredParticleCount == 0)
+        #expect(snapshot.collisionEventCount == 0)
+        #expect(snapshot.gpuSpawnedParticleCount == 0)
+        #expect(snapshot.gpuDroppedSpawnCount == 1)
+        #expect(snapshot.compactedParticleCount == 1)
+        #expect(snapshot.records.isEmpty)
     }
 
     @Test("particle GPU death events drive runtime sub-emitter spawning",
