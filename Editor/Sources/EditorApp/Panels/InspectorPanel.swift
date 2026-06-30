@@ -299,7 +299,7 @@ struct InspectorPanel: View {
             "subEmitters",
             "gpuSimulation",
         ]
-        private static let stageBadgeWidth: Float = 96
+        private static let stageBadgeWidth: Float = 78
 
         let binding: Binding<ParticleModuleStack>
         let diagnostics: InspectorParticleRuntimeDiagnostics
@@ -408,6 +408,10 @@ struct InspectorPanel: View {
             stack.modules.filter { isAdvancedModule($0) }.count
         }
 
+        private var modifiedModuleCount: Int {
+            stack.modifiedModuleIDs.count
+        }
+
         private var coreModuleIndices: [Int] {
             stack.modules.indices.filter { !isAdvancedModule(stack.modules[$0]) }
         }
@@ -421,12 +425,12 @@ struct InspectorPanel: View {
         }
 
         var body: some View {
-            Box(direction: .column, alignItems: .stretch, spacing: 10) {
-                Box(direction: .column, alignItems: .stretch, spacing: 8) {
+            Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                Box(direction: .column, alignItems: .stretch, spacing: 6) {
                     Row(alignment: .center, spacing: 8) {
                         Text(L("Modules"))
                             .lineLimit(1)
-                            .font(.title)
+                            .font(.bodyStrong)
                             .foregroundColor(.onSurface)
                             .flex()
 
@@ -447,6 +451,16 @@ struct InspectorPanel: View {
                                     foreground: gpuSummaryForeground,
                                     background: gpuSummaryBackground)
                         summaryChip("\(L("Advanced"))  \(advancedModuleCount)")
+
+                        if modifiedModuleCount > 0 {
+                            Button("\(L("Modified"))  \(modifiedModuleCount)",
+                                   tooltip: L("Expand modified modules")) {
+                                var stack = binding.wrappedValue
+                                stack.expandModifiedModules(collapseOthers: true)
+                                binding.wrappedValue = stack
+                            }
+                            .buttonStyle(GhostButtonStyle())
+                        }
 
                         if hasValidationIssues {
                             Button(L("Issues"),
@@ -474,16 +488,12 @@ struct InspectorPanel: View {
                                     indices: advancedModuleIndices)
                     }
                 }
-                .padding(horizontal: 6, vertical: 6)
-                .background(.surface)
-                .cornerRadius(6)
-                .border(.border, width: 1)
                 .debugName("particle-module-stack-list")
             }
-            .padding(horizontal: 12, vertical: 12)
-            .background(.surfaceSunken)
-            .cornerRadius(7)
-            .border(.border, width: 1)
+            .padding(horizontal: 8, vertical: 8)
+            .background(.surface)
+            .cornerRadius(6)
+            .border(.divider, width: 1)
             .clipped()
             .debugName("particle-module-stack")
         }
@@ -541,10 +551,10 @@ struct InspectorPanel: View {
                 .lineLimit(1)
                 .font(.caption)
                 .foregroundColor(foreground)
-                .padding(horizontal: 8, vertical: 3)
+                .padding(horizontal: 7, vertical: 2)
                 .background(background)
-                .cornerRadius(4)
-                .border(foreground.opacity(0.14), width: 1)
+                .cornerRadius(3)
+                .border(foreground.opacity(0.10), width: 1)
         }
 
         private func moduleGroup(title: String, subtitle: String, indices: [Int]) -> AnyView {
@@ -579,20 +589,24 @@ struct InspectorPanel: View {
             let module = stack.modules[index]
             let health = moduleHealthSnapshot(module)
             let isModified = stack.moduleSettingsDifferFromDefault(module.id)
-            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 6) {
+            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 Row(alignment: .center, spacing: 8) {
-                    dragHandle()
-
                     Button(icon: .resource(module.isExpanded ? UICommonIcons.chevronDown : UICommonIcons.chevronRight),
                            size: 9,
                            tooltip: module.isExpanded ? L("Collapse module") : L("Expand module")) {
                         toggleModuleExpanded(index)
                     }
-                    .frame(width: 24)
+                    .frame(width: 22)
                     .buttonStyle(GhostButtonStyle())
 
                     Checkbox(isOn: moduleEnabledBinding(index))
-                        .frame(width: 24)
+                        .frame(width: 22)
+
+                    Box { EmptyView() }
+                        .frame(width: 3, height: 30)
+                        .background(moduleAccent(module))
+                        .cornerRadius(2)
+                        .opacity(module.isEnabled ? 0.85 : 0.35)
 
                     Box(direction: .column, alignItems: .stretch, spacing: 4) {
                         Row(alignment: .center, spacing: 7) {
@@ -613,9 +627,6 @@ struct InspectorPanel: View {
                         }
 
                         Row(alignment: .center, spacing: 6) {
-                            Box { EmptyView() }
-                                .frame(width: Self.stageBadgeWidth)
-
                             Text(moduleDetail(module.settings))
                                 .lineLimit(1)
                                 .font(.caption)
@@ -634,9 +645,8 @@ struct InspectorPanel: View {
                     .frame(minWidth: 0)
                     .flex()
                 }
-                .padding(horizontal: 10, vertical: 8)
+                .padding(horizontal: 8, vertical: 7)
                 .background(moduleHeaderBackground(module))
-                .border(module.isExpanded ? moduleBorder(module) : .divider.opacity(0), width: 1)
 
                 if module.isExpanded {
                     expandedModuleEditor(index: index, module: module)
@@ -652,35 +662,9 @@ struct InspectorPanel: View {
             title == L("Advanced")
         }
 
-        private func dragHandle() -> AnyView {
-            AnyView(Box(direction: .column, alignItems: .center, spacing: 3) {
-                Row(alignment: .center, spacing: 3) {
-                    gripDot()
-                    gripDot()
-                }
-                Row(alignment: .center, spacing: 3) {
-                    gripDot()
-                    gripDot()
-                }
-                Row(alignment: .center, spacing: 3) {
-                    gripDot()
-                    gripDot()
-                }
-            }
-            .frame(width: 20))
-        }
-
-        private func gripDot() -> AnyView {
-            AnyView(Box { EmptyView() }
-                .frame(width: 3, height: 3)
-                .background(.onSurfaceMuted)
-                .cornerRadius(2)
-                .opacity(0.55))
-        }
-
         private func moduleHeaderBackground(_ module: ParticleEmitterModule) -> SemanticColorRef {
             if !module.isEnabled { return .surfaceSunken }
-            if module.isExpanded { return moduleAccent(module).opacity(0.05) }
+            if module.isExpanded { return .surfaceRaised }
             return .surface
         }
 
@@ -717,6 +701,7 @@ struct InspectorPanel: View {
                 .padding(horizontal: 5, vertical: 1)
                 .background(background)
                 .cornerRadius(3)
+                .border(foreground.opacity(0.10), width: 1)
         }
 
         private func moduleStageBadge(_ module: ParticleEmitterModule) -> AnyView {
@@ -725,9 +710,7 @@ struct InspectorPanel: View {
                 .lineLimit(1)
                 .font(.caption)
                 .foregroundColor(accent)
-                .padding(horizontal: 7, vertical: 2)
-                .background(accent.opacity(0.14))
-                .cornerRadius(4)
+                .padding(horizontal: 0, vertical: 0)
                 .frame(width: Self.stageBadgeWidth))
         }
 
@@ -962,7 +945,7 @@ struct InspectorPanel: View {
 
         private func expandedModuleEditor(index: Int, module: ParticleEmitterModule) -> AnyView {
             let issues = diagnostics.validationIssues(for: module.id)
-            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 8) {
+            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 7) {
                 moduleParameterSurface(index: index, module: module)
 
                 if case .gpuSimulation = module.settings {
@@ -991,9 +974,8 @@ struct InspectorPanel: View {
                     }
                 }
             }
-            .padding(horizontal: 8, vertical: 0)
-            .background(.surfaceSunken)
-            .cornerRadius(4)
+            .padding(horizontal: 8, vertical: 8)
+            .background(.surface)
             .border(.divider, width: 1))
         }
 
@@ -1185,39 +1167,26 @@ struct InspectorPanel: View {
         }
 
         private func moduleParameterSurface(index: Int, module: ParticleEmitterModule) -> AnyView {
-            let status = moduleStatus(module) ?? moduleBackendStatus(module)
-            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 7) {
-                Row(alignment: .center, spacing: 7) {
-                    Spacer(minLength: 0)
-                        .frame(width: 3, height: 30)
-                        .background(moduleAccent(module))
-                        .cornerRadius(2)
-                        .opacity(module.isEnabled ? 1 : 0.45)
+            return AnyView(Box(direction: .column, alignItems: .stretch, spacing: 6) {
+                Row(alignment: .center, spacing: 6) {
+                    Text(moduleParameterSummary(module))
+                        .lineLimit(1)
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                        .flex()
 
-                    Box(direction: .column, alignItems: .stretch, spacing: 1) {
-                        Text(L("Parameters"))
-                            .lineLimit(1)
-                            .font(.caption)
-                            .foregroundColor(.onSurface)
-                        Text(moduleParameterSummary(module))
-                            .lineLimit(1)
-                            .font(.caption)
-                            .foregroundColor(.onSurfaceMuted)
+                    if !module.isEnabled {
+                        badge(L("Disabled"))
                     }
-                    .flex()
-
-                    badge(module.isEnabled ? L("Editable") : L("Disabled"),
-                          foreground: module.isEnabled ? status.tone.foreground : .onSurfaceMuted,
-                          background: module.isEnabled ? status.tone.background : .surfaceSunken)
                 }
 
                 moduleEditor(index: index, module: module)
                     .opacity(module.isEnabled ? 1 : 0.66)
             }
-            .padding(horizontal: 7, vertical: 7)
-            .background(.surface)
+            .padding(horizontal: 6, vertical: 6)
+            .background(.surfaceSunken)
             .cornerRadius(4)
-            .border(status.tone.background, width: 1))
+            .border(.divider, width: 1))
         }
 
         private func moduleParameterSummary(_ module: ParticleEmitterModule) -> String {
@@ -1535,7 +1504,7 @@ struct InspectorPanel: View {
                     .font(.caption)
                     .foregroundColor(foreground)
             }
-            .padding(horizontal: 6, vertical: 2)
+            .padding(horizontal: 5, vertical: 2)
             .background(background)
             .cornerRadius(3))
         }
@@ -3394,11 +3363,6 @@ struct InspectorPanel: View {
                                          tone: ModuleRuntimeTone,
                                          content: AnyView) -> AnyView {
             AnyView(Box(direction: .column, alignItems: .stretch, spacing: 6) {
-                Row(alignment: .center, spacing: 7) {
-                    Spacer(minLength: 0)
-                        .frame(width: 3, height: 28)
-                        .background(tone.foreground)
-                        .cornerRadius(2)
                     Box(direction: .column, alignItems: .stretch, spacing: 1) {
                         Text(L(title))
                             .lineLimit(1)
@@ -3409,17 +3373,12 @@ struct InspectorPanel: View {
                             .font(.caption)
                             .foregroundColor(.onSurfaceMuted)
                     }
-                    .flex()
-                    badge(tone == .muted ? L("Settings") : L("Linked"),
-                          foreground: tone.foreground,
-                          background: tone.background)
-                }
                 content
             }
-            .padding(horizontal: 7, vertical: 7)
+            .padding(horizontal: 6, vertical: 6)
             .background(.surface)
             .cornerRadius(4)
-            .border(tone.background, width: 1))
+            .border(tone.background.opacity(0.45), width: 1))
         }
 
         private func moduleEditorRows(_ rows: [[AnyView]]) -> AnyView {
@@ -3432,8 +3391,6 @@ struct InspectorPanel: View {
 
         private func moduleEditorRow(_ fields: [AnyView]) -> AnyView {
             AnyView(Row(alignment: .center, spacing: 8) {
-                Spacer(minLength: 0)
-                    .frame(width: 28)
                 for field in fields {
                     field
                 }
@@ -3489,13 +3446,11 @@ struct InspectorPanel: View {
                 InspectorParticleCurveValue(binding: value, isEnabled: enabled)
                     .opacity(enabled ? 1 : 0.72)
             }
-            .padding(horizontal: 28, vertical: 0))
+            .padding(horizontal: 0, vertical: 0))
         }
 
         private func moduleColorRow(_ fields: [AnyView]) -> AnyView {
             AnyView(Row(alignment: .center, spacing: 8) {
-                Spacer(minLength: 0)
-                    .frame(width: 28)
                 for field in fields {
                     field
                 }
@@ -4589,12 +4544,13 @@ struct InspectorPanel: View {
             let startsCollapsed = collapsedIDs.contains(section.id)
             if section.id == "particle-emitter",
                let moduleStackField = section.fields.first(where: { $0.id == Self.particleModuleStackFieldID }) {
+                let primaryFields = section.fields.filter(Self.isPrimaryParticleInspectorField)
                 let legacyFields = section.fields.filter(Self.isLegacyParticleInspectorField)
                 var result = [
                     PropertyGridSection(
                         id: section.id,
                         title: section.title,
-                        rows: [row(for: moduleStackField, sectionID: section.id)],
+                        rows: ([moduleStackField] + primaryFields).map { row(for: $0, sectionID: section.id) },
                         isCollapsible: true,
                         startsCollapsed: startsCollapsed
                     )
@@ -4627,9 +4583,18 @@ struct InspectorPanel: View {
     }
 
     private static let particleModuleStackFieldID = "particle-module-stack"
+    private static let primaryParticleInspectorFieldIDs: Set<String> = [
+        "particle-texture",
+    ]
+
+    private static func isPrimaryParticleInspectorField(_ field: EditorInspectorField) -> Bool {
+        primaryParticleInspectorFieldIDs.contains(field.id)
+    }
 
     private static func isLegacyParticleInspectorField(_ field: EditorInspectorField) -> Bool {
-        field.id.hasPrefix("particle-") && field.id != particleModuleStackFieldID
+        field.id.hasPrefix("particle-")
+            && field.id != particleModuleStackFieldID
+            && !isPrimaryParticleInspectorField(field)
     }
 
     private func fieldView(_ value: EditorInspectorFieldValue,
@@ -4819,14 +4784,14 @@ private extension EditorInspectorFieldValue {
             return max(defaultHeight, ParticleSubEmitterEditorLayout.rowHeight(ruleCount: binding.wrappedValue.count))
         case let .particleModuleStack(binding):
             let stack = binding.wrappedValue
-            let headerHeight: Float = 88
-            let listPaddingHeight: Float = 12
+            let headerHeight: Float = 62
+            let listPaddingHeight: Float = 0
             let advancedSeparatorHeight: Float = 34
-            let rowHeight: Float = 72
-            let moduleEditorRowHeight: Float = 50
-            let moduleParameterChromeHeight: Float = 58
+            let rowHeight: Float = 58
+            let moduleEditorRowHeight: Float = 46
+            let moduleParameterChromeHeight: Float = 34
             let moduleGPUBackendPanelHeight: Float = 90
-            let moduleExpandedDiagnosticsHeight: Float = 43
+            let moduleExpandedDiagnosticsHeight: Float = 36
             let moduleIssueHeaderHeight: Float = 18
             let moduleIssueRowHeight: Float = 30
             let advancedModuleIDs: Set<String> = [
@@ -4862,7 +4827,7 @@ private extension EditorInspectorFieldValue {
             }
             let groupSpacing: Float = max(0, groupCount - 1) * 4
             let rowSpacing: Float = Float(max(0, stack.modules.count - Int(groupCount))) * 3
-            let cardPadding: Float = 24
+            let cardPadding: Float = 16
             return max(defaultHeight,
                        headerHeight
                        + listPaddingHeight
@@ -4883,8 +4848,8 @@ private extension EditorInspectorFieldValue {
 
 private func particleModuleEditorHeight(_ settings: ParticleEmitterModuleSettings,
                                         rowHeight: Float) -> Float {
-    let sectionHeaderHeight: Float = 32
-    let sectionPadding: Float = 14
+    let sectionHeaderHeight: Float = 28
+    let sectionPadding: Float = 12
     let sectionSpacing: Float = 8
     func sectionHeight(rowCount: Int) -> Float {
         sectionHeaderHeight
