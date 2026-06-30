@@ -412,6 +412,12 @@ struct RenderExtractionTests {
                                       collisionPlaneY: -1,
                                       collisionRestitution: 0.7,
                                       collisionDamping: 0.2,
+                                      startSize: 0.25,
+                                      endSize: 2,
+                                      sizeCurve: .easeIn,
+                                      startColor: SIMD4<Float>(1, 0, 0, 0.25),
+                                      endColor: SIMD4<Float>(0, 0, 1, 1),
+                                      colorCurve: .easeOut,
                                       sortMode: .oldestFirst,
                                       renderSortPriority: 9,
                                       renderAlignment: .velocity,
@@ -470,6 +476,13 @@ struct RenderExtractionTests {
         #expect(batch.textureSheetPlaybackMode == .loop)
         #expect(batch.textureSheetStartFrame == 3)
         #expect(batch.textureSheetFrameRandomness == 2)
+        #expect(batch.startSize == 0.25)
+        #expect(batch.endSize == 2)
+        #expect(batch.sizeCurve == .easeIn)
+        #expect(batch.startColor == SIMD4<Float>(1, 0, 0, 0.25))
+        #expect(batch.endColor == SIMD4<Float>(0, 0, 1, 1))
+        #expect(batch.colorCurve == .easeOut)
+        #expect(batch.usesAuthoredAppearance)
         #expect(batch.renderAlignment == .velocity)
         #expect(batch.velocityStretchScale == 0.25)
         #expect(batch.velocityStretchMax == 3)

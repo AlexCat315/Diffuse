@@ -480,6 +480,13 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
     public var textureSheetPlaybackMode: ParticleTextureSheetPlaybackMode
     public var textureSheetStartFrame: Int
     public var textureSheetFrameRandomness: Int
+    public var startSize: Float
+    public var endSize: Float
+    public var sizeCurve: ParticleCurve
+    public var startColor: SIMD4<Float>
+    public var endColor: SIMD4<Float>
+    public var colorCurve: ParticleCurve
+    public var usesAuthoredAppearance: Bool
     public var blendMode: ParticleBlendMode
     public var texturePath: String?
     public var renderAlignment: ParticleRenderAlignment
@@ -531,6 +538,13 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
                 textureSheetPlaybackMode: ParticleTextureSheetPlaybackMode = .automatic,
                 textureSheetStartFrame: Int = 0,
                 textureSheetFrameRandomness: Int = 0,
+                startSize: Float = 1,
+                endSize: Float = 1,
+                sizeCurve: ParticleCurve = .linear,
+                startColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1),
+                endColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1),
+                colorCurve: ParticleCurve = .linear,
+                usesAuthoredAppearance: Bool = false,
                 blendMode: ParticleBlendMode = .alpha,
                 texturePath: String? = nil,
                 renderAlignment: ParticleRenderAlignment = .billboard,
@@ -579,6 +593,13 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
         self.textureSheetPlaybackMode = textureSheetPlaybackMode
         self.textureSheetStartFrame = max(0, textureSheetStartFrame)
         self.textureSheetFrameRandomness = max(0, textureSheetFrameRandomness)
+        self.startSize = max(0, startSize)
+        self.endSize = max(0, endSize)
+        self.sizeCurve = sizeCurve
+        self.startColor = startColor
+        self.endColor = endColor
+        self.colorCurve = colorCurve
+        self.usesAuthoredAppearance = usesAuthoredAppearance
         self.blendMode = blendMode
         self.texturePath = normalizedParticleTexturePath(texturePath)
         self.renderAlignment = renderAlignment

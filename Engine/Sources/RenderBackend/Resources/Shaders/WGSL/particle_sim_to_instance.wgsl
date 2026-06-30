@@ -6,6 +6,10 @@ struct ParticleSimToInstanceUniforms {
     render_params: vec4<f32>,
     trail_params: vec4<f32>,
     texture_sheet_playback: vec4<f32>,
+    appearance_size: vec4<f32>,
+    appearance_start_color: vec4<f32>,
+    appearance_end_color: vec4<f32>,
+    appearance_color_curve: vec4<f32>,
 };
 
 struct ParticleSimState {
@@ -89,6 +93,65 @@ fn texture_sheet_uv_rect(particle: ParticleSimState) -> vec4<f32> {
     );
 }
 
+fn particle_normalized_age(particle: ParticleSimState) -> f32 {
+    return select(
+        0.0,
+        clamp(particle.velocity_age.w / particle.position_lifetime.w, 0.0, 1.0),
+        particle.position_lifetime.w > 0.0001
+    );
+}
+
+fn particle_curve_value(mode: f32, constant_value: f32, t: f32) -> f32 {
+    if (mode < 0.5) {
+        return -1.0;
+    }
+    if (mode < 1.5) {
+        return constant_value;
+    }
+    if (mode < 2.5) {
+        return t;
+    }
+    if (mode < 3.5) {
+        return t * t;
+    }
+    if (mode < 4.5) {
+        return 1.0 - (1.0 - t) * (1.0 - t);
+    }
+    let inv = -2.0 * t + 2.0;
+    return select(
+        2.0 * t * t,
+        1.0 - inv * inv * 0.5,
+        t >= 0.5
+    );
+}
+
+fn particle_appearance_size(particle: ParticleSimState, t: f32) -> f32 {
+    if (uniforms.appearance_color_curve.z < 0.5 || particle.params.y != 0u) {
+        return max(particle.size_rotation.x, 0.0);
+    }
+    let size_t = particle_curve_value(uniforms.appearance_size.z, uniforms.appearance_size.w, t);
+    if (size_t < 0.0) {
+        return max(particle.size_rotation.x, 0.0);
+    }
+    let authored_size = mix(
+        max(uniforms.appearance_size.x, 0.0),
+        max(uniforms.appearance_size.y, 0.0),
+        size_t
+    );
+    return max(authored_size * max(particle.size_rotation.w, 0.0), 0.0);
+}
+
+fn particle_appearance_color(particle: ParticleSimState, t: f32) -> vec4<f32> {
+    if (uniforms.appearance_color_curve.z < 0.5 || particle.params.y != 0u) {
+        return particle.color;
+    }
+    let color_t = particle_curve_value(uniforms.appearance_color_curve.x, uniforms.appearance_color_curve.y, t);
+    if (color_t < 0.0) {
+        return particle.color;
+    }
+    return mix(uniforms.appearance_start_color, uniforms.appearance_end_color, color_t);
+}
+
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let output_index = gid.x;
@@ -144,9 +207,10 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let trail_offset = world_velocity * uniforms.trail_params.y * trail_t;
     let trail_size_scale = mix(1.0, max(uniforms.trail_params.z, 0.0), trail_t);
     let trail_alpha_scale = mix(1.0, clamp(uniforms.trail_params.w, 0.0, 1.0), trail_t);
-    var color = sim_particle.color;
+    let normalized_age = particle_normalized_age(sim_particle);
+    var color = particle_appearance_color(sim_particle, normalized_age);
     color.a = color.a * clamp(uniforms.render_params.w, 0.0, 1.0) * trail_alpha_scale;
-    let size = max(sim_particle.size_rotation.x * trail_size_scale, 0.0);
+    let size = max(particle_appearance_size(sim_particle, normalized_age) * trail_size_scale, 0.0);
 
     var instance: ParticleInstance;
     instance.position_size = vec4<f32>(

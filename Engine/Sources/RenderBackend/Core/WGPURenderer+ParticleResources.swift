@@ -98,6 +98,14 @@ private struct GPUParticleSimulationInstanceUniforms {
     var trailParams: SIMD4<Float>
     /// x: playback mode, y: start frame, z: random frame range, w: reserved.
     var textureSheetPlayback: SIMD4<Float>
+    /// x: start size, y: end size, z: size curve mode, w: size curve constant.
+    var appearanceSize: SIMD4<Float>
+    /// Main emitter start color.
+    var appearanceStartColor: SIMD4<Float>
+    /// Main emitter end color.
+    var appearanceEndColor: SIMD4<Float>
+    /// x: color curve mode, y: color curve constant, z/w reserved.
+    var appearanceColorCurve: SIMD4<Float>
 }
 
 /// Layout matches `ParticleSortPrepareUniforms` in `particle_sort_prepare.wgsl`.
@@ -225,6 +233,23 @@ extension WGPURenderer {
             return 2
         case .youngestFirst:
             return 3
+        }
+    }
+
+    private func gpuParticleCurve(_ curve: ParticleCurve) -> SIMD2<Float> {
+        switch curve {
+        case .constant(let value):
+            return SIMD2<Float>(1, value)
+        case .linear:
+            return SIMD2<Float>(2, 0)
+        case .easeIn:
+            return SIMD2<Float>(3, 0)
+        case .easeOut:
+            return SIMD2<Float>(4, 0)
+        case .easeInOut:
+            return SIMD2<Float>(5, 0)
+        case .keyframes:
+            return SIMD2<Float>(0, 0)
         }
     }
 
@@ -1326,6 +1351,8 @@ extension WGPURenderer {
             workgroupSize: workgroupSize
         )
 
+        let sizeCurve = gpuParticleCurve(batch.sizeCurve)
+        let colorCurve = gpuParticleCurve(batch.colorCurve)
         var uniforms = GPUParticleSimulationInstanceUniforms(
             worldTransform: batch.worldTransform,
             params: SIMD4<Float>(
@@ -1357,6 +1384,20 @@ extension WGPURenderer {
                 gpuTextureSheetPlaybackMode(batch.textureSheetPlaybackMode),
                 Float(batch.textureSheetStartFrame),
                 Float(batch.textureSheetFrameRandomness),
+                0
+            ),
+            appearanceSize: SIMD4<Float>(
+                batch.startSize,
+                batch.endSize,
+                sizeCurve.x,
+                sizeCurve.y
+            ),
+            appearanceStartColor: batch.startColor,
+            appearanceEndColor: batch.endColor,
+            appearanceColorCurve: SIMD4<Float>(
+                colorCurve.x,
+                colorCurve.y,
+                batch.usesAuthoredAppearance ? 1 : 0,
                 0
             )
         )
