@@ -979,6 +979,85 @@ struct RenderBackendGPUSmokeTests {
         #expect(abs(instances[1].ribbonParams.y - 1.5) < 0.001)
     }
 
+    @Test("particle GPU render path evaluates authored appearance curves",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU particle appearance test"))
+    func particleSimulationRenderPathEvaluatesAuthoredAppearanceCurvesOnGPU() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+
+        renderer.initialize()
+
+        let plan = ParticleEmitter(
+            maxParticles: 4,
+            simulationBackend: .gpuIfSupported,
+            gpuSimulationWorkgroupSize: 64
+        ).gpuSimulationPlan
+        let particle = Particle(
+            position: .zero,
+            velocity: .zero,
+            age: 0.5,
+            lifetime: 1,
+            sizeScale: 1,
+            size: 99,
+            color: SIMD4<Float>(1, 1, 1, 1),
+            appearanceIndex: 0
+        )
+        let scene = RenderScene(
+            camera: .fallbackPerspective,
+            particleSimulationBatches: [
+                RenderParticleSimulationBatch(
+                    emitterEntity: EntityID(index: 80, generation: 1),
+                    plan: plan,
+                    particles: [particle],
+                    gravity: .zero,
+                    renderOnGPU: true,
+                    startSize: 0,
+                    endSize: 4,
+                    sizeCurve: .easeIn,
+                    startColor: SIMD4<Float>(1, 0, 0, 0),
+                    endColor: SIMD4<Float>(0, 0, 1, 1),
+                    colorCurve: .easeOut,
+                    usesAuthoredAppearance: true
+                )
+            ]
+        )
+
+        let encoder = try backend.createCommandEncoder()
+        let report = try renderer.encodeParticleSimulationPrePass(
+            encoder: encoder,
+            scene: scene,
+            deltaTime: 0,
+            elapsedTime: 0
+        )
+        #expect(report.renderInstanceCount == 1)
+        let sourceBuffer = try #require(renderer.particleStorageBuffer)
+        let commandBuffer = try encoder.finish()
+        backend.submit(commandBuffer)
+
+        let instances = try readbackParticleInstances(buffer: sourceBuffer,
+                                                       count: 1,
+                                                       backend: backend)
+        #expect(abs(instances[0].positionSize.w - 1) < 0.001)
+        #expect(abs(instances[0].color.x - 0.25) < 0.001)
+        #expect(abs(instances[0].color.z - 0.75) < 0.001)
+        #expect(abs(instances[0].color.w - 0.75) < 0.001)
+    }
+
     @Test("particle GPU render path applies texture sheet playback ranges",
           .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU texture sheet test"))
     func particleSimulationRenderPathAppliesTextureSheetPlaybackOnGPU() throws {

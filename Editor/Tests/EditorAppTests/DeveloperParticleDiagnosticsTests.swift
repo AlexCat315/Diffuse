@@ -743,6 +743,96 @@ struct DeveloperParticleDiagnosticsTests {
         #expect(event?.target.label == "Open Particles")
     }
 
+    @Test("trace event filters combine query track and severity")
+    func traceEventFiltersCombineQueryTrackAndSeverity() {
+        let stats = EditorFrameStats(frameSeconds: 1.0 / 60.0,
+                                     simulationSeconds: 0.001)
+        let renderStats = RenderFrameStats(
+            passDrawCallCounts: [.basePass: 2, .particles: 4],
+            activePasses: [.basePass, .particles],
+            passEncodeNS: [.basePass: 2_000_000, .particles: 18_000_000]
+        )
+
+        let trace = makeDeveloperTrace(
+            frameStats: stats,
+            frameHistory: [
+                EditorFrameStatsHistorySample(sampleIndex: 20,
+                                              frameIndex: 200,
+                                              stats: stats),
+            ],
+            particleHistory: [],
+            renderStats: renderStats,
+            issues: [],
+            consoleEntries: [
+                EditorConsoleEntry(id: 1,
+                                   severity: .warning,
+                                   message: "Shader variant missing"),
+            ]
+        )
+
+        let renderOnly = developerTraceVisibleEvents(trace: trace,
+                                                     query: "pass",
+                                                     trackFilter: .renderPass,
+                                                     severityFilter: .critical)
+        #expect(renderOnly.count == 1)
+        #expect(renderOnly.first?.track == .renderPass)
+
+        let consoleOnly = developerTraceVisibleEvents(trace: trace,
+                                                      query: "shader",
+                                                      trackFilter: .console,
+                                                      severityFilter: .warning)
+        #expect(consoleOnly.count == 1)
+        #expect(consoleOnly.first?.track == .console)
+
+        let noMatch = developerTraceVisibleEvents(trace: trace,
+                                                  query: "shader",
+                                                  trackFilter: .renderPass,
+                                                  severityFilter: .warning)
+        #expect(noMatch.isEmpty)
+    }
+
+    @Test("trace issue filters honor target track and severity")
+    func traceIssueFiltersHonorTargetTrackAndSeverity() {
+        let issue = DeveloperDiagnosticIssue(
+            id: "console.warning",
+            severity: .warning,
+            scope: .console,
+            title: "Console warnings",
+            primarySignal: "1 warning recorded",
+            evidence: ["Shader variant missing"],
+            recommendation: "Open console.",
+            target: DeveloperDiagnosticTarget(tab: .console,
+                                              frameSampleIndex: nil,
+                                              label: "Open Console")
+        )
+        let stats = EditorFrameStats(frameSeconds: 1.0 / 60.0,
+                                     simulationSeconds: 0.001)
+        let trace = makeDeveloperTrace(
+            frameStats: stats,
+            frameHistory: [
+                EditorFrameStatsHistorySample(sampleIndex: 30,
+                                              frameIndex: 300,
+                                              stats: stats),
+            ],
+            particleHistory: [],
+            renderStats: .init(),
+            issues: [issue],
+            consoleEntries: []
+        )
+
+        let warnings = developerTraceVisibleIssues(trace: trace,
+                                                   query: "shader",
+                                                   trackFilter: .console,
+                                                   severityFilter: .warning)
+        #expect(warnings.map(\.id) == ["console.warning"])
+
+        let critical = developerTraceVisibleIssues(trace: trace,
+                                                   query: "shader",
+                                                   trackFilter: .console,
+                                                   severityFilter: .critical)
+        #expect(critical.isEmpty)
+    }
+
     private func particleSample(index: UInt64,
                                 live: Int,
                                 limit: Int,
