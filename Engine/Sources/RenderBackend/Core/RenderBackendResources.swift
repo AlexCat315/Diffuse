@@ -320,6 +320,8 @@ struct GPUParticleSimulationResources {
     let instancePipelineLayout: GPUPipelineLayout
     let instancePipeline: GPUComputePipeline
     let instanceUniformBuffer: GPUBuffer
+    let appearanceBuffer: GPUBuffer
+    let curveKeyframeBuffer: GPUBuffer
     let capacity: Int
     let eventCapacity: Int
     let workgroupSize: Int
