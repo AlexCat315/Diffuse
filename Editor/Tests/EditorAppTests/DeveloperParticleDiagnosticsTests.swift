@@ -743,6 +743,497 @@ struct DeveloperParticleDiagnosticsTests {
         #expect(event?.target.label == "Open Particles")
     }
 
+    @Test("trace event filters combine query track and severity")
+    func traceEventFiltersCombineQueryTrackAndSeverity() {
+        let stats = EditorFrameStats(frameSeconds: 1.0 / 60.0,
+                                     simulationSeconds: 0.001)
+        let renderStats = RenderFrameStats(
+            passDrawCallCounts: [.basePass: 2, .particles: 4],
+            activePasses: [.basePass, .particles],
+            passEncodeNS: [.basePass: 2_000_000, .particles: 18_000_000]
+        )
+
+        let trace = makeDeveloperTrace(
+            frameStats: stats,
+            frameHistory: [
+                EditorFrameStatsHistorySample(sampleIndex: 20,
+                                              frameIndex: 200,
+                                              stats: stats),
+            ],
+            particleHistory: [],
+            renderStats: renderStats,
+            issues: [],
+            consoleEntries: [
+                EditorConsoleEntry(id: 1,
+                                   severity: .warning,
+                                   message: "Shader variant missing"),
+            ]
+        )
+
+        let renderOnly = developerTraceVisibleEvents(trace: trace,
+                                                     query: "pass",
+                                                     trackFilter: .renderPass,
+                                                     severityFilter: .critical)
+        #expect(renderOnly.count == 1)
+        #expect(renderOnly.first?.track == .renderPass)
+
+        let consoleOnly = developerTraceVisibleEvents(trace: trace,
+                                                      query: "shader",
+                                                      trackFilter: .console,
+                                                      severityFilter: .warning)
+        #expect(consoleOnly.count == 1)
+        #expect(consoleOnly.first?.track == .console)
+
+        let noMatch = developerTraceVisibleEvents(trace: trace,
+                                                  query: "shader",
+                                                  trackFilter: .renderPass,
+                                                  severityFilter: .warning)
+        #expect(noMatch.isEmpty)
+    }
+
+    @Test("trace issue filters honor target track and severity")
+    func traceIssueFiltersHonorTargetTrackAndSeverity() {
+        let issue = DeveloperDiagnosticIssue(
+            id: "console.warning",
+            severity: .warning,
+            scope: .console,
+            title: "Console warnings",
+            primarySignal: "1 warning recorded",
+            evidence: ["Shader variant missing"],
+            recommendation: "Open console.",
+            target: DeveloperDiagnosticTarget(tab: .console,
+                                              frameSampleIndex: nil,
+                                              label: "Open Console")
+        )
+        let stats = EditorFrameStats(frameSeconds: 1.0 / 60.0,
+                                     simulationSeconds: 0.001)
+        let trace = makeDeveloperTrace(
+            frameStats: stats,
+            frameHistory: [
+                EditorFrameStatsHistorySample(sampleIndex: 30,
+                                              frameIndex: 300,
+                                              stats: stats),
+            ],
+            particleHistory: [],
+            renderStats: .init(),
+            issues: [issue],
+            consoleEntries: []
+        )
+
+        let warnings = developerTraceVisibleIssues(trace: trace,
+                                                   query: "shader",
+                                                   trackFilter: .console,
+                                                   severityFilter: .warning)
+        #expect(warnings.map(\.id) == ["console.warning"])
+
+        let critical = developerTraceVisibleIssues(trace: trace,
+                                                   query: "shader",
+                                                   trackFilter: .console,
+                                                   severityFilter: .critical)
+        #expect(critical.isEmpty)
+    }
+
+    @Test("trace sample events are sorted by severity for property context")
+    func traceSampleEventsSortBySeverityForPropertyContext() {
+        let stats = EditorFrameStats(frameSeconds: 0.040,
+                                     simulationSeconds: 0.020,
+                                     renderSubmitSeconds: 0.010)
+        let renderStats = RenderFrameStats(
+            passDrawCallCounts: [.basePass: 2, .particles: 4],
+            activePasses: [.basePass, .particles],
+            passEncodeNS: [.basePass: 2_000_000, .particles: 18_000_000]
+        )
+
+        let trace = makeDeveloperTrace(
+            frameStats: stats,
+            frameHistory: [
+                EditorFrameStatsHistorySample(sampleIndex: 40,
+                                              frameIndex: 400,
+                                              stats: stats),
+            ],
+            particleHistory: [],
+            renderStats: renderStats,
+            issues: [],
+            consoleEntries: [
+                EditorConsoleEntry(id: 1,
+                                   severity: .warning,
+                                   message: "Shader variant missing"),
+            ]
+        )
+
+        let events = developerTraceSampleEvents(trace: trace,
+                                                sampleIndex: 40)
+        #expect(events.first?.severity == .critical)
+        #expect(events.contains { $0.track == .frame })
+        #expect(events.contains { $0.track == .console })
+        #expect(developerTraceSampleEvents(trace: trace,
+                                           sampleIndex: 40,
+                                           excluding: events.first?.id).count == events.count - 1)
+    }
+
+    @Test("trace event sort modes order rows predictably")
+    func traceEventSortModesOrderRowsPredictably() {
+        let target = DeveloperDiagnosticTarget(tab: .frame,
+                                               frameSampleIndex: nil,
+                                               label: "Open")
+        let trace = DeveloperTraceSnapshot(
+            mode: .live,
+            samples: [],
+            events: [
+                DeveloperTraceEvent(id: "console.warning",
+                                    track: .console,
+                                    sampleIndex: 30,
+                                    severity: .warning,
+                                    scope: .console,
+                                    title: "Console warning",
+                                    primarySignal: "warning",
+                                    evidence: [],
+                                    recommendation: "Open console",
+                                    target: target),
+                DeveloperTraceEvent(id: "render.critical",
+                                    track: .renderPass,
+                                    sampleIndex: 20,
+                                    severity: .critical,
+                                    scope: .render,
+                                    title: "Render critical",
+                                    primarySignal: "render",
+                                    evidence: [],
+                                    recommendation: "Open render",
+                                    target: target),
+                DeveloperTraceEvent(id: "frame.warning",
+                                    track: .frame,
+                                    sampleIndex: 40,
+                                    severity: .warning,
+                                    scope: .frame,
+                                    title: "Frame warning",
+                                    primarySignal: "frame",
+                                    evidence: [],
+                                    recommendation: "Open frame",
+                                    target: target),
+                DeveloperTraceEvent(id: "particles.critical",
+                                    track: .particles,
+                                    sampleIndex: 10,
+                                    severity: .critical,
+                                    scope: .particles,
+                                    title: "Particle critical",
+                                    primarySignal: "particles",
+                                    evidence: [],
+                                    recommendation: "Open particles",
+                                    target: target),
+            ],
+            renderPasses: [],
+            issues: []
+        )
+
+        #expect(developerTraceVisibleEvents(trace: trace,
+                                           query: "",
+                                           trackFilter: nil,
+                                           severityFilter: .all,
+                                           sortOrder: .newest).map(\.id).first == "frame.warning")
+        #expect(Array(developerTraceVisibleEvents(trace: trace,
+                                                 query: "",
+                                                 trackFilter: nil,
+                                                 severityFilter: .all,
+                                                 sortOrder: .severity).map(\.id).prefix(2)) == [
+            "render.critical",
+            "particles.critical",
+        ])
+        #expect(developerTraceVisibleEvents(trace: trace,
+                                           query: "",
+                                           trackFilter: nil,
+                                           severityFilter: .all,
+                                           sortOrder: .track).map(\.id).first == "console.warning")
+    }
+
+    @Test("trace adjacent event navigation clamps to visible rows")
+    func traceAdjacentEventNavigationClampsToVisibleRows() {
+        let target = DeveloperDiagnosticTarget(tab: .frame,
+                                               frameSampleIndex: nil,
+                                               label: "Open")
+        let events = [
+            DeveloperTraceEvent(id: "a",
+                                track: .frame,
+                                sampleIndex: 1,
+                                severity: .warning,
+                                scope: .frame,
+                                title: "A",
+                                primarySignal: "A",
+                                evidence: [],
+                                recommendation: "A",
+                                target: target),
+            DeveloperTraceEvent(id: "b",
+                                track: .renderPass,
+                                sampleIndex: 2,
+                                severity: .critical,
+                                scope: .render,
+                                title: "B",
+                                primarySignal: "B",
+                                evidence: [],
+                                recommendation: "B",
+                                target: target),
+            DeveloperTraceEvent(id: "c",
+                                track: .console,
+                                sampleIndex: 3,
+                                severity: .warning,
+                                scope: .console,
+                                title: "C",
+                                primarySignal: "C",
+                                evidence: [],
+                                recommendation: "C",
+                                target: target),
+        ]
+
+        #expect(developerTraceAdjacentEventID(events: events,
+                                             selectedEventID: nil,
+                                             direction: .next) == "a")
+        #expect(developerTraceAdjacentEventID(events: events,
+                                             selectedEventID: "a",
+                                             direction: .previous) == "a")
+        #expect(developerTraceAdjacentEventID(events: events,
+                                             selectedEventID: "a",
+                                             direction: .next) == "b")
+        #expect(developerTraceAdjacentEventID(events: events,
+                                             selectedEventID: "c",
+                                             direction: .next) == "c")
+        #expect(developerTraceAdjacentEventID(events: events,
+                                             selectedEventID: "missing",
+                                             direction: .next) == "a")
+        #expect(developerTraceAdjacentEventID(events: [],
+                                             selectedEventID: "a",
+                                             direction: .next) == nil)
+    }
+
+    @Test("trace investigation summary identifies hot sample and focus event")
+    func traceInvestigationSummaryIdentifiesHotSampleAndFocusEvent() {
+        let target = DeveloperDiagnosticTarget(tab: .frame,
+                                               frameSampleIndex: nil,
+                                               label: "Open")
+        let events = [
+            DeveloperTraceEvent(id: "warning.1",
+                                track: .frame,
+                                sampleIndex: 10,
+                                severity: .warning,
+                                scope: .frame,
+                                title: "Frame warning",
+                                primarySignal: "Frame",
+                                evidence: [],
+                                recommendation: "Open frame",
+                                target: target),
+            DeveloperTraceEvent(id: "critical.1",
+                                track: .renderPass,
+                                sampleIndex: 20,
+                                severity: .critical,
+                                scope: .render,
+                                title: "Render critical",
+                                primarySignal: "Render",
+                                evidence: [],
+                                recommendation: "Open render",
+                                target: target),
+            DeveloperTraceEvent(id: "warning.2",
+                                track: .console,
+                                sampleIndex: 20,
+                                severity: .warning,
+                                scope: .console,
+                                title: "Console warning",
+                                primarySignal: "Console",
+                                evidence: [],
+                                recommendation: "Open console",
+                                target: target),
+            DeveloperTraceEvent(id: "info.1",
+                                track: .particles,
+                                sampleIndex: 20,
+                                severity: .info,
+                                scope: .particles,
+                                title: "Particle info",
+                                primarySignal: "Particles",
+                                evidence: [],
+                                recommendation: "Open particles",
+                                target: target),
+        ]
+
+        let summary = makeDeveloperTraceInvestigationSummary(events: events)
+
+        #expect(summary.visibleEventCount == 4)
+        #expect(summary.criticalCount == 1)
+        #expect(summary.warningCount == 2)
+        #expect(summary.hotSampleIndex == 20)
+        #expect(summary.hotSampleEventCount == 3)
+        #expect(summary.focusEventID == "critical.1")
+    }
+
+    @Test("trace investigation summary handles empty visible events")
+    func traceInvestigationSummaryHandlesEmptyVisibleEvents() {
+        let summary = makeDeveloperTraceInvestigationSummary(events: [])
+
+        #expect(summary.visibleEventCount == 0)
+        #expect(summary.criticalCount == 0)
+        #expect(summary.warningCount == 0)
+        #expect(summary.hotSampleIndex == nil)
+        #expect(summary.hotSampleEventCount == 0)
+        #expect(summary.focusEventID == nil)
+    }
+
+    @Test("trace sample investigation ranks lead marker and deduplicates jump targets")
+    func traceSampleInvestigationRanksLeadMarkerAndDeduplicatesJumpTargets() {
+        let frameTarget = DeveloperDiagnosticTarget(tab: .frame,
+                                                    frameSampleIndex: 20,
+                                                    label: "Open Frame")
+        let renderTarget = DeveloperDiagnosticTarget(tab: .render,
+                                                     frameSampleIndex: nil,
+                                                     label: "Open Render")
+        let trace = DeveloperTraceSnapshot(
+            mode: .live,
+            samples: [],
+            events: [
+                DeveloperTraceEvent(id: "frame.warning",
+                                    track: .frame,
+                                    sampleIndex: 20,
+                                    severity: .warning,
+                                    scope: .frame,
+                                    title: "Frame warning",
+                                    primarySignal: "Frame",
+                                    evidence: [],
+                                    recommendation: "Open frame",
+                                    target: frameTarget),
+                DeveloperTraceEvent(id: "render.critical",
+                                    track: .renderPass,
+                                    sampleIndex: 20,
+                                    severity: .critical,
+                                    scope: .render,
+                                    title: "Render critical",
+                                    primarySignal: "Render",
+                                    evidence: [],
+                                    recommendation: "Open render",
+                                    target: renderTarget),
+                DeveloperTraceEvent(id: "frame.issue",
+                                    track: .frame,
+                                    sampleIndex: 20,
+                                    severity: .warning,
+                                    scope: .frame,
+                                    title: "Frame issue",
+                                    primarySignal: "Frame",
+                                    evidence: [],
+                                    recommendation: "Open frame",
+                                    target: frameTarget),
+                DeveloperTraceEvent(id: "console.other",
+                                    track: .console,
+                                    sampleIndex: 21,
+                                    severity: .critical,
+                                    scope: .console,
+                                    title: "Other sample",
+                                    primarySignal: "Console",
+                                    evidence: [],
+                                    recommendation: "Open console",
+                                    target: DeveloperDiagnosticTarget(tab: .console,
+                                                                      frameSampleIndex: nil,
+                                                                      label: "Open Console")),
+            ],
+            renderPasses: [],
+            issues: []
+        )
+
+        let investigation = makeDeveloperTraceSampleInvestigation(trace: trace,
+                                                                  sampleIndex: 20)
+
+        #expect(investigation.sampleIndex == 20)
+        #expect(investigation.leadEventID == "render.critical")
+        #expect(investigation.eventCount == 3)
+        #expect(investigation.criticalCount == 1)
+        #expect(investigation.warningCount == 2)
+        #expect(investigation.tracks == [.renderPass, .frame])
+        #expect(investigation.drilldownTargets == [renderTarget, frameTarget])
+    }
+
+    @Test("trace sample context compares neighboring samples")
+    func traceSampleContextComparesNeighboringSamples() {
+        let target = DeveloperDiagnosticTarget(tab: .frame,
+                                               frameSampleIndex: nil,
+                                               label: "Open")
+        let trace = DeveloperTraceSnapshot(
+            mode: .live,
+            samples: [
+                DeveloperTraceSample(sampleIndex: 10,
+                                     frameIndex: 100,
+                                     frameStats: EditorFrameStats(frameSeconds: 0.010,
+                                                                  renderSubmitSeconds: 0.010),
+                                     particleLiveCount: 0,
+                                     particleDroppedCount: 0,
+                                     consoleSeverity: nil,
+                                     issueIDs: []),
+                DeveloperTraceSample(sampleIndex: 20,
+                                     frameIndex: 200,
+                                     frameStats: EditorFrameStats(frameSeconds: 0.040,
+                                                                  renderSubmitSeconds: 0.040),
+                                     particleLiveCount: 0,
+                                     particleDroppedCount: 0,
+                                     consoleSeverity: nil,
+                                     issueIDs: []),
+                DeveloperTraceSample(sampleIndex: 30,
+                                     frameIndex: 300,
+                                     frameStats: EditorFrameStats(frameSeconds: 0.025,
+                                                                  renderSubmitSeconds: 0.025),
+                                     particleLiveCount: 0,
+                                     particleDroppedCount: 0,
+                                     consoleSeverity: nil,
+                                     issueIDs: []),
+            ],
+            events: [
+                DeveloperTraceEvent(id: "previous.warning",
+                                    track: .frame,
+                                    sampleIndex: 10,
+                                    severity: .warning,
+                                    scope: .frame,
+                                    title: "Previous",
+                                    primarySignal: "Previous",
+                                    evidence: [],
+                                    recommendation: "Previous",
+                                    target: target),
+                DeveloperTraceEvent(id: "selected.critical",
+                                    track: .renderPass,
+                                    sampleIndex: 20,
+                                    severity: .critical,
+                                    scope: .render,
+                                    title: "Selected",
+                                    primarySignal: "Selected",
+                                    evidence: [],
+                                    recommendation: "Selected",
+                                    target: target),
+                DeveloperTraceEvent(id: "selected.warning",
+                                    track: .console,
+                                    sampleIndex: 20,
+                                    severity: .warning,
+                                    scope: .console,
+                                    title: "Selected warning",
+                                    primarySignal: "Selected",
+                                    evidence: [],
+                                    recommendation: "Selected",
+                                    target: target),
+            ],
+            renderPasses: [],
+            issues: []
+        )
+
+        let context = makeDeveloperTraceSampleContext(trace: trace,
+                                                      sampleIndex: 20)
+
+        #expect(context?.previous?.sampleIndex == 10)
+        #expect(context?.previous?.workMs == 10)
+        #expect(context?.previous?.workDeltaFromSelectedMs == -30)
+        #expect(context?.previous?.eventCount == 1)
+        #expect(context?.previous?.highestSeverity == .warning)
+        #expect(context?.selected.sampleIndex == 20)
+        #expect(context?.selected.workMs == 40)
+        #expect(context?.selected.workDeltaFromSelectedMs == 0)
+        #expect(context?.selected.eventCount == 2)
+        #expect(context?.selected.highestSeverity == .critical)
+        #expect(context?.next?.sampleIndex == 30)
+        #expect(context?.next?.workMs == 25)
+        #expect(context?.next?.eventCount == 0)
+        #expect(context?.next?.highestSeverity == .nominal)
+        #expect(makeDeveloperTraceSampleContext(trace: trace,
+                                               sampleIndex: 999) == nil)
+    }
+
     private func particleSample(index: UInt64,
                                 live: Int,
                                 limit: Int,

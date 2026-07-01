@@ -384,11 +384,22 @@ struct RenderExtractionTests {
 
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -4)), for: entity)
+        let ruleAppearance = ParticleSubEmitter(trigger: .death,
+                                                burstCount: 1,
+                                                startSize: 0.75,
+                                                endSize: 0.15,
+                                                startColor: SIMD4<Float>(0.2, 0.4, 0.6, 1),
+                                                endColor: SIMD4<Float>(0.8, 0.6, 0.4, 0))
         var emitter = ParticleEmitter(isEmitting: false,
                                       simulationSpeed: 1.75,
                                       emissionRate: 0,
                                       maxParticles: 8,
                                       lifetime: 10,
+                                      subEmitterStartSize: 0.5,
+                                      subEmitterEndSize: 0.1,
+                                      subEmitterStartColor: SIMD4<Float>(0, 1, 0, 1),
+                                      subEmitterEndColor: SIMD4<Float>(0, 1, 1, 0),
+                                      subEmitters: [ruleAppearance],
                                       spawnRadius: 0,
                                       startVelocity: SIMD3<Float>(1, 2, 3),
                                       gravity: SIMD3<Float>(0, -4, 0),
@@ -412,6 +423,12 @@ struct RenderExtractionTests {
                                       collisionPlaneY: -1,
                                       collisionRestitution: 0.7,
                                       collisionDamping: 0.2,
+                                      startSize: 0.25,
+                                      endSize: 2,
+                                      sizeCurve: .easeIn,
+                                      startColor: SIMD4<Float>(1, 0, 0, 0.25),
+                                      endColor: SIMD4<Float>(0, 0, 1, 1),
+                                      colorCurve: .easeOut,
                                       sortMode: .oldestFirst,
                                       renderSortPriority: 9,
                                       renderAlignment: .velocity,
@@ -470,6 +487,27 @@ struct RenderExtractionTests {
         #expect(batch.textureSheetPlaybackMode == .loop)
         #expect(batch.textureSheetStartFrame == 3)
         #expect(batch.textureSheetFrameRandomness == 2)
+        #expect(batch.startSize == 0.25)
+        #expect(batch.endSize == 2)
+        #expect(batch.sizeCurve == .easeIn)
+        #expect(batch.startColor == SIMD4<Float>(1, 0, 0, 0.25))
+        #expect(batch.endColor == SIMD4<Float>(0, 0, 1, 1))
+        #expect(batch.colorCurve == .easeOut)
+        #expect(batch.usesAuthoredAppearance)
+        #expect(batch.appearancePalette == [
+            RenderParticleAppearance(startSize: 0.25,
+                                     endSize: 2,
+                                     startColor: SIMD4<Float>(1, 0, 0, 0.25),
+                                     endColor: SIMD4<Float>(0, 0, 1, 1)),
+            RenderParticleAppearance(startSize: 0.5,
+                                     endSize: 0.1,
+                                     startColor: SIMD4<Float>(0, 1, 0, 1),
+                                     endColor: SIMD4<Float>(0, 1, 1, 0)),
+            RenderParticleAppearance(startSize: 0.75,
+                                     endSize: 0.15,
+                                     startColor: SIMD4<Float>(0.2, 0.4, 0.6, 1),
+                                     endColor: SIMD4<Float>(0.8, 0.6, 0.4, 0)),
+        ])
         #expect(batch.renderAlignment == .velocity)
         #expect(batch.velocityStretchScale == 0.25)
         #expect(batch.velocityStretchMax == 3)
@@ -586,6 +624,46 @@ struct RenderExtractionTests {
         #expect(batch.particles.count == 1)
         #expect(batch.spawnParticles.count == 2)
         #expect(batch.particleCount == 3)
+        #expect(batch.renderOnGPU)
+        #expect(extracted.scene.particles.isEmpty)
+    }
+
+    @Test("renderExtract keeps distance emission spawn requests on the GPU simulation path")
+    func renderExtractKeepsDistanceEmissionSpawnRequestsOnGPUPath() throws {
+        var runtime = SceneRuntime()
+
+        let camera = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+        _ = runtime.setComponent(CameraComponent(isActive: true), for: camera)
+
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 0, -4)), for: entity)
+        let emitter = ParticleEmitter(emissionRate: 0,
+                                      distanceEmissionRate: 4,
+                                      maxParticles: 8,
+                                      lifetime: 10,
+                                      spawnRadius: 0,
+                                      startVelocity: .zero,
+                                      gravity: .zero,
+                                      simulationBackend: .gpuIfSupported)
+        _ = runtime.setComponent(emitter, for: entity)
+
+        _ = runtime.tick(deltaTime: 0.01)
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(1, 0, -4)), for: entity)
+        _ = runtime.tick(deltaTime: 1)
+
+        let extracted = try #require(runtime.extractedRenderScene)
+        let simulated = try #require(runtime.component(ParticleEmitter.self, for: entity))
+        let batch = try #require(extracted.scene.particleSimulationBatches.first)
+
+        #expect(simulated.aliveCount == 4)
+        #expect(simulated.lastFrameStats.distanceSpawnedCount == 4)
+        #expect(batch.emitterEntity == entity)
+        #expect(batch.plan.usesGPU)
+        #expect(batch.plan.unsupportedReasons.isEmpty)
+        #expect(batch.particles.isEmpty)
+        #expect(batch.spawnParticles.count == 4)
+        #expect(batch.particleCount == 4)
         #expect(batch.renderOnGPU)
         #expect(extracted.scene.particles.isEmpty)
     }
@@ -826,6 +904,46 @@ struct RenderExtractionTests {
 
         #expect(extracted.scene.particles.count == 1)
         #expect(isClose(extracted.scene.particles[0].position.x, 0))
+    }
+
+    @Test("renderExtract keeps GPU emitters visible when automatic bounds include keyframe size overshoot")
+    func renderExtractKeepsGPUEmitterVisibleWithKeyframeSizedAutomaticBounds() throws {
+        var runtime = SceneRuntime()
+
+        let camera = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: camera)
+        _ = runtime.setComponent(CameraComponent(target: SIMD3<Float>(0, 0, -1), isActive: true), for: camera)
+
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(8, 0, -10)), for: entity)
+        var emitter = ParticleEmitter(isEmitting: false,
+                                      emissionRate: 0,
+                                      maxParticles: 4,
+                                      lifetime: 1,
+                                      spawnRadius: 0,
+                                      startVelocity: .zero,
+                                      gravity: .zero,
+                                      simulationBackend: .gpuIfSupported,
+                                      startSize: 1,
+                                      endSize: 2,
+                                      sizeCurve: .keyframes([
+                                        ParticleCurveKeyframe(time: 0, value: 0),
+                                        ParticleCurveKeyframe(time: 0.5, value: 40),
+                                        ParticleCurveKeyframe(time: 1, value: 1),
+                                      ]),
+                                      renderBoundsMode: .automatic)
+        emitter.emit(1)
+        _ = runtime.setComponent(emitter, for: entity)
+
+        _ = runtime.tick()
+        let extracted = try #require(runtime.extractedRenderScene)
+        let batch = try #require(extracted.scene.particleSimulationBatches.first)
+
+        #expect(extracted.scene.particleSimulationBatches.count == 1)
+        #expect(batch.emitterEntity == entity)
+        #expect(batch.renderOnGPU)
+        #expect(extracted.scene.particleSummary.gpuRenderInstanceCount == 1)
+        #expect(extracted.scene.particles.isEmpty)
     }
 
     @Test("renderExtract keeps legacy emitters uncullable when render bounds are disabled")

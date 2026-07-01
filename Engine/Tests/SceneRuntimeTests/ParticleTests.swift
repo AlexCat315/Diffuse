@@ -1058,8 +1058,8 @@ struct ParticleTests {
         #expect(emitter.lastFrameSpawnedParticles.count == 2)
     }
 
-    @Test("GPU fallback keeps CPU-owned event sub-emitter spawning")
-    func gpuFallbackKeepsCPUOwnedEventSubEmitterSpawning() {
+    @Test("CPU backend keeps CPU-owned event sub-emitter spawning")
+    func cpuBackendKeepsCPUOwnedEventSubEmitterSpawning() {
         var emitter = ParticleEmitter(isEmitting: false,
                                       emissionRate: 0,
                                       distanceEmissionRate: 1,
@@ -1072,8 +1072,8 @@ struct ParticleTests {
                                       subEmitterStartVelocity: .zero,
                                       subEmitterVelocityRandomness: .zero,
                                       gravity: .zero,
-                                      simulationBackend: .gpuIfSupported)
-        #expect(emitter.gpuSimulationPlan.status == .fallbackToCPU)
+                                      simulationBackend: .cpu)
+        #expect(emitter.gpuSimulationPlan.status == .disabled)
         #expect(!emitter.gpuSimulationPlan.usesGPU)
 
         emitter.emit(1)
@@ -1249,15 +1249,15 @@ struct ParticleTests {
         #expect(clampedPlan.workgroupSize == ParticleGPUSimulationPlan.maximumWorkgroupSize)
         #expect(clampedPlan.dispatchWorkgroups == 3)
 
-        let fallback = ParticleEmitter(emissionRate: 0,
-                                       distanceEmissionRate: 2,
-                                       maxParticles: 64,
-                                       lifetime: 10,
-                                       simulationBackend: .gpuIfSupported)
-        let fallbackPlan = fallback.gpuSimulationPlan
-        #expect(fallbackPlan.status == .fallbackToCPU)
-        #expect(!fallbackPlan.usesGPU)
-        #expect(fallbackPlan.unsupportedReasons == [.distanceEmission])
+        let distanceEmission = ParticleEmitter(emissionRate: 0,
+                                               distanceEmissionRate: 2,
+                                               maxParticles: 64,
+                                               lifetime: 10,
+                                               simulationBackend: .gpuIfSupported)
+        let distanceEmissionPlan = distanceEmission.gpuSimulationPlan
+        #expect(distanceEmissionPlan.status == .supported)
+        #expect(distanceEmissionPlan.usesGPU)
+        #expect(distanceEmissionPlan.unsupportedReasons.isEmpty)
 
         let complexFallback = ParticleEmitter(emissionRate: 10,
                                               maxParticles: 64,
@@ -1617,6 +1617,17 @@ struct ParticleTests {
         ])
         #expect(abs(curve.evaluate(at: 0.25) - 0.5) < 1e-4)
         #expect(abs(curve.evaluate(at: 0.75) - 0.5) < 1e-4)
+        let range = curve.conservativeValueRange()
+        #expect(range.min == 0)
+        #expect(range.max == 1)
+
+        let overshootRange = ParticleCurve.keyframes([
+            ParticleCurveKeyframe(time: 0, value: -0.5),
+            ParticleCurveKeyframe(time: 0.5, value: 3),
+            ParticleCurveKeyframe(time: 1, value: 0.25),
+        ]).conservativeValueRange()
+        #expect(overshootRange.min == -0.5)
+        #expect(overshootRange.max == 3)
     }
 
     @Test("emission rate curve modulates continuous spawn rate over emitter duration")
@@ -1845,6 +1856,31 @@ struct ParticleTests {
 
         #expect(estimated > 6.4)
         #expect(abs(emitter.effectiveRenderBoundsRadius() - estimated) < 0.0001)
+    }
+
+    @Test("automatic render bounds estimate includes size curve keyframe overshoot")
+    func automaticRenderBoundsEstimateIncludesSizeCurveOvershoot() {
+        let baseline = ParticleEmitter(lifetime: 1,
+                                       spawnRadius: 0,
+                                       startVelocity: .zero,
+                                       gravity: .zero,
+                                       startSize: 1,
+                                       endSize: 2,
+                                       renderBoundsMode: .automatic)
+        let oversized = ParticleEmitter(lifetime: 1,
+                                        spawnRadius: 0,
+                                        startVelocity: .zero,
+                                        gravity: .zero,
+                                        startSize: 1,
+                                        endSize: 2,
+                                        sizeCurve: .keyframes([
+                                            ParticleCurveKeyframe(time: 0, value: 0),
+                                            ParticleCurveKeyframe(time: 0.5, value: 40),
+                                            ParticleCurveKeyframe(time: 1, value: 1),
+                                        ]),
+                                        renderBoundsMode: .automatic)
+
+        #expect(oversized.estimatedRenderBoundsRadius() > baseline.estimatedRenderBoundsRadius() * 10)
     }
 
     @Test("manual render bounds preserve legacy radius behavior")
@@ -2102,7 +2138,8 @@ struct ParticleTests {
                                           capacityLimitedSpawnCount: 3)
         let aggregate = ParticleFrameStatsResource(emitterStats: [a, b],
                                                    emitterStatsByEntity: [11: a, 22: b])
-        let eventReport = ParticleSimulationEventApplyReport(requestedSpawnCount: 9,
+        let eventReport = ParticleSimulationEventApplyReport(gpuDroppedSpawnCount: 4,
+                                                             requestedSpawnCount: 9,
                                                              spawnBudgetLimit: 10,
                                                              spawnBudgetConsumedCount: 6,
                                                              capacityLimitedSpawnCount: 2,
@@ -2129,7 +2166,7 @@ struct ParticleTests {
         #expect(aggregate.droppedSpawnCount == 9)
         #expect(aggregate.runtimePressureLevel == .critical)
         #expect(aggregate.emitterStats(for: 11)?.liveParticleBudgetLimit == 50)
-        #expect(eventReport.droppedSpawnCount == 5)
+        #expect(eventReport.droppedSpawnCount == 9)
         #expect(abs(eventReport.spawnBudgetUtilization - 0.6) < 0.0001)
     }
 
