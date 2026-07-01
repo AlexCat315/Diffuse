@@ -305,14 +305,15 @@ public struct ParticleScalabilityPolicyResource: Sendable, Equatable {
         if stats.capacityLimitedSpawnCount > 0 {
             return (1, .capacityLimited)
         }
-        if stats.spawnBudgetLimitedCount > 0 {
+        if stats.spawnBudgetLimitedCount > 0 || stats.gpuDroppedSpawnCount > 0 {
             return (1, .spawnBudget)
         }
 
         var pressure: Float = 0
         var reason: ParticleScalabilityPressureReason = .none
-        if targetLiveParticles > 0, stats.liveParticleCount > targetLiveParticles {
-            pressure = max(pressure, Float(stats.liveParticleCount - targetLiveParticles)
+        let liveParticleCount = max(stats.liveParticleCount, stats.gpuAliveParticleCount)
+        if targetLiveParticles > 0, liveParticleCount > targetLiveParticles {
+            pressure = max(pressure, Float(liveParticleCount - targetLiveParticles)
                            / Float(targetLiveParticles))
             reason = .liveBudget
         }
@@ -440,11 +441,23 @@ public struct ParticleFrameStatsResource: Sendable, Equatable {
     public var spawnBudgetConsumedCount: Int
     public var capacityLimitedSpawnCount: Int
     public var spawnBudgetLimitedCount: Int
+    public var gpuAliveParticleCount: Int
+    public var gpuExpiredParticleCount: Int
+    public var gpuCollisionEventCount: Int
+    public var gpuSpawnedParticleCount: Int
+    public var gpuDroppedSpawnCount: Int
+    public var gpuCompactedParticleCount: Int
     public var runtimePressureLevel: ParticleRuntimePressureLevel
 
     public init(simulatedDeltaTime: Float = 0,
                 emitterStats: [ParticleEmitterFrameStats] = [],
-                emitterStatsByEntity: [UInt64: ParticleEmitterFrameStats] = [:]) {
+                emitterStatsByEntity: [UInt64: ParticleEmitterFrameStats] = [:],
+                gpuAliveParticleCount: Int = 0,
+                gpuExpiredParticleCount: Int = 0,
+                gpuCollisionEventCount: Int = 0,
+                gpuSpawnedParticleCount: Int = 0,
+                gpuDroppedSpawnCount: Int = 0,
+                gpuCompactedParticleCount: Int = 0) {
         self.simulatedDeltaTime = max(0, simulatedDeltaTime)
         self.emitterStatsByEntity = emitterStatsByEntity
         self.emitterCount = emitterStats.count
@@ -467,9 +480,21 @@ public struct ParticleFrameStatsResource: Sendable, Equatable {
         self.spawnBudgetConsumedCount = emitterStats.reduce(0) { $0 + $1.spawnBudgetConsumedCount }
         self.capacityLimitedSpawnCount = emitterStats.reduce(0) { $0 + $1.capacityLimitedSpawnCount }
         self.spawnBudgetLimitedCount = emitterStats.reduce(0) { $0 + $1.spawnBudgetLimitedCount }
-        self.runtimePressureLevel = emitterStats.reduce(.idle) {
+        self.gpuAliveParticleCount = max(0, gpuAliveParticleCount)
+        self.gpuExpiredParticleCount = max(0, gpuExpiredParticleCount)
+        self.gpuCollisionEventCount = max(0, gpuCollisionEventCount)
+        self.gpuSpawnedParticleCount = max(0, gpuSpawnedParticleCount)
+        self.gpuDroppedSpawnCount = max(0, gpuDroppedSpawnCount)
+        self.gpuCompactedParticleCount = max(0, gpuCompactedParticleCount)
+        let emitterPressure = emitterStats.reduce(.idle) {
             dominantParticleRuntimePressureLevel($0, $1.runtimePressureLevel)
         }
+        self.runtimePressureLevel = dominantParticleRuntimePressureLevel(
+            emitterPressure,
+            Self.gpuRuntimePressureLevel(gpuAliveParticleCount: self.gpuAliveParticleCount,
+                                         gpuDroppedSpawnCount: self.gpuDroppedSpawnCount,
+                                         liveParticleBudgetLimit: self.liveParticleBudgetLimit)
+        )
     }
 
     public static let empty = ParticleFrameStatsResource()
@@ -484,12 +509,49 @@ public struct ParticleFrameStatsResource: Sendable, Equatable {
     }
 
     public var droppedSpawnCount: Int {
-        capacityLimitedSpawnCount + spawnBudgetLimitedCount
+        capacityLimitedSpawnCount + spawnBudgetLimitedCount + gpuDroppedSpawnCount
     }
 
     public var spawnBudgetUtilization: Float {
         guard spawnBudgetLimit > 0 else { return 0 }
         return Float(min(spawnBudgetConsumedCount, spawnBudgetLimit)) / Float(spawnBudgetLimit)
+    }
+
+    public func mergingGPUReadback(_ report: ParticleSimulationEventApplyReport) -> ParticleFrameStatsResource {
+        var stats = self
+        stats.gpuAliveParticleCount = report.gpuAliveParticleCount
+        stats.gpuExpiredParticleCount = report.gpuExpiredParticleCount
+        stats.gpuCollisionEventCount = report.gpuCollisionEventCount
+        stats.gpuSpawnedParticleCount = report.gpuSpawnedParticleCount
+        stats.gpuDroppedSpawnCount = report.gpuDroppedSpawnCount
+        stats.gpuCompactedParticleCount = report.gpuCompactedParticleCount
+        stats.runtimePressureLevel = dominantParticleRuntimePressureLevel(
+            stats.runtimePressureLevel,
+            Self.gpuRuntimePressureLevel(gpuAliveParticleCount: stats.gpuAliveParticleCount,
+                                         gpuDroppedSpawnCount: stats.gpuDroppedSpawnCount,
+                                         liveParticleBudgetLimit: stats.liveParticleBudgetLimit)
+        )
+        return stats
+    }
+
+    private static func gpuRuntimePressureLevel(gpuAliveParticleCount: Int,
+                                                gpuDroppedSpawnCount: Int,
+                                                liveParticleBudgetLimit: Int)
+        -> ParticleRuntimePressureLevel {
+        if gpuDroppedSpawnCount > 0 {
+            return .critical
+        }
+        if liveParticleBudgetLimit > 0, gpuAliveParticleCount >= liveParticleBudgetLimit {
+            return .critical
+        }
+        if liveParticleBudgetLimit > 0,
+           Float(gpuAliveParticleCount) / Float(liveParticleBudgetLimit) >= 0.9 {
+            return .warning
+        }
+        if gpuAliveParticleCount > 0 {
+            return .nominal
+        }
+        return .idle
     }
 
 }
