@@ -107,9 +107,17 @@ struct EditorViewportResolutionTests {
 
         controller.begin(.camera(.orbit, button: .left), at: (0, 0), modifiers: [])
         #expect(controller.isContinuousSceneInteractionActive)
+        controller.pressedScancodes = [26]
+        #expect(!controller.hasFreelookMovementInput)
 
         controller.begin(.gizmo(button: .left), at: (0, 0), modifiers: [])
         #expect(controller.isContinuousSceneInteractionActive)
+
+        controller.begin(.camera(.freelook, button: .right), at: (0, 0), modifiers: [])
+        #expect(controller.isContinuousSceneInteractionActive)
+        #expect(controller.hasFreelookMovementInput)
+        controller.pressedScancodes = [44]
+        #expect(!controller.hasFreelookMovementInput)
 
         controller.begin(.pendingClick(button: .left), at: (0, 0), modifiers: [])
         #expect(!controller.isContinuousSceneInteractionActive)

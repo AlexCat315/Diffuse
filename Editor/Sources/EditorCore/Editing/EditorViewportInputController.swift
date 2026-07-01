@@ -59,6 +59,20 @@ public final class EditorViewportInputController: @unchecked Sendable {
         }
     }
 
+    public var hasFreelookMovementInput: Bool {
+        activeCameraDrag == .freelook
+            && !pressedScancodes.isDisjoint(with: Self.freelookMovementScancodes)
+    }
+
+    private static let freelookMovementScancodes: Set<UInt32> = [
+        4,  // A
+        7,  // D
+        8,  // E
+        20, // Q
+        22, // S
+        26, // W
+    ]
+
     public func begin(_ interaction: ActiveInteraction,
                       at point: (x: Float, y: Float),
                       modifiers: KeyModifiers) {
