@@ -153,7 +153,13 @@ struct SimulationThreadTests {
                     generation: 0,
                     appearanceIndex: 0
                 ),
-            ]
+            ],
+            aliveParticleCount: 4,
+            expiredParticleCount: 1,
+            collisionEventCount: 0,
+            gpuSpawnedParticleCount: 2,
+            gpuDroppedSpawnCount: 1,
+            compactedParticleCount: 4
         )
 
         thread.submitParticleSimulationEventSnapshots([snapshot])
@@ -179,6 +185,13 @@ struct SimulationThreadTests {
         #expect(report?.droppedReadbackEventCount == 2)
         #expect(report?.deathEventCount == 1)
         #expect(report?.subEmitterSpawnedCount == 1)
+        #expect(report?.gpuAliveParticleCount == 4)
+        #expect(report?.gpuExpiredParticleCount == 1)
+        #expect(report?.gpuCollisionEventCount == 0)
+        #expect(report?.gpuSpawnedParticleCount == 2)
+        #expect(report?.gpuDroppedSpawnCount == 1)
+        #expect(report?.gpuCompactedParticleCount == 4)
+        #expect(report?.droppedSpawnCount == 1)
 
         guard let packet = ring.consumeLatest() else {
             Issue.record("expected a render packet from the simulation thread")
@@ -215,7 +228,13 @@ struct SimulationThreadTests {
             eventCapacity: 0,
             totalEventCount: 5,
             droppedEventCount: 5,
-            records: []
+            records: [],
+            aliveParticleCount: 7,
+            expiredParticleCount: 3,
+            collisionEventCount: 2,
+            gpuSpawnedParticleCount: 4,
+            gpuDroppedSpawnCount: 6,
+            compactedParticleCount: 7
         )
 
         thread.submitParticleSimulationEventSnapshots([snapshot])
@@ -227,6 +246,13 @@ struct SimulationThreadTests {
         #expect(report?.appliedEventCount == 0)
         #expect(report?.totalReadbackEventCount == 5)
         #expect(report?.droppedReadbackEventCount == 5)
+        #expect(report?.gpuAliveParticleCount == 7)
+        #expect(report?.gpuExpiredParticleCount == 3)
+        #expect(report?.gpuCollisionEventCount == 2)
+        #expect(report?.gpuSpawnedParticleCount == 4)
+        #expect(report?.gpuDroppedSpawnCount == 6)
+        #expect(report?.gpuCompactedParticleCount == 7)
+        #expect(report?.droppedSpawnCount == 6)
 
         thread.shutdown()
     }

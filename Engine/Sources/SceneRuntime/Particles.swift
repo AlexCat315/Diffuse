@@ -119,9 +119,6 @@ public struct ParticleGPUSimulationPlan: Sendable, Equatable {
         if particleCapacity == 0 {
             reasons.append(.noParticleCapacity)
         }
-        if emitter.distanceEmissionRate > 0 {
-            reasons.append(.distanceEmission)
-        }
         self.unsupportedReasons = reasons
 
         if emitter.simulationBackend == .cpu {
@@ -510,6 +507,12 @@ public struct ParticleSimulationEventApplyReport: Sendable, Equatable {
     public var deathEventCount: Int
     public var subEmitterSpawnedCount: Int
     public var spawnedParticleCount: Int
+    public var gpuAliveParticleCount: Int
+    public var gpuExpiredParticleCount: Int
+    public var gpuCollisionEventCount: Int
+    public var gpuSpawnedParticleCount: Int
+    public var gpuDroppedSpawnCount: Int
+    public var gpuCompactedParticleCount: Int
     public var requestedSpawnCount: Int
     public var spawnBudgetLimit: Int
     public var spawnBudgetConsumedCount: Int
@@ -529,6 +532,12 @@ public struct ParticleSimulationEventApplyReport: Sendable, Equatable {
                 deathEventCount: Int = 0,
                 subEmitterSpawnedCount: Int = 0,
                 spawnedParticleCount: Int = 0,
+                gpuAliveParticleCount: Int = 0,
+                gpuExpiredParticleCount: Int = 0,
+                gpuCollisionEventCount: Int = 0,
+                gpuSpawnedParticleCount: Int = 0,
+                gpuDroppedSpawnCount: Int = 0,
+                gpuCompactedParticleCount: Int = 0,
                 requestedSpawnCount: Int = 0,
                 spawnBudgetLimit: Int = 0,
                 spawnBudgetConsumedCount: Int = 0,
@@ -547,6 +556,12 @@ public struct ParticleSimulationEventApplyReport: Sendable, Equatable {
         self.deathEventCount = max(0, deathEventCount)
         self.subEmitterSpawnedCount = max(0, subEmitterSpawnedCount)
         self.spawnedParticleCount = max(0, spawnedParticleCount)
+        self.gpuAliveParticleCount = max(0, gpuAliveParticleCount)
+        self.gpuExpiredParticleCount = max(0, gpuExpiredParticleCount)
+        self.gpuCollisionEventCount = max(0, gpuCollisionEventCount)
+        self.gpuSpawnedParticleCount = max(0, gpuSpawnedParticleCount)
+        self.gpuDroppedSpawnCount = max(0, gpuDroppedSpawnCount)
+        self.gpuCompactedParticleCount = max(0, gpuCompactedParticleCount)
         self.requestedSpawnCount = max(0, requestedSpawnCount)
         self.spawnBudgetLimit = max(0, spawnBudgetLimit)
         self.spawnBudgetConsumedCount = max(0, spawnBudgetConsumedCount)
@@ -562,7 +577,7 @@ public struct ParticleSimulationEventApplyReport: Sendable, Equatable {
     }
 
     public var droppedSpawnCount: Int {
-        capacityLimitedSpawnCount + spawnBudgetLimitedCount
+        capacityLimitedSpawnCount + spawnBudgetLimitedCount + gpuDroppedSpawnCount
     }
 
     public var spawnBudgetUtilization: Float {
@@ -690,6 +705,24 @@ public enum ParticleCurve: RawRepresentable, CaseIterable, Codable, Sendable, Eq
             return 1 - 2 * inverse * inverse
         case .keyframes(let keyframes):
             return Self.evaluateKeyframes(keyframes, at: x)
+        }
+    }
+
+    public func conservativeValueRange() -> (min: Float, max: Float) {
+        switch self {
+        case .constant(let value):
+            return (value, value)
+        case .linear, .easeIn, .easeOut, .easeInOut:
+            return (0, 1)
+        case .keyframes(let keyframes):
+            guard !keyframes.isEmpty else { return (0, 1) }
+            var minimum = keyframes[0].value
+            var maximum = keyframes[0].value
+            for keyframe in keyframes.dropFirst() {
+                minimum = min(minimum, keyframe.value)
+                maximum = max(maximum, keyframe.value)
+            }
+            return (minimum, maximum)
         }
     }
 
@@ -1445,9 +1478,12 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
     }
 
     private func estimatedBillboardRadius(velocityMagnitude: Float) -> Float {
-        var size = max(startSize, endSize, subEmitterStartSize, subEmitterEndSize)
+        var size = estimatedMaximumParticleSize(startSize: startSize, endSize: endSize)
+        size = max(size, estimatedMaximumParticleSize(startSize: subEmitterStartSize,
+                                                      endSize: subEmitterEndSize))
         for rule in subEmitters {
-            size = max(size, rule.startSize, rule.endSize)
+            size = max(size, estimatedMaximumParticleSize(startSize: rule.startSize,
+                                                          endSize: rule.endSize))
         }
         let sizeScale = max(0, 1 + sizeRandomness)
         let stretch = renderAlignment == .velocity
@@ -1456,6 +1492,14 @@ public struct ParticleEmitter: RuntimeComponent, Sendable, Equatable {
         let billboardRadius = max(0, size) * sizeScale * max(1, stretch) * 0.70710678
         let trailRadius = trailLength > 0 ? velocityMagnitude * trailLength : 0
         return billboardRadius + trailRadius
+    }
+
+    private func estimatedMaximumParticleSize(startSize: Float, endSize: Float) -> Float {
+        let range = sizeCurve.conservativeValueRange()
+        let delta = endSize - startSize
+        return max(0,
+                   startSize + delta * range.min,
+                   startSize + delta * range.max)
     }
 
     /// Number of currently-alive particles.

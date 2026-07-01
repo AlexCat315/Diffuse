@@ -46,19 +46,37 @@ public struct GPUParticleSimulationEventSnapshot: Sendable, Equatable {
     public var totalEventCount: Int
     public var droppedEventCount: Int
     public var records: [GPUParticleSimulationEventRecord]
+    public var aliveParticleCount: Int
+    public var expiredParticleCount: Int
+    public var collisionEventCount: Int
+    public var gpuSpawnedParticleCount: Int
+    public var gpuDroppedSpawnCount: Int
+    public var compactedParticleCount: Int
 
     public init(slot: Int,
                 emitterRawValue: UInt64?,
                 eventCapacity: Int,
                 totalEventCount: Int,
                 droppedEventCount: Int,
-                records: [GPUParticleSimulationEventRecord]) {
+                records: [GPUParticleSimulationEventRecord],
+                aliveParticleCount: Int = 0,
+                expiredParticleCount: Int = 0,
+                collisionEventCount: Int = 0,
+                gpuSpawnedParticleCount: Int = 0,
+                gpuDroppedSpawnCount: Int = 0,
+                compactedParticleCount: Int = 0) {
         self.slot = max(0, slot)
         self.emitterRawValue = emitterRawValue
         self.eventCapacity = max(0, eventCapacity)
         self.totalEventCount = max(0, totalEventCount)
         self.droppedEventCount = max(0, droppedEventCount)
         self.records = records
+        self.aliveParticleCount = max(0, aliveParticleCount)
+        self.expiredParticleCount = max(0, expiredParticleCount)
+        self.collisionEventCount = max(0, collisionEventCount)
+        self.gpuSpawnedParticleCount = max(0, gpuSpawnedParticleCount)
+        self.gpuDroppedSpawnCount = max(0, gpuDroppedSpawnCount)
+        self.compactedParticleCount = max(0, compactedParticleCount)
     }
 }
 
