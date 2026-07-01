@@ -2,7 +2,7 @@ name: GuavaEngine CI
 
 on:
   push:
-    branches: [main, next]
+    branches: [main]
     paths:
       - 'Engine/**'
       - '.github/workflows/ci-engine.yml'
