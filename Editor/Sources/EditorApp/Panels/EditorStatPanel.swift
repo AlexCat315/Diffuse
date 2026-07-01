@@ -8,10 +8,11 @@ import SceneRuntime
 struct DeveloperToolsPanel: View {
     let app: EditorApplication
 
-    @State private var selectedTab: DeveloperToolTab = .trace
+    @State private var selectedTab: DeveloperToolTab = .profiler
     @State private var selectedFrameSampleIndex: UInt64?
     @State private var selectedTraceEventID: String?
     @State private var selectedTraceSampleIndex: UInt64?
+    @State private var selectedPerformanceMonitorSampleIndex: UInt64?
     @State private var traceMode: DeveloperTraceMode = .live
     @State private var capturedTrace: DeveloperTraceSnapshot?
     @State private var baselineTrace: DeveloperTraceSnapshot?
@@ -19,16 +20,22 @@ struct DeveloperToolsPanel: View {
     @State private var traceTrackFilter: DeveloperTraceTrack?
     @State private var traceSeverityFilter: DeveloperTraceSeverityFilter = .all
     @State private var traceEventSortOrder: DeveloperTraceEventSortOrder = .newest
+    @State private var selectedPerformanceMonitorIDs: Set<DeveloperPerformanceMonitorID> = DeveloperPerformanceMonitorID.defaultSelection
+    @State private var selectedMonitorTracks: Set<DeveloperTraceTrack> = Set(DeveloperTraceTrack.allCases)
 
     var body: some View {
         StoreScope(app.store) { store in
             let timingRevision = store.frameTimingRevision
             let frameStats = store.state.frameStats
             let frameStatsHistory = store.frameStatsHistory
-            let needsRenderSnapshot = selectedTab == .trace
+            let needsRenderSnapshot = selectedTab == .profiler
+                || selectedTab == .trace
+                || selectedTab == .monitors
                 || selectedTab == .render
                 || selectedTab == .particles
-            let needsParticleSnapshot = selectedTab == .trace
+            let needsParticleSnapshot = selectedTab == .profiler
+                || selectedTab == .trace
+                || selectedTab == .monitors
                 || selectedTab == .particles
             let renderStats: RenderFrameStats = needsRenderSnapshot
                 ? app.currentRenderStats()
@@ -89,9 +96,45 @@ struct DeveloperToolsPanel: View {
                 maxSamples: 180
             )
             let activeTrace = traceMode == .live ? liveTrace : (capturedTrace ?? liveTrace)
+            let performanceMonitors = makeDeveloperPerformanceMonitors(
+                frameStats: frameStats,
+                frameHistory: frameStatsHistory,
+                particleHistory: store.particleDiagnosticsHistory,
+                renderStats: renderStats,
+                consoleEntries: store.consoleEntries,
+                maxSamples: 180
+            )
 
             TabView(selection: $selectedTab, tabs: [
-                TabItem("Trace", id: DeveloperToolTab.trace) {
+                TabItem("Profiler", id: DeveloperToolTab.profiler) {
+                    DeveloperProfilerWorkbenchView(
+                        frameStats: frameStats,
+                        history: frameStatsHistory,
+                        renderStats: renderStats,
+                        particleHistory: store.particleDiagnosticsHistory,
+                        issues: diagnostics.filter { $0.target.tab == .frame || $0.target.tab == .render },
+                        selectedSampleIndex: $selectedFrameSampleIndex
+                    )
+                },
+                TabItem("Monitors", id: DeveloperToolTab.monitors) {
+                    DeveloperPerformanceMonitorsView(monitors: performanceMonitors,
+                                                     selectedMonitorIDs: $selectedPerformanceMonitorIDs,
+                                                     selectedSampleIndex: $selectedPerformanceMonitorSampleIndex)
+                },
+                TabItem("Render", id: DeveloperToolTab.render) {
+                    RenderFrameDebuggerView(frameStats: frameStats,
+                                            renderStats: renderStats,
+                                            issues: diagnostics.filter { $0.target.tab == .render })
+                },
+                TabItem("Particles", id: DeveloperToolTab.particles) {
+                    ParticleDiagnosticsTabView(app: app,
+                                               store: store)
+                },
+                TabItem("Debugger", id: DeveloperToolTab.debugger) {
+                    DeveloperDebuggerWorkbenchView(store: store,
+                                                   timingRevision: timingRevision)
+                },
+                TabItem("Legacy Trace", id: DeveloperToolTab.trace) {
                     DeveloperTraceWorkbenchView(
                         trace: activeTrace,
                         baselineTrace: baselineTrace,
@@ -116,36 +159,14 @@ struct DeveloperToolsPanel: View {
                             baselineTrace = activeTrace.withMode(activeTrace.mode)
                         },
                         onOpenTarget: { target in
-                            selectedTab = target.tab
+                            selectedTab = developerToolTabDestination(for: target.tab)
                             if let sampleIndex = target.frameSampleIndex {
                                 selectedFrameSampleIndex = sampleIndex
                                 selectedTraceSampleIndex = sampleIndex
+                                selectedPerformanceMonitorSampleIndex = sampleIndex
                             }
                         }
                     )
-                },
-                TabItem("Frame", id: DeveloperToolTab.frame) {
-                    FrameWorkbenchView(stats: frameStats,
-                                       history: frameStatsHistory,
-                                       timingRevision: timingRevision,
-                                       selectedSampleIndex: $selectedFrameSampleIndex,
-                                       issues: diagnostics.filter { $0.target.tab == .frame })
-                },
-                TabItem("Render", id: DeveloperToolTab.render) {
-                    RenderFrameDebuggerView(frameStats: frameStats,
-                                            renderStats: renderStats,
-                                            issues: diagnostics.filter { $0.target.tab == .render })
-                },
-                TabItem("State", id: DeveloperToolTab.state) {
-                    RuntimeDiagnosticsView(store: store,
-                                           timingRevision: timingRevision)
-                },
-                TabItem("Particles", id: DeveloperToolTab.particles) {
-                    ParticleDiagnosticsTabView(app: app,
-                                               store: store)
-                },
-                TabItem(L("Console"), id: DeveloperToolTab.console) {
-                    ConsoleDiagnosticsView(store: store)
                 },
             ])
             .frame(minHeight: 160)
@@ -154,12 +175,46 @@ struct DeveloperToolsPanel: View {
 }
 
 enum DeveloperToolTab: Hashable {
+    case profiler
     case trace
+    case monitors
     case frame
     case render
     case state
     case particles
     case console
+    case debugger
+}
+
+private func developerToolTabDestination(for target: DeveloperToolTab) -> DeveloperToolTab {
+    switch target {
+    case .frame:
+        return .profiler
+    case .console, .state:
+        return .debugger
+    default:
+        return target
+    }
+}
+
+private struct DeveloperDebuggerWorkbenchView: View {
+    let store: EditorStore
+    let timingRevision: UInt64
+
+    var body: some View {
+        Row(alignment: .top, spacing: 0) {
+            RuntimeDiagnosticsView(store: store,
+                                   timingRevision: timingRevision)
+                .flex(1, shrink: 1)
+
+            Divider(axis: .vertical)
+                .frame(width: 1)
+
+            ConsoleDiagnosticsView(store: store)
+                .flex(1.2, shrink: 1)
+        }
+        .background(.surface)
+    }
 }
 
 enum DeveloperDiagnosticSeverity: String, Equatable {
@@ -207,7 +262,7 @@ enum DeveloperTraceMode: String, Equatable {
     case captured = "Captured"
 }
 
-enum DeveloperTraceTrack: String, Equatable, CaseIterable {
+enum DeveloperTraceTrack: String, Equatable, Hashable, CaseIterable {
     case frame = "Frame"
     case cpu = "CPU"
     case gpuPresent = "GPU/Present"
@@ -309,6 +364,51 @@ struct DeveloperTraceSampleContext: Equatable {
     var previous: DeveloperTraceSampleContextRow?
     var selected: DeveloperTraceSampleContextRow
     var next: DeveloperTraceSampleContextRow?
+}
+
+private struct DeveloperTraceEventCellKey: Hashable {
+    var track: DeveloperTraceTrack
+    var sampleIndex: UInt64
+}
+
+struct DeveloperTraceEventIndex {
+    private var eventsByCell: [DeveloperTraceEventCellKey: [DeveloperTraceEvent]]
+    private var eventsBySample: [UInt64: [DeveloperTraceEvent]]
+
+    init(trace: DeveloperTraceSnapshot) {
+        var eventsByCell: [DeveloperTraceEventCellKey: [DeveloperTraceEvent]] = [:]
+        var eventsBySample: [UInt64: [DeveloperTraceEvent]] = [:]
+        for event in trace.events {
+            eventsByCell[DeveloperTraceEventCellKey(track: event.track,
+                                                    sampleIndex: event.sampleIndex),
+                         default: []].append(event)
+            eventsBySample[event.sampleIndex, default: []].append(event)
+        }
+        self.eventsByCell = eventsByCell
+        self.eventsBySample = eventsBySample
+    }
+
+    func events(track: DeveloperTraceTrack, sampleIndex: UInt64) -> [DeveloperTraceEvent] {
+        eventsByCell[DeveloperTraceEventCellKey(track: track, sampleIndex: sampleIndex)] ?? []
+    }
+
+    func events(sampleIndex: UInt64, excluding excludedEventID: String? = nil) -> [DeveloperTraceEvent] {
+        let events = eventsBySample[sampleIndex] ?? []
+        guard let excludedEventID else { return events }
+        return events.filter { $0.id != excludedEventID }
+    }
+}
+
+struct DeveloperMonitorSnapshot: Equatable {
+    var track: DeveloperTraceTrack
+    var title: String
+    var currentValue: Float?
+    var currentLabel: String
+    var rangeLabel: String
+    var sampleLabel: String
+    var limit: Float?
+    var isOverLimit: Bool
+    var values: [Float]
 }
 
 func makeDeveloperDiagnosticCounts(_ issues: [DeveloperDiagnosticIssue]) -> DeveloperDiagnosticCounts {
@@ -1029,13 +1129,6 @@ private func developerSelectedTraceSample(trace: DeveloperTraceSnapshot,
     return trace.samples.first { $0.sampleIndex == sampleIndex } ?? trace.samples.last
 }
 
-private func developerTraceEvents(trace: DeveloperTraceSnapshot,
-                                  track: DeveloperTraceTrack,
-                                  sampleIndex: UInt64) -> [DeveloperTraceEvent] {
-    trace.events.filter { $0.track == track && $0.sampleIndex == sampleIndex }
-        .sorted(by: developerTraceEventPrecedes)
-}
-
 func developerTraceSampleEvents(trace: DeveloperTraceSnapshot,
                                 sampleIndex: UInt64,
                                 excluding excludedEventID: String? = nil) -> [DeveloperTraceEvent] {
@@ -1581,6 +1674,42 @@ private func developerTraceMonitorSampleLabel(track: DeveloperTraceTrack,
     }
 }
 
+func makeDeveloperMonitorSnapshots(trace: DeveloperTraceSnapshot) -> [DeveloperMonitorSnapshot] {
+    DeveloperTraceTrack.allCases.map { track in
+        makeDeveloperMonitorSnapshot(track: track, trace: trace)
+    }
+}
+
+private func makeDeveloperMonitorSnapshot(track: DeveloperTraceTrack,
+                                          trace: DeveloperTraceSnapshot) -> DeveloperMonitorSnapshot {
+    let values = developerTraceMonitorSeries(track: track, trace: trace)
+    let current = developerMonitorCurrentValue(track: track, values: values)
+    let limit = developerTraceMonitorLimit(track)
+    return DeveloperMonitorSnapshot(
+        track: track,
+        title: developerTraceMonitorTitle(track),
+        currentValue: current,
+        currentLabel: developerTraceTrackLatestSignal(track: track,
+                                                      sample: trace.samples.last,
+                                                      trace: trace),
+        rangeLabel: developerTraceMonitorRangeLabel(values),
+        sampleLabel: developerTraceMonitorSampleLabel(track: track, trace: trace),
+        limit: limit,
+        isOverLimit: limit.map { threshold in current.map { $0 > threshold } ?? false } ?? false,
+        values: values
+    )
+}
+
+private func developerMonitorCurrentValue(track: DeveloperTraceTrack,
+                                          values: [Float]) -> Float? {
+    switch track {
+    case .renderPass:
+        return values.max()
+    default:
+        return values.last
+    }
+}
+
 private func developerTraceStatusText(summary: DeveloperTraceInvestigationSummary,
                                       trackFilter: DeveloperTraceTrack?,
                                       severityFilter: DeveloperTraceSeverityFilter,
@@ -1640,33 +1769,27 @@ private struct DeveloperTraceWorkbenchView: View {
         let selectedSample = developerSelectedTraceSample(trace: trace,
                                                          selectedSampleIndex: selectedSampleIndex.wrappedValue,
                                                          selectedEvent: selectedEvent)
+        let eventIndex = DeveloperTraceEventIndex(trace: trace)
         let visibleEvents = developerTraceVisibleEvents(trace: trace,
                                                        query: searchQuery.wrappedValue,
                                                        trackFilter: selectedTrackFilter.wrappedValue,
                                                        severityFilter: severityFilter.wrappedValue,
                                                        sortOrder: eventSortOrder.wrappedValue)
+        let summary = makeDeveloperTraceInvestigationSummary(events: visibleEvents)
         Column(alignment: .leading, spacing: 0) {
             DeveloperTraceToolbar(trace: trace,
                                   baselineTrace: baselineTrace,
+                                  summary: summary,
                                   searchQuery: searchQuery,
                                   onLive: onLive,
                                   onPause: onPause,
                                   onCapture: onCapture,
                                   onBaseline: onBaseline)
-                .padding(horizontal: 10, vertical: 4)
-
-            DeveloperTraceFilterBar(trace: trace,
-                                    visibleEvents: visibleEvents,
-                                    selectedEventID: selectedEventID,
-                                    selectedTrackFilter: selectedTrackFilter,
-                                    severityFilter: severityFilter,
-                                    eventSortOrder: eventSortOrder,
-                                    selectedSampleIndex: selectedSampleIndex)
-                .padding(horizontal: 10, vertical: 3)
+                .padding(horizontal: 12, vertical: 10)
 
             DeveloperTraceSelectionStrip(event: selectedEvent,
                                          sample: selectedSample,
-                                         trace: trace)
+                                         eventIndex: eventIndex)
                 .padding(horizontal: 12, vertical: 0)
 
             Divider()
@@ -1674,12 +1797,14 @@ private struct DeveloperTraceWorkbenchView: View {
             Row(alignment: .top, spacing: 0) {
                 DeveloperTraceNavigator(trace: trace,
                                         visibleEvents: visibleEvents,
+                                        summary: summary,
                                         selectedEventID: selectedEventID,
                                         searchQuery: searchQuery,
                                         selectedTrackFilter: selectedTrackFilter,
                                         severityFilter: severityFilter,
+                                        eventSortOrder: eventSortOrder,
                                         onOpenTarget: onOpenTarget)
-                    .frame(width: 230)
+                    .frame(width: 248)
 
                 Divider(axis: .vertical)
                     .frame(width: 1)
@@ -1688,15 +1813,16 @@ private struct DeveloperTraceWorkbenchView: View {
                     DeveloperTraceMonitorGrid(trace: trace,
                                               selectedTrackFilter: selectedTrackFilter,
                                               selectedSampleIndex: selectedSampleIndex)
-                        .frame(height: 292)
+                        .frame(height: 132)
 
                     Divider()
 
                     DeveloperTraceTimelineView(trace: trace,
+                                               eventIndex: eventIndex,
                                                selectedEventID: selectedEventID,
                                                selectedSampleIndex: selectedSampleIndex,
                                                selectedTrackFilter: selectedTrackFilter)
-                        .frame(height: 92)
+                        .frame(height: 128)
 
                     Divider()
 
@@ -1717,93 +1843,16 @@ private struct DeveloperTraceWorkbenchView: View {
                 DeveloperTracePropertiesInspector(event: selectedEvent,
                                                   sample: selectedSample,
                                                   trace: trace,
+                                                  eventIndex: eventIndex,
                                                   baselineTrace: baselineTrace,
                                                   selectedEventID: selectedEventID,
                                                   selectedSampleIndex: selectedSampleIndex,
                                                   onOpenTarget: onOpenTarget)
-                    .frame(width: 300)
+                    .frame(width: 312)
             }
             .flex(1, shrink: 1)
         }
         .background(.surface)
-    }
-}
-
-private struct DeveloperTraceFilterBar: View {
-    let trace: DeveloperTraceSnapshot
-    let visibleEvents: [DeveloperTraceEvent]
-    let selectedEventID: Binding<String?>
-    let selectedTrackFilter: Binding<DeveloperTraceTrack?>
-    let severityFilter: Binding<DeveloperTraceSeverityFilter>
-    let eventSortOrder: Binding<DeveloperTraceEventSortOrder>
-    let selectedSampleIndex: Binding<UInt64?>
-
-    var body: some View {
-        let summary = makeDeveloperTraceInvestigationSummary(events: visibleEvents)
-        ScrollView(.horizontal) {
-            Row(alignment: .center, spacing: 6) {
-                Text("Filter")
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
-
-                DeveloperTraceFilterChip(label: "All Tracks",
-                                         isSelected: selectedTrackFilter.wrappedValue == nil,
-                                         action: { selectedTrackFilter.wrappedValue = nil })
-                for track in DeveloperTraceTrack.allCases {
-                    DeveloperTraceFilterChip(
-                        label: developerTraceTrackIcon(track),
-                        detail: track.rawValue,
-                        isSelected: selectedTrackFilter.wrappedValue == track,
-                        action: { selectedTrackFilter.wrappedValue = track }
-                    )
-                }
-
-                Divider(axis: .vertical)
-                    .frame(width: 1, height: 20)
-
-                for filter in DeveloperTraceSeverityFilter.allCases {
-                    DeveloperTraceFilterChip(label: filter.rawValue,
-                                             isSelected: severityFilter.wrappedValue == filter,
-                                             action: { severityFilter.wrappedValue = filter })
-                }
-
-                Button(action: clearStructuredFilters) {
-                    Text("Clear")
-                        .font(.caption)
-                }
-                .buttonStyle(.ghost)
-
-                Button(action: { focus(summary.focusEventID) }) {
-                    Text("Focus")
-                        .font(.caption)
-                }
-                .buttonStyle(.ghost)
-
-                Text(developerTraceStatusText(summary: summary,
-                                              trackFilter: selectedTrackFilter.wrappedValue,
-                                              severityFilter: severityFilter.wrappedValue,
-                                              sortOrder: eventSortOrder.wrappedValue,
-                                              selectedSampleIndex: selectedSampleIndex.wrappedValue))
-                    .lineLimit(1)
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
-            }
-        }
-    }
-
-    private func clearStructuredFilters() {
-        selectedTrackFilter.wrappedValue = nil
-        severityFilter.wrappedValue = .all
-        eventSortOrder.wrappedValue = .newest
-    }
-
-    private func focus(_ eventID: String?) {
-        guard let eventID,
-              let event = visibleEvents.first(where: { $0.id == eventID }) else {
-            return
-        }
-        selectedEventID.wrappedValue = event.id
-        selectedSampleIndex.wrappedValue = event.sampleIndex
     }
 }
 
@@ -1814,20 +1863,24 @@ private struct DeveloperTraceFilterChip: View {
     let action: () -> Void
 
     var body: some View {
-        Button(isSelected: isSelected, action: action) {
+        Button(action: action) {
             Row(alignment: .center, spacing: 4) {
-                Text(label)
-                    .lineLimit(1)
-                    .font(.caption)
                 if let detail {
                     Text(detail)
                         .lineLimit(1)
-                        .font(.caption)
+                        .font(.mono)
+                        .foregroundColor(isSelected ? .accent : .onSurfaceMuted)
+                        .frame(width: 12)
                 }
+                Text(label)
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(isSelected ? .onSurface : .onSurfaceMuted)
             }
-            .padding(horizontal: 6, vertical: 2)
-            .background(isSelected ? .accent.opacity(0.14) : .surface)
-            .border(isSelected ? .accent : .divider, width: isSelected ? 1 : 0)
+            .padding(horizontal: 7, vertical: 3)
+            .background(isSelected ? .surfaceFloating : .surfaceSunken)
+            .cornerRadius(4)
+            .border(isSelected ? .accent : .divider, width: 1)
         }
         .buttonStyle(.plain)
     }
@@ -1836,7 +1889,7 @@ private struct DeveloperTraceFilterChip: View {
 private struct DeveloperTraceSelectionStrip: View {
     let event: DeveloperTraceEvent?
     let sample: DeveloperTraceSample?
-    let trace: DeveloperTraceSnapshot
+    let eventIndex: DeveloperTraceEventIndex
 
     var body: some View {
         Row(alignment: .center, spacing: 8) {
@@ -1862,8 +1915,7 @@ private struct DeveloperTraceSelectionStrip: View {
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
             } else if let sample {
-                let markerCount = developerTraceSampleEvents(trace: trace,
-                                                             sampleIndex: sample.sampleIndex).count
+                let markerCount = eventIndex.events(sampleIndex: sample.sampleIndex).count
                 Text("#\(sample.sampleIndex)")
                     .font(.mono)
                     .foregroundColor(.onSurface)
@@ -1892,6 +1944,7 @@ private struct DeveloperTraceSelectionStrip: View {
 private struct DeveloperTraceToolbar: View {
     let trace: DeveloperTraceSnapshot
     let baselineTrace: DeveloperTraceSnapshot?
+    let summary: DeveloperTraceInvestigationSummary
     let searchQuery: Binding<String>
     let onLive: () -> Void
     let onPause: () -> Void
@@ -1899,152 +1952,206 @@ private struct DeveloperTraceToolbar: View {
     let onBaseline: () -> Void
 
     var body: some View {
-        Row(alignment: .center, spacing: 8) {
-            Text("Trace")
-                .font(.bodyStrong)
-                .foregroundColor(.onSurface)
-            DeveloperSeverityBadge(severity: trace.events.first?.severity ?? .nominal,
-                                   text: trace.events.first?.severity.rawValue ?? "Nominal")
-            Text("\(trace.samples.count) frames")
-                .font(.caption)
-                .foregroundColor(.onSurfaceMuted)
+        Column(alignment: .leading, spacing: 8) {
+            Row(alignment: .center, spacing: 10) {
+                Column(alignment: .leading, spacing: 2) {
+                    Text("Developer Trace")
+                        .font(.bodyStrong)
+                        .foregroundColor(.onSurface)
+                    Text("\(developerTraceWindowLabel(trace.samples)) - \(trace.samples.count) frames")
+                        .lineLimit(1)
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                }
+                .frame(width: 190)
 
-            Divider(axis: .vertical)
-                .frame(width: 1, height: 22)
+                DeveloperTraceHeaderMetric(label: "Events",
+                                           value: "\(summary.visibleEventCount)",
+                                           severity: .nominal)
+                DeveloperTraceHeaderMetric(label: "Errors",
+                                           value: "\(summary.criticalCount)",
+                                           severity: summary.criticalCount > 0 ? .critical : .nominal)
+                DeveloperTraceHeaderMetric(label: "Warnings",
+                                           value: "\(summary.warningCount)",
+                                           severity: summary.warningCount > 0 ? .warning : .nominal)
+                DeveloperTraceHeaderMetric(label: "Hot",
+                                           value: summary.hotSampleIndex.map { "#\($0)" } ?? "--",
+                                           severity: summary.hotSampleEventCount > 1 ? .warning : .nominal)
 
-            Button(isSelected: trace.mode == .live, action: onLive) {
-                Text("Live")
+                Spacer(minLength: 0)
+
+                TextField("Search trace", text: searchQuery, size: .small)
                     .font(.caption)
+                    .frame(width: 240)
             }
-            .buttonStyle(.ghost)
 
-            Button(isSelected: trace.mode == .paused, action: onPause) {
-                Text("Pause")
+            Row(alignment: .center, spacing: 6) {
+                DeveloperTraceToolbarButton(label: "Live",
+                                            isSelected: trace.mode == .live,
+                                            action: onLive)
+                DeveloperTraceToolbarButton(label: "Pause",
+                                            isSelected: trace.mode == .paused,
+                                            action: onPause)
+
+                Divider(axis: .vertical)
+                    .frame(width: 1, height: 20)
+
+                Button(action: onCapture) {
+                    Text("Capture")
+                        .font(.caption)
+                }
+                .buttonStyle(.ghost)
+
+                Button(action: onBaseline) {
+                    Text("Set Baseline")
+                        .font(.caption)
+                }
+                .buttonStyle(.ghost)
+
+                Text(baselineTrace.map { "Baseline \($0.samples.count) frames" } ?? "No baseline")
+                    .lineLimit(1)
                     .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.ghost)
-
-            Button(action: onCapture) {
-                Text("Capture")
-                    .font(.caption)
-            }
-            .buttonStyle(.ghost)
-
-            Button(action: onBaseline) {
-                Text("Baseline")
-                    .font(.caption)
-            }
-            .buttonStyle(.ghost)
-
-            Text(baselineTrace.map { "Baseline \($0.samples.count) frames" } ?? "No baseline")
-                .font(.caption)
-                .foregroundColor(.onSurfaceMuted)
-
-            Spacer(minLength: 0)
-
-            TextField("Search trace", text: searchQuery, size: .small)
-                .font(.caption)
-                .frame(width: 220)
         }
+    }
+}
+
+private struct DeveloperTraceHeaderMetric: View {
+    let label: String
+    let value: String
+    let severity: DeveloperDiagnosticSeverity
+
+    var body: some View {
+        Column(alignment: .leading, spacing: 1) {
+            Text(label)
+                .lineLimit(1)
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+            Text(value)
+                .lineLimit(1)
+                .font(.mono)
+                .foregroundColor(developerDiagnosticForeground(severity))
+        }
+        .padding(horizontal: 9, vertical: 5)
+        .background(.surfaceSunken)
+        .cornerRadius(5)
+        .border(developerDiagnosticBorder(severity), width: severity == .nominal ? 0 : 1)
+    }
+}
+
+private struct DeveloperTraceToolbarButton: View {
+    let label: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.caption)
+                .foregroundColor(isSelected ? .accent : .onSurfaceMuted)
+                .padding(horizontal: 8, vertical: 3)
+                .background(isSelected ? .surfaceFloating : .surface)
+                .cornerRadius(4)
+                .border(isSelected ? .accent : .divider, width: 1)
+        }
+        .buttonStyle(.plain)
     }
 }
 
 private struct DeveloperTraceNavigator: View {
     let trace: DeveloperTraceSnapshot
     let visibleEvents: [DeveloperTraceEvent]
+    let summary: DeveloperTraceInvestigationSummary
     let selectedEventID: Binding<String?>
     let searchQuery: Binding<String>
     let selectedTrackFilter: Binding<DeveloperTraceTrack?>
     let severityFilter: Binding<DeveloperTraceSeverityFilter>
+    let eventSortOrder: Binding<DeveloperTraceEventSortOrder>
     let onOpenTarget: (DeveloperDiagnosticTarget) -> Void
 
     var body: some View {
+        let issues = developerTraceVisibleIssues(trace: trace,
+                                                 query: searchQuery.wrappedValue,
+                                                 trackFilter: selectedTrackFilter.wrappedValue,
+                                                 severityFilter: severityFilter.wrappedValue)
         Column(alignment: .leading, spacing: 0) {
-            DeveloperTracePaneHeader(title: "Monitor",
-                                     subtitle: "\(trace.samples.count) frames")
-
-            Row(alignment: .center, spacing: 8) {
-                Text("Monitor")
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
-                    .flex(1, shrink: 1)
-                Text("Value")
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
-                    .frame(width: 74)
-            }
-            .padding(horizontal: 10, vertical: 5)
-            .background(.surface)
+            DeveloperTracePaneHeader(title: "Inspect",
+                                     subtitle: "\(visibleEvents.count) visible")
 
             ScrollView(.vertical) {
                 Column(alignment: .leading, spacing: 8) {
-                    DeveloperTraceNavigatorSection(title: "Time") {
+                    DeveloperTraceNavigatorSection(title: "Status") {
+                        DeveloperTraceInvestigationSummaryView(summary: summary)
+                    }
+
+                    DeveloperTraceNavigatorSection(title: "Severity") {
+                        Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 5) {
+                            for filter in DeveloperTraceSeverityFilter.allCases {
+                                DeveloperTraceFilterChip(label: filter.rawValue,
+                                                         isSelected: severityFilter.wrappedValue == filter,
+                                                         action: { severityFilter.wrappedValue = filter })
+                            }
+                        }
+                    }
+
+                    DeveloperTraceNavigatorSection(title: "Order") {
+                        Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 5) {
+                            for order in DeveloperTraceEventSortOrder.allCases {
+                                DeveloperTraceFilterChip(label: order.rawValue,
+                                                         isSelected: eventSortOrder.wrappedValue == order,
+                                                         action: { eventSortOrder.wrappedValue = order })
+                            }
+                        }
+                    }
+
+                    DeveloperTraceNavigatorSection(title: "Signals") {
+                        DeveloperTraceAllTracksSummaryRow(trace: trace,
+                                                          isSelected: selectedTrackFilter.wrappedValue == nil,
+                                                          onSelect: {
+                                                              selectedTrackFilter.wrappedValue = nil
+                                                          })
                         DeveloperTraceTrackSummaryRow(track: .frame,
                                                       trace: trace,
-                                                      isSelected: selectedTrackFilter.wrappedValue == .frame || selectedTrackFilter.wrappedValue == nil,
+                                                      isSelected: selectedTrackFilter.wrappedValue == .frame,
                                                       onSelect: {
                                                           toggleTrack(.frame)
                                                       })
                         DeveloperTraceTrackSummaryRow(track: .cpu,
                                                       trace: trace,
-                                                      isSelected: selectedTrackFilter.wrappedValue == .cpu || selectedTrackFilter.wrappedValue == nil,
+                                                      isSelected: selectedTrackFilter.wrappedValue == .cpu,
                                                       onSelect: {
                                                           toggleTrack(.cpu)
                                                       })
                         DeveloperTraceTrackSummaryRow(track: .gpuPresent,
                                                       trace: trace,
-                                                      isSelected: selectedTrackFilter.wrappedValue == .gpuPresent || selectedTrackFilter.wrappedValue == nil,
+                                                      isSelected: selectedTrackFilter.wrappedValue == .gpuPresent,
                                                       onSelect: {
                                                           toggleTrack(.gpuPresent)
                                                       })
-                    }
-
-                    DeveloperTraceNavigatorSection(title: "Runtime") {
                         DeveloperTraceTrackSummaryRow(track: .renderPass,
                                                       trace: trace,
-                                                      isSelected: selectedTrackFilter.wrappedValue == .renderPass || selectedTrackFilter.wrappedValue == nil,
+                                                      isSelected: selectedTrackFilter.wrappedValue == .renderPass,
                                                       onSelect: {
                                                           toggleTrack(.renderPass)
                                                       })
                         DeveloperTraceTrackSummaryRow(track: .particles,
                                                       trace: trace,
-                                                      isSelected: selectedTrackFilter.wrappedValue == .particles || selectedTrackFilter.wrappedValue == nil,
+                                                      isSelected: selectedTrackFilter.wrappedValue == .particles,
                                                       onSelect: {
                                                           toggleTrack(.particles)
                                                       })
-                    }
-
-                    DeveloperTraceNavigatorSection(title: "Diagnostics") {
                         DeveloperTraceTrackSummaryRow(track: .console,
                                                       trace: trace,
-                                                      isSelected: selectedTrackFilter.wrappedValue == .console || selectedTrackFilter.wrappedValue == nil,
+                                                      isSelected: selectedTrackFilter.wrappedValue == .console,
                                                       onSelect: {
                                                           toggleTrack(.console)
                                                       })
-                        DeveloperTraceSummaryMetricRow(label: "Errors",
-                                                       value: "\(makeDeveloperTraceInvestigationSummary(events: visibleEvents).criticalCount)",
-                                                       severity: makeDeveloperTraceInvestigationSummary(events: visibleEvents).criticalCount > 0 ? .critical : .nominal)
-                        DeveloperTraceSummaryMetricRow(label: "Warnings",
-                                                       value: "\(makeDeveloperTraceInvestigationSummary(events: visibleEvents).warningCount)",
-                                                       severity: makeDeveloperTraceInvestigationSummary(events: visibleEvents).warningCount > 0 ? .warning : .nominal)
-                    }
-
-                    DeveloperTraceNavigatorSection(title: "All Tracks") {
-                        for track in DeveloperTraceTrack.allCases {
-                            DeveloperTraceTrackSummaryRow(track: track,
-                                                          trace: trace,
-                                                          isSelected: selectedTrackFilter.wrappedValue == track,
-                                                          onSelect: {
-                                                              toggleTrack(track)
-                                                          })
-                        }
                     }
 
                     DeveloperTraceNavigatorSection(title: "Issues") {
-                        let issues = developerTraceVisibleIssues(trace: trace,
-                                                                 query: searchQuery.wrappedValue,
-                                                                 trackFilter: selectedTrackFilter.wrappedValue,
-                                                                 severityFilter: severityFilter.wrappedValue)
                         for issue in issues.prefix(18) {
                             DeveloperTraceIssueRailRow(
                                 issue: issue,
@@ -2161,6 +2268,38 @@ private struct DeveloperTraceSummaryMetricRow: View {
     }
 }
 
+private struct DeveloperTraceAllTracksSummaryRow: View {
+    let trace: DeveloperTraceSnapshot
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            Row(alignment: .center, spacing: 7) {
+                Text("*")
+                    .font(.mono)
+                    .foregroundColor(isSelected ? .accent : .onSurfaceMuted)
+                    .frame(width: 18)
+                Text("All Tracks")
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurface)
+                    .flex(1, shrink: 1)
+                Text("\(trace.events.count) markers")
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(trace.events.isEmpty ? .onSurfaceMuted : .warning)
+                    .frame(width: 74)
+            }
+            .padding(horizontal: 8, vertical: 4)
+            .background(isSelected ? .accent.opacity(0.10) : .surface)
+            .cornerRadius(4)
+            .border(isSelected ? .accent : .divider, width: isSelected ? 1 : 0)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 private struct DeveloperTraceTrackSummaryRow: View {
     let track: DeveloperTraceTrack
     let trace: DeveloperTraceSnapshot
@@ -2169,16 +2308,12 @@ private struct DeveloperTraceTrackSummaryRow: View {
 
     var body: some View {
         let events = trace.events.filter { $0.track == track }
-        Button(isSelected: isSelected, action: onSelect) {
-            Row(alignment: .center, spacing: 6) {
-                Checkbox(isOn: Binding(
-                    get: { isSelected },
-                    set: { nextValue in
-                        if nextValue || isSelected {
-                            onSelect()
-                        }
-                    }
-                ))
+        Button(action: onSelect) {
+            Row(alignment: .center, spacing: 7) {
+                Text(developerTraceTrackIcon(track))
+                    .font(.mono)
+                    .foregroundColor(isSelected ? .accent : .onSurfaceMuted)
+                    .frame(width: 18)
                 Text(track.rawValue)
                     .lineLimit(1)
                     .font(.caption)
@@ -2192,8 +2327,10 @@ private struct DeveloperTraceTrackSummaryRow: View {
                     .foregroundColor(events.isEmpty ? .onSurfaceMuted : developerDiagnosticForeground(developerTraceHighestSeverity(events)))
                     .frame(width: 74)
             }
-            .padding(horizontal: 8, vertical: 3)
-            .background(isSelected ? .accent.opacity(0.08) : .surfaceSunken)
+            .padding(horizontal: 8, vertical: 4)
+            .background(isSelected ? .accent.opacity(0.10) : .surface)
+            .cornerRadius(4)
+            .border(isSelected ? .accent : .divider, width: isSelected ? 1 : 0)
         }
         .buttonStyle(.plain)
     }
@@ -2206,7 +2343,7 @@ private struct DeveloperTraceIssueRailRow: View {
     let onOpenTarget: (DeveloperDiagnosticTarget) -> Void
 
     var body: some View {
-        Button(isSelected: isSelected, action: onSelect) {
+        Button(action: onSelect) {
             Column(alignment: .leading, spacing: 4) {
                 Row(alignment: .center, spacing: 6) {
                     Text(developerTraceSeverityGlyph(issue.severity))
@@ -2257,46 +2394,40 @@ private struct DeveloperTraceMonitorGrid: View {
             DeveloperTracePaneHeader(title: "Monitors",
                                      subtitle: developerTraceWindowLabel(trace.samples))
 
-            ScrollView(.vertical) {
-                Column(alignment: .leading, spacing: 8) {
-                    Row(alignment: .top, spacing: 8) {
-                        DeveloperTraceMonitorPanel(track: .frame,
-                                                   trace: trace,
-                                                   isSelected: selectedTrackFilter.wrappedValue == .frame,
-                                                   onSelect: { select(.frame) })
-                            .flex(1, shrink: 1)
-                        DeveloperTraceMonitorPanel(track: .cpu,
-                                                   trace: trace,
-                                                   isSelected: selectedTrackFilter.wrappedValue == .cpu,
-                                                   onSelect: { select(.cpu) })
-                            .flex(1, shrink: 1)
-                    }
-                    Row(alignment: .top, spacing: 8) {
-                        DeveloperTraceMonitorPanel(track: .gpuPresent,
-                                                   trace: trace,
-                                                   isSelected: selectedTrackFilter.wrappedValue == .gpuPresent,
-                                                   onSelect: { select(.gpuPresent) })
-                            .flex(1, shrink: 1)
-                        DeveloperTraceMonitorPanel(track: .renderPass,
-                                                   trace: trace,
-                                                   isSelected: selectedTrackFilter.wrappedValue == .renderPass,
-                                                   onSelect: { select(.renderPass) })
-                            .flex(1, shrink: 1)
-                    }
-                    Row(alignment: .top, spacing: 8) {
-                        DeveloperTraceMonitorPanel(track: .particles,
-                                                   trace: trace,
-                                                   isSelected: selectedTrackFilter.wrappedValue == .particles,
-                                                   onSelect: { select(.particles) })
-                            .flex(1, shrink: 1)
-                        DeveloperTraceMonitorPanel(track: .console,
-                                                   trace: trace,
-                                                   isSelected: selectedTrackFilter.wrappedValue == .console,
-                                                   onSelect: { select(.console) })
-                            .flex(1, shrink: 1)
-                    }
+            ScrollView(.horizontal) {
+                Row(alignment: .top, spacing: 8) {
+                    DeveloperTraceMonitorPanel(track: .frame,
+                                               trace: trace,
+                                               isSelected: selectedTrackFilter.wrappedValue == .frame,
+                                               onSelect: { select(.frame) })
+                        .frame(width: 176)
+                    DeveloperTraceMonitorPanel(track: .cpu,
+                                               trace: trace,
+                                               isSelected: selectedTrackFilter.wrappedValue == .cpu,
+                                               onSelect: { select(.cpu) })
+                        .frame(width: 176)
+                    DeveloperTraceMonitorPanel(track: .gpuPresent,
+                                               trace: trace,
+                                               isSelected: selectedTrackFilter.wrappedValue == .gpuPresent,
+                                               onSelect: { select(.gpuPresent) })
+                        .frame(width: 176)
+                    DeveloperTraceMonitorPanel(track: .renderPass,
+                                               trace: trace,
+                                               isSelected: selectedTrackFilter.wrappedValue == .renderPass,
+                                               onSelect: { select(.renderPass) })
+                        .frame(width: 176)
+                    DeveloperTraceMonitorPanel(track: .particles,
+                                               trace: trace,
+                                               isSelected: selectedTrackFilter.wrappedValue == .particles,
+                                               onSelect: { select(.particles) })
+                        .frame(width: 176)
+                    DeveloperTraceMonitorPanel(track: .console,
+                                               trace: trace,
+                                               isSelected: selectedTrackFilter.wrappedValue == .console,
+                                               onSelect: { select(.console) })
+                        .frame(width: 176)
                 }
-                .padding(horizontal: 10, vertical: 10)
+                .padding(horizontal: 10, vertical: 8)
             }
             .background(.surfaceSunken)
         }
@@ -2318,12 +2449,12 @@ private struct DeveloperTraceMonitorPanel: View {
         let series = developerTraceMonitorSeries(track: track, trace: trace)
         let values = Array(series.suffix(72))
         let limit = developerTraceMonitorLimit(track)
-        Button(isSelected: isSelected, action: onSelect) {
+        Button(action: onSelect) {
             Column(alignment: .leading, spacing: 4) {
-                Row(alignment: .center, spacing: 8) {
+                Row(alignment: .center, spacing: 6) {
                     Text(developerTraceMonitorTitle(track))
                         .lineLimit(1)
-                        .font(.bodyStrong)
+                        .font(.caption)
                         .foregroundColor(developerTraceMonitorColor(track))
                         .flex(1, shrink: 1)
                     Text(developerTraceTrackLatestSignal(track: track,
@@ -2347,7 +2478,7 @@ private struct DeveloperTraceMonitorPanel: View {
                                                contentInset: 4,
                                                background: .surfaceSunken,
                                                gridColor: .divider))
-                    .frame(height: 66)
+                    .frame(height: 34)
                 Row(alignment: .center, spacing: 8) {
                     Text(developerTraceMonitorRangeLabel(values))
                         .lineLimit(1)
@@ -2360,16 +2491,290 @@ private struct DeveloperTraceMonitorPanel: View {
                         .foregroundColor(.onSurfaceMuted)
                 }
             }
-            .padding(horizontal: 10, vertical: 8)
+            .padding(horizontal: 8, vertical: 6)
             .background(isSelected ? .accent.opacity(0.08) : .surface)
+            .cornerRadius(5)
             .border(isSelected ? .accent : .divider, width: isSelected ? 1 : 0)
         }
         .buttonStyle(.plain)
     }
 }
 
+private struct DeveloperMonitorBoardView: View {
+    let trace: DeveloperTraceSnapshot
+    let selectedTracks: Binding<Set<DeveloperTraceTrack>>
+    let selectedSampleIndex: Binding<UInt64?>
+
+    var body: some View {
+        let snapshots = makeDeveloperMonitorSnapshots(trace: trace)
+        let selected = snapshots.filter { selectedTracks.wrappedValue.contains($0.track) }
+
+        Column(alignment: .leading, spacing: 0) {
+            Row(alignment: .center, spacing: 8) {
+                Text("Monitors")
+                    .font(.bodyStrong)
+                    .foregroundColor(.onSurface)
+                Text(developerTraceWindowLabel(trace.samples))
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+
+                Spacer(minLength: 0)
+
+                Button(action: selectAll) {
+                    Text("All")
+                        .font(.caption)
+                }
+                .buttonStyle(.ghost)
+
+                Button(action: clearSelection) {
+                    Text("None")
+                        .font(.caption)
+                }
+                .buttonStyle(.ghost)
+            }
+            .padding(horizontal: 12, vertical: 8)
+
+            Divider()
+
+            Row(alignment: .top, spacing: 0) {
+                DeveloperMonitorList(snapshots: snapshots,
+                                     selectedTracks: selectedTracks,
+                                     selectedSampleIndex: selectedSampleIndex)
+                    .frame(width: 268)
+
+                Divider(axis: .vertical)
+                    .frame(width: 1)
+
+                ScrollView(.vertical) {
+                    if selected.isEmpty {
+                        StatWrappedValue(label: "Selection",
+                                         value: "No monitors selected.")
+                            .padding(horizontal: 12, vertical: 10)
+                    } else {
+                        Column(alignment: .leading, spacing: 10) {
+                            DeveloperMonitorSummaryStrip(snapshots: selected)
+
+                            for snapshot in selected {
+                                DeveloperMonitorDetailPanel(snapshot: snapshot,
+                                                            trace: trace,
+                                                            selectedSampleIndex: selectedSampleIndex)
+                            }
+                        }
+                        .padding(horizontal: 12, vertical: 10)
+                    }
+                }
+                .flex(1, shrink: 1)
+            }
+            .flex(1, shrink: 1)
+        }
+        .background(.surface)
+    }
+
+    private func selectAll() {
+        selectedTracks.wrappedValue = Set(DeveloperTraceTrack.allCases)
+        selectedSampleIndex.wrappedValue = trace.samples.last?.sampleIndex
+    }
+
+    private func clearSelection() {
+        selectedTracks.wrappedValue = []
+    }
+}
+
+private struct DeveloperMonitorList: View {
+    let snapshots: [DeveloperMonitorSnapshot]
+    let selectedTracks: Binding<Set<DeveloperTraceTrack>>
+    let selectedSampleIndex: Binding<UInt64?>
+
+    var body: some View {
+        Column(alignment: .leading, spacing: 0) {
+            Row(alignment: .center, spacing: 8) {
+                Text("Signal")
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                    .flex(1, shrink: 1)
+                Text("Current")
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
+            .padding(horizontal: 10, vertical: 7)
+
+            Divider()
+
+            ScrollView(.vertical) {
+                Column(alignment: .leading, spacing: 4) {
+                    for snapshot in snapshots {
+                        DeveloperMonitorListRow(
+                            snapshot: snapshot,
+                            isSelected: selectedTracks.wrappedValue.contains(snapshot.track),
+                            onToggle: { toggle(snapshot.track) }
+                        )
+                    }
+                }
+                .padding(horizontal: 8, vertical: 8)
+            }
+            .flex(1, shrink: 1)
+        }
+        .background(.surfaceSunken)
+    }
+
+    private func toggle(_ track: DeveloperTraceTrack) {
+        var next = selectedTracks.wrappedValue
+        if next.contains(track) {
+            next.remove(track)
+        } else {
+            next.insert(track)
+        }
+        selectedTracks.wrappedValue = next
+        selectedSampleIndex.wrappedValue = nil
+    }
+}
+
+private struct DeveloperMonitorListRow: View {
+    let snapshot: DeveloperMonitorSnapshot
+    let isSelected: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        Button(action: onToggle) {
+            Row(alignment: .center, spacing: 8) {
+                Text(developerTraceTrackIcon(snapshot.track))
+                    .lineLimit(1)
+                    .font(.mono)
+                    .foregroundColor(developerTraceMonitorColor(snapshot.track))
+                    .frame(width: 20)
+
+                Column(alignment: .leading, spacing: 2) {
+                    Text(snapshot.title)
+                        .lineLimit(1)
+                        .font(.caption)
+                        .foregroundColor(.onSurface)
+                    Text(snapshot.rangeLabel)
+                        .lineLimit(1)
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                }
+                .flex(1, shrink: 1)
+
+                Text(snapshot.currentLabel)
+                    .lineLimit(1)
+                    .font(.mono)
+                    .foregroundColor(snapshot.isOverLimit ? .warning : .onSurface)
+            }
+            .padding(horizontal: 8, vertical: 6)
+            .background(isSelected ? .accent.opacity(0.10) : .surface)
+            .cornerRadius(5)
+            .border(isSelected ? .accent : .divider, width: isSelected ? 1 : 0)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct DeveloperMonitorSummaryStrip: View {
+    let snapshots: [DeveloperMonitorSnapshot]
+
+    var body: some View {
+        Row(alignment: .top, spacing: 10) {
+            StatGroup(title: "Selected") {
+                StatRow(label: "Count", value: "\(snapshots.count)")
+                StatRow(label: "Over Limit", value: "\(snapshots.filter(\.isOverLimit).count)")
+            }
+            .frame(width: 180)
+
+            StatGroup(title: "Hot Signal") {
+                if let hot = snapshots.first(where: \.isOverLimit) {
+                    StatRow(label: "Monitor", value: hot.title)
+                    StatRow(label: "Current", value: hot.currentLabel)
+                } else if let first = snapshots.first {
+                    StatRow(label: "Monitor", value: first.title)
+                    StatRow(label: "Current", value: first.currentLabel)
+                } else {
+                    StatRow(label: "Monitor", value: "--")
+                    StatRow(label: "Current", value: "--")
+                }
+            }
+            .flex(1, shrink: 1)
+        }
+    }
+}
+
+private struct DeveloperMonitorDetailPanel: View {
+    let snapshot: DeveloperMonitorSnapshot
+    let trace: DeveloperTraceSnapshot
+    let selectedSampleIndex: Binding<UInt64?>
+
+    var body: some View {
+        let values = Array(snapshot.values.suffix(180))
+        Column(alignment: .leading, spacing: 8) {
+            Row(alignment: .center, spacing: 8) {
+                Text(developerTraceTrackIcon(snapshot.track))
+                    .lineLimit(1)
+                    .font(.mono)
+                    .foregroundColor(developerTraceMonitorColor(snapshot.track))
+                    .frame(width: 20)
+                Text(snapshot.title)
+                    .lineLimit(1)
+                    .font(.bodyStrong)
+                    .foregroundColor(.onSurface)
+                    .flex(1, shrink: 1)
+                Text(snapshot.currentLabel)
+                    .lineLimit(1)
+                    .font(.mono)
+                    .foregroundColor(snapshot.isOverLimit ? .warning : .onSurface)
+                Button(action: { selectedSampleIndex.wrappedValue = trace.samples.last?.sampleIndex }) {
+                    Text("Latest")
+                        .font(.caption)
+                }
+                .buttonStyle(.ghost)
+            }
+
+            MonitorChart(values: values,
+                         color: developerTraceMonitorColor(snapshot.track),
+                         mode: developerTraceMonitorMode(snapshot.track),
+                         threshold: snapshot.limit.map { ChartThreshold(value: $0, color: .warning) },
+                         marker: developerMonitorMarker(values: values,
+                                                        trace: trace,
+                                                        selectedSampleIndex: selectedSampleIndex.wrappedValue),
+                         style: ChartStyle(minValue: 0,
+                                           gridLineCount: 5,
+                                           lineWidth: 1.4,
+                                           barSpacing: 1,
+                                           contentInset: 5,
+                                           background: .surfaceSunken,
+                                           gridColor: .divider))
+                .frame(height: 96)
+
+            Row(alignment: .center, spacing: 12) {
+                StatRow(label: "Range", value: snapshot.rangeLabel)
+                    .flex(1, shrink: 1)
+                StatRow(label: "Samples", value: snapshot.sampleLabel)
+                    .flex(1, shrink: 1)
+                StatRow(label: "Limit", value: snapshot.limit.map { developerTraceMonitorFormat($0) } ?? "--")
+                    .flex(1, shrink: 1)
+            }
+        }
+        .padding(horizontal: 10, vertical: 9)
+        .background(.surfaceSunken)
+        .cornerRadius(6)
+        .border(snapshot.isOverLimit ? .warning : .border, width: 1)
+    }
+}
+
+private func developerMonitorMarker(values: [Float],
+                                    trace: DeveloperTraceSnapshot,
+                                    selectedSampleIndex: UInt64?) -> ChartMarker? {
+    guard !values.isEmpty else { return nil }
+    guard let selectedSampleIndex,
+          let index = trace.samples.suffix(values.count).firstIndex(where: { $0.sampleIndex == selectedSampleIndex }) else {
+        return ChartMarker(index: values.count - 1, color: .accent, width: 1)
+    }
+    let suffixStart = trace.samples.count - values.count
+    let markerIndex = min(max(0, index - suffixStart), values.count - 1)
+    return ChartMarker(index: markerIndex, color: .accent, width: 1)
+}
+
 private struct DeveloperTraceTimelineView: View {
     let trace: DeveloperTraceSnapshot
+    let eventIndex: DeveloperTraceEventIndex
     let selectedEventID: Binding<String?>
     let selectedSampleIndex: Binding<UInt64?>
     let selectedTrackFilter: Binding<DeveloperTraceTrack?>
@@ -2387,6 +2792,7 @@ private struct DeveloperTraceTimelineView: View {
                         for track in tracks {
                             DeveloperTraceTrackLane(track: track,
                                                     trace: trace,
+                                                    eventIndex: eventIndex,
                                                     selectedEventID: selectedEventID,
                                                     selectedSampleIndex: selectedSampleIndex)
                         }
@@ -2422,6 +2828,7 @@ private struct DeveloperTraceRuler: View {
 private struct DeveloperTraceTrackLane: View {
     let track: DeveloperTraceTrack
     let trace: DeveloperTraceSnapshot
+    let eventIndex: DeveloperTraceEventIndex
     let selectedEventID: Binding<String?>
     let selectedSampleIndex: Binding<UInt64?>
 
@@ -2451,9 +2858,8 @@ private struct DeveloperTraceTrackLane: View {
             for sample in trace.samples {
                 DeveloperTraceLaneCell(track: track,
                                        sample: sample,
-                                       events: developerTraceEvents(trace: trace,
-                                                                   track: track,
-                                                                   sampleIndex: sample.sampleIndex),
+                                       events: eventIndex.events(track: track,
+                                                                 sampleIndex: sample.sampleIndex),
                                        isSelected: selectedSampleIndex.wrappedValue == sample.sampleIndex,
                                        selectedEventID: selectedEventID,
                                        selectedSampleIndex: selectedSampleIndex)
@@ -2476,7 +2882,7 @@ private struct DeveloperTraceLaneCell: View {
         let severity = developerTraceCellSeverity(track: track,
                                                   sample: sample,
                                                   events: events)
-        Button(isSelected: isSelected, action: {
+        Button(action: {
             selectedSampleIndex.wrappedValue = sample.sampleIndex
             selectedEventID.wrappedValue = events.first?.id
         }) {
@@ -2646,7 +3052,7 @@ private struct DeveloperTraceEventTableRow: View {
     let onSelect: () -> Void
 
     var body: some View {
-        Button(isSelected: isSelected, action: onSelect) {
+        Button(action: onSelect) {
             Row(alignment: .center, spacing: 8) {
                 Text(developerTraceSeverityGlyph(event.severity))
                     .font(.mono)
@@ -2685,6 +3091,7 @@ private struct DeveloperTracePropertiesInspector: View {
     let event: DeveloperTraceEvent?
     let sample: DeveloperTraceSample?
     let trace: DeveloperTraceSnapshot
+    let eventIndex: DeveloperTraceEventIndex
     let baselineTrace: DeveloperTraceSnapshot?
     let selectedEventID: Binding<String?>
     let selectedSampleIndex: Binding<UInt64?>
@@ -2699,12 +3106,14 @@ private struct DeveloperTracePropertiesInspector: View {
                     if let event {
                         DeveloperTraceEventProperties(event: event,
                                                       trace: trace,
+                                                      eventIndex: eventIndex,
                                                       selectedEventID: selectedEventID,
                                                       selectedSampleIndex: selectedSampleIndex,
                                                       onOpenTarget: onOpenTarget)
                     } else if let sample {
                         DeveloperTraceSampleProperties(sample: sample,
                                                        trace: trace,
+                                                       eventIndex: eventIndex,
                                                        baselineSample: developerTraceBaselineSample(for: sample,
                                                                                                     baselineTrace: baselineTrace),
                                                        selectedEventID: selectedEventID,
@@ -2727,14 +3136,14 @@ private struct DeveloperTracePropertiesInspector: View {
 private struct DeveloperTraceEventProperties: View {
     let event: DeveloperTraceEvent
     let trace: DeveloperTraceSnapshot
+    let eventIndex: DeveloperTraceEventIndex
     let selectedEventID: Binding<String?>
     let selectedSampleIndex: Binding<UInt64?>
     let onOpenTarget: (DeveloperDiagnosticTarget) -> Void
 
     var body: some View {
-        let relatedEvents = developerTraceSampleEvents(trace: trace,
-                                                       sampleIndex: event.sampleIndex,
-                                                       excluding: event.id)
+        let relatedEvents = eventIndex.events(sampleIndex: event.sampleIndex,
+                                              excluding: event.id)
         let investigation = makeDeveloperTraceSampleInvestigation(trace: trace,
                                                                   sampleIndex: event.sampleIndex)
         Column(alignment: .leading, spacing: 10) {
@@ -2786,14 +3195,14 @@ private struct DeveloperTraceEventProperties: View {
 private struct DeveloperTraceSampleProperties: View {
     let sample: DeveloperTraceSample
     let trace: DeveloperTraceSnapshot
+    let eventIndex: DeveloperTraceEventIndex
     let baselineSample: DeveloperTraceSample?
     let selectedEventID: Binding<String?>
     let selectedSampleIndex: Binding<UInt64?>
     let onOpenTarget: (DeveloperDiagnosticTarget) -> Void
 
     var body: some View {
-        let sampleEvents = developerTraceSampleEvents(trace: trace,
-                                                     sampleIndex: sample.sampleIndex)
+        let sampleEvents = eventIndex.events(sampleIndex: sample.sampleIndex)
         let investigation = makeDeveloperTraceSampleInvestigation(trace: trace,
                                                                   sampleIndex: sample.sampleIndex)
         Column(alignment: .leading, spacing: 10) {
@@ -2986,7 +3395,7 @@ private struct DeveloperTraceSampleContextRowView: View {
     let selectedSampleIndex: Binding<UInt64?>
 
     var body: some View {
-        Button(isSelected: row.position == .selected, action: {
+        Button(action: {
             selectedEventID.wrappedValue = nil
             selectedSampleIndex.wrappedValue = row.sampleIndex
         }) {
@@ -3088,7 +3497,7 @@ private struct DeveloperTraceRelatedEventRow: View {
     let onSelect: () -> Void
 
     var body: some View {
-        Button(isSelected: isSelected, action: onSelect) {
+        Button(action: onSelect) {
             Row(alignment: .center, spacing: 6) {
                 Text(developerTraceSeverityGlyph(event.severity))
                     .font(.mono)
@@ -3289,7 +3698,7 @@ private struct FrameTimelineRow: View {
     let onSelect: () -> Void
 
     var body: some View {
-        Button(isSelected: isSelected, action: onSelect) {
+        Button(action: onSelect) {
             Row(alignment: .center, spacing: 8) {
                 Text("#\(sample.sampleIndex)")
                     .lineLimit(1)
