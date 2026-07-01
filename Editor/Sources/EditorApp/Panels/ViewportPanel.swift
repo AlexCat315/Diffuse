@@ -333,10 +333,7 @@ struct ViewportPanel: View {
                 return
             }
             if viewport.activeCameraDrag == .freelook {
-                scene.freelookCamera(deltaScreenX: 0,
-                                     deltaScreenY: 0,
-                                     pressedScancodes: viewport.pressedScancodes,
-                                     modifiers: key.modifiers)
+                app.enqueueViewportInput(event)
                 return
             }
             if let mode = gizmoMode(for: key) {
