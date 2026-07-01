@@ -22,7 +22,7 @@ struct ChartTests {
 
     @Test("Line chart emits line geometry")
     func lineChartEmitsGeometry() {
-        var chart = MonitorChart(values: [0, 1, 0],
+        let chart = MonitorChart(values: [0, 1, 0],
                                  mode: .line,
                                  style: ChartStyle(gridLineCount: 0,
                                                    contentInset: 0))
@@ -39,7 +39,7 @@ struct ChartTests {
 
     @Test("Bar chart emits one quad per sample")
     func barChartEmitsGeometry() {
-        var chart = MonitorChart(values: [1, 2, 3],
+        let chart = MonitorChart(values: [1, 2, 3],
                                  mode: .bar,
                                  style: ChartStyle(minValue: 0,
                                                    gridLineCount: 0,
@@ -58,7 +58,7 @@ struct ChartTests {
 
     @Test("Thresholds and markers add guide geometry")
     func thresholdAndMarkerEmitGuideGeometry() {
-        var chart = MonitorChart(values: [0, 1, 2],
+        let chart = MonitorChart(values: [0, 1, 2],
                                  threshold: ChartThreshold(value: 1),
                                  marker: ChartMarker(index: 2),
                                  style: ChartStyle(gridLineCount: 0,
