@@ -1154,6 +1154,35 @@ struct ParticleTests {
         #expect(scene.particleFrameStats.emitterStats(for: missing.rawValue) == nil)
     }
 
+    @Test("SceneRuntime merges GPU particle readback stats into frame stats")
+    func sceneRuntimeMergesGPUParticleReadbackStatsIntoFrameStats() {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(ParticleEmitter(emissionRate: 2, maxParticles: 8), for: entity)
+        _ = scene.tick(deltaTime: 1)
+
+        scene.applyParticleSimulationReadbackStats(
+            ParticleSimulationEventApplyReport(gpuAliveParticleCount: 7,
+                                               gpuExpiredParticleCount: 1,
+                                               gpuCollisionEventCount: 2,
+                                               gpuSpawnedParticleCount: 3,
+                                               gpuDroppedSpawnCount: 4,
+                                               gpuCompactedParticleCount: 7)
+        )
+
+        let stats = scene.particleFrameStats
+        #expect(stats.liveParticleCount == 2)
+        #expect(stats.gpuAliveParticleCount == 7)
+        #expect(stats.gpuExpiredParticleCount == 1)
+        #expect(stats.gpuCollisionEventCount == 2)
+        #expect(stats.gpuSpawnedParticleCount == 3)
+        #expect(stats.gpuDroppedSpawnCount == 4)
+        #expect(stats.gpuCompactedParticleCount == 7)
+        #expect(stats.droppedSpawnCount == 4)
+        #expect(stats.runtimePressureLevel == .critical)
+        #expect(stats.emitterStats(for: entity.rawValue)?.spawnedParticleCount == 2)
+    }
+
     @Test("gravity and velocity integrate with semi-implicit Euler")
     func motionIntegration() {
         var emitter = ParticleEmitter(emissionRate: 0, lifetime: 100,
@@ -2117,6 +2146,19 @@ struct ParticleTests {
         ]))
         #expect(spawnBudgetLimitedPressure.reason == .spawnBudget)
         #expect(spawnBudgetLimitedPressure.pressure == 1)
+
+        let gpuDropPressure = policy.updatedState(previousStats: ParticleFrameStatsResource(gpuDroppedSpawnCount: 2))
+        #expect(gpuDropPressure.reason == .spawnBudget)
+        #expect(gpuDropPressure.pressure == 1)
+
+        let gpuLivePressure = policy.updatedState(previousStats: ParticleFrameStatsResource(
+            emitterStats: [
+                ParticleEmitterFrameStats(liveParticleCount: 10, maxParticleCount: 200, liveParticleLimit: 200),
+            ],
+            gpuAliveParticleCount: 180
+        ))
+        #expect(gpuLivePressure.reason == .liveBudget)
+        #expect(abs(gpuLivePressure.pressure - 0.8) < 0.0001)
     }
 
     @Test("particle frame stats expose live budget utilization and dropped spawns")
@@ -2166,6 +2208,23 @@ struct ParticleTests {
         #expect(aggregate.droppedSpawnCount == 9)
         #expect(aggregate.runtimePressureLevel == .critical)
         #expect(aggregate.emitterStats(for: 11)?.liveParticleBudgetLimit == 50)
+        let gpuMerged = aggregate.mergingGPUReadback(
+            ParticleSimulationEventApplyReport(gpuAliveParticleCount: 300,
+                                               gpuExpiredParticleCount: 6,
+                                               gpuCollisionEventCount: 2,
+                                               gpuSpawnedParticleCount: 7,
+                                               gpuDroppedSpawnCount: 4,
+                                               gpuCompactedParticleCount: 296)
+        )
+        #expect(gpuMerged.liveParticleCount == aggregate.liveParticleCount)
+        #expect(gpuMerged.gpuAliveParticleCount == 300)
+        #expect(gpuMerged.gpuExpiredParticleCount == 6)
+        #expect(gpuMerged.gpuCollisionEventCount == 2)
+        #expect(gpuMerged.gpuSpawnedParticleCount == 7)
+        #expect(gpuMerged.gpuDroppedSpawnCount == 4)
+        #expect(gpuMerged.gpuCompactedParticleCount == 296)
+        #expect(gpuMerged.droppedSpawnCount == 13)
+        #expect(gpuMerged.runtimePressureLevel == .critical)
         #expect(eventReport.droppedSpawnCount == 9)
         #expect(abs(eventReport.spawnBudgetUtilization - 0.6) < 0.0001)
     }
