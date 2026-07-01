@@ -2,7 +2,7 @@ name: GuavaUI CI
 
 on:
   push:
-    branches: [main,  next]
+    branches: [main]
     paths:
       - 'GuavaUI/**'
       - 'Engine/**'
