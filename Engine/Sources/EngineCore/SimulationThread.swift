@@ -195,7 +195,7 @@ final class SimulationThread: @unchecked Sendable {
             eventsByEntity[EntityID(rawValue: rawValue), default: []].append(contentsOf: events)
         }
         guard !eventsByEntity.isEmpty else {
-            return ParticleSimulationEventApplyReport(
+            let report = ParticleSimulationEventApplyReport(
                 totalReadbackEventCount: totalReadbackEventCount,
                 droppedReadbackEventCount: droppedReadbackEventCount,
                 gpuAliveParticleCount: gpuAliveParticleCount,
@@ -205,6 +205,8 @@ final class SimulationThread: @unchecked Sendable {
                 gpuDroppedSpawnCount: gpuDroppedSpawnCount,
                 gpuCompactedParticleCount: gpuCompactedParticleCount
             )
+            sceneRuntime.applyParticleSimulationReadbackStats(report)
+            return report
         }
         var report = sceneRuntime.applyParticleSimulationEvents(eventsByEntity)
         report.totalReadbackEventCount = totalReadbackEventCount
@@ -215,6 +217,7 @@ final class SimulationThread: @unchecked Sendable {
         report.gpuSpawnedParticleCount = gpuSpawnedParticleCount
         report.gpuDroppedSpawnCount = gpuDroppedSpawnCount
         report.gpuCompactedParticleCount = gpuCompactedParticleCount
+        sceneRuntime.applyParticleSimulationReadbackStats(report)
         return report
     }
 }
