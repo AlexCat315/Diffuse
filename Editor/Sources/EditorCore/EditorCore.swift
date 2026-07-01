@@ -188,12 +188,17 @@ public final class EditorApplication: @unchecked Sendable {
         pendingViewportEvents.removeAll(keepingCapacity: true)
         inputState.process(inputEvents)
         scene.tickScene(deltaTime: simulationDelta)
+        driveContinuousViewportCamera(deltaTime: simulationDelta)
         let drawableSize = effectiveViewportDrawableSize()
         let jointPalettes = scene.currentJointPaletteMap()
         let state = store.state
-        let wantsContinuousFrames = state.viewportRealtimeEnabled
-            || state.playbackState == .playing
-            || scene.hasActiveParticles()
+        let viewportInput = EditorViewportInputController.shared
+        let wantsContinuousFrames = EditorViewportFrameDrive.wantsContinuousFrames(
+            viewportRealtimeEnabled: state.viewportRealtimeEnabled,
+            playbackState: state.playbackState,
+            sceneHasActiveParticles: scene.hasActiveParticles(),
+            continuousViewportInteractionActive: viewportInput.isContinuousSceneInteractionActive
+        )
         let renderViewport = renderGate.shouldRender(
             signature: EditorViewportRenderGate.Signature(
                 sceneRevision: scene.revision,
@@ -245,12 +250,23 @@ public final class EditorApplication: @unchecked Sendable {
 
     public func enqueueViewportInput(_ event: InputEvent) {
         pendingViewportEvents.append(event)
+        displayInvalidationHandler?()
     }
 
     /// Presentation size of the viewport in physical pixels (reported by
     /// `ViewportHost`). The engine renders this scaled by the render-scale
     /// settings — see `effectiveViewportDrawableSize()`.
     public var viewportDrawableSize: RenderDrawableSize { _viewportDrawableSize }
+
+    private func driveContinuousViewportCamera(deltaTime: Double) {
+        let viewportInput = EditorViewportInputController.shared
+        guard viewportInput.hasFreelookMovementInput else { return }
+        scene.freelookCamera(deltaScreenX: 0,
+                             deltaScreenY: 0,
+                             pressedScancodes: viewportInput.pressedScancodes,
+                             modifiers: viewportInput.modifiers,
+                             deltaTime: Float(max(0, deltaTime)))
+    }
 
     public func setViewportDrawableSize(_ size: RenderDrawableSize) {
         guard _viewportDrawableSize != size else { return }
@@ -287,6 +303,7 @@ public final class EditorApplication: @unchecked Sendable {
         store.dispatch(.setViewportRealtime(enabled))
         logConsole(enabled ? "Viewport realtime rendering enabled"
                            : "Viewport renders on demand")
+        displayInvalidationHandler?()
     }
 
     private func monotonicNow() -> Double {
