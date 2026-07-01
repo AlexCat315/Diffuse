@@ -665,6 +665,14 @@ public struct RuntimeWorldSchedule {
                     textureSheetPlaybackMode: emitter.textureSheetPlaybackMode,
                     textureSheetStartFrame: emitter.textureSheetStartFrame,
                     textureSheetFrameRandomness: emitter.textureSheetFrameRandomness,
+                    startSize: emitter.startSize,
+                    endSize: emitter.endSize,
+                    sizeCurve: emitter.sizeCurve,
+                    startColor: emitter.startColor,
+                    endColor: emitter.endColor,
+                    colorCurve: emitter.colorCurve,
+                    usesAuthoredAppearance: true,
+                    appearancePalette: renderParticleAppearancePalette(for: emitter),
                     blendMode: emitter.blendMode,
                     texturePath: emitter.texturePath,
                     renderAlignment: emitter.renderAlignment,
@@ -688,6 +696,26 @@ public struct RuntimeWorldSchedule {
             return (lhs.emitterEntity?.rawValue ?? 0) < (rhs.emitterEntity?.rawValue ?? 0)
         }
         return result
+    }
+
+    private func renderParticleAppearancePalette(for emitter: ParticleEmitter) -> [RenderParticleAppearance] {
+        var palette = [
+            RenderParticleAppearance(startSize: emitter.startSize,
+                                     endSize: emitter.endSize,
+                                     startColor: emitter.startColor,
+                                     endColor: emitter.endColor),
+            RenderParticleAppearance(startSize: emitter.subEmitterStartSize,
+                                     endSize: emitter.subEmitterEndSize,
+                                     startColor: emitter.subEmitterStartColor,
+                                     endColor: emitter.subEmitterEndColor),
+        ]
+        palette.append(contentsOf: emitter.subEmitters.map {
+            RenderParticleAppearance(startSize: $0.startSize,
+                                     endSize: $0.endSize,
+                                     startColor: $0.startColor,
+                                     endColor: $0.endColor)
+        })
+        return palette
     }
 
     private func canRenderEmitterParticlesOnGPU(_ emitter: ParticleEmitter) -> Bool {

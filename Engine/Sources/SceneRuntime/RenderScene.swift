@@ -440,6 +440,23 @@ public struct ParticleRenderSummary: Sendable, Equatable {
     }
 }
 
+public struct RenderParticleAppearance: Sendable, Equatable {
+    public var startSize: Float
+    public var endSize: Float
+    public var startColor: SIMD4<Float>
+    public var endColor: SIMD4<Float>
+
+    public init(startSize: Float = 1,
+                endSize: Float = 1,
+                startColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1),
+                endColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1)) {
+        self.startSize = max(0, startSize)
+        self.endSize = max(0, endSize)
+        self.startColor = startColor
+        self.endColor = endColor
+    }
+}
+
 public struct RenderParticleSimulationBatch: Sendable, Equatable {
     /// Stable source emitter identity. RenderBackend uses this to keep GPU state
     /// resources attached to an emitter when batch order changes.
@@ -480,6 +497,14 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
     public var textureSheetPlaybackMode: ParticleTextureSheetPlaybackMode
     public var textureSheetStartFrame: Int
     public var textureSheetFrameRandomness: Int
+    public var startSize: Float
+    public var endSize: Float
+    public var sizeCurve: ParticleCurve
+    public var startColor: SIMD4<Float>
+    public var endColor: SIMD4<Float>
+    public var colorCurve: ParticleCurve
+    public var usesAuthoredAppearance: Bool
+    public var appearancePalette: [RenderParticleAppearance]
     public var blendMode: ParticleBlendMode
     public var texturePath: String?
     public var renderAlignment: ParticleRenderAlignment
@@ -531,6 +556,14 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
                 textureSheetPlaybackMode: ParticleTextureSheetPlaybackMode = .automatic,
                 textureSheetStartFrame: Int = 0,
                 textureSheetFrameRandomness: Int = 0,
+                startSize: Float = 1,
+                endSize: Float = 1,
+                sizeCurve: ParticleCurve = .linear,
+                startColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1),
+                endColor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1),
+                colorCurve: ParticleCurve = .linear,
+                usesAuthoredAppearance: Bool = false,
+                appearancePalette: [RenderParticleAppearance] = [],
                 blendMode: ParticleBlendMode = .alpha,
                 texturePath: String? = nil,
                 renderAlignment: ParticleRenderAlignment = .billboard,
@@ -579,6 +612,14 @@ public struct RenderParticleSimulationBatch: Sendable, Equatable {
         self.textureSheetPlaybackMode = textureSheetPlaybackMode
         self.textureSheetStartFrame = max(0, textureSheetStartFrame)
         self.textureSheetFrameRandomness = max(0, textureSheetFrameRandomness)
+        self.startSize = max(0, startSize)
+        self.endSize = max(0, endSize)
+        self.sizeCurve = sizeCurve
+        self.startColor = startColor
+        self.endColor = endColor
+        self.colorCurve = colorCurve
+        self.usesAuthoredAppearance = usesAuthoredAppearance
+        self.appearancePalette = appearancePalette
         self.blendMode = blendMode
         self.texturePath = normalizedParticleTexturePath(texturePath)
         self.renderAlignment = renderAlignment
@@ -653,7 +694,7 @@ private func includeGPUParticle(_ particle: Particle,
                                 in bounds: inout RenderBounds) {
     let center = transformPoint(particle.position, by: batch.worldTransform)
     let worldVelocity = transformDirection(particle.velocity, by: batch.worldTransform)
-    let radius = gpuParticleConservativeRadius(size: particle.size,
+    let radius = gpuParticleConservativeRadius(size: gpuParticleConservativeSize(particle, batch: batch),
                                                velocityMagnitude: simd_length(worldVelocity),
                                                batch: batch)
     bounds.include(center: center, radius: radius)
@@ -664,6 +705,39 @@ private func normalizedParticleTexturePath(_ path: String?) -> String? {
           !path.isEmpty
     else { return nil }
     return path
+}
+
+private func gpuParticleConservativeSize(_ particle: Particle,
+                                         batch: RenderParticleSimulationBatch) -> Float {
+    guard batch.usesAuthoredAppearance else {
+        return max(0, particle.size)
+    }
+    let appearance = gpuParticleAppearance(for: particle, batch: batch)
+    let range = batch.sizeCurve.conservativeValueRange()
+    let delta = appearance.endSize - appearance.startSize
+    let authoredSize = max(0,
+                           appearance.startSize + delta * range.min,
+                           appearance.startSize + delta * range.max)
+        * max(0, particle.sizeScale)
+    return max(0, particle.size, authoredSize)
+}
+
+private func gpuParticleAppearance(for particle: Particle,
+                                   batch: RenderParticleSimulationBatch) -> RenderParticleAppearance {
+    guard !batch.appearancePalette.isEmpty else {
+        return RenderParticleAppearance(startSize: batch.startSize,
+                                        endSize: batch.endSize,
+                                        startColor: batch.startColor,
+                                        endColor: batch.endColor)
+    }
+    let index = Int(particle.appearanceIndex)
+    if batch.appearancePalette.indices.contains(index) {
+        return batch.appearancePalette[index]
+    }
+    if batch.appearancePalette.indices.contains(1) {
+        return batch.appearancePalette[1]
+    }
+    return batch.appearancePalette[0]
 }
 
 private func gpuParticleConservativeRadius(size: Float,

@@ -181,6 +181,12 @@ final class SimulationThread: @unchecked Sendable {
     ) -> ParticleSimulationEventApplyReport {
         let totalReadbackEventCount = snapshots.reduce(0) { $0 + $1.totalEventCount }
         let droppedReadbackEventCount = snapshots.reduce(0) { $0 + $1.droppedEventCount }
+        let gpuAliveParticleCount = snapshots.reduce(0) { $0 + $1.aliveParticleCount }
+        let gpuExpiredParticleCount = snapshots.reduce(0) { $0 + $1.expiredParticleCount }
+        let gpuCollisionEventCount = snapshots.reduce(0) { $0 + $1.collisionEventCount }
+        let gpuSpawnedParticleCount = snapshots.reduce(0) { $0 + $1.gpuSpawnedParticleCount }
+        let gpuDroppedSpawnCount = snapshots.reduce(0) { $0 + $1.gpuDroppedSpawnCount }
+        let gpuCompactedParticleCount = snapshots.reduce(0) { $0 + $1.compactedParticleCount }
         var eventsByEntity: [EntityID: [ParticleEvent]] = [:]
         for snapshot in snapshots {
             guard let rawValue = snapshot.emitterRawValue else { continue }
@@ -191,12 +197,24 @@ final class SimulationThread: @unchecked Sendable {
         guard !eventsByEntity.isEmpty else {
             return ParticleSimulationEventApplyReport(
                 totalReadbackEventCount: totalReadbackEventCount,
-                droppedReadbackEventCount: droppedReadbackEventCount
+                droppedReadbackEventCount: droppedReadbackEventCount,
+                gpuAliveParticleCount: gpuAliveParticleCount,
+                gpuExpiredParticleCount: gpuExpiredParticleCount,
+                gpuCollisionEventCount: gpuCollisionEventCount,
+                gpuSpawnedParticleCount: gpuSpawnedParticleCount,
+                gpuDroppedSpawnCount: gpuDroppedSpawnCount,
+                gpuCompactedParticleCount: gpuCompactedParticleCount
             )
         }
         var report = sceneRuntime.applyParticleSimulationEvents(eventsByEntity)
         report.totalReadbackEventCount = totalReadbackEventCount
         report.droppedReadbackEventCount = droppedReadbackEventCount
+        report.gpuAliveParticleCount = gpuAliveParticleCount
+        report.gpuExpiredParticleCount = gpuExpiredParticleCount
+        report.gpuCollisionEventCount = gpuCollisionEventCount
+        report.gpuSpawnedParticleCount = gpuSpawnedParticleCount
+        report.gpuDroppedSpawnCount = gpuDroppedSpawnCount
+        report.gpuCompactedParticleCount = gpuCompactedParticleCount
         return report
     }
 }
