@@ -120,6 +120,40 @@ struct EditorViewportRenderGateTests {
         #expect(inputFrame)
     }
 
+    @Test("Frame drive treats camera and gizmo drags as continuous work")
+    func frameDriveIncludesContinuousViewportInteraction() {
+        #expect(EditorViewportFrameDrive.wantsContinuousFrames(
+            viewportRealtimeEnabled: false,
+            playbackState: .stopped,
+            sceneHasActiveParticles: false,
+            continuousViewportInteractionActive: true
+        ))
+        #expect(!EditorViewportFrameDrive.wantsContinuousFrames(
+            viewportRealtimeEnabled: false,
+            playbackState: .stopped,
+            sceneHasActiveParticles: false,
+            continuousViewportInteractionActive: false
+        ))
+        #expect(EditorViewportFrameDrive.wantsContinuousFrames(
+            viewportRealtimeEnabled: true,
+            playbackState: .stopped,
+            sceneHasActiveParticles: false,
+            continuousViewportInteractionActive: false
+        ))
+        #expect(EditorViewportFrameDrive.wantsContinuousFrames(
+            viewportRealtimeEnabled: false,
+            playbackState: .playing,
+            sceneHasActiveParticles: false,
+            continuousViewportInteractionActive: false
+        ))
+        #expect(EditorViewportFrameDrive.wantsContinuousFrames(
+            viewportRealtimeEnabled: false,
+            playbackState: .stopped,
+            sceneHasActiveParticles: true,
+            continuousViewportInteractionActive: false
+        ))
+    }
+
     @Test("Heartbeat forces a frame after the interval even when clean")
     func heartbeatForcesFrame() {
         var gate = EditorViewportRenderGate()
