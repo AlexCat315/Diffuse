@@ -66,6 +66,10 @@ public struct SceneRuntime {
         world.resource(ParticleScalabilityStateResource.self) ?? .default
     }
 
+    public mutating func applyParticleSimulationReadbackStats(_ report: ParticleSimulationEventApplyReport) {
+        world.setResource(particleFrameStats.mergingGPUReadback(report))
+    }
+
     public mutating func setSpatialIndexBuildSettings(_ settings: SpatialIndexBuildSettings) {
         world.setResource(settings)
     }
