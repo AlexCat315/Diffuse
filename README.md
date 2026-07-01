@@ -4,12 +4,6 @@
 
 > 基于 Swift 构建的 AI-Native 3D 游戏与影视引擎。
 
-Guava 的核心命题是：**创作意图、世界状态、运行时执行、AI 理解——不是四层，是同一件事的四个视角。** 人类作者与 AI 共用完全相同的世界变更原语；每一次交互本身就是训练信号；世界是持续维护的语义图，而不是按需序列化的快照。
-
-- 🇬🇧 **English version**: [README.en.md](README.en.md)
-- 📖 **架构设计文档（中文）**：[`docs/architecture.md`](docs/architecture.md)
-- 🗺 **路线图（中文）**：[`docs/roadmap.md`](docs/roadmap.md)
-
 ---
 
 ## 构建
