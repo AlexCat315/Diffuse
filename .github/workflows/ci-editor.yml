@@ -2,7 +2,7 @@ name: GuavaEditor CI
 
 on:
   push:
-    branches: [main, next]
+    branches: [main]
     paths:
       - 'Editor/**'
       - 'Engine/**'
