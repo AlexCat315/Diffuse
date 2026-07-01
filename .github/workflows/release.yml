@@ -12,7 +12,7 @@ on:
       target:
         description: Commit SHA or branch to use when creating a missing release
         required: false
-        default: next
+        default: main
 
 permissions:
   contents: write

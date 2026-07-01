@@ -2,7 +2,7 @@ name: guava-mcp CI
 
 on:
   push:
-    branches: [main, next]
+    branches: [main]
     paths:
       - 'guava-mcp/**'
       - '.github/workflows/ci-guava-mcp.yml'
