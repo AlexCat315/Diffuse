@@ -791,6 +791,167 @@ struct DeveloperParticleDiagnosticsTests {
         #expect(noMatch.isEmpty)
     }
 
+    @Test("monitor snapshots expose current values ranges and threshold state")
+    func monitorSnapshotsExposeCurrentValuesRangesAndThresholdState() {
+        let fast = EditorFrameStats(frameSeconds: 1.0 / 60.0,
+                                    simulationSeconds: 0.002,
+                                    renderPrepareSeconds: 0.002,
+                                    gpuPresentSeconds: 0.002)
+        let slow = EditorFrameStats(frameSeconds: 0.045,
+                                    simulationSeconds: 0.018,
+                                    renderPrepareSeconds: 0.006,
+                                    renderSubmitSeconds: 0.004,
+                                    gpuPresentSeconds: 0.012)
+        let trace = makeDeveloperTrace(
+            frameStats: slow,
+            frameHistory: [
+                EditorFrameStatsHistorySample(sampleIndex: 1,
+                                              frameIndex: 10,
+                                              stats: fast),
+                EditorFrameStatsHistorySample(sampleIndex: 2,
+                                              frameIndex: 11,
+                                              stats: slow),
+            ],
+            particleHistory: [
+                EditorParticleDiagnosticsSample(sampleIndex: 2,
+                                                frameIndex: 11,
+                                                simulatedDeltaTime: 0.016,
+                                                emitterCount: 1,
+                                                activeEmitterCount: 1,
+                                                liveParticleCount: 80,
+                                                liveParticleLimit: 100,
+                                                requestedSpawnCount: 90,
+                                                spawnedParticleCount: 80,
+                                                droppedSpawnCount: 10,
+                                                capacityLimitedSpawnCount: 0,
+                                                spawnBudgetLimitedCount: 10,
+                                                spawnBudgetConsumedCount: 80,
+                                                spawnBudgetLimit: 80,
+                                                eventRequestedSpawnCount: 0,
+                                                eventDroppedSpawnCount: 0,
+                                                droppedReadbackEventCount: 0,
+                                                cpuRenderInstanceCount: 80,
+                                                gpuRenderInstanceCount: 0,
+                                                cpuBatchCount: 1,
+                                                gpuBatchCount: 0,
+                                                gpuSimulationParticleCount: 0,
+                                                gpuWorkgroupCount: 0,
+                                                gpuSortItemCount: 0,
+                                                gpuSortPaddedItemCount: 0),
+            ],
+            renderStats: RenderFrameStats(
+                passDrawCallCounts: [.basePass: 2],
+                activePasses: [.basePass],
+                passEncodeNS: [.basePass: 3_000_000]
+            ),
+            issues: [],
+            consoleEntries: [
+                EditorConsoleEntry(id: 1,
+                                   severity: .warning,
+                                   message: "Shader warning"),
+            ]
+        )
+
+        let snapshots = makeDeveloperMonitorSnapshots(trace: trace)
+        let frame = snapshots.first { $0.track == .frame }
+        let gpu = snapshots.first { $0.track == .gpuPresent }
+        let particles = snapshots.first { $0.track == .particles }
+        let render = snapshots.first { $0.track == .renderPass }
+        let console = snapshots.first { $0.track == .console }
+
+        #expect(frame?.currentLabel == "40.0ms")
+        #expect(frame?.isOverLimit == true)
+        #expect(gpu?.currentLabel == "12.0ms")
+        #expect(gpu?.isOverLimit == true)
+        #expect(particles?.currentLabel == "20 drops")
+        #expect(particles?.values.last == 80)
+        #expect(render?.currentValue == 3)
+        #expect(render?.isOverLimit == true)
+        #expect(console?.currentLabel == "Warning")
+        #expect(console?.isOverLimit == true)
+    }
+
+    @Test("performance monitors are built from runtime sources without trace snapshots")
+    func performanceMonitorsUseRuntimeSourcesWithoutTraceSnapshots() {
+        let fast = EditorFrameStats(frameSeconds: 1.0 / 60.0,
+                                    simulationSeconds: 0.002,
+                                    renderPrepareSeconds: 0.002,
+                                    gpuPresentSeconds: 0.002,
+                                    drawCallCount: 8,
+                                    passCount: 2,
+                                    renderBundleCount: 1)
+        let slow = EditorFrameStats(frameSeconds: 0.045,
+                                    simulationSeconds: 0.018,
+                                    renderPrepareSeconds: 0.006,
+                                    renderSubmitSeconds: 0.004,
+                                    gpuPresentSeconds: 0.012,
+                                    drawCallCount: 42,
+                                    passCount: 5,
+                                    renderBundleCount: 3)
+
+        let monitors = makeDeveloperPerformanceMonitors(
+            frameStats: slow,
+            frameHistory: [
+                EditorFrameStatsHistorySample(sampleIndex: 1,
+                                              frameIndex: 10,
+                                              stats: fast),
+                EditorFrameStatsHistorySample(sampleIndex: 2,
+                                              frameIndex: 11,
+                                              stats: slow),
+            ],
+            particleHistory: [
+                EditorParticleDiagnosticsSample(sampleIndex: 2,
+                                                frameIndex: 11,
+                                                simulatedDeltaTime: 0.016,
+                                                emitterCount: 1,
+                                                activeEmitterCount: 1,
+                                                liveParticleCount: 80,
+                                                liveParticleLimit: 100,
+                                                requestedSpawnCount: 90,
+                                                spawnedParticleCount: 70,
+                                                droppedSpawnCount: 10,
+                                                capacityLimitedSpawnCount: 0,
+                                                spawnBudgetLimitedCount: 10,
+                                                spawnBudgetConsumedCount: 80,
+                                                spawnBudgetLimit: 80,
+                                                eventRequestedSpawnCount: 0,
+                                                eventDroppedSpawnCount: 0,
+                                                droppedReadbackEventCount: 0,
+                                                cpuRenderInstanceCount: 70,
+                                                gpuRenderInstanceCount: 8,
+                                                cpuBatchCount: 1,
+                                                gpuBatchCount: 1,
+                                                gpuSimulationParticleCount: 64,
+                                                gpuWorkgroupCount: 4,
+                                                gpuSortItemCount: 0,
+                                                gpuSortPaddedItemCount: 0),
+            ],
+            renderStats: RenderFrameStats(cpuEncodeNS: 3_000_000),
+            consoleEntries: [
+                EditorConsoleEntry(id: 1,
+                                   severity: .error,
+                                   message: "Pipeline creation failed"),
+                EditorConsoleEntry(id: 2,
+                                   severity: .warning,
+                                   message: "Shader warning"),
+            ]
+        )
+
+        let frameWork = monitors.first { $0.id == .frameWorkMs }
+        let drawCalls = monitors.first { $0.id == .renderDrawCalls }
+        let particleDrops = monitors.first { $0.id == .particlesSpawnDrops }
+        let consoleErrors = monitors.first { $0.id == .consoleErrors }
+
+        #expect(frameWork?.sampleIndices == [1, 2])
+        #expect(frameWork?.currentValue == 40)
+        #expect(frameWork?.status == .critical)
+        #expect(drawCalls?.currentValue == 42)
+        #expect(particleDrops?.currentValue == 20)
+        #expect(particleDrops?.status == .warning)
+        #expect(consoleErrors?.currentValue == 1)
+        #expect(consoleErrors?.status == .critical)
+    }
+
     @Test("trace issue filters honor target track and severity")
     func traceIssueFiltersHonorTargetTrackAndSeverity() {
         let issue = DeveloperDiagnosticIssue(
