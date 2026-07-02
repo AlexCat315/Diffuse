@@ -511,6 +511,41 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertEqual(rig.controller.document.groups[movedGroupID ?? ""]?.activePanelID, "hierarchy")
     }
 
+    func testDraggingTabShowsDropIndicatorBeforeRelease() {
+        let rig = makeRigWithStatusBar(width: 1000, height: 640)
+
+        let source = rig.frame(named: "workspace-tab-hierarchy").center
+        let target = rig.frame(named: "workspace-group-trailing").center
+
+        rig.beginDrag(from: source)
+        rig.moveDrag(to: target)
+
+        XCTAssertEqual(rig.controller.document.groups["leading"]?.panels, ["hierarchy"])
+        let root = rig.node(named: "workspace")
+        let dragOverlay = DrawList()
+        root.overlayDraw?(dragOverlay, .zero)
+        XCTAssertGreaterThan(dragOverlay.vertices.count, 0)
+
+        rig.endDrag(at: target)
+
+        XCTAssertEqual(rig.controller.document.groups["trailing"]?.panels.contains("hierarchy"), true)
+        let clearedOverlay = DrawList()
+        rig.node(named: "workspace").overlayDraw?(clearedOverlay, .zero)
+        XCTAssertEqual(clearedOverlay.vertices.count, 0)
+    }
+
+    func testSmallDragInsideSourceTabStripDoesNotSplitPanel() {
+        let rig = makeRigWithStatusBar(width: 1000, height: 640)
+
+        let source = rig.frame(named: "workspace-tab-hierarchy").center
+        let target = CGPoint(x: source.x + 6, y: source.y)
+
+        rig.drag(from: source, to: target)
+
+        XCTAssertEqual(rig.controller.document.groups["leading"]?.panels, ["hierarchy"])
+        XCTAssertEqual(rig.controller.document.slot(.leading).layout?.leafGroupIDs ?? [], ["leading"])
+    }
+
     func testReinstalledWorkspaceWithSameControllerStillReceivesModelUpdates() {
         let controller = WorkspaceController(document: Self.makeDocument())
         var firstRig: WorkspaceViewRig? = WorkspaceViewRig(controller: controller,
@@ -690,11 +725,7 @@ private final class WorkspaceViewRig {
     }
 
     func drag(from start: CGPoint, to end: CGPoint) {
-        dispatcher.dispatch(.mouseButtonDown(MouseButtonEvent(button: .left,
-                                                              x: Float(start.x),
-                                                              y: Float(start.y),
-                                                              clicks: 1)))
-        pump()
+        beginDrag(from: start)
         let mid = CGPoint(x: (start.x + end.x) * 0.5, y: (start.y + end.y) * 0.5)
         dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: Float(mid.x),
                                                           y: Float(mid.y),
@@ -706,9 +737,29 @@ private final class WorkspaceViewRig {
                                                           deltaX: Float(end.x - mid.x),
                                                           deltaY: Float(end.y - mid.y))))
         pump()
+        endDrag(at: end)
+    }
+
+    func beginDrag(from start: CGPoint) {
+        dispatcher.dispatch(.mouseButtonDown(MouseButtonEvent(button: .left,
+                                                              x: Float(start.x),
+                                                              y: Float(start.y),
+                                                              clicks: 1)))
+        pump()
+    }
+
+    func moveDrag(to point: CGPoint) {
+        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: Float(point.x),
+                                                          y: Float(point.y),
+                                                          deltaX: 0,
+                                                          deltaY: 0)))
+        pump()
+    }
+
+    func endDrag(at point: CGPoint) {
         dispatcher.dispatch(.mouseButtonUp(MouseButtonEvent(button: .left,
-                                                            x: Float(end.x),
-                                                            y: Float(end.y),
+                                                            x: Float(point.x),
+                                                            y: Float(point.y),
                                                             clicks: 1)))
         pump()
     }
