@@ -279,8 +279,8 @@ struct DeveloperProfilerWorkbenchView: View {
                 Divider(axis: .vertical)
                     .frame(width: 1)
 
-                ScrollView(.vertical) {
-                    Column(alignment: .leading, spacing: 10) {
+                ScrollView(.vertical, scrollbarGutter: .stable) {
+                    Box(direction: .column, alignItems: .stretch, spacing: 10) {
                         DeveloperProfilerSelectedFrameCard(sample: selectedSample,
                                                            stats: selectedStats)
                         DeveloperProfilerFrameGraph(samples: samples,
@@ -526,7 +526,7 @@ private struct DeveloperProfilerSelectedFrameCard: View {
     let stats: EditorFrameStats
 
     var body: some View {
-        Column(alignment: .leading, spacing: 9) {
+        Box(direction: .column, alignItems: .stretch, spacing: 9) {
             Row(alignment: .center, spacing: 8) {
                 Column(alignment: .leading, spacing: 3) {
                     Row(alignment: .center, spacing: 8) {
@@ -546,7 +546,7 @@ private struct DeveloperProfilerSelectedFrameCard: View {
                 }
                 .flex(1, shrink: 1)
 
-                DeveloperStatusPill(label: developerProfilerFrameStatusLabel(stats.workMs),
+                DeveloperStatusPill(label: developerProfilerFrameStatusShortLabel(stats.workMs),
                                     status: developerProfilerFrameStatus(stats.workMs))
             }
 
@@ -557,6 +557,9 @@ private struct DeveloperProfilerSelectedFrameCard: View {
                 DeveloperProfilerCompactMetric(label: "Work FPS",
                                                value: developerProfilerFormatFPS(stats.workFPS),
                                                status: developerProfilerFrameStatus(stats.workMs))
+            }
+
+            Row(alignment: .center, spacing: 8) {
                 DeveloperProfilerCompactMetric(label: "Draws",
                                                value: "\(stats.drawCallCount)",
                                                status: .nominal)
@@ -599,8 +602,9 @@ private struct DeveloperProfilerFrameGraph: View {
     let selectedSample: EditorFrameStatsHistorySample?
 
     var body: some View {
-        let values = samples.map { Float($0.stats.workMs) }
-        Column(alignment: .leading, spacing: 6) {
+        let visibleSamples = Array(samples.suffix(96))
+        let values = visibleSamples.map { Float($0.stats.workMs) }
+        Box(direction: .column, alignItems: .stretch, spacing: 6) {
             Row(alignment: .center, spacing: 8) {
                 Text("Frame Time")
                     .font(.bodyStrong)
@@ -608,26 +612,80 @@ private struct DeveloperProfilerFrameGraph: View {
                 Text(developerPerformanceMonitorRangeLabel(values: values, unit: .milliseconds))
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
+                Text("\(visibleSamples.count) recent")
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
                 Spacer(minLength: 0)
             }
+
+            Row(alignment: .center, spacing: 10) {
+                DeveloperProfilerLegend(label: "OK", color: .success.opacity(0.75))
+                DeveloperProfilerLegend(label: "Over", color: .warning)
+                DeveloperProfilerLegend(label: "Critical", color: .error)
+                Spacer(minLength: 0)
+            }
+
+            DeveloperProfilerFrameHeatStrip(samples: visibleSamples,
+                                            selectedSample: selectedSample)
+                .frame(height: 54)
+
             MonitorChart(values: values,
                          color: .accent,
                          mode: .line,
                          threshold: ChartThreshold(value: 16.7, color: .warning),
-                         marker: developerProfilerMarker(samples: samples,
+                         marker: developerProfilerMarker(samples: visibleSamples,
                                                          selectedSample: selectedSample),
                          style: ChartStyle(minValue: 0,
                                            gridLineCount: 5,
-                                           lineWidth: 1.5,
+                                           lineWidth: 2.0,
                                            barSpacing: 1,
                                            contentInset: 6,
                                            background: .surfaceSunken,
                                            gridColor: .divider))
-                .frame(height: 104)
+                .frame(height: 76)
         }
         .padding(horizontal: 10, vertical: 8)
         .background(.surface)
         .border(.divider, width: 1)
+    }
+}
+
+private struct DeveloperProfilerFrameHeatStrip: View {
+    let samples: [EditorFrameStatsHistorySample]
+    let selectedSample: EditorFrameStatsHistorySample?
+
+    var body: some View {
+        let maxMs = max(samples.map(\.stats.workMs).max() ?? 16.7, 33.3)
+        Box(direction: .row, alignItems: .stretch, spacing: 1) {
+            for sample in samples {
+                DeveloperProfilerFrameHeatBar(sample: sample,
+                                              maxMs: maxMs,
+                                              isSelected: selectedSample?.sampleIndex == sample.sampleIndex)
+            }
+        }
+        .padding(horizontal: 4, vertical: 4)
+        .background(.surfaceSunken)
+        .border(.divider, width: 1)
+    }
+}
+
+private struct DeveloperProfilerFrameHeatBar: View {
+    let sample: EditorFrameStatsHistorySample
+    let maxMs: Double
+    let isSelected: Bool
+
+    var body: some View {
+        let ratio = Float(min(max(sample.stats.workMs / max(maxMs, 0.001), 0), 1))
+        let barHeight = max(2, ratio * 42)
+        Box(direction: .column, alignItems: .stretch, justifyContent: .flexEnd) {
+            Box { EmptyView() }
+                .frame(height: barHeight)
+                .background(developerProfilerFrameHeatColor(sample.stats.workMs))
+        }
+        .flex(1, shrink: 1, basis: 2)
+        .background(isSelected ? .accent.opacity(0.18) : .surfaceSunken)
+        .border(isSelected ? .accent : .surfaceSunken, width: isSelected ? 1 : 0)
     }
 }
 
@@ -643,15 +701,19 @@ private struct DeveloperProfilerFrameComposition: View {
         let pacingMs = stats.pacingGapMs
         let measuredMs = inputMs + simulationMs + prepareMs + submitMs + presentMs + pacingMs
         let totalMs = max(stats.frameMs, stats.workMs, measuredMs, 0.001)
-        Column(alignment: .leading, spacing: 7) {
+        Box(direction: .column, alignItems: .stretch, spacing: 7) {
             Row(alignment: .center, spacing: 8) {
                 Text("Frame Composition")
                     .font(.bodyStrong)
                     .foregroundColor(.onSurface)
                 Spacer(minLength: 0)
+            }
+
+            Row(alignment: .center, spacing: 10) {
                 DeveloperProfilerLegend(label: "CPU", color: .info)
                 DeveloperProfilerLegend(label: "GPU", color: .accentSecondary)
                 DeveloperProfilerLegend(label: "Pacing", color: .accentMuted)
+                Spacer(minLength: 0)
             }
 
             Box(direction: .row, alignItems: .stretch) {
@@ -734,7 +796,7 @@ private struct DeveloperProfilerPhaseBreakdown: View {
     let particleSample: EditorParticleDiagnosticsSample?
 
     var body: some View {
-        Column(alignment: .leading, spacing: 10) {
+        Box(direction: .column, alignItems: .stretch, spacing: 10) {
             DeveloperProfilerSection(title: "CPU Phases") {
                 DeveloperProfilerPhaseRow(label: "Input",
                                           valueMs: stats.inputSeconds * 1000,
@@ -1083,7 +1145,7 @@ private struct DeveloperPerformanceMonitorGraphPane: View {
                 }
                 .padding(horizontal: 12, vertical: 12)
             } else {
-                Column(alignment: .leading, spacing: 10) {
+                Box(direction: .column, alignItems: .stretch, spacing: 10) {
                     DeveloperPerformanceMonitorSummary(monitors: monitors.sorted(by: developerPerformanceMonitorPrecedes))
                     for monitor in monitors.sorted(by: developerPerformanceMonitorPrecedes) {
                         DeveloperPerformanceMonitorGraphCard(monitor: monitor,
@@ -1125,7 +1187,7 @@ private struct DeveloperPerformanceMonitorGraphCard: View {
                 .frame(width: 3, height: 174)
                 .background(monitor.category.color)
 
-            Column(alignment: .leading, spacing: 7) {
+            Box(direction: .column, alignItems: .stretch, spacing: 7) {
                 Row(alignment: .center, spacing: 8) {
                     Text(monitor.category.rawValue)
                         .font(.caption)
@@ -1179,6 +1241,7 @@ private struct DeveloperPerformanceMonitorGraphCard: View {
                 }
             }
             .padding(horizontal: 10, vertical: 9)
+            .flex(1, shrink: 1)
         }
         .background(.surface)
         .border(monitor.status == .nominal ? .divider : developerPerformanceStatusColor(monitor.status), width: 1)
@@ -1411,14 +1474,25 @@ private func developerProfilerFrameStatus(_ workMs: Double) -> DeveloperPerforma
     return .nominal
 }
 
-private func developerProfilerFrameStatusLabel(_ workMs: Double) -> String {
+private func developerProfilerFrameStatusShortLabel(_ workMs: Double) -> String {
     switch developerProfilerFrameStatus(workMs) {
     case .nominal:
-        return "Within Budget"
+        return "OK"
     case .warning:
-        return "Over Budget"
+        return "OVER"
     case .critical:
-        return "Critical"
+        return "CRIT"
+    }
+}
+
+private func developerProfilerFrameHeatColor(_ workMs: Double) -> SemanticColorRef {
+    switch developerProfilerFrameStatus(workMs) {
+    case .nominal:
+        return .success.opacity(0.75)
+    case .warning:
+        return .warning
+    case .critical:
+        return .error
     }
 }
 
