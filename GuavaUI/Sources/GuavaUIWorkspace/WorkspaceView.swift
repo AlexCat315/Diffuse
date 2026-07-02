@@ -57,10 +57,49 @@ public struct WorkspaceView: View {
             .layoutRole("workspace")
             .semanticRole("workspace")
             .debugName("workspace")
+            .modifier(_WorkspaceDragOverlayModifier())
     }
 }
 
 private final class WorkspaceSubscriptionIdentity {}
+
+private struct _WorkspaceDragOverlayModifier: ViewModifier {
+    func apply(node: Node) {
+        node.overlayDraw = { [weak node] list, _ in
+            guard let node,
+                  let state = node.attachments[_WorkspaceTabDragOverlayState.key] as? _WorkspaceTabDragOverlayState else {
+                return
+            }
+            drawWorkspaceTabDragOverlay(state: state, in: node, list: list)
+        }
+    }
+}
+
+private struct _WorkspaceTabDragOverlayState: Equatable {
+    static let key = "__workspace_tab_drag_overlay"
+
+    var cursorX: Float
+    var cursorY: Float
+    var title: String
+    var resolution: _WorkspaceDragResolution?
+}
+
+private enum _WorkspaceDragResolution: Equatable {
+    case noop
+    case reorder(_WorkspaceReorderPreview)
+    case drop(_WorkspaceDropPreview)
+}
+
+private struct _WorkspaceReorderPreview: Equatable {
+    var groupID: WorkspaceTabGroupID
+    var targetIndex: Int
+    var lineFrame: CGRect
+}
+
+private struct _WorkspaceDropPreview: Equatable {
+    var target: WorkspaceTarget
+    var frame: CGRect
+}
 
 private enum WorkspaceControllerSubscription {
     struct Key: Hashable {
@@ -853,24 +892,30 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
             case .up:
                 let state = node.attachments[Self.pressKey] as? _WorkspaceTabPressState
                 node.attachments.removeValue(forKey: Self.pressKey)
+                node.cursor = .pointer
+                node.opacity = 1
+                if let root = workspaceRoot(from: node) {
+                    setWorkspaceTabDragOverlay(nil, on: root)
+                }
                 if PointerCaptureHolder.current?.target === node {
                     PointerCaptureHolder.current?.release()
                 }
                 guard let state else { return .ignored }
                 if state.didDrag {
-                    if let targetIndex = resolveWorkspaceTabReorder(x: event.x,
-                                                                    y: event.y,
-                                                                    sourceGroupID: groupID,
-                                                                    document: document,
-                                                                    from: node) {
-                        reorder(groupID, targetIndex)
-                    } else if let target = resolveWorkspaceDropTarget(x: event.x,
-                                                                      y: event.y,
-                                                                      sourceGroupID: groupID,
-                                                                      sourcePanelID: panelID,
-                                                                      document: document,
-                                                                      from: node) {
-                        drop(target)
+                    if let resolution = resolveWorkspaceDragResolution(x: event.x,
+                                                                       y: event.y,
+                                                                       sourceGroupID: groupID,
+                                                                       sourcePanelID: panelID,
+                                                                       document: document,
+                                                                       from: node) {
+                        switch resolution {
+                        case .noop:
+                            cancelPress()
+                        case .reorder(let preview):
+                            reorder(preview.groupID, preview.targetIndex)
+                        case .drop(let preview):
+                            drop(preview.target)
+                        }
                     } else {
                         cancelPress()
                     }
@@ -892,6 +937,23 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
             if !state.didDrag, max(abs(dx), abs(dy)) >= 4 {
                 state.didDrag = true
                 cancelPress()
+                node.cursor = .move
+                node.opacity = 0.42
+            }
+            if state.didDrag,
+               let root = workspaceRoot(from: node) {
+                let title = document.panels[panelID]?.title ?? panelID.rawValue
+                let resolution = resolveWorkspaceDragResolution(x: event.x,
+                                                                 y: event.y,
+                                                                 sourceGroupID: groupID,
+                                                                 sourcePanelID: panelID,
+                                                                 document: document,
+                                                                 from: node)
+                setWorkspaceTabDragOverlay(_WorkspaceTabDragOverlayState(cursorX: event.x,
+                                                                          cursorY: event.y,
+                                                                          title: title,
+                                                                          resolution: resolution),
+                                           on: root)
             }
             return state.didDrag ? .handled : .ignored
         }
@@ -961,6 +1023,175 @@ private final class _WorkspaceTabPressState {
         self.lastY = lastY
         self.didDrag = didDrag
     }
+}
+
+private func setWorkspaceTabDragOverlay(_ state: _WorkspaceTabDragOverlayState?,
+                                        on root: Node) {
+    let previous = root.attachments[_WorkspaceTabDragOverlayState.key] as? _WorkspaceTabDragOverlayState
+    guard previous != state else { return }
+    if let state {
+        root.attachments[_WorkspaceTabDragOverlayState.key] = state
+    } else {
+        root.attachments.removeValue(forKey: _WorkspaceTabDragOverlayState.key)
+    }
+    root.markRenderDirty(reason: .styleSet(field: "workspaceTabDragOverlay"))
+}
+
+private func drawWorkspaceTabDragOverlay(state: _WorkspaceTabDragOverlayState,
+                                         in root: Node,
+                                         list: DrawList) {
+    switch state.resolution {
+    case .noop:
+        break
+    case .reorder(let preview):
+        drawWorkspaceReorderPreview(preview, theme: root.theme, list: list)
+    case .drop(let preview):
+        drawWorkspaceDropPreview(preview, theme: root.theme, list: list)
+    case nil:
+        break
+    }
+    drawWorkspaceDragGhost(state: state, in: root, list: list)
+}
+
+private func drawWorkspaceDropPreview(_ preview: _WorkspaceDropPreview,
+                                      theme: Theme,
+                                      list: DrawList) {
+    let inset: Float = preview.target.placement == .slot ? 5 : 3
+    let rect = insetWorkspaceRect(workspaceUIRect(preview.frame), by: inset)
+    guard rect.width > 2, rect.height > 2 else { return }
+    let accent = theme.colors.accent
+    let fillAlpha: Float = preview.target.placement == .tabGroup ? 0.10 : 0.16
+    list.addRoundedRect(rect, radius: 7, color: accent.multipliedAlpha(fillAlpha))
+    addWorkspaceRectBorder(rect: rect,
+                           color: accent.multipliedAlpha(0.92),
+                           thickness: 2,
+                           list: list)
+
+    guard preview.target.placement == .split,
+          let edge = preview.target.edge else {
+        return
+    }
+    let barThickness: Float = 5
+    let bar: UIRect
+    switch edge {
+    case .leading:
+        bar = UIRect(x: rect.minX, y: rect.minY, width: barThickness, height: rect.height)
+    case .trailing:
+        bar = UIRect(x: rect.maxX - barThickness, y: rect.minY, width: barThickness, height: rect.height)
+    case .top:
+        bar = UIRect(x: rect.minX, y: rect.minY, width: rect.width, height: barThickness)
+    case .bottom:
+        bar = UIRect(x: rect.minX, y: rect.maxY - barThickness, width: rect.width, height: barThickness)
+    }
+    list.addRoundedRect(bar, radius: 2.5, color: accent.multipliedAlpha(0.98))
+}
+
+private func drawWorkspaceReorderPreview(_ preview: _WorkspaceReorderPreview,
+                                         theme: Theme,
+                                         list: DrawList) {
+    let rect = workspaceUIRect(preview.lineFrame)
+    guard rect.width > 0, rect.height > 0 else { return }
+    let accent = theme.colors.accent
+    list.addRoundedRect(rect, radius: 1.5, color: accent.multipliedAlpha(0.98))
+    list.addRoundedRect(UIRect(x: rect.minX - 3,
+                               y: rect.minY,
+                               width: rect.width + 6,
+                               height: 3),
+                        radius: 1.5,
+                        color: accent)
+    list.addRoundedRect(UIRect(x: rect.minX - 3,
+                               y: rect.maxY - 3,
+                               width: rect.width + 6,
+                               height: 3),
+                        radius: 1.5,
+                        color: accent)
+}
+
+private func drawWorkspaceDragGhost(state: _WorkspaceTabDragOverlayState,
+                                    in root: Node,
+                                    list: DrawList) {
+    let title = cleanedWorkspaceDragTitle(state.title)
+    let font = Font.system(size: 12, weight: .medium)
+    var textLayout: TextLayoutResult?
+    var textWidth = min(170, max(42, Float(title.count) * 7))
+    if let env = TextEnvironmentHolder.current {
+        let layout = env.cachedLayout(text: title,
+                                      font: font,
+                                      lineHeight: 16,
+                                      maxWidth: 170,
+                                      alignment: .leading)
+        textLayout = layout
+        textWidth = min(170, max(42, layout.totalWidth))
+    }
+
+    let width = min(220, max(112, textWidth + 34))
+    let height: Float = 28
+    let bounds = absoluteFrame(of: root)
+    let minX = Float(bounds.minX) + 6
+    let minY = Float(bounds.minY) + 6
+    let maxX = max(minX, Float(bounds.maxX) - width - 6)
+    let maxY = max(minY, Float(bounds.maxY) - height - 6)
+    let x = min(max(state.cursorX + 14, minX), maxX)
+    let y = min(max(state.cursorY + 10, minY), maxY)
+    let rect = UIRect(x: x, y: y, width: width, height: height)
+    let colors = root.theme.colors
+
+    list.addRoundedRect(rect,
+                        radius: 6,
+                        color: colors.surfaceFloating.multipliedAlpha(0.96))
+    addWorkspaceRectBorder(rect: rect,
+                           color: colors.accent.multipliedAlpha(0.55),
+                           thickness: 1,
+                           list: list)
+    list.addRoundedRect(UIRect(x: rect.minX + 7,
+                               y: rect.minY + 6,
+                               width: 3,
+                               height: rect.height - 12),
+                        radius: 1.5,
+                        color: colors.accent.multipliedAlpha(0.95))
+
+    guard let textLayout,
+          let env = TextEnvironmentHolder.current else {
+        return
+    }
+    let textY = rect.minY + max(0, (rect.height - textLayout.totalHeight) * 0.5)
+    list.addText(textLayout,
+                 origin: (rect.minX + 20, textY),
+                 color: colors.onSurface,
+                 textureID: env.atlasTextureID,
+                 atlas: env.atlas)
+}
+
+private func cleanedWorkspaceDragTitle(_ title: String) -> String {
+    let clean = title
+        .replacingOccurrences(of: "\n", with: " ")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+    return clean.isEmpty ? "Panel" : clean
+}
+
+private func workspaceUIRect(_ rect: CGRect) -> UIRect {
+    UIRect(x: Float(rect.minX),
+           y: Float(rect.minY),
+           width: Float(rect.width),
+           height: Float(rect.height))
+}
+
+private func insetWorkspaceRect(_ rect: UIRect, by amount: Float) -> UIRect {
+    UIRect(x: rect.x + amount,
+           y: rect.y + amount,
+           width: max(0, rect.width - amount * 2),
+           height: max(0, rect.height - amount * 2))
+}
+
+private func addWorkspaceRectBorder(rect: UIRect,
+                                    color: Color,
+                                    thickness: Float,
+                                    list: DrawList) {
+    let t = max(1, thickness)
+    list.addRect(UIRect(x: rect.minX, y: rect.minY, width: rect.width, height: t), color: color)
+    list.addRect(UIRect(x: rect.minX, y: rect.maxY - t, width: rect.width, height: t), color: color)
+    list.addRect(UIRect(x: rect.minX, y: rect.minY, width: t, height: rect.height), color: color)
+    list.addRect(UIRect(x: rect.maxX - t, y: rect.minY, width: t, height: rect.height), color: color)
 }
 
 private enum _WorkspaceSplitAxis {
@@ -1504,14 +1735,39 @@ private func resolveWorkspaceSplitFraction(splitID: WorkspaceSplitID,
     }
 }
 
-private func resolveWorkspaceTabReorder(x: Float,
-                                        y: Float,
-                                        sourceGroupID: WorkspaceTabGroupID,
-                                        document: WorkspaceDocument,
-                                        from node: Node) -> Int? {
+private func resolveWorkspaceDragResolution(x: Float,
+                                            y: Float,
+                                            sourceGroupID: WorkspaceTabGroupID,
+                                            sourcePanelID: WorkspacePanelID,
+                                            document: WorkspaceDocument,
+                                            from node: Node) -> _WorkspaceDragResolution? {
+    if let resolution = resolveWorkspaceTabReorderResolution(x: x,
+                                                             y: y,
+                                                             sourceGroupID: sourceGroupID,
+                                                             sourcePanelID: sourcePanelID,
+                                                             document: document,
+                                                             from: node) {
+        return resolution
+    }
+    if let preview = resolveWorkspaceDropPreview(x: x,
+                                                 y: y,
+                                                 sourceGroupID: sourceGroupID,
+                                                 sourcePanelID: sourcePanelID,
+                                                 document: document,
+                                                 from: node) {
+        return .drop(preview)
+    }
+    return nil
+}
+
+private func resolveWorkspaceTabReorderResolution(x: Float,
+                                                  y: Float,
+                                                  sourceGroupID: WorkspaceTabGroupID,
+                                                  sourcePanelID: WorkspacePanelID,
+                                                  document: WorkspaceDocument,
+                                                  from node: Node) -> _WorkspaceDragResolution? {
     guard let root = workspaceRoot(from: node),
           let group = document.groups[sourceGroupID],
-          group.panels.count > 1,
           let groupNode = firstNode(rootedAt: root,
                                     debugName: "workspace-group-\(sourceGroupID.rawValue)") else {
         return nil
@@ -1520,7 +1776,55 @@ private func resolveWorkspaceTabReorder(x: Float,
     let groupFrame = absoluteFrame(of: groupNode)
     guard groupFrame.contains(point) else { return nil }
 
-    let tabFrames = group.panels.compactMap { panelID -> (WorkspacePanelID, CGRect)? in
+    let tabFrames = workspaceTabFrames(for: group, rootedAt: root)
+    guard !tabFrames.isEmpty else { return nil }
+
+    let tabBand = tabFrames.reduce(tabFrames[0].1) { partial, item in
+        partial.union(item.1)
+    }.insetBy(dx: -10, dy: -8)
+    guard tabBand.contains(point) else { return nil }
+    guard group.panels.count > 1,
+          let oldIndex = group.panels.firstIndex(of: sourcePanelID) else {
+        return .noop
+    }
+
+    let targetIndex: Int
+    if let indexed = tabFrames.enumerated().first(where: { point.x < $0.element.1.midX }) {
+        targetIndex = indexed.offset
+    } else {
+        targetIndex = group.panels.count
+    }
+    guard targetIndex != oldIndex, targetIndex != oldIndex + 1 else { return .noop }
+
+    let lineX: CGFloat
+    if targetIndex <= 0 {
+        lineX = tabFrames[0].1.minX
+    } else if targetIndex >= tabFrames.count {
+        lineX = tabFrames[tabFrames.count - 1].1.maxX
+    } else {
+        lineX = tabFrames[targetIndex].1.minX
+    }
+    let lineFrame = CGRect(x: lineX - 1.5,
+                           y: tabBand.minY + 5,
+                           width: 3,
+                           height: max(12, tabBand.height - 10))
+    return .reorder(_WorkspaceReorderPreview(groupID: sourceGroupID,
+                                             targetIndex: targetIndex,
+                                             lineFrame: lineFrame))
+}
+
+private func workspaceTabBand(for group: WorkspaceTabGroup,
+                              rootedAt root: Node) -> CGRect? {
+    let tabFrames = workspaceTabFrames(for: group, rootedAt: root)
+    guard !tabFrames.isEmpty else { return nil }
+    return tabFrames.reduce(tabFrames[0].1) { partial, item in
+        partial.union(item.1)
+    }.insetBy(dx: -10, dy: -8)
+}
+
+private func workspaceTabFrames(for group: WorkspaceTabGroup,
+                                rootedAt root: Node) -> [(WorkspacePanelID, CGRect)] {
+    group.panels.compactMap { panelID -> (WorkspacePanelID, CGRect)? in
         guard let tabNode = firstNode(rootedAt: root,
                                       debugName: "workspace-tab-\(panelID.rawValue)") else {
             return nil
@@ -1529,25 +1833,14 @@ private func resolveWorkspaceTabReorder(x: Float,
         guard frame.width > 0, frame.height > 0 else { return nil }
         return (panelID, frame)
     }
-    guard !tabFrames.isEmpty else { return nil }
-
-    let tabBand = tabFrames.reduce(tabFrames[0].1) { partial, item in
-        partial.union(item.1)
-    }.insetBy(dx: -10, dy: -8)
-    guard tabBand.contains(point) else { return nil }
-
-    for (index, item) in tabFrames.enumerated() where point.x < item.1.midX {
-        return index
-    }
-    return group.panels.count
 }
 
-private func resolveWorkspaceDropTarget(x: Float,
-                                        y: Float,
-                                        sourceGroupID: WorkspaceTabGroupID,
-                                        sourcePanelID: WorkspacePanelID,
-                                        document: WorkspaceDocument,
-                                        from node: Node) -> WorkspaceTarget? {
+private func resolveWorkspaceDropPreview(x: Float,
+                                         y: Float,
+                                         sourceGroupID: WorkspaceTabGroupID,
+                                         sourcePanelID: WorkspacePanelID,
+                                         document: WorkspaceDocument,
+                                         from node: Node) -> _WorkspaceDropPreview? {
     guard let root = workspaceRoot(from: node) else { return nil }
     let point = CGPoint(x: CGFloat(x), y: CGFloat(y))
 
@@ -1562,14 +1855,21 @@ private func resolveWorkspaceDropTarget(x: Float,
         let frame = absoluteFrame(of: groupNode)
         guard frame.contains(point) else { continue }
         guard let slotID = document.slotContaining(groupID: groupID) else { continue }
-        let target = dropTarget(in: frame,
-                                point: point,
-                                slotID: slotID,
-                                groupID: groupID)
-        if groupID == sourceGroupID, target.placement == .tabGroup {
-            return WorkspaceTarget(slot: slotID, groupID: groupID, placement: .tabGroup)
+        if let group = document.groups[groupID],
+           let tabBand = workspaceTabBand(for: group, rootedAt: root),
+           tabBand.contains(point) {
+            return _WorkspaceDropPreview(target: .tabGroup(slot: slotID, groupID: groupID),
+                                         frame: frame.insetBy(dx: frame.width * 0.24,
+                                                              dy: frame.height * 0.24))
         }
-        return target
+        var preview = dropPreview(in: frame,
+                                  point: point,
+                                  slotID: slotID,
+                                  groupID: groupID)
+        if groupID == sourceGroupID, preview.target.placement == .tabGroup {
+            preview.target = WorkspaceTarget(slot: slotID, groupID: groupID, placement: .tabGroup)
+        }
+        return preview
     }
 
     for slotID in document.slots.keys {
@@ -1580,32 +1880,53 @@ private func resolveWorkspaceDropTarget(x: Float,
         }
         let frame = absoluteFrame(of: slotNode)
         guard frame.contains(point) else { continue }
-        return WorkspaceTarget.slot(slotID)
+        return _WorkspaceDropPreview(target: WorkspaceTarget.slot(slotID),
+                                     frame: frame)
     }
 
     return nil
 }
 
-private func dropTarget(in frame: CGRect,
-                        point: CGPoint,
-                        slotID: WorkspaceSlotID,
-                        groupID: WorkspaceTabGroupID) -> WorkspaceTarget {
+private func dropPreview(in frame: CGRect,
+                         point: CGPoint,
+                         slotID: WorkspaceSlotID,
+                         groupID: WorkspaceTabGroupID) -> _WorkspaceDropPreview {
     let localX = Float((point.x - frame.minX) / max(frame.width, 1))
     let localY = Float((point.y - frame.minY) / max(frame.height, 1))
     let edge: Float = 0.24
     if localX < edge {
-        return .split(slot: slotID, anchorGroupID: groupID, edge: .leading)
+        return _WorkspaceDropPreview(target: .split(slot: slotID, anchorGroupID: groupID, edge: .leading),
+                                     frame: CGRect(x: frame.minX,
+                                                   y: frame.minY,
+                                                   width: frame.width * CGFloat(edge),
+                                                   height: frame.height))
     }
     if localX > 1 - edge {
-        return .split(slot: slotID, anchorGroupID: groupID, edge: .trailing)
+        let width = frame.width * CGFloat(edge)
+        return _WorkspaceDropPreview(target: .split(slot: slotID, anchorGroupID: groupID, edge: .trailing),
+                                     frame: CGRect(x: frame.maxX - width,
+                                                   y: frame.minY,
+                                                   width: width,
+                                                   height: frame.height))
     }
     if localY < edge {
-        return .split(slot: slotID, anchorGroupID: groupID, edge: .top)
+        return _WorkspaceDropPreview(target: .split(slot: slotID, anchorGroupID: groupID, edge: .top),
+                                     frame: CGRect(x: frame.minX,
+                                                   y: frame.minY,
+                                                   width: frame.width,
+                                                   height: frame.height * CGFloat(edge)))
     }
     if localY > 1 - edge {
-        return .split(slot: slotID, anchorGroupID: groupID, edge: .bottom)
+        let height = frame.height * CGFloat(edge)
+        return _WorkspaceDropPreview(target: .split(slot: slotID, anchorGroupID: groupID, edge: .bottom),
+                                     frame: CGRect(x: frame.minX,
+                                                   y: frame.maxY - height,
+                                                   width: frame.width,
+                                                   height: height))
     }
-    return .tabGroup(slot: slotID, groupID: groupID)
+    return _WorkspaceDropPreview(target: .tabGroup(slot: slotID, groupID: groupID),
+                                 frame: frame.insetBy(dx: frame.width * CGFloat(edge),
+                                                      dy: frame.height * CGFloat(edge)))
 }
 
 private func workspaceRoot(from node: Node) -> Node? {
