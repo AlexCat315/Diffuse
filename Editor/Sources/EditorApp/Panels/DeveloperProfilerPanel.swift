@@ -264,6 +264,8 @@ struct DeveloperProfilerWorkbenchView: View {
         let selectedSample = developerProfilerSelectedFrame(samples: samples,
                                                             selectedSampleIndex: selectedSampleIndex.wrappedValue)
         let selectedStats = selectedSample?.stats ?? frameStats
+        let selectedParticleSample = developerProfilerParticleSample(particleHistory: particleHistory,
+                                                                     sampleIndex: selectedSample?.sampleIndex)
         Column(alignment: .leading, spacing: 0) {
             DeveloperProfilerToolbar(sampleCount: samples.count,
                                      selectedSample: selectedSample,
@@ -283,15 +285,16 @@ struct DeveloperProfilerWorkbenchView: View {
                     Box(direction: .column, alignItems: .stretch, spacing: 10) {
                         DeveloperProfilerSelectedFrameCard(sample: selectedSample,
                                                            stats: selectedStats)
+                        DeveloperProfilerBottleneckSummaryCard(stats: selectedStats,
+                                                               renderStats: renderStats,
+                                                               particleSample: selectedParticleSample)
                         DeveloperProfilerFrameGraph(samples: samples,
-                                                    selectedSample: selectedSample)
+                                                    selectedSample: selectedSample,
+                                                    selectedSampleIndex: selectedSampleIndex)
                         DeveloperProfilerFrameComposition(stats: selectedStats)
                         DeveloperProfilerPhaseBreakdown(stats: selectedStats,
                                                         renderStats: renderStats,
-                                                        particleSample: developerProfilerParticleSample(
-                                                            particleHistory: particleHistory,
-                                                            sampleIndex: selectedSample?.sampleIndex
-                                                        ))
+                                                        particleSample: selectedParticleSample)
                         DeveloperProfilerIssuePane(issues: issues)
                     }
                     .padding(horizontal: 12, vertical: 10)
@@ -441,6 +444,11 @@ private struct DeveloperProfilerFrameList: View {
             .background(.surfaceFloating)
 
             Divider()
+
+            DeveloperProfilerFrameHealthCard(samples: samples)
+                .padding(horizontal: 10, vertical: 8)
+
+            Divider()
             Row(alignment: .center, spacing: 8) {
                 Text("Sample")
                     .font(.caption)
@@ -449,15 +457,11 @@ private struct DeveloperProfilerFrameList: View {
                 Text("Work")
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
-                    .frame(width: 68)
-                Text("CPU")
+                    .frame(width: 72)
+                Text("Focus")
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
-                    .frame(width: 54)
-                Text("GPU")
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
-                    .frame(width: 54)
+                    .flex(1, shrink: 1)
             }
             .padding(horizontal: 10, vertical: 5)
             .background(.surface)
@@ -485,6 +489,7 @@ private struct DeveloperProfilerFrameRow: View {
 
     var body: some View {
         let status = developerProfilerFrameStatus(sample.stats.workMs)
+        let focus = developerProfilerFrameFocus(sample.stats)
         Button(action: onSelect) {
             Row(alignment: .center, spacing: 0) {
                 Box { EmptyView() }
@@ -500,17 +505,19 @@ private struct DeveloperProfilerFrameRow: View {
                         .lineLimit(1)
                         .font(.mono)
                         .foregroundColor(developerPerformanceStatusColor(status))
-                        .frame(width: 68)
-                    Text(developerProfilerCompactMs(sample.stats.cpuWorkSeconds * 1000))
-                        .lineLimit(1)
-                        .font(.mono)
-                        .foregroundColor(.onSurfaceMuted)
-                        .frame(width: 54)
-                    Text(developerProfilerCompactMs(sample.stats.gpuPresentSeconds * 1000))
-                        .lineLimit(1)
-                        .font(.mono)
-                        .foregroundColor(.onSurfaceMuted)
-                        .frame(width: 54)
+                        .frame(width: 72)
+                    Row(alignment: .center, spacing: 5) {
+                        Box { EmptyView() }
+                            .frame(width: 6, height: 6)
+                            .background(developerPerformanceStatusColor(focus.status))
+                            .cornerRadius(3)
+                        Text(focus.label)
+                            .lineLimit(1)
+                            .font(.caption)
+                            .foregroundColor(focus.status == .nominal ? .onSurfaceMuted : developerPerformanceStatusColor(focus.status))
+                            .flex(1, shrink: 1)
+                    }
+                    .flex(1, shrink: 1)
                 }
                 .padding(horizontal: 7, vertical: 4)
             }
@@ -518,6 +525,78 @@ private struct DeveloperProfilerFrameRow: View {
             .border(isSelected ? .accent : .divider, width: isSelected ? 1 : 0)
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct DeveloperProfilerFrameHealthCard: View {
+    let samples: [EditorFrameStatsHistorySample]
+
+    var body: some View {
+        let health = developerProfilerFrameHealth(samples: samples)
+        let status = developerProfilerFrameHealthStatus(health)
+        Box(direction: .column, alignItems: .stretch, spacing: 6) {
+            Row(alignment: .center, spacing: 6) {
+                Text("Frame Health")
+                    .lineLimit(1)
+                    .font(.bodyStrong)
+                    .foregroundColor(.onSurface)
+                Spacer(minLength: 0)
+                Text("\(health.sampleCount) samples")
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
+
+            Row(alignment: .center, spacing: 6) {
+                DeveloperProfilerHealthMetric(label: "Budget",
+                                              value: "\(Int(health.budgetHitRate.rounded()))%",
+                                              status: status)
+                DeveloperProfilerHealthMetric(label: "Avg",
+                                              value: developerProfilerFormatMs(health.averageWorkMs),
+                                              status: developerProfilerFrameStatus(health.averageWorkMs))
+                DeveloperProfilerHealthMetric(label: "Max",
+                                              value: developerProfilerFormatMs(health.maxWorkMs),
+                                              status: developerProfilerFrameStatus(health.maxWorkMs))
+            }
+
+            Row(alignment: .center, spacing: 6) {
+                DeveloperProfilerHealthMetric(label: "Over",
+                                              value: "\(health.overBudgetCount)",
+                                              status: health.overBudgetCount > 0 ? .warning : .nominal)
+                DeveloperProfilerHealthMetric(label: "Critical",
+                                              value: "\(health.criticalCount)",
+                                              status: health.criticalCount > 0 ? .critical : .nominal)
+                DeveloperProfilerHealthMetric(label: "Pacing",
+                                              value: "\(health.pacingCount)",
+                                              status: health.pacingCount > 0 ? .warning : .nominal)
+            }
+        }
+        .padding(horizontal: 8, vertical: 7)
+        .background(.surface)
+        .border(status == .nominal ? .divider : developerPerformanceStatusColor(status), width: 1)
+    }
+}
+
+private struct DeveloperProfilerHealthMetric: View {
+    let label: String
+    let value: String
+    let status: DeveloperPerformanceMonitorStatus
+
+    var body: some View {
+        Column(alignment: .leading, spacing: 1) {
+            Text(label)
+                .lineLimit(1)
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+            Text(value)
+                .lineLimit(1)
+                .font(.mono)
+                .foregroundColor(developerPerformanceStatusColor(status))
+        }
+        .padding(horizontal: 6, vertical: 4)
+        .background(.surfaceSunken)
+        .border(status == .nominal ? .divider : developerPerformanceStatusColor(status), width: 1)
+        .flex(1, shrink: 1)
     }
 }
 
@@ -597,9 +676,93 @@ private struct DeveloperProfilerCompactMetric: View {
     }
 }
 
+private struct DeveloperProfilerBottleneckSummaryCard: View {
+    let stats: EditorFrameStats
+    let renderStats: RenderFrameStats
+    let particleSample: EditorParticleDiagnosticsSample?
+
+    var body: some View {
+        let summary = developerProfilerBottleneckSummary(stats: stats,
+                                                         renderStats: renderStats,
+                                                         particleSample: particleSample)
+        Box(direction: .column, alignItems: .stretch, spacing: 7) {
+            Row(alignment: .center, spacing: 8) {
+                DeveloperStatusPill(label: developerPerformanceMonitorStatusLabel(summary.status),
+                                    status: summary.status)
+                Text(summary.title)
+                    .lineLimit(1)
+                    .font(.bodyStrong)
+                    .foregroundColor(developerPerformanceStatusColor(summary.status))
+                Spacer(minLength: 0)
+            }
+
+            Text(summary.primarySignal)
+                .lineLimit(1)
+                .font(.caption)
+                .foregroundColor(.onSurface)
+
+            DeveloperProfilerEvidenceGrid(items: summary.evidence)
+
+            Text(summary.action)
+                .lineLimit(2)
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+        }
+        .padding(horizontal: 10, vertical: 8)
+        .background(.surface)
+        .border(summary.status == .nominal ? .divider : developerPerformanceStatusColor(summary.status), width: 1)
+    }
+}
+
+private struct DeveloperProfilerEvidenceGrid: View {
+    let items: [DeveloperProfilerEvidenceItem]
+
+    var body: some View {
+        let firstRow = Array(items.prefix(2))
+        let secondRow = Array(items.dropFirst(2).prefix(2))
+        Box(direction: .column, alignItems: .stretch, spacing: 6) {
+            Row(alignment: .center, spacing: 8) {
+                for item in firstRow {
+                    DeveloperProfilerEvidenceCell(item: item)
+                }
+            }
+            if !secondRow.isEmpty {
+                Row(alignment: .center, spacing: 8) {
+                    for item in secondRow {
+                        DeveloperProfilerEvidenceCell(item: item)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct DeveloperProfilerEvidenceCell: View {
+    let item: DeveloperProfilerEvidenceItem
+
+    var body: some View {
+        Row(alignment: .center, spacing: 6) {
+            Text(item.label)
+                .lineLimit(1)
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+                .flex(1, shrink: 1)
+            Text(item.value)
+                .lineLimit(1)
+                .font(.mono)
+                .foregroundColor(developerPerformanceStatusColor(item.status))
+        }
+        .padding(horizontal: 8, vertical: 5)
+        .background(.surfaceSunken)
+        .border(item.status == .nominal ? .divider : developerPerformanceStatusColor(item.status), width: 1)
+        .flex(1, shrink: 1)
+    }
+}
+
 private struct DeveloperProfilerFrameGraph: View {
     let samples: [EditorFrameStatsHistorySample]
     let selectedSample: EditorFrameStatsHistorySample?
+    let selectedSampleIndex: Binding<UInt64?>
 
     var body: some View {
         let visibleSamples = Array(samples.suffix(96))
@@ -617,6 +780,10 @@ private struct DeveloperProfilerFrameGraph: View {
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
                 Spacer(minLength: 0)
+                Text(selectedSample.map { "#\($0.sampleIndex)" } ?? "Latest")
+                    .lineLimit(1)
+                    .font(.mono)
+                    .foregroundColor(.accent)
             }
 
             Row(alignment: .center, spacing: 10) {
@@ -627,7 +794,8 @@ private struct DeveloperProfilerFrameGraph: View {
             }
 
             DeveloperProfilerFrameHeatStrip(samples: visibleSamples,
-                                            selectedSample: selectedSample)
+                                            selectedSample: selectedSample,
+                                            selectedSampleIndex: selectedSampleIndex)
                 .frame(height: 54)
 
             MonitorChart(values: values,
@@ -654,6 +822,7 @@ private struct DeveloperProfilerFrameGraph: View {
 private struct DeveloperProfilerFrameHeatStrip: View {
     let samples: [EditorFrameStatsHistorySample]
     let selectedSample: EditorFrameStatsHistorySample?
+    let selectedSampleIndex: Binding<UInt64?>
 
     var body: some View {
         let maxMs = max(samples.map(\.stats.workMs).max() ?? 16.7, 33.3)
@@ -661,7 +830,10 @@ private struct DeveloperProfilerFrameHeatStrip: View {
             for sample in samples {
                 DeveloperProfilerFrameHeatBar(sample: sample,
                                               maxMs: maxMs,
-                                              isSelected: selectedSample?.sampleIndex == sample.sampleIndex)
+                                              isSelected: selectedSample?.sampleIndex == sample.sampleIndex,
+                                              onSelect: {
+                                                  selectedSampleIndex.wrappedValue = sample.sampleIndex
+                                              })
             }
         }
         .padding(horizontal: 4, vertical: 4)
@@ -674,18 +846,22 @@ private struct DeveloperProfilerFrameHeatBar: View {
     let sample: EditorFrameStatsHistorySample
     let maxMs: Double
     let isSelected: Bool
+    let onSelect: () -> Void
 
     var body: some View {
         let ratio = Float(min(max(sample.stats.workMs / max(maxMs, 0.001), 0), 1))
         let barHeight = max(2, ratio * 42)
-        Box(direction: .column, alignItems: .stretch, justifyContent: .flexEnd) {
-            Box { EmptyView() }
-                .frame(height: barHeight)
-                .background(developerProfilerFrameHeatColor(sample.stats.workMs))
+        Button(action: onSelect) {
+            Box(direction: .column, alignItems: .stretch, justifyContent: .flexEnd) {
+                Box { EmptyView() }
+                    .frame(height: barHeight)
+                    .background(developerProfilerFrameHeatColor(sample.stats.workMs))
+            }
+            .background(isSelected ? .accent.opacity(0.18) : .surfaceSunken)
+            .border(isSelected ? .accent : .surfaceSunken, width: isSelected ? 1 : 0)
         }
+        .buttonStyle(.plain)
         .flex(1, shrink: 1, basis: 2)
-        .background(isSelected ? .accent.opacity(0.18) : .surfaceSunken)
-        .border(isSelected ? .accent : .surfaceSunken, width: isSelected ? 1 : 0)
     }
 }
 
@@ -857,7 +1033,7 @@ private struct DeveloperProfilerSection<Content: View>: View {
     }
 
     var body: some View {
-        Column(alignment: .leading, spacing: 6) {
+        Box(direction: .column, alignItems: .stretch, spacing: 6) {
             Text(title)
                 .font(.bodyStrong)
                 .foregroundColor(.onSurface)
@@ -876,26 +1052,32 @@ private struct DeveloperProfilerPhaseRow: View {
 
     var body: some View {
         let fraction = Float(min(max(valueMs / totalMs, 0), 1))
+        let filledWeight = max(fraction, 0.001)
+        let remainingWeight = max(1 - fraction, 0.001)
         Row(alignment: .center, spacing: 8) {
             Text(label)
                 .lineLimit(1)
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
-                .frame(width: 92)
-            Row(alignment: .center, spacing: 0) {
+                .frame(width: 108)
+            Box(direction: .row, alignItems: .stretch, spacing: 0) {
+                if valueMs > 0 {
+                    Box { EmptyView() }
+                        .flex(filledWeight, shrink: 1)
+                        .background(.accent)
+                }
                 Box { EmptyView() }
-                    .frame(width: 96 * fraction, height: 6)
-                    .background(.accent)
-                Box { EmptyView() }
-                    .frame(width: 96 * (1 - fraction), height: 6)
+                    .flex(remainingWeight, shrink: 1)
                     .background(.surfaceSunken)
             }
+            .frame(height: 6)
             .cornerRadius(2)
+            .flex(1, shrink: 1)
             Text(developerProfilerFormatMs(valueMs))
                 .lineLimit(1)
                 .font(.mono)
                 .foregroundColor(.onSurface)
-                .frame(width: 70)
+                .frame(width: 64)
         }
     }
 }
@@ -952,7 +1134,7 @@ private struct DeveloperProfilerIssueRow: View {
             Text(issue.scope.rawValue)
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
-                .frame(width: 70)
+                .frame(width: 64)
             Text(issue.title)
                 .lineLimit(1)
                 .font(.caption)
@@ -962,7 +1144,7 @@ private struct DeveloperProfilerIssueRow: View {
                 .lineLimit(1)
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
-                .frame(width: 180)
+                .flex(1, shrink: 1)
         }
         .padding(horizontal: 8, vertical: 4)
         .background(.surfaceSunken)
@@ -1253,6 +1435,35 @@ private struct DeveloperMonitorSeries {
     var sampleIndices: [UInt64]
 }
 
+private struct DeveloperProfilerBottleneckSummary {
+    var title: String
+    var status: DeveloperPerformanceMonitorStatus
+    var primarySignal: String
+    var evidence: [DeveloperProfilerEvidenceItem]
+    var action: String
+}
+
+private struct DeveloperProfilerEvidenceItem {
+    var label: String
+    var value: String
+    var status: DeveloperPerformanceMonitorStatus
+}
+
+private struct DeveloperProfilerFrameHealth {
+    var sampleCount: Int
+    var overBudgetCount: Int
+    var criticalCount: Int
+    var pacingCount: Int
+    var budgetHitRate: Double
+    var averageWorkMs: Double
+    var maxWorkMs: Double
+}
+
+private struct DeveloperProfilerFrameFocus {
+    var label: String
+    var status: DeveloperPerformanceMonitorStatus
+}
+
 private func developerProfilerFrameSamples(frameStats: EditorFrameStats,
                                            frameHistory: [EditorFrameStatsHistorySample],
                                            maxSamples: Int) -> [EditorFrameStatsHistorySample] {
@@ -1458,6 +1669,45 @@ private func developerProfilerParticleDropCount(_ sample: EditorParticleDiagnost
         + sample.eventDroppedSpawnCount
 }
 
+private func developerProfilerFrameHealth(samples: [EditorFrameStatsHistorySample]) -> DeveloperProfilerFrameHealth {
+    guard !samples.isEmpty else {
+        return DeveloperProfilerFrameHealth(sampleCount: 0,
+                                            overBudgetCount: 0,
+                                            criticalCount: 0,
+                                            pacingCount: 0,
+                                            budgetHitRate: 100,
+                                            averageWorkMs: 0,
+                                            maxWorkMs: 0)
+    }
+
+    let overBudgetCount = samples.filter { developerProfilerFrameStatus($0.stats.workMs) != .nominal }.count
+    let criticalCount = samples.filter { developerProfilerFrameStatus($0.stats.workMs) == .critical }.count
+    let pacingCount = samples.filter {
+        $0.stats.isFramePacingDominated || developerProfilerPacingStatus($0.stats.pacingGapMs) != .nominal
+    }.count
+    let totalWorkMs = samples.reduce(0) { $0 + $1.stats.workMs }
+    let maxWorkMs = samples.map(\.stats.workMs).max() ?? 0
+    let budgetHitRate = Double(max(samples.count - overBudgetCount, 0)) / Double(samples.count) * 100
+
+    return DeveloperProfilerFrameHealth(sampleCount: samples.count,
+                                        overBudgetCount: overBudgetCount,
+                                        criticalCount: criticalCount,
+                                        pacingCount: pacingCount,
+                                        budgetHitRate: budgetHitRate,
+                                        averageWorkMs: totalWorkMs / Double(samples.count),
+                                        maxWorkMs: maxWorkMs)
+}
+
+private func developerProfilerFrameHealthStatus(_ health: DeveloperProfilerFrameHealth) -> DeveloperPerformanceMonitorStatus {
+    if health.criticalCount > 0 {
+        return .critical
+    }
+    if health.overBudgetCount > 0 || health.pacingCount > 0 {
+        return .warning
+    }
+    return .nominal
+}
+
 private func developerProfilerMarker(samples: [EditorFrameStatsHistorySample],
                                      selectedSample: EditorFrameStatsHistorySample?) -> ChartMarker? {
     guard !samples.isEmpty else { return nil }
@@ -1514,6 +1764,38 @@ private func developerProfilerPacingStatus(_ pacingMs: Double) -> DeveloperPerfo
     return .nominal
 }
 
+private func developerProfilerFrameFocus(_ stats: EditorFrameStats) -> DeveloperProfilerFrameFocus {
+    let cpuMs = stats.cpuWorkSeconds * 1000
+    let gpuMs = stats.gpuPresentSeconds * 1000
+    let pacingStatus = developerProfilerPacingStatus(stats.pacingGapMs)
+    let frameStatus = developerProfilerFrameStatus(stats.workMs)
+    let cpuStatus = developerProfilerCPUStatus(cpuMs)
+    let gpuStatus = developerProfilerGPUStatus(gpuMs)
+
+    if stats.isFramePacingDominated || pacingStatus != .nominal {
+        return DeveloperProfilerFrameFocus(label: "Pacing", status: pacingStatus)
+    }
+
+    if gpuStatus != .nominal && gpuMs >= cpuMs {
+        return DeveloperProfilerFrameFocus(label: "GPU", status: gpuStatus)
+    }
+
+    if cpuStatus != .nominal || frameStatus != .nominal {
+        let renderSubmitSeconds = stats.renderSubmitSeconds
+        let renderPrepareSeconds = stats.renderPrepareSeconds
+        let simulationSeconds = stats.simulationSeconds
+        if renderSubmitSeconds >= renderPrepareSeconds && renderSubmitSeconds >= simulationSeconds {
+            return DeveloperProfilerFrameFocus(label: "Submit", status: max(cpuStatus, frameStatus))
+        }
+        if renderPrepareSeconds >= simulationSeconds {
+            return DeveloperProfilerFrameFocus(label: "Prepare", status: max(cpuStatus, frameStatus))
+        }
+        return DeveloperProfilerFrameFocus(label: "Sim", status: max(cpuStatus, frameStatus))
+    }
+
+    return DeveloperProfilerFrameFocus(label: "OK", status: .nominal)
+}
+
 private func developerPerformanceStatusColor(_ status: DeveloperPerformanceMonitorStatus) -> SemanticColorRef {
     switch status {
     case .nominal:
@@ -1523,6 +1805,128 @@ private func developerPerformanceStatusColor(_ status: DeveloperPerformanceMonit
     case .critical:
         return .error
     }
+}
+
+private func developerProfilerBottleneckSummary(
+    stats: EditorFrameStats,
+    renderStats: RenderFrameStats,
+    particleSample: EditorParticleDiagnosticsSample?
+) -> DeveloperProfilerBottleneckSummary {
+    let cpuMs = stats.cpuWorkSeconds * 1000
+    let gpuMs = stats.gpuPresentSeconds * 1000
+    let pacingMs = stats.pacingGapMs
+    let renderSubmitMs = stats.renderSubmitSeconds * 1000
+    let renderPrepareMs = stats.renderPrepareSeconds * 1000
+    let simulationMs = stats.simulationSeconds * 1000
+    let particleDrops = particleSample.map(developerProfilerParticleDropCount) ?? 0
+
+    let baseEvidence = [
+        DeveloperProfilerEvidenceItem(label: "Frame",
+                                      value: developerProfilerFormatMs(stats.frameMs),
+                                      status: developerProfilerFrameStatus(stats.frameMs)),
+        DeveloperProfilerEvidenceItem(label: "Work",
+                                      value: developerProfilerFormatMs(stats.workMs),
+                                      status: developerProfilerFrameStatus(stats.workMs)),
+    ]
+
+    if stats.isFramePacingDominated || developerProfilerPacingStatus(pacingMs) != .nominal {
+        return DeveloperProfilerBottleneckSummary(
+            title: "Frame pacing wait",
+            status: developerProfilerPacingStatus(pacingMs),
+            primarySignal: "Most of this frame is waiting outside engine work.",
+            evidence: baseEvidence + [
+                DeveloperProfilerEvidenceItem(label: "Pacing",
+                                              value: developerProfilerFormatMs(pacingMs),
+                                              status: developerProfilerPacingStatus(pacingMs)),
+                DeveloperProfilerEvidenceItem(label: "GPU",
+                                              value: developerProfilerFormatMs(gpuMs),
+                                              status: developerProfilerGPUStatus(gpuMs)),
+            ],
+            action: "Check presentation wait, throttling, vsync, or frame limiter before optimizing CPU systems."
+        )
+    }
+
+    if developerProfilerGPUStatus(gpuMs) != .nominal && gpuMs >= cpuMs {
+        return DeveloperProfilerBottleneckSummary(
+            title: "GPU present pressure",
+            status: developerProfilerGPUStatus(gpuMs),
+            primarySignal: "GPU present time is higher than CPU work for this frame.",
+            evidence: baseEvidence + [
+                DeveloperProfilerEvidenceItem(label: "GPU",
+                                              value: developerProfilerFormatMs(gpuMs),
+                                              status: developerProfilerGPUStatus(gpuMs)),
+                DeveloperProfilerEvidenceItem(label: "Draws",
+                                              value: "\(stats.drawCallCount)",
+                                              status: .nominal),
+            ],
+            action: "Inspect passes, overdraw, render targets, and shader cost before tuning simulation code."
+        )
+    }
+
+    if developerProfilerCPUStatus(cpuMs) != .nominal || developerProfilerFrameStatus(stats.workMs) != .nominal {
+        let renderSubmitDominates = renderSubmitMs >= simulationMs && renderSubmitMs >= renderPrepareMs
+        let renderPrepareDominates = renderPrepareMs >= simulationMs
+        let title: String
+        let action: String
+        if renderSubmitDominates {
+            title = "Render submit cost"
+            action = "Inspect draw submission, pass count, bundle use, and render encoder work."
+        } else if renderPrepareDominates {
+            title = "Render prepare cost"
+            action = "Inspect visibility, batching, material sorting, and render data preparation."
+        } else {
+            title = "Simulation cost"
+            action = "Inspect update systems and simulation work before changing render settings."
+        }
+        return DeveloperProfilerBottleneckSummary(
+            title: title,
+            status: max(developerProfilerCPUStatus(cpuMs), developerProfilerFrameStatus(stats.workMs)),
+            primarySignal: "Engine work is over frame budget.",
+            evidence: baseEvidence + [
+                DeveloperProfilerEvidenceItem(label: "CPU",
+                                              value: developerProfilerFormatMs(cpuMs),
+                                              status: developerProfilerCPUStatus(cpuMs)),
+                DeveloperProfilerEvidenceItem(label: "Submit",
+                                              value: developerProfilerFormatMs(renderSubmitMs),
+                                              status: developerProfilerFrameStatus(renderSubmitMs)),
+            ],
+            action: action
+        )
+    }
+
+    if particleDrops > 0 {
+        return DeveloperProfilerBottleneckSummary(
+            title: "Particle spawn pressure",
+            status: .warning,
+            primarySignal: "Particles are dropping spawn requests in this sample.",
+            evidence: baseEvidence + [
+                DeveloperProfilerEvidenceItem(label: "Dropped",
+                                              value: "\(particleDrops)",
+                                              status: .warning),
+                DeveloperProfilerEvidenceItem(label: "Live",
+                                              value: particleSample.map {
+                                                  "\($0.liveParticleCount)/\($0.liveParticleLimit)"
+                                              } ?? "--",
+                                              status: .nominal),
+            ],
+            action: "Open Particles to inspect capacity, spawn budgets, and event drops."
+        )
+    }
+
+    return DeveloperProfilerBottleneckSummary(
+        title: "Frame within budget",
+        status: .nominal,
+        primarySignal: "No active CPU, GPU, pacing, or particle pressure is dominant.",
+        evidence: baseEvidence + [
+            DeveloperProfilerEvidenceItem(label: "Encode",
+                                          value: developerProfilerFormatNs(renderStats.cpuEncodeNS),
+                                          status: developerProfilerFrameStatus(Double(renderStats.cpuEncodeNS) / 1_000_000)),
+            DeveloperProfilerEvidenceItem(label: "Pacing",
+                                          value: developerProfilerFormatMs(pacingMs),
+                                          status: developerProfilerPacingStatus(pacingMs)),
+        ],
+        action: "Use the frame timeline to select an over-budget sample if hitching persists."
+    )
 }
 
 private func developerProfilerBottleneckLabel(_ stats: EditorFrameStats) -> String {
