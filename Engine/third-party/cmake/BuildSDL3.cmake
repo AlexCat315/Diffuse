@@ -37,8 +37,11 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/sdl3/include/SDL3
 # Install generated headers (SDL_build_config.h, etc.) — discovered after configure
 install(CODE "
     file(GLOB_RECURSE SDL3_GENERATED
+        \"${CMAKE_BINARY_DIR}/sdl3-build/include/build_config/*.h\"
         \"${CMAKE_BINARY_DIR}/sdl3-build/include/build_config/SDL3/*.h\"
+        \"${CMAKE_BINARY_DIR}/sdl3-build/include-config-*/build_config/*.h\"
         \"${CMAKE_BINARY_DIR}/sdl3-build/include-config-*/build_config/SDL3/*.h\"
+        \"${CMAKE_BINARY_DIR}/sdl3-build/include-revision/SDL3/*.h\"
     )
     foreach(hdr \${SDL3_GENERATED})
         file(COPY \${hdr} DESTINATION ${SDL3_VARIANT}/include/SDL3)
@@ -51,6 +54,20 @@ if(WIN32)
 else()
     set(SDL3_LIB_FILENAME "libSDL3.a")
 endif()
+
+set(SDL3_STAGE_GENERATED_HEADERS_SCRIPT "${CMAKE_BINARY_DIR}/stage_sdl3_generated_headers.cmake")
+file(WRITE "${SDL3_STAGE_GENERATED_HEADERS_SCRIPT}" "
+file(GLOB_RECURSE SDL3_GENERATED
+    \"${CMAKE_BINARY_DIR}/sdl3-build/include/build_config/*.h\"
+    \"${CMAKE_BINARY_DIR}/sdl3-build/include/build_config/SDL3/*.h\"
+    \"${CMAKE_BINARY_DIR}/sdl3-build/include-config-*/build_config/*.h\"
+    \"${CMAKE_BINARY_DIR}/sdl3-build/include-config-*/build_config/SDL3/*.h\"
+    \"${CMAKE_BINARY_DIR}/sdl3-build/include-revision/SDL3/*.h\"
+)
+foreach(hdr IN LISTS SDL3_GENERATED)
+    file(COPY \"\${hdr}\" DESTINATION \"${SDL3_VARIANT}/include/SDL3\")
+endforeach()
+")
 
 # Generate info.json for the artifactbundle (at install time so it persists with binaries)
 install(CODE "
@@ -79,13 +96,26 @@ install(CODE "
 # SDL3-static is EXCLUDE_FROM_ALL and lives in the `sdl3-build` subdirectory.
 # The blanket `cmake --build` (bootstrap) skips EXCLUDE_FROM_ALL targets, and the
 # Visual Studio generator cannot build a subdirectory target via
-# `cmake --build --target SDL3-static` (it looks for SDL3-static.vcxproj in the
-# build root → MSB1009). A top-level ALL custom target that depends on it fixes
-# both: the default build pulls SDL3-static in, and `--target stage_sdl3`
-# resolves at the build root on every generator (mirrors stage_jolt /
-# stage_ocio_openexr). The install() rules above then copy it into the bundle.
-add_custom_target(stage_sdl3 ALL COMMENT "Building SDL3-static")
-add_dependencies(stage_sdl3 SDL3-static)
+# `cmake --build --target SDL3-static`. A top-level ALL staging target fixes both:
+# the default build pulls SDL3-static in, `--target stage_sdl3` resolves at the
+# build root on every generator, and manifest generation sees an already staged
+# artifact instead of waiting for the later install step.
+add_custom_target(stage_sdl3 ALL
+    DEPENDS SDL3-static
+    BYPRODUCTS ${SDL3_VARIANT}/lib/${SDL3_LIB_FILENAME}
+    COMMAND ${CMAKE_COMMAND} -E rm -rf ${SDL3_VARIANT}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${SDL3_VARIANT}/lib
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${SDL3_VARIANT}/include
+    COMMAND ${CMAKE_COMMAND} -E copy
+        $<TARGET_FILE:SDL3-static>
+        ${SDL3_VARIANT}/lib/${SDL3_LIB_FILENAME}
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/sdl3/include/SDL3
+        ${SDL3_VARIANT}/include/SDL3
+    COMMAND ${CMAKE_COMMAND} -P "${SDL3_STAGE_GENERATED_HEADERS_SCRIPT}"
+    COMMENT "Building and staging SDL3 into ${SDL3_VARIANT}"
+    VERBATIM
+)
 
 guava_git_revision(SDL3_SOURCE_REVISION "${CMAKE_SOURCE_DIR}/sdl3")
 guava_add_artifact_build_manifest(
