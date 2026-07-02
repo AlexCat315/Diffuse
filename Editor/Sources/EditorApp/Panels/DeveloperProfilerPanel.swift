@@ -297,6 +297,7 @@ struct DeveloperProfilerWorkbenchView: View {
                                                         particleSample: selectedParticleSample)
                         DeveloperProfilerIssuePane(issues: issues)
                     }
+                    .framePercent(width: 100, minWidth: 0)
                     .padding(horizontal: 12, vertical: 10)
                 }
                 .flex(1, shrink: 1)
@@ -488,12 +489,14 @@ private struct DeveloperProfilerFrameRow: View {
     let onSelect: () -> Void
 
     var body: some View {
-        let status = developerProfilerFrameStatus(sample.stats.workMs)
+        let status = developerProfilerFrameStatus(sample.stats.frameMs)
+        let workStatus = developerProfilerFrameStatus(sample.stats.workMs)
         let focus = developerProfilerFrameFocus(sample.stats)
+        let focusColor = isSelected ? developerPerformanceStatusColor(focus.status) : .onSurfaceMuted
         Button(action: onSelect) {
             Row(alignment: .center, spacing: 0) {
                 Box { EmptyView() }
-                    .frame(width: 3, height: 28)
+                    .frame(width: 3, height: 26)
                     .background(developerPerformanceStatusColor(status))
                 Row(alignment: .center, spacing: 8) {
                     Text("#\(sample.sampleIndex)")
@@ -504,17 +507,19 @@ private struct DeveloperProfilerFrameRow: View {
                     Text(developerProfilerFormatMs(sample.stats.workMs))
                         .lineLimit(1)
                         .font(.mono)
-                        .foregroundColor(developerPerformanceStatusColor(status))
+                        .foregroundColor(developerPerformanceStatusColor(workStatus))
                         .frame(width: 72)
                     Row(alignment: .center, spacing: 5) {
-                        Box { EmptyView() }
-                            .frame(width: 6, height: 6)
-                            .background(developerPerformanceStatusColor(focus.status))
-                            .cornerRadius(3)
+                        if isSelected && focus.status != .nominal {
+                            Box { EmptyView() }
+                                .frame(width: 6, height: 6)
+                                .background(developerPerformanceStatusColor(focus.status))
+                                .cornerRadius(3)
+                        }
                         Text(focus.label)
                             .lineLimit(1)
                             .font(.caption)
-                            .foregroundColor(focus.status == .nominal ? .onSurfaceMuted : developerPerformanceStatusColor(focus.status))
+                            .foregroundColor(focusColor)
                             .flex(1, shrink: 1)
                     }
                     .flex(1, shrink: 1)
@@ -605,8 +610,9 @@ private struct DeveloperProfilerSelectedFrameCard: View {
     let stats: EditorFrameStats
 
     var body: some View {
+        let frameStatus = developerProfilerFrameStatus(stats.frameMs)
         Box(direction: .column, alignItems: .stretch, spacing: 9) {
-            Row(alignment: .center, spacing: 8) {
+            Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 8) {
                 Column(alignment: .leading, spacing: 3) {
                     Row(alignment: .center, spacing: 8) {
                         Text(sample.map { "Frame #\($0.frameIndex)" } ?? "Latest Frame")
@@ -623,22 +629,19 @@ private struct DeveloperProfilerSelectedFrameCard: View {
                         .font(.caption)
                         .foregroundColor(.onSurfaceMuted)
                 }
-                .flex(1, shrink: 1)
+                .flex(1, shrink: 1, basis: 180)
 
-                DeveloperStatusPill(label: developerProfilerFrameStatusShortLabel(stats.workMs),
-                                    status: developerProfilerFrameStatus(stats.workMs))
+                DeveloperStatusPill(label: developerProfilerFrameStatusShortLabel(stats.frameMs),
+                                    status: frameStatus)
             }
 
-            Row(alignment: .center, spacing: 8) {
+            Box(direction: .row, alignItems: .stretch, wrap: .wrap, spacing: 8) {
                 DeveloperProfilerCompactMetric(label: "Observed",
                                                value: developerProfilerFormatFPS(stats.fps),
                                                status: .nominal)
                 DeveloperProfilerCompactMetric(label: "Work FPS",
                                                value: developerProfilerFormatFPS(stats.workFPS),
                                                status: developerProfilerFrameStatus(stats.workMs))
-            }
-
-            Row(alignment: .center, spacing: 8) {
                 DeveloperProfilerCompactMetric(label: "Draws",
                                                value: "\(stats.drawCallCount)",
                                                status: .nominal)
@@ -649,7 +652,7 @@ private struct DeveloperProfilerSelectedFrameCard: View {
         }
         .padding(horizontal: 10, vertical: 9)
         .background(.surface)
-        .border(developerPerformanceStatusColor(developerProfilerFrameStatus(stats.workMs)), width: 1)
+        .border(developerPerformanceStatusColor(frameStatus), width: 1)
     }
 }
 
@@ -672,7 +675,7 @@ private struct DeveloperProfilerCompactMetric: View {
         .padding(horizontal: 8, vertical: 5)
         .background(.surfaceSunken)
         .border(status == .nominal ? .divider : developerPerformanceStatusColor(status), width: 1)
-        .flex(1, shrink: 1)
+        .flex(1, shrink: 1, basis: 104)
     }
 }
 
@@ -686,14 +689,14 @@ private struct DeveloperProfilerBottleneckSummaryCard: View {
                                                          renderStats: renderStats,
                                                          particleSample: particleSample)
         Box(direction: .column, alignItems: .stretch, spacing: 7) {
-            Row(alignment: .center, spacing: 8) {
+            Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 8) {
                 DeveloperStatusPill(label: developerPerformanceMonitorStatusLabel(summary.status),
                                     status: summary.status)
                 Text(summary.title)
                     .lineLimit(1)
                     .font(.bodyStrong)
                     .foregroundColor(developerPerformanceStatusColor(summary.status))
-                Spacer(minLength: 0)
+                    .flex(1, shrink: 1, basis: 160)
             }
 
             Text(summary.primarySignal)
@@ -721,13 +724,13 @@ private struct DeveloperProfilerEvidenceGrid: View {
         let firstRow = Array(items.prefix(2))
         let secondRow = Array(items.dropFirst(2).prefix(2))
         Box(direction: .column, alignItems: .stretch, spacing: 6) {
-            Row(alignment: .center, spacing: 8) {
+            Box(direction: .row, alignItems: .stretch, wrap: .wrap, spacing: 8) {
                 for item in firstRow {
                     DeveloperProfilerEvidenceCell(item: item)
                 }
             }
             if !secondRow.isEmpty {
-                Row(alignment: .center, spacing: 8) {
+                Box(direction: .row, alignItems: .stretch, wrap: .wrap, spacing: 8) {
                     for item in secondRow {
                         DeveloperProfilerEvidenceCell(item: item)
                     }
@@ -755,7 +758,7 @@ private struct DeveloperProfilerEvidenceCell: View {
         .padding(horizontal: 8, vertical: 5)
         .background(.surfaceSunken)
         .border(item.status == .nominal ? .divider : developerPerformanceStatusColor(item.status), width: 1)
-        .flex(1, shrink: 1)
+        .flex(1, shrink: 1, basis: 128)
     }
 }
 
@@ -766,37 +769,38 @@ private struct DeveloperProfilerFrameGraph: View {
 
     var body: some View {
         let visibleSamples = Array(samples.suffix(96))
-        let values = visibleSamples.map { Float($0.stats.workMs) }
+        let values = visibleSamples.map { Float($0.stats.frameMs) }
+        let graphMaxValue = developerProfilerFrameChartMaxValue(values: values)
         Box(direction: .column, alignItems: .stretch, spacing: 6) {
-            Row(alignment: .center, spacing: 8) {
+            Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 8) {
                 Text("Frame Time")
                     .font(.bodyStrong)
                     .foregroundColor(.onSurface)
                 Text(developerPerformanceMonitorRangeLabel(values: values, unit: .milliseconds))
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
+                    .flex(1, shrink: 1, basis: 180)
                 Text("\(visibleSamples.count) recent")
                     .lineLimit(1)
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
-                Spacer(minLength: 0)
                 Text(selectedSample.map { "#\($0.sampleIndex)" } ?? "Latest")
                     .lineLimit(1)
                     .font(.mono)
                     .foregroundColor(.accent)
             }
 
-            Row(alignment: .center, spacing: 10) {
+            Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 10) {
+                DeveloperProfilerLegend(label: "16.7 ms budget", color: .warning)
                 DeveloperProfilerLegend(label: "OK", color: .success.opacity(0.75))
                 DeveloperProfilerLegend(label: "Over", color: .warning)
                 DeveloperProfilerLegend(label: "Critical", color: .error)
-                Spacer(minLength: 0)
             }
 
             DeveloperProfilerFrameHeatStrip(samples: visibleSamples,
                                             selectedSample: selectedSample,
                                             selectedSampleIndex: selectedSampleIndex)
-                .frame(height: 54)
+                .frame(height: 44)
 
             MonitorChart(values: values,
                          color: .accent,
@@ -805,6 +809,7 @@ private struct DeveloperProfilerFrameGraph: View {
                          marker: developerProfilerMarker(samples: visibleSamples,
                                                          selectedSample: selectedSample),
                          style: ChartStyle(minValue: 0,
+                                           maxValue: graphMaxValue,
                                            gridLineCount: 5,
                                            lineWidth: 2.0,
                                            barSpacing: 1,
@@ -825,7 +830,7 @@ private struct DeveloperProfilerFrameHeatStrip: View {
     let selectedSampleIndex: Binding<UInt64?>
 
     var body: some View {
-        let maxMs = max(samples.map(\.stats.workMs).max() ?? 16.7, 33.3)
+        let maxMs = max(samples.map(\.stats.frameMs).max() ?? 16.7, 33.3)
         Box(direction: .row, alignItems: .stretch, spacing: 1) {
             for sample in samples {
                 DeveloperProfilerFrameHeatBar(sample: sample,
@@ -849,15 +854,15 @@ private struct DeveloperProfilerFrameHeatBar: View {
     let onSelect: () -> Void
 
     var body: some View {
-        let ratio = Float(min(max(sample.stats.workMs / max(maxMs, 0.001), 0), 1))
-        let barHeight = max(2, ratio * 42)
+        let ratio = Float(min(max(sample.stats.frameMs / max(maxMs, 0.001), 0), 1))
+        let barHeight = max(4, ratio * 34)
         Button(action: onSelect) {
             Box(direction: .column, alignItems: .stretch, justifyContent: .flexEnd) {
                 Box { EmptyView() }
                     .frame(height: barHeight)
-                    .background(developerProfilerFrameHeatColor(sample.stats.workMs))
+                    .background(developerProfilerFrameHeatColor(sample.stats.frameMs))
             }
-            .background(isSelected ? .accent.opacity(0.18) : .surfaceSunken)
+            .background(isSelected ? .accent.opacity(0.20) : .surface)
             .border(isSelected ? .accent : .surfaceSunken, width: isSelected ? 1 : 0)
         }
         .buttonStyle(.plain)
@@ -1680,13 +1685,13 @@ private func developerProfilerFrameHealth(samples: [EditorFrameStatsHistorySampl
                                             maxWorkMs: 0)
     }
 
-    let overBudgetCount = samples.filter { developerProfilerFrameStatus($0.stats.workMs) != .nominal }.count
-    let criticalCount = samples.filter { developerProfilerFrameStatus($0.stats.workMs) == .critical }.count
+    let overBudgetCount = samples.filter { developerProfilerFrameStatus($0.stats.frameMs) != .nominal }.count
+    let criticalCount = samples.filter { developerProfilerFrameStatus($0.stats.frameMs) == .critical }.count
     let pacingCount = samples.filter {
         $0.stats.isFramePacingDominated || developerProfilerPacingStatus($0.stats.pacingGapMs) != .nominal
     }.count
-    let totalWorkMs = samples.reduce(0) { $0 + $1.stats.workMs }
-    let maxWorkMs = samples.map(\.stats.workMs).max() ?? 0
+    let totalFrameMs = samples.reduce(0) { $0 + $1.stats.frameMs }
+    let maxFrameMs = samples.map(\.stats.frameMs).max() ?? 0
     let budgetHitRate = Double(max(samples.count - overBudgetCount, 0)) / Double(samples.count) * 100
 
     return DeveloperProfilerFrameHealth(sampleCount: samples.count,
@@ -1694,8 +1699,8 @@ private func developerProfilerFrameHealth(samples: [EditorFrameStatsHistorySampl
                                         criticalCount: criticalCount,
                                         pacingCount: pacingCount,
                                         budgetHitRate: budgetHitRate,
-                                        averageWorkMs: totalWorkMs / Double(samples.count),
-                                        maxWorkMs: maxWorkMs)
+                                        averageWorkMs: totalFrameMs / Double(samples.count),
+                                        maxWorkMs: maxFrameMs)
 }
 
 private func developerProfilerFrameHealthStatus(_ health: DeveloperProfilerFrameHealth) -> DeveloperPerformanceMonitorStatus {
@@ -1716,6 +1721,12 @@ private func developerProfilerMarker(samples: [EditorFrameStatsHistorySample],
         return ChartMarker(index: samples.count - 1, color: .accent, width: 1)
     }
     return ChartMarker(index: index, color: .accent, width: 1)
+}
+
+private func developerProfilerFrameChartMaxValue(values: [Float]) -> Float? {
+    guard let maxValue = values.max() else { return 50.1 }
+    let visualCeiling = max(Float(50.1), min(maxValue * 1.08, Float(120)))
+    return visualCeiling
 }
 
 private func developerProfilerFrameStatus(_ workMs: Double) -> DeveloperPerformanceMonitorStatus {
