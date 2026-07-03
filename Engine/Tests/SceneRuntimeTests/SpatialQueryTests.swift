@@ -172,6 +172,57 @@ struct SpatialQueryTests {
         #expect(abs((hit?.normal.y ?? 0) - 0.707_106_77) < 0.000_2)
     }
 
+    @Test("raycast applies transform scale to Jolt shape center")
+    func raycastAppliesTransformScaleToJoltShapeCenter() {
+        var runtime = SceneRuntime()
+
+        let box = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(matrix: scaleMatrix(SIMD3<Float>(2, 1, 1))), for: box)
+        _ = runtime.setComponent(
+            Collider(shape: .box(halfExtents: SIMD3<Float>(0.5, 0.5, 0.5), center: SIMD3<Float>(1, 0, 0))),
+            for: box
+        )
+
+        _ = runtime.tick()
+
+        let hit = runtime.raycast(
+            SceneRaycastQuery(
+                origin: SIMD3<Float>(-1, 0, 0),
+                direction: SIMD3<Float>(1, 0, 0),
+                maxDistance: 10
+            )
+        )
+
+        #expect(hit?.entity == box)
+        #expect(abs((hit?.distance ?? 0) - 2) < 0.000_1)
+        #expect(abs((hit?.position.x ?? 0) - 1) < 0.000_1)
+    }
+
+    @Test("raycast uses conservative Jolt scale for non-uniform sphere")
+    func raycastUsesConservativeJoltScaleForNonUniformSphere() {
+        var runtime = SceneRuntime()
+
+        let sphere = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(matrix: scaleMatrix(SIMD3<Float>(2, 1, 1))), for: sphere)
+        _ = runtime.setComponent(
+            Collider(shape: .sphere(radius: 1, center: SIMD3<Float>(0, 1, 0))),
+            for: sphere
+        )
+
+        _ = runtime.tick()
+
+        let hit = runtime.raycast(
+            SceneRaycastQuery(
+                origin: SIMD3<Float>(-3, -0.5, 0),
+                direction: SIMD3<Float>(1, 0, 0),
+                maxDistance: 10
+            )
+        )
+
+        #expect(hit?.entity == sphere)
+        #expect(abs((hit?.distance ?? 0) - 1.677_124_4) < 0.000_5)
+    }
+
     @Test("raycast uses Jolt capsule geometry instead of broad-phase bounds")
     func raycastUsesPreciseCapsuleNarrowPhase() {
         var runtime = SceneRuntime()
@@ -507,6 +558,15 @@ private func rotatedBoxMatrix(angleRadians: Float) -> simd_float4x4 {
         SIMD4<Float>(cosine, -sine, 0, 0),
         SIMD4<Float>(sine, cosine, 0, 0),
         SIMD4<Float>(0, 0, 1, 0),
+        SIMD4<Float>(0, 0, 0, 1),
+    ])
+}
+
+private func scaleMatrix(_ scale: SIMD3<Float>) -> simd_float4x4 {
+    simd_float4x4(rows: [
+        SIMD4<Float>(scale.x, 0, 0, 0),
+        SIMD4<Float>(0, scale.y, 0, 0),
+        SIMD4<Float>(0, 0, scale.z, 0),
         SIMD4<Float>(0, 0, 0, 1),
     ])
 }
