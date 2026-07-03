@@ -15,6 +15,7 @@
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
+#include <Jolt/Physics/Collision/Shape/ScaledShape.h>
 #include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
 #include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
 #include <Jolt/Physics/Collision/RayCast.h>
@@ -97,6 +98,9 @@ struct BodySignature {
     float shape_center_x = 0.0f;
     float shape_center_y = 0.0f;
     float shape_center_z = 0.0f;
+    float shape_scale_x = 1.0f;
+    float shape_scale_y = 1.0f;
+    float shape_scale_z = 1.0f;
     float mass = 0.0f;
     float gravity_scale = 0.0f;
     float linear_damping = 0.0f;
@@ -121,6 +125,9 @@ struct BodySignature {
             && shape_center_x == other.shape_center_x
             && shape_center_y == other.shape_center_y
             && shape_center_z == other.shape_center_z
+            && shape_scale_x == other.shape_scale_x
+            && shape_scale_y == other.shape_scale_y
+            && shape_scale_z == other.shape_scale_z
             && mass == other.mass
             && gravity_scale == other.gravity_scale
             && linear_damping == other.linear_damping
@@ -190,6 +197,9 @@ BodySignature make_signature(const GuavaJoltBodyDesc& desc,
     signature.shape_center_x = desc.shape_center_x;
     signature.shape_center_y = desc.shape_center_y;
     signature.shape_center_z = desc.shape_center_z;
+    signature.shape_scale_x = desc.shape_scale_x;
+    signature.shape_scale_y = desc.shape_scale_y;
+    signature.shape_scale_z = desc.shape_scale_z;
     signature.mass = desc.mass;
     signature.gravity_scale = desc.gravity_scale;
     signature.linear_damping = desc.linear_damping;
@@ -356,15 +366,67 @@ JPH::Vec3 perpendicular_axis(JPH::Vec3 axis) {
     return axis.Cross(candidate).Normalized();
 }
 
-JPH::ShapeRefC with_shape_center(const GuavaJoltBodyDesc& desc, JPH::ShapeRefC shape) {
+JPH::Vec3 shape_center_for(const GuavaJoltBodyDesc& desc) {
+    return JPH::Vec3(desc.shape_center_x, desc.shape_center_y, desc.shape_center_z);
+}
+
+JPH::Vec3 shape_scale_for(const GuavaJoltBodyDesc& desc) {
+    return JPH::Vec3(desc.shape_scale_x, desc.shape_scale_y, desc.shape_scale_z);
+}
+
+JPH::Vec3 scaled_center(JPH::Vec3Arg center, JPH::Vec3Arg scale) {
+    return JPH::Vec3(
+        center.GetX() * scale.GetX(),
+        center.GetY() * scale.GetY(),
+        center.GetZ() * scale.GetZ());
+}
+
+JPH::Vec3 conservative_uniform_scale(JPH::Vec3Arg scale) {
+    const JPH::Vec3 abs_scale = scale.Abs();
+    float uniform_scale = std::max(abs_scale.GetX(), std::max(abs_scale.GetY(), abs_scale.GetZ()));
+    uniform_scale = std::max(uniform_scale, 1.0e-6f);
+    return JPH::Vec3::sReplicate(uniform_scale);
+}
+
+bool is_identity_scale(JPH::Vec3Arg scale) {
+    return fabsf(scale.GetX() - 1.0f) <= 1.0e-6f
+        && fabsf(scale.GetY() - 1.0f) <= 1.0e-6f
+        && fabsf(scale.GetZ() - 1.0f) <= 1.0e-6f;
+}
+
+JPH::ShapeRefC with_shape_center(JPH::Vec3Arg center, JPH::ShapeRefC shape) {
     if (!shape) return nullptr;
-    JPH::Vec3 center(desc.shape_center_x, desc.shape_center_y, desc.shape_center_z);
     if (center.LengthSq() <= 1.0e-12f) return shape;
 
     JPH::RotatedTranslatedShapeSettings settings(center, JPH::Quat::sIdentity(), shape);
     settings.SetEmbedded();
     JPH::ShapeSettings::ShapeResult result = settings.Create();
     return result.IsValid() ? result.Get() : shape;
+}
+
+JPH::ShapeRefC with_shape_scale(JPH::Vec3Arg scale, JPH::ShapeRefC shape) {
+    if (!shape) return nullptr;
+    if (is_identity_scale(scale)) return shape;
+
+    JPH::ScaledShapeSettings settings(shape.GetPtr(), scale);
+    settings.SetEmbedded();
+    JPH::ShapeSettings::ShapeResult result = settings.Create();
+    return result.IsValid() ? result.Get() : shape;
+}
+
+JPH::ShapeRefC finalize_shape(const GuavaJoltBodyDesc& desc, JPH::ShapeRefC shape) {
+    if (!shape) return nullptr;
+
+    const JPH::Vec3 center = shape_center_for(desc);
+    const JPH::Vec3 requested_scale = shape_scale_for(desc);
+
+    if (shape->IsValidScale(requested_scale)) {
+        const JPH::Vec3 valid_scale = shape->MakeScaleValid(requested_scale);
+        return with_shape_scale(valid_scale, with_shape_center(center, shape));
+    }
+
+    JPH::ShapeRefC scaled_shape = with_shape_scale(conservative_uniform_scale(requested_scale), shape);
+    return with_shape_center(scaled_center(center, requested_scale), scaled_shape);
 }
 
 // Build a Shape from the descriptor's flag+geom fields. Returns null if unsupported.
@@ -376,19 +438,19 @@ JPH::ShapeRefC build_shape(const GuavaJoltBodyDesc& desc,
             desc.box_half_extent_x, desc.box_half_extent_y, desc.box_half_extent_z));
         settings.SetEmbedded();
         JPH::ShapeSettings::ShapeResult r = settings.Create();
-        if (r.IsValid()) return with_shape_center(desc, r.Get());
+        if (r.IsValid()) return finalize_shape(desc, r.Get());
     }
     if (desc.flags & kColliderHasSphereFlag) {
         JPH::SphereShapeSettings settings(desc.sphere_radius);
         settings.SetEmbedded();
         JPH::ShapeSettings::ShapeResult r = settings.Create();
-        if (r.IsValid()) return with_shape_center(desc, r.Get());
+        if (r.IsValid()) return finalize_shape(desc, r.Get());
     }
     if (desc.flags & kColliderHasCapsuleFlag) {
         JPH::CapsuleShapeSettings settings(desc.capsule_half_height, desc.capsule_radius);
         settings.SetEmbedded();
         JPH::ShapeSettings::ShapeResult r = settings.Create();
-        if (r.IsValid()) return with_shape_center(desc, r.Get());
+        if (r.IsValid()) return finalize_shape(desc, r.Get());
     }
     if ((desc.flags & kColliderHasMeshFlag) && mesh_vertices && mesh_vertex_count > 0
         && mesh_indices && mesh_index_count >= 3) {
@@ -408,7 +470,7 @@ JPH::ShapeRefC build_shape(const GuavaJoltBodyDesc& desc,
         JPH::MeshShapeSettings settings(std::move(triangles));
         settings.SetEmbedded();
         JPH::ShapeSettings::ShapeResult r = settings.Create();
-        if (r.IsValid()) return with_shape_center(desc, r.Get());
+        if (r.IsValid()) return finalize_shape(desc, r.Get());
     }
     if ((desc.flags & kColliderHasConvexFlag) && mesh_vertices && mesh_vertex_count > 0) {
         JPH::Array<JPH::Vec3> points;
@@ -419,7 +481,7 @@ JPH::ShapeRefC build_shape(const GuavaJoltBodyDesc& desc,
         JPH::ConvexHullShapeSettings settings(points);
         settings.SetEmbedded();
         JPH::ShapeSettings::ShapeResult r = settings.Create();
-        if (r.IsValid()) return with_shape_center(desc, r.Get());
+        if (r.IsValid()) return finalize_shape(desc, r.Get());
     }
     return nullptr;
 }

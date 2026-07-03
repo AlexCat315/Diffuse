@@ -25,6 +25,9 @@ typedef struct GuavaJoltBodyDesc {
     float shape_center_x;
     float shape_center_y;
     float shape_center_z;
+    float shape_scale_x;
+    float shape_scale_y;
+    float shape_scale_z;
     float linear_velocity_x;
     float linear_velocity_y;
     float linear_velocity_z;
