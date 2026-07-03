@@ -136,7 +136,7 @@ public struct RuntimeScriptPhaseContext {
         filter: PhysicsQueryFilter = PhysicsQueryFilter()
     ) -> PhysicsRaycastHit? {
         refreshTransformsIfNeeded()
-        return performPhysicsRaycast(query, filter: filter, using: buildSpatialIndexResource(in: worldPointer.pointee))
+        return makeJoltQueryBackend(in: worldPointer.pointee).raycast(query, filter: filter)
     }
 
     public func physicsOverlapAABB(
@@ -144,7 +144,7 @@ public struct RuntimeScriptPhaseContext {
         filter: PhysicsQueryFilter = PhysicsQueryFilter()
     ) -> [PhysicsOverlapHit] {
         refreshTransformsIfNeeded()
-        return performPhysicsOverlapAABB(query, filter: filter, using: buildSpatialIndexResource(in: worldPointer.pointee))
+        return makeJoltQueryBackend(in: worldPointer.pointee).overlapAABB(query, filter: filter)
     }
 
     public func physicsSweepAABB(
@@ -152,7 +152,7 @@ public struct RuntimeScriptPhaseContext {
         filter: PhysicsQueryFilter = PhysicsQueryFilter()
     ) -> PhysicsSweepHit? {
         refreshTransformsIfNeeded()
-        return performPhysicsSweepAABB(query, filter: filter, using: buildSpatialIndexResource(in: worldPointer.pointee))
+        return makeJoltQueryBackend(in: worldPointer.pointee).sweepAABB(query, filter: filter)
     }
 
     public func resource<Resource: Sendable>(_ type: Resource.Type) -> Resource? {
