@@ -226,6 +226,7 @@ public enum SceneSerializer {
             "angularDamping": c.angularDamping,
             "gravityScale": c.gravityScale,
             "allowSleep": c.allowSleep,
+            "continuousCollisionDetection": c.continuousCollisionDetection,
         ]
     }
 
@@ -236,7 +237,8 @@ public enum SceneSerializer {
             gravityScale: jsonToFloat(d["gravityScale"]) ?? 1,
             linearDamping: jsonToFloat(d["linearDamping"]) ?? 0.04,
             angularDamping: jsonToFloat(d["angularDamping"]) ?? 0.04,
-            allowSleep: jsonToBool(d["allowSleep"]) ?? true
+            allowSleep: jsonToBool(d["allowSleep"]) ?? true,
+            continuousCollisionDetection: jsonToBool(d["continuousCollisionDetection"]) ?? false
         )
     }
 
