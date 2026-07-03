@@ -170,7 +170,7 @@ public struct RuntimeWorldSchedule {
     private var physicsSyncCache = PhysicsSyncCache()
     private var resolvedPhysicsBackendKind: PhysicsBackendKind = .none
     private var jobSystem = JobSystem.shared
-    private var triggerDetector = TriggerDetector()
+    private var triggerBackend = JoltPhysicsBackend()
 
     public init() {}
 
@@ -403,12 +403,21 @@ public struct RuntimeWorldSchedule {
                 world.setDerivedResource(spatialIndexBuild.resource)
                 recordJobReport(spatialIndexBuild.report, for: .spatialIndexUpdate)
             case .triggerDetection:
-                if let index = world.resource(SpatialIndexResource.self) {
-                    let triggerFrame = triggerDetector.detect(in: index)
-                    world.setDerivedResource(triggerFrame)
-                } else {
-                    world.setDerivedResource(TriggerFrameResource())
-                }
+                let snapshot = buildPhysicsSceneSnapshot(in: world, settings: physicsSettings)
+                _ = triggerBackend.prepare(
+                    context: PhysicsPrepareContext(
+                        settings: snapshot.settings,
+                        deltaTimeSeconds: deltaTimeSeconds,
+                        activeBodies: snapshot.bodies,
+                        activeConstraints: snapshot.constraints,
+                        syncEvents: []
+                    )
+                )
+                world.setDerivedResource(
+                    triggerBackend.detectTriggerFrame(
+                        maxEventCount: snapshot.bodies.count * max(1, snapshot.bodies.count) * 3
+                    )
+                )
             case .renderExtract:
                 let renderExtraction = extractRenderScene(in: world)
                 world.setDerivedResource(renderExtraction.resource)
