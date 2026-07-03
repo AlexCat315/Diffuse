@@ -285,10 +285,12 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         var capsuleRadius: Float = 0
         var capsuleHalfHeight: Float = 0
         var shapeCenter = SIMD3<Float>.zero
+        var shapeScale = SIMD3<Float>(1, 1, 1)
         var layerID: UInt16 = 0
         var layerMask: UInt16 = .max
 
         if let collider = descriptor.collider {
+            shapeScale = matrixScale(of: descriptor.worldTransform.matrix)
             layerID = collider.layerID
             layerMask = collider.layerMask
             if collider.isTrigger {
@@ -332,6 +334,9 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             shape_center_x: shapeCenter.x,
             shape_center_y: shapeCenter.y,
             shape_center_z: shapeCenter.z,
+            shape_scale_x: shapeScale.x,
+            shape_scale_y: shapeScale.y,
+            shape_scale_z: shapeScale.z,
             linear_velocity_x: descriptor.rigidBody?.linearVelocity.x ?? 0,
             linear_velocity_y: descriptor.rigidBody?.linearVelocity.y ?? 0,
             linear_velocity_z: descriptor.rigidBody?.linearVelocity.z ?? 0,
