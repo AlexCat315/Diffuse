@@ -103,6 +103,7 @@ typedef struct GuavaJoltStepConfig {
     float gravity_x;
     float gravity_y;
     float gravity_z;
+    uint32_t collision_steps;
     uint8_t allow_sleep;
     uint8_t reserved0;
     uint16_t reserved1;
@@ -242,6 +243,21 @@ typedef struct GuavaJoltTriggerEvent {
     uint16_t reserved1;
 } GuavaJoltTriggerEvent;
 
+typedef struct GuavaJoltContactEvent {
+    uint64_t entity_a;
+    uint64_t entity_b;
+    uint8_t kind; /* 0 began, 1 persisted, 2 ended */
+    uint8_t reserved0;
+    uint16_t reserved1;
+    float position_x;
+    float position_y;
+    float position_z;
+    float normal_x;
+    float normal_y;
+    float normal_z;
+    float penetration_depth;
+} GuavaJoltContactEvent;
+
 GuavaJoltContext guava_jolt_context_create(void);
 void guava_jolt_context_destroy(GuavaJoltContext context);
 void guava_jolt_context_reset(GuavaJoltContext context);
@@ -281,6 +297,9 @@ bool guava_jolt_context_sweep_aabb(GuavaJoltContext context,
 uint32_t guava_jolt_context_detect_triggers(GuavaJoltContext context,
                                             GuavaJoltTriggerEvent* out_events,
                                             size_t event_capacity);
+uint32_t guava_jolt_context_copy_contact_events(GuavaJoltContext context,
+                                                GuavaJoltContactEvent* out_events,
+                                                size_t event_capacity);
 
 #ifdef __cplusplus
 }

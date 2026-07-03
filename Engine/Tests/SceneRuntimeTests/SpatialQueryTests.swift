@@ -59,8 +59,8 @@ struct SpatialQueryTests {
         #expect(abs((hit?.distance ?? 0) - 3) < 0.000_1)
     }
 
-    @Test("spatialIndexUpdate reports job-backed incremental cache diffs")
-    func spatialIndexUpdateReportsJobBackedIncrementalCacheDiffs() {
+    @Test("spatialIndexUpdate reports job-backed snapshot rebuilds")
+    func spatialIndexUpdateReportsJobBackedSnapshotRebuilds() {
         var runtime = SceneRuntime()
         runtime.setJobSystem(JobSystem(workerCount: 4, minimumChunkSize: 1, label: "test.jobs.spatial.update"))
 
@@ -84,7 +84,7 @@ struct SpatialQueryTests {
         let report = runtime.tick()
 
         #expect(report.parallelPhases.contains(.spatialIndexUpdate))
-        #expect(report.jobCount(for: .spatialIndexUpdate) >= 8)
+        #expect(report.jobCount(for: .spatialIndexUpdate) >= entities.count)
         #expect(runtime.spatialIndex.entries.count == entities.count)
         #expect(runtime.spatialIndex.entries.first { $0.entity == entities[0] }?.bounds.halfExtents.x == 1)
     }

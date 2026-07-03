@@ -328,6 +328,85 @@ struct PhysicsBackendSelectionTests {
         #expect(runtime.component(Collider.self, for: entity)?.material == PhysicsMaterial(friction: 0.9, restitution: 0.25, density: 2))
     }
 
+    @Test("configured Jolt backend exposes contact frame events")
+    func configuredJoltBackendExposesContactFrameEvents() {
+        var runtime = makeJoltRuntime()
+        let mover = addBody(to: &runtime, position: .zero, motionType: .dynamic)
+        let wall = addBody(to: &runtime, position: SIMD3<Float>(0.75, 0, 0), motionType: .static)
+
+        let firstReport = runtime.tick(deltaTime: 1.0 / 60.0)
+        let firstFrame = runtime.physicsContactFrame
+        let firstEvents = firstFrame.began + firstFrame.stayed
+        let firstPair = firstEvents.first {
+            ($0.entityA == mover && $0.entityB == wall)
+                || ($0.entityA == wall && $0.entityB == mover)
+        }
+
+        #expect(firstReport.physicsBackendIdentifier == "jolt")
+        #expect(firstReport.physicsContactCount >= 1)
+        #expect(runtime.physicsFrameState.contactCount >= 1)
+        #expect(firstPair != nil)
+        #expect(firstPair.map { simd_length($0.normal) > 0.5 } ?? false)
+
+        _ = runtime.setLocalTransform(
+            LocalTransform(translation: SIMD3<Float>(4, 0, 0)),
+            for: mover
+        )
+        _ = runtime.tick(deltaTime: 1.0 / 60.0)
+
+        let endedPair = runtime.physicsContactFrame.ended.first {
+            ($0.entityA == mover && $0.entityB == wall)
+                || ($0.entityA == wall && $0.entityB == mover)
+        }
+        #expect(endedPair != nil)
+    }
+
+    @Test("configured Jolt backend uses CCD for fast dynamic bodies")
+    func configuredJoltBackendUsesCCDForFastDynamicBodies() {
+        var runtime = SceneRuntime()
+        runtime.setPhysicsSettings(
+            PhysicsSettingsResource(
+                simulationMode: .play,
+                backendKind: .jolt,
+                gravity: .zero,
+                fixedTimeStepSeconds: 1.0 / 60.0,
+                maxSubstepsPerFrame: 1,
+                allowSleep: false,
+                collisionSteps: 2
+            )
+        )
+
+        let fast = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(-3, 0, 0)), for: fast)
+        _ = runtime.setComponent(
+            RigidBody(
+                motionType: .dynamic,
+                mass: 1,
+                linearVelocity: SIMD3<Float>(360, 0, 0),
+                gravityScale: 0,
+                linearDamping: 0,
+                angularDamping: 0,
+                allowSleep: false,
+                continuousCollisionDetection: true
+            ),
+            for: fast
+        )
+        _ = runtime.setComponent(Collider(shape: .sphere(radius: 0.25, center: .zero)), for: fast)
+
+        let wall = addBody(to: &runtime, position: .zero, motionType: .static)
+        let report = runtime.tick(deltaTime: 1.0 / 60.0)
+        let fastX = runtime.worldTransform(for: fast)?.translation.x ?? .greatestFiniteMagnitude
+        let hitPair = runtime.physicsContactFrame.events.first {
+            ($0.entityA == fast && $0.entityB == wall)
+                || ($0.entityA == wall && $0.entityB == fast)
+        }
+
+        #expect(runtime.physicsSettings.collisionSteps == 2)
+        #expect(report.physicsContactCount >= 1)
+        #expect(hitPair != nil)
+        #expect(fastX < 0.25, "CCD body should not tunnel past the static collider (x=\(fastX))")
+    }
+
     @Test("configured Jolt backend applies distance constraints between active bodies")
     func configuredJoltBackendAppliesDistanceConstraint() {
         var runtime = SceneRuntime()

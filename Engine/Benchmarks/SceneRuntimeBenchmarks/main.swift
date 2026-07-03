@@ -9,7 +9,6 @@ struct BenchmarkConfig {
 
 private func makeRuntime(entityCount: Int) -> SceneRuntime {
     var runtime = SceneRuntime()
-    runtime.setSpatialIndexBuildSettings(SpatialIndexBuildSettings(mode: .adaptive))
 
     for index in 0..<entityCount {
         let entity = runtime.createEntity()
