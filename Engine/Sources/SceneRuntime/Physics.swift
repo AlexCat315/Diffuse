@@ -524,6 +524,10 @@ public protocol PhysicsBackend: AnyObject, Sendable {
     var identifier: String { get }
     func prepare(context: PhysicsPrepareContext) -> PhysicsPrepareResult
     func step(context: PhysicsStepContext) -> PhysicsStepResult
+    func raycast(_ query: PhysicsRaycastQuery, filter: PhysicsQueryFilter) -> PhysicsRaycastHit?
+    func overlapAABB(_ query: PhysicsOverlapAABBQuery, filter: PhysicsQueryFilter) -> [PhysicsOverlapHit]
+    func sweepAABB(_ query: PhysicsSweepAABBQuery, filter: PhysicsQueryFilter) -> PhysicsSweepHit?
+    func detectTriggerFrame(maxEventCount: Int) -> TriggerFrameResource
     func reset()
 }
 
@@ -568,6 +572,22 @@ public final class NullPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             contactCount: 0,
             writebacks: []
         )
+    }
+
+    public func raycast(_ query: PhysicsRaycastQuery, filter: PhysicsQueryFilter) -> PhysicsRaycastHit? {
+        nil
+    }
+
+    public func overlapAABB(_ query: PhysicsOverlapAABBQuery, filter: PhysicsQueryFilter) -> [PhysicsOverlapHit] {
+        []
+    }
+
+    public func sweepAABB(_ query: PhysicsSweepAABBQuery, filter: PhysicsQueryFilter) -> PhysicsSweepHit? {
+        nil
+    }
+
+    public func detectTriggerFrame(maxEventCount: Int) -> TriggerFrameResource {
+        TriggerFrameResource()
     }
 
     public func reset() {}

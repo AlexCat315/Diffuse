@@ -89,7 +89,7 @@ struct SpatialQueryTests {
         #expect(runtime.spatialIndex.entries.first { $0.entity == entities[0] }?.bounds.halfExtents.x == 1)
     }
 
-    @Test("raycast returns the nearest collider hit from the spatial cache")
+    @Test("raycast returns the nearest collider hit from Jolt")
     func raycastReturnsNearestColliderHit() {
         var runtime = SceneRuntime()
 
@@ -120,7 +120,7 @@ struct SpatialQueryTests {
         #expect(hit?.normal == SIMD3<Float>(-1, 0, 0))
     }
 
-    @Test("raycast uses a precise sphere narrow phase instead of the broad-phase AABB")
+    @Test("raycast uses Jolt sphere geometry instead of broad-phase bounds")
     func raycastUsesPreciseSphereNarrowPhase() {
         var runtime = SceneRuntime()
 
@@ -144,7 +144,7 @@ struct SpatialQueryTests {
         #expect(abs((hit?.normal.y ?? 0) - 0.5) < 0.000_1)
     }
 
-    @Test("raycast uses a precise rotated box narrow phase instead of the broad-phase AABB")
+    @Test("raycast uses Jolt rotated box geometry instead of broad-phase bounds")
     func raycastUsesPreciseRotatedBoxNarrowPhase() {
         var runtime = SceneRuntime()
 
@@ -172,7 +172,7 @@ struct SpatialQueryTests {
         #expect(abs((hit?.normal.y ?? 0) - 0.707_106_77) < 0.000_2)
     }
 
-    @Test("raycast uses a precise capsule narrow phase instead of the broad-phase AABB")
+    @Test("raycast uses Jolt capsule geometry instead of broad-phase bounds")
     func raycastUsesPreciseCapsuleNarrowPhase() {
         var runtime = SceneRuntime()
 
@@ -199,7 +199,7 @@ struct SpatialQueryTests {
         #expect(abs((hit?.normal.y ?? 0) - 0.6) < 0.000_1)
     }
 
-    @Test("overlap uses a precise sphere narrow phase instead of the broad-phase AABB")
+    @Test("overlap uses Jolt sphere geometry instead of broad-phase bounds")
     func overlapUsesPreciseSphereNarrowPhase() {
         var runtime = SceneRuntime()
 
@@ -217,7 +217,7 @@ struct SpatialQueryTests {
         #expect(hits.isEmpty)
     }
 
-    @Test("overlap uses a precise rotated box narrow phase instead of the broad-phase AABB")
+    @Test("overlap uses Jolt rotated box geometry instead of broad-phase bounds")
     func overlapUsesPreciseRotatedBoxNarrowPhase() {
         var runtime = SceneRuntime()
 
@@ -239,7 +239,7 @@ struct SpatialQueryTests {
         #expect(hits.isEmpty)
     }
 
-    @Test("overlap uses a precise capsule narrow phase instead of the broad-phase AABB")
+    @Test("overlap uses Jolt capsule geometry instead of broad-phase bounds")
     func overlapUsesPreciseCapsuleNarrowPhase() {
         var runtime = SceneRuntime()
 
@@ -305,7 +305,7 @@ struct SpatialQueryTests {
         #expect(hitsIncludingTriggers.map(\ .entity) == [sphere, box, trigger].sorted { $0.rawValue < $1.rawValue })
     }
 
-    @Test("sweep returns the nearest collider hit from the spatial cache")
+    @Test("sweep returns the nearest collider hit from Jolt")
     func sweepReturnsNearestColliderHit() {
         var runtime = SceneRuntime()
 
@@ -381,7 +381,7 @@ struct SpatialQueryTests {
         #expect(triggerHit?.isTrigger == true)
     }
 
-    @Test("sweep uses a precise sphere narrow phase instead of the broad-phase AABB")
+    @Test("sweep uses Jolt sphere geometry instead of broad-phase bounds")
     func sweepUsesPreciseSphereNarrowPhase() {
         var runtime = SceneRuntime()
 
@@ -475,7 +475,7 @@ struct SpatialQueryTests {
         #expect(sweepHit?.entity == filteredHit)
     }
 
-    @Test("physics sweep reports the shape contact normal instead of the broad-phase axis")
+    @Test("physics sweep reports the Jolt shape contact normal")
     func physicsSweepReportsPreciseContactNormal() {
         var runtime = SceneRuntime()
 
