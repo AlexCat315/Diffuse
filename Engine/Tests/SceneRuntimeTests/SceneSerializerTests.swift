@@ -87,7 +87,14 @@ struct SceneSerializerTests {
         let entity = original.createEntity()
         _ = original.setLocalTransform(LocalTransform(translation: .zero), for: entity)
         _ = original.setComponent(
-            RigidBody(motionType: .dynamic, mass: 80, gravityScale: 2, linearDamping: 0.1, allowSleep: false),
+            RigidBody(
+                motionType: .dynamic,
+                mass: 80,
+                gravityScale: 2,
+                linearDamping: 0.1,
+                allowSleep: false,
+                continuousCollisionDetection: true
+            ),
             for: entity
         )
 
@@ -104,6 +111,7 @@ struct SceneSerializerTests {
         #expect(rb!.gravityScale == 2)
         #expect(rb!.linearDamping == 0.1)
         #expect(rb!.allowSleep == false)
+        #expect(rb!.continuousCollisionDetection)
     }
 
     // MARK: - Collider shapes
