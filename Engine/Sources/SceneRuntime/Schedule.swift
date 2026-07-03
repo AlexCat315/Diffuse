@@ -167,6 +167,7 @@ public struct RuntimeWorldSchedule {
     private var scriptDriver: (any RuntimeScriptDriver)?
     private var physicsClock = PhysicsStepClockResource()
     private var physicsFrameState = PhysicsFrameStateResource()
+    private var physicsContactFrame = PhysicsContactFrameResource.empty
     private var physicsSyncCache = PhysicsSyncCache()
     private var resolvedPhysicsBackendKind: PhysicsBackendKind = .none
     private var jobSystem = JobSystem.shared
@@ -214,6 +215,10 @@ public struct RuntimeWorldSchedule {
         physicsFrameState
     }
 
+    public var currentPhysicsContactFrame: PhysicsContactFrameResource {
+        physicsContactFrame
+    }
+
     public mutating func run(
         world: inout RuntimeWorld,
         commands: inout RuntimeCommandBuffer,
@@ -245,6 +250,7 @@ public struct RuntimeWorldSchedule {
         var activeConstraints: [PhysicsConstraintDescriptor] = []
         var syncEvents: [PhysicsSyncEvent] = []
         var pendingWritebacks: [PhysicsBodyWriteback] = []
+        var physicsContactEvents: [PhysicsContactEvent] = []
 
         ensureConfiguredPhysicsBackend(kind: physicsSettings.backendKind)
 
@@ -274,8 +280,10 @@ public struct RuntimeWorldSchedule {
                     physicsSyncCache = PhysicsSyncCache()
                     physicsClock = PhysicsStepClockResource()
                     physicsFrameState = PhysicsFrameStateResource(backendIdentifier: physicsBackend.identifier)
+                    physicsContactFrame = .empty
                     world.setDerivedResource(physicsClock)
                     world.setDerivedResource(physicsFrameState)
+                    world.setDerivedResource(physicsContactFrame)
                     continue
                 }
 
@@ -329,6 +337,7 @@ public struct RuntimeWorldSchedule {
                     physicsClock.lastSteppedSeconds += fixedStep
                     physicsStepCount += 1
                     physicsContactCount += stepResult.contactCount
+                    physicsContactEvents.append(contentsOf: stepResult.contactEvents)
                     pendingWritebacks = mergeWritebacks(existing: pendingWritebacks, incoming: stepResult.writebacks)
                     substepIndex += 1
                 }
@@ -355,8 +364,10 @@ public struct RuntimeWorldSchedule {
                     simulatedSteps: physicsStepCount,
                     simulatedSeconds: physicsClock.lastSteppedSeconds
                 )
+                physicsContactFrame = PhysicsContactFrameResource(events: physicsContactEvents)
                 world.setDerivedResource(physicsClock)
                 world.setDerivedResource(physicsFrameState)
+                world.setDerivedResource(physicsContactFrame)
             case .animationAndScripts:
                 if let scriptDriver {
                     withUnsafeMutablePointer(to: &world) { worldPointer in
