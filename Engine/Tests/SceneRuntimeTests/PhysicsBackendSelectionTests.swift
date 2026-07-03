@@ -116,6 +116,32 @@ struct PhysicsBackendSelectionTests {
         #expect(report.physicsConstraintCount == 0)
     }
 
+    @Test("default backendKind selects Jolt when simulation runs")
+    func defaultBackendKindSelectsJoltWhenSimulationRuns() {
+        var runtime = SceneRuntime()
+        runtime.setPhysicsSettings(
+            PhysicsSettingsResource(
+                simulationMode: .play,
+                gravity: .zero,
+                fixedTimeStepSeconds: 1.0 / 60.0,
+                maxSubstepsPerFrame: 1
+            )
+        )
+
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform.identity, for: entity)
+        _ = runtime.setComponent(RigidBody(), for: entity)
+        _ = runtime.setComponent(
+            Collider(shape: .box(halfExtents: SIMD3<Float>(0.5, 0.5, 0.5), center: .zero)),
+            for: entity
+        )
+
+        let report = runtime.tick(deltaTime: 1.0 / 60.0)
+
+        #expect(report.physicsBackendIdentifier == "jolt")
+        #expect(report.physicsBodyCount == 1)
+    }
+
     @Test("manual backend override still wins over backendKind")
     func manualBackendOverrideWinsOverConfiguredKind() {
         var runtime = SceneRuntime()
