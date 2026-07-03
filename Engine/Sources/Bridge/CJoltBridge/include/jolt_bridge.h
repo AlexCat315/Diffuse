@@ -22,6 +22,9 @@ typedef struct GuavaJoltBodyDesc {
     float rotation_y;
     float rotation_z;
     float rotation_w;
+    float shape_center_x;
+    float shape_center_y;
+    float shape_center_z;
     float linear_velocity_x;
     float linear_velocity_y;
     float linear_velocity_z;
@@ -49,6 +52,9 @@ typedef struct GuavaJoltBodyDesc {
     uint16_t reserved1;
     uint16_t layer_id;
     uint16_t layer_mask;
+    float friction;
+    float restitution;
+    float density;
 } GuavaJoltBodyDesc;
 
 typedef struct GuavaJoltConstraintDesc {
@@ -129,6 +135,110 @@ typedef struct GuavaJoltStepStats {
     uint16_t reserved1;
 } GuavaJoltStepStats;
 
+typedef struct GuavaJoltQueryFilter {
+    uint64_t exclude_entity;
+    uint8_t has_exclude_entity;
+    uint8_t include_triggers;
+    uint8_t has_layer_id;
+    uint8_t reserved0;
+    uint16_t layer_id;
+    uint16_t layer_mask;
+} GuavaJoltQueryFilter;
+
+typedef struct GuavaJoltRaycastQuery {
+    float origin_x;
+    float origin_y;
+    float origin_z;
+    float direction_x;
+    float direction_y;
+    float direction_z;
+    float max_distance;
+} GuavaJoltRaycastQuery;
+
+typedef struct GuavaJoltRaycastHit {
+    uint64_t entity_id;
+    float distance;
+    float position_x;
+    float position_y;
+    float position_z;
+    float normal_x;
+    float normal_y;
+    float normal_z;
+    float bounds_min_x;
+    float bounds_min_y;
+    float bounds_min_z;
+    float bounds_max_x;
+    float bounds_max_y;
+    float bounds_max_z;
+    uint8_t is_trigger;
+    uint8_t reserved0;
+    uint16_t reserved1;
+} GuavaJoltRaycastHit;
+
+typedef struct GuavaJoltOverlapAABBQuery {
+    float bounds_min_x;
+    float bounds_min_y;
+    float bounds_min_z;
+    float bounds_max_x;
+    float bounds_max_y;
+    float bounds_max_z;
+    uint32_t max_results;
+} GuavaJoltOverlapAABBQuery;
+
+typedef struct GuavaJoltOverlapHit {
+    uint64_t entity_id;
+    float bounds_min_x;
+    float bounds_min_y;
+    float bounds_min_z;
+    float bounds_max_x;
+    float bounds_max_y;
+    float bounds_max_z;
+    uint8_t is_trigger;
+    uint8_t reserved0;
+    uint16_t reserved1;
+} GuavaJoltOverlapHit;
+
+typedef struct GuavaJoltSweepAABBQuery {
+    float bounds_min_x;
+    float bounds_min_y;
+    float bounds_min_z;
+    float bounds_max_x;
+    float bounds_max_y;
+    float bounds_max_z;
+    float translation_x;
+    float translation_y;
+    float translation_z;
+} GuavaJoltSweepAABBQuery;
+
+typedef struct GuavaJoltSweepHit {
+    uint64_t entity_id;
+    float fraction;
+    float distance;
+    float position_x;
+    float position_y;
+    float position_z;
+    float normal_x;
+    float normal_y;
+    float normal_z;
+    float bounds_min_x;
+    float bounds_min_y;
+    float bounds_min_z;
+    float bounds_max_x;
+    float bounds_max_y;
+    float bounds_max_z;
+    uint8_t is_trigger;
+    uint8_t reserved0;
+    uint16_t reserved1;
+} GuavaJoltSweepHit;
+
+typedef struct GuavaJoltTriggerEvent {
+    uint64_t trigger_entity;
+    uint64_t other_entity;
+    uint8_t kind; /* 0 enter, 1 exit, 2 active */
+    uint8_t reserved0;
+    uint16_t reserved1;
+} GuavaJoltTriggerEvent;
+
 GuavaJoltContext guava_jolt_context_create(void);
 void guava_jolt_context_destroy(GuavaJoltContext context);
 void guava_jolt_context_reset(GuavaJoltContext context);
@@ -152,6 +262,22 @@ bool guava_jolt_context_step(GuavaJoltContext context,
                              GuavaJoltBodyState* states,
                              size_t state_count,
                              GuavaJoltStepStats* out_stats);
+bool guava_jolt_context_raycast(GuavaJoltContext context,
+                                const GuavaJoltRaycastQuery* query,
+                                const GuavaJoltQueryFilter* filter,
+                                GuavaJoltRaycastHit* out_hit);
+uint32_t guava_jolt_context_overlap_aabb(GuavaJoltContext context,
+                                         const GuavaJoltOverlapAABBQuery* query,
+                                         const GuavaJoltQueryFilter* filter,
+                                         GuavaJoltOverlapHit* out_hits,
+                                         size_t hit_capacity);
+bool guava_jolt_context_sweep_aabb(GuavaJoltContext context,
+                                   const GuavaJoltSweepAABBQuery* query,
+                                   const GuavaJoltQueryFilter* filter,
+                                   GuavaJoltSweepHit* out_hit);
+uint32_t guava_jolt_context_detect_triggers(GuavaJoltContext context,
+                                            GuavaJoltTriggerEvent* out_events,
+                                            size_t event_capacity);
 
 #ifdef __cplusplus
 }

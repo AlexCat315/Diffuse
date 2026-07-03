@@ -402,6 +402,7 @@ let package = Package(
                 "SIMDCompat",
                 "EngineKernel",
                 "SceneRuntime",
+                "ScriptRuntime",
             ]
         ),
         .testTarget(
