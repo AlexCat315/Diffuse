@@ -266,7 +266,7 @@ struct DeveloperProfilerWorkbenchView: View {
         let selectedStats = selectedSample?.stats ?? frameStats
         let selectedParticleSample = developerProfilerParticleSample(particleHistory: particleHistory,
                                                                      sampleIndex: selectedSample?.sampleIndex)
-        Column(alignment: .leading, spacing: 0) {
+        Box(direction: .column, alignItems: .stretch, spacing: 0) {
             DeveloperProfilerToolbar(sampleCount: samples.count,
                                      selectedSample: selectedSample,
                                      frameStats: selectedStats)
@@ -276,7 +276,8 @@ struct DeveloperProfilerWorkbenchView: View {
             Row(alignment: .top, spacing: 0) {
                 DeveloperProfilerFrameList(samples: samples,
                                            selectedSampleIndex: selectedSampleIndex)
-                    .frame(width: 300)
+                    .frame(minWidth: 220, maxWidth: 260)
+                    .flex(0, shrink: 1, basis: 248)
 
                 Divider(axis: .vertical)
                     .frame(width: 1)
@@ -298,9 +299,10 @@ struct DeveloperProfilerWorkbenchView: View {
                         DeveloperProfilerIssuePane(issues: issues)
                     }
                     .framePercent(width: 100, minWidth: 0)
-                    .padding(horizontal: 12, vertical: 10)
+                    .padding(horizontal: 10, vertical: 10)
                 }
-                .flex(1, shrink: 1)
+                .frame(minWidth: 0)
+                .flex(1, shrink: 1, basis: 0)
             }
             .flex(1, shrink: 1)
         }
@@ -347,7 +349,7 @@ private struct DeveloperProfilerToolbar: View {
     let frameStats: EditorFrameStats
 
     var body: some View {
-        Row(alignment: .center, spacing: 10) {
+        Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 8) {
             DeveloperStatusPill(label: "LIVE", status: .nominal)
             Column(alignment: .leading, spacing: 2) {
                 Text("Profiler")
@@ -359,7 +361,7 @@ private struct DeveloperProfilerToolbar: View {
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
             }
-            .flex(1, shrink: 1)
+            .flex(1, shrink: 1, basis: 140)
 
             DeveloperProfilerMetric(label: "Frames",
                                     value: "\(sampleCount)",
@@ -431,7 +433,7 @@ private struct DeveloperProfilerFrameList: View {
     let selectedSampleIndex: Binding<UInt64?>
 
     var body: some View {
-        Column(alignment: .leading, spacing: 0) {
+        Box(direction: .column, alignItems: .stretch, spacing: 0) {
             Row(alignment: .center, spacing: 8) {
                 Text("Frames")
                     .font(.bodyStrong)
@@ -468,7 +470,7 @@ private struct DeveloperProfilerFrameList: View {
             .background(.surface)
 
             ScrollView(.vertical) {
-                Column(alignment: .leading, spacing: 0) {
+                Box(direction: .column, alignItems: .stretch, spacing: 0) {
                     for sample in samples.reversed() {
                         DeveloperProfilerFrameRow(sample: sample,
                                                   isSelected: selectedSampleIndex.wrappedValue == sample.sampleIndex,
@@ -477,9 +479,11 @@ private struct DeveloperProfilerFrameList: View {
                                                   })
                     }
                 }
+                .framePercent(width: 100, minWidth: 0)
             }
             .background(.surfaceSunken)
         }
+        .framePercent(width: 100, minWidth: 0)
     }
 }
 
@@ -525,11 +529,13 @@ private struct DeveloperProfilerFrameRow: View {
                     .flex(1, shrink: 1)
                 }
                 .padding(horizontal: 7, vertical: 4)
+                .framePercent(width: 100, minWidth: 0)
             }
             .background(isSelected ? .accent.opacity(0.12) : .surfaceSunken)
             .border(isSelected ? .accent : .divider, width: isSelected ? 1 : 0)
         }
         .buttonStyle(.plain)
+        .framePercent(width: 100, minWidth: 0)
     }
 }
 
@@ -625,11 +631,11 @@ private struct DeveloperProfilerSelectedFrameCard: View {
                             .foregroundColor(.onSurfaceMuted)
                     }
                     Text(developerProfilerBottleneckLabel(stats))
-                        .lineLimit(1)
+                        .lineLimit(2)
                         .font(.caption)
                         .foregroundColor(.onSurfaceMuted)
                 }
-                .flex(1, shrink: 1, basis: 180)
+                .flex(1, shrink: 1, basis: 160)
 
                 DeveloperStatusPill(label: developerProfilerFrameStatusShortLabel(stats.frameMs),
                                     status: frameStatus)
@@ -653,6 +659,7 @@ private struct DeveloperProfilerSelectedFrameCard: View {
         .padding(horizontal: 10, vertical: 9)
         .background(.surface)
         .border(developerPerformanceStatusColor(frameStatus), width: 1)
+        .framePercent(width: 100, minWidth: 0)
     }
 }
 
@@ -675,7 +682,7 @@ private struct DeveloperProfilerCompactMetric: View {
         .padding(horizontal: 8, vertical: 5)
         .background(.surfaceSunken)
         .border(status == .nominal ? .divider : developerPerformanceStatusColor(status), width: 1)
-        .flex(1, shrink: 1, basis: 104)
+        .flex(1, shrink: 1, basis: 88)
     }
 }
 
@@ -693,14 +700,14 @@ private struct DeveloperProfilerBottleneckSummaryCard: View {
                 DeveloperStatusPill(label: developerPerformanceMonitorStatusLabel(summary.status),
                                     status: summary.status)
                 Text(summary.title)
-                    .lineLimit(1)
+                    .lineLimit(2)
                     .font(.bodyStrong)
                     .foregroundColor(developerPerformanceStatusColor(summary.status))
-                    .flex(1, shrink: 1, basis: 160)
+                    .flex(1, shrink: 1, basis: 140)
             }
 
             Text(summary.primarySignal)
-                .lineLimit(1)
+                .lineLimit(2)
                 .font(.caption)
                 .foregroundColor(.onSurface)
 
@@ -714,6 +721,7 @@ private struct DeveloperProfilerBottleneckSummaryCard: View {
         .padding(horizontal: 10, vertical: 8)
         .background(.surface)
         .border(summary.status == .nominal ? .divider : developerPerformanceStatusColor(summary.status), width: 1)
+        .framePercent(width: 100, minWidth: 0)
     }
 }
 
@@ -721,22 +729,13 @@ private struct DeveloperProfilerEvidenceGrid: View {
     let items: [DeveloperProfilerEvidenceItem]
 
     var body: some View {
-        let firstRow = Array(items.prefix(2))
-        let secondRow = Array(items.dropFirst(2).prefix(2))
-        Box(direction: .column, alignItems: .stretch, spacing: 6) {
-            Box(direction: .row, alignItems: .stretch, wrap: .wrap, spacing: 8) {
-                for item in firstRow {
-                    DeveloperProfilerEvidenceCell(item: item)
-                }
-            }
-            if !secondRow.isEmpty {
-                Box(direction: .row, alignItems: .stretch, wrap: .wrap, spacing: 8) {
-                    for item in secondRow {
-                        DeveloperProfilerEvidenceCell(item: item)
-                    }
-                }
+        let visibleItems = Array(items.prefix(4))
+        Box(direction: .row, alignItems: .stretch, wrap: .wrap, spacing: 6) {
+            for item in visibleItems {
+                DeveloperProfilerEvidenceCell(item: item)
             }
         }
+        .framePercent(width: 100, minWidth: 0)
     }
 }
 
@@ -749,16 +748,18 @@ private struct DeveloperProfilerEvidenceCell: View {
                 .lineLimit(1)
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
-                .flex(1, shrink: 1)
+                .flex(1, shrink: 1, basis: 0)
             Text(item.value)
                 .lineLimit(1)
                 .font(.mono)
                 .foregroundColor(developerPerformanceStatusColor(item.status))
+                .flex(0, shrink: 0)
         }
         .padding(horizontal: 8, vertical: 5)
         .background(.surfaceSunken)
         .border(item.status == .nominal ? .divider : developerPerformanceStatusColor(item.status), width: 1)
-        .flex(1, shrink: 1, basis: 128)
+        .frame(minWidth: 104)
+        .flex(1, shrink: 1, basis: 112)
     }
 }
 
@@ -768,7 +769,7 @@ private struct DeveloperProfilerFrameGraph: View {
     let selectedSampleIndex: Binding<UInt64?>
 
     var body: some View {
-        let visibleSamples = Array(samples.suffix(96))
+        let visibleSamples = Array(samples.suffix(72))
         let values = visibleSamples.map { Float($0.stats.frameMs) }
         let graphMaxValue = developerProfilerFrameChartMaxValue(values: values)
         Box(direction: .column, alignItems: .stretch, spacing: 6) {
@@ -779,9 +780,8 @@ private struct DeveloperProfilerFrameGraph: View {
                 Text(developerPerformanceMonitorRangeLabel(values: values, unit: .milliseconds))
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
-                    .flex(1, shrink: 1, basis: 180)
+                    .flex(1, shrink: 1, basis: 120)
                 Text("\(visibleSamples.count) recent")
-                    .lineLimit(1)
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
                 Text(selectedSample.map { "#\($0.sampleIndex)" } ?? "Latest")
@@ -821,6 +821,7 @@ private struct DeveloperProfilerFrameGraph: View {
         .padding(horizontal: 10, vertical: 8)
         .background(.surface)
         .border(.divider, width: 1)
+        .framePercent(width: 100, minWidth: 0)
     }
 }
 
@@ -924,18 +925,19 @@ private struct DeveloperProfilerFrameComposition: View {
             .background(.surfaceSunken)
             .cornerRadius(3)
 
-            Row(alignment: .center, spacing: 12) {
+            Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 8) {
                 DeveloperProfilerValueRow(label: "Frame", value: developerProfilerFormatMs(stats.frameMs))
-                    .flex(1, shrink: 1)
+                    .flex(1, shrink: 1, basis: 92)
                 DeveloperProfilerValueRow(label: "Work", value: developerProfilerFormatMs(stats.workMs))
-                    .flex(1, shrink: 1)
+                    .flex(1, shrink: 1, basis: 92)
                 DeveloperProfilerValueRow(label: "Pacing", value: developerProfilerFormatMs(stats.pacingGapMs))
-                    .flex(1, shrink: 1)
+                    .flex(1, shrink: 1, basis: 92)
             }
         }
         .padding(horizontal: 10, vertical: 8)
         .background(.surface)
         .border(.divider, width: 1)
+        .framePercent(width: 100, minWidth: 0)
     }
 }
 
@@ -994,7 +996,7 @@ private struct DeveloperProfilerPhaseBreakdown: View {
             }
             .flex(1, shrink: 1)
 
-            Row(alignment: .top, spacing: 10) {
+            Box(direction: .row, alignItems: .flexStart, wrap: .wrap, spacing: 10) {
                 DeveloperProfilerSection(title: "Render") {
                     DeveloperProfilerValueRow(label: "Draw Calls", value: "\(stats.drawCallCount)")
                     DeveloperProfilerValueRow(label: "Passes", value: "\(stats.passCount)")
@@ -1002,7 +1004,7 @@ private struct DeveloperProfilerPhaseBreakdown: View {
                     DeveloperProfilerValueRow(label: "Encode", value: developerProfilerFormatNs(renderStats.cpuEncodeNS))
                     DeveloperProfilerValueRow(label: "Present", value: developerProfilerFormatMs(stats.gpuPresentSeconds * 1000))
                 }
-                .flex(1, shrink: 1)
+                .flex(1, shrink: 1, basis: 160)
 
                 DeveloperProfilerSection(title: "Particles") {
                     if let particleSample {
@@ -1022,7 +1024,7 @@ private struct DeveloperProfilerPhaseBreakdown: View {
                         DeveloperProfilerValueRow(label: "GPU Sim", value: "--")
                     }
                 }
-                .flex(1, shrink: 1)
+                .flex(1, shrink: 1, basis: 160)
             }
         }
     }
@@ -1047,6 +1049,7 @@ private struct DeveloperProfilerSection<Content: View>: View {
         .padding(horizontal: 10, vertical: 8)
         .background(.surface)
         .border(.divider, width: 1)
+        .framePercent(width: 100, minWidth: 0)
     }
 }
 
@@ -1097,11 +1100,12 @@ private struct DeveloperProfilerValueRow: View {
                 .lineLimit(1)
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
-                .flex(1, shrink: 1)
+                .flex(1, shrink: 1, basis: 0)
             Text(value)
                 .lineLimit(1)
                 .font(.mono)
                 .foregroundColor(.onSurface)
+                .flex(0, shrink: 0)
         }
     }
 }
