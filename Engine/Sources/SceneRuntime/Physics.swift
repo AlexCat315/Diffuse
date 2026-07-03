@@ -30,6 +30,7 @@ public struct RigidBody: RuntimeComponent, Sendable, Equatable {
     public var angularDamping: Float
     public var allowSleep: Bool
     public var isSleeping: Bool
+    public var continuousCollisionDetection: Bool
 
     public init(
         motionType: RigidBodyMotionType = .dynamic,
@@ -42,7 +43,8 @@ public struct RigidBody: RuntimeComponent, Sendable, Equatable {
         linearDamping: Float = 0.04,
         angularDamping: Float = 0.04,
         allowSleep: Bool = true,
-        isSleeping: Bool = false
+        isSleeping: Bool = false,
+        continuousCollisionDetection: Bool = false
     ) {
         self.motionType = motionType
         self.mass = mass
@@ -55,6 +57,7 @@ public struct RigidBody: RuntimeComponent, Sendable, Equatable {
         self.angularDamping = angularDamping
         self.allowSleep = allowSleep
         self.isSleeping = isSleeping
+        self.continuousCollisionDetection = continuousCollisionDetection
     }
 }
 
@@ -191,6 +194,7 @@ public struct PhysicsSettingsResource: Sendable, Equatable {
     public var fixedTimeStepSeconds: Double
     public var maxSubstepsPerFrame: Int
     public var allowSleep: Bool
+    public var collisionSteps: Int
 
     public init(
         simulationMode: PhysicsSimulationMode = .off,
@@ -198,7 +202,8 @@ public struct PhysicsSettingsResource: Sendable, Equatable {
         gravity: SIMD3<Float> = SIMD3<Float>(0, -9.81, 0),
         fixedTimeStepSeconds: Double = 1.0 / 60.0,
         maxSubstepsPerFrame: Int = 4,
-        allowSleep: Bool = true
+        allowSleep: Bool = true,
+        collisionSteps: Int = 1
     ) {
         self.simulationMode = simulationMode
         self.backendKind = backendKind
@@ -206,6 +211,7 @@ public struct PhysicsSettingsResource: Sendable, Equatable {
         self.fixedTimeStepSeconds = fixedTimeStepSeconds
         self.maxSubstepsPerFrame = maxSubstepsPerFrame
         self.allowSleep = allowSleep
+        self.collisionSteps = max(1, collisionSteps)
     }
 }
 
@@ -254,6 +260,65 @@ public struct PhysicsFrameStateResource: Sendable, Equatable {
         self.simulatedSteps = simulatedSteps
         self.simulatedSeconds = simulatedSeconds
     }
+}
+
+public enum PhysicsContactEventKind: String, Sendable, Equatable {
+    case began
+    case stayed
+    case ended
+}
+
+public struct PhysicsContactEvent: Sendable, Equatable {
+    public var entityA: EntityID
+    public var entityB: EntityID
+    public var kind: PhysicsContactEventKind
+    public var position: SIMD3<Float>
+    public var normal: SIMD3<Float>
+    public var penetrationDepth: Float
+
+    public init(
+        entityA: EntityID,
+        entityB: EntityID,
+        kind: PhysicsContactEventKind,
+        position: SIMD3<Float> = .zero,
+        normal: SIMD3<Float> = .zero,
+        penetrationDepth: Float = 0
+    ) {
+        self.entityA = entityA
+        self.entityB = entityB
+        self.kind = kind
+        self.position = position
+        self.normal = normal
+        self.penetrationDepth = penetrationDepth
+    }
+}
+
+public struct PhysicsContactFrameResource: Sendable, Equatable {
+    public var began: [PhysicsContactEvent]
+    public var stayed: [PhysicsContactEvent]
+    public var ended: [PhysicsContactEvent]
+
+    public init(
+        began: [PhysicsContactEvent] = [],
+        stayed: [PhysicsContactEvent] = [],
+        ended: [PhysicsContactEvent] = []
+    ) {
+        self.began = began
+        self.stayed = stayed
+        self.ended = ended
+    }
+
+    public init(events: [PhysicsContactEvent]) {
+        began = events.filter { $0.kind == .began }
+        stayed = events.filter { $0.kind == .stayed }
+        ended = events.filter { $0.kind == .ended }
+    }
+
+    public var events: [PhysicsContactEvent] {
+        began + stayed + ended
+    }
+
+    public static let empty = PhysicsContactFrameResource()
 }
 
 public struct PhysicsQueryFilter: Sendable, Equatable {
@@ -506,17 +571,20 @@ public struct PhysicsStepResult: Sendable, Equatable {
     public var constraintCount: Int
     public var contactCount: Int
     public var writebacks: [PhysicsBodyWriteback]
+    public var contactEvents: [PhysicsContactEvent]
 
     public init(
         bodyCount: Int = 0,
         constraintCount: Int = 0,
         contactCount: Int = 0,
-        writebacks: [PhysicsBodyWriteback] = []
+        writebacks: [PhysicsBodyWriteback] = [],
+        contactEvents: [PhysicsContactEvent] = []
     ) {
         self.bodyCount = bodyCount
         self.constraintCount = constraintCount
         self.contactCount = contactCount
         self.writebacks = writebacks
+        self.contactEvents = contactEvents
     }
 }
 

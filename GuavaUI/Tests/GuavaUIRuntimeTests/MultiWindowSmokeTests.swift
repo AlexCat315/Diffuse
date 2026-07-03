@@ -183,6 +183,30 @@ struct MultiWindowSmokeTests {
     }
 
     @MainActor
+    @Test("Display-refresh frame-rate mode drives cadence frames")
+    func displayRefreshModeDrivesCadenceFrames() throws {
+        let shell = MockShell(eventBatches: Array(repeating: [], count: 8))
+        shell.refreshRate = 240
+        let host = SDL3PlatformHost(shellFactory: { shell })
+        host.setFrameRateMode(.displayRefresh)
+
+        let tree = NodeTree()
+        let session = try host.openWindow(title: "A", tree: tree)
+        tree.root = Node()
+        (shell.window(for: session.id) as? MockWindowHandle)?.renderSurface = mockSurface
+
+        var frameCount = 0
+        session.onFrame = { _ in
+            frameCount += 1
+            return true
+        }
+
+        host.run()
+
+        #expect(frameCount > 1)
+    }
+
+    @MainActor
     @Test("Active animations alone do not force extra frames")
     func activeAnimationsDoNotForceFrames() throws {
         let shell = MockShell(eventBatches: [[], []])
@@ -417,6 +441,7 @@ private final class MockShell: Shell {
     }
 
     var eventBatches: [[WindowInputEvent]]
+    var refreshRate: Double?
     var cursorRequests: [CursorRequest] = []
     var textInputAreas: [WindowID: TextInputArea?] = [:]
 
@@ -479,6 +504,11 @@ private final class MockShell: Shell {
 
     func setCursor(windowID: WindowID, _ cursor: SystemCursor) {
         cursorRequests.append(CursorRequest(windowID: windowID, cursor: cursor))
+    }
+
+    func displayRefreshRate(windowID: WindowID?) -> Double? {
+        _ = windowID
+        return refreshRate
     }
 
     func shutdown() {

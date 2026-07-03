@@ -54,10 +54,6 @@ public struct SceneRuntime {
         world.resource(SpatialIndexResource.self) ?? buildSpatialIndexResource(in: world)
     }
 
-    public var spatialIndexBuildSettings: SpatialIndexBuildSettings {
-        world.resource(SpatialIndexBuildSettings.self) ?? SpatialIndexBuildSettings()
-    }
-
     public var particleFrameStats: ParticleFrameStatsResource {
         world.resource(ParticleFrameStatsResource.self) ?? .empty
     }
@@ -68,10 +64,6 @@ public struct SceneRuntime {
 
     public mutating func applyParticleSimulationReadbackStats(_ report: ParticleSimulationEventApplyReport) {
         world.setResource(particleFrameStats.mergingGPUReadback(report))
-    }
-
-    public mutating func setSpatialIndexBuildSettings(_ settings: SpatialIndexBuildSettings) {
-        world.setResource(settings)
     }
 
     @discardableResult
@@ -310,6 +302,10 @@ public struct SceneRuntime {
 
     public var physicsFrameState: PhysicsFrameStateResource {
         world.resource(PhysicsFrameStateResource.self) ?? schedule.currentPhysicsFrameState
+    }
+
+    public var physicsContactFrame: PhysicsContactFrameResource {
+        world.resource(PhysicsContactFrameResource.self) ?? schedule.currentPhysicsContactFrame
     }
 
     @discardableResult

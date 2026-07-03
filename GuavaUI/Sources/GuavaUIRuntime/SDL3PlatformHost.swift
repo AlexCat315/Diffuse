@@ -555,11 +555,11 @@ public final class SDL3PlatformHost: PlatformHost {
             pruneClosedSessions(using: shell)
 
             if let targetFrameInterval, let lastFramePreparationTime {
-                // Only an explicit `.fixed(N)` cap reaches here; `.displayRefresh`
-                // returns nil and lets the swapchain present (FIFO/vsync) pace
-                // the loop instead. Sleep almost the whole remaining interval —
-                // timeBeginPeriod(1) above keeps this accurate on Windows — and
-                // let the next iteration spin out the final sub-millisecond.
+                // Sleep almost the whole remaining interval — timeBeginPeriod(1)
+                // above keeps this accurate on Windows — and let the next
+                // iteration spin out the final sub-millisecond. The deadline is
+                // measured from frame preparation start, so FIFO present time
+                // contributes to the interval instead of stacking an extra wait.
                 let remaining = (lastFramePreparationTime + targetFrameInterval) - TimingTrace.now()
                 if remaining > 0.001 {
                     Thread.sleep(forTimeInterval: remaining - 0.0003)
@@ -587,12 +587,13 @@ public final class SDL3PlatformHost: PlatformHost {
 
     private func currentFrameInterval(shell: any Shell) -> Double? {
         switch frameRateMode {
-        case .eventDriven, .displayRefresh:
-            // VSync is provided by the surface's FIFO present, which blocks at
-            // vblank and paces the loop to the refresh rate. A separate sleep
-            // pacer here would stack on top and halve the rate, so we pace only
-            // for an explicit fixed cap.
+        case .eventDriven:
             return nil
+        case .displayRefresh:
+            let refreshRate = Self.sanitizedOptionalFrameRate(
+                shell.displayRefreshRate(windowID: mainWindowID)
+            ) ?? 60.0
+            return 1.0 / refreshRate
         case let .fixed(framesPerSecond):
             return 1.0 / Self.sanitizedFrameRate(framesPerSecond)
         }
