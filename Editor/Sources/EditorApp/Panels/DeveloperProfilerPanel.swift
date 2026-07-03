@@ -257,6 +257,8 @@ struct DeveloperProfilerWorkbenchView: View {
     let issues: [DeveloperDiagnosticIssue]
     let selectedSampleIndex: Binding<UInt64?>
 
+    @State private var selectedFrameFilter: DeveloperProfilerFrameFilter = .all
+
     var body: some View {
         let samples = developerProfilerFrameSamples(frameStats: frameStats,
                                                    frameHistory: history,
@@ -275,6 +277,7 @@ struct DeveloperProfilerWorkbenchView: View {
 
             Row(alignment: .top, spacing: 0) {
                 DeveloperProfilerFrameList(samples: samples,
+                                           selectedFilter: $selectedFrameFilter,
                                            selectedSampleIndex: selectedSampleIndex)
                     .frame(minWidth: 220, maxWidth: 260)
                     .flex(0, shrink: 1, basis: 248)
@@ -296,7 +299,8 @@ struct DeveloperProfilerWorkbenchView: View {
                         DeveloperProfilerPhaseBreakdown(stats: selectedStats,
                                                         renderStats: renderStats,
                                                         particleSample: selectedParticleSample)
-                        DeveloperProfilerIssuePane(issues: issues)
+                        DeveloperProfilerIssuePane(issues: issues,
+                                                   selectedSampleIndex: selectedSampleIndex)
                     }
                     .framePercent(width: 100, minWidth: 0)
                     .padding(horizontal: 10, vertical: 10)
@@ -430,15 +434,18 @@ private struct DeveloperProfilerMetric: View {
 
 private struct DeveloperProfilerFrameList: View {
     let samples: [EditorFrameStatsHistorySample]
+    let selectedFilter: Binding<DeveloperProfilerFrameFilter>
     let selectedSampleIndex: Binding<UInt64?>
 
     var body: some View {
+        let filteredSamples = developerProfilerFilteredSamples(samples, filter: selectedFilter.wrappedValue)
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             Row(alignment: .center, spacing: 8) {
                 Text("Frames")
                     .font(.bodyStrong)
                     .foregroundColor(.onSurface)
-                Text("\(samples.count)")
+                Text(developerProfilerFrameFilterCountLabel(visible: filteredSamples.count,
+                                                            total: samples.count))
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
                 Spacer(minLength: 0)
@@ -452,6 +459,14 @@ private struct DeveloperProfilerFrameList: View {
                 .padding(horizontal: 10, vertical: 8)
 
             Divider()
+
+            DeveloperProfilerFrameFilterBar(samples: samples,
+                                            selectedFilter: selectedFilter,
+                                            selectedSampleIndex: selectedSampleIndex)
+                .padding(horizontal: 8, vertical: 7)
+
+            Divider()
+
             Row(alignment: .center, spacing: 8) {
                 Text("Sample")
                     .font(.caption)
@@ -471,12 +486,19 @@ private struct DeveloperProfilerFrameList: View {
 
             ScrollView(.vertical) {
                 Box(direction: .column, alignItems: .stretch, spacing: 0) {
-                    for sample in samples.reversed() {
-                        DeveloperProfilerFrameRow(sample: sample,
-                                                  isSelected: selectedSampleIndex.wrappedValue == sample.sampleIndex,
-                                                  onSelect: {
-                                                      selectedSampleIndex.wrappedValue = sample.sampleIndex
-                                                  })
+                    if filteredSamples.isEmpty {
+                        Text("No frames match")
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                            .padding(horizontal: 10, vertical: 8)
+                    } else {
+                        for sample in filteredSamples.reversed() {
+                            DeveloperProfilerFrameRow(sample: sample,
+                                                      isSelected: selectedSampleIndex.wrappedValue == sample.sampleIndex,
+                                                      onSelect: {
+                                                          selectedSampleIndex.wrappedValue = sample.sampleIndex
+                                                      })
+                        }
                     }
                 }
                 .framePercent(width: 100, minWidth: 0)
@@ -484,6 +506,49 @@ private struct DeveloperProfilerFrameList: View {
             .background(.surfaceSunken)
         }
         .framePercent(width: 100, minWidth: 0)
+    }
+}
+
+private struct DeveloperProfilerFrameFilterBar: View {
+    let samples: [EditorFrameStatsHistorySample]
+    let selectedFilter: Binding<DeveloperProfilerFrameFilter>
+    let selectedSampleIndex: Binding<UInt64?>
+
+    var body: some View {
+        Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 5) {
+            for filter in DeveloperProfilerFrameFilter.allCases {
+                DeveloperProfilerFrameFilterChip(
+                    filter: filter,
+                    count: developerProfilerFilteredSamples(samples, filter: filter).count,
+                    isSelected: selectedFilter.wrappedValue == filter,
+                    onSelect: {
+                        selectedFilter.wrappedValue = filter
+                        developerProfilerSelectLatestVisibleFrame(samples: samples,
+                                                                  filter: filter,
+                                                                  selectedSampleIndex: selectedSampleIndex)
+                    }
+                )
+            }
+        }
+        .framePercent(width: 100, minWidth: 0)
+    }
+}
+
+private struct DeveloperProfilerFrameFilterChip: View {
+    let filter: DeveloperProfilerFrameFilter
+    let count: Int
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(isSelected: isSelected, action: onSelect) {
+            Row(alignment: .center, spacing: 4) {
+                Text(filter.label, lineLimit: 1)
+                Text("\(count)", lineLimit: 1)
+                    .font(.mono)
+            }
+        }
+        .buttonStyle(ToggleButtonStyle(minWidth: 42, height: 22))
     }
 }
 
@@ -1112,6 +1177,7 @@ private struct DeveloperProfilerValueRow: View {
 
 private struct DeveloperProfilerIssuePane: View {
     let issues: [DeveloperDiagnosticIssue]
+    let selectedSampleIndex: Binding<UInt64?>
 
     var body: some View {
         let visibleIssues = Array(issues.prefix(6))
@@ -1123,7 +1189,8 @@ private struct DeveloperProfilerIssuePane: View {
             } else {
                 Column(alignment: .leading, spacing: 4) {
                     for issue in visibleIssues {
-                        DeveloperProfilerIssueRow(issue: issue)
+                        DeveloperProfilerIssueRow(issue: issue,
+                                                  selectedSampleIndex: selectedSampleIndex)
                     }
                 }
             }
@@ -1133,8 +1200,10 @@ private struct DeveloperProfilerIssuePane: View {
 
 private struct DeveloperProfilerIssueRow: View {
     let issue: DeveloperDiagnosticIssue
+    let selectedSampleIndex: Binding<UInt64?>
 
     var body: some View {
+        let targetSampleIndex = issue.target.frameSampleIndex
         Row(alignment: .center, spacing: 8) {
             Text(developerIssueGlyph(issue.severity))
                 .font(.mono)
@@ -1154,6 +1223,17 @@ private struct DeveloperProfilerIssueRow: View {
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
                 .flex(1, shrink: 1)
+            if let targetSampleIndex {
+                Button(action: {
+                    selectedSampleIndex.wrappedValue = targetSampleIndex
+                }) {
+                    Text(issue.target.label, lineLimit: 1)
+                        .font(.caption)
+                        .foregroundColor(selectedSampleIndex.wrappedValue == targetSampleIndex ? .accent : .onSurface)
+                }
+                .buttonStyle(.ghost)
+                .flex(0, shrink: 1)
+            }
         }
         .padding(horizontal: 8, vertical: 4)
         .background(.surfaceSunken)
@@ -1473,6 +1553,29 @@ private struct DeveloperProfilerFrameFocus {
     var status: DeveloperPerformanceMonitorStatus
 }
 
+private enum DeveloperProfilerFrameFilter: CaseIterable, Equatable {
+    case all
+    case hot
+    case critical
+    case pacing
+    case submit
+
+    var label: String {
+        switch self {
+        case .all:
+            return "All"
+        case .hot:
+            return "Hot"
+        case .critical:
+            return "Crit"
+        case .pacing:
+            return "Pacing"
+        case .submit:
+            return "Submit"
+        }
+    }
+}
+
 private func developerProfilerFrameSamples(frameStats: EditorFrameStats,
                                            frameHistory: [EditorFrameStatsHistorySample],
                                            maxSamples: Int) -> [EditorFrameStatsHistorySample] {
@@ -1657,6 +1760,48 @@ private func developerProfilerSelectedFrame(samples: [EditorFrameStatsHistorySam
                                             selectedSampleIndex: UInt64?) -> EditorFrameStatsHistorySample? {
     guard let selectedSampleIndex else { return samples.last }
     return samples.first { $0.sampleIndex == selectedSampleIndex } ?? samples.last
+}
+
+private func developerProfilerFilteredSamples(_ samples: [EditorFrameStatsHistorySample],
+                                              filter: DeveloperProfilerFrameFilter) -> [EditorFrameStatsHistorySample] {
+    samples.filter { developerProfilerFrameMatchesFilter($0, filter: filter) }
+}
+
+private func developerProfilerFrameMatchesFilter(_ sample: EditorFrameStatsHistorySample,
+                                                 filter: DeveloperProfilerFrameFilter) -> Bool {
+    switch filter {
+    case .all:
+        return true
+    case .hot:
+        return developerProfilerFrameStatus(sample.stats.frameMs) != .nominal
+            || developerProfilerFrameStatus(sample.stats.workMs) != .nominal
+            || developerProfilerPacingStatus(sample.stats.pacingGapMs) != .nominal
+            || sample.stats.isFramePacingDominated
+    case .critical:
+        return developerProfilerFrameStatus(sample.stats.frameMs) == .critical
+            || developerProfilerFrameStatus(sample.stats.workMs) == .critical
+            || developerProfilerPacingStatus(sample.stats.pacingGapMs) == .critical
+    case .pacing:
+        return sample.stats.isFramePacingDominated
+            || developerProfilerPacingStatus(sample.stats.pacingGapMs) != .nominal
+    case .submit:
+        return developerProfilerFrameFocus(sample.stats).label == "Submit"
+    }
+}
+
+private func developerProfilerFrameFilterCountLabel(visible: Int, total: Int) -> String {
+    visible == total ? "\(total)" : "\(visible)/\(total)"
+}
+
+private func developerProfilerSelectLatestVisibleFrame(samples: [EditorFrameStatsHistorySample],
+                                                       filter: DeveloperProfilerFrameFilter,
+                                                       selectedSampleIndex: Binding<UInt64?>) {
+    let visibleSamples = developerProfilerFilteredSamples(samples, filter: filter)
+    if let current = selectedSampleIndex.wrappedValue,
+       visibleSamples.contains(where: { $0.sampleIndex == current }) {
+        return
+    }
+    selectedSampleIndex.wrappedValue = visibleSamples.last?.sampleIndex ?? samples.last?.sampleIndex
 }
 
 private func developerProfilerToolbarSubtitle(sampleCount: Int,
