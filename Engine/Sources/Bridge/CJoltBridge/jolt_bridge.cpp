@@ -52,6 +52,7 @@ constexpr uint32_t kColliderIsTriggerFlag  = 1u << 3;
 constexpr uint32_t kRigidBodyAllowSleepFlag = 1u << 4;
 constexpr uint32_t kColliderHasCapsuleFlag = 1u << 5;
 constexpr uint32_t kColliderHasConvexFlag  = 1u << 6;
+constexpr uint32_t kRigidBodyContinuousCollisionFlag = 1u << 7;
 
 constexpr uint32_t kMotionStatic    = 0u;
 constexpr uint32_t kMotionDynamic   = 1u;
@@ -66,6 +67,10 @@ constexpr uint8_t kConstraintFixed        = 4u;
 constexpr uint8_t kTriggerEnter = 0u;
 constexpr uint8_t kTriggerExit  = 1u;
 constexpr uint8_t kTriggerActive = 2u;
+
+constexpr uint8_t kContactBegan = 0u;
+constexpr uint8_t kContactPersisted = 1u;
+constexpr uint8_t kContactEnded = 2u;
 
 // Layer setup — minimal two-layer scheme (non-moving + moving).
 namespace Layers {
@@ -161,6 +166,20 @@ struct TriggerPairHash {
         size_t h2 = std::hash<uint64_t>{}(pair.other);
         return h1 ^ (h2 + 0x9e3779b97f4a7c15ull + (h1 << 6) + (h1 >> 2));
     }
+};
+
+struct PendingContactEvent {
+    uint64_t entity_a = 0;
+    uint64_t entity_b = 0;
+    uint8_t kind = kContactBegan;
+    JPH::RVec3 position = JPH::RVec3::sZero();
+    JPH::Vec3 normal = JPH::Vec3::sZero();
+    float penetration_depth = 0.0f;
+};
+
+struct ActiveContactPair {
+    uint64_t entity_a = 0;
+    uint64_t entity_b = 0;
 };
 
 uint64_t hash_mesh_data(const std::vector<float>* vertices, const std::vector<uint32_t>* indices) {
@@ -296,8 +315,140 @@ public:
         return JPH::ValidateResult::AcceptAllContactsForThisBodyPair;
     }
 
+    void OnContactAdded(const JPH::Body& body1,
+                        const JPH::Body& body2,
+                        const JPH::ContactManifold& manifold,
+                        JPH::ContactSettings&) override {
+        record_contact(kContactBegan, body1, body2, manifold);
+    }
+
+    void OnContactPersisted(const JPH::Body& body1,
+                            const JPH::Body& body2,
+                            const JPH::ContactManifold& manifold,
+                            JPH::ContactSettings&) override {
+        record_contact(kContactPersisted, body1, body2, manifold);
+    }
+
+    void OnContactRemoved(const JPH::SubShapeIDPair& sub_shape_pair) override {
+        std::lock_guard<std::mutex> lock(mMutex);
+        auto it = mActiveContacts.find(sub_shape_pair);
+        if (it == mActiveContacts.end()) return;
+
+        mEvents.push_back(PendingContactEvent{
+            it->second.entity_a,
+            it->second.entity_b,
+            kContactEnded,
+            JPH::RVec3::sZero(),
+            JPH::Vec3::sZero(),
+            0.0f
+        });
+        mActiveContacts.erase(it);
+    }
+
+    void begin_step() {
+        std::lock_guard<std::mutex> lock(mMutex);
+        mEvents.clear();
+    }
+
+    void reset() {
+        std::lock_guard<std::mutex> lock(mMutex);
+        mEvents.clear();
+        mActiveContacts.clear();
+    }
+
+    uint32_t event_count() const {
+        std::lock_guard<std::mutex> lock(mMutex);
+        return static_cast<uint32_t>(mEvents.size());
+    }
+
+    uint32_t copy_events(GuavaJoltContactEvent* out_events, size_t event_capacity) const {
+        std::vector<PendingContactEvent> events;
+        {
+            std::lock_guard<std::mutex> lock(mMutex);
+            events = mEvents;
+        }
+        std::sort(events.begin(), events.end(), [](const auto& lhs, const auto& rhs) {
+            if (lhs.entity_a != rhs.entity_a) return lhs.entity_a < rhs.entity_a;
+            if (lhs.entity_b != rhs.entity_b) return lhs.entity_b < rhs.entity_b;
+            if (lhs.kind != rhs.kind) return lhs.kind < rhs.kind;
+            if (lhs.position.GetX() != rhs.position.GetX()) return lhs.position.GetX() < rhs.position.GetX();
+            if (lhs.position.GetY() != rhs.position.GetY()) return lhs.position.GetY() < rhs.position.GetY();
+            return lhs.position.GetZ() < rhs.position.GetZ();
+        });
+
+        const size_t count = std::min(event_capacity, events.size());
+        if (out_events) {
+            for (size_t i = 0; i < count; ++i) {
+                const auto& event = events[i];
+                out_events[i].entity_a = event.entity_a;
+                out_events[i].entity_b = event.entity_b;
+                out_events[i].kind = event.kind;
+                out_events[i].reserved0 = 0;
+                out_events[i].reserved1 = 0;
+                out_events[i].position_x = event.position.GetX();
+                out_events[i].position_y = event.position.GetY();
+                out_events[i].position_z = event.position.GetZ();
+                out_events[i].normal_x = event.normal.GetX();
+                out_events[i].normal_y = event.normal.GetY();
+                out_events[i].normal_z = event.normal.GetZ();
+                out_events[i].penetration_depth = event.penetration_depth;
+            }
+        }
+        return static_cast<uint32_t>(events.size());
+    }
+
 private:
+    bool should_record_contact(uint64_t entity1, uint64_t entity2) const {
+        auto it1 = mMetadata.find(entity1);
+        auto it2 = mMetadata.find(entity2);
+        if (it1 == mMetadata.end() || it2 == mMetadata.end()) return false;
+        if (it1->second.is_trigger || it2->second.is_trigger) return false;
+        return body_layers_collide(it1->second, it2->second);
+    }
+
+    JPH::RVec3 contact_position(const JPH::ContactManifold& manifold) const {
+        if (manifold.mRelativeContactPointsOn1.empty()) return manifold.mBaseOffset;
+        JPH::RVec3 point1 = manifold.GetWorldSpaceContactPointOn1(0);
+        JPH::RVec3 point2 = manifold.GetWorldSpaceContactPointOn2(0);
+        return JPH::RVec3(
+            (point1.GetX() + point2.GetX()) * 0.5,
+            (point1.GetY() + point2.GetY()) * 0.5,
+            (point1.GetZ() + point2.GetZ()) * 0.5
+        );
+    }
+
+    void record_contact(uint8_t kind,
+                        const JPH::Body& body1,
+                        const JPH::Body& body2,
+                        const JPH::ContactManifold& manifold) {
+        const uint64_t entity1 = body1.GetUserData();
+        const uint64_t entity2 = body2.GetUserData();
+        if (!should_record_contact(entity1, entity2)) return;
+
+        JPH::SubShapeIDPair sub_shape_pair(
+            body1.GetID(),
+            manifold.mSubShapeID1,
+            body2.GetID(),
+            manifold.mSubShapeID2
+        );
+        PendingContactEvent event{
+            entity1,
+            entity2,
+            kind,
+            contact_position(manifold),
+            manifold.mWorldSpaceNormal,
+            manifold.mPenetrationDepth
+        };
+
+        std::lock_guard<std::mutex> lock(mMutex);
+        mActiveContacts[sub_shape_pair] = ActiveContactPair{ entity1, entity2 };
+        mEvents.push_back(event);
+    }
+
     const std::unordered_map<uint64_t, BodyMetadata>& mMetadata;
+    mutable std::mutex mMutex;
+    std::vector<PendingContactEvent> mEvents;
+    std::unordered_map<JPH::SubShapeIDPair, ActiveContactPair> mActiveContacts;
 };
 
 class BPLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface {
@@ -589,6 +740,7 @@ struct GuavaJoltContextImpl {
         mesh_vertices.clear();
         mesh_indices.clear();
         previous_trigger_pairs.clear();
+        contact_listener.reset();
     }
 
     void destroy_body(uint64_t entity, JPH::BodyInterface& bi) {
@@ -640,6 +792,10 @@ struct GuavaJoltContextImpl {
         settings.mRestitution = desc.restitution;
         settings.mIsSensor = (desc.flags & kColliderIsTriggerFlag) != 0;
         settings.mAllowSleeping = (desc.flags & kRigidBodyAllowSleepFlag) != 0;
+        if (motion == JPH::EMotionType::Dynamic
+            && (desc.flags & kRigidBodyContinuousCollisionFlag) != 0) {
+            settings.mMotionQuality = JPH::EMotionQuality::LinearCast;
+        }
         if (motion == JPH::EMotionType::Dynamic) {
             settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
             settings.mMassPropertiesOverride.mMass = desc.mass > 0.0f ? desc.mass : std::max(desc.density, 1.0f);
@@ -853,7 +1009,8 @@ struct GuavaJoltContextImpl {
 	        if (!config || !out_stats) return false;
         physics_system.SetGravity(JPH::Vec3(config->gravity_x, config->gravity_y, config->gravity_z));
 
-        const int collision_steps = 1;
+        const int collision_steps = static_cast<int>(std::max<uint32_t>(1u, config->collision_steps));
+        contact_listener.begin_step();
         physics_system.Update(config->delta_seconds, collision_steps,
                               temp_allocator.get(), job_system.get());
 
@@ -873,7 +1030,7 @@ struct GuavaJoltContextImpl {
 
         out_stats->body_count = static_cast<uint32_t>(body_ids.size());
         out_stats->constraint_count = static_cast<uint32_t>(constraints.size());
-        out_stats->contact_count = 0; // not surfaced from Jolt's public API here
+        out_stats->contact_count = contact_listener.event_count();
         out_stats->state_count = static_cast<uint32_t>(written);
         out_stats->success = 1;
         out_stats->reserved0 = 0;
@@ -1131,6 +1288,10 @@ struct GuavaJoltContextImpl {
 	        }
 	        return static_cast<uint32_t>(events.size());
 	    }
+
+        uint32_t copy_contact_events(GuavaJoltContactEvent* out_events, size_t event_capacity) const {
+            return contact_listener.copy_events(out_events, event_capacity);
+        }
 	};
 
 extern "C" {
@@ -1210,6 +1371,14 @@ uint32_t guava_jolt_context_detect_triggers(GuavaJoltContext context,
     if (!context) return 0;
     if (event_capacity > 0 && !out_events) return 0;
     return context->detect_triggers(out_events, event_capacity);
+}
+
+uint32_t guava_jolt_context_copy_contact_events(GuavaJoltContext context,
+                                                GuavaJoltContactEvent* out_events,
+                                                size_t event_capacity) {
+    if (!context) return 0;
+    if (event_capacity > 0 && !out_events) return 0;
+    return context->copy_contact_events(out_events, event_capacity);
 }
 
 }  // extern "C"

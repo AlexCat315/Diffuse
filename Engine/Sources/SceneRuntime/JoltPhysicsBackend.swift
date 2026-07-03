@@ -9,6 +9,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     private static let rigidBodyAllowSleepFlag: UInt32 = 1 << 4
     private static let colliderHasCapsuleFlag: UInt32 = 1 << 5
     private static let colliderHasConvexFlag: UInt32 = 1 << 6
+    private static let rigidBodyContinuousCollisionFlag: UInt32 = 1 << 7
 
     private var context: GuavaJoltContext?
     private var lastPreparedBodyCount: Int = 0
@@ -129,6 +130,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             gravity_x: context.settings.gravity.x,
             gravity_y: context.settings.gravity.y,
             gravity_z: context.settings.gravity.z,
+            collision_steps: UInt32(max(1, context.settings.collisionSteps)),
             allow_sleep: context.settings.allowSleep ? 1 : 0,
             reserved0: 0,
             reserved1: 0
@@ -154,13 +156,18 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             )
         }
 
+        let contactEvents = copyContactEvents(
+            from: nativeContext,
+            expectedCount: Int(stats.contact_count)
+        )
         return PhysicsStepResult(
             bodyCount: Int(stats.body_count),
             constraintCount: Int(stats.constraint_count),
-            contactCount: Int(stats.contact_count),
+            contactCount: max(Int(stats.contact_count), contactEvents.count),
             writebacks: bodyStates
                 .prefix(Int(stats.state_count))
-                .compactMap { makeWriteback(from: $0, descriptorsByEntity: descriptorsByEntity) }
+                .compactMap { makeWriteback(from: $0, descriptorsByEntity: descriptorsByEntity) },
+            contactEvents: contactEvents
         )
     }
 
@@ -276,6 +283,9 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         var flags: UInt32 = 0
         if descriptor.rigidBody?.allowSleep ?? false {
             flags |= Self.rigidBodyAllowSleepFlag
+        }
+        if descriptor.rigidBody?.continuousCollisionDetection ?? false {
+            flags |= Self.rigidBodyContinuousCollisionFlag
         }
 
         let rotation = rotationQuaternion(from: descriptor.worldTransform.matrix)
@@ -471,6 +481,38 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         )
     }
 
+    private func copyContactEvents(
+        from nativeContext: GuavaJoltContext,
+        expectedCount: Int
+    ) -> [PhysicsContactEvent] {
+        guard expectedCount > 0 else { return [] }
+        var events = [GuavaJoltContactEvent](
+            repeating: GuavaJoltContactEvent(),
+            count: expectedCount
+        )
+        let count = events.withUnsafeMutableBufferPointer { buffer in
+            guava_jolt_context_copy_contact_events(
+                nativeContext,
+                buffer.baseAddress,
+                buffer.count
+            )
+        }
+        return events
+            .prefix(min(Int(count), events.count))
+            .map(makeContactEvent)
+    }
+
+    private func makeContactEvent(_ event: GuavaJoltContactEvent) -> PhysicsContactEvent {
+        PhysicsContactEvent(
+            entityA: EntityID(rawValue: event.entity_a),
+            entityB: EntityID(rawValue: event.entity_b),
+            kind: contactEventKind(event.kind),
+            position: SIMD3<Float>(event.position_x, event.position_y, event.position_z),
+            normal: SIMD3<Float>(event.normal_x, event.normal_y, event.normal_z),
+            penetrationDepth: event.penetration_depth
+        )
+    }
+
     private func motionTypeValue(_ motionType: RigidBodyMotionType) -> UInt32 {
         switch motionType {
         case .static:
@@ -494,6 +536,17 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             return 2
         case .distance:
             return 3
+        }
+    }
+
+    private func contactEventKind(_ raw: UInt8) -> PhysicsContactEventKind {
+        switch raw {
+        case 0:
+            return .began
+        case 1:
+            return .stayed
+        default:
+            return .ended
         }
     }
 
