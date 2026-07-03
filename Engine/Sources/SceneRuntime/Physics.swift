@@ -194,7 +194,7 @@ public struct PhysicsSettingsResource: Sendable, Equatable {
 
     public init(
         simulationMode: PhysicsSimulationMode = .off,
-        backendKind: PhysicsBackendKind = .none,
+        backendKind: PhysicsBackendKind = .jolt,
         gravity: SIMD3<Float> = SIMD3<Float>(0, -9.81, 0),
         fixedTimeStepSeconds: Double = 1.0 / 60.0,
         maxSubstepsPerFrame: Int = 4,
