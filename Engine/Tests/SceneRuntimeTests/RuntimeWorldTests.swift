@@ -60,6 +60,22 @@ private final class RecordingPhysicsBackend: PhysicsBackend, @unchecked Sendable
         )
     }
 
+    func raycast(_ query: PhysicsRaycastQuery, filter: PhysicsQueryFilter) -> PhysicsRaycastHit? {
+        nil
+    }
+
+    func overlapAABB(_ query: PhysicsOverlapAABBQuery, filter: PhysicsQueryFilter) -> [PhysicsOverlapHit] {
+        []
+    }
+
+    func sweepAABB(_ query: PhysicsSweepAABBQuery, filter: PhysicsQueryFilter) -> PhysicsSweepHit? {
+        nil
+    }
+
+    func detectTriggerFrame(maxEventCount: Int) -> TriggerFrameResource {
+        TriggerFrameResource()
+    }
+
     func reset() {}
 }
 

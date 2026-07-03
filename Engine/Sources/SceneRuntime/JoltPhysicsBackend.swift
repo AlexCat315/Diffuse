@@ -11,6 +11,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     private static let colliderHasConvexFlag: UInt32 = 1 << 6
 
     private var context: GuavaJoltContext?
+    private var lastPreparedBodyCount: Int = 0
 
     public init() {
         context = guava_jolt_context_create()
@@ -28,6 +29,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
 
     public func prepare(context: PhysicsPrepareContext) -> PhysicsPrepareResult {
         guard let nativeContext = self.context else {
+            lastPreparedBodyCount = context.activeBodies.count
             return PhysicsPrepareResult(
                 synchronizedBodies: context.activeBodies.count,
                 synchronizedConstraints: context.activeConstraints.count
@@ -36,6 +38,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
 
         let bodyDescs = context.activeBodies.map(makeBodyDesc)
         let constraintDescs = context.activeConstraints.map(makeConstraintDesc)
+        lastPreparedBodyCount = context.activeBodies.count
 
         // Collect mesh geometry into flat arrays so C pointers stay valid.
         var flatVertices: [Float] = []
@@ -161,10 +164,112 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         )
     }
 
+    public func raycast(_ query: PhysicsRaycastQuery, filter: PhysicsQueryFilter) -> PhysicsRaycastHit? {
+        guard let nativeContext = context else { return nil }
+        var cQuery = GuavaJoltRaycastQuery(
+            origin_x: query.origin.x,
+            origin_y: query.origin.y,
+            origin_z: query.origin.z,
+            direction_x: query.direction.x,
+            direction_y: query.direction.y,
+            direction_z: query.direction.z,
+            max_distance: query.maxDistance
+        )
+        var cFilter = makeQueryFilter(filter)
+        var hit = GuavaJoltRaycastHit()
+        let success = guava_jolt_context_raycast(nativeContext, &cQuery, &cFilter, &hit)
+        guard success else { return nil }
+        return makeRaycastHit(hit)
+    }
+
+    public func overlapAABB(_ query: PhysicsOverlapAABBQuery, filter: PhysicsQueryFilter) -> [PhysicsOverlapHit] {
+        guard let nativeContext = context else { return [] }
+        let maxResults = query.maxResults == .max
+            ? UInt32.max
+            : UInt32(max(0, min(query.maxResults, Int(UInt32.max))))
+        guard maxResults > 0 else { return [] }
+
+        var cQuery = GuavaJoltOverlapAABBQuery(
+            bounds_min_x: query.bounds.min.x,
+            bounds_min_y: query.bounds.min.y,
+            bounds_min_z: query.bounds.min.z,
+            bounds_max_x: query.bounds.max.x,
+            bounds_max_y: query.bounds.max.y,
+            bounds_max_z: query.bounds.max.z,
+            max_results: maxResults
+        )
+        var cFilter = makeQueryFilter(filter)
+        let capacity = maxResults == UInt32.max
+            ? lastPreparedBodyCount
+            : min(Int(maxResults), lastPreparedBodyCount)
+        guard capacity > 0 else { return [] }
+        var hits = [GuavaJoltOverlapHit](repeating: GuavaJoltOverlapHit(), count: capacity)
+        let count = hits.withUnsafeMutableBufferPointer { buffer in
+            guava_jolt_context_overlap_aabb(
+                nativeContext,
+                &cQuery,
+                &cFilter,
+                buffer.baseAddress,
+                buffer.count
+            )
+        }
+        return hits.prefix(min(Int(count), hits.count)).map(makeOverlapHit)
+    }
+
+    public func sweepAABB(_ query: PhysicsSweepAABBQuery, filter: PhysicsQueryFilter) -> PhysicsSweepHit? {
+        guard let nativeContext = context else { return nil }
+        var cQuery = GuavaJoltSweepAABBQuery(
+            bounds_min_x: query.bounds.min.x,
+            bounds_min_y: query.bounds.min.y,
+            bounds_min_z: query.bounds.min.z,
+            bounds_max_x: query.bounds.max.x,
+            bounds_max_y: query.bounds.max.y,
+            bounds_max_z: query.bounds.max.z,
+            translation_x: query.translation.x,
+            translation_y: query.translation.y,
+            translation_z: query.translation.z
+        )
+        var cFilter = makeQueryFilter(filter)
+        var hit = GuavaJoltSweepHit()
+        let success = guava_jolt_context_sweep_aabb(nativeContext, &cQuery, &cFilter, &hit)
+        guard success else { return nil }
+        return makeSweepHit(hit)
+    }
+
+    public func detectTriggerFrame(maxEventCount: Int) -> TriggerFrameResource {
+        guard let nativeContext = context else { return TriggerFrameResource() }
+        let capacity = max(maxEventCount, lastPreparedBodyCount * max(1, lastPreparedBodyCount) * 3)
+        guard capacity > 0 else { return TriggerFrameResource() }
+        var events = [GuavaJoltTriggerEvent](repeating: GuavaJoltTriggerEvent(), count: capacity)
+        let count = events.withUnsafeMutableBufferPointer { buffer in
+            guava_jolt_context_detect_triggers(nativeContext, buffer.baseAddress, buffer.count)
+        }
+
+        var enters: [TriggerEvent] = []
+        var exits: [TriggerEvent] = []
+        var active: [TriggerEvent] = []
+        for event in events.prefix(min(Int(count), events.count)) {
+            let trigger = EntityID(rawValue: event.trigger_entity)
+            let other = EntityID(rawValue: event.other_entity)
+            switch event.kind {
+            case 0:
+                enters.append(TriggerEvent(triggerEntity: trigger, otherEntity: other, kind: .enter))
+            case 1:
+                exits.append(TriggerEvent(triggerEntity: trigger, otherEntity: other, kind: .exit))
+            case 2:
+                active.append(TriggerEvent(triggerEntity: trigger, otherEntity: other, kind: .active))
+            default:
+                continue
+            }
+        }
+        return TriggerFrameResource(enters: enters, exits: exits, active: active)
+    }
+
     public func reset() {
         if let context {
             guava_jolt_context_reset(context)
         }
+        lastPreparedBodyCount = 0
     }
 
     private func makeBodyDesc(from descriptor: PhysicsBodyDescriptor) -> GuavaJoltBodyDesc {
@@ -179,6 +284,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         var sphereRadius: Float = 0
         var capsuleRadius: Float = 0
         var capsuleHalfHeight: Float = 0
+        var shapeCenter = SIMD3<Float>.zero
         var layerID: UInt16 = 0
         var layerMask: UInt16 = .max
 
@@ -190,20 +296,25 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             }
 
             switch collider.shape {
-            case let .box(halfExtents, _):
+            case let .box(halfExtents, center):
                 flags |= Self.colliderHasBoxFlag
                 boxHalfExtents = halfExtents
-            case let .sphere(radius, _):
+                shapeCenter = center
+            case let .sphere(radius, center):
                 flags |= Self.colliderHasSphereFlag
                 sphereRadius = radius
-            case let .capsule(radius, halfHeight, _):
+                shapeCenter = center
+            case let .capsule(radius, halfHeight, center):
                 flags |= Self.colliderHasCapsuleFlag
                 capsuleRadius = radius
                 capsuleHalfHeight = halfHeight
-            case .mesh:
+                shapeCenter = center
+            case let .mesh(_, center):
                 flags |= Self.colliderHasMeshFlag
-            case .convex:
+                shapeCenter = center
+            case let .convex(_, center):
                 flags |= Self.colliderHasConvexFlag
+                shapeCenter = center
             }
         }
 
@@ -218,6 +329,9 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             rotation_y: rotation.vector.y,
             rotation_z: rotation.vector.z,
             rotation_w: rotation.vector.w,
+            shape_center_x: shapeCenter.x,
+            shape_center_y: shapeCenter.y,
+            shape_center_z: shapeCenter.z,
             linear_velocity_x: descriptor.rigidBody?.linearVelocity.x ?? 0,
             linear_velocity_y: descriptor.rigidBody?.linearVelocity.y ?? 0,
             linear_velocity_z: descriptor.rigidBody?.linearVelocity.z ?? 0,
@@ -244,7 +358,10 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             reserved0: 0,
             reserved1: 0,
             layer_id: layerID,
-            layer_mask: layerMask
+            layer_mask: layerMask,
+            friction: descriptor.collider?.material.friction ?? PhysicsMaterial().friction,
+            restitution: descriptor.collider?.material.restitution ?? PhysicsMaterial().restitution,
+            density: descriptor.collider?.material.density ?? PhysicsMaterial().density
         )
     }
 
@@ -294,6 +411,58 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             is_sleeping: descriptor.rigidBody?.isSleeping == true ? 1 : 0,
             reserved0: 0,
             reserved1: 0
+        )
+    }
+
+    private func makeQueryFilter(_ filter: PhysicsQueryFilter) -> GuavaJoltQueryFilter {
+        GuavaJoltQueryFilter(
+            exclude_entity: filter.excludeEntity?.rawValue ?? 0,
+            has_exclude_entity: filter.excludeEntity == nil ? 0 : 1,
+            include_triggers: filter.includeTriggers ? 1 : 0,
+            has_layer_id: filter.layerID == nil ? 0 : 1,
+            reserved0: 0,
+            layer_id: filter.layerID ?? 0,
+            layer_mask: filter.layerMask
+        )
+    }
+
+    private func makeRaycastHit(_ hit: GuavaJoltRaycastHit) -> PhysicsRaycastHit {
+        PhysicsRaycastHit(
+            entity: EntityID(rawValue: hit.entity_id),
+            distance: hit.distance,
+            position: SIMD3<Float>(hit.position_x, hit.position_y, hit.position_z),
+            normal: SIMD3<Float>(hit.normal_x, hit.normal_y, hit.normal_z),
+            bounds: SpatialAABB(
+                min: SIMD3<Float>(hit.bounds_min_x, hit.bounds_min_y, hit.bounds_min_z),
+                max: SIMD3<Float>(hit.bounds_max_x, hit.bounds_max_y, hit.bounds_max_z)
+            ),
+            isTrigger: hit.is_trigger != 0
+        )
+    }
+
+    private func makeOverlapHit(_ hit: GuavaJoltOverlapHit) -> PhysicsOverlapHit {
+        PhysicsOverlapHit(
+            entity: EntityID(rawValue: hit.entity_id),
+            bounds: SpatialAABB(
+                min: SIMD3<Float>(hit.bounds_min_x, hit.bounds_min_y, hit.bounds_min_z),
+                max: SIMD3<Float>(hit.bounds_max_x, hit.bounds_max_y, hit.bounds_max_z)
+            ),
+            isTrigger: hit.is_trigger != 0
+        )
+    }
+
+    private func makeSweepHit(_ hit: GuavaJoltSweepHit) -> PhysicsSweepHit {
+        PhysicsSweepHit(
+            entity: EntityID(rawValue: hit.entity_id),
+            fraction: hit.fraction,
+            distance: hit.distance,
+            position: SIMD3<Float>(hit.position_x, hit.position_y, hit.position_z),
+            normal: SIMD3<Float>(hit.normal_x, hit.normal_y, hit.normal_z),
+            bounds: SpatialAABB(
+                min: SIMD3<Float>(hit.bounds_min_x, hit.bounds_min_y, hit.bounds_min_z),
+                max: SIMD3<Float>(hit.bounds_max_x, hit.bounds_max_y, hit.bounds_max_z)
+            ),
+            isTrigger: hit.is_trigger != 0
         )
     }
 

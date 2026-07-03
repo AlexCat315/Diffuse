@@ -348,14 +348,23 @@ public struct SceneRuntime {
     }
 
     public func raycast(_ query: SceneRaycastQuery) -> SceneRaycastHit? {
-        performSpatialRaycast(query, using: spatialIndex)
+        makeJoltQueryBackend(in: world)
+            .raycast(
+                PhysicsRaycastQuery(
+                    origin: query.origin,
+                    direction: query.direction,
+                    maxDistance: query.maxDistance
+                ),
+                filter: PhysicsQueryFilter(includeTriggers: query.includeTriggers)
+            )
+            .map(makeSceneRaycastHit)
     }
 
     public func physicsRaycast(
         _ query: PhysicsRaycastQuery,
         filter: PhysicsQueryFilter = PhysicsQueryFilter()
     ) -> PhysicsRaycastHit? {
-        performPhysicsRaycast(query, filter: filter, using: spatialIndex)
+        makeJoltQueryBackend(in: world).raycast(query, filter: filter)
     }
 
     public func physicsRaycastWithStats(
@@ -363,39 +372,34 @@ public struct SceneRuntime {
         filter: PhysicsQueryFilter = PhysicsQueryFilter(),
         scratch: SpatialQueryScratch? = nil
     ) -> (hit: PhysicsRaycastHit?, stats: SpatialQueryStats) {
-        let recorder = SpatialQueryStatsRecorder()
-        let hit = performPhysicsRaycast(query,
-                                        filter: filter,
-                                        using: spatialIndex,
-                                        scratch: scratch,
-                                        statsRecorder: recorder)
-        return (hit, recorder.stats)
+        let hit = makeJoltQueryBackend(in: world).raycast(query, filter: filter)
+        return (hit, SpatialQueryStats())
     }
 
     public func overlap(_ query: SceneOverlapQuery) -> [SceneOverlapHit] {
-        performSpatialOverlap(query, using: spatialIndex)
+        makeJoltQueryBackend(in: world)
+            .overlapAABB(
+                PhysicsOverlapAABBQuery(bounds: query.bounds),
+                filter: PhysicsQueryFilter(includeTriggers: query.includeTriggers)
+            )
+            .map(makeSceneOverlapHit)
     }
 
     public func overlap(_ query: SceneOverlapQuery,
                         scratch: SpatialQueryScratch) -> [SceneOverlapHit] {
-        performSpatialOverlap(query, using: spatialIndex, scratch: scratch)
+        overlap(query)
     }
 
     public func overlapWithStats(_ query: SceneOverlapQuery,
                                  scratch: SpatialQueryScratch? = nil) -> (hits: [SceneOverlapHit], stats: SpatialQueryStats) {
-        let recorder = SpatialQueryStatsRecorder()
-        let hits = performSpatialOverlap(query,
-                                         using: spatialIndex,
-                                         scratch: scratch,
-                                         statsRecorder: recorder)
-        return (hits, recorder.stats)
+        (overlap(query), SpatialQueryStats())
     }
 
     public func physicsOverlapAABB(
         _ query: PhysicsOverlapAABBQuery,
         filter: PhysicsQueryFilter = PhysicsQueryFilter()
     ) -> [PhysicsOverlapHit] {
-        performPhysicsOverlapAABB(query, filter: filter, using: spatialIndex)
+        makeJoltQueryBackend(in: world).overlapAABB(query, filter: filter)
     }
 
     public func physicsOverlapAABB(
@@ -403,10 +407,7 @@ public struct SceneRuntime {
         filter: PhysicsQueryFilter = PhysicsQueryFilter(),
         scratch: SpatialQueryScratch
     ) -> [PhysicsOverlapHit] {
-        performPhysicsOverlapAABB(query,
-                                  filter: filter,
-                                  using: spatialIndex,
-                                  scratch: scratch)
+        physicsOverlapAABB(query, filter: filter)
     }
 
     public func physicsOverlapAABBWithStats(
@@ -414,24 +415,23 @@ public struct SceneRuntime {
         filter: PhysicsQueryFilter = PhysicsQueryFilter(),
         scratch: SpatialQueryScratch? = nil
     ) -> (hits: [PhysicsOverlapHit], stats: SpatialQueryStats) {
-        let recorder = SpatialQueryStatsRecorder()
-        let hits = performPhysicsOverlapAABB(query,
-                                             filter: filter,
-                                             using: spatialIndex,
-                                             scratch: scratch,
-                                             statsRecorder: recorder)
-        return (hits, recorder.stats)
+        (physicsOverlapAABB(query, filter: filter), SpatialQueryStats())
     }
 
     public func sweep(_ query: SceneSweepQuery) -> SceneSweepHit? {
-        performSpatialSweep(query, using: spatialIndex)
+        makeJoltQueryBackend(in: world)
+            .sweepAABB(
+                PhysicsSweepAABBQuery(bounds: query.bounds, translation: query.translation),
+                filter: PhysicsQueryFilter(includeTriggers: query.includeTriggers)
+            )
+            .map(makeSceneSweepHit)
     }
 
     public func physicsSweepAABB(
         _ query: PhysicsSweepAABBQuery,
         filter: PhysicsQueryFilter = PhysicsQueryFilter()
     ) -> PhysicsSweepHit? {
-        performPhysicsSweepAABB(query, filter: filter, using: spatialIndex)
+        makeJoltQueryBackend(in: world).sweepAABB(query, filter: filter)
     }
 
     public func physicsSweepAABBWithStats(
@@ -439,13 +439,7 @@ public struct SceneRuntime {
         filter: PhysicsQueryFilter = PhysicsQueryFilter(),
         scratch: SpatialQueryScratch? = nil
     ) -> (hit: PhysicsSweepHit?, stats: SpatialQueryStats) {
-        let recorder = SpatialQueryStatsRecorder()
-        let hit = performPhysicsSweepAABB(query,
-                                          filter: filter,
-                                          using: spatialIndex,
-                                          scratch: scratch,
-                                          statsRecorder: recorder)
-        return (hit, recorder.stats)
+        (physicsSweepAABB(query, filter: filter), SpatialQueryStats())
     }
 
     public mutating func setPhysicsBackend(_ backend: any PhysicsBackend) {
@@ -505,4 +499,31 @@ public struct SceneRuntime {
             }
         }
     }
+}
+
+private func makeSceneRaycastHit(_ hit: PhysicsRaycastHit) -> SceneRaycastHit {
+    SceneRaycastHit(
+        entity: hit.entity,
+        distance: hit.distance,
+        position: hit.position,
+        normal: hit.normal,
+        bounds: hit.bounds,
+        isTrigger: hit.isTrigger
+    )
+}
+
+private func makeSceneOverlapHit(_ hit: PhysicsOverlapHit) -> SceneOverlapHit {
+    SceneOverlapHit(entity: hit.entity, bounds: hit.bounds, isTrigger: hit.isTrigger)
+}
+
+private func makeSceneSweepHit(_ hit: PhysicsSweepHit) -> SceneSweepHit {
+    SceneSweepHit(
+        entity: hit.entity,
+        fraction: hit.fraction,
+        distance: hit.distance,
+        position: hit.position,
+        normal: hit.normal,
+        bounds: hit.bounds,
+        isTrigger: hit.isTrigger
+    )
 }
