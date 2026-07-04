@@ -370,6 +370,47 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         #expect(rowHosts.allSatisfy { registry.handlers(for: $0).hover != nil })
     } }
 
+    @Test("Default Tree row hover updates render state without recomposing the tree")
+    func defaultTreeRowHoverDoesNotRecomposeTree() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        let roots = [
+            TreeItem(id: "scene", title: "Scene", children: [
+                TreeItem(id: "camera", title: "Camera", children: [])
+            ]),
+            TreeItem(id: "console", title: "Console", children: [])
+        ]
+
+        let selectionProbe = Probe<String?>(nil)
+        let expandedProbe = Probe<Set<String>>([])
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: TreeHarness(selectionProbe: selectionProbe,
+                                        expandedProbe: expandedProbe,
+                                        roots: roots))
+        graph.computeLayout(width: 280, height: 220)
+
+        let buttons = orderedPointerNodes(in: tree.root!, registry: registry)
+        let disclosure = buttons.min { $0.frame.width < $1.frame.width }!
+        let row = buttons.first { $0 !== disclosure }
+        #expect(row != nil)
+        guard let row,
+              let hover = registry.handlers(for: row).hover else { return }
+
+        #expect(graph.recomposer.hasPending == false)
+        #expect(row.backgroundColor == nil)
+
+        hover(.enter)
+        #expect(graph.recomposer.hasPending == false)
+        #expect(row.backgroundColor != nil)
+
+        hover(.leave)
+        #expect(graph.recomposer.hasPending == false)
+        #expect(row.backgroundColor == nil)
+    } }
+
     @Test("Tree drag dispatches inside-drop callback")
     func treeDragDispatchesInsideDrop() { GlobalTestLock.locked {
         let registry = InteractionRegistry()

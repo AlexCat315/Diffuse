@@ -16,7 +16,6 @@ public struct DefaultTreeRowStyle: TreeRowStyle {
         let bg: Color = {
             if configuration.isSelected { return t.colors.selection }
             if configuration.isSearchHit { return t.colors.stateLayerSelected }
-            if configuration.isHovered  { return t.colors.stateLayerHover }
             return clear
         }()
         let alpha: Float = configuration.isEnabled ? 1 : 0.55

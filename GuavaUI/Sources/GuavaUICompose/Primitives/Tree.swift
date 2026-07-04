@@ -123,7 +123,8 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
     }
 
     public var body: some View {
-        let entries = visibleEntries
+        let treeState = derivedState()
+        let entries = visibleEntries(using: treeState)
         let entriesByToken = Dictionary(uniqueKeysWithValues: entries.map { ($0.nodeKey, $0) })
         let guideRows = entries.map {
             _TreeGuideRowSnapshot(depth: $0.depth,
@@ -144,12 +145,9 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                 Box(direction: .column, alignItems: .stretch, spacing: rowSpacing) {
                     for entry in entries {
                         let token = entry.nodeKey
-                        let isSel: Bool = {
-                            if multiSelectionKeys != nil || selectionKey.wrappedValue != nil {
-                                return selectedNodeKeys.contains(token)
-                            }
-                            return selectedIDs.contains(entry.id)
-                        }()
+                        let isSel = treeState.usesNodeKeySelection
+                            ? treeState.selectedNodeKeys.contains(token)
+                            : treeState.selectedIDs.contains(entry.id)
                         _TreeRowComposite(
                             depth: entry.depth,
                             hasChildren: entry.hasChildren,
@@ -157,6 +155,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                             isSearchHit: entry.isSearchHit,
                             isSelected: isSel,
                             isHovered: hoveredToken == token,
+                            propagateHoverState: trailingContent != nil,
                             dropPosition: dragState?.targetID == token ? dragState?.position : nil,
                             dragID: AnyHashable(token),
                             rowHeight: rowHeight,
@@ -174,20 +173,20 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                             },
                             onToggle: { toggle(entry.nodeKey, legacyID: entry.id) },
                             onSelect: { modifiers in
-                                select(entry, modifiers: modifiers)
+                                select(entry, modifiers: modifiers, entries: entries)
                             },
                             onMoveSelection: { delta in
-                                moveSelection(from: entry.nodeKey, delta: delta)
+                                moveSelection(from: entry.nodeKey, delta: delta, entries: entries)
                             },
                             onCollapseOrParent: {
-                                collapseOrSelectParent(entry)
+                                collapseOrSelectParent(entry, entries: entries)
                             },
                             onExpandOrChild: {
-                                expandOrSelectFirstChild(entry)
+                                expandOrSelectFirstChild(entry, entries: entries)
                             },
                             onKeyEvent: { event in
                                 activeModifiers = event.modifiers
-                                if onKeyCommand?(event, selectedIDs) == true {
+                                if onKeyCommand?(event, treeState.selectedIDs) == true {
                                     return true
                                 }
                                 return false
@@ -233,14 +232,14 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
 
     private var expandedIDs: Set<ID> {
         if expandedKeys != nil {
-            return Set(expandedNodeKeys.map(\ .id))
+            return Set(expandedNodeKeys.map(\.id))
         }
         return expanded?.wrappedValue ?? localExpanded
     }
 
     private var selectedIDs: Set<ID> {
         if let multiSelectionKeys {
-            return Set(multiSelectionKeys.wrappedValue.map(\ .id))
+            return Set(multiSelectionKeys.wrappedValue.map(\.id))
         }
         if let multiSelection {
             return multiSelection.wrappedValue
@@ -263,9 +262,52 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
     }
 
     private var visibleEntries: [VisibleEntry] {
-        let searchMetadata = buildSearchMetadata()
-        let filterActive = isFilterActive
-        let autoExpand = isAutoExpandActive
+        visibleEntries(using: derivedState())
+    }
+
+    private func derivedState() -> DerivedState {
+        let expandedNodeKeys = expandedKeys?.wrappedValue ?? []
+        let expandedIDs: Set<ID>
+        if expandedKeys != nil {
+            expandedIDs = Set(expandedNodeKeys.map(\.id))
+        } else {
+            expandedIDs = expanded?.wrappedValue ?? localExpanded
+        }
+
+        let selectedNodeKeys: Set<TreeNodeKey<ID>>
+        let selectedIDs: Set<ID>
+        if let multiSelectionKeys {
+            selectedNodeKeys = multiSelectionKeys.wrappedValue
+            selectedIDs = Set(selectedNodeKeys.map(\.id))
+        } else if let multiSelection {
+            selectedNodeKeys = []
+            selectedIDs = multiSelection.wrappedValue
+        } else if let selected = selectionKey.wrappedValue {
+            selectedNodeKeys = [selected]
+            selectedIDs = [selected.id]
+        } else if let single = selection.wrappedValue {
+            selectedNodeKeys = []
+            selectedIDs = [single]
+        } else {
+            selectedNodeKeys = []
+            selectedIDs = []
+        }
+
+        let query = normalizedSearchQuery
+        let filterActive = !query.isEmpty
+            && searchText != nil
+            && searchFilterPolicy == .filterAndAutoExpand
+        return DerivedState(expandedIDs: expandedIDs,
+                            expandedNodeKeys: expandedNodeKeys,
+                            selectedIDs: selectedIDs,
+                            selectedNodeKeys: selectedNodeKeys,
+                            usesNodeKeySelection: multiSelectionKeys != nil || selectionKey.wrappedValue != nil,
+                            searchMetadata: buildSearchMetadata(query: query),
+                            filterActive: filterActive,
+                            autoExpand: filterActive)
+    }
+
+    private func visibleEntries(using state: DerivedState) -> [VisibleEntry] {
         var out: [VisibleEntry] = []
         appendVisible(nodes: roots,
                       depth: 0,
@@ -273,9 +315,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                       ancestorHasNextSiblings: [],
                       parentID: nil,
                       parentKey: nil,
-                      searchMetadata: searchMetadata,
-                      filterActive: filterActive,
-                      autoExpand: autoExpand,
+                      state: state,
                       into: &out)
         return out
     }
@@ -286,16 +326,13 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                                ancestorHasNextSiblings: [Bool],
                                parentID: ID?,
                                parentKey: TreeNodeKey<ID>?,
-                               searchMetadata: SearchMetadata?,
-                               filterActive: Bool,
-                               autoExpand: Bool,
+                               state: DerivedState,
                                into out: inout [VisibleEntry]) {
-        let expanded = expandedIDs
         let visibleNodes: [Element]
-        if filterActive {
+        if state.filterActive {
             visibleNodes = nodes.filter {
                 let nodeID = $0[keyPath: id]
-                return searchMetadata?.subtreeMatches[nodeID] ?? false
+                return state.searchMetadata?.subtreeMatches[nodeID] ?? false
             }
         } else {
             visibleNodes = nodes
@@ -307,14 +344,19 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
             let nodeKey = TreeNodeKey(id: nodeID, path: path)
             let childNodes = children(node)
 
-            let selfMatches = searchMetadata?.selfMatches[nodeID] ?? false
-            let childSubtreeMatches = childNodes.contains {
-                let childID = $0[keyPath: id]
-                return searchMetadata?.subtreeMatches[childID] ?? false
+            let selfMatches = state.searchMetadata?.selfMatches[nodeID] ?? false
+            let childSubtreeMatches: Bool
+            if state.autoExpand {
+                childSubtreeMatches = childNodes.contains {
+                    let childID = $0[keyPath: id]
+                    return state.searchMetadata?.subtreeMatches[childID] ?? false
+                }
+            } else {
+                childSubtreeMatches = false
             }
-            let isExpanded = expanded.contains(nodeID)
-                || expandedNodeKeys.contains(nodeKey)
-                || (autoExpand && childSubtreeMatches)
+            let isExpanded = state.expandedIDs.contains(nodeID)
+                || state.expandedNodeKeys.contains(nodeKey)
+                || (state.autoExpand && childSubtreeMatches)
             let hasNextSibling = index < visibleNodes.count - 1
             out.append(VisibleEntry(id: nodeID,
                                     nodeKey: nodeKey,
@@ -341,9 +383,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                               ancestorHasNextSiblings: childGuide,
                               parentID: nodeID,
                               parentKey: nodeKey,
-                              searchMetadata: searchMetadata,
-                              filterActive: filterActive,
-                              autoExpand: autoExpand,
+                              state: state,
                               into: &out)
             }
         }
@@ -351,6 +391,12 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
 
     private func select(_ entry: VisibleEntry,
                         modifiers: KeyModifiers) {
+        select(entry, modifiers: modifiers, entries: visibleEntries)
+    }
+
+    private func select(_ entry: VisibleEntry,
+                        modifiers: KeyModifiers,
+                        entries: [VisibleEntry]) {
         let targetID = entry.id
         let targetKey = entry.nodeKey
 
@@ -359,7 +405,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
             var nextPrimary: TreeNodeKey<ID>? = targetKey
             if modifiers.hasShift,
                let anchor = rangeAnchorKey ?? selectionKey.wrappedValue {
-                let keys = keysBetween(anchor, targetKey)
+                let keys = keysBetween(anchor, targetKey, entries: entries)
                 next = keys.isEmpty ? [targetKey] : keys
                 nextPrimary = targetKey
             } else if modifiers.hasGui || modifiers.hasCtrl {
@@ -373,7 +419,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                     nextPrimary = nil
                 } else {
                     rangeAnchorKey = targetKey
-                    nextPrimary = next.contains(targetKey) ? targetKey : firstVisibleKey(in: next)
+                    nextPrimary = next.contains(targetKey) ? targetKey : firstVisibleKey(in: next, entries: entries)
                 }
             } else {
                 next = [targetKey]
@@ -384,7 +430,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
             selectionKey.wrappedValue = nextPrimary
             selection.wrappedValue = nextPrimary?.id
             if let multiSelection {
-                multiSelection.wrappedValue = Set(next.map(\ .id))
+                multiSelection.wrappedValue = Set(next.map(\.id))
             }
             onSelect?(entry.element)
             return
@@ -395,7 +441,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
             var nextPrimary: ID? = targetID
             if modifiers.hasShift,
                let anchor = rangeAnchorID ?? selection.wrappedValue {
-                let ids = idsBetween(anchor, targetID)
+                let ids = idsBetween(anchor, targetID, entries: entries)
                 if !ids.isEmpty {
                     next = ids
                 } else {
@@ -416,7 +462,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                     if next.contains(targetID) {
                         nextPrimary = targetID
                     } else {
-                        nextPrimary = firstVisibleID(in: next)
+                        nextPrimary = firstVisibleID(in: next, entries: entries)
                     }
                 }
             } else {
@@ -427,7 +473,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
             multiSelection.wrappedValue = next
             selection.wrappedValue = nextPrimary
             selectionKey.wrappedValue = nextPrimary.flatMap { primary in
-                visibleEntries.first(where: { $0.id == primary })?.nodeKey
+                entries.first(where: { $0.id == primary })?.nodeKey
             }
         } else {
             selection.wrappedValue = targetID
@@ -438,32 +484,52 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
     }
 
     private func keysBetween(_ a: TreeNodeKey<ID>, _ b: TreeNodeKey<ID>) -> Set<TreeNodeKey<ID>> {
-        let entries = visibleEntries
+        keysBetween(a, b, entries: visibleEntries)
+    }
+
+    private func keysBetween(_ a: TreeNodeKey<ID>,
+                             _ b: TreeNodeKey<ID>,
+                             entries: [VisibleEntry]) -> Set<TreeNodeKey<ID>> {
         guard let ia = entries.firstIndex(where: { $0.nodeKey == a }),
               let ib = entries.firstIndex(where: { $0.nodeKey == b }) else {
             return []
         }
         let lower = min(ia, ib)
         let upper = max(ia, ib)
-        return Set(entries[lower...upper].map(\ .nodeKey))
+        return Set(entries[lower...upper].map(\.nodeKey))
     }
 
     private func firstVisibleKey(in candidates: Set<TreeNodeKey<ID>>) -> TreeNodeKey<ID>? {
-        for entry in visibleEntries where candidates.contains(entry.nodeKey) {
+        firstVisibleKey(in: candidates, entries: visibleEntries)
+    }
+
+    private func firstVisibleKey(in candidates: Set<TreeNodeKey<ID>>,
+                                 entries: [VisibleEntry]) -> TreeNodeKey<ID>? {
+        for entry in entries where candidates.contains(entry.nodeKey) {
             return entry.nodeKey
         }
         return candidates.sorted { $0.path.lexicographicallyPrecedes($1.path) }.first
     }
 
     private func firstVisibleID(in candidates: Set<ID>) -> ID? {
-        for entry in visibleEntries where candidates.contains(entry.id) {
+        firstVisibleID(in: candidates, entries: visibleEntries)
+    }
+
+    private func firstVisibleID(in candidates: Set<ID>,
+                                entries: [VisibleEntry]) -> ID? {
+        for entry in entries where candidates.contains(entry.id) {
             return entry.id
         }
         return candidates.sorted { String(describing: $0) < String(describing: $1) }.first
     }
 
     private func idsBetween(_ a: ID, _ b: ID) -> Set<ID> {
-        let entries = visibleEntries
+        idsBetween(a, b, entries: visibleEntries)
+    }
+
+    private func idsBetween(_ a: ID,
+                            _ b: ID,
+                            entries: [VisibleEntry]) -> Set<ID> {
         guard let ia = entries.firstIndex(where: { $0.id == a }),
               let ib = entries.firstIndex(where: { $0.id == b }) else {
             return []
@@ -493,7 +559,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
             }
             expandedKeys.wrappedValue = next
             if let expanded {
-                expanded.wrappedValue = Set(next.map(\ .id))
+                expanded.wrappedValue = Set(next.map(\.id))
             }
             return
         }
@@ -531,8 +597,22 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
         var subtreeMatches: [ID: Bool]
     }
 
+    private struct DerivedState {
+        let expandedIDs: Set<ID>
+        let expandedNodeKeys: Set<TreeNodeKey<ID>>
+        let selectedIDs: Set<ID>
+        let selectedNodeKeys: Set<TreeNodeKey<ID>>
+        let usesNodeKeySelection: Bool
+        let searchMetadata: SearchMetadata?
+        let filterActive: Bool
+        let autoExpand: Bool
+    }
+
     private func buildSearchMetadata() -> SearchMetadata? {
-        let query = normalizedSearchQuery
+        buildSearchMetadata(query: normalizedSearchQuery)
+    }
+
+    private func buildSearchMetadata(query: String) -> SearchMetadata? {
         guard !query.isEmpty, let searchText else {
             return nil
         }
@@ -562,38 +642,51 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
     }
 
     private func moveSelection(from currentKey: TreeNodeKey<ID>, delta: Int) {
-        let entries = visibleEntries
+        moveSelection(from: currentKey, delta: delta, entries: visibleEntries)
+    }
+
+    private func moveSelection(from currentKey: TreeNodeKey<ID>,
+                               delta: Int,
+                               entries: [VisibleEntry]) {
         guard let index = entries.firstIndex(where: { $0.nodeKey == currentKey }) else { return }
         let target = max(0, min(entries.count - 1, index + delta))
         guard target != index else { return }
-        select(entries[target], modifiers: activeModifiers)
+        select(entries[target], modifiers: activeModifiers, entries: entries)
     }
 
     private func collapseOrSelectParent(_ entry: VisibleEntry) {
+        collapseOrSelectParent(entry, entries: visibleEntries)
+    }
+
+    private func collapseOrSelectParent(_ entry: VisibleEntry, entries: [VisibleEntry]) {
         if entry.hasChildren && entry.isExpanded {
-            toggle(entry.id)
+            toggle(entry.nodeKey, legacyID: entry.id)
             return
         }
         guard let parent = entry.parentKey.flatMap({ key in
-            visibleEntries.first(where: { $0.nodeKey == key })
+            entries.first(where: { $0.nodeKey == key })
         }) ?? entry.parentID.flatMap({ id in
-            visibleEntries.first(where: { $0.id == id })
+            entries.first(where: { $0.id == id })
         }) else {
             return
         }
-        select(parent, modifiers: activeModifiers)
+        select(parent, modifiers: activeModifiers, entries: entries)
     }
 
     private func expandOrSelectFirstChild(_ entry: VisibleEntry) {
+        expandOrSelectFirstChild(entry, entries: visibleEntries)
+    }
+
+    private func expandOrSelectFirstChild(_ entry: VisibleEntry, entries: [VisibleEntry]) {
         guard entry.hasChildren else { return }
         if !entry.isExpanded {
             toggle(entry.nodeKey, legacyID: entry.id)
             return
         }
-        guard let firstChild = visibleEntries.first(where: { $0.parentKey == entry.nodeKey }) else {
+        guard let firstChild = entries.first(where: { $0.parentKey == entry.nodeKey }) else {
             return
         }
-        select(firstChild, modifiers: activeModifiers)
+        select(firstChild, modifiers: activeModifiers, entries: entries)
     }
 
     private func beginDrag(from sourceToken: TreeNodeKey<ID>) {
@@ -840,6 +933,7 @@ private struct _TreeRowComposite: View {
     let isSearchHit: Bool
     let isSelected: Bool
     let isHovered: Bool
+    let propagateHoverState: Bool
     let dropPosition: TreeDropPosition?
     let dragID: AnyHashable
     let rowHeight: Float
@@ -891,6 +985,7 @@ private struct _TreeRowComposite: View {
                 isSearchHit: isSearchHit,
                 isSelected: isSelected,
                 isHovered: isHovered,
+                propagateHoverState: propagateHoverState,
                 dropPosition: dropPosition,
                 rowHeight: rowHeight,
                 onSelect: onSelect,
@@ -1105,6 +1200,7 @@ private struct _TreeRowHost: _PrimitiveView {
     let isSearchHit: Bool
     let isSelected: Bool
     let isHovered: Bool
+    let propagateHoverState: Bool
     let dropPosition: TreeDropPosition?
     let rowHeight: Float
     let onSelect: (KeyModifiers) -> Void
@@ -1133,12 +1229,25 @@ private struct _TreeRowHost: _PrimitiveView {
         guard let registry = InteractionRegistryHolder.current else { return }
         let captured = onSelect
         let hoverChange = onHoverChange
+        let style = node.compositionValue(of: TreeRowStyleEnvironment.key)
+        let shouldPropagateHover = propagateHoverState || style.requiresHoverRecompose
+        let usesNodeHoverChrome = !style.requiresHoverRecompose
         let dropPosition = dropPosition
         let depth = depth
         let indentation = indentation
         let disclosureWidth = disclosureWidth
         node.cursor = .pointer
-        node.attachments[Self.hoveredKey] = isHovered
+        let effectiveHover: Bool
+        if shouldPropagateHover {
+            node.attachments[Self.hoveredKey] = isHovered
+            effectiveHover = isHovered
+        } else {
+            if node.attachments[Self.hoveredKey] == nil {
+                node.attachments[Self.hoveredKey] = false
+            }
+            effectiveHover = node.attachments[Self.hoveredKey] as? Bool ?? false
+        }
+        applyHoverChrome(to: node, isHovered: usesNodeHoverChrome && effectiveHover)
         // Dim source row during drag for visual lift feedback.
         node.animatableSet(\.opacity, to: isDragSource ? 0.38 : 1.0)
         // Extend hit zone leftward to cover the indent gutter + disclosure slot
@@ -1173,9 +1282,17 @@ private struct _TreeRowHost: _PrimitiveView {
         registry.setHover(node) { phase in
             switch phase {
             case .enter:
-                hoverChange(true)
+                node.attachments[Self.hoveredKey] = true
+                applyHoverChrome(to: node, isHovered: usesNodeHoverChrome)
+                if shouldPropagateHover {
+                    hoverChange(true)
+                }
             case .leave:
-                hoverChange(false)
+                node.attachments[Self.hoveredKey] = false
+                applyHoverChrome(to: node, isHovered: false)
+                if shouldPropagateHover {
+                    hoverChange(false)
+                }
             }
         }
         registry.setPointer(node) { event, phase, _ in
@@ -1287,6 +1404,13 @@ private struct _TreeRowHost: _PrimitiveView {
     static let hoveredKey = "__tree_row_hovered"
     static let dragStateKey = "__tree_row_drag_state"
     static let dropPositionKey = "__tree_row_drop_position"
+
+    private func applyHoverChrome(to node: Node, isHovered: Bool) {
+        node.cornerRadius = node.theme.radius.sm
+        node.backgroundColor = isHovered && !isSelected && !isSearchHit
+            ? node.theme.colors.stateLayerHover
+            : nil
+    }
 }
 
 private struct _TreeRowPressState {

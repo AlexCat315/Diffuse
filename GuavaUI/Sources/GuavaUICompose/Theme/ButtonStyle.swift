@@ -106,11 +106,13 @@ private struct _AnyButtonStyleIdentity: Hashable {
 public struct AnyButtonStyle: @unchecked Sendable, Hashable {
     public let makeBody: (ButtonStyleConfiguration) -> any View
     public let styleID: ObjectIdentifier
+    let requiresInteractionRecompose: Bool
     private let identity: _AnyButtonStyleIdentity
 
     public init<S: ButtonStyle>(_ style: S) {
         self.makeBody = { config in style.makeBody(configuration: config) }
         self.styleID = ObjectIdentifier(S.self)
+        self.requiresInteractionRecompose = !Self.isNodeDrivenInteractionStyle(style)
         let value: AnyHashable?
         if let hashableStyle = style as? any Hashable {
             value = AnyHashable(hashableStyle)
@@ -126,6 +128,15 @@ public struct AnyButtonStyle: @unchecked Sendable, Hashable {
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(identity)
+    }
+
+    private static func isNodeDrivenInteractionStyle<S: ButtonStyle>(_ style: S) -> Bool {
+        style is PlainButtonStyle
+            || style is PrimaryButtonStyle
+            || style is SecondaryButtonStyle
+            || style is GhostButtonStyle
+            || style is DestructiveButtonStyle
+            || style is ToggleButtonStyle
     }
 }
 

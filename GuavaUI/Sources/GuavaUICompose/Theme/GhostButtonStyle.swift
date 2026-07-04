@@ -7,30 +7,9 @@ public struct GhostButtonStyle: ButtonStyle {
     public init() {}
 
     public func makeBody(configuration: ButtonStyleConfiguration) -> some View {
-        let theme = configuration.theme
-        let clear = Color(r: 0, g: 0, b: 0, a: 0)
-        let bg: Color = {
-            if !configuration.isEnabled { return clear }
-            if configuration.isPressed  { return theme.colors.stateLayerPressed }
-            if configuration.isHovered  { return theme.colors.stateLayerHover }
-            return clear
-        }()
-        let border: Color = configuration.isFocused ? theme.colors.focusRing : clear
-        let borderWidth: Float = configuration.isFocused ? 2 : 0
-
-        return Box(direction: .row, alignItems: .center, justifyContent: .center) {
-            AnyView(configuration.label)
-                .font(SemanticFontRef.label)
-                .foregroundColor(SemanticColorRef.onSurface)
-        }
-            .frame(height: 28)
-            .padding(horizontal: theme.spacing.md, vertical: 0)
-            .background(bg)
-            .cornerRadius(theme.radius.md)
-            .border(border, width: borderWidth)
-            .opacity(configuration.isEnabled ? 1 : 0.55)
-            .animation(.semantic(.snappy, in: theme), value: configuration.interactionKey)
+        BuiltinButtonChrome(kind: .ghost,
+                            configuration: configuration,
+                            foreground: .onSurface)
     }
 }
-
 
