@@ -234,7 +234,7 @@ public final class EditorStore: @unchecked Sendable {
         if old.shouldRender != new.shouldRender {
             keys.insert(.shouldRender)
         }
-        if !keys.isEmpty {
+        if !keys.isEmpty && action.invalidatesWholeStateObservation {
             keys.insert(.state)
         }
         return keys
@@ -265,6 +265,7 @@ extension EditorStore {
     public var pendingCloseRequest: EditorPendingCloseRequest? { read(.pendingCloseRequest, storage.pendingCloseRequest) }
     public var frameIndex: UInt64 { read(.frameIndex, storage.frameIndex) }
     public var frameTimingRevision: UInt64 { read(.frameTimingRevision, storage.frameTimingRevision) }
+    public var frameStats: EditorFrameStats { read(.frameStats, storage.frameStats) }
     public var frameStatsHistory: [EditorFrameStatsHistorySample] { read(.frameStatsHistory, storage.frameStatsHistory) }
     public var particleDiagnosticsHistory: [EditorParticleDiagnosticsSample] {
         read(.particleDiagnosticsHistory, storage.particleDiagnosticsHistory)

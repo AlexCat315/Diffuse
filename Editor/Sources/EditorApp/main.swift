@@ -41,21 +41,28 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
         try context.loadProject(directory: dir)
     }
 
-    let inGameUIHost = InGameUIHost(backend: backend)
-    InGameUIRegistry.shared.provider = inGameUIHost
+    let inGameUIHost: InGameUIHost?
+    if ProcessInfo.processInfo.environment["GUAVA_EDITOR_SAMPLE_HUD"] == "1" {
+        let host = InGameUIHost(backend: backend)
+        InGameUIRegistry.shared.provider = host
 
-    let initialBattleState = BattleStateMachine.reduce(
-        BattleSampleFactory.makeThreeKingdomsDuel(),
-        command: .startPlayerTurn(drawCount: 4)
-    )
-    let hudModel = BattleHUDModel(
-        snapshot: BattleHUDSnapshot.make(from: initialBattleState, playerID: .player)
-            ?? BattleHUDSnapshot(phase: .setup, turn: 0, energy: 0, maxEnergy: 0,
-                                 health: 0, maxHealth: 0,
-                                 opponentHealth: 0, opponentMaxHealth: 0,
-                                 hand: [], skills: [])
-    )
-    inGameUIHost.setRootView(InGameBattleHUDView(model: hudModel))
+        let initialBattleState = BattleStateMachine.reduce(
+            BattleSampleFactory.makeThreeKingdomsDuel(),
+            command: .startPlayerTurn(drawCount: 4)
+        )
+        let hudModel = BattleHUDModel(
+            snapshot: BattleHUDSnapshot.make(from: initialBattleState, playerID: .player)
+                ?? BattleHUDSnapshot(phase: .setup, turn: 0, energy: 0, maxEnergy: 0,
+                                     health: 0, maxHealth: 0,
+                                     opponentHealth: 0, opponentMaxHealth: 0,
+                                     hand: [], skills: [])
+        )
+        host.setRootView(InGameBattleHUDView(model: hudModel))
+        inGameUIHost = host
+    } else {
+        InGameUIRegistry.shared.provider = nil
+        inGameUIHost = nil
+    }
 
     try AppRuntime.run(
         config: AppConfig(title: "GuavaNext Editor",
@@ -65,14 +72,25 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
                           clearColor: GPUColor(r: 0x1E / 255, g: 0x1F / 255, b: 0x22 / 255, a: 1),
                           backendConfig: launchOptions.backendConfig,
                           titleBarStyle: .hiddenInset,
-                          // 编辑器走事件驱动：空闲时 UI 与 3D 都不渲染（场景按需
-                          // 渲染见 EditorViewportRenderGate），输入延迟与 GPU 负载解耦。
-                          frameDrivePolicy: .eventDriven),
+                          // Editor chrome follows the active display refresh
+                          // rate. Capping it at 60Hz makes every panel feel
+                          // laggy on ProMotion / high-refresh displays even
+                          // when the frame work itself is tiny. The expensive
+                          // 3D viewport still renders on demand through
+                          // EditorViewportRenderGate.
+                          targetFrameRate: nil,
+                          frameDrivePolicy: .eventDriven,
+                          // FIFO present can block the main UI loop for multiple
+                          // refresh intervals, which makes Inspector/DevTools
+                          // input feel laggy. Mailbox keeps VSync-style pacing
+                          // while letting the compositor consume the latest UI
+                          // frame instead of back-pressuring the editor loop.
+                          vsyncPresentMode: .mailbox),
         backend: backend,
         events: events,
         onTick: { dt in
             context.tick(deltaTime: dt)
-            if context.bundle != nil {
+            if let inGameUIHost, context.bundle != nil {
                 // HUD 布局用视口的逻辑尺寸；光栅化按窗口 content scale。
                 let scale = max(1, ContentScaleHolder.current)
                 let frame = EditorViewportDropTarget.frame
