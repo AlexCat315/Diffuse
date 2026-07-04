@@ -283,35 +283,12 @@ private struct _MenuItemRow: View {
     let isHighlighted: Bool
     let showsSelectionColumn: Bool
     let onActivate: () -> Void
-    @State var isHovered: Bool = false
-    @State var isPressed: Bool = false
 
     var body: some View {
         _MenuItemRowHost(item: item,
                          isHighlighted: isHighlighted,
                          showsSelectionColumn: showsSelectionColumn,
-                         isHovered: isHovered,
-                         isPressed: isPressed,
-                         onHoverChange: { hovered in
-                             if isHovered != hovered {
-                                 isHovered = hovered
-                             }
-                         },
-                         onDown: {
-                             if !isPressed {
-                                 isPressed = true
-                             }
-                         },
-                         onUp: {
-                             isPressed = false
-                             onActivate()
-                             return true
-                         },
-                         onCancel: {
-                             if isPressed {
-                                 isPressed = false
-                             }
-                         })
+                         onActivate: onActivate)
     }
 }
 
@@ -319,12 +296,7 @@ private struct _MenuItemRowHost: _PrimitiveView {
     let item: MenuItem
     let isHighlighted: Bool
     let showsSelectionColumn: Bool
-    let isHovered: Bool
-    let isPressed: Bool
-    let onHoverChange: (Bool) -> Void
-    let onDown: () -> Void
-    let onUp: () -> Bool
-    let onCancel: () -> Void
+    let onActivate: () -> Void
 
     func _makeNode() -> Node {
         let node = Node()
@@ -335,9 +307,38 @@ private struct _MenuItemRowHost: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         node.attachments[Self.itemIDKey] = item.id
-        node.attachments[Self.hoveredKey] = isHovered
-        node.attachments[Self.pressedKey] = isPressed
+        if item.isEnabled {
+            if node.attachments[Self.hoveredKey] == nil {
+                node.attachments[Self.hoveredKey] = false
+            }
+            if node.attachments[Self.pressedKey] == nil {
+                node.attachments[Self.pressedKey] = false
+            }
+        } else {
+            node.attachments[Self.hoveredKey] = false
+            node.attachments[Self.pressedKey] = false
+            node.attachments.removeValue(forKey: Self.activePressKey)
+            if PointerCaptureHolder.current?.target === node {
+                PointerCaptureHolder.current?.release()
+            }
+        }
         node.cursor = item.isEnabled ? .pointer : .notAllowed
+        node.draw = { [weak node, item, isHighlighted] list, origin in
+            guard let node,
+                  let background = Self.backgroundColor(for: node,
+                                                        item: item,
+                                                        isHighlighted: isHighlighted) else {
+                return
+            }
+            let width = max(0, Float(node.frame.width) - 8)
+            let rect = UIRect(x: Float(origin.x) + 4,
+                              y: Float(origin.y) + 2,
+                              width: width,
+                              height: 26)
+            list.addRoundedRect(rect,
+                                radius: 5,
+                                color: background.multipliedAlpha(node.opacity))
+        }
 
         guard item.isEnabled, let registry = InteractionRegistryHolder.current else {
             InteractionRegistryHolder.current?.remove(node)
@@ -347,41 +348,43 @@ private struct _MenuItemRowHost: _PrimitiveView {
         registry.setHover(node) { phase in
             switch phase {
             case .enter:
-                onHoverChange(true)
+                setMenuItemInteraction(node, key: Self.hoveredKey, value: true)
             case .leave:
                 node.attachments.removeValue(forKey: Self.activePressKey)
                 if PointerCaptureHolder.current?.target === node {
                     PointerCaptureHolder.current?.release()
                 }
-                onHoverChange(false)
-                onCancel()
+                setMenuItemInteraction(node, key: Self.hoveredKey, value: false)
+                setMenuItemInteraction(node, key: Self.pressedKey, value: false)
             }
         }
         registry.setPointer(node) { event, phase, _ in
             guard event.button == .left else { return .ignored }
             switch phase {
             case .down:
-                node.attachments[Self.activePressKey] = ActiveMenuPress(onUp: onUp)
+                node.attachments[Self.activePressKey] = true
                 PointerCaptureHolder.current?.acquire(node)
-                onDown()
+                setMenuItemInteraction(node, key: Self.pressedKey, value: true)
                 return .handled
             case .up:
-                let activePress = node.attachments[Self.activePressKey] as? ActiveMenuPress
+                let wasActive = node.attachments[Self.activePressKey] as? Bool == true
                 node.attachments.removeValue(forKey: Self.activePressKey)
+                setMenuItemInteraction(node, key: Self.pressedKey, value: false)
                 defer {
                     if PointerCaptureHolder.current?.target === node {
                         PointerCaptureHolder.current?.release()
                     }
                 }
-                guard let activePress else { return .ignored }
-                return activePress.onUp() ? .handled : .ignored
+                guard wasActive else { return .ignored }
+                onActivate()
+                return .handled
             }
         }
         registry.setKey(node) { event, _ in
             guard !event.isRepeat else { return .ignored }
             switch event.scancode {
             case Scancode.return, Scancode.space, Scancode.keypadEnter:
-                _ = onUp()
+                onActivate()
                 return .handled
             default:
                 return .ignored
@@ -405,14 +408,6 @@ private struct _MenuItemRowHost: _PrimitiveView {
 
     func _children(for node: Node) -> [any View] {
         let theme = node.theme
-        let background: Color = {
-            guard item.isEnabled else { return Color(r: 0, g: 0, b: 0, a: 0) }
-            if isPressed { return theme.colors.stateLayerPressed }
-            if isHovered { return theme.colors.stateLayerHover }
-            if isHighlighted { return theme.colors.stateLayerSelected }
-            return Color(r: 0, g: 0, b: 0, a: 0)
-        }()
-
         let titleColor: Color = item.role == .destructive
             ? theme.colors.error
             : theme.colors.onSurface
@@ -445,11 +440,21 @@ private struct _MenuItemRowHost: _PrimitiveView {
         }
         .padding(horizontal: 12, vertical: 0)
         .frame(height: 26)
-        .background(background)
-        .cornerRadius(5)
         .padding(horizontal: 4, vertical: 2)
 
         return [row]
+    }
+
+    private static func backgroundColor(for node: Node,
+                                        item: MenuItem,
+                                        isHighlighted: Bool) -> Color? {
+        guard item.isEnabled else { return nil }
+        let isPressed = node.attachments[pressedKey] as? Bool == true
+        let isHovered = node.attachments[hoveredKey] as? Bool == true
+        if isPressed { return node.theme.colors.stateLayerPressed }
+        if isHovered { return node.theme.colors.stateLayerHover }
+        if isHighlighted { return node.theme.colors.stateLayerSelected }
+        return nil
     }
 
     private static let hoveredKey = "__menu_item_hovered"
@@ -458,12 +463,12 @@ private struct _MenuItemRowHost: _PrimitiveView {
     private static let activePressKey = "__menu_item_active_press"
 }
 
-private final class ActiveMenuPress {
-    let onUp: () -> Bool
-
-    init(onUp: @escaping () -> Bool) {
-        self.onUp = onUp
+private func setMenuItemInteraction(_ node: Node, key: String, value: Bool) {
+    if node.attachments[key] as? Bool == value {
+        return
     }
+    node.attachments[key] = value
+    node.markRenderDirty(reason: .styleSet(field: key))
 }
 
 public extension Menu {

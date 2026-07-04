@@ -8,13 +8,11 @@ import GuavaUIRuntime
 import EngineKernel
 @testable import GuavaUICompose
 
-/// Verifies that pointer-driven press transitions on a real `Button`
-/// invalidate the owning scope (via `_StatefulButton`'s `@State`) and
-/// recompose the styled body. Before this fix, `node.markDirty()` did not
-/// re-run `_children(for:)`, so the visual state never changed in
-/// production — even though `ButtonStyleAnimationTests` proved the styles
-/// themselves transitioned correctly when driven by `@State` directly.
-@Suite("Phase 8 / Button press recompose plumbing", .serialized)
+/// Verifies that pointer-driven press transitions on a real `Button` update
+/// the built-in chrome through node-local interaction state. Custom
+/// `ButtonStyle`s still keep the compatibility recompose path, but default
+/// buttons should not need a view rebuild to show hover / press feedback.
+@Suite("Phase 8 / Button interaction chrome plumbing", .serialized)
 struct ButtonPressRecomposeTests: GuavaUIComposeSerializedSuite {
 
     private func findFilled(_ root: Node) -> Node? {
@@ -29,7 +27,7 @@ struct ButtonPressRecomposeTests: GuavaUIComposeSerializedSuite {
         tree.root!.children.first!.children.first!.children.first!
     }
 
-    @Test("Pointer down on Button recomposes body with isPressed=true")
+    @Test("Pointer down on Button updates chrome with isPressed=true")
     func pointerDownRecomposes() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
         InteractionRegistryHolder.current = registry
@@ -58,7 +56,8 @@ struct ButtonPressRecomposeTests: GuavaUIComposeSerializedSuite {
             let evt = MouseButtonEvent(button: .left, x: 0, y: 0, clicks: 1)
             _ = handler!(evt, .down, .target)
 
-            // The State write enqueues an invalidation; flush it.
+            // Built-in styles update chrome directly; this remains harmless
+            // for the custom-style compatibility path.
             recomp.commitAll()
 
             // Settle the implicit press animation to its terminal value so we
@@ -78,7 +77,7 @@ struct ButtonPressRecomposeTests: GuavaUIComposeSerializedSuite {
         }
     } }
 
-    @Test("Hover enter on Button recomposes body with isHovered=true")
+    @Test("Hover enter on Button updates chrome with isHovered=true")
     func hoverEnterRecomposes() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
         InteractionRegistryHolder.current = registry

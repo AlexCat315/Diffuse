@@ -886,6 +886,67 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         #expect(parentScrollView.contentOffset.y == 0)
     } }
 
+    @Test("Menu item hover and press update render state without recomposing")
+    func menuItemInteractionDoesNotRecompose() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        let capture = PointerCapture()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = capture
+        defer {
+            InteractionRegistryHolder.current = nil
+            PointerCaptureHolder.current = nil
+        }
+
+        var activations = 0
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root:
+            Menu([
+                .item(MenuItem(id: "alpha", title: "Alpha") {
+                    activations += 1
+                }),
+                .item(MenuItem(id: "beta", title: "Beta") {})
+            ], width: 180)
+        )
+        graph.computeLayout(width: 180, height: 80)
+
+        guard let item = firstNode(in: tree.root, where: {
+            $0.attachments["__menu_item_id"] as? AnyHashable == AnyHashable("alpha")
+        }) else {
+            Issue.record("menu item row was not materialized")
+            return
+        }
+
+        let hover = registry.handlers(for: item).hover
+        let pointer = registry.handlers(for: item).pointer
+        #expect(hover != nil)
+        #expect(pointer != nil)
+        guard let hover, let pointer else { return }
+
+        tree.flush()
+        #expect(graph.recomposer.hasPending == false)
+
+        hover(.enter)
+        #expect(graph.recomposer.hasPending == false)
+        #expect(tree.hasRenderUpdates == true)
+        #expect(item.attachments["__menu_item_hovered"] as? Bool == true)
+
+        tree.flush()
+        let event = MouseButtonEvent(button: .left, x: 8, y: 8, clicks: 1)
+        #expect(pointer(event, .down, .target) == .handled)
+        #expect(graph.recomposer.hasPending == false)
+        #expect(tree.hasRenderUpdates == true)
+        #expect(item.attachments["__menu_item_pressed"] as? Bool == true)
+        #expect(activations == 0)
+
+        tree.flush()
+        #expect(pointer(event, .up, .target) == .handled)
+        #expect(graph.recomposer.hasPending == false)
+        #expect(tree.hasRenderUpdates == true)
+        #expect(item.attachments["__menu_item_pressed"] as? Bool == false)
+        #expect(activations == 1)
+    } }
+
     @Test("Focused TextField wheel priority outranks hovered parent ScrollView")
     func focusedTextFieldWheelPriorityBeatsHoveredParent() { GlobalTestLock.locked {
         let registry = InteractionRegistry()

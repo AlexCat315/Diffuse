@@ -59,38 +59,11 @@ struct _StatefulBoolControl: View {
     let isEnabled: Bool
     let variant: _BoolControlVariant
 
-    @State var isPressed: Bool = false
-    @State var isHovered: Bool = false
-
     var body: some View {
         BoolControlHost(
             isOn: isOn,
             isEnabled: isEnabled,
-            variant: variant,
-            isPressed: isEnabled ? isPressed : false,
-            isHovered: isEnabled ? isHovered : false,
-            onHoverChange: { hovered in
-                if isHovered != hovered {
-                    isHovered = hovered
-                }
-            },
-            onDown: {
-                if !isPressed {
-                    isPressed = true
-                }
-            },
-            onUp: {
-                let was = isPressed
-                isPressed = false
-                if was {
-                    isOn.wrappedValue.toggle()
-                    return true
-                }
-                return false
-            },
-            onActivate: {
-                isOn.wrappedValue.toggle()
-            }
+            variant: variant
         )
     }
 }
@@ -99,12 +72,6 @@ struct BoolControlHost: _PrimitiveView {
     let isOn: Binding<Bool>
     let isEnabled: Bool
     let variant: _BoolControlVariant
-    let isPressed: Bool
-    let isHovered: Bool
-    let onHoverChange: (Bool) -> Void
-    let onDown: () -> Void
-    let onUp: () -> Bool
-    let onActivate: () -> Void
 
     static let pressedKey = "__bool_control_pressed"
     static let hoveredKey = "__bool_control_hovered"
@@ -119,8 +86,17 @@ struct BoolControlHost: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
-        node.attachments[Self.pressedKey] = isPressed
-        node.attachments[Self.hoveredKey] = isHovered
+        if !isEnabled {
+            node.attachments[Self.pressedKey] = false
+            node.attachments[Self.hoveredKey] = false
+        } else {
+            if node.attachments[Self.pressedKey] == nil {
+                node.attachments[Self.pressedKey] = false
+            }
+            if node.attachments[Self.hoveredKey] == nil {
+                node.attachments[Self.hoveredKey] = false
+            }
+        }
         node.attachments[Self.onKey] = isOn.wrappedValue
         node.attachments[Self.variantKey] = variant
         node.cursor = isEnabled ? .pointer : .notAllowed
@@ -135,33 +111,37 @@ struct BoolControlHost: _PrimitiveView {
             return
         }
 
-        let hoverChange = onHoverChange
-        let down = onDown
-        let up = onUp
-        let activate = onActivate
         registry.setHover(node) { phase in
             switch phase {
             case .enter:
-                hoverChange(true)
+                setBoolControlInteraction(node, key: Self.hoveredKey, value: true)
             case .leave:
-                hoverChange(false)
+                setBoolControlInteraction(node, key: Self.hoveredKey, value: false)
             }
         }
         registry.setPointer(node) { event, phase, _ in
             if event.button != .left { return .ignored }
             switch phase {
             case .down:
-                down()
+                setBoolControlInteraction(node, key: Self.pressedKey, value: true)
                 return .handled
             case .up:
-                return up() ? .handled : .ignored
+                let wasPressed = node.attachments[Self.pressedKey] as? Bool ?? false
+                setBoolControlInteraction(node, key: Self.pressedKey, value: false)
+                guard wasPressed else { return .ignored }
+                isOn.wrappedValue.toggle()
+                node.attachments[Self.onKey] = isOn.wrappedValue
+                node.markRenderDirty(reason: .styleSet(field: "boolControlValue"))
+                return .handled
             }
         }
         registry.setKey(node) { event, _ in
             guard !event.isRepeat else { return .ignored }
             switch event.scancode {
             case Scancode.return, Scancode.space, Scancode.keypadEnter:
-                activate()
+                isOn.wrappedValue.toggle()
+                node.attachments[Self.onKey] = isOn.wrappedValue
+                node.markRenderDirty(reason: .styleSet(field: "boolControlValue"))
                 return .handled
             default:
                 return .ignored
@@ -210,7 +190,7 @@ struct BoolControlHost: _PrimitiveView {
                                height: trackHeight)
         list.addRoundedRect(trackRect,
                             radius: trackHeight * 0.5,
-                            color: resolvedFillColor(colors: colors))
+                            color: resolvedFillColor(node: node, colors: colors))
 
         let thumbTravel = trackRect.width - 2 * thumbInset - thumbDiameter
         let thumbX = trackRect.minX + thumbInset + (isOn.wrappedValue ? thumbTravel : 0)
@@ -260,7 +240,7 @@ struct BoolControlHost: _PrimitiveView {
                             color: boxBorderColor)
         list.addRoundedRect(boxRect,
                             radius: 4,
-                            color: resolvedFillColor(colors: colors))
+                            color: resolvedFillColor(node: node, colors: colors))
 
         if isOn.wrappedValue {
             let inset = max(3, edge * 0.18)
@@ -282,10 +262,12 @@ struct BoolControlHost: _PrimitiveView {
         }
     }
 
-    private func resolvedFillColor(colors: ColorScheme) -> Color {
+    private func resolvedFillColor(node: Node, colors: ColorScheme) -> Color {
         if !isEnabled {
             return colors.surfaceVariant
         }
+        let isPressed = node.attachments[Self.pressedKey] as? Bool ?? false
+        let isHovered = node.attachments[Self.hoveredKey] as? Bool ?? false
         if isOn.wrappedValue {
             if isPressed { return colors.accentPressed }
             if isHovered { return colors.accentHover }
@@ -304,4 +286,11 @@ struct BoolControlHost: _PrimitiveView {
         }
         return isOn.wrappedValue ? colors.onAccent : colors.surfaceRaised
     }
+}
+
+private func setBoolControlInteraction(_ node: Node, key: String, value: Bool) {
+    let previous = node.attachments[key] as? Bool
+    guard previous != value else { return }
+    node.attachments[key] = value
+    node.markRenderDirty(reason: .styleSet(field: key))
 }

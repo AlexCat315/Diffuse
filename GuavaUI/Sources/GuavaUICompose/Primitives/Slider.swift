@@ -14,9 +14,8 @@ import GuavaUIRuntime
 /// ```
 ///
 /// Mirrors the `Button` pattern: the public struct delegates to a stateful
-/// composite (`_StatefulSlider`) whose `@State` writes drive recompose, while
-/// the actual hit-testing and drawing live in a leaf `_PrimitiveView`
-/// (`SliderHost`).
+/// composite while the actual hit-testing and drawing live in a leaf
+/// `_PrimitiveView` (`SliderHost`).
 public struct Slider: View {
     public let value: Binding<Double>
     public let range: ClosedRange<Double>
@@ -54,26 +53,13 @@ struct _StatefulSlider: View {
     let isEnabled: Bool
     let onEditingChanged: ((Bool) -> Void)?
 
-    @State var isPressed: Bool = false
-    @State var isHovered: Bool = false
-
     var body: some View {
         SliderHost(
             value: value,
             range: range,
             step: step,
             isEnabled: isEnabled,
-            isPressed: isEnabled ? isPressed : false,
-            isHovered: isEnabled ? isHovered : false,
-            onHoverChange: { hovered in
-                if isHovered != hovered { isHovered = hovered }
-            },
-            onPressChange: { [onEditingChanged] pressed in
-                if isPressed != pressed {
-                    isPressed = pressed
-                    onEditingChanged?(pressed)
-                }
-            }
+            onEditingChanged: onEditingChanged
         )
     }
 }
@@ -85,10 +71,7 @@ struct SliderHost: _PrimitiveView {
     let range: ClosedRange<Double>
     let step: Double?
     let isEnabled: Bool
-    let isPressed: Bool
-    let isHovered: Bool
-    let onHoverChange: (Bool) -> Void
-    let onPressChange: (Bool) -> Void
+    let onEditingChanged: ((Bool) -> Void)?
 
     static let pressedKey = "__slider_pressed"
     static let hoveredKey = "__slider_hovered"
@@ -102,32 +85,29 @@ struct SliderHost: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
-        node.attachments[SliderHost.pressedKey] = isPressed
-        node.attachments[SliderHost.hoveredKey] = isHovered
+        if !isEnabled {
+            node.attachments[SliderHost.pressedKey] = false
+            node.attachments[SliderHost.hoveredKey] = false
+        } else {
+            if node.attachments[SliderHost.pressedKey] == nil {
+                node.attachments[SliderHost.pressedKey] = false
+            }
+            if node.attachments[SliderHost.hoveredKey] == nil {
+                node.attachments[SliderHost.hoveredKey] = false
+            }
+        }
         node.cursor = isEnabled ? .pointer : .notAllowed
 
-        // Resolve the active style and store the appearance for `draw` to
-        // consume. Style lookup walks `compositionValues` so users can swap in
-        // a custom `SliderStyle` via `.sliderStyle(_:)`.
+        // Style lookup walks `compositionValues` so users can swap in a custom
+        // `SliderStyle` via `.sliderStyle(_:)`. Interaction flags are read
+        // from node attachments in draw, so hover/press can repaint without
+        // scheduling a recompose.
         let style = node.compositionValue(of: SliderStyleEnvironment.key)
-        let theme = node.theme
-        let isFocused = (FocusChainHolder.current?.focused === node)
-        let config = SliderStyleConfiguration(
-            value: clampedValue(value.wrappedValue),
-            range: range,
-            isPressed: isPressed,
-            isHovered: isHovered,
-            isFocused: isFocused,
-            isEnabled: isEnabled,
-            theme: theme
-        )
-        let appearance = style.resolve(config)
-        node.attachments[SliderHost.appearanceKey] = appearance
 
         // Renderer hook — draws track + filled segment + thumb each frame.
         let snapshot = self
         node.draw = { list, origin in
-            snapshot.render(node: node, origin: origin, list: list)
+            snapshot.render(node: node, style: style, origin: origin, list: list)
         }
 
         // Wire interaction handlers (only when enabled and a registry exists).
@@ -135,24 +115,29 @@ struct SliderHost: _PrimitiveView {
             InteractionRegistryHolder.current?.remove(node)
             return
         }
-        let hover = onHoverChange
-        let press = onPressChange
         registry.setHover(node) { phase in
             switch phase {
-            case .enter: hover(true)
-            case .leave: hover(false)
+            case .enter:
+                setSliderInteraction(node, key: SliderHost.hoveredKey, value: true)
+            case .leave:
+                setSliderInteraction(node, key: SliderHost.hoveredKey, value: false)
             }
         }
         registry.setPointer(node) { event, phase, _ in
             switch phase {
             case .down:
                 PointerCaptureHolder.current?.acquire(node)
-                press(true)
+                if setSliderInteraction(node, key: SliderHost.pressedKey, value: true) {
+                    onEditingChanged?(true)
+                }
                 snapshot.writeValue(forWindowX: event.x, node: node)
+                node.markRenderDirty(reason: .styleSet(field: "sliderValue"))
                 return .handled
             case .up:
                 PointerCaptureHolder.current?.release()
-                press(false)
+                if setSliderInteraction(node, key: SliderHost.pressedKey, value: false) {
+                    onEditingChanged?(false)
+                }
                 return .handled
             }
         }
@@ -160,8 +145,9 @@ struct SliderHost: _PrimitiveView {
             // Only consume motion while the thumb is being dragged. The host
             // explicitly acquires pointer capture on `.down`, so motion events
             // outside the node's frame still arrive here during a drag.
-            guard snapshot.isPressed else { return .ignored }
+            guard node.attachments[SliderHost.pressedKey] as? Bool == true else { return .ignored }
             snapshot.writeValue(forWindowX: event.x, node: node)
+            node.markRenderDirty(reason: .styleSet(field: "sliderValue"))
             return .handled
         }
     }
@@ -208,10 +194,19 @@ struct SliderHost: _PrimitiveView {
 
     // MARK: - Rendering
 
-    private func render(node: Node, origin: CGPoint, list: DrawList) {
-        guard let appearance = node.attachments[SliderHost.appearanceKey] as? SliderAppearance else {
-            return
-        }
+    private func render(node: Node,
+                        style: AnySliderStyle,
+                        origin: CGPoint,
+                        list: DrawList) {
+        let appearance = style.resolve(SliderStyleConfiguration(
+            value: clampedValue(value.wrappedValue),
+            range: range,
+            isPressed: node.attachments[SliderHost.pressedKey] as? Bool ?? false,
+            isHovered: node.attachments[SliderHost.hoveredKey] as? Bool ?? false,
+            isFocused: FocusChainHolder.current?.focused === node,
+            isEnabled: isEnabled,
+            theme: node.theme
+        ))
         let frame = node.frame
         let width = Float(frame.width)
         let height = Float(frame.height)
@@ -271,4 +266,13 @@ struct SliderHost: _PrimitiveView {
                             radius: appearance.thumbDiameter * 0.5,
                             color: appearance.thumbColor)
     }
+}
+
+@discardableResult
+private func setSliderInteraction(_ node: Node, key: String, value: Bool) -> Bool {
+    let previous = node.attachments[key] as? Bool
+    guard previous != value else { return false }
+    node.attachments[key] = value
+    node.markRenderDirty(reason: .styleSet(field: key))
+    return true
 }
