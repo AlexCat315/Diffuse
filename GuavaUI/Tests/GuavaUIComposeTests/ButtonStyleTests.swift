@@ -196,6 +196,53 @@ struct ButtonStyleTests: GuavaUIComposeSerializedSuite {
         #expect(fired == 0)
     } }
 
+    @Test("Built-in Button interaction updates chrome without recomposing")
+    func builtInInteractionDoesNotRecompose() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let theme = Theme.defaultDark
+            var fired = 0
+            let tree = NodeTree()
+            let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+            graph.install(root: Button("Tap") { fired += 1 })
+            graph.computeLayout(width: 120, height: 40)
+
+            guard let host = findButtonHost(tree.root!) else {
+                Issue.record("no ButtonHost found in tree"); return
+            }
+            let hover = registry.handlers(for: host).hover
+            let pointer = registry.handlers(for: host).pointer
+            #expect(hover != nil)
+            #expect(pointer != nil)
+            guard let hover, let pointer else { return }
+
+            tree.flush()
+            #expect(graph.recomposer.hasPending == false)
+
+            hover(.enter)
+            #expect(graph.recomposer.hasPending == false)
+            scheduler.tick(deltaTime: 1)
+            #expect(findFilled(tree.root!)?.backgroundColor == theme.colors.accentHover)
+
+            tree.flush()
+            let event = MouseButtonEvent(button: .left, x: 8, y: 8, clicks: 1)
+            #expect(pointer(event, .down, .target) == .handled)
+            #expect(graph.recomposer.hasPending == false)
+            scheduler.tick(deltaTime: 1)
+            #expect(findFilled(tree.root!)?.backgroundColor == theme.colors.accentPressed)
+
+            tree.flush()
+            #expect(pointer(event, .up, .target) == .handled)
+            #expect(graph.recomposer.hasPending == false)
+            scheduler.tick(deltaTime: 1)
+            #expect(findFilled(tree.root!)?.backgroundColor == theme.colors.accentHover)
+            #expect(fired == 1)
+        }
+    } }
+
     @Test("Disabled Button does not register key handler")
     func disabledButtonHasNoKeyHandler() { GlobalTestLock.locked {
         let registry = InteractionRegistry()

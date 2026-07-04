@@ -16,34 +16,9 @@ public struct PrimaryButtonStyle: ButtonStyle {
     public init() {}
 
     public func makeBody(configuration: ButtonStyleConfiguration) -> some View {
-        let theme = configuration.theme
-        let bg: Color = {
-            if !configuration.isEnabled { return theme.colors.surfaceVariant }
-            if configuration.isPressed  { return theme.colors.accentPressed }
-            if configuration.isHovered  { return theme.colors.accentHover }
-            return theme.colors.accent
-        }()
-        let fg: SemanticColorRef =
-            configuration.isEnabled ? .onAccent : .onSurfaceMuted
-
-        let borderColor: Color = configuration.isFocused
-            ? theme.colors.focusRing
-            : Color(r: 0, g: 0, b: 0, a: 0)
-        let borderWidth: Float = configuration.isFocused ? 2 : 0
-
-        return Box(direction: .row, alignItems: .center, justifyContent: .center) {
-            AnyView(configuration.label)
-                .font(SemanticFontRef.label)
-                .foregroundColor(fg)
-        }
-            .frame(height: 28)
-            .padding(horizontal: theme.spacing.md, vertical: 0)
-            .background(bg)
-            .cornerRadius(theme.radius.md)
-            .border(borderColor, width: borderWidth)
-            .opacity(configuration.isEnabled ? 1 : 0.55)
-            .animation(.semantic(.snappy, in: theme), value: configuration.interactionKey)
+        BuiltinButtonChrome(kind: .primary,
+                            configuration: configuration,
+                            foreground: configuration.isEnabled ? .onAccent : .onSurfaceMuted)
     }
 }
-
 
