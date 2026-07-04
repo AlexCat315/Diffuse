@@ -69,6 +69,44 @@ struct ObservableStateTrackingTests: GuavaUIComposeSerializedSuite {
         #expect(valueCounter.count == 2)
         #expect(otherCounter.count == 1)
     } }
+
+    @Test("Observed dynamic properties do not accumulate observers across parent rebuilds")
+    func observedDynamicPropertyDoesNotAccumulateObserversAcrossParentRebuilds() { GlobalTestLock.locked {
+        let object = CountingObservableObject()
+        let tree = NodeTree()
+        let recomposer = Recomposer()
+        let graph = ViewGraph(tree: tree, recomposer: recomposer)
+        let root = ObservedRebuildHarness(object: object)
+
+        graph.install(root: root)
+        #expect(object.observerCount == 1)
+
+        for _ in 0..<10 {
+            root.$tick.wrappedValue += 1
+            while recomposer.commitAll() {}
+            #expect(object.observerCount == 1)
+        }
+    } }
+
+    @Test("Observed dynamic properties unregister when removed from the tree")
+    func observedDynamicPropertyUnregistersWhenRemovedFromTree() { GlobalTestLock.locked {
+        let object = CountingObservableObject()
+        let tree = NodeTree()
+        let recomposer = Recomposer()
+        let graph = ViewGraph(tree: tree, recomposer: recomposer)
+        let root = ConditionalObservedHarness(object: object)
+
+        graph.install(root: root)
+        #expect(object.observerCount == 1)
+
+        root.$isVisible.wrappedValue = false
+        while recomposer.commitAll() {}
+        #expect(object.observerCount == 0)
+
+        root.$isVisible.wrappedValue = true
+        while recomposer.commitAll() {}
+        #expect(object.observerCount == 1)
+    } }
 }
 
 private final class BodyCounter {
@@ -122,6 +160,70 @@ private final class TestObservableStore {
             storedOtherValue = newValue
             registrar.invalidate(AnyHashable(Key.otherValue))
         }
+    }
+}
+
+private final class CountingObservableObject: _ObservableObject {
+    private var observers: [AnyHashable: () -> Void] = [:]
+    private var nextToken: UInt64 = 0
+
+    var value = 0 {
+        didSet {
+            for observer in observers.values {
+                observer()
+            }
+        }
+    }
+
+    var observerCount: Int {
+        observers.count
+    }
+
+    func _registerObserver(_ handler: @escaping () -> Void) -> AnyHashable {
+        let token = AnyHashable(nextToken)
+        nextToken &+= 1
+        observers[token] = handler
+        return token
+    }
+
+    func _unregisterObserver(_ token: AnyHashable) {
+        observers.removeValue(forKey: token)
+    }
+}
+
+private struct ObservedRebuildHarness: View {
+    @State var tick = 0
+    let object: CountingObservableObject
+
+    var body: some View {
+        let _ = tick
+        ObservedObjectLeaf(object: object)
+    }
+}
+
+private struct ConditionalObservedHarness: View {
+    @State var isVisible = true
+    let object: CountingObservableObject
+
+    var body: some View {
+        if isVisible {
+            ObservedObjectLeaf(object: object)
+        } else {
+            Text("hidden")
+        }
+    }
+}
+
+private struct ObservedObjectLeaf: View {
+    private var _value: Observed<CountingObservableObject, Int>
+    private var value: Int { _value.wrappedValue }
+
+    init(object: CountingObservableObject) {
+        self._value = Observed(\.value, on: object)
+    }
+
+    var body: some View {
+        Text("value \(value)")
     }
 }
 
