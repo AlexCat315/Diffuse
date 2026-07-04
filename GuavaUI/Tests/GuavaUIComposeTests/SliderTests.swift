@@ -139,6 +139,51 @@ struct SliderTests: GuavaUIComposeSerializedSuite {
         #expect(read() == 100)
     } }
 
+    @Test("Slider hover press and drag update render state without recomposing")
+    func sliderInteractionDoesNotRecompose() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        let (binding, read) = makeBinding(0)
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: Slider(value: binding, range: 0...100))
+        graph.computeLayout(width: 200, height: 24)
+
+        let h = host(in: tree)
+        let width = Float(h.frame.width)
+        let hover = registry.handlers(for: h).hover!
+        let pointer = registry.handlers(for: h).pointer!
+        let motion = registry.handlers(for: h).motion!
+
+        tree.flush()
+        #expect(graph.recomposer.hasPending == false)
+
+        hover(.enter)
+        #expect(graph.recomposer.hasPending == false)
+        #expect(tree.hasRenderUpdates == true)
+        #expect(h.attachments[SliderHost.hoveredKey] as? Bool == true)
+
+        tree.flush()
+        _ = pointer(MouseButtonEvent(button: .left, x: width * 0.25, y: 12, clicks: 1), .down, .target)
+        #expect(graph.recomposer.hasPending == false)
+        #expect(tree.hasRenderUpdates == true)
+        #expect(h.attachments[SliderHost.pressedKey] as? Bool == true)
+        #expect(read() == 25)
+
+        tree.flush()
+        _ = motion(MouseMotionEvent(x: width * 0.75, y: 12, deltaX: 0, deltaY: 0), .target)
+        #expect(graph.recomposer.hasPending == false)
+        #expect(tree.hasRenderUpdates == true)
+        #expect(read() == 75)
+
+        tree.flush()
+        _ = pointer(MouseButtonEvent(button: .left, x: width * 0.75, y: 12, clicks: 1), .up, .target)
+        #expect(graph.recomposer.hasPending == false)
+        #expect(tree.hasRenderUpdates == true)
+        #expect(h.attachments[SliderHost.pressedKey] as? Bool == false)
+    } }
+
     @Test("Disabled slider ignores pointer down")
     func disabledIgnoresInput() { GlobalTestLock.locked {
         let registry = InteractionRegistry()

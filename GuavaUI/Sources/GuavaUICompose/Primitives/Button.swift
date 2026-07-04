@@ -148,10 +148,9 @@ public extension Button where Label == ButtonIcon {
 
 // MARK: - StatefulButton
 
-/// User-view wrapper around `ButtonHost` that owns `@State` for press / hover.
-/// Press transitions go through `Recomposer.invalidate` (because `@State`
-/// writes do), which is what lets `.animation(_:value:)` inside the active
-/// `ButtonStyle` body see a value change and animate the colour swap.
+/// User-view wrapper around `ButtonHost` that keeps the compatibility state
+/// used by custom `ButtonStyle`s. Built-in styles use node-local interaction
+/// state instead, so hover / press does not recompose the button subtree.
 struct _StatefulButton: View {
     let role: ButtonRole
     let isEnabled: Bool
@@ -182,25 +181,13 @@ struct _StatefulButton: View {
                     isPressed = true
                 }
             },
-            onUp: { [action] in
-                isPressed = false
+            onPressChange: { pressed in
+                if isPressed != pressed {
+                    isPressed = pressed
+                }
+            },
+            action: { [action] in
                 action()
-                return true
-            },
-            onCancel: {
-                if isPressed {
-                    isPressed = false
-                }
-            },
-            onKey: { [action] scancode, isRepeat in
-                guard !isRepeat else { return EventResult.ignored }
-                switch scancode {
-                case Scancode.return, Scancode.space, Scancode.keypadEnter:
-                    action()
-                    return EventResult.handled
-                default:
-                    return EventResult.ignored
-                }
             }
         )
     }
@@ -208,10 +195,8 @@ struct _StatefulButton: View {
 
 // MARK: - ButtonHost
 
-/// The actual primitive node behind `Button`. Owns hit-testing; the
-/// `isPressed` flag is now passed in by `_StatefulButton` (driven by
-/// `@State`) so press transitions invalidate the owning scope and
-/// re-evaluate `_children(for:)` with the new configuration.
+/// The actual primitive node behind `Button`. It owns hit-testing and keeps
+/// fast-path interaction state in node attachments for built-in styles.
 struct ButtonHost: _PrimitiveView {
     let role: ButtonRole
     let isEnabled: Bool
@@ -222,9 +207,8 @@ struct ButtonHost: _PrimitiveView {
     let label: AnyView
     let onHoverChange: (Bool) -> Void
     let onDown: () -> Void
-    let onUp: () -> Bool
-    let onCancel: () -> Void
-    let onKey: (UInt32, Bool) -> EventResult
+    let onPressChange: (Bool) -> Void
+    let action: () -> Void
 
     func _makeNode() -> Node {
         let n = Node()
@@ -234,8 +218,24 @@ struct ButtonHost: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
-        node.attachments[ButtonHost.pressedKey] = isPressed
-        node.attachments[ButtonHost.hoveredKey] = isHovered
+        node.attachments[ButtonHost.markerKey] = true
+        let style = node.compositionValue(of: ButtonStyleEnvironment.key)
+        let requiresInteractionRecompose = style.requiresInteractionRecompose
+        node.attachments[ButtonHost.requiresInteractionRecomposeKey] = requiresInteractionRecompose
+        if requiresInteractionRecompose {
+            node.attachments[ButtonHost.pressedKey] = isEnabled ? isPressed : false
+            node.attachments[ButtonHost.hoveredKey] = isEnabled ? isHovered : false
+        } else if isEnabled {
+            if node.attachments[ButtonHost.pressedKey] == nil {
+                node.attachments[ButtonHost.pressedKey] = false
+            }
+            if node.attachments[ButtonHost.hoveredKey] == nil {
+                node.attachments[ButtonHost.hoveredKey] = false
+            }
+        } else {
+            node.attachments[ButtonHost.pressedKey] = false
+            node.attachments[ButtonHost.hoveredKey] = false
+        }
         node.attachments[ButtonHost.tooltipKey] = tooltip
 
         let resolvedTooltip = tooltip?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -244,7 +244,7 @@ struct ButtonHost: _PrimitiveView {
                 guard let node else { return }
                 // Hover only. Clicking focuses the button, and a focus-driven
                 // tooltip would outlive the pointer leaving the control.
-                guard isHovered else { return }
+                guard node.attachments[ButtonHost.hoveredKey] as? Bool == true else { return }
                 guard let env = TextEnvironmentHolder.current else { return }
 
                 let origin = node.absoluteOrigin
@@ -324,6 +324,13 @@ struct ButtonHost: _PrimitiveView {
         // applied closer to the leaf — modifier wrappers run after this
         // primitive and therefore win.
         node.cursor = isEnabled ? .pointer : .notAllowed
+        if !isEnabled {
+            node.attachments.removeValue(forKey: ButtonHost.activePressKey)
+            if PointerCaptureHolder.current?.target === node {
+                PointerCaptureHolder.current?.release()
+            }
+        }
+        updateBuiltinButtonChromeDescendants(of: node, animated: false)
 
         guard isEnabled, let registry = InteractionRegistryHolder.current else {
             InteractionRegistryHolder.current?.remove(node)
@@ -331,15 +338,22 @@ struct ButtonHost: _PrimitiveView {
         }
         let hoverChange = onHoverChange
         let down = onDown
-        let up = onUp
-        let cancel = onCancel
-        let key = onKey
+        let pressChange = onPressChange
+        let activate = action
         registry.setHover(node) { phase in
             switch phase {
             case .enter:
-                hoverChange(true)
+                setButtonInteraction(node,
+                                     key: ButtonHost.hoveredKey,
+                                     value: true,
+                                     requiresRecompose: requiresInteractionRecompose,
+                                     onChange: hoverChange)
             case .leave:
-                hoverChange(false)
+                setButtonInteraction(node,
+                                     key: ButtonHost.hoveredKey,
+                                     value: false,
+                                     requiresRecompose: requiresInteractionRecompose,
+                                     onChange: hoverChange)
             }
         }
         registry.setPointer(node) { event, phase, _ in
@@ -349,12 +363,20 @@ struct ButtonHost: _PrimitiveView {
             if event.button != .left { return .ignored }
             switch phase {
             case .down:
-                node.attachments[ButtonHost.activePressKey] = ActiveButtonPress(onUp: up)
+                node.attachments[ButtonHost.activePressKey] = true
                 PointerCaptureHolder.current?.acquire(node)
-                down()
+                if requiresInteractionRecompose {
+                    down()
+                } else {
+                    setButtonInteraction(node,
+                                         key: ButtonHost.pressedKey,
+                                         value: true,
+                                         requiresRecompose: false,
+                                         onChange: pressChange)
+                }
                 return .handled
             case .up:
-                let activePress = node.attachments[ButtonHost.activePressKey] as? ActiveButtonPress
+                let wasActive = node.attachments[ButtonHost.activePressKey] as? Bool == true
                 node.attachments.removeValue(forKey: ButtonHost.activePressKey)
                 let isInside = isPointInsideButton(event.x, event.y, node: node)
                 defer {
@@ -362,29 +384,57 @@ struct ButtonHost: _PrimitiveView {
                         PointerCaptureHolder.current?.release()
                     }
                 }
-                guard let activePress else { return .ignored }
+                guard wasActive else { return .ignored }
+                setButtonInteraction(node,
+                                     key: ButtonHost.pressedKey,
+                                     value: false,
+                                     requiresRecompose: requiresInteractionRecompose,
+                                     onChange: pressChange)
                 guard isInside else {
-                    cancel()
                     return .handled
                 }
-                return activePress.onUp() ? .handled : .ignored
+                activate()
+                return .handled
             }
         }
         registry.setMotion(node) { event, _ in
-            guard node.attachments[ButtonHost.activePressKey] is ActiveButtonPress else {
+            guard node.attachments[ButtonHost.activePressKey] as? Bool == true else {
                 return .ignored
             }
             let isInside = isPointInsideButton(event.x, event.y, node: node)
-            hoverChange(isInside)
+            setButtonInteraction(node,
+                                 key: ButtonHost.hoveredKey,
+                                 value: isInside,
+                                 requiresRecompose: requiresInteractionRecompose,
+                                 onChange: hoverChange)
             if isInside {
-                down()
+                if requiresInteractionRecompose {
+                    down()
+                } else {
+                    setButtonInteraction(node,
+                                         key: ButtonHost.pressedKey,
+                                         value: true,
+                                         requiresRecompose: false,
+                                         onChange: pressChange)
+                }
             } else {
-                cancel()
+                setButtonInteraction(node,
+                                     key: ButtonHost.pressedKey,
+                                     value: false,
+                                     requiresRecompose: requiresInteractionRecompose,
+                                     onChange: pressChange)
             }
             return .handled
         }
         registry.setKey(node) { event, _ in
-            key(event.scancode, event.isRepeat)
+            guard !event.isRepeat else { return .ignored }
+            switch event.scancode {
+            case Scancode.return, Scancode.space, Scancode.keypadEnter:
+                activate()
+                return .handled
+            default:
+                return .ignored
+            }
         }
     }
 
@@ -402,11 +452,17 @@ struct ButtonHost: _PrimitiveView {
         let style = node.compositionValue(of: ButtonStyleEnvironment.key)
         let theme = node.theme
         let isFocused = (FocusChainHolder.current?.focused === node)
+        let configPressed = style.requiresInteractionRecompose
+            ? isPressed
+            : (node.attachments[ButtonHost.pressedKey] as? Bool == true)
+        let configHovered = style.requiresInteractionRecompose
+            ? isHovered
+            : (node.attachments[ButtonHost.hoveredKey] as? Bool == true)
         let config = ButtonStyleConfiguration(
             label:      label,
             role:       role,
-            isPressed:  isPressed,
-            isHovered:  isHovered,
+            isPressed:  isEnabled ? configPressed : false,
+            isHovered:  isEnabled ? configHovered : false,
             isFocused:  isFocused,
             isEnabled:  isEnabled,
             isSelected: isSelected,
@@ -415,20 +471,281 @@ struct ButtonHost: _PrimitiveView {
         return [style.makeBody(config)]
     }
 
+    static let markerKey = "__button_host"
     static let pressedKey = "__button_pressed"
     static let hoveredKey = "__button_hovered"
     static let tooltipKey = "__button_tooltip"
     static let activePressKey = "__button_active_press"
-}
-
-private final class ActiveButtonPress {
-    let onUp: () -> Bool
-
-    init(onUp: @escaping () -> Bool) {
-        self.onUp = onUp
-    }
+    static let requiresInteractionRecomposeKey = "__button_requires_interaction_recompose"
 }
 
 private func isPointInsideButton(_ x: Float, _ y: Float, node: Node) -> Bool {
     node.absoluteFrame.contains(CGPoint(x: CGFloat(x), y: CGFloat(y)))
+}
+
+private func setButtonInteraction(_ node: Node,
+                                  key: String,
+                                  value: Bool,
+                                  requiresRecompose: Bool,
+                                  onChange: (Bool) -> Void) {
+    if requiresRecompose {
+        onChange(value)
+        return
+    }
+    if node.attachments[key] as? Bool == value {
+        return
+    }
+    node.attachments[key] = value
+    node.markRenderDirty(reason: .styleSet(field: key))
+    updateBuiltinButtonChromeDescendants(of: node, animated: true)
+}
+
+enum BuiltinButtonChromeKind: Hashable {
+    case primary
+    case secondary
+    case ghost
+    case destructive
+    case toggle(minWidth: Float, height: Float)
+}
+
+struct BuiltinButtonChrome: _PrimitiveView {
+    let kind: BuiltinButtonChromeKind
+    let isEnabled: Bool
+    let isSelected: Bool
+    let foreground: SemanticColorRef
+    let label: any View
+    private let metrics: BuiltinButtonChromeMetrics
+
+    init(kind: BuiltinButtonChromeKind,
+         configuration: ButtonStyleConfiguration,
+         foreground: SemanticColorRef) {
+        self.kind = kind
+        self.isEnabled = configuration.isEnabled
+        self.isSelected = configuration.isSelected
+        self.foreground = foreground
+        self.label = configuration.label
+        self.metrics = kind.metrics(in: configuration.theme)
+    }
+
+    func _makeNode() -> Node {
+        let node = Node()
+        node.isHitTestable = false
+        return node
+    }
+
+    func _updateNode(_ node: Node) {
+        node.attachments[Self.stateKey] = BuiltinButtonChromeState(
+            kind: kind,
+            isEnabled: isEnabled,
+            isSelected: isSelected,
+            metrics: metrics
+        )
+        applyBuiltinButtonChrome(to: node, animated: false)
+    }
+
+    func _makeLayoutNode() -> LayoutNode? {
+        LayoutNode()
+    }
+
+    func _updateLayout(_ layout: LayoutNode) {
+        layout.flexDirection = .row
+        layout.alignItems = .center
+        layout.justifyContent = .center
+        layout.height = metrics.height
+        layout.minWidth = metrics.minWidth
+        layout.setPadding(0, edge: .top)
+        layout.setPadding(metrics.horizontalPadding, edge: .left)
+        layout.setPadding(0, edge: .bottom)
+        layout.setPadding(metrics.horizontalPadding, edge: .right)
+    }
+
+    func _children(for node: Node) -> [any View] {
+        [
+            AnyView(label)
+                .font(SemanticFontRef.label)
+                .foregroundColor(foreground)
+        ]
+    }
+
+    static let stateKey = "__builtin_button_chrome_state"
+}
+
+private struct BuiltinButtonChromeState {
+    let kind: BuiltinButtonChromeKind
+    let isEnabled: Bool
+    let isSelected: Bool
+    let metrics: BuiltinButtonChromeMetrics
+}
+
+private struct BuiltinButtonChromeMetrics {
+    let height: Float
+    let minWidth: Float?
+    let horizontalPadding: Float
+    let radius: Float
+}
+
+private struct BuiltinButtonChromeValues {
+    let background: Color
+    let border: Color
+    let borderWidth: Float
+    let radius: Float
+    let opacity: Float
+}
+
+private extension BuiltinButtonChromeKind {
+    func metrics(in theme: Theme) -> BuiltinButtonChromeMetrics {
+        switch self {
+        case .primary, .secondary, .ghost, .destructive:
+            return BuiltinButtonChromeMetrics(height: 28,
+                                              minWidth: nil,
+                                              horizontalPadding: theme.spacing.md,
+                                              radius: theme.radius.md)
+        case .toggle(let minWidth, let height):
+            return BuiltinButtonChromeMetrics(height: height,
+                                              minWidth: minWidth,
+                                              horizontalPadding: 7,
+                                              radius: 6)
+        }
+    }
+}
+
+private func updateBuiltinButtonChromeDescendants(of buttonNode: Node, animated: Bool) {
+    for child in buttonNode.children {
+        updateBuiltinButtonChromeDescendants(child, animated: animated)
+    }
+}
+
+private func updateBuiltinButtonChromeDescendants(_ node: Node, animated: Bool) {
+    if node.attachments[BuiltinButtonChrome.stateKey] is BuiltinButtonChromeState {
+        applyBuiltinButtonChrome(to: node, animated: animated)
+    }
+    for child in node.children {
+        updateBuiltinButtonChromeDescendants(child, animated: animated)
+    }
+}
+
+private func applyBuiltinButtonChrome(to chromeNode: Node, animated: Bool) {
+    guard let state = chromeNode.attachments[BuiltinButtonChrome.stateKey] as? BuiltinButtonChromeState else {
+        return
+    }
+    let buttonNode = nearestButtonHostAncestor(of: chromeNode)
+    let values = builtinButtonChromeValues(state: state,
+                                           chromeNode: chromeNode,
+                                           buttonNode: buttonNode)
+    let apply = {
+        chromeNode.animatableSet(\.backgroundColor, to: values.background)
+        chromeNode.animatableSet(\.borderColor, to: values.border)
+        chromeNode.animatableSet(\.borderWidth, to: values.borderWidth)
+        chromeNode.animatableSet(\.cornerRadius, to: values.radius)
+        chromeNode.animatableSet(\.opacity, to: values.opacity)
+    }
+    if animated {
+        withAnimation(.semantic(.snappy, in: chromeNode.theme), apply)
+    } else {
+        apply()
+    }
+}
+
+private func builtinButtonChromeValues(state: BuiltinButtonChromeState,
+                                       chromeNode: Node,
+                                       buttonNode: Node?) -> BuiltinButtonChromeValues {
+    let theme = chromeNode.theme
+    let pressed = state.isEnabled && (buttonNode?.attachments[ButtonHost.pressedKey] as? Bool == true)
+    let hovered = state.isEnabled && (buttonNode?.attachments[ButtonHost.hoveredKey] as? Bool == true)
+    let focused = state.isEnabled && buttonNode.map { FocusChainHolder.current?.focused === $0 } == true
+    let metrics = state.metrics
+    let clear = Color.clear
+    let background: Color
+    let border: Color
+    let borderWidth: Float
+
+    switch state.kind {
+    case .primary:
+        if !state.isEnabled {
+            background = theme.colors.surfaceVariant
+        } else if pressed {
+            background = theme.colors.accentPressed
+        } else if hovered {
+            background = theme.colors.accentHover
+        } else {
+            background = theme.colors.accent
+        }
+        border = focused ? theme.colors.focusRing : clear
+        borderWidth = focused ? 2 : 0
+    case .secondary:
+        if !state.isEnabled {
+            background = theme.colors.surfaceSunken
+        } else {
+            let base = theme.colors.surfaceVariant
+            if pressed {
+                background = base.composited(over: theme.colors.stateLayerPressed)
+            } else if hovered {
+                background = base.composited(over: theme.colors.stateLayerHover)
+            } else {
+                background = base
+            }
+        }
+        border = focused ? theme.colors.focusRing : theme.colors.border
+        borderWidth = focused ? 2 : 1
+    case .ghost:
+        if pressed {
+            background = theme.colors.stateLayerPressed
+        } else if hovered {
+            background = theme.colors.stateLayerHover
+        } else {
+            background = clear
+        }
+        border = focused ? theme.colors.focusRing : clear
+        borderWidth = focused ? 2 : 0
+    case .destructive:
+        let error = theme.colors.error
+        if !state.isEnabled {
+            background = theme.colors.surfaceVariant
+        } else if pressed {
+            background = error.composited(over: theme.colors.stateLayerPressed)
+        } else if hovered {
+            background = error.composited(over: theme.colors.stateLayerHover)
+        } else {
+            background = error
+        }
+        border = focused ? theme.colors.focusRing : clear
+        borderWidth = focused ? 2 : 0
+    case .toggle:
+        if !state.isEnabled {
+            background = clear
+        } else if state.isSelected {
+            if pressed {
+                background = theme.colors.accentPressed
+            } else if hovered {
+                background = theme.colors.accentHover
+            } else {
+                background = theme.colors.accent
+            }
+        } else if pressed {
+            background = theme.colors.stateLayerPressed
+        } else if hovered {
+            background = theme.colors.stateLayerHover
+        } else {
+            background = clear
+        }
+        border = focused ? theme.colors.focusRing : clear
+        borderWidth = focused ? 2 : 0
+    }
+
+    return BuiltinButtonChromeValues(background: background,
+                                     border: border,
+                                     borderWidth: borderWidth,
+                                     radius: metrics.radius,
+                                     opacity: state.isEnabled ? 1 : 0.55)
+}
+
+private func nearestButtonHostAncestor(of node: Node) -> Node? {
+    var current = node.parent
+    while let candidate = current {
+        if candidate.attachments[ButtonHost.markerKey] as? Bool == true {
+            return candidate
+        }
+        current = candidate.parent
+    }
+    return nil
 }
