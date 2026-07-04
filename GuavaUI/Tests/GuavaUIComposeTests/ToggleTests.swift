@@ -71,6 +71,45 @@ struct ToggleTests: GuavaUIComposeSerializedSuite {
         #expect(read() == false)
     } }
 
+    @Test("Toggle hover and press update render state without recomposing")
+    func toggleInteractionDoesNotRecompose() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        let (binding, read) = makeBinding(false)
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: Toggle(isOn: binding))
+        graph.computeLayout(width: 100, height: 24)
+
+        let h = host(in: tree)
+        let hover = registry.handlers(for: h).hover!
+        let pointer = registry.handlers(for: h).pointer!
+        let evt = MouseButtonEvent(button: .left, x: 12, y: 12, clicks: 1)
+
+        tree.flush()
+        #expect(graph.recomposer.hasPending == false)
+
+        hover(.enter)
+        #expect(graph.recomposer.hasPending == false)
+        #expect(tree.hasRenderUpdates == true)
+        #expect(h.attachments[BoolControlHost.hoveredKey] as? Bool == true)
+
+        tree.flush()
+        _ = pointer(evt, .down, .target)
+        #expect(graph.recomposer.hasPending == false)
+        #expect(tree.hasRenderUpdates == true)
+        #expect(h.attachments[BoolControlHost.pressedKey] as? Bool == true)
+        #expect(read() == false)
+
+        tree.flush()
+        _ = pointer(evt, .up, .target)
+        #expect(graph.recomposer.hasPending == false)
+        #expect(tree.hasRenderUpdates == true)
+        #expect(h.attachments[BoolControlHost.pressedKey] as? Bool == false)
+        #expect(read() == true)
+    } }
+
     @Test("Right click is ignored")
     func rightClickIgnored() { GlobalTestLock.locked {
         let registry = InteractionRegistry()

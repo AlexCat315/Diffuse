@@ -160,12 +160,12 @@ struct ButtonIconTests: GuavaUIComposeSerializedSuite {
                               label: AnyView(EmptyView()),
                               onHoverChange: { _ in },
                               onDown: {},
-                              onUp: { false },
-                              onCancel: {},
-                              onKey: { _, _ in .ignored })
+                              onPressChange: { _ in },
+                              action: {})
         let node = host._makeNode()
         node.frame = CGRect(x: 10, y: 0, width: 34, height: 34)
         host._updateNode(node)
+        node.attachments[ButtonHost.hoveredKey] = true
 
         let list = DrawList()
         list.setViewportBounds(UIRect(x: 0, y: 0, width: 200, height: 120))
