@@ -7,7 +7,7 @@ public enum EditorViewportFrameDrive {
                                              continuousViewportInteractionActive: Bool) -> Bool {
         viewportRealtimeEnabled
             || playbackState == .playing
-            || sceneHasActiveParticles
+            || (sceneHasActiveParticles && (viewportRealtimeEnabled || playbackState == .playing))
             || continuousViewportInteractionActive
     }
 }

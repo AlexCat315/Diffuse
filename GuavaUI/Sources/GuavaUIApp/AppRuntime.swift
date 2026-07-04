@@ -115,9 +115,7 @@ public final class AppRuntime {
     private var fpsPresentAccum = 0.0
     private var fpsTickAccum = 0.0
 
-    private var currentPresentMode: GPUPresentMode {
-        isVSyncEnabled ? .fifo : .immediate
-    }
+    private var currentPresentMode: GPUPresentMode = .fifo
 
     /// 进程内 DevTools 调试服务器。仅当 `config.devTools != nil` 时创建。
     private var devTools: DevTools?
@@ -148,8 +146,22 @@ public final class AppRuntime {
             mainWindowOptions: WindowOptions(titleBarStyle: config.titleBarStyle.platformStyle),
             inputContext: mainInputContext
         )
-        self.host.setTargetFrameRate(config.targetFrameRate)
         self.graph = ViewGraph(tree: tree, recomposer: host.recomposer)
+        configureHostFrameDrive()
+    }
+
+    private func configureHostFrameDrive() {
+        if let targetFrameRate = config.targetFrameRate {
+            host.setTargetFrameRate(targetFrameRate)
+            return
+        }
+
+        switch config.frameDrivePolicy {
+        case .continuous:
+            host.setFrameRateMode(.displayRefresh)
+        case .eventDriven:
+            host.setFrameRateMode(.eventDriven)
+        }
     }
 
     private func start<Root: View>(rootView: Root) throws {
@@ -390,13 +402,15 @@ public final class AppRuntime {
         logicalH = host.logicalSize.height
 
         let gpu = try SurfaceFactory.make(backend: backend, native: native)
+        let presentMode = resolvePresentMode(for: gpu, context: "main surface init")
         try gpu.configure(
             device: backend.rawDevice!,
             format: .bgra8UnormSrgb,
             width: widthPx,
             height: heightPx,
-            presentMode: currentPresentMode
+            presentMode: presentMode
         )
+        currentPresentMode = presentMode
         if !isVSyncEnabled { native.disableDisplaySync() }
         try renderer.configure(format: .bgra8UnormSrgb,
                                sampleCount: config.msaaSampleCount)
@@ -429,13 +443,15 @@ public final class AppRuntime {
         logicalW = host.logicalSize.width
         logicalH = host.logicalSize.height
         guard let surface, let device = backend.rawDevice else { return }
+        let presentMode = resolvePresentMode(for: surface, context: "main surface resize")
         try surface.configure(
             device: device,
             format: .bgra8UnormSrgb,
             width: widthPx,
             height: heightPx,
-            presentMode: currentPresentMode
+            presentMode: presentMode
         )
+        currentPresentMode = presentMode
         try ensureMSAATarget(widthPx: widthPx, heightPx: heightPx)
         configureTextEnvironment(scale: host.contentScaleFactor)
         try uploadAtlasIfNeeded()
@@ -448,10 +464,13 @@ public final class AppRuntime {
             isVSyncEnabled = enabled
             reconfigureMainSurfaceForCurrentPresentMode()
             for window in auxiliaryWindows.values {
-                window.setPresentMode(currentPresentMode)
+                window.setVSyncEnabled(isVSyncEnabled)
             }
         }
-        host.setFrameRateMode(enabled ? .displayRefresh : .eventDriven)
+        // VSync controls the surface present mode only. Frame cadence is owned
+        // by `AppConfig.frameDrivePolicy` or an explicit runtime frame-rate
+        // override; tying it to VSync makes input/update pacing change when the
+        // user only asked to change presentation.
         host.requestDisplay()
     }
 
@@ -464,16 +483,70 @@ public final class AppRuntime {
         else { return }
 
         do {
+            let presentMode = resolvePresentMode(for: surface, context: "main surface present mode update")
             try surface.configure(
                 device: device,
                 format: .bgra8UnormSrgb,
                 width: drawableW,
                 height: drawableH,
-                presentMode: currentPresentMode
+                presentMode: presentMode
             )
+            currentPresentMode = presentMode
         } catch {
             Logger(label: "com.guava.ui.app").warning("Main surface present mode update failed: \(error)")
         }
+    }
+
+    private func resolvePresentMode(for surface: GPUSurface,
+                                    context: String) -> GPUPresentMode {
+        let candidates = Self.presentModeCandidates(vsyncEnabled: isVSyncEnabled,
+                                                    preferred: config.vsyncPresentMode)
+        guard let adapter = backend.rawAdapter else {
+            Logger(label: "com.guava.ui.app").warning("\(context): no adapter available; falling back to FIFO present mode")
+            return .fifo
+        }
+
+        do {
+            let supported = try surface.supportedPresentModes(adapter: adapter)
+            if let selected = candidates.first(where: { supported.contains($0) }) {
+                if selected != (candidates.first ?? selected) {
+                    Logger(label: "com.guava.ui.app").info("\(context): present mode \(String(describing: candidates.first ?? selected)) unsupported; using \(String(describing: selected))")
+                }
+                return selected
+            }
+            if supported.contains(.fifo) {
+                Logger(label: "com.guava.ui.app").warning("\(context): none of \(String(describing: candidates)) are supported; falling back to FIFO")
+                return .fifo
+            }
+            if let first = supported.first {
+                Logger(label: "com.guava.ui.app").warning("\(context): none of \(String(describing: candidates)) are supported; using \(String(describing: first))")
+                return first
+            }
+        } catch {
+            Logger(label: "com.guava.ui.app").warning("\(context): present mode capability query failed: \(error); falling back to FIFO")
+        }
+
+        return .fifo
+    }
+
+    fileprivate static func presentModeCandidates(vsyncEnabled: Bool,
+                                                  preferred: GPUPresentMode) -> [GPUPresentMode] {
+        let desired: [GPUPresentMode]
+        if vsyncEnabled {
+            if preferred == .fifo || preferred == .immediate {
+                desired = [preferred, .fifo]
+            } else {
+                desired = [preferred, .immediate, .fifo]
+            }
+        } else {
+            desired = [.immediate, .fifo]
+        }
+
+        var candidates: [GPUPresentMode] = []
+        for mode in desired where !candidates.contains(mode) {
+            candidates.append(mode)
+        }
+        return candidates
     }
 
     private func syncMainWindowChromeHitTest() {
@@ -797,7 +870,7 @@ public final class AppRuntime {
                                             backend: backend,
                                             renderer: renderer,
                                             config: config,
-                                            presentMode: currentPresentMode,
+                                            isVSyncEnabled: isVSyncEnabled,
                                             useLegacyRenderer: useLegacyRenderer,
                                             setWindowChromeHitTest: { [weak self] id, hitTest in
                                                 self?.host.setWindowChromeHitTest(id, hitTest)
@@ -901,7 +974,8 @@ private final class AuxiliaryAppWindow {
     private let drawList = DrawList()
     private let layerRenderer = LayerAwareNodeRenderer()
     private let nodeRenderer = NodeRenderer()
-    private var presentMode: GPUPresentMode
+    private var isVSyncEnabled: Bool
+    private var presentMode: GPUPresentMode = .fifo
 
     private var surface: GPUSurface?
     private var configuredSurface = false
@@ -922,7 +996,7 @@ private final class AuxiliaryAppWindow {
          backend: WGPUBackend,
          renderer: DrawListRenderer,
          config: AppConfig,
-         presentMode: GPUPresentMode,
+         isVSyncEnabled: Bool,
          useLegacyRenderer: Bool,
          setWindowChromeHitTest: @escaping (WindowID, WindowChromeHitTest?) -> Void) {
         self.session = session
@@ -930,7 +1004,7 @@ private final class AuxiliaryAppWindow {
         self.backend = backend
         self.renderer = renderer
         self.config = config
-        self.presentMode = presentMode
+        self.isVSyncEnabled = isVSyncEnabled
         self.useLegacyRenderer = useLegacyRenderer
         self.setWindowChromeHitTest = setWindowChromeHitTest
         self.graph = ViewGraph(tree: session.tree, recomposer: session.recomposer)
@@ -947,13 +1021,15 @@ private final class AuxiliaryAppWindow {
         logicalH = session.logicalSize.height
 
         let gpu = try SurfaceFactory.make(backend: backend, native: native)
+        let resolvedPresentMode = resolvePresentMode(for: gpu, context: "auxiliary surface init")
         try gpu.configure(
             device: backend.rawDevice!,
             format: .bgra8UnormSrgb,
             width: widthPx,
             height: heightPx,
-            presentMode: presentMode
+            presentMode: resolvedPresentMode
         )
+        presentMode = resolvedPresentMode
         try ensureMSAATarget(widthPx: widthPx, heightPx: heightPx)
         surface = gpu
 
@@ -994,13 +1070,15 @@ private final class AuxiliaryAppWindow {
         logicalW = session.logicalSize.width
         logicalH = session.logicalSize.height
         guard let surface, let device = backend.rawDevice else { return }
+        let resolvedPresentMode = resolvePresentMode(for: surface, context: "auxiliary surface resize")
         try surface.configure(
             device: device,
             format: .bgra8UnormSrgb,
             width: widthPx,
             height: heightPx,
-            presentMode: presentMode
+            presentMode: resolvedPresentMode
         )
+        presentMode = resolvedPresentMode
         try ensureMSAATarget(widthPx: widthPx, heightPx: heightPx)
         try session.withCurrent {
             configureTextEnvironment(session.contentScaleFactor)
@@ -1008,9 +1086,8 @@ private final class AuxiliaryAppWindow {
         }
     }
 
-    func setPresentMode(_ mode: GPUPresentMode) {
-        guard presentMode != mode else { return }
-        presentMode = mode
+    func setVSyncEnabled(_ enabled: Bool) {
+        isVSyncEnabled = enabled
         guard configuredSurface,
               let surface,
               let device = backend.rawDevice,
@@ -1019,17 +1096,52 @@ private final class AuxiliaryAppWindow {
         else { return }
 
         do {
+            let resolvedPresentMode = resolvePresentMode(for: surface, context: "auxiliary surface present mode update")
+            guard presentMode != resolvedPresentMode else { return }
             try surface.configure(
                 device: device,
                 format: .bgra8UnormSrgb,
                 width: drawableW,
                 height: drawableH,
-                presentMode: presentMode
+                presentMode: resolvedPresentMode
             )
+            presentMode = resolvedPresentMode
             session.requestDisplay()
         } catch {
             Logger(label: "com.guava.ui.app").warning("Auxiliary surface present mode update failed: \(error)")
         }
+    }
+
+    private func resolvePresentMode(for surface: GPUSurface,
+                                    context: String) -> GPUPresentMode {
+        let candidates = AppRuntime.presentModeCandidates(vsyncEnabled: isVSyncEnabled,
+                                                          preferred: config.vsyncPresentMode)
+        guard let adapter = backend.rawAdapter else {
+            Logger(label: "com.guava.ui.app").warning("\(context): no adapter available; falling back to FIFO present mode")
+            return .fifo
+        }
+
+        do {
+            let supported = try surface.supportedPresentModes(adapter: adapter)
+            if let selected = candidates.first(where: { supported.contains($0) }) {
+                if selected != (candidates.first ?? selected) {
+                    Logger(label: "com.guava.ui.app").info("\(context): present mode \(String(describing: candidates.first ?? selected)) unsupported; using \(String(describing: selected))")
+                }
+                return selected
+            }
+            if supported.contains(.fifo) {
+                Logger(label: "com.guava.ui.app").warning("\(context): none of \(String(describing: candidates)) are supported; falling back to FIFO")
+                return .fifo
+            }
+            if let first = supported.first {
+                Logger(label: "com.guava.ui.app").warning("\(context): none of \(String(describing: candidates)) are supported; using \(String(describing: first))")
+                return first
+            }
+        } catch {
+            Logger(label: "com.guava.ui.app").warning("\(context): present mode capability query failed: \(error); falling back to FIFO")
+        }
+
+        return .fifo
     }
 
     private func syncWindowChromeHitTest() {

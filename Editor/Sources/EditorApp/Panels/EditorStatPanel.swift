@@ -16,7 +16,7 @@ struct DeveloperToolsPanel: View {
     var body: some View {
         StoreScope(app.store) { store in
             let timingRevision = store.frameTimingRevision
-            let frameStats = store.state.frameStats
+            let frameStats = store.frameStats
             let frameStatsHistory = store.frameStatsHistory
             let needsRenderSnapshot = selectedTab == .profiler
                 || selectedTab == .monitors
@@ -73,14 +73,16 @@ struct DeveloperToolsPanel: View {
                 selectedEntityID: store.selectedEntityID,
                 consoleEntries: store.consoleEntries
             )
-            let performanceMonitors = makeDeveloperPerformanceMonitors(
-                frameStats: frameStats,
-                frameHistory: frameStatsHistory,
-                particleHistory: store.particleDiagnosticsHistory,
-                renderStats: renderStats,
-                consoleEntries: store.consoleEntries,
-                maxSamples: 180
-            )
+            let performanceMonitors = selectedTab == .monitors
+                ? makeDeveloperPerformanceMonitors(
+                    frameStats: frameStats,
+                    frameHistory: frameStatsHistory,
+                    particleHistory: store.particleDiagnosticsHistory,
+                    renderStats: renderStats,
+                    consoleEntries: store.consoleEntries,
+                    maxSamples: 180
+                )
+                : []
 
             TabView(selection: $selectedTab, tabs: [
                 TabItem("Profiler", id: DeveloperToolTab.profiler) {

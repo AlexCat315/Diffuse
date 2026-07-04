@@ -57,13 +57,18 @@ public final class EditorApplication: @unchecked Sendable {
     private let editLog: EditLog
     private let contextMemoryStore: ContextMemoryStore?
     private var physicsPlaySnapshot: SceneRuntime?
-    /// Accumulator for stable FPS averaging (250ms window).
+    private static let frameStatsDispatchInterval: Double = 1.0
+    /// Accumulator for stable FPS averaging.
     private var frameTimingAccumulator: Double = 0
     private var frameTimingCount: Int = 0
     /// GPU submit time from the most recent rendered frame (seconds).
     private var lastRenderSubmitSeconds: Double = 0
     /// Render frame stats from the most recent rendered frame.
     private var lastRenderFrameStats: RenderFrameStats = .init()
+    /// Scene revision after the last editor-side simulation/extraction pass.
+    /// `SceneRuntime.tick` advances its revision even for zero-delta extraction,
+    /// so this tracks when authored scene mutations actually need another pass.
+    private var lastPreparedSceneRevision: UInt64?
 
     public init(projectDirectory: String,
                 backendConfig: WGPUDeviceConfig? = nil,
@@ -187,17 +192,29 @@ public final class EditorApplication: @unchecked Sendable {
         let inputEvents = pendingViewportEvents
         pendingViewportEvents.removeAll(keepingCapacity: true)
         inputState.process(inputEvents)
-        scene.tickScene(deltaTime: simulationDelta)
-        driveContinuousViewportCamera(deltaTime: simulationDelta)
-        let drawableSize = effectiveViewportDrawableSize()
-        let jointPalettes = scene.currentJointPaletteMap()
         let state = store.state
         let viewportInput = EditorViewportInputController.shared
+        let continuousViewportInteractionActive = viewportInput.isContinuousSceneInteractionActive
+        let shouldAdvanceSceneSimulation =
+            state.viewportRealtimeEnabled || state.playbackState == .playing
+        if viewportInput.hasFreelookMovementInput {
+            driveContinuousViewportCamera(deltaTime: simulationDelta)
+        }
+        let sceneRevisionBeforePreparation = scene.revision
+        let shouldPrepareSceneForRender =
+            shouldAdvanceSceneSimulation || sceneRevisionBeforePreparation != lastPreparedSceneRevision
+        if shouldPrepareSceneForRender {
+            scene.tickScene(deltaTime: shouldAdvanceSceneSimulation ? simulationDelta : 0)
+            lastPreparedSceneRevision = scene.revision
+        }
+
+        let drawableSize = effectiveViewportDrawableSize()
+        let jointPalettes = scene.currentJointPaletteMap()
         let wantsContinuousFrames = EditorViewportFrameDrive.wantsContinuousFrames(
             viewportRealtimeEnabled: state.viewportRealtimeEnabled,
             playbackState: state.playbackState,
-            sceneHasActiveParticles: scene.hasActiveParticles(),
-            continuousViewportInteractionActive: viewportInput.isContinuousSceneInteractionActive
+            sceneHasActiveParticles: state.viewportRealtimeEnabled && scene.hasActiveParticles(),
+            continuousViewportInteractionActive: continuousViewportInteractionActive
         )
         let renderViewport = renderGate.shouldRender(
             signature: EditorViewportRenderGate.Signature(
@@ -212,14 +229,17 @@ public final class EditorApplication: @unchecked Sendable {
             temporalEffectsActive: lastQueuedRenderSettings.enableTAA,
             now: monotonicNow()
         )
-        engine.tick(
-            deltaTime: simulationDelta,
-            inputEvents: inputEvents,
-            drawableSize: drawableSize,
-            shouldRender: state.shouldRender && renderViewport,
-            renderSceneOverride: scene.currentRenderScene(),
-            jointPaletteOverride: jointPalettes
-        )
+        let shouldSubmitEngineTick = shouldAdvanceSceneSimulation || renderViewport
+        if shouldSubmitEngineTick {
+            engine.tick(
+                deltaTime: shouldAdvanceSceneSimulation ? simulationDelta : 0,
+                inputEvents: inputEvents,
+                drawableSize: drawableSize,
+                shouldRender: state.shouldRender && renderViewport,
+                renderSceneOverride: scene.currentRenderScene(),
+                jointPaletteOverride: jointPalettes
+            )
+        }
 
         let surface = engine.currentViewportSurfaceState()
         if surface != lastViewportSurfaceState {
@@ -1806,7 +1826,7 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     /// Accumulates raw delta time and dispatches `EditorFrameStats` when the
-    /// 250ms averaging window is full. Combines:
+    /// diagnostics averaging window is full. Combines:
     ///   - PhaseTimings from EngineHost (input / simulation / renderPrepare / renderSubmit)
     ///   - GPU present time from the render completion handler
     ///   - RenderFrameStats from the GPU backend (draw calls, passes, etc.)
@@ -1815,7 +1835,7 @@ public final class EditorApplication: @unchecked Sendable {
         guard deltaTime.isFinite, deltaTime > 0 else { return false }
         frameTimingAccumulator += deltaTime
         frameTimingCount += 1
-        guard frameTimingAccumulator >= 0.25 else { return false }
+        guard frameTimingAccumulator >= Self.frameStatsDispatchInterval else { return false }
 
         let phaseTimings = engine.lastTimings
         let renderStats = lastRenderFrameStats
