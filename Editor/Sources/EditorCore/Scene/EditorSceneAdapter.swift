@@ -1553,10 +1553,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         scene.snapshot.entityCount
     }
 
-    /// True while any emitter can still emit or has live particles. Under the
-    /// event-driven frame policy an idle viewport stops ticking, which would
-    /// freeze particle motion; the render gate uses this to keep driving frames
-    /// while particles are alive and fall back to idle once they die out.
+    /// True while any emitter can still emit or has live particles. The editor
+    /// consults this only while realtime preview or playback is active; ordinary
+    /// inspector/devtools work should not keep the scene simulation running.
     public func hasActiveParticles() -> Bool {
         for entity in scene.entities(with: ParticleEmitter.self) {
             guard let emitter = scene.component(ParticleEmitter.self, for: entity) else { continue }

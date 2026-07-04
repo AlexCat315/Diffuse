@@ -4,6 +4,11 @@ import GuavaUICompose
 import GuavaUIRuntime
 import RenderBackend
 
+private enum DeveloperProfilerConstants {
+    static let maxMaterializedFrameRows = 32
+    static let maxGraphSamples = 48
+}
+
 enum DeveloperPerformanceMonitorCategory: String, CaseIterable {
     case frame = "Frame"
     case cpu = "CPU"
@@ -439,6 +444,11 @@ private struct DeveloperProfilerFrameList: View {
 
     var body: some View {
         let filteredSamples = developerProfilerFilteredSamples(samples, filter: selectedFilter.wrappedValue)
+        let visibleRows = developerProfilerVisibleFrameRows(
+            filteredSamples,
+            selectedSampleIndex: selectedSampleIndex.wrappedValue,
+            maxRows: DeveloperProfilerConstants.maxMaterializedFrameRows
+        )
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             Row(alignment: .center, spacing: 8) {
                 Text("Frames")
@@ -492,7 +502,7 @@ private struct DeveloperProfilerFrameList: View {
                             .foregroundColor(.onSurfaceMuted)
                             .padding(horizontal: 10, vertical: 8)
                     } else {
-                        for sample in filteredSamples.reversed() {
+                        for sample in visibleRows.reversed() {
                             DeveloperProfilerFrameRow(sample: sample,
                                                       isSelected: selectedSampleIndex.wrappedValue == sample.sampleIndex,
                                                       onSelect: {
@@ -834,7 +844,7 @@ private struct DeveloperProfilerFrameGraph: View {
     let selectedSampleIndex: Binding<UInt64?>
 
     var body: some View {
-        let visibleSamples = Array(samples.suffix(72))
+        let visibleSamples = Array(samples.suffix(DeveloperProfilerConstants.maxGraphSamples))
         let values = visibleSamples.map { Float($0.stats.frameMs) }
         let graphMaxValue = developerProfilerFrameChartMaxValue(values: values)
         Box(direction: .column, alignItems: .stretch, spacing: 6) {
@@ -1765,6 +1775,23 @@ private func developerProfilerSelectedFrame(samples: [EditorFrameStatsHistorySam
 private func developerProfilerFilteredSamples(_ samples: [EditorFrameStatsHistorySample],
                                               filter: DeveloperProfilerFrameFilter) -> [EditorFrameStatsHistorySample] {
     samples.filter { developerProfilerFrameMatchesFilter($0, filter: filter) }
+}
+
+private func developerProfilerVisibleFrameRows(_ samples: [EditorFrameStatsHistorySample],
+                                               selectedSampleIndex: UInt64?,
+                                               maxRows: Int) -> [EditorFrameStatsHistorySample] {
+    guard samples.count > maxRows else { return samples }
+    var visible = Array(samples.suffix(max(1, maxRows)))
+    guard let selectedSampleIndex,
+          !visible.contains(where: { $0.sampleIndex == selectedSampleIndex }),
+          let selected = samples.first(where: { $0.sampleIndex == selectedSampleIndex })
+    else {
+        return visible
+    }
+
+    visible.removeFirst()
+    visible.insert(selected, at: 0)
+    return visible
 }
 
 private func developerProfilerFrameMatchesFilter(_ sample: EditorFrameStatsHistorySample,

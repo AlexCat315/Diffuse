@@ -84,6 +84,26 @@ static WGPUPresentMode to_wgpu_present_mode(WGPUBridgePresentMode m) {
     }
 }
 
+static int from_wgpu_present_mode(WGPUPresentMode m, WGPUBridgePresentMode* out_mode) {
+    if (out_mode == NULL) { return 0; }
+    switch (m) {
+        case WGPUPresentMode_Fifo:
+            *out_mode = WGPUBridge_PresentMode_Fifo;
+            return 1;
+        case WGPUPresentMode_FifoRelaxed:
+            *out_mode = WGPUBridge_PresentMode_FifoRelaxed;
+            return 1;
+        case WGPUPresentMode_Immediate:
+            *out_mode = WGPUBridge_PresentMode_Immediate;
+            return 1;
+        case WGPUPresentMode_Mailbox:
+            *out_mode = WGPUBridge_PresentMode_Mailbox;
+            return 1;
+        default:
+            return 0;
+    }
+}
+
 static WGPULoadOp to_wgpu_load_op(WGPUBridgeLoadOp op) {
     switch (op) {
         case WGPUBridge_LoadOp_Clear: return WGPULoadOp_Clear;
@@ -579,6 +599,40 @@ int wgpu_bridge_create_surface_xlib(void* instance, void* display, uint64_t wind
         (WGPUChainedStruct*)&xlib,
         out_surface,
         "invalid create_surface_xlib arguments");
+}
+
+int wgpu_bridge_surface_get_present_modes(void* surface,
+                                          void* adapter,
+                                          WGPUBridgePresentMode* out_modes,
+                                          size_t capacity,
+                                          size_t* out_count) {
+    if (out_count != NULL) {
+        *out_count = 0;
+    }
+    if (surface == NULL || adapter == NULL || out_modes == NULL || out_count == NULL) {
+        set_error("invalid surface_get_present_modes arguments");
+        return 0;
+    }
+
+    WGPUSurfaceCapabilities caps = WGPU_SURFACE_CAPABILITIES_INIT;
+    WGPUStatus status = wgpuSurfaceGetCapabilities((WGPUSurface)surface,
+                                                   (WGPUAdapter)adapter,
+                                                   &caps);
+    if (status != WGPUStatus_Success) {
+        set_error("wgpuSurfaceGetCapabilities failed");
+        return 0;
+    }
+
+    size_t written = 0;
+    for (size_t i = 0; i < caps.presentModeCount && written < capacity; ++i) {
+        WGPUBridgePresentMode mode;
+        if (from_wgpu_present_mode(caps.presentModes[i], &mode)) {
+            out_modes[written++] = mode;
+        }
+    }
+    *out_count = written;
+    wgpuSurfaceCapabilitiesFreeMembers(caps);
+    return 1;
 }
 
 int wgpu_bridge_configure_surface(void* surface, void* device,
