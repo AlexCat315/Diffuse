@@ -222,4 +222,16 @@ extension EditorAction {
             return true
         }
     }
+
+    var invalidatesWholeStateObservation: Bool {
+        switch self {
+        case .frameTimingUpdated,
+             .viewportSurfaceUpdated,
+             .updateFrameStats,
+             .updateParticleDiagnostics:
+            return false
+        default:
+            return true
+        }
+    }
 }

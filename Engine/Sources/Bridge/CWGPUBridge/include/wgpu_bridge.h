@@ -331,6 +331,12 @@ int wgpu_bridge_create_surface_xlib(void* instance,
                                     uint64_t window,
                                     void** out_surface);
 
+int wgpu_bridge_surface_get_present_modes(void* surface,
+                                          void* adapter,
+                                          WGPUBridgePresentMode* out_modes,
+                                          size_t capacity,
+                                          size_t* out_count);
+
 int wgpu_bridge_configure_surface(void* surface,
                                   void* device,
                                   WGPUBridgeTextureFormat format,

@@ -40,10 +40,15 @@ public struct AppConfig: Sendable {
     /// Native window titlebar behavior. macOS maps `.hiddenInset` to a
     /// transparent full-size content titlebar.
     public var titleBarStyle: AppWindowTitleBarStyle
-    /// Optional UI frame-rate cap. `nil` preserves the event-driven default.
+    /// Optional UI frame-rate cap. `nil` uses the selected frame-drive policy's
+    /// default cadence.
     public var targetFrameRate: Double?
     /// Frame scheduling after present. `.continuous` keeps legacy behavior.
     public var frameDrivePolicy: AppFrameDrivePolicy
+    /// Present mode used while VSync is enabled. `.fifo` is the portable default;
+    /// interactive tools can opt into `.mailbox` to avoid FIFO back-pressure on
+    /// the main UI loop.
+    public var vsyncPresentMode: GPUPresentMode
     /// DevTools 配置。`nil` 关闭。默认从 `GUAVA_DEVTOOLS=1` env var 读取，
     /// 这样 release 构建不会意外开启服务端。
     public var devTools: DevToolsConfig?
@@ -58,6 +63,7 @@ public struct AppConfig: Sendable {
                 titleBarStyle: AppWindowTitleBarStyle = .standard,
                 targetFrameRate: Double? = nil,
                 frameDrivePolicy: AppFrameDrivePolicy = .continuous,
+                vsyncPresentMode: GPUPresentMode = .fifo,
                 devTools: DevToolsConfig? = nil) {
         self.title = title
         self.primaryFontName = primaryFontName
@@ -73,6 +79,7 @@ public struct AppConfig: Sendable {
             self.targetFrameRate = nil
         }
         self.frameDrivePolicy = frameDrivePolicy
+        self.vsyncPresentMode = vsyncPresentMode
         self.devTools = devTools ?? DevToolsConfig.fromEnvironment(appTitle: title)
     }
 }

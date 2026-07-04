@@ -4,6 +4,7 @@ public enum GPUSurfaceError: Error {
     case createFailed(String)
     case configureFailed(String)
     case acquireTextureFailed(String)
+    case capabilitiesFailed(String)
 }
 
 public final class GPUSurface {
@@ -31,6 +32,24 @@ public final class GPUSurface {
         guard ok == 1 else {
             throw GPUSurfaceError.configureFailed(WGPUBackend.lastError())
         }
+    }
+
+    public func supportedPresentModes(adapter: UnsafeMutableRawPointer) throws -> [GPUPresentMode] {
+        var rawModes = Array(repeating: WGPUBridge_PresentMode_Fifo, count: 8)
+        var count = 0
+        let ok = rawModes.withUnsafeMutableBufferPointer { buffer in
+            wgpu_bridge_surface_get_present_modes(
+                handle,
+                adapter,
+                buffer.baseAddress,
+                buffer.count,
+                &count
+            )
+        }
+        guard ok == 1 else {
+            throw GPUSurfaceError.capabilitiesFailed(WGPUBackend.lastError())
+        }
+        return rawModes.prefix(count).compactMap(GPUPresentMode.fromBridgeValue)
     }
 
     /// Returns nil when the surface is temporarily unavailable (e.g. the

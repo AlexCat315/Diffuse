@@ -377,6 +377,18 @@ public final class SDL3Shell: Shell {
             syncDrawableSize()
         }
 
+        func nativeDisplayRefreshRate() -> Double? {
+            let screen = cocoaWindow?.screen ?? NSScreen.main
+            guard let screen else { return nil }
+            if #available(macOS 10.15, *) {
+                let fps = screen.maximumFramesPerSecond
+                if fps > 0 {
+                    return Double(fps)
+                }
+            }
+            return nil
+        }
+
         private var cocoaWindow: NSWindow? {
             guard let pointer = pointerWindowProperty(named: "SDL.window.cocoa.window") else {
                 return nil
@@ -952,30 +964,71 @@ public final class SDL3Shell: Shell {
     public func displayRefreshRate(windowID: WindowID? = nil) -> Double? {
         guard didInitializeSDL else { return nil }
 
+        let preferredHandle: SDL3WindowHandle?
         let displayID: SDL_DisplayID
         if let windowID,
            let handle = windows[windowID] {
+            preferredHandle = handle
             displayID = SDL_GetDisplayForWindow(handle.window)
         } else if let mainWindowID,
                   let handle = windows[mainWindowID] {
+            preferredHandle = handle
             displayID = SDL_GetDisplayForWindow(handle.window)
         } else {
+            preferredHandle = nil
             displayID = SDL_GetPrimaryDisplay()
         }
 
+        let nativeRefreshRate: Double? = {
+#if os(macOS)
+            return preferredHandle?.nativeDisplayRefreshRate()
+                ?? NSScreen.main.map { screen in
+                    if #available(macOS 10.15, *) {
+                        return Double(screen.maximumFramesPerSecond)
+                    }
+                    return 0
+                }
+#else
+            return nil
+#endif
+        }()
+
         guard displayID != 0,
               let mode = SDL_GetCurrentDisplayMode(displayID)
-        else { return nil }
+        else {
+            return Self.validDisplayRefreshRate(nativeRefreshRate)
+        }
 
+        let sdlRefreshRate: Double?
         let preciseNumerator = mode.pointee.refresh_rate_numerator
         let preciseDenominator = mode.pointee.refresh_rate_denominator
         if preciseNumerator > 0, preciseDenominator > 0 {
-            return Double(preciseNumerator) / Double(preciseDenominator)
+            sdlRefreshRate = Double(preciseNumerator) / Double(preciseDenominator)
+        } else {
+            sdlRefreshRate = Double(mode.pointee.refresh_rate)
         }
 
-        let refreshRate = mode.pointee.refresh_rate
-        guard refreshRate.isFinite, refreshRate > 0 else { return nil }
-        return Double(refreshRate)
+        let validSDL = Self.validDisplayRefreshRate(sdlRefreshRate)
+        let validNative = Self.validDisplayRefreshRate(nativeRefreshRate)
+        switch (validSDL, validNative) {
+        case let (sdl?, native?):
+            return max(sdl, native)
+        case let (sdl?, nil):
+            return sdl
+        case let (nil, native?):
+            return native
+        case (nil, nil):
+            return nil
+        }
+    }
+
+    private static func validDisplayRefreshRate(_ refreshRate: Double?) -> Double? {
+        guard let refreshRate,
+              refreshRate.isFinite,
+              refreshRate >= 30,
+              refreshRate <= 500
+        else { return nil }
+        return refreshRate
     }
 
     public func shutdown() {
