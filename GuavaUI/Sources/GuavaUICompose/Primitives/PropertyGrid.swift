@@ -112,7 +112,6 @@ private struct _StatefulPropertyGrid: View {
 
     // Keyed by section id; true = collapsed
     @State var collapsed: [String: Bool] = [:]
-    @State var hoveredRowID: String? = nil
 
     var body: some View {
         scrollContainer {
@@ -169,7 +168,8 @@ private struct _StatefulPropertyGrid: View {
 
     private func rowViews(_ rows: [PropertyGridRow], sectionID: String) -> [AnyView] {
         rows.enumerated().map { index, row in
-            AnyView(rowView(row, sectionID: sectionID, index: index))
+            AnyView(rowView(row, sectionID: sectionID, index: index)
+                .id("\(sectionID)/\(row.id)"))
         }
     }
 
@@ -246,20 +246,10 @@ private struct _StatefulPropertyGrid: View {
     private func decoratedRow<Content: View>(_ id: String,
                                              index: Int,
                                              @ViewBuilder content: () -> Content) -> some View {
-        let isHovered = hoveredRowID == id
-        let background: SemanticColorRef = isHovered
-            ? .stateLayerHover
-            : (index.isMultiple(of: 2) ? .surface : .surfaceOverlay)
-        return content()
-            .background(background)
-            .cornerRadius(4)
-            .onHover { hovered in
-                if hovered {
-                    hoveredRowID = id
-                } else if hoveredRowID == id {
-                    hoveredRowID = nil
-                }
-            }
+        _PropertyGridRowHost(baseBackground: index.isMultiple(of: 2) ? .surface : .surfaceOverlay,
+                             hoverBackground: .stateLayerHover,
+                             cornerRadius: 4,
+                             content: AnyView(content()))
     }
 
     private func twoColumnRowView(_ row: PropertyGridRow, rowHeight: Float) -> some View {
@@ -311,4 +301,54 @@ private struct _StatefulPropertyGrid: View {
         .frame(height: rowHeight)
         .flex()
     }
+}
+
+private struct _PropertyGridRowHost: _PrimitiveView {
+    let baseBackground: SemanticColorRef
+    let hoverBackground: SemanticColorRef
+    let cornerRadius: Float
+    let content: AnyView
+
+    func _makeNode() -> Node {
+        let node = Node()
+        node.isHitTestable = true
+        return node
+    }
+
+    func _updateNode(_ node: Node) {
+        node.cornerRadius = cornerRadius
+        applyBackground(to: node, isHovered: node.attachments[Self.hoveredKey] as? Bool ?? false)
+
+        guard let registry = InteractionRegistryHolder.current else { return }
+        registry.setHover(node) { phase in
+            switch phase {
+            case .enter:
+                node.attachments[Self.hoveredKey] = true
+                applyBackground(to: node, isHovered: true)
+            case .leave:
+                node.attachments[Self.hoveredKey] = false
+                applyBackground(to: node, isHovered: false)
+            }
+        }
+    }
+
+    func _makeLayoutNode() -> LayoutNode? {
+        LayoutNode()
+    }
+
+    func _updateLayout(_ layout: LayoutNode) {
+        layout.flexDirection = .column
+        layout.alignItems = .stretch
+    }
+
+    func _children(for node: Node) -> [any View] {
+        [content]
+    }
+
+    private func applyBackground(to node: Node, isHovered: Bool) {
+        let colorRef = isHovered ? hoverBackground : baseBackground
+        node.animatableSet(\.backgroundColor, to: colorRef.resolve(node.theme))
+    }
+
+    private static let hoveredKey = "__property_grid_row_hovered"
 }

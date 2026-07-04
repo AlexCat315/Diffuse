@@ -638,6 +638,41 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         #expect(scrollView.contentOffset.y > 0)
     } }
 
+    @Test("PropertyGrid row hover updates render state without recomposing the grid")
+    func propertyGridRowHoverDoesNotRecomposeGrid() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root:
+            PropertyGrid(inspectorSections(sectionCount: 1, rowCount: 2),
+                         labelWidth: 88,
+                         rowHeight: 24)
+                .frame(width: 260, height: 120)
+        )
+        graph.computeLayout(width: 260, height: 120)
+
+        let row = firstNode(in: tree.root, where: { node in
+            registry.handlers(for: node).hover != nil
+                && node.cornerRadius == 4
+                && node.backgroundColor != nil
+        })
+        #expect(row != nil)
+        guard let row,
+              let hover = registry.handlers(for: row).hover,
+              let baseColor = row.backgroundColor else { return }
+        #expect(graph.recomposer.hasPending == false)
+
+        hover(.enter)
+        #expect(graph.recomposer.hasPending == false)
+        #expect(row.backgroundColor != baseColor)
+
+        hover(.leave)
+        #expect(graph.recomposer.hasPending == false)
+        #expect(row.backgroundColor == baseColor)
+    } }
+
     @Test("Inspector-style PropertyGrid scrolls inside Panel chrome")
     func inspectorPropertyGridScrollsInsidePanel() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
