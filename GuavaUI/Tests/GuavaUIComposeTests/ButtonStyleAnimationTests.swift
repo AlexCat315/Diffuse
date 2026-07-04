@@ -5,10 +5,8 @@ import GuavaUIRuntime
 
 /// Drives real `Button` instances through `InteractionRegistry` pointer
 /// events so the press transition exercises the full production path:
-/// pointer handler → `_StatefulButton.@State` write → `Recomposer.invalidate`
-/// → recompose → `ButtonStyle.makeBody` → `.animation(.buttonInteraction,
-/// value: configuration.interactionKey)` registers a controller against the
-/// active `AnimatorScheduler`.
+/// pointer handler → node-local ButtonHost interaction state → built-in
+/// chrome node `animatableSet` writes → `AnimatorScheduler`.
 @Suite("Phase 8 / ButtonStyle implicit transitions", .serialized)
 struct ButtonStyleAnimationTests: GuavaUIComposeSerializedSuite {
 
