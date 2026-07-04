@@ -40,6 +40,21 @@ public enum GPUPresentMode: Sendable, Equatable {
         case .mailbox:     return WGPUBridge_PresentMode_Mailbox
         }
     }
+
+    static func fromBridgeValue(_ value: WGPUBridgePresentMode) -> GPUPresentMode? {
+        switch value {
+        case WGPUBridge_PresentMode_Fifo:
+            return .fifo
+        case WGPUBridge_PresentMode_FifoRelaxed:
+            return .fifoRelaxed
+        case WGPUBridge_PresentMode_Immediate:
+            return .immediate
+        case WGPUBridge_PresentMode_Mailbox:
+            return .mailbox
+        default:
+            return nil
+        }
+    }
 }
 
 // MARK: - Load / Store Op

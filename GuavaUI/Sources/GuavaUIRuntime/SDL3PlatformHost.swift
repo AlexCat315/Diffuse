@@ -104,6 +104,10 @@ public enum PlatformFrameRateMode: Sendable, Equatable {
 @MainActor
 public final class SDL3PlatformHost: PlatformHost {
     private static let focusedTextRefreshInterval: Double = 0.25
+    private static let fallbackDisplayRefreshRate: Double = 60.0
+    private static let minimumUsableDisplayRefreshRate: Double = 30.0
+    private static let maxCadenceSleepInterval: Double = 0.001
+    private static let cadenceSpinThreshold: Double = 0.0005
     private static let frameTimingLogStride: Int = {
         guard let raw = ProcessInfo.processInfo.environment["GUAVAUI_FRAME_TIMING_LOG_STRIDE"],
               let value = Int(raw) else {
@@ -442,7 +446,9 @@ public final class SDL3PlatformHost: PlatformHost {
                 session.needsDisplay = true
             }
             if shouldRunFramePreparation {
-                if let lastFramePreparationTime {
+                if targetFrameInterval == nil {
+                    framePreparationDelta = loopDeltaTime
+                } else if let lastFramePreparationTime {
                     framePreparationDelta = frameStart - lastFramePreparationTime
                 } else if let targetFrameInterval {
                     framePreparationDelta = targetFrameInterval
@@ -555,14 +561,14 @@ public final class SDL3PlatformHost: PlatformHost {
             pruneClosedSessions(using: shell)
 
             if let targetFrameInterval, let lastFramePreparationTime {
-                // Sleep almost the whole remaining interval — timeBeginPeriod(1)
-                // above keeps this accurate on Windows — and let the next
-                // iteration spin out the final sub-millisecond. The deadline is
-                // measured from frame preparation start, so FIFO present time
-                // contributes to the interval instead of stacking an extra wait.
+                // Sleep in short slices until the next cadence deadline.
+                // A single long Thread.sleep can be timer-coalesced by the OS
+                // into multiple refresh intervals, which shows up as 50ms+
+                // "pacing" gaps even when frame work itself is only a few ms.
                 let remaining = (lastFramePreparationTime + targetFrameInterval) - TimingTrace.now()
-                if remaining > 0.001 {
-                    Thread.sleep(forTimeInterval: remaining - 0.0003)
+                if remaining > Self.cadenceSpinThreshold {
+                    Thread.sleep(forTimeInterval: min(remaining - Self.cadenceSpinThreshold,
+                                                      Self.maxCadenceSleepInterval))
                 }
             } else if !handledEvents && !committedAny && !renderedAnyFrame {
                 // Nothing to draw (idle / occluded window) — yield briefly.
@@ -590,13 +596,21 @@ public final class SDL3PlatformHost: PlatformHost {
         case .eventDriven:
             return nil
         case .displayRefresh:
-            let refreshRate = Self.sanitizedOptionalFrameRate(
+            let refreshRate = Self.sanitizedDisplayRefreshRate(
                 shell.displayRefreshRate(windowID: mainWindowID)
-            ) ?? 60.0
+            )
             return 1.0 / refreshRate
         case let .fixed(framesPerSecond):
             return 1.0 / Self.sanitizedFrameRate(framesPerSecond)
         }
+    }
+
+    private static func sanitizedDisplayRefreshRate(_ framesPerSecond: Double?) -> Double {
+        guard let framesPerSecond = sanitizedOptionalFrameRate(framesPerSecond),
+              framesPerSecond >= minimumUsableDisplayRefreshRate else {
+            return fallbackDisplayRefreshRate
+        }
+        return framesPerSecond
     }
 
     private static func sanitizedOptionalFrameRate(_ framesPerSecond: Double?) -> Double? {

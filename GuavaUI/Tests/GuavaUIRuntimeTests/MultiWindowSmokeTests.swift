@@ -1,8 +1,7 @@
 #if canImport(CoreGraphics)
 import CoreGraphics
-#else
-import Foundation
 #endif
+import Foundation
 import EngineKernel
 import PlatformShell
 import Testing
@@ -185,8 +184,9 @@ struct MultiWindowSmokeTests {
     @MainActor
     @Test("Display-refresh frame-rate mode drives cadence frames")
     func displayRefreshModeDrivesCadenceFrames() throws {
-        let shell = MockShell(eventBatches: Array(repeating: [], count: 8))
+        let shell = MockShell(eventBatches: Array(repeating: [], count: 32))
         shell.refreshRate = 240
+        shell.pollDelay = 0.001
         let host = SDL3PlatformHost(shellFactory: { shell })
         host.setFrameRateMode(.displayRefresh)
 
@@ -204,6 +204,60 @@ struct MultiWindowSmokeTests {
         host.run()
 
         #expect(frameCount > 1)
+    }
+
+    @MainActor
+    @Test("Display-refresh mode falls back when reported refresh is implausibly low")
+    func displayRefreshModeFallsBackForImplausiblyLowReportedRefresh() throws {
+        let shell = MockShell(eventBatches: [[]])
+        shell.refreshRate = 11
+        let host = SDL3PlatformHost(shellFactory: { shell })
+        host.setFrameRateMode(.displayRefresh)
+
+        let tree = NodeTree()
+        let session = try host.openWindow(title: "A", tree: tree)
+        tree.root = Node()
+        (shell.window(for: session.id) as? MockWindowHandle)?.renderSurface = mockSurface
+
+        var deltas: [Double] = []
+        host.onBeforeCommit = { deltaTime in
+            deltas.append(deltaTime)
+        }
+        session.onFrame = { _ in true }
+
+        host.run()
+
+        #expect((deltas.first ?? 1) < 0.02)
+    }
+
+    @MainActor
+    @Test("Event-driven frame delta excludes idle time")
+    func eventDrivenFrameDeltaExcludesIdleTime() throws {
+        let shell = MockShell(eventBatches: [])
+        shell.pollDelay = 0.005
+        let host = SDL3PlatformHost(shellFactory: { shell })
+        host.setFrameRateMode(.eventDriven)
+
+        let tree = NodeTree()
+        let session = try host.openWindow(title: "A", tree: tree)
+        tree.root = Node()
+        (shell.window(for: session.id) as? MockWindowHandle)?.renderSurface = mockSurface
+
+        shell.eventBatches = Array(repeating: [], count: 8) + [[
+            WindowInputEvent(windowID: session.id,
+                             event: .mouseMotion(MouseMotionEvent(x: 8, y: 8, deltaX: 1, deltaY: 0))),
+        ]]
+
+        var deltas: [Double] = []
+        host.onBeforeCommit = { deltaTime in
+            deltas.append(deltaTime)
+        }
+        session.onFrame = { _ in true }
+
+        host.run()
+
+        #expect(deltas.count >= 2)
+        #expect((deltas.last ?? 1) < 0.02)
     }
 
     @MainActor
@@ -442,6 +496,7 @@ private final class MockShell: Shell {
 
     var eventBatches: [[WindowInputEvent]]
     var refreshRate: Double?
+    var pollDelay: TimeInterval = 0
     var cursorRequests: [CursorRequest] = []
     var textInputAreas: [WindowID: TextInputArea?] = [:]
 
@@ -488,6 +543,9 @@ private final class MockShell: Shell {
 
     @discardableResult
     func pollWindowEvents() -> [WindowInputEvent] {
+        if pollDelay > 0 {
+            Thread.sleep(forTimeInterval: pollDelay)
+        }
         defer {
             pollIndex += 1
             if pollIndex >= eventBatches.count {

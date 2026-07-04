@@ -146,7 +146,7 @@ struct EditorViewportRenderGateTests {
             sceneHasActiveParticles: false,
             continuousViewportInteractionActive: false
         ))
-        #expect(EditorViewportFrameDrive.wantsContinuousFrames(
+        #expect(!EditorViewportFrameDrive.wantsContinuousFrames(
             viewportRealtimeEnabled: false,
             playbackState: .stopped,
             sceneHasActiveParticles: true,
