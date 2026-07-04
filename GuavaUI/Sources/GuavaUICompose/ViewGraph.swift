@@ -282,12 +282,12 @@ public final class ViewGraph {
 
         // Build matching tables.
         var keyedOld: [KeyedSlot: Node] = [:]
-        var unkeyedQueues: [String: [Node]] = [:]
+        var unkeyedQueues: [String: UnkeyedSlotQueue] = [:]
         for child in oldChildren {
             if let key = child.key, let tag = child.viewTag {
                 keyedOld[KeyedSlot(tag: tag, key: key)] = child
             } else if let tag = child.viewTag {
-                unkeyedQueues[tag, default: []].append(child)
+                unkeyedQueues[tag, default: UnkeyedSlotQueue()].append(child)
             } else {
                 // No tag — leave unmatchable (will be torn down).
             }
@@ -316,18 +316,11 @@ public final class ViewGraph {
         // Second pass: unkeyed entries pull from their per-tag queue.
         for (index, entry) in entries.enumerated() {
             guard case .create = actions[index], entry.key == nil else { continue }
-            guard var queue = unkeyedQueues[entry.tag], !queue.isEmpty else { continue }
-            var picked: Node? = nil
-            while !queue.isEmpty {
-                let candidate = queue.removeFirst()
-                if !matchedOldIDs.contains(ObjectIdentifier(candidate)) {
-                    matchedOldIDs.insert(ObjectIdentifier(candidate))
-                    picked = candidate
-                    break
-                }
-            }
+            guard var queue = unkeyedQueues[entry.tag] else { continue }
+            let picked = queue.popSkipping(claimed: matchedOldIDs)
             unkeyedQueues[entry.tag] = queue
             if let picked {
+                matchedOldIDs.insert(ObjectIdentifier(picked))
                 actions[index] = .reuse(picked)
             }
         }
@@ -433,11 +426,6 @@ public final class ViewGraph {
     /// any user-view scope rooted at it, and drop interaction-registry entries
     /// for the entire subtree.
     func tearDown(node: Node, parentLayout: LayoutNode?) {
-        // Recursively tear down child scopes first so they unregister cleanly.
-        for child in node.children {
-            tearDownSubtreeBookkeeping(child, parentLayout:
-                layoutOf[ObjectIdentifier(node)] ?? parentLayout)
-        }
         tearDownSubtreeBookkeeping(node, parentLayout: parentLayout)
         // Phase 4a: drop RenderObject mirror BEFORE removing from parent so
         // we still know the parent linkage.
@@ -453,15 +441,18 @@ public final class ViewGraph {
     /// cleanup to thread through this walk (坏味 #4 / 规则 2).
     private func tearDownSubtreeBookkeeping(_ node: Node, parentLayout: LayoutNode?) {
         let id = ObjectIdentifier(node)
-        if let myLN = layoutOf.removeValue(forKey: id) {
+        let myLN = layoutOf.removeValue(forKey: id)
+        if let myLN {
             parentLayout?.removeChild(myLN)
         }
-        if scopes.removeValue(forKey: id) != nil {
+        let childLayoutParent = myLN ?? parentLayout
+        if let scope = scopes.removeValue(forKey: id) {
+            scope.uninstall()
             ObservableStateTracking.removeScope(id: id)
         }
         for child in node.children {
             tearDownSubtreeBookkeeping(child,
-                                       parentLayout: layoutOf[id] ?? parentLayout)
+                                       parentLayout: childLayoutParent)
         }
     }
 
@@ -566,7 +557,9 @@ public final class ViewGraph {
     // MARK: - Internal
 
     func dropScope(for anchor: Node) {
-        scopes.removeValue(forKey: ObjectIdentifier(anchor))
+        if let scope = scopes.removeValue(forKey: ObjectIdentifier(anchor)) {
+            scope.uninstall()
+        }
     }
 
     /// Remove a node's layout node from the layout tree (via `parent`'s removeChild)
@@ -613,34 +606,47 @@ final class ViewScope {
         materialiseBody()
     }
 
+    func uninstall() {
+        unwireDynamicProperties()
+    }
+
     /// Discover `@State` / other `DynamicProperty` members and route their
     /// `onChange` into the recomposer.
     private func wireDynamicProperties() {
-        let mirror = Mirror(reflecting: view)
         guard let graph = graph, let anchor = anchor else { return }
         let scopeID = ObjectIdentifier(anchor)
 
-        for child in mirror.children {
+        for stateBox in dynamicPropertyBoxes(in: view) {
             // `@State` adds a `_storage` member to the State struct; we identify
             // a `State<T>` by trying a bridging via its `_setOnChange` method.
             // Because State is generic we can't pattern match cleanly — call
             // through the runtime helper.
-            if let stateBox = child.value as? _StateErased {
-                stateBox._wire(invalidate: { [weak self, weak graph] in
-                    guard let self, let graph else { return }
-                    // Capture the animation context at write time. The
-                    // recomposer stores the animation alongside the body and
-                    // re-establishes it before invoking the body in
-                    // `commitAll`.
-                    let capturedAnim = ActiveAnimationContext.current
-                    graph.recomposer.invalidate(
-                        scopeID: scopeID,
-                        animation: capturedAnim
-                    ) { [weak self] in
-                        self?.recompose()
-                    }
-                })
-            }
+            stateBox._wire(invalidate: { [weak self, weak graph] in
+                guard let self, let graph else { return }
+                // Capture the animation context at write time. The
+                // recomposer stores the animation alongside the body and
+                // re-establishes it before invoking the body in
+                // `commitAll`.
+                let capturedAnim = ActiveAnimationContext.current
+                graph.recomposer.invalidate(
+                    scopeID: scopeID,
+                    animation: capturedAnim
+                ) { [weak self] in
+                    self?.recompose()
+                }
+            })
+        }
+    }
+
+    private func unwireDynamicProperties() {
+        for stateBox in dynamicPropertyBoxes(in: view) {
+            stateBox._unwire()
+        }
+    }
+
+    private func dynamicPropertyBoxes(in candidate: any View) -> [_StateErased] {
+        Mirror(reflecting: candidate).children.compactMap { child in
+            child.value as? _StateErased
         }
     }
 
@@ -668,6 +674,11 @@ final class ViewScope {
             if let match = oldChildren.first(where: { $0.label == label }),
                let oldBox = match.value as? _StateErased {
                 newBox._copyValue(from: oldBox)
+            }
+        }
+        for oldChild in oldChildren {
+            if let oldBox = oldChild.value as? _StateErased {
+                oldBox._unwire()
             }
         }
         view = newView
@@ -737,20 +748,52 @@ fileprivate struct KeyedSlot: Hashable {
     let key: AnyHashable
 }
 
+/// FIFO queue for unkeyed slot reuse. Keeps a cursor instead of calling
+/// `Array.removeFirst()`, which would make large repeated child lists O(n²)
+/// during every reconcile.
+fileprivate struct UnkeyedSlotQueue {
+    private var nodes: [Node] = []
+    private var head = 0
+
+    mutating func append(_ node: Node) {
+        nodes.append(node)
+    }
+
+    mutating func popSkipping(claimed: Set<ObjectIdentifier>) -> Node? {
+        while head < nodes.count {
+            let candidate = nodes[head]
+            head += 1
+            if !claimed.contains(ObjectIdentifier(candidate)) {
+                return candidate
+            }
+        }
+        return nil
+    }
+}
+
 // MARK: - State erasure shim
 
 /// Existential helper so `ViewScope` can wire state observers without knowing
 /// the concrete value type of every `@State`.
 public protocol _StateErased {
     func _wire(invalidate: @escaping () -> Void)
+    func _unwire()
     /// Copy the runtime value out of `other` into self's backing storage.
     /// No-op if the concrete value types do not match.
     func _copyValue(from other: _StateErased)
 }
 
+public extension _StateErased {
+    func _unwire() {}
+}
+
 extension State: _StateErased {
     public func _wire(invalidate: @escaping () -> Void) {
         _setOnChange(invalidate)
+    }
+
+    public func _unwire() {
+        _setOnChange(nil)
     }
 
     public func _copyValue(from other: _StateErased) {
