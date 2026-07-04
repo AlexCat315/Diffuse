@@ -39,6 +39,7 @@ public struct List<Data: RandomAccessCollection, ID: Hashable, RowContent: View>
                         onActivate: { activate(element) },
                         content: AnyView(rowContent(element, selected))
                     )
+                    .id(element[keyPath: id])
                 }
             }
         }
