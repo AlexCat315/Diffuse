@@ -42,8 +42,11 @@ public protocol TreeRowStyle {
 
 public struct AnyTreeRowStyle: @unchecked Sendable {
     public let makeBody: (TreeRowStyleConfiguration) -> any View
+    public let requiresHoverRecompose: Bool
+
     public init<S: TreeRowStyle>(_ style: S) {
         self.makeBody = { config in style.makeBody(configuration: config) }
+        self.requiresHoverRecompose = !(style is DefaultTreeRowStyle)
     }
 }
 
