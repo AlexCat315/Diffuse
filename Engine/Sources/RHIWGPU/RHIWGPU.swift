@@ -100,6 +100,7 @@ public final class WGPUBackend: @unchecked Sendable {
     public var rawDevice: UnsafeMutableRawPointer? { device }
     public var rawQueue: UnsafeMutableRawPointer? { queue }
     public var rawInstance: UnsafeMutableRawPointer? { instance }
+    public var rawAdapter: UnsafeMutableRawPointer? { adapter }
 
     public init(config: WGPUDeviceConfig = .init()) {
         self.config = config
