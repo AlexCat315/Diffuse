@@ -547,6 +547,32 @@ struct SpatialQueryTests {
         #expect(abs((hit?.normal.x ?? 0) + 1) < 0.000_1)
     }
 
+    @Test("physics sweep shape box hits diagonal wall")
+    func physicsSweepShapeBoxHitsDiagonalWall() {
+        var runtime = SceneRuntime()
+
+        let wall = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 2, -2)), for: wall)
+        _ = runtime.setComponent(
+            Collider(shape: .box(halfExtents: SIMD3<Float>(2, 2, 0.5), center: .zero)),
+            for: wall
+        )
+
+        _ = runtime.tick()
+
+        let hit = runtime.physicsSweepShape(
+            PhysicsSweepShapeQuery(
+                shape: .box(halfExtents: SIMD3<Float>(0.5, 1, 0.5)),
+                position: SIMD3<Float>(0, 2, 0),
+                translation: SIMD3<Float>(1.767_767, 0, -1.767_767)
+            )
+        )
+
+        #expect(hit?.entity == wall)
+        #expect((hit?.distance ?? .greatestFiniteMagnitude) < 1.5)
+        #expect((hit?.normal.z ?? 0) > 0.9)
+    }
+
     @Test("physics queries apply excludeEntity and layer filters")
     func physicsQueriesApplyUnifiedFilters() {
         var runtime = SceneRuntime()

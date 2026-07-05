@@ -474,10 +474,17 @@ public final class Node: @unchecked Sendable {
     }
 
     public func markRenderDirty(reason: InvalidationSource = .unknown) {
+        let wasRenderDirty = renderDirty
         InvalidationLogHolder.current?.record(
             DirtyReason(target: id, source: reason, phase: .render)
         )
         propagateDirty(layoutDirty: false, renderDirty: true)
+        if wasRenderDirty {
+            if isLayerClassificationInvalidation(reason) {
+                renderObject?.refreshLayerClassification()
+            }
+            return
+        }
         // Phase 4b: a style mutation may have promoted/demoted this node to a
         // layer root (clipsToBounds, opacity, shadowColor changes); refresh
         // before invalidating so the cache state lands on the right object.
@@ -500,5 +507,10 @@ public final class Node: @unchecked Sendable {
         if shouldPropagate {
             parent?.propagateDirty(layoutDirty: layoutDirty, renderDirty: renderDirty)
         }
+    }
+
+    private func isLayerClassificationInvalidation(_ reason: InvalidationSource) -> Bool {
+        guard case .styleSet(let field) = reason else { return false }
+        return field == "clipsToBounds" || field == "opacity" || field == "shadowColor"
     }
 }
