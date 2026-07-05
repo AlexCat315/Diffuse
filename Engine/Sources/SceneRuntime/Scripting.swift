@@ -147,12 +147,28 @@ public struct RuntimeScriptPhaseContext {
         return makeJoltQueryBackend(in: worldPointer.pointee).overlapAABB(query, filter: filter)
     }
 
+    public func physicsOverlapShape(
+        _ query: PhysicsOverlapShapeQuery,
+        filter: PhysicsQueryFilter = PhysicsQueryFilter()
+    ) -> [PhysicsOverlapHit] {
+        refreshTransformsIfNeeded()
+        return makeJoltQueryBackend(in: worldPointer.pointee).overlapShape(query, filter: filter)
+    }
+
     public func physicsSweepAABB(
         _ query: PhysicsSweepAABBQuery,
         filter: PhysicsQueryFilter = PhysicsQueryFilter()
     ) -> PhysicsSweepHit? {
         refreshTransformsIfNeeded()
         return makeJoltQueryBackend(in: worldPointer.pointee).sweepAABB(query, filter: filter)
+    }
+
+    public func physicsSweepShape(
+        _ query: PhysicsSweepShapeQuery,
+        filter: PhysicsQueryFilter = PhysicsQueryFilter()
+    ) -> PhysicsSweepHit? {
+        refreshTransformsIfNeeded()
+        return makeJoltQueryBackend(in: worldPointer.pointee).sweepShape(query, filter: filter)
     }
 
     public func resource<Resource: Sendable>(_ type: Resource.Type) -> Resource? {

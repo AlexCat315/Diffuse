@@ -199,6 +199,13 @@ public final class ScriptContext {
         phaseContext.physicsOverlapAABB(query, filter: filter)
     }
 
+    public func physicsOverlapShape(
+        _ query: PhysicsOverlapShapeQuery,
+        filter: PhysicsQueryFilter = PhysicsQueryFilter()
+    ) -> [PhysicsOverlapHit] {
+        phaseContext.physicsOverlapShape(query, filter: filter)
+    }
+
     public func overlap(
         bounds: SpatialAABB,
         filter: PhysicsQueryFilter = PhysicsQueryFilter()
@@ -211,6 +218,13 @@ public final class ScriptContext {
         filter: PhysicsQueryFilter = PhysicsQueryFilter()
     ) -> PhysicsSweepHit? {
         phaseContext.physicsSweepAABB(query, filter: filter)
+    }
+
+    public func physicsSweepShape(
+        _ query: PhysicsSweepShapeQuery,
+        filter: PhysicsQueryFilter = PhysicsQueryFilter()
+    ) -> PhysicsSweepHit? {
+        phaseContext.physicsSweepShape(query, filter: filter)
     }
 
     public func sweep(

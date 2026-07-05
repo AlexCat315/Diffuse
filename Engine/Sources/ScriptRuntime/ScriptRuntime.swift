@@ -116,11 +116,27 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
         runtime.physicsOverlapAABB(query, filter: filter)
     }
 
+    public func physicsOverlapShape(
+        in runtime: SceneRuntime,
+        query: PhysicsOverlapShapeQuery,
+        filter: PhysicsQueryFilter = PhysicsQueryFilter()
+    ) -> [PhysicsOverlapHit] {
+        runtime.physicsOverlapShape(query, filter: filter)
+    }
+
     public func physicsSweepAABB(
         in runtime: SceneRuntime,
         query: PhysicsSweepAABBQuery,
         filter: PhysicsQueryFilter = PhysicsQueryFilter()
     ) -> PhysicsSweepHit? {
         runtime.physicsSweepAABB(query, filter: filter)
+    }
+
+    public func physicsSweepShape(
+        in runtime: SceneRuntime,
+        query: PhysicsSweepShapeQuery,
+        filter: PhysicsQueryFilter = PhysicsQueryFilter()
+    ) -> PhysicsSweepHit? {
+        runtime.physicsSweepShape(query, filter: filter)
     }
 }

@@ -47,7 +47,7 @@ struct ScriptRuntimeQueryTests {
         #expect(hit?.entity == target)
     }
 
-    @Test("ScriptRuntime forwards physics overlap and sweep AABB queries")
+    @Test("ScriptRuntime forwards physics overlap and sweep queries")
     func scriptRuntimeForwardsOverlapAndSweepQueries() {
         var runtime = SceneRuntime()
         let scriptRuntime = ScriptRuntime()
@@ -92,9 +92,33 @@ struct ScriptRuntimeQueryTests {
                 layerMask: 0b0010
             )
         )
+        let shapeOverlapHits = scriptRuntime.physicsOverlapShape(
+            in: runtime,
+            query: PhysicsOverlapShapeQuery(
+                shape: .sphere(radius: 1.25),
+                position: SIMD3<Float>(4, 0, 0)
+            ),
+            filter: PhysicsQueryFilter(layerID: 1, layerMask: 0b0010)
+        )
+        let shapeSweepHit = scriptRuntime.physicsSweepShape(
+            in: runtime,
+            query: PhysicsSweepShapeQuery(
+                shape: .sphere(radius: 0.5),
+                position: .zero,
+                translation: SIMD3<Float>(10, 0, 0)
+            ),
+            filter: PhysicsQueryFilter(
+                includeTriggers: true,
+                layerID: 1,
+                layerMask: 0b0010
+            )
+        )
 
         #expect(overlapHits.map(\ .entity) == [solid])
         #expect(sweepHit?.entity == trigger)
         #expect(sweepHit?.isTrigger == true)
+        #expect(shapeOverlapHits.map(\.entity) == [solid])
+        #expect(shapeSweepHit?.entity == trigger)
+        #expect(shapeSweepHit?.isTrigger == true)
     }
 }

@@ -26,6 +26,16 @@ public final class Node: @unchecked Sendable {
     /// Ordered children. Use `addChild` / `removeChild` to mutate.
     public private(set) var children: [Node] = []
 
+    /// Fast-path hint for hit-testing and rendering. Most UI containers never
+    /// set child zIndex, so they can traverse children in tree order without
+    /// allocating and sorting on every input/render pass.
+    internal private(set) var childrenMayNeedZSort: Bool = false
+
+    /// Bumped for this node and all ancestors whenever descendant membership
+    /// or sibling order changes. Primitives such as ScrollView use it to keep
+    /// subtree-derived caches valid without rescanning every frame.
+    public private(set) var subtreeStructureVersion: UInt64 = 0
+
     /// Weak reference to avoid retain cycles.
     public private(set) weak var parent: Node?
 
@@ -198,6 +208,7 @@ public final class Node: @unchecked Sendable {
     public var zIndex: Float = 0 {
         didSet {
             if oldValue != zIndex {
+                parent?.childZIndexDidChange(from: oldValue, to: zIndex)
                 // z-order reorders hit/paint among siblings. The InputScene is
                 // shared across the whole tree (one per tree), so invalidating
                 // via this node's own scene is equivalent to the parent's and
@@ -351,11 +362,16 @@ public final class Node: @unchecked Sendable {
     public func addChild(_ child: Node) {
         child.parent = self
         children.append(child)
+        if child.zIndex != 0 {
+            childrenMayNeedZSort = true
+        }
+        bumpSubtreeStructureVersion()
         markRenderDirty(reason: .structuralChange)
     }
 
     public func removeChild(_ child: Node) {
         let previousCount = children.count
+        let removedMayNeedZSort = child.zIndex != 0
         children.removeAll { $0 === child }
         child.parent = nil
         if children.count != previousCount {
@@ -364,6 +380,10 @@ public final class Node: @unchecked Sendable {
             // focus). This is the single authoritative cleanup path; no modifier
             // or ViewGraph side-effect is needed (坏味 #4).
             child.releaseFromTree()
+            if removedMayNeedZSort {
+                recomputeChildrenMayNeedZSort()
+            }
+            bumpSubtreeStructureVersion()
             markRenderDirty(reason: .structuralChange)
         }
     }
@@ -394,7 +414,25 @@ public final class Node: @unchecked Sendable {
         // `reorderChildren` call (坏味 #2: one sync path, no hand-written
         // second one that can drift). Hit-testing reads this order live.
         children = ordered
+        bumpSubtreeStructureVersion()
         markRenderDirty(reason: .structuralChange)
+    }
+
+    private func childZIndexDidChange(from oldValue: Float, to newValue: Float) {
+        if oldValue == 0, newValue != 0 {
+            childrenMayNeedZSort = true
+        } else if oldValue != 0, newValue == 0 {
+            recomputeChildrenMayNeedZSort()
+        }
+    }
+
+    private func recomputeChildrenMayNeedZSort() {
+        childrenMayNeedZSort = children.contains { $0.zIndex != 0 }
+    }
+
+    private func bumpSubtreeStructureVersion() {
+        subtreeStructureVersion &+= 1
+        parent?.bumpSubtreeStructureVersion()
     }
 
     // MARK: - Geometry single funnel (坏味 #1)
