@@ -23,7 +23,6 @@ final class AnimatablePropertyRegistry {
 
     func replaceController(for propertyKey: AnyHashable,
                            with controller: (any AnyAnimationController)?) {
-        pruneDeadEntries()
         if let existing = controllers[propertyKey]?.controller {
             existing.cancel()
         }
@@ -35,12 +34,21 @@ final class AnimatablePropertyRegistry {
         }
     }
 
-    private func pruneDeadEntries() {
-        controllers = controllers.filter { _, box in box.controller != nil }
+    func hasActiveController(for propertyKey: AnyHashable) -> Bool {
+        guard let box = controllers[propertyKey] else { return false }
+        guard let controller = box.controller, !controller.isFinished else {
+            controllers.removeValue(forKey: propertyKey)
+            return false
+        }
+        return true
     }
 }
 
 extension Node {
+    private var existingAnimatablePropertyRegistry: AnimatablePropertyRegistry? {
+        attachments[_AnimatablePropertyAttachmentKey.registry] as? AnimatablePropertyRegistry
+    }
+
     private var animatablePropertyRegistry: AnimatablePropertyRegistry {
         if let existing = attachments[_AnimatablePropertyAttachmentKey.registry] as? AnimatablePropertyRegistry {
             return existing
@@ -52,6 +60,13 @@ extension Node {
 
     func replaceAnimationController(for propertyKey: AnyHashable,
                                     with controller: (any AnyAnimationController)?) {
+        guard controller != nil || existingAnimatablePropertyRegistry != nil else {
+            return
+        }
         animatablePropertyRegistry.replaceController(for: propertyKey, with: controller)
+    }
+
+    func hasAnimationController(for propertyKey: AnyHashable) -> Bool {
+        existingAnimatablePropertyRegistry?.hasActiveController(for: propertyKey) ?? false
     }
 }

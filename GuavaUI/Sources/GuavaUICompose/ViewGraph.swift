@@ -277,8 +277,20 @@ public final class ViewGraph {
                            layoutParent: LayoutNode?,
                            newViews: [any View]) {
         let flat = ViewGraph.flattenSlots(newViews)
-        let entries = flat.map { ViewGraph.classify($0) }
         let oldChildren = parent.children
+        if let entries = stableChildrenFastPath(parent: parent,
+                                                layoutParent: layoutParent,
+                                                flat: flat,
+                                                oldChildren: oldChildren) {
+            for (entry, node) in zip(entries, oldChildren) {
+                updateInPlace(node: node,
+                              view: entry.view,
+                              layoutParent: layoutParent)
+            }
+            return
+        }
+
+        let entries = flat.map { ViewGraph.classify($0) }
 
         // Build matching tables.
         var keyedOld: [KeyedSlot: Node] = [:]
@@ -382,6 +394,26 @@ public final class ViewGraph {
 
         // Phase 4a: keep the RenderTree mirror in sync with the new child list.
         renderTree.reconcileChildren(of: parent)
+    }
+
+    private func stableChildrenFastPath(parent: Node,
+                                        layoutParent: LayoutNode?,
+                                        flat: [any View],
+                                        oldChildren: [Node]) -> [SlotInfo]? {
+        guard flat.count == oldChildren.count else { return nil }
+        guard !flat.isEmpty else { return [] }
+
+        var entries: [SlotInfo] = []
+        entries.reserveCapacity(flat.count)
+        for (index, view) in flat.enumerated() {
+            let entry = ViewGraph.classify(view)
+            let old = oldChildren[index]
+            guard old.viewTag == entry.tag, old.key == entry.key else {
+                return nil
+            }
+            entries.append(entry)
+        }
+        return entries
     }
 
     /// Refresh the properties of an already-materialised node from `view`,
