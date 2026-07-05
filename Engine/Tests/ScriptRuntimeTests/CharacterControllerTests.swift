@@ -47,6 +47,16 @@ struct CharacterControllerTests {
         )
     }
 
+    private func addWall(to runtime: inout SceneRuntime, at position: SIMD3<Float>) {
+        let wall = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: position), for: wall)
+        _ = runtime.setComponent(
+            Collider(shape: .box(halfExtents: SIMD3<Float>(2, 2, 0.5), center: .zero),
+                     isTrigger: false, layerID: 1, layerMask: .max),
+            for: wall
+        )
+    }
+
     private func keyDown(_ sc: UInt32) -> InputEvent {
         .keyDown(KeyEvent(scancode: sc, keycode: sc, modifiers: [], isRepeat: false))
     }
@@ -126,6 +136,40 @@ struct CharacterControllerTests {
         let pos = runtime.localTransform(for: entity)?.translation
         #expect(pos != nil)
         #expect(pos!.z < -0.5)
+    }
+
+    @Test("move_forward sweeps against walls")
+    func moveForwardSweepsAgainstWalls() {
+        var (runtime, entity) = makeScene()
+        addGround(to: &runtime, at: 0)
+        addWall(to: &runtime, at: SIMD3<Float>(0, 2, -2))
+
+        for _ in 0..<100 { _ = runtime.tick(deltaTime: 0.1) }
+
+        _ = runtime.tick(deltaTime: 0.5, inputEvents: [keyDown(Scancode.w)])
+
+        let pos = runtime.localTransform(for: entity)?.translation
+        #expect(pos != nil)
+        #expect(pos!.z > -1.2)
+    }
+
+    @Test("diagonal movement slides along walls")
+    func diagonalMovementSlidesAlongWalls() {
+        var (runtime, entity) = makeScene()
+        addGround(to: &runtime, at: 0)
+        addWall(to: &runtime, at: SIMD3<Float>(0, 2, -2))
+
+        for _ in 0..<100 { _ = runtime.tick(deltaTime: 0.1) }
+
+        _ = runtime.tick(deltaTime: 0.5, inputEvents: [
+            keyDown(Scancode.w),
+            keyDown(Scancode.d),
+        ])
+
+        let pos = runtime.localTransform(for: entity)?.translation
+        #expect(pos != nil)
+        #expect(pos!.z > -1.2)
+        #expect(pos!.x > 1.2)
     }
 
     @Test("move_left moves in -X")

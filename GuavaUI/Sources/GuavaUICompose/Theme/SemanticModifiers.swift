@@ -55,6 +55,11 @@ public struct SemanticFontModifier: ViewModifier {
         // sensible measure; the node-side apply above will refine it once
         // the node is parented under any `.theme(_:)` provider.
         let token = ref.resolve(.defaultDark)
+        let previousFont = layout.attachments[StyleAttachmentKey.font] as? Font
+        let previousLineHeight = layout.attachments[StyleAttachmentKey.lineHeight] as? Float
+        guard previousFont != token.font || previousLineHeight != token.lineHeight else {
+            return
+        }
         layout.attachments[StyleAttachmentKey.font] = token.font
         layout.attachments[StyleAttachmentKey.lineHeight] = token.lineHeight
         // Only nodes with a custom measure function (Text / TextField) may be

@@ -44,6 +44,13 @@ public extension Node {
         apply: @escaping (Value) -> Void
     ) {
         let propertyKey = AnyHashable(propertyKey)
+        if current == target, ActiveAnimationContext.current == nil {
+            if hasAnimationController(for: propertyKey) {
+                replaceAnimationController(for: propertyKey, with: nil)
+            }
+            apply(target)
+            return
+        }
         guard let anim = ActiveAnimationContext.current, current != target else {
             replaceAnimationController(for: propertyKey, with: nil)
             apply(target)
@@ -71,12 +78,19 @@ public extension Node {
         apply: @escaping (Value?) -> Void
     ) {
         let propertyKey = AnyHashable(propertyKey)
+        if current == target, ActiveAnimationContext.current == nil {
+            if hasAnimationController(for: propertyKey) {
+                replaceAnimationController(for: propertyKey, with: nil)
+            }
+            apply(target)
+            return
+        }
         guard let anim = ActiveAnimationContext.current,
               let from = current,
               let to = target,
               from != to
         else {
-                        replaceAnimationController(for: propertyKey, with: nil)
+            replaceAnimationController(for: propertyKey, with: nil)
             apply(target)
             return
         }
@@ -99,6 +113,12 @@ public extension Node {
     ) {
         let propertyKey = AnyHashable(keyPath)
         let current = self[keyPath: keyPath]
+        if current == target, ActiveAnimationContext.current == nil {
+            guard hasAnimationController(for: propertyKey) else { return }
+            replaceAnimationController(for: propertyKey, with: nil)
+            self[keyPath: keyPath] = target
+            return
+        }
         guard let anim = ActiveAnimationContext.current, current != target else {
             replaceAnimationController(for: propertyKey, with: nil)
             self[keyPath: keyPath] = target
@@ -123,12 +143,18 @@ public extension Node {
     ) {
         let propertyKey = AnyHashable(keyPath)
         let current = self[keyPath: keyPath]
+        if current == target, ActiveAnimationContext.current == nil {
+            guard hasAnimationController(for: propertyKey) else { return }
+            replaceAnimationController(for: propertyKey, with: nil)
+            self[keyPath: keyPath] = target
+            return
+        }
         guard let anim = ActiveAnimationContext.current,
               let from = current,
               let to = target,
               from != to
         else {
-                        replaceAnimationController(for: propertyKey, with: nil)
+            replaceAnimationController(for: propertyKey, with: nil)
             self[keyPath: keyPath] = target
             return
         }
