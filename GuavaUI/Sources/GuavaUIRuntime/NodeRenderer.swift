@@ -115,8 +115,14 @@ public struct NodeRenderer {
         // 6. Children — translated by -contentOffset for scrollable containers.
         let childOriginX = absX - Float(node.contentOffset.x)
         let childOriginY = absY - Float(node.contentOffset.y)
-        for child in renderOrderedChildren(of: node) {
-            renderNode(child, list: list, originX: childOriginX, originY: childOriginY)
+        if node.childrenMayNeedZSort {
+            for child in renderOrderedChildren(of: node) {
+                renderNode(child, list: list, originX: childOriginX, originY: childOriginY)
+            }
+        } else {
+            for child in node.children {
+                renderNode(child, list: list, originX: childOriginX, originY: childOriginY)
+            }
         }
 
         // 7. Overlay (scrollbars, focus rings drawn above content).

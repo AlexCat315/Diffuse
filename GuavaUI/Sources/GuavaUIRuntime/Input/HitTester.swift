@@ -53,9 +53,17 @@ public struct HitTester {
         // must apply the inverse translation when descending.
         let childPoint = CGPoint(x: local.x + node.contentOffset.x,
                                  y: local.y + node.contentOffset.y)
-        for child in hitTestOrderedChildren(of: node) {
-            if let hit = walk(node: child, pointInParent: childPoint, path: &path) {
-                return hit
+        if node.childrenMayNeedZSort {
+            for child in hitTestOrderedChildren(of: node) {
+                if let hit = walk(node: child, pointInParent: childPoint, path: &path) {
+                    return hit
+                }
+            }
+        } else {
+            for child in node.children.reversed() {
+                if let hit = walk(node: child, pointInParent: childPoint, path: &path) {
+                    return hit
+                }
             }
         }
 

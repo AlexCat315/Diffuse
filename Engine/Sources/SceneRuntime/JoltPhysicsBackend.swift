@@ -10,6 +10,9 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     private static let colliderHasCapsuleFlag: UInt32 = 1 << 5
     private static let colliderHasConvexFlag: UInt32 = 1 << 6
     private static let rigidBodyContinuousCollisionFlag: UInt32 = 1 << 7
+    private static let queryShapeBox: UInt8 = 0
+    private static let queryShapeSphere: UInt8 = 1
+    private static let queryShapeCapsule: UInt8 = 2
 
     private var context: GuavaJoltContext?
     private var lastPreparedBodyCount: Int = 0
@@ -223,6 +226,32 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         return hits.prefix(min(Int(count), hits.count)).map(makeOverlapHit)
     }
 
+    public func overlapShape(_ query: PhysicsOverlapShapeQuery, filter: PhysicsQueryFilter) -> [PhysicsOverlapHit] {
+        guard let nativeContext = context else { return [] }
+        let maxResults = query.maxResults == .max
+            ? UInt32.max
+            : UInt32(max(0, min(query.maxResults, Int(UInt32.max))))
+        guard maxResults > 0 else { return [] }
+
+        var cQuery = makeOverlapShapeQuery(query, maxResults: maxResults)
+        var cFilter = makeQueryFilter(filter)
+        let capacity = maxResults == UInt32.max
+            ? lastPreparedBodyCount
+            : min(Int(maxResults), lastPreparedBodyCount)
+        guard capacity > 0 else { return [] }
+        var hits = [GuavaJoltOverlapHit](repeating: GuavaJoltOverlapHit(), count: capacity)
+        let count = hits.withUnsafeMutableBufferPointer { buffer in
+            guava_jolt_context_overlap_shape(
+                nativeContext,
+                &cQuery,
+                &cFilter,
+                buffer.baseAddress,
+                buffer.count
+            )
+        }
+        return hits.prefix(min(Int(count), hits.count)).map(makeOverlapHit)
+    }
+
     public func sweepAABB(_ query: PhysicsSweepAABBQuery, filter: PhysicsQueryFilter) -> PhysicsSweepHit? {
         guard let nativeContext = context else { return nil }
         var cQuery = GuavaJoltSweepAABBQuery(
@@ -239,6 +268,16 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         var cFilter = makeQueryFilter(filter)
         var hit = GuavaJoltSweepHit()
         let success = guava_jolt_context_sweep_aabb(nativeContext, &cQuery, &cFilter, &hit)
+        guard success else { return nil }
+        return makeSweepHit(hit)
+    }
+
+    public func sweepShape(_ query: PhysicsSweepShapeQuery, filter: PhysicsQueryFilter) -> PhysicsSweepHit? {
+        guard let nativeContext = context else { return nil }
+        var cQuery = makeSweepShapeQuery(query)
+        var cFilter = makeQueryFilter(filter)
+        var hit = GuavaJoltSweepHit()
+        let success = guava_jolt_context_sweep_shape(nativeContext, &cQuery, &cFilter, &hit)
         guard success else { return nil }
         return makeSweepHit(hit)
     }
@@ -359,6 +398,12 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             accumulated_torque_x: descriptor.rigidBody?.accumulatedTorque.x ?? 0,
             accumulated_torque_y: descriptor.rigidBody?.accumulatedTorque.y ?? 0,
             accumulated_torque_z: descriptor.rigidBody?.accumulatedTorque.z ?? 0,
+            accumulated_linear_impulse_x: descriptor.rigidBody?.accumulatedLinearImpulse.x ?? 0,
+            accumulated_linear_impulse_y: descriptor.rigidBody?.accumulatedLinearImpulse.y ?? 0,
+            accumulated_linear_impulse_z: descriptor.rigidBody?.accumulatedLinearImpulse.z ?? 0,
+            accumulated_angular_impulse_x: descriptor.rigidBody?.accumulatedAngularImpulse.x ?? 0,
+            accumulated_angular_impulse_y: descriptor.rigidBody?.accumulatedAngularImpulse.y ?? 0,
+            accumulated_angular_impulse_z: descriptor.rigidBody?.accumulatedAngularImpulse.z ?? 0,
             box_half_extent_x: boxHalfExtents.x,
             box_half_extent_y: boxHalfExtents.y,
             box_half_extent_z: boxHalfExtents.z,
@@ -439,6 +484,80 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             layer_id: filter.layerID ?? 0,
             layer_mask: filter.layerMask
         )
+    }
+
+    private func makeOverlapShapeQuery(
+        _ query: PhysicsOverlapShapeQuery,
+        maxResults: UInt32
+    ) -> GuavaJoltOverlapShapeQuery {
+        let shape = queryShapeFields(query.shape)
+        return GuavaJoltOverlapShapeQuery(
+            shape_type: shape.type,
+            reserved0: 0,
+            reserved1: 0,
+            position_x: query.position.x,
+            position_y: query.position.y,
+            position_z: query.position.z,
+            rotation_x: query.rotation.x,
+            rotation_y: query.rotation.y,
+            rotation_z: query.rotation.z,
+            rotation_w: query.rotation.w,
+            box_half_extent_x: shape.boxHalfExtents.x,
+            box_half_extent_y: shape.boxHalfExtents.y,
+            box_half_extent_z: shape.boxHalfExtents.z,
+            sphere_radius: shape.sphereRadius,
+            capsule_radius: shape.capsuleRadius,
+            capsule_half_height: shape.capsuleHalfHeight,
+            max_results: maxResults
+        )
+    }
+
+    private func makeSweepShapeQuery(_ query: PhysicsSweepShapeQuery) -> GuavaJoltSweepShapeQuery {
+        let shape = queryShapeFields(query.shape)
+        return GuavaJoltSweepShapeQuery(
+            shape_type: shape.type,
+            reserved0: 0,
+            reserved1: 0,
+            position_x: query.position.x,
+            position_y: query.position.y,
+            position_z: query.position.z,
+            rotation_x: query.rotation.x,
+            rotation_y: query.rotation.y,
+            rotation_z: query.rotation.z,
+            rotation_w: query.rotation.w,
+            box_half_extent_x: shape.boxHalfExtents.x,
+            box_half_extent_y: shape.boxHalfExtents.y,
+            box_half_extent_z: shape.boxHalfExtents.z,
+            sphere_radius: shape.sphereRadius,
+            capsule_radius: shape.capsuleRadius,
+            capsule_half_height: shape.capsuleHalfHeight,
+            translation_x: query.translation.x,
+            translation_y: query.translation.y,
+            translation_z: query.translation.z
+        )
+    }
+
+    private func queryShapeFields(_ shape: PhysicsQueryShape) -> (
+        type: UInt8,
+        boxHalfExtents: SIMD3<Float>,
+        sphereRadius: Float,
+        capsuleRadius: Float,
+        capsuleHalfHeight: Float
+    ) {
+        switch shape {
+        case let .box(halfExtents):
+            return (
+                Self.queryShapeBox,
+                SIMD3<Float>(max(halfExtents.x, 0), max(halfExtents.y, 0), max(halfExtents.z, 0)),
+                0,
+                0,
+                0
+            )
+        case let .sphere(radius):
+            return (Self.queryShapeSphere, .zero, max(radius, 0), 0, 0)
+        case let .capsule(radius, halfHeight):
+            return (Self.queryShapeCapsule, .zero, 0, max(radius, 0), max(halfHeight, 0))
+        }
     }
 
     private func makeRaycastHit(_ hit: GuavaJoltRaycastHit) -> PhysicsRaycastHit {
