@@ -103,6 +103,10 @@ public struct FontModifier: ViewModifier {
     }
 
     public func apply(layout: LayoutNode) {
+        if let previous = layout.attachments[StyleAttachmentKey.font] as? Font,
+           previous == font {
+            return
+        }
         layout.attachments[StyleAttachmentKey.font] = font
         if layout.hasMeasureFunc { layout.markDirty() }
     }
@@ -119,6 +123,10 @@ public struct LineHeightModifier: ViewModifier {
     }
 
     public func apply(layout: LayoutNode) {
+        if let previous = layout.attachments[StyleAttachmentKey.lineHeight] as? Float,
+           previous == lineHeight {
+            return
+        }
         layout.attachments[StyleAttachmentKey.lineHeight] = lineHeight
         if layout.hasMeasureFunc { layout.markDirty() }
     }

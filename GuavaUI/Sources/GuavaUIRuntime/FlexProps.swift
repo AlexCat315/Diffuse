@@ -80,7 +80,7 @@ extension YGMeasureMode {
 #endif
 
 /// Flex layout direction (maps to `YGFlexDirection`).
-public enum FlexDirection {
+public enum FlexDirection: Hashable {
     case row, rowReverse, column, columnReverse
 
     var ygValue: YGFlexDirection {
@@ -94,7 +94,7 @@ public enum FlexDirection {
 }
 
 /// Cross-axis alignment (maps to `YGAlign`).
-public enum Align {
+public enum Align: Hashable {
     case auto, flexStart, center, flexEnd, stretch, baseline, spaceBetween, spaceAround, spaceEvenly
 
     var ygValue: YGAlign {
@@ -113,7 +113,7 @@ public enum Align {
 }
 
 /// Main-axis alignment (maps to `YGJustify`).
-public enum Justify {
+public enum Justify: Hashable {
     case flexStart, center, flexEnd, spaceBetween, spaceAround, spaceEvenly
 
     var ygValue: YGJustify {
@@ -129,7 +129,7 @@ public enum Justify {
 }
 
 /// Box edge selector (maps to `YGEdge`).
-public enum Edge {
+public enum Edge: Hashable {
     case left, top, right, bottom, start, end, horizontal, vertical, all
 
     var ygValue: YGEdge {
@@ -148,7 +148,7 @@ public enum Edge {
 }
 
 /// Text/layout direction (maps to `YGDirection`).
-public enum Direction {
+public enum Direction: Hashable {
     case inherit, ltr, rtl
 
     var ygValue: YGDirection {
@@ -161,7 +161,7 @@ public enum Direction {
 }
 
 /// Position type (maps to `YGPositionType`).
-public enum PositionType {
+public enum PositionType: Hashable {
     case `static`, relative, absolute
 
     var ygValue: YGPositionType {
@@ -174,7 +174,7 @@ public enum PositionType {
 }
 
 /// Flex wrap (maps to `YGWrap`).
-public enum Wrap {
+public enum Wrap: Hashable {
     case noWrap, wrap, wrapReverse
 
     var ygValue: YGWrap {
@@ -187,7 +187,7 @@ public enum Wrap {
 }
 
 /// Overflow behavior (maps to `YGOverflow`).
-public enum Overflow {
+public enum Overflow: Hashable {
     case visible, hidden
 
     var ygValue: YGOverflow {
@@ -199,7 +199,7 @@ public enum Overflow {
 }
 
 /// Display type (maps to `YGDisplay`).
-public enum Display {
+public enum Display: Hashable {
     case flex, none, contents
 
     var ygValue: YGDisplay {
@@ -212,7 +212,7 @@ public enum Display {
 }
 
 /// Gutter (gap) axis selector (maps to `YGGutter`).
-public enum Gutter {
+public enum Gutter: Hashable {
     case column, row, all
 
     var ygValue: YGGutter {
@@ -225,7 +225,7 @@ public enum Gutter {
 }
 
 /// Box sizing model (maps to `YGBoxSizing`).
-public enum BoxSizing {
+public enum BoxSizing: Hashable {
     case borderBox, contentBox
 
     var ygValue: YGBoxSizing {
