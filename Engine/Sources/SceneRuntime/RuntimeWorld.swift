@@ -1076,14 +1076,14 @@ public struct RuntimeWorld: @unchecked Sendable {
     @discardableResult
     public mutating func applyLinearImpulse(_ impulse: SIMD3<Float>, to entity: EntityID, wake: Bool = true) -> Bool {
         updateDynamicRigidBody(for: entity, wake: wake) { body in
-            body.linearVelocity += impulse * inverseMass(for: body)
+            body.accumulatedLinearImpulse += impulse
         }
     }
 
     @discardableResult
     public mutating func applyAngularImpulse(_ impulse: SIMD3<Float>, to entity: EntityID, wake: Bool = true) -> Bool {
         updateDynamicRigidBody(for: entity, wake: wake) { body in
-            body.angularVelocity += impulse * inverseMass(for: body)
+            body.accumulatedAngularImpulse += impulse
         }
     }
 
@@ -1101,6 +1101,8 @@ public struct RuntimeWorld: @unchecked Sendable {
             body.angularVelocity = .zero
             body.accumulatedForce = .zero
             body.accumulatedTorque = .zero
+            body.accumulatedLinearImpulse = .zero
+            body.accumulatedAngularImpulse = .zero
             body.isSleeping = true
         }
     }
@@ -1120,6 +1122,8 @@ public struct RuntimeWorld: @unchecked Sendable {
             let cleared = updateComponent(RigidBody.self, for: entity) { body in
                 body.accumulatedForce = .zero
                 body.accumulatedTorque = .zero
+                body.accumulatedLinearImpulse = .zero
+                body.accumulatedAngularImpulse = .zero
             }
             if cleared {
                 clearedCount += 1
@@ -1184,8 +1188,4 @@ private func translationMatrix(_ translation: SIMD3<Float>) -> simd_float4x4 {
         SIMD4<Float>(0, 0, 1, translation.z),
         SIMD4<Float>(0, 0, 0, 1),
     ])
-}
-
-private func inverseMass(for body: RigidBody) -> Float {
-    body.mass > 0.000_001 ? 1 / body.mass : 0
 }

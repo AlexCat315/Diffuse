@@ -68,7 +68,15 @@ private final class RecordingPhysicsBackend: PhysicsBackend, @unchecked Sendable
         []
     }
 
+    func overlapShape(_ query: PhysicsOverlapShapeQuery, filter: PhysicsQueryFilter) -> [PhysicsOverlapHit] {
+        []
+    }
+
     func sweepAABB(_ query: PhysicsSweepAABBQuery, filter: PhysicsQueryFilter) -> PhysicsSweepHit? {
+        nil
+    }
+
+    func sweepShape(_ query: PhysicsSweepShapeQuery, filter: PhysicsQueryFilter) -> PhysicsSweepHit? {
         nil
     }
 

@@ -34,7 +34,15 @@ private final class SelectionRecordingPhysicsBackend: PhysicsBackend, @unchecked
         []
     }
 
+    func overlapShape(_ query: PhysicsOverlapShapeQuery, filter: PhysicsQueryFilter) -> [PhysicsOverlapHit] {
+        []
+    }
+
     func sweepAABB(_ query: PhysicsSweepAABBQuery, filter: PhysicsQueryFilter) -> PhysicsSweepHit? {
+        nil
+    }
+
+    func sweepShape(_ query: PhysicsSweepShapeQuery, filter: PhysicsQueryFilter) -> PhysicsSweepHit? {
         nil
     }
 
@@ -300,9 +308,11 @@ struct PhysicsBackendSelectionTests {
         )
 
         let appliedImpulse = runtime.applyLinearImpulse(SIMD3<Float>(2, 0, 0), to: entity)
+        let appliedAngularImpulse = runtime.applyAngularImpulse(SIMD3<Float>(0, 0, 0.2), to: entity)
         let appliedForce = runtime.applyForce(SIMD3<Float>(0, 120, 0), to: entity)
         let appliedTorque = runtime.applyTorque(SIMD3<Float>(0, 0, 120), to: entity)
         #expect(appliedImpulse)
+        #expect(appliedAngularImpulse)
         #expect(appliedForce)
         #expect(appliedTorque)
 
@@ -312,8 +322,9 @@ struct PhysicsBackendSelectionTests {
         // Real Jolt: sphere inertia I = (2/5)·m·r虏 = 0.4·2·0.25 = 0.2.
         // Linear impulse (2,0,0) on m=2  →Δv  = 1 in x
         // Force (0,120,0) for dt=1/60  →Δv  = 120/2 · 1/60 = 1 in y
+        // Angular impulse (0,0,0.2)     →Δω = 0.2/0.2 = 1 in z
         // Torque (0,0,120) for dt=1/60 →Δω = 120/0.2 · 1/60 = 10 in z
-        let expectedAngularZ: Float = 10
+        let expectedAngularZ: Float = 11
         #expect(report.physicsBackendIdentifier == "jolt")
         #expect(report.physicsWritebackCount == 1)
         #expect(abs((body?.linearVelocity.x ?? 0) - 1) < 0.001)
@@ -321,6 +332,8 @@ struct PhysicsBackendSelectionTests {
         #expect(abs((body?.angularVelocity.z ?? 0) - expectedAngularZ) < 0.01)
         #expect(body?.accumulatedForce == .zero)
         #expect(body?.accumulatedTorque == .zero)
+        #expect(body?.accumulatedLinearImpulse == .zero)
+        #expect(body?.accumulatedAngularImpulse == .zero)
         #expect(body?.isSleeping == false)
         // Symplectic Euler: position = newVelocity · dt
         #expect(abs((runtime.worldTransform(for: entity)?.translation.x ?? 0) - Float(1.0 / 60.0)) < 0.001)
