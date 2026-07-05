@@ -14,17 +14,34 @@ public struct ObservableStateScope {
 public enum ObservableStateTracking {
     public typealias DependencyCleaner = (ObjectIdentifier) -> Void
 
-    nonisolated(unsafe) private static var stack: [ObservableStateScope] = []
+    private final class StackBox {
+        var stack: [ObservableStateScope] = []
+    }
+
+    private static let stackStorageKey = "guava.ui.ObservableStateTracking.stack"
+    private static let cleanersLock = NSLock()
     nonisolated(unsafe) private static var cleanersByScope: [ObjectIdentifier: [ObjectIdentifier: DependencyCleaner]] = [:]
 
     public static var current: ObservableStateScope? {
-        stack.last
+        stackBox.stack.last
+    }
+
+    private static var stackBox: StackBox {
+        let dict = Thread.current.threadDictionary
+        if let existing = dict[stackStorageKey] as? StackBox {
+            return existing
+        }
+        let fresh = StackBox()
+        dict[stackStorageKey] = fresh
+        return fresh
     }
 
     public static func registerDependencyCleaner(for scopeID: ObjectIdentifier,
                                                  ownerID: ObjectIdentifier,
                                                  _ cleaner: @escaping DependencyCleaner) {
-        cleanersByScope[scopeID, default: [:]][ownerID] = cleaner
+        cleanersLock.withLock {
+            cleanersByScope[scopeID, default: [:]][ownerID] = cleaner
+        }
     }
 
     @discardableResult
@@ -32,8 +49,9 @@ public enum ObservableStateTracking {
                                     invalidate: @escaping () -> Void,
                                     _ body: () throws -> R) rethrows -> R {
         clearDependencies(for: id)
-        stack.append(ObservableStateScope(id: id, invalidate: invalidate))
-        defer { _ = stack.popLast() }
+        let stack = stackBox
+        stack.stack.append(ObservableStateScope(id: id, invalidate: invalidate))
+        defer { _ = stack.stack.popLast() }
         return try body()
     }
 
@@ -42,7 +60,9 @@ public enum ObservableStateTracking {
     }
 
     private static func clearDependencies(for scopeID: ObjectIdentifier) {
-        let cleaners = cleanersByScope.removeValue(forKey: scopeID).map { Array($0.values) } ?? []
+        let cleaners = cleanersLock.withLock {
+            cleanersByScope.removeValue(forKey: scopeID).map { Array($0.values) } ?? []
+        }
         for cleaner in cleaners {
             cleaner(scopeID)
         }

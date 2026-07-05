@@ -24,7 +24,9 @@ public final class Recomposer: @unchecked Sendable {
         let animation: Animation?
     }
 
-    private var pending: [PendingScope] = []
+    private var pendingOrder: [ObjectIdentifier] = []
+    private var pendingByID: [ObjectIdentifier: PendingScope] = [:]
+    private var scanIndex = 0
     private let lock = NSLock()
 
     public init() {}
@@ -42,8 +44,11 @@ public final class Recomposer: @unchecked Sendable {
                            animation: Animation? = nil,
                            body: @escaping () -> Void) {
         lock.withLock {
-            guard !pending.contains(where: { $0.id == scopeID }) else { return }
-            pending.append(PendingScope(id: scopeID, body: body, animation: animation))
+            guard pendingByID[scopeID] == nil else { return }
+            pendingByID[scopeID] = PendingScope(id: scopeID,
+                                                body: body,
+                                                animation: animation)
+            pendingOrder.append(scopeID)
         }
     }
 
@@ -63,10 +68,15 @@ public final class Recomposer: @unchecked Sendable {
 
         while true {
             let scope: PendingScope? = lock.withLock {
-                guard let index = pending.firstIndex(where: { !committedIDs.contains($0.id) }) else {
-                    return nil
+                while scanIndex < pendingOrder.count {
+                    let id = pendingOrder[scanIndex]
+                    scanIndex += 1
+                    guard let scope = pendingByID[id] else { continue }
+                    guard !committedIDs.contains(id) else { continue }
+                    pendingByID.removeValue(forKey: id)
+                    return scope
                 }
-                return pending.remove(at: index)
+                return nil
             }
             guard let scope else { break }
             didCommit = true
@@ -76,11 +86,20 @@ public final class Recomposer: @unchecked Sendable {
             }
         }
 
+        compactPendingQueue()
         return didCommit
     }
 
     /// `true` when there are pending recomposes queued for the next `commitAll()`.
     public var hasPending: Bool {
-        lock.withLock { !pending.isEmpty }
+        lock.withLock { !pendingByID.isEmpty }
+    }
+
+    private func compactPendingQueue() {
+        lock.withLock {
+            guard scanIndex > 0 else { return }
+            pendingOrder = pendingOrder.filter { pendingByID[$0] != nil }
+            scanIndex = 0
+        }
     }
 }

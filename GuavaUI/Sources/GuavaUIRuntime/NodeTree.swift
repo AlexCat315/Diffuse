@@ -44,10 +44,14 @@ public final class NodeTree: @unchecked Sendable {
     }
 
     private func traverse(_ node: Node) {
+        let shouldVisitChildren = node.isDirty || node.renderDirty
         node.isDirty = false
         node.renderDirty = false
+        guard shouldVisitChildren else { return }
         for child in node.children {
-            traverse(child)
+            if child.isDirty || child.renderDirty {
+                traverse(child)
+            }
         }
     }
 }
