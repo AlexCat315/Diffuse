@@ -4,6 +4,12 @@ import CoreGraphics
 #endif
 import Foundation
 
+private enum LayoutStyleValue: Equatable {
+    case points(Float)
+    case percent(Float)
+    case auto
+}
+
 /// Wraps a `YGNodeRef` and owns its lifetime.
 ///
 /// Create a `LayoutNode` for every `Node` that participates in flexbox layout,
@@ -19,9 +25,21 @@ public final class LayoutNode: @unchecked Sendable {
     /// Retained children — prevents the underlying YGNodeRefs from dangling.
     public private(set) var children: [LayoutNode] = []
 
+    private weak var parent: LayoutNode?
+    private var subtreeLayoutDirtyHint = false
+
     /// Side table for style metadata that affects measurement but is not part
     /// of Yoga's native style surface.
     public var attachments: [String: Any] = [:]
+
+    private var flexBasisStyle: LayoutStyleValue = .auto
+    private var widthStyle: LayoutStyleValue = .auto
+    private var heightStyle: LayoutStyleValue = .auto
+    private var positionStyles: [Edge: LayoutStyleValue] = [:]
+    private var marginStyles: [Edge: LayoutStyleValue] = [:]
+    private var paddingStyles: [Edge: LayoutStyleValue] = [:]
+    private var borderStyles: [Edge: Float] = [:]
+    private var gapStyles: [Gutter: LayoutStyleValue] = [:]
 
     // MARK: - Phase 6: typed text measure slot
     //
@@ -53,12 +71,19 @@ public final class LayoutNode: @unchecked Sendable {
 
     public func addChild(_ child: LayoutNode) {
         YGNodeInsertChild(ygNode, child.ygNode, children.count)
+        child.parent = self
         children.append(child)
+        markLayoutDirtyHint()
     }
 
     public func removeChild(_ child: LayoutNode) {
         YGNodeRemoveChild(ygNode, child.ygNode)
+        let previousCount = children.count
         children.removeAll { $0 === child }
+        if children.count != previousCount {
+            child.parent = nil
+            markLayoutDirtyHint()
+        }
     }
 
     /// Reassign this node's children to `ordered` (which must be exactly the
@@ -86,182 +111,287 @@ public final class LayoutNode: @unchecked Sendable {
             YGNodeInsertChild(ygNode, c.ygNode, index)
         }
         children = ordered
+        markLayoutDirtyHint()
     }
 
     // MARK: - Style setters (container)
 
     public var direction: Direction = .inherit {
-        didSet { YGNodeStyleSetDirection(ygNode, direction.ygValue) }
+        didSet {
+            guard oldValue != direction else { return }
+            YGNodeStyleSetDirection(ygNode, direction.ygValue)
+            markLayoutDirtyHint()
+        }
     }
 
     public var flexDirection: FlexDirection = .column {
-        didSet { YGNodeStyleSetFlexDirection(ygNode, flexDirection.ygValue) }
+        didSet {
+            guard oldValue != flexDirection else { return }
+            YGNodeStyleSetFlexDirection(ygNode, flexDirection.ygValue)
+            markLayoutDirtyHint()
+        }
     }
 
     public var alignItems: Align = .stretch {
-        didSet { YGNodeStyleSetAlignItems(ygNode, alignItems.ygValue) }
+        didSet {
+            guard oldValue != alignItems else { return }
+            YGNodeStyleSetAlignItems(ygNode, alignItems.ygValue)
+            markLayoutDirtyHint()
+        }
     }
 
     public var alignContent: Align = .flexStart {
-        didSet { YGNodeStyleSetAlignContent(ygNode, alignContent.ygValue) }
+        didSet {
+            guard oldValue != alignContent else { return }
+            YGNodeStyleSetAlignContent(ygNode, alignContent.ygValue)
+            markLayoutDirtyHint()
+        }
     }
 
     public var justifyContent: Justify = .flexStart {
-        didSet { YGNodeStyleSetJustifyContent(ygNode, justifyContent.ygValue) }
+        didSet {
+            guard oldValue != justifyContent else { return }
+            YGNodeStyleSetJustifyContent(ygNode, justifyContent.ygValue)
+            markLayoutDirtyHint()
+        }
     }
 
     public var flexWrap: Wrap = .noWrap {
-        didSet { YGNodeStyleSetFlexWrap(ygNode, flexWrap.ygValue) }
+        didSet {
+            guard oldValue != flexWrap else { return }
+            YGNodeStyleSetFlexWrap(ygNode, flexWrap.ygValue)
+            markLayoutDirtyHint()
+        }
     }
 
     public var overflow: Overflow = .visible {
-        didSet { YGNodeStyleSetOverflow(ygNode, overflow.ygValue) }
+        didSet {
+            guard oldValue != overflow else { return }
+            YGNodeStyleSetOverflow(ygNode, overflow.ygValue)
+            markLayoutDirtyHint()
+        }
     }
 
     public var display: Display = .flex {
-        didSet { YGNodeStyleSetDisplay(ygNode, display.ygValue) }
+        didSet {
+            guard oldValue != display else { return }
+            YGNodeStyleSetDisplay(ygNode, display.ygValue)
+            markLayoutDirtyHint()
+        }
     }
 
     // MARK: - Style setters (child)
 
     public var alignSelf: Align = .auto {
-        didSet { YGNodeStyleSetAlignSelf(ygNode, alignSelf.ygValue) }
+        didSet {
+            guard oldValue != alignSelf else { return }
+            YGNodeStyleSetAlignSelf(ygNode, alignSelf.ygValue)
+            markLayoutDirtyHint()
+        }
     }
 
     public var positionType: PositionType = .relative {
-        didSet { YGNodeStyleSetPositionType(ygNode, positionType.ygValue) }
+        didSet {
+            guard oldValue != positionType else { return }
+            YGNodeStyleSetPositionType(ygNode, positionType.ygValue)
+            markLayoutDirtyHint()
+        }
     }
 
     public var flex: Float = 0 {
-        didSet { YGNodeStyleSetFlex(ygNode, flex) }
+        didSet {
+            guard oldValue != flex else { return }
+            YGNodeStyleSetFlex(ygNode, flex)
+            markLayoutDirtyHint()
+        }
     }
 
     public var flexGrow: Float = 0 {
-        didSet { YGNodeStyleSetFlexGrow(ygNode, flexGrow) }
+        didSet {
+            guard oldValue != flexGrow else { return }
+            YGNodeStyleSetFlexGrow(ygNode, flexGrow)
+            markLayoutDirtyHint()
+        }
     }
 
     public var flexShrink: Float = 0 {
-        didSet { YGNodeStyleSetFlexShrink(ygNode, flexShrink) }
+        didSet {
+            guard oldValue != flexShrink else { return }
+            YGNodeStyleSetFlexShrink(ygNode, flexShrink)
+            markLayoutDirtyHint()
+        }
     }
 
     // MARK: - Flex basis
 
     public func setFlexBasis(_ value: Float) {
+        guard flexBasisStyle != .points(value) else { return }
+        flexBasisStyle = .points(value)
         YGNodeStyleSetFlexBasis(ygNode, value)
+        markLayoutDirtyHint()
     }
 
     public func setFlexBasisPercent(_ value: Float) {
+        guard flexBasisStyle != .percent(value) else { return }
+        flexBasisStyle = .percent(value)
         YGNodeStyleSetFlexBasisPercent(ygNode, value)
+        markLayoutDirtyHint()
     }
 
     public func setFlexBasisAuto() {
+        guard flexBasisStyle != .auto else { return }
+        flexBasisStyle = .auto
         YGNodeStyleSetFlexBasisAuto(ygNode)
+        markLayoutDirtyHint()
     }
 
     // MARK: - Dimensions
 
     public var width: Float? {
         didSet {
-            if let w = width { YGNodeStyleSetWidth(ygNode, w) }
-            else { YGNodeStyleSetWidthAuto(ygNode) }
+            applyWidthStyle(width.map(LayoutStyleValue.points) ?? .auto)
         }
     }
 
     public var minWidth: Float? {
         didSet {
+            guard oldValue != minWidth else { return }
             if let w = minWidth { YGNodeStyleSetMinWidth(ygNode, w) }
             else { YGNodeStyleSetMinWidth(ygNode, .nan) }
+            markLayoutDirtyHint()
         }
     }
 
     public var maxWidth: Float? {
         didSet {
+            guard oldValue != maxWidth else { return }
             if let w = maxWidth { YGNodeStyleSetMaxWidth(ygNode, w) }
             else { YGNodeStyleSetMaxWidth(ygNode, .nan) }
+            markLayoutDirtyHint()
         }
     }
 
     public func setWidthPercent(_ value: Float) {
-        YGNodeStyleSetWidthPercent(ygNode, value)
+        applyWidthStyle(.percent(value))
     }
 
     public var height: Float? {
         didSet {
-            if let h = height { YGNodeStyleSetHeight(ygNode, h) }
-            else { YGNodeStyleSetHeightAuto(ygNode) }
+            applyHeightStyle(height.map(LayoutStyleValue.points) ?? .auto)
         }
     }
 
     public var minHeight: Float? {
         didSet {
+            guard oldValue != minHeight else { return }
             if let h = minHeight { YGNodeStyleSetMinHeight(ygNode, h) }
             else { YGNodeStyleSetMinHeight(ygNode, .nan) }
+            markLayoutDirtyHint()
         }
     }
 
     public var maxHeight: Float? {
         didSet {
+            guard oldValue != maxHeight else { return }
             if let h = maxHeight { YGNodeStyleSetMaxHeight(ygNode, h) }
             else { YGNodeStyleSetMaxHeight(ygNode, .nan) }
+            markLayoutDirtyHint()
         }
     }
 
     public func setHeightPercent(_ value: Float) {
-        YGNodeStyleSetHeightPercent(ygNode, value)
+        applyHeightStyle(.percent(value))
     }
 
     // MARK: - Position / Margin / Padding / Border
 
     public func setPosition(_ value: Float, edge: Edge) {
+        guard positionStyles[edge] != .points(value) else { return }
+        positionStyles[edge] = .points(value)
         YGNodeStyleSetPosition(ygNode, edge.ygValue, value)
+        markLayoutDirtyHint()
     }
 
     public func setPositionPercent(_ value: Float, edge: Edge) {
+        guard positionStyles[edge] != .percent(value) else { return }
+        positionStyles[edge] = .percent(value)
         YGNodeStyleSetPositionPercent(ygNode, edge.ygValue, value)
+        markLayoutDirtyHint()
     }
 
     public func setPositionAuto(edge: Edge) {
+        guard positionStyles[edge] != .auto else { return }
+        positionStyles[edge] = .auto
         YGNodeStyleSetPositionAuto(ygNode, edge.ygValue)
+        markLayoutDirtyHint()
     }
 
     public func setMargin(_ value: Float, edge: Edge = .all) {
+        guard marginStyles[edge] != .points(value) else { return }
+        marginStyles[edge] = .points(value)
         YGNodeStyleSetMargin(ygNode, edge.ygValue, value)
+        markLayoutDirtyHint()
     }
 
     public func setMarginPercent(_ value: Float, edge: Edge = .all) {
+        guard marginStyles[edge] != .percent(value) else { return }
+        marginStyles[edge] = .percent(value)
         YGNodeStyleSetMarginPercent(ygNode, edge.ygValue, value)
+        markLayoutDirtyHint()
     }
 
     public func setMarginAuto(edge: Edge = .all) {
+        guard marginStyles[edge] != .auto else { return }
+        marginStyles[edge] = .auto
         YGNodeStyleSetMarginAuto(ygNode, edge.ygValue)
+        markLayoutDirtyHint()
     }
 
     public func setPadding(_ value: Float, edge: Edge = .all) {
+        guard paddingStyles[edge] != .points(value) else { return }
+        paddingStyles[edge] = .points(value)
         YGNodeStyleSetPadding(ygNode, edge.ygValue, value)
+        markLayoutDirtyHint()
     }
 
     public func setPaddingPercent(_ value: Float, edge: Edge = .all) {
+        guard paddingStyles[edge] != .percent(value) else { return }
+        paddingStyles[edge] = .percent(value)
         YGNodeStyleSetPaddingPercent(ygNode, edge.ygValue, value)
+        markLayoutDirtyHint()
     }
 
     public func setBorder(_ value: Float, edge: Edge = .all) {
+        guard borderStyles[edge] != value else { return }
+        borderStyles[edge] = value
         YGNodeStyleSetBorder(ygNode, edge.ygValue, value)
+        markLayoutDirtyHint()
     }
 
     // MARK: - Gap
 
     public func setGap(_ value: Float, gutter: Gutter = .all) {
+        guard gapStyles[gutter] != .points(value) else { return }
+        gapStyles[gutter] = .points(value)
         YGNodeStyleSetGap(ygNode, gutter.ygValue, value)
+        markLayoutDirtyHint()
     }
 
     public func setGapPercent(_ value: Float, gutter: Gutter = .all) {
+        guard gapStyles[gutter] != .percent(value) else { return }
+        gapStyles[gutter] = .percent(value)
         YGNodeStyleSetGapPercent(ygNode, gutter.ygValue, value)
+        markLayoutDirtyHint()
     }
 
     // MARK: - Box sizing
 
     public var boxSizing: BoxSizing = .borderBox {
-        didSet { YGNodeStyleSetBoxSizing(ygNode, boxSizing.ygValue) }
+        didSet {
+            guard oldValue != boxSizing else { return }
+            YGNodeStyleSetBoxSizing(ygNode, boxSizing.ygValue)
+            markLayoutDirtyHint()
+        }
     }
 
     // MARK: - Layout calculation
@@ -278,14 +408,12 @@ public final class LayoutNode: @unchecked Sendable {
         direction: Direction = .ltr
     ) {
         YGNodeCalculateLayout(ygNode, availableWidth, availableHeight, direction.ygValue)
+        clearLayoutDirtyHints()
     }
 
     /// True when this node or any descendant still needs a Yoga layout pass.
     public var subtreeIsDirty: Bool {
-        if YGNodeIsDirty(ygNode) {
-            return true
-        }
-        return children.contains { $0.subtreeIsDirty }
+        subtreeLayoutDirtyHint || YGNodeIsDirty(ygNode)
     }
 
     // MARK: - Layout readback
@@ -328,14 +456,19 @@ public final class LayoutNode: @unchecked Sendable {
 
     /// Sets a measure callback for leaf nodes (e.g. Text). Calling `nil` clears it.
     public func setMeasureFunc(_ closure: MeasureFunc?) {
+        let hadMeasureFunc = measureClosure != nil
         self.measureClosure = closure
         if closure == nil {
+            guard hadMeasureFunc else { return }
             YGNodeSetMeasureFunc(ygNode, nil)
             YGNodeSetContext(ygNode, nil)
+            markLayoutDirtyHint()
             return
         }
+        guard !hadMeasureFunc else { return }
         YGNodeSetContext(ygNode, Unmanaged.passUnretained(self).toOpaque())
         YGNodeSetMeasureFunc(ygNode, layoutNodeMeasureTrampoline)
+        markLayoutDirtyHint()
     }
 
     /// Mark this node's measurement as stale (call after content changes).
@@ -344,11 +477,56 @@ public final class LayoutNode: @unchecked Sendable {
     /// modifiers.
     public func markDirty() {
         YGNodeMarkDirty(ygNode)
+        markLayoutDirtyHint()
     }
 
     /// True iff this node has a custom measure callback installed via
     /// `setMeasureFunc`. Use to gate `markDirty()` from generic modifiers.
     public var hasMeasureFunc: Bool { measureClosure != nil }
+
+    private func applyWidthStyle(_ style: LayoutStyleValue) {
+        guard widthStyle != style else { return }
+        widthStyle = style
+        switch style {
+        case .points(let value):
+            YGNodeStyleSetWidth(ygNode, value)
+        case .percent(let value):
+            YGNodeStyleSetWidthPercent(ygNode, value)
+        case .auto:
+            YGNodeStyleSetWidthAuto(ygNode)
+        }
+        markLayoutDirtyHint()
+    }
+
+    private func applyHeightStyle(_ style: LayoutStyleValue) {
+        guard heightStyle != style else { return }
+        heightStyle = style
+        switch style {
+        case .points(let value):
+            YGNodeStyleSetHeight(ygNode, value)
+        case .percent(let value):
+            YGNodeStyleSetHeightPercent(ygNode, value)
+        case .auto:
+            YGNodeStyleSetHeightAuto(ygNode)
+        }
+        markLayoutDirtyHint()
+    }
+
+    private func markLayoutDirtyHint() {
+        guard !subtreeLayoutDirtyHint else { return }
+        subtreeLayoutDirtyHint = true
+        parent?.markLayoutDirtyHint()
+    }
+
+    private func clearLayoutDirtyHints() {
+        guard subtreeLayoutDirtyHint else { return }
+        subtreeLayoutDirtyHint = false
+        for child in children {
+            if child.subtreeLayoutDirtyHint {
+                child.clearLayoutDirtyHints()
+            }
+        }
+    }
 }
 
 /// Trampoline that bridges Yoga's C measure callback to the Swift closure
