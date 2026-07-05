@@ -40,6 +40,12 @@ typedef struct GuavaJoltBodyDesc {
     float accumulated_torque_x;
     float accumulated_torque_y;
     float accumulated_torque_z;
+    float accumulated_linear_impulse_x;
+    float accumulated_linear_impulse_y;
+    float accumulated_linear_impulse_z;
+    float accumulated_angular_impulse_x;
+    float accumulated_angular_impulse_y;
+    float accumulated_angular_impulse_z;
     float box_half_extent_x;
     float box_half_extent_y;
     float box_half_extent_z;
@@ -202,6 +208,26 @@ typedef struct GuavaJoltOverlapHit {
     uint16_t reserved1;
 } GuavaJoltOverlapHit;
 
+typedef struct GuavaJoltOverlapShapeQuery {
+    uint8_t shape_type; /* 0 box, 1 sphere, 2 capsule */
+    uint8_t reserved0;
+    uint16_t reserved1;
+    float position_x;
+    float position_y;
+    float position_z;
+    float rotation_x;
+    float rotation_y;
+    float rotation_z;
+    float rotation_w;
+    float box_half_extent_x;
+    float box_half_extent_y;
+    float box_half_extent_z;
+    float sphere_radius;
+    float capsule_radius;
+    float capsule_half_height;
+    uint32_t max_results;
+} GuavaJoltOverlapShapeQuery;
+
 typedef struct GuavaJoltSweepAABBQuery {
     float bounds_min_x;
     float bounds_min_y;
@@ -213,6 +239,28 @@ typedef struct GuavaJoltSweepAABBQuery {
     float translation_y;
     float translation_z;
 } GuavaJoltSweepAABBQuery;
+
+typedef struct GuavaJoltSweepShapeQuery {
+    uint8_t shape_type; /* 0 box, 1 sphere, 2 capsule */
+    uint8_t reserved0;
+    uint16_t reserved1;
+    float position_x;
+    float position_y;
+    float position_z;
+    float rotation_x;
+    float rotation_y;
+    float rotation_z;
+    float rotation_w;
+    float box_half_extent_x;
+    float box_half_extent_y;
+    float box_half_extent_z;
+    float sphere_radius;
+    float capsule_radius;
+    float capsule_half_height;
+    float translation_x;
+    float translation_y;
+    float translation_z;
+} GuavaJoltSweepShapeQuery;
 
 typedef struct GuavaJoltSweepHit {
     uint64_t entity_id;
@@ -290,10 +338,19 @@ uint32_t guava_jolt_context_overlap_aabb(GuavaJoltContext context,
                                          const GuavaJoltQueryFilter* filter,
                                          GuavaJoltOverlapHit* out_hits,
                                          size_t hit_capacity);
+uint32_t guava_jolt_context_overlap_shape(GuavaJoltContext context,
+                                          const GuavaJoltOverlapShapeQuery* query,
+                                          const GuavaJoltQueryFilter* filter,
+                                          GuavaJoltOverlapHit* out_hits,
+                                          size_t hit_capacity);
 bool guava_jolt_context_sweep_aabb(GuavaJoltContext context,
                                    const GuavaJoltSweepAABBQuery* query,
                                    const GuavaJoltQueryFilter* filter,
                                    GuavaJoltSweepHit* out_hit);
+bool guava_jolt_context_sweep_shape(GuavaJoltContext context,
+                                    const GuavaJoltSweepShapeQuery* query,
+                                    const GuavaJoltQueryFilter* filter,
+                                    GuavaJoltSweepHit* out_hit);
 uint32_t guava_jolt_context_detect_triggers(GuavaJoltContext context,
                                             GuavaJoltTriggerEvent* out_events,
                                             size_t event_capacity);

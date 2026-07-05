@@ -414,6 +414,21 @@ public struct SceneRuntime {
         (physicsOverlapAABB(query, filter: filter), SpatialQueryStats())
     }
 
+    public func physicsOverlapShape(
+        _ query: PhysicsOverlapShapeQuery,
+        filter: PhysicsQueryFilter = PhysicsQueryFilter()
+    ) -> [PhysicsOverlapHit] {
+        makeJoltQueryBackend(in: world).overlapShape(query, filter: filter)
+    }
+
+    public func physicsOverlapShapeWithStats(
+        _ query: PhysicsOverlapShapeQuery,
+        filter: PhysicsQueryFilter = PhysicsQueryFilter(),
+        scratch: SpatialQueryScratch? = nil
+    ) -> (hits: [PhysicsOverlapHit], stats: SpatialQueryStats) {
+        (physicsOverlapShape(query, filter: filter), SpatialQueryStats())
+    }
+
     public func sweep(_ query: SceneSweepQuery) -> SceneSweepHit? {
         makeJoltQueryBackend(in: world)
             .sweepAABB(
@@ -436,6 +451,21 @@ public struct SceneRuntime {
         scratch: SpatialQueryScratch? = nil
     ) -> (hit: PhysicsSweepHit?, stats: SpatialQueryStats) {
         (physicsSweepAABB(query, filter: filter), SpatialQueryStats())
+    }
+
+    public func physicsSweepShape(
+        _ query: PhysicsSweepShapeQuery,
+        filter: PhysicsQueryFilter = PhysicsQueryFilter()
+    ) -> PhysicsSweepHit? {
+        makeJoltQueryBackend(in: world).sweepShape(query, filter: filter)
+    }
+
+    public func physicsSweepShapeWithStats(
+        _ query: PhysicsSweepShapeQuery,
+        filter: PhysicsQueryFilter = PhysicsQueryFilter(),
+        scratch: SpatialQueryScratch? = nil
+    ) -> (hit: PhysicsSweepHit?, stats: SpatialQueryStats) {
+        (physicsSweepShape(query, filter: filter), SpatialQueryStats())
     }
 
     public mutating func setPhysicsBackend(_ backend: any PhysicsBackend) {

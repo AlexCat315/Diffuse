@@ -311,6 +311,73 @@ struct SpatialQueryTests {
         #expect(hits.isEmpty)
     }
 
+    @Test("physics overlap shape uses Jolt sphere geometry")
+    func physicsOverlapShapeUsesPreciseSphereNarrowPhase() {
+        var runtime = SceneRuntime()
+
+        let sphere = runtime.createEntity()
+        _ = runtime.setComponent(Collider(shape: .sphere(radius: 1, center: .zero)), for: sphere)
+
+        _ = runtime.tick()
+
+        let broadPhaseOnlyHits = runtime.physicsOverlapShape(
+            PhysicsOverlapShapeQuery(
+                shape: .sphere(radius: 0.05),
+                position: SIMD3<Float>(0.95, 0.95, 0)
+            )
+        )
+        let narrowPhaseHits = runtime.physicsOverlapShape(
+            PhysicsOverlapShapeQuery(
+                shape: .sphere(radius: 0.2),
+                position: SIMD3<Float>(0.9, 0, 0)
+            )
+        )
+
+        #expect(broadPhaseOnlyHits.isEmpty)
+        #expect(narrowPhaseHits.map(\.entity) == [sphere])
+    }
+
+    @Test("physics overlap shape supports rotated Jolt boxes")
+    func physicsOverlapShapeSupportsRotatedBoxes() {
+        var runtime = SceneRuntime()
+
+        let sphere = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0.75, 0.75, 0)), for: sphere)
+        _ = runtime.setComponent(Collider(shape: .sphere(radius: 0.1, center: .zero)), for: sphere)
+
+        _ = runtime.tick()
+
+        let hits = runtime.physicsOverlapShape(
+            PhysicsOverlapShapeQuery(
+                shape: .box(halfExtents: SIMD3<Float>(1, 0.1, 0.5)),
+                position: .zero,
+                rotation: zRotationQuaternion(angleRadians: .pi / 4)
+            )
+        )
+
+        #expect(hits.map(\.entity) == [sphere])
+    }
+
+    @Test("physics overlap shape supports Jolt capsules")
+    func physicsOverlapShapeSupportsCapsules() {
+        var runtime = SceneRuntime()
+
+        let sphere = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 1.2, 0)), for: sphere)
+        _ = runtime.setComponent(Collider(shape: .sphere(radius: 0.1, center: .zero)), for: sphere)
+
+        _ = runtime.tick()
+
+        let hits = runtime.physicsOverlapShape(
+            PhysicsOverlapShapeQuery(
+                shape: .capsule(radius: 0.15, halfHeight: 1),
+                position: .zero
+            )
+        )
+
+        #expect(hits.map(\.entity) == [sphere])
+    }
+
     @Test("overlap returns every intersecting collider in stable order")
     func overlapReturnsIntersectingColliders() {
         var runtime = SceneRuntime()
@@ -451,6 +518,35 @@ struct SpatialQueryTests {
         #expect(hit == nil)
     }
 
+    @Test("physics sweep shape returns the nearest Jolt hit")
+    func physicsSweepShapeReturnsNearestHit() {
+        var runtime = SceneRuntime()
+
+        let nearSphere = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(3, 0, 0)), for: nearSphere)
+        _ = runtime.setComponent(Collider(shape: .sphere(radius: 0.5, center: .zero)), for: nearSphere)
+
+        let farSphere = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(6, 0, 0)), for: farSphere)
+        _ = runtime.setComponent(Collider(shape: .sphere(radius: 0.5, center: .zero)), for: farSphere)
+
+        _ = runtime.tick()
+
+        let hit = runtime.physicsSweepShape(
+            PhysicsSweepShapeQuery(
+                shape: .sphere(radius: 0.5),
+                position: .zero,
+                translation: SIMD3<Float>(5, 0, 0)
+            )
+        )
+
+        #expect(hit?.entity == nearSphere)
+        #expect(abs((hit?.fraction ?? 0) - 0.4) < 0.000_1)
+        #expect(abs((hit?.distance ?? 0) - 2) < 0.000_1)
+        #expect(abs((hit?.position.x ?? 0) - 2) < 0.000_1)
+        #expect(abs((hit?.normal.x ?? 0) + 1) < 0.000_1)
+    }
+
     @Test("physics queries apply excludeEntity and layer filters")
     func physicsQueriesApplyUnifiedFilters() {
         var runtime = SceneRuntime()
@@ -520,10 +616,27 @@ struct SpatialQueryTests {
             ),
             filter: filter
         )
+        let shapeOverlapHits = runtime.physicsOverlapShape(
+            PhysicsOverlapShapeQuery(
+                shape: .sphere(radius: 4),
+                position: SIMD3<Float>(4, 0, 0)
+            ),
+            filter: filter
+        )
+        let shapeSweepHit = runtime.physicsSweepShape(
+            PhysicsSweepShapeQuery(
+                shape: .sphere(radius: 0.5),
+                position: .zero,
+                translation: SIMD3<Float>(10, 0, 0)
+            ),
+            filter: filter
+        )
 
         #expect(raycastHit?.entity == filteredHit)
         #expect(overlapHits.map(\ .entity) == [filteredHit])
         #expect(sweepHit?.entity == filteredHit)
+        #expect(shapeOverlapHits.map(\.entity) == [filteredHit])
+        #expect(shapeSweepHit?.entity == filteredHit)
     }
 
     @Test("physics sweep reports the Jolt shape contact normal")
@@ -560,6 +673,10 @@ private func rotatedBoxMatrix(angleRadians: Float) -> simd_float4x4 {
         SIMD4<Float>(0, 0, 1, 0),
         SIMD4<Float>(0, 0, 0, 1),
     ])
+}
+
+private func zRotationQuaternion(angleRadians: Float) -> SIMD4<Float> {
+    SIMD4<Float>(0, 0, sin(angleRadians * 0.5), cos(angleRadians * 0.5))
 }
 
 private func scaleMatrix(_ scale: SIMD3<Float>) -> simd_float4x4 {

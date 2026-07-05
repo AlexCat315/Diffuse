@@ -22,6 +22,7 @@ private enum _ScrollViewAttachmentKeys {
     static let dragState = "__scrollview_scrollbar_drag_state"
     static let isHovered = "__scrollview_scrollbar_is_hovered"
     static let chromeOpacity = "__scrollview_scrollbar_chrome_opacity"
+    static let contentSize = "__scrollview_content_size"
 }
 
 private struct _ScrollViewScrollbarGeometry {
@@ -31,6 +32,11 @@ private struct _ScrollViewScrollbarGeometry {
     var horizontalThumb: CGRect?
     var maxOffsetX: CGFloat
     var maxOffsetY: CGFloat
+}
+
+private struct _ScrollViewContentSizeCache {
+    var size: CGSize
+    var structureVersion: UInt64
 }
 
 /// Clipping container that scrolls its content via mouse wheel input.
@@ -94,23 +100,26 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         if node.attachments[_ScrollViewAttachmentKeys.isHovered] == nil {
             node.attachments[_ScrollViewAttachmentKeys.isHovered] = false
         }
+        node.layoutDidUpdate = { node in
+            Self.refreshScrollableContentSize(on: node)
+        }
 
         if let registry = InteractionRegistryHolder.current {
             registry.setHover(node) { phase in
                 switch phase {
                 case .enter:
                     node.attachments[_ScrollViewAttachmentKeys.isHovered] = true
-                    setScrollbarChromeVisible(true, on: node)
+                    Self.setScrollbarChromeVisible(true, on: node)
                 case .leave:
                     node.attachments[_ScrollViewAttachmentKeys.isHovered] = false
                     let isDragging = node.attachments[_ScrollViewAttachmentKeys.dragState] != nil
-                    setScrollbarChromeVisible(isDragging, on: node)
+                    Self.setScrollbarChromeVisible(isDragging, on: node)
                 }
             }
             registry.setWheel(node, route: .scroll) { event, _ in
                 if let mouseX = event.mouseX, let mouseY = event.mouseY {
-                    let local = localPoint(x: mouseX, y: mouseY, in: node)
-                    guard visibleViewportRect(for: node).contains(local) else {
+                    let local = Self.localPoint(x: mouseX, y: mouseY, in: node)
+                    guard Self.visibleViewportRect(for: node).contains(local) else {
                         return .ignored
                     }
                 }
@@ -127,8 +136,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 // Clamp to [0, max(0, contentSize - viewSize)] using the full
                 // content subtree. The direct wrapper can be flex-clamped to
                 // the viewport while its descendants still overflow.
-                let viewSize = visibleViewportRect(for: node).size
-                let contentSize = scrollableContentSize(for: node)
+                let viewSize = Self.visibleViewportRect(for: node).size
+                let contentSize = Self.cachedScrollableContentSize(for: node)
                 if contentSize.width > 0 || contentSize.height > 0 {
                     nextOffset.x = max(0, min(nextOffset.x, max(0, contentSize.width  - viewSize.width)))
                     nextOffset.y = max(0, min(nextOffset.y, max(0, contentSize.height - viewSize.height)))
@@ -145,29 +154,29 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     guard eventPhase == .capture || eventPhase == .target else {
                         return .ignored
                     }
-                    let local = localPoint(x: event.x, y: event.y, in: node)
-                    let geometry = scrollbarGeometry(for: node,
-                                                     axes: axes,
-                                                     trackThickness: trackThickness,
-                                                     trackInset: trackInset)
-                    if let state = beginScrollbarDrag(axis: .vertical,
-                                                      local: local,
-                                                      geometry: geometry,
-                                                      hitSlop: CGFloat(trackHitSlop),
-                                                      node: node) {
+                    let local = Self.localPoint(x: event.x, y: event.y, in: node)
+                    let geometry = Self.scrollbarGeometry(for: node,
+                                                          axes: axes,
+                                                          trackThickness: trackThickness,
+                                                          trackInset: trackInset)
+                    if let state = Self.beginScrollbarDrag(axis: .vertical,
+                                                           local: local,
+                                                           geometry: geometry,
+                                                           hitSlop: CGFloat(trackHitSlop),
+                                                           node: node) {
                         node.attachments[_ScrollViewAttachmentKeys.dragState] = state
                         PointerCaptureHolder.current?.acquire(node)
-                        setScrollbarChromeVisible(true, on: node)
+                        Self.setScrollbarChromeVisible(true, on: node)
                         return .handled
                     }
-                    if let state = beginScrollbarDrag(axis: .horizontal,
-                                                      local: local,
-                                                      geometry: geometry,
-                                                      hitSlop: CGFloat(trackHitSlop),
-                                                      node: node) {
+                    if let state = Self.beginScrollbarDrag(axis: .horizontal,
+                                                           local: local,
+                                                           geometry: geometry,
+                                                           hitSlop: CGFloat(trackHitSlop),
+                                                           node: node) {
                         node.attachments[_ScrollViewAttachmentKeys.dragState] = state
                         PointerCaptureHolder.current?.acquire(node)
-                        setScrollbarChromeVisible(true, on: node)
+                        Self.setScrollbarChromeVisible(true, on: node)
                         return .handled
                     }
                     return .ignored
@@ -178,7 +187,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     node.attachments[_ScrollViewAttachmentKeys.dragState] = nil
                     PointerCaptureHolder.current?.release()
                     let isHovered = node.attachments[_ScrollViewAttachmentKeys.isHovered] as? Bool ?? false
-                    setScrollbarChromeVisible(isHovered, on: node)
+                    Self.setScrollbarChromeVisible(isHovered, on: node)
                     return .handled
                 }
             }
@@ -187,7 +196,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                         as? _ScrollViewDragState else {
                     return .ignored
                 }
-                let local = localPoint(x: event.x, y: event.y, in: node)
+                let local = Self.localPoint(x: event.x, y: event.y, in: node)
                 let pointer = state.axis == .vertical ? local.y : local.x
                 let availableTrack = max(1, state.trackLength - state.thumbLength)
                 let rawOffset = state.offsetStart
@@ -214,10 +223,10 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         let thumbColor = theme.colors.onSurfaceMuted
         node.overlayDraw = { [weak node] list, origin in
             guard let node else { return }
-            let viewport = visibleViewportRect(for: node)
+            let viewport = Self.visibleViewportRect(for: node)
             let viewW = Float(viewport.width)
             let viewH = Float(viewport.height)
-            let contentSize = scrollableContentSize(for: node)
+            let contentSize = Self.cachedScrollableContentSize(for: node)
             let contentW = Float(contentSize.width)
             let contentH = Float(contentSize.height)
             guard contentW > 0 || contentH > 0 else { return }
@@ -304,11 +313,11 @@ public struct ScrollView<Content: View>: _PrimitiveView {
 
     public var _children: [any View] { [content] }
 
-    private func localPoint(x: Float, y: Float, in node: Node) -> CGPoint {
+    private static func localPoint(x: Float, y: Float, in node: Node) -> CGPoint {
         node.convertFromWindow(CGPoint(x: CGFloat(x), y: CGFloat(y)))
     }
 
-    private func visibleViewportRect(for node: Node) -> CGRect {
+    private static func visibleViewportRect(for node: Node) -> CGRect {
         let nodeOrigin = node.absoluteOrigin
         var visible = CGRect(origin: nodeOrigin, size: node.frame.size)
         var current = node.parent
@@ -324,7 +333,39 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         return visible.offsetBy(dx: -nodeOrigin.x, dy: -nodeOrigin.y)
     }
 
-    private func scrollableContentSize(for node: Node) -> CGSize {
+    private static func cachedScrollableContentSize(for node: Node) -> CGSize {
+        if let cached = node.attachments[_ScrollViewAttachmentKeys.contentSize]
+            as? _ScrollViewContentSizeCache,
+           cached.structureVersion == node.subtreeStructureVersion {
+            return cached.size
+        }
+        return refreshScrollableContentSize(on: node)
+    }
+
+    @discardableResult
+    private static func refreshScrollableContentSize(on node: Node) -> CGSize {
+        let next = scrollableContentSize(for: node)
+        let previous = (node.attachments[_ScrollViewAttachmentKeys.contentSize]
+            as? _ScrollViewContentSizeCache)?.size
+        if previous != next {
+            node.markRenderDirty(reason: .styleSet(field: "scrollContentSize"))
+        }
+        node.attachments[_ScrollViewAttachmentKeys.contentSize] = _ScrollViewContentSizeCache(
+            size: next,
+            structureVersion: node.subtreeStructureVersion
+        )
+
+        let viewport = visibleViewportRect(for: node).size
+        let maxOffsetX = max(0, next.width - viewport.width)
+        let maxOffsetY = max(0, next.height - viewport.height)
+        if node.contentOffset.x > maxOffsetX || node.contentOffset.y > maxOffsetY {
+            node.contentOffset = CGPoint(x: min(node.contentOffset.x, maxOffsetX),
+                                         y: min(node.contentOffset.y, maxOffsetY))
+        }
+        return next
+    }
+
+    private static func scrollableContentSize(for node: Node) -> CGSize {
         var bounds: CGRect = .null
         for child in node.children {
             bounds = bounds.union(contentBounds(for: child, origin: .zero))
@@ -334,7 +375,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                       height: max(0, bounds.maxY))
     }
 
-    private func setScrollbarChromeVisible(_ visible: Bool, on node: Node) {
+    private static func setScrollbarChromeVisible(_ visible: Bool, on node: Node) {
         let current = node.attachments[_ScrollViewAttachmentKeys.chromeOpacity] as? Float ?? 0
         let target: Float = visible ? 1 : 0
         withAnimation(.semantic(.fast, in: node.theme)) {
@@ -348,7 +389,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         }
     }
 
-    private func contentBounds(for node: Node, origin: CGPoint) -> CGRect {
+    private static func contentBounds(for node: Node, origin: CGPoint) -> CGRect {
         let frame = node.frame.offsetBy(dx: origin.x, dy: origin.y)
         var bounds = frame
 
@@ -364,11 +405,11 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         return bounds
     }
 
-    private func beginScrollbarDrag(axis: _ScrollViewDragAxis,
-                                    local: CGPoint,
-                                    geometry: _ScrollViewScrollbarGeometry,
-                                    hitSlop: CGFloat,
-                                    node: Node) -> _ScrollViewDragState? {
+    private static func beginScrollbarDrag(axis: _ScrollViewDragAxis,
+                                           local: CGPoint,
+                                           geometry: _ScrollViewScrollbarGeometry,
+                                           hitSlop: CGFloat,
+                                           node: Node) -> _ScrollViewDragState? {
         let track: CGRect?
         let thumb: CGRect?
         let maxOffset: CGFloat
@@ -400,9 +441,9 @@ public struct ScrollView<Content: View>: _PrimitiveView {
 
         var nextOffset = node.contentOffset
         if !thumb.contains(local) {
-            let availableTrack = max(1, trackLength(for: axis, track: track) - trackLength(for: axis, track: thumb))
-            let centeredThumbStart = pointer - trackLength(for: axis, track: thumb) / 2
-            let rawOffset = ((centeredThumbStart - trackStart(for: axis, track: track))
+            let availableTrack = max(1, Self.trackLength(for: axis, track: track) - Self.trackLength(for: axis, track: thumb))
+            let centeredThumbStart = pointer - Self.trackLength(for: axis, track: thumb) / 2
+            let rawOffset = ((centeredThumbStart - Self.trackStart(for: axis, track: track))
                              / availableTrack) * maxOffset
             nextOffset[keyPath: offsetKeyPath] = max(0, min(rawOffset, maxOffset))
             node.contentOffset = nextOffset
@@ -413,20 +454,20 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             pointerStart: pointer,
             offsetStart: node.contentOffset[keyPath: offsetKeyPath],
             maxOffset: maxOffset,
-            trackStart: trackStart(for: axis, track: track),
-            trackLength: trackLength(for: axis, track: track),
-            thumbLength: trackLength(for: axis, track: thumb)
+            trackStart: Self.trackStart(for: axis, track: track),
+            trackLength: Self.trackLength(for: axis, track: track),
+            thumbLength: Self.trackLength(for: axis, track: thumb)
         )
     }
 
-    private func scrollbarGeometry(for node: Node,
-                                   axes: Axis,
-                                   trackThickness: Float,
-                                   trackInset: Float) -> _ScrollViewScrollbarGeometry {
+    private static func scrollbarGeometry(for node: Node,
+                                          axes: Axis,
+                                          trackThickness: Float,
+                                          trackInset: Float) -> _ScrollViewScrollbarGeometry {
         let viewport = visibleViewportRect(for: node)
         let viewW = viewport.width
         let viewH = viewport.height
-        let contentSize = scrollableContentSize(for: node)
+        let contentSize = cachedScrollableContentSize(for: node)
         let contentW = contentSize.width
         let contentH = contentSize.height
         let maxOffsetX = max(0, contentW - viewW)
@@ -475,23 +516,23 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                             maxOffsetY: maxOffsetY)
     }
 
-    private func trackStart(for axis: _ScrollViewDragAxis, track: CGRect) -> CGFloat {
+    private static func trackStart(for axis: _ScrollViewDragAxis, track: CGRect) -> CGFloat {
         switch axis {
         case .vertical: return track.minY
         case .horizontal: return track.minX
         }
     }
 
-    private func trackLength(for axis: _ScrollViewDragAxis, track: CGRect) -> CGFloat {
+    private static func trackLength(for axis: _ScrollViewDragAxis, track: CGRect) -> CGFloat {
         switch axis {
         case .vertical: return track.height
         case .horizontal: return track.width
         }
     }
 
-    private func expandedHitTrack(axis: _ScrollViewDragAxis,
-                                  track: CGRect,
-                                  hitSlop: CGFloat) -> CGRect {
+    private static func expandedHitTrack(axis: _ScrollViewDragAxis,
+                                         track: CGRect,
+                                         hitSlop: CGFloat) -> CGRect {
         switch axis {
         case .vertical:
             return track.insetBy(dx: -hitSlop, dy: 0)

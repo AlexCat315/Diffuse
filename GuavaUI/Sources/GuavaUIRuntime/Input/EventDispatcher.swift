@@ -305,11 +305,18 @@ public final class EventDispatcher {
                                      minPriority: InputRoutingPriority,
                                      excluding excludedNodes: Set<ObjectIdentifier> = []) -> EventResult {
         guard let root = tree.root else { return .ignored }
-        for candidate in routeCandidates(rootedAt: root,
-                                         kind: kind,
-                                         role: role,
-                                         minPriority: minPriority)
-            where !excludedNodes.contains(ObjectIdentifier(candidate.node)) {
+        let routed = interactions.routedNodes(slot: handlerSlot(for: kind),
+                                              role: role,
+                                              minPriority: minPriority)
+        var candidates: [RouteCandidate] = []
+        candidates.reserveCapacity(routed.count)
+        for item in routed where !excludedNodes.contains(ObjectIdentifier(item.node)) {
+            guard let depth = depth(of: item.node, under: root) else { continue }
+            candidates.append(RouteCandidate(node: item.node,
+                                             route: item.route,
+                                             depth: depth))
+        }
+        for candidate in candidates.sorted(by: routeCandidateSort) {
             let phase: EventPhase = (role == .shortcut || role == .scrollChrome) ? .capture : .target
             if invoke(node: candidate.node, kind: kind, phase: phase) == .handled {
                 return .handled
@@ -330,42 +337,6 @@ public final class EventDispatcher {
             return RouteCandidate(node: node, route: route, depth: index)
         }
         .sorted(by: routeCandidateSort)
-    }
-
-    private func routeCandidates(rootedAt root: Node,
-                                 kind: EventKind,
-                                 role: InputHandlerRole,
-                                 minPriority: InputRoutingPriority = .background) -> [RouteCandidate] {
-        var out: [RouteCandidate] = []
-        collectRouteCandidates(node: root,
-                               depth: 0,
-                               kind: kind,
-                               role: role,
-                               minPriority: minPriority,
-                               into: &out)
-        return out.sorted(by: routeCandidateSort)
-    }
-
-    private func collectRouteCandidates(node: Node,
-                                        depth: Int,
-                                        kind: EventKind,
-                                        role: InputHandlerRole,
-                                        minPriority: InputRoutingPriority,
-                                        into out: inout [RouteCandidate]) {
-        let handlers = interactions.handlers(for: node)
-        if let route = route(in: handlers, kind: kind),
-           route.role == role,
-           route.priority >= minPriority {
-            out.append(RouteCandidate(node: node, route: route, depth: depth))
-        }
-        for child in node.children {
-            collectRouteCandidates(node: child,
-                                   depth: depth + 1,
-                                   kind: kind,
-                                   role: role,
-                                   minPriority: minPriority,
-                                   into: &out)
-        }
     }
 
     private func routeCandidateSort(_ lhs: RouteCandidate,
@@ -427,6 +398,32 @@ public final class EventDispatcher {
     }
 
     // MARK: - Helpers
+
+    private func handlerSlot(for kind: EventKind) -> InputHandlerSlot {
+        switch kind {
+        case .pointer: return .pointer
+        case .motion: return .motion
+        case .wheel: return .wheel
+        case .key(_, let phase):
+            switch phase {
+            case .down: return .key
+            case .up: return .keyUp
+            }
+        case .editing: return .editing
+        case .text: return .text
+        }
+    }
+
+    private func depth(of node: Node, under root: Node) -> Int? {
+        var depth = 0
+        var cursor: Node? = node
+        while let current = cursor {
+            if current === root { return depth }
+            depth += 1
+            cursor = current.parent
+        }
+        return nil
+    }
 
     /// Build root → leaf path for a given node by walking the parent chain.
     private func pathFromRoot(to node: Node) -> [Node] {
