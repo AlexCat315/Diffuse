@@ -132,7 +132,8 @@ public final class LayerAwareNodeRenderer {
         let childX = originX - Float(node.contentOffset.x)
         let childY = originY - Float(node.contentOffset.y)
         let childClipStack: [UIRect] = clipped ? clipStack + [clipRect!] : clipStack
-        for child in renderOrderedChildren(of: obj) {
+        let children = node.childrenMayNeedZSort ? renderOrderedChildren(of: obj) : obj.children
+        for child in children {
             // A nested layer root composites separately (cache-aware), so we
             // call `compose` rather than recording inline.
             if child.isLayerRoot {

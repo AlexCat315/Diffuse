@@ -72,6 +72,10 @@ constexpr uint8_t kContactBegan = 0u;
 constexpr uint8_t kContactPersisted = 1u;
 constexpr uint8_t kContactEnded = 2u;
 
+constexpr uint8_t kQueryShapeBox = 0u;
+constexpr uint8_t kQueryShapeSphere = 1u;
+constexpr uint8_t kQueryShapeCapsule = 2u;
+
 // Layer setup — minimal two-layer scheme (non-moving + moving).
 namespace Layers {
     static constexpr JPH::ObjectLayer NON_MOVING = 0;
@@ -637,6 +641,82 @@ JPH::ShapeRefC build_shape(const GuavaJoltBodyDesc& desc,
     return nullptr;
 }
 
+JPH::Quat normalized_quat(float x, float y, float z, float w) {
+    const float len_sq = x * x + y * y + z * z + w * w;
+    if (len_sq <= 1.0e-8f) return JPH::Quat::sIdentity();
+    const float inv_len = 1.0f / sqrtf(len_sq);
+    return JPH::Quat(x * inv_len, y * inv_len, z * inv_len, w * inv_len);
+}
+
+JPH::ShapeRefC build_query_shape(uint8_t shape_type,
+                                 float box_half_extent_x,
+                                 float box_half_extent_y,
+                                 float box_half_extent_z,
+                                 float sphere_radius,
+                                 float capsule_radius,
+                                 float capsule_half_height) {
+    if (shape_type == kQueryShapeBox) {
+        JPH::Vec3 half_extents(
+            std::max(box_half_extent_x, 0.0f),
+            std::max(box_half_extent_y, 0.0f),
+            std::max(box_half_extent_z, 0.0f));
+        if (half_extents.GetX() <= 0.0f || half_extents.GetY() <= 0.0f || half_extents.GetZ() <= 0.0f) {
+            return nullptr;
+        }
+        JPH::BoxShapeSettings settings(half_extents);
+        settings.SetEmbedded();
+        JPH::ShapeSettings::ShapeResult result = settings.Create();
+        return result.IsValid() ? result.Get() : nullptr;
+    }
+
+    if (shape_type == kQueryShapeSphere) {
+        if (sphere_radius <= 0.0f) return nullptr;
+        JPH::SphereShapeSettings settings(sphere_radius);
+        settings.SetEmbedded();
+        JPH::ShapeSettings::ShapeResult result = settings.Create();
+        return result.IsValid() ? result.Get() : nullptr;
+    }
+
+    if (shape_type == kQueryShapeCapsule) {
+        if (capsule_radius <= 0.0f || capsule_half_height < 0.0f) return nullptr;
+        JPH::CapsuleShapeSettings settings(capsule_half_height, capsule_radius);
+        settings.SetEmbedded();
+        JPH::ShapeSettings::ShapeResult result = settings.Create();
+        return result.IsValid() ? result.Get() : nullptr;
+    }
+
+    return nullptr;
+}
+
+JPH::RMat44 query_transform(float position_x,
+                            float position_y,
+                            float position_z,
+                            float rotation_x,
+                            float rotation_y,
+                            float rotation_z,
+                            float rotation_w) {
+    return JPH::RMat44::sRotationTranslation(
+        normalized_quat(rotation_x, rotation_y, rotation_z, rotation_w),
+        JPH::RVec3(position_x, position_y, position_z));
+}
+
+void apply_dynamic_inputs(JPH::BodyInterface& bi,
+                          const JPH::BodyID& body_id,
+                          const GuavaJoltBodyDesc& desc) {
+    bi.AddForce(body_id, JPH::Vec3(
+        desc.accumulated_force_x, desc.accumulated_force_y, desc.accumulated_force_z));
+    bi.AddTorque(body_id, JPH::Vec3(
+        desc.accumulated_torque_x, desc.accumulated_torque_y, desc.accumulated_torque_z));
+    bi.AddImpulse(body_id, JPH::Vec3(
+        desc.accumulated_linear_impulse_x,
+        desc.accumulated_linear_impulse_y,
+        desc.accumulated_linear_impulse_z));
+    bi.AddAngularImpulse(body_id, JPH::Vec3(
+        desc.accumulated_angular_impulse_x,
+        desc.accumulated_angular_impulse_y,
+        desc.accumulated_angular_impulse_z));
+}
+
 void fill_state_from_body(GuavaJoltBodyState& state, uint64_t entity_id,
                           JPH::BodyInterface& bi, const JPH::BodyID& id) {
     JPH::RVec3 pos = bi.GetPosition(id);
@@ -813,10 +893,7 @@ struct GuavaJoltContextImpl {
         };
         body_signatures[entity] = signature;
         if (motion == JPH::EMotionType::Dynamic) {
-            bi.AddForce(body->GetID(), JPH::Vec3(
-                desc.accumulated_force_x, desc.accumulated_force_y, desc.accumulated_force_z));
-            bi.AddTorque(body->GetID(), JPH::Vec3(
-                desc.accumulated_torque_x, desc.accumulated_torque_y, desc.accumulated_torque_z));
+            apply_dynamic_inputs(bi, body->GetID(), desc);
         }
         return true;
     }
@@ -915,10 +992,7 @@ struct GuavaJoltContextImpl {
 	                    desc.layer_mask
 	                };
 	                if (desc.motion_type == kMotionDynamic) {
-	                    bi.AddForce(existing->second, JPH::Vec3(
-	                        desc.accumulated_force_x, desc.accumulated_force_y, desc.accumulated_force_z));
-                    bi.AddTorque(existing->second, JPH::Vec3(
-                        desc.accumulated_torque_x, desc.accumulated_torque_y, desc.accumulated_torque_z));
+	                    apply_dynamic_inputs(bi, existing->second, desc);
 	                }
 	                continue;
 	            }
@@ -1154,6 +1228,77 @@ struct GuavaJoltContextImpl {
 	        return static_cast<uint32_t>(hits.size());
 	    }
 
+        uint32_t overlap_shape(const GuavaJoltOverlapShapeQuery* query,
+                               const GuavaJoltQueryFilter* filter,
+                               GuavaJoltOverlapHit* out_hits,
+                               size_t hit_capacity) const {
+            if (!query) return 0;
+            JPH::ShapeRefC shape = build_query_shape(
+                query->shape_type,
+                query->box_half_extent_x,
+                query->box_half_extent_y,
+                query->box_half_extent_z,
+                query->sphere_radius,
+                query->capsule_radius,
+                query->capsule_half_height);
+            if (!shape) return 0;
+
+            JPH::CollideShapeSettings collide_settings;
+            MetadataBodyFilter body_filter(body_metadata, filter);
+            JPH::ClosestHitPerBodyCollisionCollector<JPH::CollideShapeCollector> collector;
+            physics_system.GetNarrowPhaseQuery().CollideShape(
+                shape,
+                JPH::Vec3::sOne(),
+                query_transform(
+                    query->position_x,
+                    query->position_y,
+                    query->position_z,
+                    query->rotation_x,
+                    query->rotation_y,
+                    query->rotation_z,
+                    query->rotation_w),
+                collide_settings,
+                JPH::RVec3::sZero(),
+                collector,
+                {},
+                {},
+                body_filter,
+                {});
+            collector.Sort();
+
+            std::vector<GuavaJoltOverlapHit> hits;
+            hits.reserve(collector.mHits.size());
+            for (const JPH::CollideShapeResult& result : collector.mHits) {
+                JPH::BodyLockRead lock(physics_system.GetBodyLockInterface(), result.mBodyID2);
+                if (!lock.Succeeded()) continue;
+                const JPH::Body& body = lock.GetBody();
+                const uint64_t entity = body.GetUserData();
+                auto metadata_it = body_metadata.find(entity);
+                if (metadata_it == body_metadata.end()) continue;
+
+                GuavaJoltOverlapHit hit {};
+                hit.entity_id = entity;
+                fill_bounds(body.GetWorldSpaceBounds(),
+                            hit.bounds_min_x, hit.bounds_min_y, hit.bounds_min_z,
+                            hit.bounds_max_x, hit.bounds_max_y, hit.bounds_max_z);
+                hit.is_trigger = metadata_it->second.is_trigger ? 1u : 0u;
+                hits.push_back(hit);
+            }
+
+            std::sort(hits.begin(), hits.end(), [](const auto& lhs, const auto& rhs) {
+                return lhs.entity_id < rhs.entity_id;
+            });
+            const uint32_t max_results = query->max_results == 0 ? 0 : query->max_results;
+            if (max_results != UINT32_MAX && hits.size() > max_results) {
+                hits.resize(max_results);
+            }
+            if (out_hits && hit_capacity > 0) {
+                const size_t count = std::min(hit_capacity, hits.size());
+                for (size_t i = 0; i < count; ++i) out_hits[i] = hits[i];
+            }
+            return static_cast<uint32_t>(hits.size());
+        }
+
 	    bool sweep_aabb(const GuavaJoltSweepAABBQuery* query,
 	                    const GuavaJoltQueryFilter* filter,
 	                    GuavaJoltSweepHit* out_hit) const {
@@ -1220,6 +1365,80 @@ struct GuavaJoltContextImpl {
 	        out_hit->reserved1 = 0;
 	        return true;
 	    }
+
+        bool sweep_shape(const GuavaJoltSweepShapeQuery* query,
+                         const GuavaJoltQueryFilter* filter,
+                         GuavaJoltSweepHit* out_hit) const {
+            if (!query || !out_hit) return false;
+            JPH::ShapeRefC shape = build_query_shape(
+                query->shape_type,
+                query->box_half_extent_x,
+                query->box_half_extent_y,
+                query->box_half_extent_z,
+                query->sphere_radius,
+                query->capsule_radius,
+                query->capsule_half_height);
+            if (!shape) return false;
+
+            JPH::Vec3 translation(query->translation_x, query->translation_y, query->translation_z);
+            const float travel_distance = translation.Length();
+            if (travel_distance <= 1.0e-6f) return false;
+
+            const JPH::RVec3 position(query->position_x, query->position_y, query->position_z);
+            JPH::RShapeCast shape_cast = JPH::RShapeCast::sFromWorldTransform(
+                shape,
+                JPH::Vec3::sOne(),
+                query_transform(
+                    query->position_x,
+                    query->position_y,
+                    query->position_z,
+                    query->rotation_x,
+                    query->rotation_y,
+                    query->rotation_z,
+                    query->rotation_w),
+                translation);
+            JPH::ShapeCastSettings settings;
+            settings.mReturnDeepestPoint = true;
+            MetadataBodyFilter body_filter(body_metadata, filter);
+            JPH::ClosestHitCollisionCollector<JPH::CastShapeCollector> collector;
+            physics_system.GetNarrowPhaseQuery().CastShape(
+                shape_cast,
+                settings,
+                position,
+                collector,
+                {},
+                {},
+                body_filter,
+                {});
+            if (!collector.HadHit()) return false;
+
+            const JPH::ShapeCastResult& result = collector.mHit;
+            JPH::BodyLockRead lock(physics_system.GetBodyLockInterface(), result.mBodyID2);
+            if (!lock.Succeeded()) return false;
+            const JPH::Body& body = lock.GetBody();
+            const uint64_t entity = body.GetUserData();
+            auto metadata_it = body_metadata.find(entity);
+            if (metadata_it == body_metadata.end()) return false;
+
+            JPH::Vec3 normal = safe_normalized(-result.mPenetrationAxis, -translation / travel_distance);
+            JPH::RVec3 hit_position = position + translation * result.mFraction;
+            out_hit->entity_id = entity;
+            out_hit->fraction = result.mFraction;
+            out_hit->distance = result.mFraction * travel_distance;
+            out_hit->position_x = hit_position.GetX();
+            out_hit->position_y = hit_position.GetY();
+            out_hit->position_z = hit_position.GetZ();
+            out_hit->normal_x = normal.GetX();
+            out_hit->normal_y = normal.GetY();
+            out_hit->normal_z = normal.GetZ();
+            fill_bounds(body.GetWorldSpaceBounds(),
+                        out_hit->bounds_min_x, out_hit->bounds_min_y, out_hit->bounds_min_z,
+                        out_hit->bounds_max_x, out_hit->bounds_max_y, out_hit->bounds_max_z);
+            out_hit->is_trigger = metadata_it->second.is_trigger ? 1u : 0u;
+            out_hit->reserved0 = 0;
+            out_hit->reserved1 = 0;
+            return true;
+        }
 
 	    uint32_t detect_triggers(GuavaJoltTriggerEvent* out_events, size_t event_capacity) {
 	        std::unordered_set<TriggerPair, TriggerPairHash> current_pairs;
@@ -1357,12 +1576,30 @@ uint32_t guava_jolt_context_overlap_aabb(GuavaJoltContext context,
     return context->overlap_aabb(query, filter, out_hits, hit_capacity);
 }
 
+uint32_t guava_jolt_context_overlap_shape(GuavaJoltContext context,
+                                          const GuavaJoltOverlapShapeQuery* query,
+                                          const GuavaJoltQueryFilter* filter,
+                                          GuavaJoltOverlapHit* out_hits,
+                                          size_t hit_capacity) {
+    if (!context) return 0;
+    if (hit_capacity > 0 && !out_hits) return 0;
+    return context->overlap_shape(query, filter, out_hits, hit_capacity);
+}
+
 bool guava_jolt_context_sweep_aabb(GuavaJoltContext context,
                                    const GuavaJoltSweepAABBQuery* query,
                                    const GuavaJoltQueryFilter* filter,
                                    GuavaJoltSweepHit* out_hit) {
     if (!context) return false;
     return context->sweep_aabb(query, filter, out_hit);
+}
+
+bool guava_jolt_context_sweep_shape(GuavaJoltContext context,
+                                    const GuavaJoltSweepShapeQuery* query,
+                                    const GuavaJoltQueryFilter* filter,
+                                    GuavaJoltSweepHit* out_hit) {
+    if (!context) return false;
+    return context->sweep_shape(query, filter, out_hit);
 }
 
 uint32_t guava_jolt_context_detect_triggers(GuavaJoltContext context,

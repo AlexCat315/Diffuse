@@ -25,6 +25,8 @@ public struct RigidBody: RuntimeComponent, Sendable, Equatable {
     public var angularVelocity: SIMD3<Float>
     public var accumulatedForce: SIMD3<Float>
     public var accumulatedTorque: SIMD3<Float>
+    public var accumulatedLinearImpulse: SIMD3<Float>
+    public var accumulatedAngularImpulse: SIMD3<Float>
     public var gravityScale: Float
     public var linearDamping: Float
     public var angularDamping: Float
@@ -39,6 +41,8 @@ public struct RigidBody: RuntimeComponent, Sendable, Equatable {
         angularVelocity: SIMD3<Float> = .zero,
         accumulatedForce: SIMD3<Float> = .zero,
         accumulatedTorque: SIMD3<Float> = .zero,
+        accumulatedLinearImpulse: SIMD3<Float> = .zero,
+        accumulatedAngularImpulse: SIMD3<Float> = .zero,
         gravityScale: Float = 1,
         linearDamping: Float = 0.04,
         angularDamping: Float = 0.04,
@@ -52,6 +56,8 @@ public struct RigidBody: RuntimeComponent, Sendable, Equatable {
         self.angularVelocity = angularVelocity
         self.accumulatedForce = accumulatedForce
         self.accumulatedTorque = accumulatedTorque
+        self.accumulatedLinearImpulse = accumulatedLinearImpulse
+        self.accumulatedAngularImpulse = accumulatedAngularImpulse
         self.gravityScale = gravityScale
         self.linearDamping = linearDamping
         self.angularDamping = angularDamping
@@ -401,12 +407,59 @@ public struct PhysicsOverlapHit: Sendable, Equatable {
     }
 }
 
+public enum PhysicsQueryShape: Sendable, Equatable {
+    case box(halfExtents: SIMD3<Float>)
+    case sphere(radius: Float)
+    case capsule(radius: Float, halfHeight: Float)
+}
+
+public struct PhysicsOverlapShapeQuery: Sendable, Equatable {
+    public var shape: PhysicsQueryShape
+    public var position: SIMD3<Float>
+    /// Quaternion stored as (x, y, z, w). Capsules are aligned to local Y before rotation.
+    public var rotation: SIMD4<Float>
+    /// Stop collecting hits after this many results. Default (.max) collects all.
+    public var maxResults: Int
+
+    public init(
+        shape: PhysicsQueryShape,
+        position: SIMD3<Float>,
+        rotation: SIMD4<Float> = SIMD4<Float>(0, 0, 0, 1),
+        maxResults: Int = .max
+    ) {
+        self.shape = shape
+        self.position = position
+        self.rotation = rotation
+        self.maxResults = max(maxResults, 0)
+    }
+}
+
 public struct PhysicsSweepAABBQuery: Sendable, Equatable {
     public var bounds: SpatialAABB
     public var translation: SIMD3<Float>
 
     public init(bounds: SpatialAABB, translation: SIMD3<Float>) {
         self.bounds = bounds
+        self.translation = translation
+    }
+}
+
+public struct PhysicsSweepShapeQuery: Sendable, Equatable {
+    public var shape: PhysicsQueryShape
+    public var position: SIMD3<Float>
+    /// Quaternion stored as (x, y, z, w). Capsules are aligned to local Y before rotation.
+    public var rotation: SIMD4<Float>
+    public var translation: SIMD3<Float>
+
+    public init(
+        shape: PhysicsQueryShape,
+        position: SIMD3<Float>,
+        rotation: SIMD4<Float> = SIMD4<Float>(0, 0, 0, 1),
+        translation: SIMD3<Float>
+    ) {
+        self.shape = shape
+        self.position = position
+        self.rotation = rotation
         self.translation = translation
     }
 }
@@ -594,7 +647,9 @@ public protocol PhysicsBackend: AnyObject, Sendable {
     func step(context: PhysicsStepContext) -> PhysicsStepResult
     func raycast(_ query: PhysicsRaycastQuery, filter: PhysicsQueryFilter) -> PhysicsRaycastHit?
     func overlapAABB(_ query: PhysicsOverlapAABBQuery, filter: PhysicsQueryFilter) -> [PhysicsOverlapHit]
+    func overlapShape(_ query: PhysicsOverlapShapeQuery, filter: PhysicsQueryFilter) -> [PhysicsOverlapHit]
     func sweepAABB(_ query: PhysicsSweepAABBQuery, filter: PhysicsQueryFilter) -> PhysicsSweepHit?
+    func sweepShape(_ query: PhysicsSweepShapeQuery, filter: PhysicsQueryFilter) -> PhysicsSweepHit?
     func detectTriggerFrame(maxEventCount: Int) -> TriggerFrameResource
     func reset()
 }
@@ -650,7 +705,15 @@ public final class NullPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         []
     }
 
+    public func overlapShape(_ query: PhysicsOverlapShapeQuery, filter: PhysicsQueryFilter) -> [PhysicsOverlapHit] {
+        []
+    }
+
     public func sweepAABB(_ query: PhysicsSweepAABBQuery, filter: PhysicsQueryFilter) -> PhysicsSweepHit? {
+        nil
+    }
+
+    public func sweepShape(_ query: PhysicsSweepShapeQuery, filter: PhysicsQueryFilter) -> PhysicsSweepHit? {
         nil
     }
 
