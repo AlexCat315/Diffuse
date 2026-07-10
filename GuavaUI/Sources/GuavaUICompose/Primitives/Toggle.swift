@@ -40,7 +40,7 @@ public struct Checkbox: View {
     }
 }
 
-enum _BoolControlVariant: Sendable {
+enum _BoolControlVariant: Sendable, Equatable {
     case toggle
     case checkbox
 
@@ -78,6 +78,12 @@ struct BoolControlHost: _PrimitiveView {
     static let onKey = "__bool_control_on"
     static let variantKey = "__bool_control_variant"
 
+    private struct PaintIdentity: Equatable {
+        let isOn: Bool
+        let isEnabled: Bool
+        let variant: _BoolControlVariant
+    }
+
     func _makeNode() -> Node {
         let node = Node()
         node.isHitTestable = true
@@ -102,7 +108,9 @@ struct BoolControlHost: _PrimitiveView {
         node.cursor = isEnabled ? .pointer : .notAllowed
 
         let snapshot = self
-        node.draw = { list, origin in
+        node.updateDraw(identity: PaintIdentity(isOn: isOn.wrappedValue,
+                                                isEnabled: isEnabled,
+                                                variant: variant)) { list, origin in
             snapshot.render(node: node, origin: origin, list: list)
         }
 

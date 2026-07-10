@@ -108,6 +108,7 @@ public final class SDL3PlatformHost: PlatformHost {
     private static let minimumUsableDisplayRefreshRate: Double = 30.0
     private static let maxCadenceSleepInterval: Double = 0.001
     private static let cadenceSpinThreshold: Double = 0.0005
+    private static let maxEventWaitInterval: Double = 0.25
     private static let frameTimingLogStride: Int = {
         guard let raw = ProcessInfo.processInfo.environment["GUAVAUI_FRAME_TIMING_LOG_STRIDE"],
               let value = Int(raw) else {
@@ -150,7 +151,24 @@ public final class SDL3PlatformHost: PlatformHost {
         }
     }
 
+    private final class EventLoopWakeRelay: @unchecked Sendable {
+        private let lock = NSLock()
+        private var handler: (() -> Void)?
+
+        func install(_ handler: (() -> Void)?) {
+            lock.withLock {
+                self.handler = handler
+            }
+        }
+
+        func signal() {
+            let handler = lock.withLock { self.handler }
+            handler?()
+        }
+    }
+
     private let mainThreadInbox = MainThreadInbox()
+    private let eventLoopWakeRelay = EventLoopWakeRelay()
 
     public var recomposer: Recomposer { mainRecomposer }
     public var interactions: InteractionRegistry { mainInputContext.interactions }
@@ -344,6 +362,11 @@ public final class SDL3PlatformHost: PlatformHost {
 
     public nonisolated func enqueueMainThreadWork(_ work: @escaping () -> Void) {
         mainThreadInbox.enqueue(work)
+        eventLoopWakeRelay.signal()
+    }
+
+    public nonisolated func wakeEventLoop() {
+        eventLoopWakeRelay.signal()
     }
 
     public func setTargetFrameRate(_ framesPerSecond: Double?) {
@@ -394,10 +417,8 @@ public final class SDL3PlatformHost: PlatformHost {
             var framePreparationDelta = loopDeltaTime
             var timing = TimingTrace(label: "[timing] host.frame")
 
-            var handledEvents = false
             for routed in shell.pollWindowEvents() {
                 guard let session = sessions[routed.windowID] else { continue }
-                handledEvents = true
                 session.withCurrent {
                     session.dispatcher.dispatch(routed.event)
                     session.onEvent?(routed.event)
@@ -458,7 +479,6 @@ public final class SDL3PlatformHost: PlatformHost {
             }
             timing.mark("prepare")
 
-            var committedAny = false
             for id in sessionOrder {
                 guard let session = sessions[id] else { continue }
                 let didCommit = session.withCurrent {
@@ -466,7 +486,6 @@ public final class SDL3PlatformHost: PlatformHost {
                 }
                 if didCommit {
                     session.needsDisplay = true
-                    committedAny = true
                 }
             }
             timing.mark("commit")
@@ -570,9 +589,17 @@ public final class SDL3PlatformHost: PlatformHost {
                     Thread.sleep(forTimeInterval: min(remaining - Self.cadenceSpinThreshold,
                                                       Self.maxCadenceSleepInterval))
                 }
-            } else if !handledEvents && !committedAny && !renderedAnyFrame {
-                // Nothing to draw (idle / occluded window) — yield briefly.
-                Thread.sleep(forTimeInterval: 0.001)
+            } else if targetFrameInterval == nil {
+                let hasImmediateWork = sessions.values.contains { session in
+                    session.needsDisplay || session.tree.hasRenderUpdates || session.recomposer.hasPending
+                }
+                let timeout = hasImmediateWork
+                    ? 0.001
+                    : eventWaitTimeout(shell: shell, animationsActive: animationsActive)
+                // Event-driven windows sleep inside SDL. Native input and
+                // cross-thread display requests both wake this wait immediately,
+                // eliminating the old 1 ms polling loop without adding latency.
+                _ = shell.waitForEvents(timeout: timeout)
             }
         }
 
@@ -582,6 +609,7 @@ public final class SDL3PlatformHost: PlatformHost {
         // the surfaces outlive the Wayland display and crash on release.
         onTeardown?()
         shell.shutdown()
+        eventLoopWakeRelay.install(nil)
         self.shell = nil
         sessions.removeAll()
         sessionOrder.removeAll()
@@ -603,6 +631,31 @@ public final class SDL3PlatformHost: PlatformHost {
         case let .fixed(framesPerSecond):
             return 1.0 / Self.sanitizedFrameRate(framesPerSecond)
         }
+    }
+
+    private func eventWaitTimeout(shell: any Shell,
+                                  animationsActive: Bool) -> Double {
+        var timeout = Self.maxEventWaitInterval
+
+        if animationsActive {
+            let refreshRate = Self.sanitizedDisplayRefreshRate(
+                shell.displayRefreshRate(windowID: mainWindowID)
+            )
+            timeout = min(timeout, 1.0 / refreshRate)
+        }
+
+        let now = TimingTrace.now()
+        for session in sessions.values where focusedTextInputArea(for: session) != nil {
+            guard session.lastTextCursorAnimationTick > 0 else {
+                timeout = min(timeout, Self.focusedTextRefreshInterval)
+                continue
+            }
+            let remaining = Self.focusedTextRefreshInterval
+                - (now - session.lastTextCursorAnimationTick)
+            timeout = min(timeout, max(0.001, remaining))
+        }
+
+        return max(0.001, timeout)
     }
 
     private static func sanitizedDisplayRefreshRate(_ framesPerSecond: Double?) -> Double {
@@ -629,6 +682,7 @@ public final class SDL3PlatformHost: PlatformHost {
             return shell
         }
         let created = try shellFactory()
+        eventLoopWakeRelay.install { created.wakeEventLoop() }
         created.closeInterceptor = { [weak self] windowID in
             guard let self else { return true }
             guard self.windowCloseInterceptor?(windowID) ?? true else {

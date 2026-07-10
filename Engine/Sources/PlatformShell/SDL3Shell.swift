@@ -749,6 +749,21 @@ public final class SDL3Shell: Shell {
         return collected
     }
 
+    @discardableResult
+    public func waitForEvents(timeout: TimeInterval) -> Bool {
+        guard didInitializeSDL, timeout > 0 else { return false }
+        let milliseconds = Int32(min(Double(Int32.max), ceil(timeout * 1000)))
+        // Passing nil waits without removing the event. The next poll therefore
+        // processes the exact native event that woke the host.
+        return SDL_WaitEventTimeout(nil, max(1, milliseconds))
+    }
+
+    nonisolated public func wakeEventLoop() {
+        var event = SDL_Event()
+        event.type = UInt32(GUAVA_SDL_EVENT_WAKE)
+        _ = SDL_PushEvent(&event)
+    }
+
     public func setTextInputArea(_ area: TextInputArea?) {
         guard let id = mainWindowID else { return }
         setTextInputArea(windowID: id, area)

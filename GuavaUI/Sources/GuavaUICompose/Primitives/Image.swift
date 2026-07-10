@@ -16,13 +16,13 @@ import GuavaUIRuntime
 /// a multiplicative tint, matching the shader's `color * texture` path).
 public struct Image: _PrimitiveView {
 
-    public enum ContentMode: Sendable {
+    public enum ContentMode: Sendable, Equatable {
         case stretch
         case fit
         case fill
     }
 
-    public enum RenderingMode: Sendable {
+    public enum RenderingMode: Sendable, Equatable {
         case color
         case alphaMask
     }
@@ -34,6 +34,17 @@ public struct Image: _PrimitiveView {
     public let sourcePixelSize: (width: Float, height: Float)?
     public let contentMode: ContentMode
     public let renderingMode: RenderingMode
+
+    private struct PaintIdentity: Equatable {
+        let textureID: TextureID
+        let width: Float
+        let height: Float
+        let tint: Color
+        let sourceWidth: Float?
+        let sourceHeight: Float?
+        let contentMode: ContentMode
+        let renderingMode: RenderingMode
+    }
 
     public init(textureID: TextureID,
                 width: Float,
@@ -59,7 +70,14 @@ public struct Image: _PrimitiveView {
 
     public func _updateNode(_ node: Node) {
         let snap = self
-        node.draw = { list, origin in
+        node.updateDraw(identity: PaintIdentity(textureID: textureID,
+                                                width: width,
+                                                height: height,
+                                                tint: tint,
+                                                sourceWidth: sourcePixelSize?.width,
+                                                sourceHeight: sourcePixelSize?.height,
+                                                contentMode: contentMode,
+                                                renderingMode: renderingMode)) { list, origin in
             let f = node.frame
             let drawWidth  = f.width  > 0 ? Float(f.width)  : snap.width
             let drawHeight = f.height > 0 ? Float(f.height) : snap.height

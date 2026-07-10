@@ -688,6 +688,104 @@ struct SpatialQueryTests {
         #expect(abs((hit?.normal.x ?? 0) - expectedNormal.x) < 0.01)
         #expect(abs((hit?.normal.y ?? 0) - expectedNormal.y) < 0.01)
     }
+
+    @Test("Jolt query scene is reused until the runtime revision changes")
+    func joltQuerySceneCachesByWorldRevision() {
+        var runtime = SceneRuntime()
+        let sphere = runtime.createEntity()
+        _ = runtime.setComponent(Collider(shape: .sphere(radius: 1, center: .zero)), for: sphere)
+
+        #expect(runtime.physicsQueryCacheStats == PhysicsQueryCacheStats())
+
+        let firstHit = runtime.physicsRaycast(
+            PhysicsRaycastQuery(
+                origin: SIMD3<Float>(-5, 0, 0),
+                direction: SIMD3<Float>(1, 0, 0),
+                maxDistance: 10
+            )
+        )
+        #expect(firstHit?.entity == sphere)
+        let firstPhysicsRevision = runtime.physicsQueryCacheStats.sourceRevision
+        #expect(firstPhysicsRevision != nil)
+        #expect(runtime.physicsQueryCacheStats.bodyCount == 1)
+        #expect(runtime.physicsQueryCacheStats.queryCount == 1)
+        #expect(runtime.physicsQueryCacheStats.rebuildCount == 1)
+        #expect(runtime.physicsQueryCacheStats.cacheHitCount == 0)
+
+        let overlapHits = runtime.physicsOverlapAABB(
+            PhysicsOverlapAABBQuery(
+                bounds: SpatialAABB(center: .zero, halfExtents: SIMD3<Float>(repeating: 2))
+            )
+        )
+        #expect(overlapHits.map(\.entity) == [sphere])
+        #expect(runtime.physicsQueryCacheStats.queryCount == 2)
+        #expect(runtime.physicsQueryCacheStats.rebuildCount == 1)
+        #expect(runtime.physicsQueryCacheStats.cacheHitCount == 1)
+
+        runtime.setResource("render-only change")
+        _ = runtime.physicsRaycast(
+            PhysicsRaycastQuery(
+                origin: SIMD3<Float>(-5, 0, 0),
+                direction: SIMD3<Float>(1, 0, 0),
+                maxDistance: 10
+            )
+        )
+        #expect(runtime.physicsQueryCacheStats.sourceRevision == firstPhysicsRevision)
+        #expect(runtime.physicsQueryCacheStats.queryCount == 3)
+        #expect(runtime.physicsQueryCacheStats.rebuildCount == 1)
+        #expect(runtime.physicsQueryCacheStats.cacheHitCount == 2)
+
+        _ = runtime.updateComponent(Collider.self, for: sphere) { collider in
+            collider.shape = .sphere(radius: 2, center: .zero)
+        }
+        _ = runtime.physicsRaycast(
+            PhysicsRaycastQuery(
+                origin: SIMD3<Float>(-5, 0, 0),
+                direction: SIMD3<Float>(1, 0, 0),
+                maxDistance: 10
+            )
+        )
+        #expect(runtime.physicsQueryCacheStats.sourceRevision != firstPhysicsRevision)
+        #expect(runtime.physicsQueryCacheStats.queryCount == 4)
+        #expect(runtime.physicsQueryCacheStats.rebuildCount == 2)
+        #expect(runtime.physicsQueryCacheStats.cacheHitCount == 2)
+    }
+
+    @Test("simulation and queries share the same persistent Jolt world")
+    func simulationAndQueriesShareJoltWorld() {
+        var runtime = SceneRuntime()
+        runtime.setResource(
+            PhysicsSettingsResource(
+                simulationMode: .fixed,
+                fixedTimeStepSeconds: 1.0 / 60.0,
+                maxSubstepsPerFrame: 1
+            )
+        )
+
+        let ground = runtime.createEntity()
+        _ = runtime.setComponent(
+            Collider(shape: .box(halfExtents: SIMD3<Float>(2, 0.5, 2), center: .zero)),
+            for: ground
+        )
+
+        _ = runtime.tick(deltaTime: 1.0 / 60.0)
+        let statsAfterSimulation = runtime.physicsQueryCacheStats
+        #expect(statsAfterSimulation.bodyCount == 1)
+        #expect(statsAfterSimulation.rebuildCount == 0)
+
+        let hit = runtime.physicsRaycast(
+            PhysicsRaycastQuery(
+                origin: SIMD3<Float>(0, 2, 0),
+                direction: SIMD3<Float>(0, -1, 0),
+                maxDistance: 10
+            )
+        )
+
+        #expect(hit?.entity == ground)
+        #expect(runtime.physicsQueryCacheStats.queryCount == 1)
+        #expect(runtime.physicsQueryCacheStats.rebuildCount == 0)
+        #expect(runtime.physicsQueryCacheStats.cacheHitCount == 1)
+    }
 }
 
 private func rotatedBoxMatrix(angleRadians: Float) -> simd_float4x4 {

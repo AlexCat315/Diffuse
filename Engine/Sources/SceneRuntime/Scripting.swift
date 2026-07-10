@@ -9,15 +9,18 @@ public struct RuntimeScriptPhaseContext {
     private let worldPointer: UnsafeMutablePointer<RuntimeWorld>
     private let commandBufferPointer: UnsafeMutablePointer<RuntimeCommandBuffer>
     private let deltaTimeSecondsValue: Double
+    private let physicsQueryScene: JoltPhysicsQueryScene
 
     init(
         world: UnsafeMutablePointer<RuntimeWorld>,
         commands: UnsafeMutablePointer<RuntimeCommandBuffer>,
-        deltaTimeSeconds: Double
+        deltaTimeSeconds: Double,
+        physicsQueryScene: JoltPhysicsQueryScene
     ) {
         self.worldPointer = world
         self.commandBufferPointer = commands
         self.deltaTimeSecondsValue = deltaTimeSeconds
+        self.physicsQueryScene = physicsQueryScene
     }
 
     public var deltaTimeSeconds: Double {
@@ -136,7 +139,7 @@ public struct RuntimeScriptPhaseContext {
         filter: PhysicsQueryFilter = PhysicsQueryFilter()
     ) -> PhysicsRaycastHit? {
         refreshTransformsIfNeeded()
-        return makeJoltQueryBackend(in: worldPointer.pointee).raycast(query, filter: filter)
+        return physicsQueryScene.backend(in: worldPointer.pointee).raycast(query, filter: filter)
     }
 
     public func physicsOverlapAABB(
@@ -144,7 +147,7 @@ public struct RuntimeScriptPhaseContext {
         filter: PhysicsQueryFilter = PhysicsQueryFilter()
     ) -> [PhysicsOverlapHit] {
         refreshTransformsIfNeeded()
-        return makeJoltQueryBackend(in: worldPointer.pointee).overlapAABB(query, filter: filter)
+        return physicsQueryScene.backend(in: worldPointer.pointee).overlapAABB(query, filter: filter)
     }
 
     public func physicsOverlapShape(
@@ -152,7 +155,7 @@ public struct RuntimeScriptPhaseContext {
         filter: PhysicsQueryFilter = PhysicsQueryFilter()
     ) -> [PhysicsOverlapHit] {
         refreshTransformsIfNeeded()
-        return makeJoltQueryBackend(in: worldPointer.pointee).overlapShape(query, filter: filter)
+        return physicsQueryScene.backend(in: worldPointer.pointee).overlapShape(query, filter: filter)
     }
 
     public func physicsSweepAABB(
@@ -160,7 +163,7 @@ public struct RuntimeScriptPhaseContext {
         filter: PhysicsQueryFilter = PhysicsQueryFilter()
     ) -> PhysicsSweepHit? {
         refreshTransformsIfNeeded()
-        return makeJoltQueryBackend(in: worldPointer.pointee).sweepAABB(query, filter: filter)
+        return physicsQueryScene.backend(in: worldPointer.pointee).sweepAABB(query, filter: filter)
     }
 
     public func physicsSweepShape(
@@ -168,7 +171,7 @@ public struct RuntimeScriptPhaseContext {
         filter: PhysicsQueryFilter = PhysicsQueryFilter()
     ) -> PhysicsSweepHit? {
         refreshTransformsIfNeeded()
-        return makeJoltQueryBackend(in: worldPointer.pointee).sweepShape(query, filter: filter)
+        return physicsQueryScene.backend(in: worldPointer.pointee).sweepShape(query, filter: filter)
     }
 
     public func resource<Resource: Sendable>(_ type: Resource.Type) -> Resource? {
