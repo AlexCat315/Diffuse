@@ -92,6 +92,37 @@ public struct MonitorChart: _PrimitiveView {
     public let markers: [ChartMarker]
     public let style: ChartStyle
 
+    private struct SeriesIdentity: Equatable {
+        let values: [Float]
+        let color: Color
+        let mode: ChartRenderMode
+    }
+
+    private struct ThresholdIdentity: Equatable {
+        let value: Float
+        let color: Color
+    }
+
+    private struct MarkerIdentity: Equatable {
+        let index: Int
+        let color: Color
+        let width: Float
+    }
+
+    private struct PaintIdentity: Equatable {
+        let series: [SeriesIdentity]
+        let thresholds: [ThresholdIdentity]
+        let markers: [MarkerIdentity]
+        let minValue: Float?
+        let maxValue: Float?
+        let gridLineCount: Int
+        let lineWidth: Float
+        let barSpacing: Float
+        let contentInset: Float
+        let background: Color?
+        let gridColor: Color
+    }
+
     public init(series: [ChartSeries],
                 thresholds: [ChartThreshold] = [],
                 markers: [ChartMarker] = [],
@@ -122,7 +153,27 @@ public struct MonitorChart: _PrimitiveView {
 
     public func _updateNode(_ node: Node) {
         let snapshot = self
-        node.draw = { list, origin in
+        let theme = node.theme
+        let identity = PaintIdentity(
+            series: series.map {
+                SeriesIdentity(values: $0.values, color: $0.color.resolve(theme), mode: $0.mode)
+            },
+            thresholds: thresholds.map {
+                ThresholdIdentity(value: $0.value, color: $0.color.resolve(theme))
+            },
+            markers: markers.map {
+                MarkerIdentity(index: $0.index, color: $0.color.resolve(theme), width: $0.width)
+            },
+            minValue: style.minValue,
+            maxValue: style.maxValue,
+            gridLineCount: style.gridLineCount,
+            lineWidth: style.lineWidth,
+            barSpacing: style.barSpacing,
+            contentInset: style.contentInset,
+            background: style.background?.resolve(theme),
+            gridColor: style.gridColor.resolve(theme)
+        )
+        node.updateDraw(identity: identity) { list, origin in
             snapshot.render(node: node, origin: origin, list: list)
         }
     }

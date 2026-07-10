@@ -84,6 +84,8 @@
 "Sculpt" = "Sculpt";
 "Seq" = "Seq";
 "Play" = "Play";
+"Preview" = "Preview";
+"Bake" = "Bake";
 "Pause" = "Pause";
 "Stop" = "Stop";
 "Guava Make" = "Guava Make";

@@ -84,6 +84,8 @@
 "Sculpt" = "雕刻";
 "Seq" = "序列";
 "Play" = "播放";
+"Preview" = "预览";
+"Bake" = "烘焙";
 "Pause" = "暂停";
 "Stop" = "停止";
 "Guava Make" = "Guava 制作";

@@ -30,6 +30,9 @@ enum {
 	GUAVA_SDL_EVENT_WINDOW_FOCUS_GAINED = SDL_EVENT_WINDOW_FOCUS_GAINED,
 	GUAVA_SDL_EVENT_WINDOW_FOCUS_LOST = SDL_EVENT_WINDOW_FOCUS_LOST,
 	GUAVA_SDL_EVENT_WINDOW_OCCLUDED = SDL_EVENT_WINDOW_OCCLUDED,
+	// Internal wake signal used to interrupt SDL_WaitEventTimeout when work is
+	// posted from the render thread or another native callback.
+	GUAVA_SDL_EVENT_WAKE = SDL_EVENT_USER,
 };
 
 // Keyboard events

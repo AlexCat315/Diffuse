@@ -261,6 +261,25 @@ struct MultiWindowSmokeTests {
     }
 
     @MainActor
+    @Test("Event-driven host waits for events when no frame is pending")
+    func eventDrivenHostWaitsWhenIdle() throws {
+        let shell = MockShell(eventBatches: [[], [], []])
+        let host = SDL3PlatformHost(shellFactory: { shell })
+        host.setFrameRateMode(.eventDriven)
+
+        let tree = NodeTree()
+        let session = try host.openWindow(title: "A", tree: tree)
+        tree.root = Node()
+        (shell.window(for: session.id) as? MockWindowHandle)?.renderSurface = mockSurface
+        session.onFrame = { _ in true }
+
+        host.run()
+
+        #expect(!shell.waitTimeouts.isEmpty)
+        #expect(shell.waitTimeouts.allSatisfy { $0 > 0 })
+    }
+
+    @MainActor
     @Test("Active animations alone do not force extra frames")
     func activeAnimationsDoNotForceFrames() throws {
         let shell = MockShell(eventBatches: [[], []])
@@ -497,6 +516,7 @@ private final class MockShell: Shell {
     var eventBatches: [[WindowInputEvent]]
     var refreshRate: Double?
     var pollDelay: TimeInterval = 0
+    var waitTimeouts: [TimeInterval] = []
     var cursorRequests: [CursorRequest] = []
     var textInputAreas: [WindowID: TextInputArea?] = [:]
 
@@ -554,6 +574,12 @@ private final class MockShell: Shell {
         }
         guard pollIndex < eventBatches.count else { return [] }
         return eventBatches[pollIndex]
+    }
+
+    @discardableResult
+    func waitForEvents(timeout: TimeInterval) -> Bool {
+        waitTimeouts.append(timeout)
+        return false
     }
 
     func setTextInputArea(windowID: WindowID, _ area: TextInputArea?) {
