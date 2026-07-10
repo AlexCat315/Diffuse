@@ -33,6 +33,15 @@ else()
     set(JOLT_MSVC_RUNTIME_ARG "")
 endif()
 
+# Keep the archive compatible with the Swift package's declared platform floor.
+# Without this explicit value, recent Xcode toolchains stamp the host SDK version
+# into every object file and SwiftPM emits thousands of deployment-target warnings.
+if(APPLE)
+    set(JOLT_PLATFORM_ARGS -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0)
+else()
+    set(JOLT_PLATFORM_ARGS "")
+endif()
+
 ExternalProject_Add(jolt_ep
     SOURCE_DIR ${CMAKE_SOURCE_DIR}/jolt/Build
     PREFIX ${CMAKE_BINARY_DIR}/jolt-ep
@@ -41,6 +50,7 @@ ExternalProject_Add(jolt_ep
         -DCMAKE_INSTALL_PREFIX=${JOLT_INSTALL_PREFIX}
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+        ${JOLT_PLATFORM_ARGS}
         -DBUILD_SHARED_LIBS=OFF
         ${JOLT_MSVC_RUNTIME_ARG}
         # Build only the library — no tests/samples/viewer

@@ -33,6 +33,7 @@ public enum ComponentCatalog {
         ComponentTypeID(RigidBody.self),
         ComponentTypeID(Collider.self),
         ComponentTypeID(Constraint.self),
+        ComponentTypeID(CharacterController.self),
 
         // Scene metadata
         ComponentTypeID(SceneNameComponent.self),
