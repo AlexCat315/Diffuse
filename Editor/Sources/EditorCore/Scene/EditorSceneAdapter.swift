@@ -273,6 +273,7 @@ public struct EditorSceneManifestParticleScalabilityPolicy: Codable, Sendable, E
 }
 
 public struct EditorSceneManifest: Codable, Sendable, Equatable {
+    public static let currentSchemaVersion = 5
     public let schemaVersion: Int
     public let revision: UInt64
     public let entityCount: Int
@@ -285,7 +286,7 @@ public struct EditorSceneManifest: Codable, Sendable, Equatable {
     public let lastModifiedAt: String?
     public let roots: [EditorSceneManifestNode]
 
-    public init(schemaVersion: Int = 4,
+    public init(schemaVersion: Int = EditorSceneManifest.currentSchemaVersion,
                 revision: UInt64,
                 entityCount: Int,
                 selectedEntityID: UInt64? = nil,
@@ -313,11 +314,23 @@ public struct EditorSceneManifest: Codable, Sendable, Equatable {
 public struct EditorSceneManifestLoadResult: Sendable, Equatable {
     public let entityCount: Int
     public let selectedEntityID: UInt64?
+    public let error: EditorSceneManifestLoadError?
 
-    public init(entityCount: Int, selectedEntityID: UInt64?) {
+    public init(
+        entityCount: Int,
+        selectedEntityID: UInt64?,
+        error: EditorSceneManifestLoadError? = nil
+    ) {
         self.entityCount = entityCount
         self.selectedEntityID = selectedEntityID
+        self.error = error
     }
+
+    public var succeeded: Bool { error == nil }
+}
+
+public enum EditorSceneManifestLoadError: Error, Sendable, Equatable {
+    case unsupportedVersion(Int)
 }
 
 public struct EditorSceneManifestVector3: Codable, Sendable, Equatable {
@@ -1682,6 +1695,13 @@ public final class EditorSceneAdapter: @unchecked Sendable {
 
     @discardableResult
     public func load(manifest: EditorSceneManifest, notify: Bool = true) -> EditorSceneManifestLoadResult {
+        guard manifest.schemaVersion == EditorSceneManifest.currentSchemaVersion else {
+            return EditorSceneManifestLoadResult(
+                entityCount: entityCount,
+                selectedEntityID: initialSelectionID,
+                error: .unsupportedVersion(manifest.schemaVersion)
+            )
+        }
         var restoredScene = SceneRuntime()
         var idMap: [UInt64: EntityID] = [:]
 

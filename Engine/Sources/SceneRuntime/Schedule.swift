@@ -1,14 +1,16 @@
-﻿import Foundation
+﻿import Dispatch
+import Foundation
 import EngineKernel
 import SIMDCompat
 
 public enum RuntimeSystemPhase: String, CaseIterable, Sendable {
     case commandApply
     case hierarchyPropagate
+    case inputAndPrePhysicsScripts
     case fixedPhysicsPrepare
     case fixedPhysicsStep
     case physicsWriteback
-    case animationAndScripts
+    case postPhysicsScripts
     case spatialIndexUpdate
     case triggerDetection
     case renderExtract
@@ -72,6 +74,10 @@ public struct RuntimeScheduleReport: Sendable {
     public var physicsConstraintCount: Int
     public var physicsContactCount: Int
     public var physicsBackendIdentifier: String
+    public var physicsSynchronizationNanoseconds: UInt64
+    public var physicsStepNanoseconds: UInt64
+    public var physicsDroppedStepCount: Int
+    public var physicsError: PhysicsBackendError?
     public var scheduledJobCount: Int
     public var jobWorkerCount: Int
     public var parallelPhases: [RuntimeSystemPhase]
@@ -89,6 +95,10 @@ public struct RuntimeScheduleReport: Sendable {
         physicsConstraintCount: Int = 0,
         physicsContactCount: Int = 0,
         physicsBackendIdentifier: String = "none",
+        physicsSynchronizationNanoseconds: UInt64 = 0,
+        physicsStepNanoseconds: UInt64 = 0,
+        physicsDroppedStepCount: Int = 0,
+        physicsError: PhysicsBackendError? = nil,
         scheduledJobCount: Int = 0,
         jobWorkerCount: Int = 1,
         parallelPhases: [RuntimeSystemPhase] = [],
@@ -105,6 +115,10 @@ public struct RuntimeScheduleReport: Sendable {
         self.physicsConstraintCount = physicsConstraintCount
         self.physicsContactCount = physicsContactCount
         self.physicsBackendIdentifier = physicsBackendIdentifier
+        self.physicsSynchronizationNanoseconds = physicsSynchronizationNanoseconds
+        self.physicsStepNanoseconds = physicsStepNanoseconds
+        self.physicsDroppedStepCount = physicsDroppedStepCount
+        self.physicsError = physicsError
         self.scheduledJobCount = scheduledJobCount
         self.jobWorkerCount = jobWorkerCount
         self.parallelPhases = parallelPhases
@@ -168,6 +182,7 @@ public struct RuntimeWorldSchedule {
     private var physicsClock = PhysicsStepClockResource()
     private var physicsFrameState = PhysicsFrameStateResource()
     private var physicsContactFrame = PhysicsContactFrameResource.empty
+    private var physicsDebugFrame = PhysicsDebugFrameResource.empty
     private var physicsSyncCache = PhysicsSyncCache()
     private var resolvedPhysicsBackendKind: PhysicsBackendKind = .none
     private var jobSystem = JobSystem.shared
@@ -224,6 +239,10 @@ public struct RuntimeWorldSchedule {
         physicsContactFrame
     }
 
+    public var currentPhysicsDebugFrame: PhysicsDebugFrameResource {
+        physicsDebugFrame
+    }
+
     public var currentPhysicsQueryCacheStats: PhysicsQueryCacheStats {
         physicsQueryScene.stats
     }
@@ -244,12 +263,17 @@ public struct RuntimeWorldSchedule {
         let drainedCommands = commands.drain()
         var createdEntities: [EntityID] = []
         var destroyedEntities: [EntityID] = []
-        let physicsSettings = world.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()
+        var physicsSettings = world.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()
         var physicsStepCount = 0
         var physicsWritebackCount = 0
         var physicsBodyCount = 0
         var physicsConstraintCount = 0
         var physicsContactCount = 0
+        var physicsSynchronizationNanoseconds: UInt64 = 0
+        var physicsStepNanoseconds: UInt64 = 0
+        var physicsBackendError: PhysicsBackendError?
+        var synchronizedBodyCount = 0
+        var synchronizedConstraintCount = 0
         var scheduledJobCount = 0
         var parallelPhases = Set<RuntimeSystemPhase>()
         var phaseJobCounts: [RuntimeSystemPhase: Int] = [:]
@@ -268,8 +292,6 @@ public struct RuntimeWorldSchedule {
         var syncEvents: [PhysicsSyncEvent] = []
         var pendingWritebacks: [PhysicsBodyWriteback] = []
         var physicsContactEvents: [PhysicsContactEvent] = []
-
-        ensureConfiguredPhysicsBackend(kind: physicsSettings.backendKind)
 
         for phase in RuntimeSystemPhase.allCases {
             switch phase {
@@ -291,6 +313,27 @@ public struct RuntimeWorldSchedule {
             case .hierarchyPropagate:
                 let report = world.propagateTransforms(using: jobSystem)
                 recordJobReport(report, for: .hierarchyPropagate)
+            case .inputAndPrePhysicsScripts:
+                if let scriptDriver {
+                    withUnsafeMutablePointer(to: &world) { worldPointer in
+                        withUnsafeMutablePointer(to: &commands) { commandPointer in
+                            var scriptContext = RuntimeScriptPhaseContext(
+                                world: worldPointer,
+                                commands: commandPointer,
+                                deltaTimeSeconds: deltaTimeSeconds,
+                                physicsQueryScene: physicsQueryScene
+                            )
+                            scriptDriver.prepareFrame(context: &scriptContext)
+                            scriptDriver.runPrePhysics(context: &scriptContext)
+                        }
+                    }
+                }
+                if world.hierarchyNeedsPropagation() {
+                    let report = world.propagateTransforms(using: jobSystem)
+                    recordJobReport(report, for: .inputAndPrePhysicsScripts)
+                }
+                physicsSettings = world.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()
+                ensureConfiguredPhysicsBackend(kind: physicsSettings.backendKind)
             case .fixedPhysicsPrepare:
                 guard physicsSettings.simulationMode != .off else {
                     if !usesSharedJoltBackend {
@@ -300,9 +343,11 @@ public struct RuntimeWorldSchedule {
                     physicsClock = PhysicsStepClockResource()
                     physicsFrameState = PhysicsFrameStateResource(backendIdentifier: physicsBackend.identifier)
                     physicsContactFrame = .empty
+                    physicsDebugFrame = .empty
                     world.setDerivedResource(physicsClock)
                     world.setDerivedResource(physicsFrameState)
                     world.setDerivedResource(physicsContactFrame)
+                    world.setDerivedResource(physicsDebugFrame)
                     continue
                 }
 
@@ -328,7 +373,12 @@ public struct RuntimeWorldSchedule {
                     activeConstraints: activeConstraints,
                     syncEvents: syncEvents
                 )
-                _ = physicsBackend.prepare(context: prepareContext)
+                let prepareStarted = DispatchTime.now().uptimeNanoseconds
+                let prepareResult = physicsBackend.prepare(context: prepareContext)
+                physicsSynchronizationNanoseconds += DispatchTime.now().uptimeNanoseconds - prepareStarted
+                synchronizedBodyCount += prepareResult.synchronizedBodies
+                synchronizedConstraintCount += prepareResult.synchronizedConstraints
+                physicsBackendError = prepareResult.error
                 replacePhysicsSyncCache(bodies: activeBodies, constraints: activeConstraints)
                 if usesSharedJoltBackend {
                     physicsQueryScene.adoptSynchronizedWorld(
@@ -342,12 +392,14 @@ public struct RuntimeWorldSchedule {
                 physicsClock.accumulatedSeconds += deltaTimeSeconds
                 physicsClock.lastStepCount = 0
                 physicsClock.lastSteppedSeconds = 0
+                physicsClock.lastDroppedStepCount = 0
 
                 let fixedStep = max(physicsSettings.fixedTimeStepSeconds, 0.000_001)
                 let maxSubsteps = max(physicsSettings.maxSubstepsPerFrame, 0)
                 var substepIndex = 0
 
                 while physicsClock.accumulatedSeconds + 0.000_000_1 >= fixedStep && substepIndex < maxSubsteps {
+                    let stepStarted = DispatchTime.now().uptimeNanoseconds
                     let stepResult = physicsBackend.step(
                         context: PhysicsStepContext(
                             settings: physicsSettings,
@@ -357,6 +409,10 @@ public struct RuntimeWorldSchedule {
                             activeConstraints: activeConstraints
                         )
                     )
+                    physicsStepNanoseconds += DispatchTime.now().uptimeNanoseconds - stepStarted
+                    if let error = stepResult.error {
+                        physicsBackendError = error
+                    }
                     physicsClock.accumulatedSeconds -= fixedStep
                     physicsClock.simulatedSteps += 1
                     physicsClock.lastStepCount += 1
@@ -366,6 +422,13 @@ public struct RuntimeWorldSchedule {
                     physicsContactEvents.append(contentsOf: stepResult.contactEvents)
                     pendingWritebacks = mergeWritebacks(existing: pendingWritebacks, incoming: stepResult.writebacks)
                     substepIndex += 1
+                }
+                if substepIndex >= maxSubsteps,
+                   physicsClock.accumulatedSeconds + 0.000_000_1 >= fixedStep {
+                    let dropped = Int(physicsClock.accumulatedSeconds / fixedStep)
+                    physicsClock.accumulatedSeconds.formTruncatingRemainder(dividingBy: fixedStep)
+                    physicsClock.droppedSteps += dropped
+                    physicsClock.lastDroppedStepCount = dropped
                 }
             case .physicsWriteback:
                 guard physicsSettings.simulationMode != .off else { continue }
@@ -388,7 +451,14 @@ public struct RuntimeWorldSchedule {
                     contactCount: physicsContactCount,
                     writebackCount: physicsWritebackCount,
                     simulatedSteps: physicsStepCount,
-                    simulatedSeconds: physicsClock.lastSteppedSeconds
+                    simulatedSeconds: physicsClock.lastSteppedSeconds,
+                    synchronizedBodyCount: synchronizedBodyCount,
+                    synchronizedConstraintCount: synchronizedConstraintCount,
+                    activeBodyCount: pendingWritebacks.filter { $0.isSleeping == false }.count,
+                    droppedStepCount: physicsClock.lastDroppedStepCount,
+                    synchronizationNanoseconds: physicsSynchronizationNanoseconds,
+                    stepNanoseconds: physicsStepNanoseconds,
+                    lastError: physicsBackendError
                 )
                 physicsContactFrame = PhysicsContactFrameResource(events: physicsContactEvents)
                 world.setDerivedResource(physicsClock)
@@ -401,7 +471,7 @@ public struct RuntimeWorldSchedule {
                         constraintCount: activeConstraints.count
                     )
                 }
-            case .animationAndScripts:
+            case .postPhysicsScripts:
                 if let scriptDriver {
                     withUnsafeMutablePointer(to: &world) { worldPointer in
                         withUnsafeMutablePointer(to: &commands) { commandPointer in
@@ -411,13 +481,13 @@ public struct RuntimeWorldSchedule {
                                 deltaTimeSeconds: deltaTimeSeconds,
                                 physicsQueryScene: physicsQueryScene
                             )
-                            scriptDriver.run(context: &scriptContext)
+                            scriptDriver.runPostPhysics(context: &scriptContext)
                         }
                     }
                 }
                 if world.hierarchyNeedsPropagation() {
                     let report = world.propagateTransforms(using: jobSystem)
-                    recordJobReport(report, for: .animationAndScripts)
+                    recordJobReport(report, for: .postPhysicsScripts)
                 }
                 if deltaTimeSeconds > 0 {
                     let particleOptions = particleAdvanceOptions(in: &world)
@@ -446,6 +516,12 @@ public struct RuntimeWorldSchedule {
             case .spatialIndexUpdate:
                 let spatialIndexBuild = buildSpatialIndexResource(in: world, using: jobSystem)
                 world.setDerivedResource(spatialIndexBuild.resource)
+                physicsDebugFrame = buildPhysicsDebugFrame(
+                    in: world,
+                    spatialIndex: spatialIndexBuild.resource,
+                    contacts: physicsContactEvents
+                )
+                world.setDerivedResource(physicsDebugFrame)
                 recordJobReport(spatialIndexBuild.report, for: .spatialIndexUpdate)
             case .triggerDetection:
                 let triggerBackend = physicsQueryScene.synchronize(in: world)
@@ -476,6 +552,10 @@ public struct RuntimeWorldSchedule {
             physicsConstraintCount: physicsConstraintCount,
             physicsContactCount: physicsContactCount,
             physicsBackendIdentifier: physicsBackend.identifier,
+            physicsSynchronizationNanoseconds: physicsSynchronizationNanoseconds,
+            physicsStepNanoseconds: physicsStepNanoseconds,
+            physicsDroppedStepCount: physicsClock.lastDroppedStepCount,
+            physicsError: physicsBackendError,
             scheduledJobCount: scheduledJobCount,
             jobWorkerCount: jobSystem.workerCount,
             parallelPhases: RuntimeSystemPhase.allCases.filter { parallelPhases.contains($0) },
@@ -1527,6 +1607,35 @@ public struct RuntimeWorldSchedule {
             colliders: colliders,
             constraints: world.componentSnapshot(Constraint.self, matching: entities),
             meshGeometries: meshGeometries
+        )
+    }
+
+    private func buildPhysicsDebugFrame(
+        in world: RuntimeWorld,
+        spatialIndex: SpatialIndexResource,
+        contacts: [PhysicsContactEvent]
+    ) -> PhysicsDebugFrameResource {
+        let bodies = spatialIndex.entries.map { entry in
+            let body = world.component(RigidBody.self, for: entry.entity)
+            return PhysicsDebugBody(
+                entity: entry.entity,
+                shape: entry.shape,
+                worldTransform: entry.worldTransform,
+                bounds: entry.bounds,
+                motionType: body?.motionType ?? .static,
+                isTrigger: entry.isTrigger,
+                isSleeping: body?.isSleeping ?? false
+            )
+        }
+        let constraints = world.entities(with: Constraint.self).compactMap { entity in
+            world.component(Constraint.self, for: entity).map {
+                PhysicsDebugConstraint(entity: entity, constraint: $0)
+            }
+        }
+        return PhysicsDebugFrameResource(
+            bodies: bodies,
+            constraints: constraints,
+            contacts: contacts
         )
     }
 

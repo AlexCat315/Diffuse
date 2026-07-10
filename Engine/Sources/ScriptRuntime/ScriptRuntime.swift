@@ -49,40 +49,34 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
     }
 
     public func run(context: inout RuntimeScriptPhaseContext) {
+        prepareFrame(context: &context)
+        runPrePhysics(context: &context)
+        runPostPhysics(context: &context)
+    }
+
+    public func prepareFrame(context: inout RuntimeScriptPhaseContext) {
         context.setResource(InGameCanvas())
         inputProcessor.process(context: &context)
+    }
+
+    public func runPrePhysics(context: inout RuntimeScriptPhaseContext) {
+        forEachBoundScript(context: context) { key, registered, scriptContext in
+            if activeInstances.insert(key).inserted {
+                registered.script.onStartHandler?(scriptContext)
+            }
+            registered.script.onPrePhysicsHandler?(scriptContext)
+        }
+    }
+
+    public func runPostPhysics(context: inout RuntimeScriptPhaseContext) {
         animationRuntime.tick(context: &context, deltaTime: context.deltaTimeSeconds)
-        let entities = context.entities()
         var liveInstances: Set<ScriptInstanceKey> = []
-
-        for entity in entities {
-            guard let scriptComponent = context.component(ScriptComponent.self, for: entity) else {
-                continue
+        forEachBoundScript(context: context) { key, registered, scriptContext in
+            liveInstances.insert(key)
+            if activeInstances.insert(key).inserted {
+                registered.script.onStartHandler?(scriptContext)
             }
-
-            var ordinals: [ScriptHandle: Int] = [:]
-
-            for binding in scriptComponent.bindings where binding.isEnabled {
-                guard let registered = registeredScripts[binding.script] else {
-                    continue
-                }
-
-                let ordinal = ordinals[binding.script, default: 0]
-                ordinals[binding.script] = ordinal + 1
-                let key = ScriptInstanceKey(entity: entity, script: binding.script, ordinal: ordinal)
-                let scriptContext = ScriptContext(
-                    phaseContext: context,
-                    entity: entity,
-                    deltaTime: context.deltaTimeSeconds,
-                    parametersJSON: binding.parametersJSON
-                )
-
-                liveInstances.insert(key)
-                if activeInstances.insert(key).inserted {
-                    registered.script.onStartHandler?(scriptContext)
-                }
-                registered.script.onTickHandler?(scriptContext)
-            }
+            registered.script.onTickHandler?(scriptContext)
         }
 
         let endedInstances = activeInstances.subtracting(liveInstances)
@@ -98,6 +92,34 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
             registered.script.onDestroyHandler?(scriptContext)
         }
         activeInstances = liveInstances
+    }
+
+    private func forEachBoundScript(
+        context: RuntimeScriptPhaseContext,
+        _ visit: (ScriptInstanceKey, RegisteredScript, ScriptContext) -> Void
+    ) {
+        for entity in context.entities() {
+            guard let scriptComponent = context.component(ScriptComponent.self, for: entity) else {
+                continue
+            }
+            var ordinals: [ScriptHandle: Int] = [:]
+            for binding in scriptComponent.bindings where binding.isEnabled {
+                guard let registered = registeredScripts[binding.script] else { continue }
+                let ordinal = ordinals[binding.script, default: 0]
+                ordinals[binding.script] = ordinal + 1
+                let key = ScriptInstanceKey(entity: entity, script: binding.script, ordinal: ordinal)
+                visit(
+                    key,
+                    registered,
+                    ScriptContext(
+                        phaseContext: context,
+                        entity: entity,
+                        deltaTime: context.deltaTimeSeconds,
+                        parametersJSON: binding.parametersJSON
+                    )
+                )
+            }
+        }
     }
 
     public func physicsRaycast(

@@ -41,6 +41,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <thread>
 
 namespace {
 
@@ -776,6 +777,7 @@ struct GuavaJoltContextImpl {
     std::unordered_map<uint64_t, std::vector<uint32_t>> mesh_indices;
     std::unordered_set<TriggerPair, TriggerPairHash> previous_trigger_pairs;
     LayerMaskContactListener contact_listener;
+    uint32_t last_error = GUAVA_JOLT_ERROR_NONE;
 
     GuavaJoltContextImpl()
         : contact_listener(body_metadata) {
@@ -787,8 +789,10 @@ struct GuavaJoltContextImpl {
                             bp_layer_interface, object_vs_bp_filter, object_layer_filter);
         physics_system.SetContactListener(&contact_listener);
         temp_allocator = std::make_unique<JPH::TempAllocatorImpl>(10 * 1024 * 1024);
+        const unsigned hardware_threads = std::thread::hardware_concurrency();
+        const int worker_threads = static_cast<int>(hardware_threads > 1 ? hardware_threads - 1 : 1);
         job_system = std::make_unique<JPH::JobSystemThreadPool>(
-            JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, 1);
+            JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, worker_threads);
     }
 
     ~GuavaJoltContextImpl() {
@@ -846,9 +850,8 @@ struct GuavaJoltContextImpl {
             mi ? mi->data() : nullptr,
             mi ? static_cast<uint32_t>(mi->size()) : 0u);
         if (!shape) {
-            JPH::BoxShapeSettings settings(JPH::Vec3(0.05f, 0.05f, 0.05f));
-            settings.SetEmbedded();
-            shape = settings.Create().Get();
+            last_error = GUAVA_JOLT_ERROR_INVALID_SHAPE;
+            return false;
         }
 
         JPH::EMotionType motion = to_motion_type(desc.motion_type);
@@ -882,7 +885,10 @@ struct GuavaJoltContextImpl {
         }
 
         JPH::Body* body = bi.CreateBody(settings);
-        if (!body) return false;
+        if (!body) {
+            last_error = GUAVA_JOLT_ERROR_BODY_CREATION_FAILED;
+            return false;
+        }
 
         bi.AddBody(body->GetID(), JPH::EActivation::Activate);
         body_ids[entity] = body->GetID();
@@ -902,7 +908,15 @@ struct GuavaJoltContextImpl {
 	                 const GuavaJoltConstraintDesc* constraints_in, size_t constraint_count,
 	                 const GuavaJoltMeshGeometry* meshes, size_t mesh_count,
 	                 GuavaJoltPrepareStats* out_stats) {
-        // Capture mesh geometry keyed by entity_id (deep-copy so pointers stay valid).
+	        last_error = GUAVA_JOLT_ERROR_NONE;
+        if ((body_count > 0 && !bodies)
+            || (constraint_count > 0 && !constraints_in)
+            || (mesh_count > 0 && !meshes)) {
+            last_error = GUAVA_JOLT_ERROR_INVALID_ARGUMENT;
+            return false;
+        }
+
+	        // Capture mesh geometry keyed by entity_id (deep-copy so pointers stay valid).
         std::unordered_map<uint64_t, std::pair<const float*, std::pair<uint32_t, std::pair<const uint32_t*, uint32_t>>>> mesh_lookup;
         mesh_vertices.clear();
         mesh_indices.clear();
@@ -950,9 +964,13 @@ struct GuavaJoltContextImpl {
         }
 
         // Add / refresh bodies in incoming.
-	        for (auto& kv : incoming) {
-	            const uint64_t entity = kv.first;
-	            const GuavaJoltBodyDesc& desc = *kv.second;
+        std::vector<uint64_t> incoming_entities;
+        incoming_entities.reserve(incoming.size());
+        for (const auto& kv : incoming) incoming_entities.push_back(kv.first);
+        std::sort(incoming_entities.begin(), incoming_entities.end());
+
+	        for (uint64_t entity : incoming_entities) {
+	            const GuavaJoltBodyDesc& desc = *incoming[entity];
 	            const std::vector<float>* mv = nullptr;
 	            const std::vector<uint32_t>* mi = nullptr;
 	            auto mv_it = mesh_vertices.find(entity);
@@ -968,7 +986,7 @@ struct GuavaJoltContextImpl {
 	                    || previous_signature->second != signature) {
 	                    destroy_body(entity, bi);
 	                    ++removed_bodies;
-	                    create_body(entity, desc, mv, mi, signature, bi);
+	                    if (!create_body(entity, desc, mv, mi, signature, bi)) return false;
 	                    continue;
 	                }
 
@@ -996,7 +1014,7 @@ struct GuavaJoltContextImpl {
 	                }
 	                continue;
 	            }
-	            create_body(entity, desc, mv, mi, signature, bi);
+	            if (!create_body(entity, desc, mv, mi, signature, bi)) return false;
 	        }
 	
 	        if (constraints_in) {
@@ -1080,7 +1098,11 @@ struct GuavaJoltContextImpl {
 
 	    bool step(const GuavaJoltStepConfig* config, GuavaJoltBodyState* states, size_t state_count,
 	              GuavaJoltStepStats* out_stats) {
-	        if (!config || !out_stats) return false;
+	        last_error = GUAVA_JOLT_ERROR_NONE;
+	        if (!config || !out_stats || (state_count > 0 && !states)) {
+            last_error = GUAVA_JOLT_ERROR_INVALID_ARGUMENT;
+            return false;
+        }
         physics_system.SetGravity(JPH::Vec3(config->gravity_x, config->gravity_y, config->gravity_z));
 
         const int collision_steps = static_cast<int>(std::max<uint32_t>(1u, config->collision_steps));
@@ -1515,9 +1537,29 @@ struct GuavaJoltContextImpl {
 
 extern "C" {
 
+uint32_t guava_jolt_bridge_abi_version(void) {
+    return GUAVA_JOLT_ABI_VERSION;
+}
+
+bool guava_jolt_bridge_get_abi_layout(GuavaJoltABILayout* out_layout) {
+    if (!out_layout) return false;
+    out_layout->abi_version = GUAVA_JOLT_ABI_VERSION;
+    out_layout->struct_size = static_cast<uint32_t>(sizeof(GuavaJoltABILayout));
+    out_layout->body_desc_size = static_cast<uint32_t>(sizeof(GuavaJoltBodyDesc));
+    out_layout->constraint_desc_size = static_cast<uint32_t>(sizeof(GuavaJoltConstraintDesc));
+    out_layout->step_config_size = static_cast<uint32_t>(sizeof(GuavaJoltStepConfig));
+    out_layout->body_state_size = static_cast<uint32_t>(sizeof(GuavaJoltBodyState));
+    out_layout->contact_event_size = static_cast<uint32_t>(sizeof(GuavaJoltContactEvent));
+    return true;
+}
+
 GuavaJoltContext guava_jolt_context_create(void) {
     ensure_jolt_initialized();
     return new (std::nothrow) GuavaJoltContextImpl();
+}
+
+uint32_t guava_jolt_context_last_error(GuavaJoltContext context) {
+    return context ? context->last_error : GUAVA_JOLT_ERROR_INVALID_ARGUMENT;
 }
 
 void guava_jolt_context_destroy(GuavaJoltContext context) {

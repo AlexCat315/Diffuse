@@ -53,7 +53,7 @@ private func decodeJSONValue<T: Decodable>(_ value: Any?, as type: T.Type) -> T?
 // MARK: - Scene save/load
 
 public enum SceneSerializer {
-    private static let currentVersion = 1
+    private static let currentVersion = 2
 
     /// Document version stamped into captured prefabs. Shares the scene format.
     static let prefabVersion = currentVersion
@@ -136,6 +136,10 @@ public enum SceneSerializer {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let entities = jsonToArray(json["entities"])
         else { throw SceneSerializerError.invalidFormat }
+        let version = jsonToInt(json["version"]) ?? 0
+        guard version == currentVersion else {
+            throw SceneSerializerError.unsupportedVersion(version)
+        }
         _ = loadEntities(entities, into: &scene)
     }
 
