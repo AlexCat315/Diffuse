@@ -2,6 +2,7 @@
 import SIMDCompat
 
 public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
+    private static let expectedABIVersion: UInt32 = 2
     private static let colliderHasBoxFlag: UInt32 = 1 << 0
     private static let colliderHasSphereFlag: UInt32 = 1 << 1
     private static let colliderHasMeshFlag: UInt32 = 1 << 2
@@ -16,9 +17,27 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
 
     private var context: GuavaJoltContext?
     private var lastPreparedBodyCount: Int = 0
+    private var initializationError: PhysicsBackendError?
 
     public init() {
-        context = guava_jolt_context_create()
+        var layout = GuavaJoltABILayout()
+        let compatible = guava_jolt_bridge_abi_version() == Self.expectedABIVersion
+            && guava_jolt_bridge_get_abi_layout(&layout)
+            && layout.abi_version == Self.expectedABIVersion
+            && layout.struct_size == UInt32(MemoryLayout<GuavaJoltABILayout>.size)
+            && layout.body_desc_size == UInt32(MemoryLayout<GuavaJoltBodyDesc>.size)
+            && layout.constraint_desc_size == UInt32(MemoryLayout<GuavaJoltConstraintDesc>.size)
+            && layout.step_config_size == UInt32(MemoryLayout<GuavaJoltStepConfig>.size)
+            && layout.body_state_size == UInt32(MemoryLayout<GuavaJoltBodyState>.size)
+            && layout.contact_event_size == UInt32(MemoryLayout<GuavaJoltContactEvent>.size)
+        if compatible {
+            context = guava_jolt_context_create()
+        } else {
+            initializationError = PhysicsBackendError(
+                code: .abiMismatch,
+                message: "CJoltBridge ABI layout does not match the Swift bindings"
+            )
+        }
     }
 
     deinit {
@@ -36,7 +55,8 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             lastPreparedBodyCount = context.activeBodies.count
             return PhysicsPrepareResult(
                 synchronizedBodies: context.activeBodies.count,
-                synchronizedConstraints: context.activeConstraints.count
+                synchronizedConstraints: context.activeConstraints.count,
+                error: initializationError
             )
         }
 
@@ -104,8 +124,9 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
 
         guard success else {
             return PhysicsPrepareResult(
-                synchronizedBodies: context.activeBodies.count,
-                synchronizedConstraints: context.activeConstraints.count
+                synchronizedBodies: 0,
+                synchronizedConstraints: 0,
+                error: nativeError(from: nativeContext)
             )
         }
 
@@ -123,7 +144,8 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
                 bodyCount: context.activeBodies.count,
                 constraintCount: context.activeConstraints.count,
                 contactCount: 0,
-                writebacks: []
+                writebacks: [],
+                error: initializationError
             )
         }
 
@@ -155,7 +177,8 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
                 bodyCount: context.activeBodies.count,
                 constraintCount: context.activeConstraints.count,
                 contactCount: 0,
-                writebacks: []
+                writebacks: [],
+                error: nativeError(from: nativeContext)
             )
         }
 
@@ -316,6 +339,23 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             guava_jolt_context_reset(context)
         }
         lastPreparedBodyCount = 0
+    }
+
+    private func nativeError(from context: GuavaJoltContext) -> PhysicsBackendError {
+        switch guava_jolt_context_last_error(context) {
+        case 1:
+            return PhysicsBackendError(code: .abiMismatch, message: "CJoltBridge ABI mismatch")
+        case 2:
+            return PhysicsBackendError(code: .invalidArgument, message: "CJoltBridge received an invalid argument")
+        case 3:
+            return PhysicsBackendError(code: .invalidShape, message: "Collider shape could not be created")
+        case 4:
+            return PhysicsBackendError(code: .bodyCreationFailed, message: "Jolt failed to create a body")
+        case 5:
+            return PhysicsBackendError(code: .updateFailed, message: "Jolt simulation update failed")
+        default:
+            return PhysicsBackendError(code: .unknown, message: "Unknown CJoltBridge failure")
+        }
     }
 
     private func makeBodyDesc(from descriptor: PhysicsBodyDescriptor) -> GuavaJoltBodyDesc {

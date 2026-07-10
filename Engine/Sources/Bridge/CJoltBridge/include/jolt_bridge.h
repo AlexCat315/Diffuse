@@ -11,6 +11,27 @@ extern "C" {
 
 typedef struct GuavaJoltContextImpl* GuavaJoltContext;
 
+#define GUAVA_JOLT_ABI_VERSION 2u
+
+typedef enum GuavaJoltErrorCode {
+    GUAVA_JOLT_ERROR_NONE = 0,
+    GUAVA_JOLT_ERROR_ABI_MISMATCH = 1,
+    GUAVA_JOLT_ERROR_INVALID_ARGUMENT = 2,
+    GUAVA_JOLT_ERROR_INVALID_SHAPE = 3,
+    GUAVA_JOLT_ERROR_BODY_CREATION_FAILED = 4,
+    GUAVA_JOLT_ERROR_UPDATE_FAILED = 5
+} GuavaJoltErrorCode;
+
+typedef struct GuavaJoltABILayout {
+    uint32_t abi_version;
+    uint32_t struct_size;
+    uint32_t body_desc_size;
+    uint32_t constraint_desc_size;
+    uint32_t step_config_size;
+    uint32_t body_state_size;
+    uint32_t contact_event_size;
+} GuavaJoltABILayout;
+
 typedef struct GuavaJoltBodyDesc {
     uint64_t entity_id;
     uint32_t motion_type;
@@ -306,7 +327,10 @@ typedef struct GuavaJoltContactEvent {
     float penetration_depth;
 } GuavaJoltContactEvent;
 
+uint32_t guava_jolt_bridge_abi_version(void);
+bool guava_jolt_bridge_get_abi_layout(GuavaJoltABILayout* out_layout);
 GuavaJoltContext guava_jolt_context_create(void);
+uint32_t guava_jolt_context_last_error(GuavaJoltContext context);
 void guava_jolt_context_destroy(GuavaJoltContext context);
 void guava_jolt_context_reset(GuavaJoltContext context);
 bool guava_jolt_context_prepare(GuavaJoltContext context,

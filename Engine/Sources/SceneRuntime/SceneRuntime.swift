@@ -62,6 +62,10 @@ public struct SceneRuntime {
         world.resource(ParticleScalabilityStateResource.self) ?? .default
     }
 
+    public var physicsDebugFrame: PhysicsDebugFrameResource {
+        world.resource(PhysicsDebugFrameResource.self) ?? schedule.currentPhysicsDebugFrame
+    }
+
     public mutating func applyParticleSimulationReadbackStats(_ report: ParticleSimulationEventApplyReport) {
         world.setResource(particleFrameStats.mergingGPUReadback(report))
     }

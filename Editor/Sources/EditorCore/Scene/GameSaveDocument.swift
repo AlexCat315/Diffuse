@@ -8,6 +8,7 @@ import Foundation
 ///
 /// Files are stored under `.guava/game-saves/slot-{slot}.json`.
 public struct GameSaveDocument: Codable, Sendable, Equatable {
+    public static let currentSchemaVersion = 2
     public var schemaVersion: Int
     /// Save slot index (0-based). Slot 255 is reserved for the auto-save.
     public var slot: Int
@@ -18,7 +19,7 @@ public struct GameSaveDocument: Codable, Sendable, Equatable {
     public static let autoSaveSlot = 255
 
     public init(slot: Int, manifest: EditorSceneManifest) {
-        self.schemaVersion = 1
+        self.schemaVersion = Self.currentSchemaVersion
         self.slot = slot
         self.savedAt = ISO8601DateFormatter().string(from: Date())
         self.manifest = manifest
@@ -51,6 +52,17 @@ extension GameSaveDocument {
     public static func read(from url: URL) throws -> GameSaveDocument? {
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
         let data = try Data(contentsOf: url)
-        return try JSONDecoder().decode(GameSaveDocument.self, from: data)
+        let document = try JSONDecoder().decode(GameSaveDocument.self, from: data)
+        guard document.schemaVersion == currentSchemaVersion else {
+            throw GameSaveDocumentError.unsupportedVersion(document.schemaVersion)
+        }
+        guard document.manifest.schemaVersion == EditorSceneManifest.currentSchemaVersion else {
+            throw EditorSceneManifestLoadError.unsupportedVersion(document.manifest.schemaVersion)
+        }
+        return document
     }
+}
+
+public enum GameSaveDocumentError: Error, Sendable, Equatable {
+    case unsupportedVersion(Int)
 }
