@@ -84,6 +84,114 @@ struct EditorInspectorSectionsTests {
         #expect(abs(binding.wrappedValue - 1.777) < 1e-4)
     }
 
+    // MARK: - Jolt Physics
+
+    @Test("physics settings inspector authors the Jolt world configuration")
+    func physicsSettingsBindings() throws {
+        let adapter = EditorSceneAdapter()
+        let id = makeEntity(in: adapter)
+        #expect(hasSection(adapter, id, "physics-settings"))
+
+        guard case let .physicsSimulationMode(mode) =
+                field(adapter, id, section: "physics-settings", field: "physics-simulation-mode"),
+              case let .vector3(gravityX, gravityY, gravityZ) =
+                field(adapter, id, section: "physics-settings", field: "physics-gravity"),
+              case let .constrainedNumber(fixedStep, _, _, _, _) =
+                field(adapter, id, section: "physics-settings", field: "physics-fixed-step"),
+              case let .constrainedNumber(maxSubsteps, _, _, _, _) =
+                field(adapter, id, section: "physics-settings", field: "physics-max-substeps"),
+              case let .constrainedNumber(collisionSteps, _, _, _, _) =
+                field(adapter, id, section: "physics-settings", field: "physics-collision-steps"),
+              case let .bool(allowSleep) =
+                field(adapter, id, section: "physics-settings", field: "physics-allow-sleep") else {
+            Issue.record("expected complete physics settings fields"); return
+        }
+
+        mode.wrappedValue = .preview
+        gravityX.wrappedValue = 1
+        gravityY.wrappedValue = -20
+        gravityZ.wrappedValue = 2
+        fixedStep.wrappedValue = 1.0 / 120.0
+        maxSubsteps.wrappedValue = 8
+        collisionSteps.wrappedValue = 3
+        allowSleep.wrappedValue = false
+
+        let settings = try #require(adapter.scene.resource(PhysicsSettingsResource.self))
+        #expect(settings.backendKind == .jolt)
+        #expect(settings.simulationMode == .preview)
+        #expect(settings.gravity == SIMD3<Float>(1, -20, 2))
+        #expect(abs(settings.fixedTimeStepSeconds - (1.0 / 120.0)) < 0.000_001)
+        #expect(settings.maxSubstepsPerFrame == 8)
+        #expect(settings.collisionSteps == 3)
+        #expect(!settings.allowSleep)
+    }
+
+    @Test("rigid body inspector edits Jolt velocity damping and CCD settings")
+    func rigidBodyJoltSettingsBindings() throws {
+        let adapter = EditorSceneAdapter()
+        let id = makeEntity(in: adapter)
+        let entity = try #require(EntityID(rawValue: id))
+        _ = adapter.addComponent(.rigidBody, to: id)
+
+        guard case let .vector3(linearX, linearY, linearZ) =
+                field(adapter, id, section: "rigid-body", field: "linear-velocity") else {
+            Issue.record("expected linear velocity field"); return
+        }
+        linearX.wrappedValue = 1
+        linearY.wrappedValue = 2
+        linearZ.wrappedValue = 3
+
+        guard case let .vector3(angularX, angularY, angularZ) =
+                field(adapter, id, section: "rigid-body", field: "angular-velocity") else {
+            Issue.record("expected angular velocity field"); return
+        }
+        angularX.wrappedValue = 4
+        angularY.wrappedValue = 5
+        angularZ.wrappedValue = 6
+
+        guard case let .constrainedNumber(linearDamping, _, _, _, _) =
+                field(adapter, id, section: "rigid-body", field: "linear-damping"),
+              case let .constrainedNumber(angularDamping, _, _, _, _) =
+                field(adapter, id, section: "rigid-body", field: "angular-damping"),
+              case let .bool(ccd) =
+                field(adapter, id, section: "rigid-body", field: "continuous-collision-detection") else {
+            Issue.record("expected damping and CCD fields"); return
+        }
+        linearDamping.wrappedValue = 0.25
+        angularDamping.wrappedValue = 0.5
+        ccd.wrappedValue = true
+
+        let body = try #require(adapter.scene.component(RigidBody.self, for: entity))
+        #expect(body.linearVelocity == SIMD3<Float>(1, 2, 3))
+        #expect(body.angularVelocity == SIMD3<Float>(4, 5, 6))
+        #expect(body.linearDamping == 0.25)
+        #expect(body.angularDamping == 0.5)
+        #expect(body.continuousCollisionDetection)
+    }
+
+    @Test("collider inspector edits Jolt shape center and collision mask")
+    func colliderJoltSettingsBindings() throws {
+        let adapter = EditorSceneAdapter()
+        let id = makeEntity(in: adapter)
+        let entity = try #require(EntityID(rawValue: id))
+        _ = adapter.addComponent(.collider, to: id)
+
+        guard case let .vector3(centerX, centerY, centerZ) =
+                field(adapter, id, section: "collider", field: "shape-center"),
+              case let .constrainedNumber(layerMask, _, _, _, _) =
+                field(adapter, id, section: "collider", field: "layer-mask") else {
+            Issue.record("expected collider center and layer mask fields"); return
+        }
+        centerX.wrappedValue = 1
+        centerY.wrappedValue = 2
+        centerZ.wrappedValue = 3
+        layerMask.wrappedValue = 0x00F0
+
+        let collider = try #require(adapter.scene.component(Collider.self, for: entity))
+        #expect(collider.shape.center == SIMD3<Float>(1, 2, 3))
+        #expect(collider.layerMask == 0x00F0)
+    }
+
     // MARK: - Audio Listener
 
     @Test("audio listener volume binding writes back")

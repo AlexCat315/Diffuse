@@ -249,7 +249,9 @@ public final class AppRuntime {
             self?.releaseGPUSurfaces()
         }
 
-        let displayHandle = AppDisplayHandle()
+        let displayHandle = AppDisplayHandle { [weak host] in
+            host?.wakeEventLoop()
+        }
         let previousDisplayHandle = AppDisplayHandleHolder.current
         AppDisplayHandleHolder.current = displayHandle
         defer {

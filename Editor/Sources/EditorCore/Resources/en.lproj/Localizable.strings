@@ -25,9 +25,20 @@
 "World Position" = "World Position";
 
 /* Rigid Body fields */
+"Physics Settings" = "Physics Settings";
+"Backend" = "Backend";
+"Simulation Mode" = "Simulation Mode";
+"Fixed Time Step" = "Fixed Time Step";
+"Max Substeps" = "Max Substeps";
+"Collision Steps" = "Collision Steps";
 "Motion" = "Motion";
 "Mass" = "Mass";
+"Linear Velocity" = "Linear Velocity";
+"Angular Velocity" = "Angular Velocity";
 "Gravity" = "Gravity";
+"Linear Damping" = "Linear Damping";
+"Angular Damping" = "Angular Damping";
+"Continuous Collision" = "Continuous Collision";
 "Allow Sleep" = "Allow Sleep";
 "Sleeping" = "Sleeping";
 "Yes" = "Yes";
@@ -35,8 +46,10 @@
 
 /* Collider fields */
 "Shape" = "Shape";
+"Center" = "Center";
 "Trigger" = "Trigger";
 "Layer" = "Layer";
+"Layer Mask" = "Layer Mask";
 
 /* Constraint fields */
 "Type" = "Type";

@@ -20,6 +20,18 @@ struct TextShapeCacheTests {
         }
     }
 
+    struct StableTextPaintHarness: View {
+        @State var revision: Int = 0
+
+        var body: some View {
+            Row {
+                Text("constant")
+                EmptyView()
+                    .frame(width: Float(revision), height: 1)
+            }
+        }
+    }
+
     @Test("Layout cache entry is written on first measure and reused on identical inputs")
     func cacheHit() {
         GlobalTestLock.locked {
@@ -91,6 +103,34 @@ struct TextShapeCacheTests {
             #expect(afterWidth > beforeWidth)
             let key = graph.layoutNode(for: textNode)!.textMeasure?.key
             #expect(key?.text == "a much longer label")
+        }
+    }
+
+    @Test("Unchanged Text paint stays clean across an unrelated recompose")
+    func stableTextPaintSurvivesRecompose() {
+        GlobalTestLock.locked {
+            TextEnvironmentHolder.current = TestTextEnvironmentFactory.make(size: 16, lineHeight: 20)
+            defer { TextEnvironmentHolder.current = nil }
+
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let harness = StableTextPaintHarness()
+            graph.install(root: harness)
+            graph.computeLayout(width: 200, height: 200)
+
+            guard let textNode = tree.root?.children.first?.children.first?.children.first else {
+                Issue.record("Expected the Text primitive node")
+                return
+            }
+            tree.flush()
+            #expect(!textNode.renderDirty)
+
+            harness.$revision.wrappedValue = 12
+            recomp.commitAll()
+
+            #expect(tree.root?.children.first?.children.first?.children.first === textNode)
+            #expect(!textNode.renderDirty)
         }
     }
 }

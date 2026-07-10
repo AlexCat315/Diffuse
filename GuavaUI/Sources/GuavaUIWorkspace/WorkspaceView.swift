@@ -65,7 +65,7 @@ private final class WorkspaceSubscriptionIdentity {}
 
 private struct _WorkspaceDragOverlayModifier: ViewModifier {
     func apply(node: Node) {
-        node.overlayDraw = { [weak node] list, _ in
+        node.updateOverlayDraw(identity: true) { [weak node] list, _ in
             guard let node,
                   let state = node.attachments[_WorkspaceTabDragOverlayState.key] as? _WorkspaceTabDragOverlayState else {
                 return

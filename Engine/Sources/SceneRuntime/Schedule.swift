@@ -171,9 +171,14 @@ public struct RuntimeWorldSchedule {
     private var physicsSyncCache = PhysicsSyncCache()
     private var resolvedPhysicsBackendKind: PhysicsBackendKind = .none
     private var jobSystem = JobSystem.shared
-    private var triggerBackend = JoltPhysicsBackend()
+    private let joltPhysicsBackend: JoltPhysicsBackend
+    private let physicsQueryScene: JoltPhysicsQueryScene
 
-    public init() {}
+    public init() {
+        let joltPhysicsBackend = JoltPhysicsBackend()
+        self.joltPhysicsBackend = joltPhysicsBackend
+        physicsQueryScene = JoltPhysicsQueryScene(backend: joltPhysicsBackend)
+    }
 
     public mutating func setPhysicsBackend(_ backend: any PhysicsBackend) {
         explicitPhysicsBackend = backend
@@ -217,6 +222,18 @@ public struct RuntimeWorldSchedule {
 
     public var currentPhysicsContactFrame: PhysicsContactFrameResource {
         physicsContactFrame
+    }
+
+    public var currentPhysicsQueryCacheStats: PhysicsQueryCacheStats {
+        physicsQueryScene.stats
+    }
+
+    func physicsQueryBackend(in world: RuntimeWorld) -> JoltPhysicsBackend {
+        physicsQueryScene.backend(in: world)
+    }
+
+    var physicsQuerySceneHandle: JoltPhysicsQueryScene {
+        physicsQueryScene
     }
 
     public mutating func run(
@@ -276,7 +293,9 @@ public struct RuntimeWorldSchedule {
                 recordJobReport(report, for: .hierarchyPropagate)
             case .fixedPhysicsPrepare:
                 guard physicsSettings.simulationMode != .off else {
-                    physicsBackend.reset()
+                    if !usesSharedJoltBackend {
+                        physicsBackend.reset()
+                    }
                     physicsSyncCache = PhysicsSyncCache()
                     physicsClock = PhysicsStepClockResource()
                     physicsFrameState = PhysicsFrameStateResource(backendIdentifier: physicsBackend.identifier)
@@ -311,6 +330,13 @@ public struct RuntimeWorldSchedule {
                 )
                 _ = physicsBackend.prepare(context: prepareContext)
                 replacePhysicsSyncCache(bodies: activeBodies, constraints: activeConstraints)
+                if usesSharedJoltBackend {
+                    physicsQueryScene.adoptSynchronizedWorld(
+                        world,
+                        bodyCount: activeBodies.count,
+                        constraintCount: activeConstraints.count
+                    )
+                }
             case .fixedPhysicsStep:
                 guard physicsSettings.simulationMode != .off else { continue }
                 physicsClock.accumulatedSeconds += deltaTimeSeconds
@@ -368,6 +394,13 @@ public struct RuntimeWorldSchedule {
                 world.setDerivedResource(physicsClock)
                 world.setDerivedResource(physicsFrameState)
                 world.setDerivedResource(physicsContactFrame)
+                if usesSharedJoltBackend {
+                    physicsQueryScene.adoptSynchronizedWorld(
+                        world,
+                        bodyCount: activeBodies.count,
+                        constraintCount: activeConstraints.count
+                    )
+                }
             case .animationAndScripts:
                 if let scriptDriver {
                     withUnsafeMutablePointer(to: &world) { worldPointer in
@@ -375,7 +408,8 @@ public struct RuntimeWorldSchedule {
                             var scriptContext = RuntimeScriptPhaseContext(
                                 world: worldPointer,
                                 commands: commandPointer,
-                                deltaTimeSeconds: deltaTimeSeconds
+                                deltaTimeSeconds: deltaTimeSeconds,
+                                physicsQueryScene: physicsQueryScene
                             )
                             scriptDriver.run(context: &scriptContext)
                         }
@@ -414,19 +448,11 @@ public struct RuntimeWorldSchedule {
                 world.setDerivedResource(spatialIndexBuild.resource)
                 recordJobReport(spatialIndexBuild.report, for: .spatialIndexUpdate)
             case .triggerDetection:
-                let snapshot = buildPhysicsSceneSnapshot(in: world, settings: physicsSettings)
-                _ = triggerBackend.prepare(
-                    context: PhysicsPrepareContext(
-                        settings: snapshot.settings,
-                        deltaTimeSeconds: deltaTimeSeconds,
-                        activeBodies: snapshot.bodies,
-                        activeConstraints: snapshot.constraints,
-                        syncEvents: []
-                    )
-                )
+                let triggerBackend = physicsQueryScene.synchronize(in: world)
+                let triggerBodyCount = physicsQueryScene.stats.bodyCount
                 world.setDerivedResource(
                     triggerBackend.detectTriggerFrame(
-                        maxEventCount: snapshot.bodies.count * max(1, snapshot.bodies.count) * 3
+                        maxEventCount: triggerBodyCount * max(1, triggerBodyCount) * 3
                     )
                 )
             case .renderExtract:
@@ -552,15 +578,23 @@ public struct RuntimeWorldSchedule {
         guard explicitPhysicsBackend == nil else { return }
         guard resolvedPhysicsBackendKind != kind else { return }
 
+        if usesSharedJoltBackend {
+            physicsQueryScene.invalidate()
+        }
         physicsBackend.reset()
         switch kind {
         case .none:
             physicsBackend = NullPhysicsBackend()
         case .jolt:
-            physicsBackend = JoltPhysicsBackend()
+            physicsBackend = joltPhysicsBackend
         }
         resolvedPhysicsBackendKind = kind
         physicsFrameState.backendIdentifier = physicsBackend.identifier
+    }
+
+    private var usesSharedJoltBackend: Bool {
+        guard let backend = physicsBackend as? JoltPhysicsBackend else { return false }
+        return backend === joltPhysicsBackend
     }
 
     private func particleAdvanceOptions(in world: inout RuntimeWorld) -> ParticleAdvanceOptions {

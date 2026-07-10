@@ -1,5 +1,5 @@
 /// Text alignment for multi-line layout.
-public enum TextAlignment {
+public enum TextAlignment: Equatable, Sendable {
     case leading, center, trailing
 }
 

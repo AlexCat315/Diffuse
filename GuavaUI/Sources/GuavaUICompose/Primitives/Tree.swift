@@ -1041,7 +1041,7 @@ private struct _TreeDisclosureSlotHost: View {
     }
 }
 
-private struct _TreeGuideRowSnapshot {
+private struct _TreeGuideRowSnapshot: Equatable {
     let depth: Int
     let ancestorHasNextSiblings: [Bool]
     let hasNextSibling: Bool
@@ -1056,6 +1056,14 @@ private struct _TreeGuideOverlayHost<Content: View>: _PrimitiveView {
     let indentation: Float
     let showsIndentGuides: Bool
     let content: Content
+
+    private struct PaintIdentity: Equatable {
+        let rows: [_TreeGuideRowSnapshot]
+        let rowHeight: Float
+        let rowSpacing: Float
+        let indentation: Float
+        let showsIndentGuides: Bool
+    }
 
     init(rows: [_TreeGuideRowSnapshot],
          rowHeight: Float,
@@ -1085,7 +1093,11 @@ private struct _TreeGuideOverlayHost<Content: View>: _PrimitiveView {
         let indentation = indentation
         let showsIndentGuides = showsIndentGuides
 
-        node.draw = { [weak node] list, origin in
+        node.updateDraw(identity: PaintIdentity(rows: rows,
+                                                rowHeight: rowHeight,
+                                                rowSpacing: rowSpacing,
+                                                indentation: indentation,
+                                                showsIndentGuides: showsIndentGuides)) { [weak node] list, origin in
             guard let node,
                   showsIndentGuides,
                   rowHeight > 0,
@@ -1438,6 +1450,12 @@ private struct _TreeGhostContainer<Content: View>: _PrimitiveView {
     let rowHeight: Float
     let content: Content
 
+    private struct PaintIdentity: Equatable {
+        let cursorX: CGFloat?
+        let cursorY: CGFloat?
+        let rowHeight: Float
+    }
+
     init(dragCursorPos: CGPoint?,
          rowHeight: Float,
          @ViewBuilder content: () -> Content) {
@@ -1455,7 +1473,9 @@ private struct _TreeGhostContainer<Content: View>: _PrimitiveView {
     func _updateNode(_ node: Node) {
         let cursorPos = dragCursorPos
         let rowH = rowHeight
-        node.overlayDraw = { [weak node] list, _ in
+        node.updateOverlayDraw(identity: PaintIdentity(cursorX: cursorPos?.x,
+                                                       cursorY: cursorPos?.y,
+                                                       rowHeight: rowH)) { [weak node] list, _ in
             guard let node, let pos = cursorPos else { return }
             let cx = Float(pos.x)
             let cy = Float(pos.y)
