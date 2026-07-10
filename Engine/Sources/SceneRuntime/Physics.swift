@@ -1,6 +1,6 @@
 ﻿import SIMDCompat
 
-public enum PhysicsSimulationMode: String, Sendable, Equatable {
+public enum PhysicsSimulationMode: String, CaseIterable, Sendable, Equatable {
     case off
     case preview
     case play
@@ -112,6 +112,21 @@ public enum ColliderShape: Sendable, Equatable {
             return nil
         }
     }
+
+    public func replacingCenter(with center: SIMD3<Float>) -> ColliderShape {
+        switch self {
+        case let .box(halfExtents, _):
+            return .box(halfExtents: halfExtents, center: center)
+        case let .sphere(radius, _):
+            return .sphere(radius: radius, center: center)
+        case let .capsule(radius, halfHeight, _):
+            return .capsule(radius: radius, halfHeight: halfHeight, center: center)
+        case let .mesh(resourceID, _):
+            return .mesh(resourceID: resourceID, center: center)
+        case let .convex(resourceID, _):
+            return .convex(resourceID: resourceID, center: center)
+        }
+    }
 }
 
 public struct PhysicsMaterial: Sendable, Equatable {
@@ -214,8 +229,8 @@ public struct PhysicsSettingsResource: Sendable, Equatable {
         self.simulationMode = simulationMode
         self.backendKind = backendKind
         self.gravity = gravity
-        self.fixedTimeStepSeconds = fixedTimeStepSeconds
-        self.maxSubstepsPerFrame = maxSubstepsPerFrame
+        self.fixedTimeStepSeconds = max(0.000_001, fixedTimeStepSeconds)
+        self.maxSubstepsPerFrame = max(1, maxSubstepsPerFrame)
         self.allowSleep = allowSleep
         self.collisionSteps = max(1, collisionSteps)
     }

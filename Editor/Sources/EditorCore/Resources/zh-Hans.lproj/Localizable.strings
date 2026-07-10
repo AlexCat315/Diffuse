@@ -25,9 +25,20 @@
 "World Position" = "世界位置";
 
 /* Rigid Body fields */
+"Physics Settings" = "物理设置";
+"Backend" = "后端";
+"Simulation Mode" = "模拟模式";
+"Fixed Time Step" = "固定时间步";
+"Max Substeps" = "最大子步数";
+"Collision Steps" = "碰撞步数";
 "Motion" = "运动";
 "Mass" = "质量";
+"Linear Velocity" = "线速度";
+"Angular Velocity" = "角速度";
 "Gravity" = "重力";
+"Linear Damping" = "线性阻尼";
+"Angular Damping" = "角阻尼";
+"Continuous Collision" = "连续碰撞检测";
 "Allow Sleep" = "允许休眠";
 "Sleeping" = "休眠中";
 "Yes" = "是";
@@ -35,8 +46,10 @@
 
 /* Collider fields */
 "Shape" = "形状";
+"Center" = "中心偏移";
 "Trigger" = "触发器";
 "Layer" = "层";
+"Layer Mask" = "碰撞层掩码";
 
 /* Constraint fields */
 "Type" = "类型";

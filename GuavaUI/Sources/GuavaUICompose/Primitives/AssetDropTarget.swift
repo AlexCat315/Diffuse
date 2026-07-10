@@ -133,6 +133,12 @@ public struct AssetDropTarget<Content: View>: View {
 private struct AssetDropTargetHost<Content: View>: _PrimitiveView {
     let target: AssetDropTarget<Content>
 
+    private struct PaintIdentity: Equatable {
+        let payload: AssetDropPayload?
+        let acceptedKinds: Set<String>
+        let isEnabled: Bool
+    }
+
     func _makeNode() -> Node {
         let node = Node()
         node.isHitTestable = false
@@ -147,7 +153,9 @@ private struct AssetDropTargetHost<Content: View>: _PrimitiveView {
                           onDrop: target.onDrop)
 
         let snapshot = target
-        node.overlayDraw = { [weak node] list, origin in
+        node.updateOverlayDraw(identity: PaintIdentity(payload: target.activePayload.wrappedValue,
+                                                       acceptedKinds: target.acceptedKinds,
+                                                       isEnabled: target.isEnabled)) { [weak node] list, origin in
             guard let node else { return }
             drawDropChrome(for: snapshot,
                            node: node,

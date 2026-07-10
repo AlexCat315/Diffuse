@@ -224,16 +224,54 @@ public final class Node: @unchecked Sendable {
     ///
     /// Used by leaf primitives such as Text/Image to emit content-specific
     /// geometry without subclassing `Node`.
+    private var storedDraw: ((DrawList, CGPoint) -> Void)?
+    private var drawIdentity: AnyRenderContentIdentity?
+
     public var draw: ((DrawList, CGPoint) -> Void)? {
-        didSet {
+        get { storedDraw }
+        set {
+            storedDraw = newValue
+            drawIdentity = nil
             markRenderDirty(reason: .styleSet(field: "draw"))
         }
     }
 
     /// Optional draw hook invoked AFTER children render. Used for chrome that
     /// must overlay scrolled content (e.g. ScrollView scrollbars).
+    private var storedOverlayDraw: ((DrawList, CGPoint) -> Void)?
+    private var overlayDrawIdentity: AnyRenderContentIdentity?
+
     public var overlayDraw: ((DrawList, CGPoint) -> Void)? {
-        didSet {
+        get { storedOverlayDraw }
+        set {
+            storedOverlayDraw = newValue
+            overlayDrawIdentity = nil
+            markRenderDirty(reason: .styleSet(field: "overlayDraw"))
+        }
+    }
+
+    /// Refresh a custom painter while invalidating render caches only when its
+    /// paint-affecting identity changed. The closure is still replaced on every
+    /// call, so bindings/callback captures stay current without turning an
+    /// otherwise stable declarative update into a full DrawList rebuild.
+    public func updateDraw<Identity: Equatable>(identity: Identity,
+                                                _ draw: @escaping (DrawList, CGPoint) -> Void) {
+        let nextIdentity = AnyRenderContentIdentity(identity)
+        let changed = storedDraw == nil || drawIdentity != nextIdentity
+        storedDraw = draw
+        drawIdentity = nextIdentity
+        if changed {
+            markRenderDirty(reason: .styleSet(field: "draw"))
+        }
+    }
+
+    public func updateOverlayDraw<Identity: Equatable>(identity: Identity,
+                                                       _ draw: @escaping (DrawList, CGPoint) -> Void) {
+        let nextIdentity = AnyRenderContentIdentity(identity)
+        let changed = storedOverlayDraw == nil || overlayDrawIdentity != nextIdentity
+        storedOverlayDraw = draw
+        overlayDrawIdentity = nextIdentity
+        if changed {
             markRenderDirty(reason: .styleSet(field: "overlayDraw"))
         }
     }
@@ -511,6 +549,39 @@ public final class Node: @unchecked Sendable {
 
     private func isLayerClassificationInvalidation(_ reason: InvalidationSource) -> Bool {
         guard case .styleSet(let field) = reason else { return false }
-        return field == "clipsToBounds" || field == "opacity" || field == "shadowColor"
+        return field == "clipsToBounds"
+            || field == "opacity"
+            || field == "shadowColor"
+            || field == "draw"
+            || field == "overlayDraw"
+    }
+}
+
+private struct AnyRenderContentIdentity: Equatable {
+    private let box: AnyRenderContentIdentityBox
+
+    init<Value: Equatable>(_ value: Value) {
+        box = RenderContentIdentityBox(value)
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.box.equals(rhs.box)
+    }
+}
+
+private class AnyRenderContentIdentityBox {
+    func equals(_ other: AnyRenderContentIdentityBox) -> Bool { false }
+}
+
+private final class RenderContentIdentityBox<Value: Equatable>: AnyRenderContentIdentityBox {
+    let value: Value
+
+    init(_ value: Value) {
+        self.value = value
+    }
+
+    override func equals(_ other: AnyRenderContentIdentityBox) -> Bool {
+        guard let other = other as? RenderContentIdentityBox<Value> else { return false }
+        return value == other.value
     }
 }

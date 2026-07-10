@@ -16,14 +16,14 @@ import GuavaUIRuntime
 ///   field still accepts input but renders no glyphs.
 public struct TextField: View {
 
-    public enum Axis: Sendable {
+    public enum Axis: Sendable, Equatable {
         case horizontal
         case vertical
     }
 
     /// Visual size variants matching Element Plus Input semantics.
     /// Drives field height, horizontal padding, and font metrics.
-    public enum Size: Sendable {
+    public enum Size: Sendable, Equatable {
         case large
         case regular
         case small
@@ -116,6 +116,27 @@ public struct TextField: View {
         let axis: Axis
     }
 
+    private struct PaintIdentity: Equatable {
+        let text: String
+        let placeholder: String
+        let axis: Axis
+        let size: Size
+        let disabled: Bool
+        let readOnly: Bool
+        let clearable: Bool
+        let maxLength: Int?
+        let showWordLimit: Bool
+        let prefix: String?
+        let suffix: String?
+        let prepend: String?
+        let append: String?
+        let textColor: Color?
+        let placeholderColor: Color?
+        let cursorColor: Color?
+        let selectionColor: Color?
+        let isFocused: Bool
+    }
+
     private static let minimumFieldHeightDefault: Float = 32
     private static let multilineMaxVisibleLines: Float = 6
     static let multilineWheelStep: Float = 30
@@ -202,6 +223,24 @@ public struct TextField: View {
         state.hostNode = node
         normalizeIndices(state)
         let snapshot = self
+        let paintIdentity = PaintIdentity(text: text.wrappedValue,
+                                          placeholder: placeholder,
+                                          axis: axis,
+                                          size: size,
+                                          disabled: disabled,
+                                          readOnly: readOnly,
+                                          clearable: clearable,
+                                          maxLength: maxLength,
+                                          showWordLimit: showWordLimit,
+                                          prefix: prefix,
+                                          suffix: suffix,
+                                          prepend: prepend,
+                                          append: append,
+                                          textColor: textColor,
+                                          placeholderColor: placeholderColor,
+                                          cursorColor: cursorColor,
+                                          selectionColor: selectionColor,
+                                          isFocused: interactionState.isFocused)
 
         updateInteractionHandlers(for: node, state: state)
         node.attachments[WheelRoutingAttachmentKey.priority] = interactionState.isFocused
@@ -232,14 +271,14 @@ public struct TextField: View {
                                             isFocused: interactionState.isFocused)
         }
 
-        node.draw = { list, origin in
+        node.updateDraw(identity: paintIdentity) { list, origin in
             snapshot.render(node: node,
                             state: state,
                             list: list,
                             origin: origin,
                             interactionState: interactionState)
         }
-        node.overlayDraw = { [weak node] list, origin in
+        node.updateOverlayDraw(identity: paintIdentity) { [weak node] list, origin in
             guard let node,
                   let metrics = snapshot.layoutEngine.scrollbarMetrics(state: state,
                                                                       node: node,

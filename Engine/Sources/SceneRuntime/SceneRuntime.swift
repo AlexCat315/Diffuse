@@ -308,6 +308,10 @@ public struct SceneRuntime {
         world.resource(PhysicsContactFrameResource.self) ?? schedule.currentPhysicsContactFrame
     }
 
+    public var physicsQueryCacheStats: PhysicsQueryCacheStats {
+        schedule.currentPhysicsQueryCacheStats
+    }
+
     @discardableResult
     public mutating func applyForce(_ force: SIMD3<Float>, to entity: EntityID, wake: Bool = true) -> Bool {
         world.applyForce(force, to: entity, wake: wake)
@@ -344,7 +348,7 @@ public struct SceneRuntime {
     }
 
     public func raycast(_ query: SceneRaycastQuery) -> SceneRaycastHit? {
-        makeJoltQueryBackend(in: world)
+        schedule.physicsQueryBackend(in: world)
             .raycast(
                 PhysicsRaycastQuery(
                     origin: query.origin,
@@ -360,7 +364,7 @@ public struct SceneRuntime {
         _ query: PhysicsRaycastQuery,
         filter: PhysicsQueryFilter = PhysicsQueryFilter()
     ) -> PhysicsRaycastHit? {
-        makeJoltQueryBackend(in: world).raycast(query, filter: filter)
+        schedule.physicsQueryBackend(in: world).raycast(query, filter: filter)
     }
 
     public func physicsRaycastWithStats(
@@ -368,12 +372,12 @@ public struct SceneRuntime {
         filter: PhysicsQueryFilter = PhysicsQueryFilter(),
         scratch: SpatialQueryScratch? = nil
     ) -> (hit: PhysicsRaycastHit?, stats: SpatialQueryStats) {
-        let hit = makeJoltQueryBackend(in: world).raycast(query, filter: filter)
+        let hit = schedule.physicsQueryBackend(in: world).raycast(query, filter: filter)
         return (hit, SpatialQueryStats())
     }
 
     public func overlap(_ query: SceneOverlapQuery) -> [SceneOverlapHit] {
-        makeJoltQueryBackend(in: world)
+        schedule.physicsQueryBackend(in: world)
             .overlapAABB(
                 PhysicsOverlapAABBQuery(bounds: query.bounds),
                 filter: PhysicsQueryFilter(includeTriggers: query.includeTriggers)
@@ -395,7 +399,7 @@ public struct SceneRuntime {
         _ query: PhysicsOverlapAABBQuery,
         filter: PhysicsQueryFilter = PhysicsQueryFilter()
     ) -> [PhysicsOverlapHit] {
-        makeJoltQueryBackend(in: world).overlapAABB(query, filter: filter)
+        schedule.physicsQueryBackend(in: world).overlapAABB(query, filter: filter)
     }
 
     public func physicsOverlapAABB(
@@ -418,7 +422,7 @@ public struct SceneRuntime {
         _ query: PhysicsOverlapShapeQuery,
         filter: PhysicsQueryFilter = PhysicsQueryFilter()
     ) -> [PhysicsOverlapHit] {
-        makeJoltQueryBackend(in: world).overlapShape(query, filter: filter)
+        schedule.physicsQueryBackend(in: world).overlapShape(query, filter: filter)
     }
 
     public func physicsOverlapShapeWithStats(
@@ -430,7 +434,7 @@ public struct SceneRuntime {
     }
 
     public func sweep(_ query: SceneSweepQuery) -> SceneSweepHit? {
-        makeJoltQueryBackend(in: world)
+        schedule.physicsQueryBackend(in: world)
             .sweepAABB(
                 PhysicsSweepAABBQuery(bounds: query.bounds, translation: query.translation),
                 filter: PhysicsQueryFilter(includeTriggers: query.includeTriggers)
@@ -442,7 +446,7 @@ public struct SceneRuntime {
         _ query: PhysicsSweepAABBQuery,
         filter: PhysicsQueryFilter = PhysicsQueryFilter()
     ) -> PhysicsSweepHit? {
-        makeJoltQueryBackend(in: world).sweepAABB(query, filter: filter)
+        schedule.physicsQueryBackend(in: world).sweepAABB(query, filter: filter)
     }
 
     public func physicsSweepAABBWithStats(
@@ -457,7 +461,7 @@ public struct SceneRuntime {
         _ query: PhysicsSweepShapeQuery,
         filter: PhysicsQueryFilter = PhysicsQueryFilter()
     ) -> PhysicsSweepHit? {
-        makeJoltQueryBackend(in: world).sweepShape(query, filter: filter)
+        schedule.physicsQueryBackend(in: world).sweepShape(query, filter: filter)
     }
 
     public func physicsSweepShapeWithStats(
@@ -519,7 +523,8 @@ public struct SceneRuntime {
                 var context = RuntimeScriptPhaseContext(
                     world: worldPointer,
                     commands: commandPointer,
-                    deltaTimeSeconds: deltaTime
+                    deltaTimeSeconds: deltaTime,
+                    physicsQueryScene: schedule.physicsQuerySceneHandle
                 )
                 driver.run(context: &context)
             }
