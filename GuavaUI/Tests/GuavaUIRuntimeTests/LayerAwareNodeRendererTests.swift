@@ -76,6 +76,24 @@ struct LayerAwareNodeRendererTests {
         #expect(second.indices.count == first.indices.count)
     }
 
+    @Test("Changed containers render directly before caching a stable frame")
+    func containerCacheIsDeferredUntilStable() {
+        let t = Tree()
+        let renderer = LayerAwareNodeRenderer()
+        let rootObject = t.render.root!
+
+        renderer.render(tree: t.render, into: DrawList())
+        #expect(rootObject.cachedLayerList == nil)
+        #expect(!rootObject.cacheInvalid)
+
+        renderer.render(tree: t.render, into: DrawList())
+        let stableCache = rootObject.cachedLayerList
+        #expect(stableCache != nil)
+
+        renderer.render(tree: t.render, into: DrawList())
+        #expect(rootObject.cachedLayerList === stableCache)
+    }
+
     @Test("markRenderDirty on a non-layer descendant invalidates the enclosing layer")
     func dirtyBubblesToEnclosingLayer() {
         // Root is its own layer; child A is non-layer; leaf B is its own layer.
@@ -122,16 +140,16 @@ struct LayerAwareNodeRendererTests {
         renderer.render(tree: t.render, into: DrawList())
         t.nodeTree.flush()
 
-        let rootObj = t.render.root!
-        let firstCache = rootObj.cachedLayerList
+        let leafObj = t.render.renderObject(for: t.b)!
+        let firstCache = leafObj.cachedLayerList
         #expect(firstCache != nil)
 
-        t.root.backgroundColor = Color(r: 0.5, g: 0.5, b: 0.5, a: 1)
-        #expect(rootObj.cacheInvalid == true)
+        t.b.backgroundColor = Color(r: 0.5, g: 0.5, b: 0.5, a: 1)
+        #expect(leafObj.cacheInvalid == true)
 
         renderer.render(tree: t.render, into: DrawList())
-        #expect(rootObj.cachedLayerList !== firstCache)
-        #expect(rootObj.cacheInvalid == false)
+        #expect(leafObj.cachedLayerList !== firstCache)
+        #expect(leafObj.cacheInvalid == false)
     }
 
     @Test("Promoting a node to a layer via opacity refreshes its classification")
@@ -147,19 +165,19 @@ struct LayerAwareNodeRendererTests {
     @Test("Stable custom painter identity preserves its retained layer cache")
     func stablePainterIdentityPreservesCache() {
         let t = Tree()
-        t.a.updateDraw(identity: "same") { list, origin in
+        t.b.updateDraw(identity: "same") { list, origin in
             list.addRect(UIRect(x: Float(origin.x), y: Float(origin.y), width: 4, height: 4),
                          color: .white)
         }
         let renderer = LayerAwareNodeRenderer()
         renderer.render(tree: t.render, into: DrawList())
 
-        let object = t.render.renderObject(for: t.a)!
+        let object = t.render.renderObject(for: t.b)!
         #expect(object.isLayerRoot)
         let firstCache = object.cachedLayerList
 
         t.nodeTree.flush()
-        t.a.updateDraw(identity: "same") { _, _ in }
+        t.b.updateDraw(identity: "same") { _, _ in }
 
         #expect(!t.root.renderDirty)
         #expect(!object.cacheInvalid)
@@ -181,5 +199,106 @@ struct LayerAwareNodeRendererTests {
         #expect(object.cacheInvalid)
         #expect(t.render.root?.cacheInvalid == true)
         #expect(t.root.renderDirty)
+    }
+
+    @Test("Scrolling translates a stable leaf painter without rebuilding its cache")
+    func scrollingTranslatesStableLeafPainter() {
+        let nodeTree = NodeTree()
+        let root = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 200, height: 200)
+        nodeTree.root = root
+
+        let scroll = Node()
+        scroll.frame = CGRect(x: 10, y: 10, width: 100, height: 80)
+        scroll.clipsToBounds = true
+        root.addChild(scroll)
+
+        let leaf = Node()
+        leaf.frame = CGRect(x: 4, y: 30, width: 40, height: 20)
+        leaf.updateDraw(identity: "stable") { list, origin in
+            list.addRect(UIRect(x: Float(origin.x), y: Float(origin.y), width: 40, height: 20),
+                         color: .white)
+        }
+        scroll.addChild(leaf)
+
+        let renderTree = RenderTree()
+        renderTree.install(rootNode: root)
+        let renderer = LayerAwareNodeRenderer()
+        renderer.render(tree: renderTree, into: DrawList())
+        nodeTree.flush()
+
+        let leafObject = renderTree.renderObject(for: leaf)!
+        let firstCache = leafObject.cachedLayerList
+        scroll.contentOffset = CGPoint(x: 0, y: 12)
+
+        let actual = DrawList()
+        renderer.render(tree: renderTree, into: actual)
+        let expected = DrawList()
+        NodeRenderer().render(root: root, into: expected)
+
+        #expect(leafObject.cachedLayerList === firstCache)
+        #expect(actual.vertices.map(\.posX) == expected.vertices.map(\.posX))
+        #expect(actual.vertices.map(\.posY) == expected.vertices.map(\.posY))
+        #expect(actual.batches.map(\.scissor) == expected.batches.map(\.scissor))
+    }
+
+    @Test("Scrolling a painter-dense tree avoids rebuilding every leaf")
+    func painterDenseScrollStress() {
+        let root = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 1280, height: 720)
+        let scroll = Node()
+        scroll.frame = CGRect(x: 0, y: 0, width: 1280, height: 720)
+        scroll.clipsToBounds = true
+        root.addChild(scroll)
+
+        var painterCalls = 0
+        for row in 0..<300 {
+            let leaf = Node()
+            leaf.frame = CGRect(x: 12, y: row * 28, width: 900, height: 24)
+            leaf.updateDraw(identity: row) { list, origin in
+                painterCalls += 1
+                for column in 0..<20 {
+                    list.addGlyphQuad(
+                        x: Float(origin.x) + Float(column * 10),
+                        y: Float(origin.y),
+                        width: 8,
+                        height: 16,
+                        uvMinX: 0,
+                        uvMinY: 0,
+                        uvMaxX: 1,
+                        uvMaxY: 1,
+                        color: .white,
+                        textureID: 1
+                    )
+                }
+            }
+            scroll.addChild(leaf)
+        }
+
+        let renderTree = RenderTree()
+        renderTree.install(rootNode: root)
+        let retained = LayerAwareNodeRenderer()
+        retained.render(tree: renderTree, into: DrawList())
+        let callsAfterWarmup = painterCalls
+
+        let retainedFrame = DrawList()
+        for frame in 0..<30 {
+            scroll.contentOffset = CGPoint(x: 0, y: frame * 3)
+            retainedFrame.reset()
+            retained.render(tree: renderTree, into: retainedFrame)
+        }
+        #expect(painterCalls == callsAfterWarmup)
+
+        let legacyFrame = DrawList()
+        let legacy = NodeRenderer()
+        for frame in 0..<30 {
+            scroll.contentOffset = CGPoint(x: 0, y: frame * 3)
+            legacyFrame.reset()
+            legacy.render(root: root, into: legacyFrame)
+        }
+
+        #expect(retainedFrame.vertices.count == legacyFrame.vertices.count)
+        #expect(retainedFrame.indices.count == legacyFrame.indices.count)
+        #expect(painterCalls == callsAfterWarmup + 300 * 30)
     }
 }

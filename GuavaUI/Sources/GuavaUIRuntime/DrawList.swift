@@ -86,23 +86,46 @@ public final class DrawList {
     /// Append every vertex/index/batch from `other` into this list, shifting
     /// vertex indices and batch index-offsets so the merged buffer stays
     /// internally consistent. The caller owns the responsibility for
-    /// `other`'s coordinate system: `other.vertices` are copied verbatim, so
-    /// they must already be in the same absolute space `self` expects.
+    /// `other`'s coordinate system: `other.vertices` must already be in the
+    /// same absolute space `self` expects.
     public func append(_ other: DrawList) {
+        append(other, vertexTranslationX: 0, vertexTranslationY: 0)
+    }
+
+    /// Append cached geometry at a new absolute origin while preserving its
+    /// existing scissor rectangles. This is used for unclipped leaf layers
+    /// moving beneath an unchanged parent clip, such as text while scrolling.
+    /// The caller must ensure every scissor comes from the stationary parent.
+    func append(_ other: DrawList,
+                vertexTranslationX: Float,
+                vertexTranslationY: Float) {
+        if vertices.isEmpty,
+           indices.isEmpty,
+           batches.isEmpty,
+           vertexTranslationX == 0,
+           vertexTranslationY == 0 {
+            // Swift arrays are copy-on-write. A stable root layer can lend its
+            // buffers to the per-frame DrawList in O(1); appending a tooltip or
+            // another overlay later detaches the destination automatically.
+            vertices = other.vertices
+            indices = other.indices
+            batches = other.batches
+            return
+        }
+
         let baseVertex = UInt32(vertices.count)
         let baseIndex = UInt32(indices.count)
-        vertices.append(contentsOf: other.vertices)
-        // Fast path: appending into an empty list (the common single-root-layer
-        // composite) needs no index/offset shift, so bulk-copy instead of the
-        // per-element loop. `i + 0 == i` and `offset + 0 == offset`, so the
-        // output is identical — this just avoids ~O(indices) element appends
-        // (which are very costly under -Onone debug builds).
-        if baseVertex == 0 {
-            indices.append(contentsOf: other.indices)
+        if vertexTranslationX == 0, vertexTranslationY == 0 {
+            vertices.append(contentsOf: other.vertices)
         } else {
-            indices.reserveCapacity(indices.count + other.indices.count)
-            for i in other.indices { indices.append(i + baseVertex) }
+            vertices.reserveCapacity(vertices.count + other.vertices.count)
+            for var vertex in other.vertices {
+                vertex.posX += vertexTranslationX
+                vertex.posY += vertexTranslationY
+                vertices.append(vertex)
+            }
         }
+        appendIndices(other.indices, adding: baseVertex)
         if baseIndex == 0 {
             batches.append(contentsOf: other.batches)
         } else {
@@ -114,6 +137,36 @@ public final class DrawList {
                     textureID: b.textureID,
                     scissor: b.scissor
                 ))
+            }
+        }
+    }
+
+    /// Bulk-copy cached indices, then offset them in SIMD-sized chunks. This
+    /// preserves the renderer's proven flat-index contract while avoiding the
+    /// per-element Array append loop that dominates Debug scrolling profiles.
+    private func appendIndices(_ source: [UInt32], adding offset: UInt32) {
+        guard !source.isEmpty else { return }
+        let start = indices.count
+        indices.append(contentsOf: source)
+        guard offset != 0 else { return }
+
+        let end = indices.count
+        let lanes = 16
+        let delta = SIMD16<UInt32>(repeating: offset)
+        indices.withUnsafeMutableBufferPointer { buffer in
+            guard let base = buffer.baseAddress else { return }
+            var index = start
+            while index + lanes <= end {
+                let pointer = base.advanced(by: index)
+                let values = UnsafeRawPointer(pointer)
+                    .loadUnaligned(as: SIMD16<UInt32>.self)
+                UnsafeMutableRawPointer(pointer)
+                    .storeBytes(of: values &+ delta, as: SIMD16<UInt32>.self)
+                index += lanes
+            }
+            while index < end {
+                buffer[index] &+= offset
+                index += 1
             }
         }
     }

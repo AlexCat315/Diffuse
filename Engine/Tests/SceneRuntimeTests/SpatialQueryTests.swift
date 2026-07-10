@@ -756,7 +756,7 @@ struct SpatialQueryTests {
         var runtime = SceneRuntime()
         runtime.setResource(
             PhysicsSettingsResource(
-                simulationMode: .fixed,
+                simulationMode: .play,
                 fixedTimeStepSeconds: 1.0 / 60.0,
                 maxSubstepsPerFrame: 1
             )

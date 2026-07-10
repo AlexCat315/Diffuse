@@ -314,61 +314,91 @@ enum WindowChromeAttachmentKey {
     static let interactiveRegion = "GuavaUIApp.windowChrome.interactiveRegion"
 }
 
-enum WindowChromeHitTestCollector {
-    static func collect(root: Node) -> WindowChromeHitTest? {
-        var config: WindowChromeHitTest?
-        var dragRects: [WindowChromeHitTest.Rect] = []
-        var nonDraggableRects: [WindowChromeHitTest.Rect] = []
-        collect(node: root,
-                parentOrigin: .zero,
-                config: &config,
-                dragRects: &dragRects,
-                nonDraggableRects: &nonDraggableRects)
+final class WindowChromeHitTestCollector {
+    private weak var indexedRoot: Node?
+    private var indexedStructureVersion: UInt64?
+    private var configurationNodes: [Node] = []
+    private var dragRegionNodes: [Node] = []
+    private var interactiveRegionNodes: [Node] = []
 
-        guard var hitTest = config else { return nil }
-        hitTest.draggableRects = dragRects
-        hitTest.nonDraggableRects = nonDraggableRects
+    internal private(set) var discoveryPassCount = 0
+
+    /// Retain only the handful of nodes that participate in native window
+    /// chrome. Geometry is read live from those nodes, while a full-tree scan
+    /// is needed only when tree membership/order changes.
+    func collect(root: Node) -> WindowChromeHitTest? {
+        refreshIndexIfNeeded(root: root)
+
+        guard var hitTest = configurationNodes.reversed().lazy.compactMap({ node in
+            node.attachments[WindowChromeAttachmentKey.configuration] as? WindowChromeHitTest
+        }).first else {
+            return nil
+        }
+
+        hitTest.draggableRects = rects(for: dragRegionNodes,
+                                       attachmentKey: WindowChromeAttachmentKey.dragRegion)
+        hitTest.nonDraggableRects = rects(for: interactiveRegionNodes,
+                                          attachmentKey: WindowChromeAttachmentKey.interactiveRegion)
         return hitTest
     }
 
-    private static func collect(node: Node,
-                                parentOrigin: CGPoint,
-                                config: inout WindowChromeHitTest?,
-                                dragRects: inout [WindowChromeHitTest.Rect],
-                                nonDraggableRects: inout [WindowChromeHitTest.Rect]) {
-        let origin = CGPoint(x: parentOrigin.x + node.frame.origin.x,
-                             y: parentOrigin.y + node.frame.origin.y)
+    static func collect(root: Node) -> WindowChromeHitTest? {
+        WindowChromeHitTestCollector().collect(root: root)
+    }
 
-        if let chrome = node.attachments[WindowChromeAttachmentKey.configuration] as? WindowChromeHitTest {
-            config = chrome
+    private func refreshIndexIfNeeded(root: Node) {
+        guard indexedRoot !== root
+                || indexedStructureVersion != root.subtreeStructureVersion else {
+            return
         }
 
-        if node.attachments[WindowChromeAttachmentKey.dragRegion] as? Bool == true,
-           node.frame.width > 0,
-           node.frame.height > 0 {
-            dragRects.append(WindowChromeHitTest.Rect(x: Float(origin.x),
-                                                      y: Float(origin.y),
-                                                      width: Float(node.frame.width),
-                                                      height: Float(node.frame.height)))
-        }
+        indexedRoot = root
+        indexedStructureVersion = root.subtreeStructureVersion
+        configurationNodes.removeAll(keepingCapacity: true)
+        dragRegionNodes.removeAll(keepingCapacity: true)
+        interactiveRegionNodes.removeAll(keepingCapacity: true)
+        discover(node: root)
+        discoveryPassCount += 1
+    }
 
-        if node.attachments[WindowChromeAttachmentKey.interactiveRegion] as? Bool == true,
-           node.frame.width > 0,
-           node.frame.height > 0 {
-            nonDraggableRects.append(WindowChromeHitTest.Rect(x: Float(origin.x),
-                                                             y: Float(origin.y),
-                                                             width: Float(node.frame.width),
-                                                             height: Float(node.frame.height)))
+    private func discover(node: Node) {
+        if node.attachments[WindowChromeAttachmentKey.configuration] != nil {
+            configurationNodes.append(node)
         }
-
-        let childOrigin = CGPoint(x: origin.x - node.contentOffset.x,
-                                  y: origin.y - node.contentOffset.y)
+        if node.attachments[WindowChromeAttachmentKey.dragRegion] != nil {
+            dragRegionNodes.append(node)
+        }
+        if node.attachments[WindowChromeAttachmentKey.interactiveRegion] != nil {
+            interactiveRegionNodes.append(node)
+        }
         for child in node.children {
-            collect(node: child,
-                    parentOrigin: childOrigin,
-                    config: &config,
-                    dragRects: &dragRects,
-                    nonDraggableRects: &nonDraggableRects)
+            discover(node: child)
         }
+    }
+
+    private func rects(for nodes: [Node],
+                       attachmentKey: String) -> [WindowChromeHitTest.Rect] {
+        var result: [WindowChromeHitTest.Rect] = []
+        result.reserveCapacity(nodes.count)
+        for node in nodes where node.attachments[attachmentKey] as? Bool == true {
+            guard node.frame.width > 0, node.frame.height > 0 else { continue }
+            let origin = absoluteOrigin(of: node)
+            result.append(WindowChromeHitTest.Rect(x: Float(origin.x),
+                                                   y: Float(origin.y),
+                                                   width: Float(node.frame.width),
+                                                   height: Float(node.frame.height)))
+        }
+        return result
+    }
+
+    private func absoluteOrigin(of node: Node) -> CGPoint {
+        var origin = node.frame.origin
+        var ancestor = node.parent
+        while let current = ancestor {
+            origin.x += current.frame.origin.x - current.contentOffset.x
+            origin.y += current.frame.origin.y - current.contentOffset.y
+            ancestor = current.parent
+        }
+        return origin
     }
 }
