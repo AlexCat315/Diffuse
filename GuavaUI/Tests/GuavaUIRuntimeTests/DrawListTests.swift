@@ -188,6 +188,47 @@ struct DrawListTests {
         #expect(list.currentClip == nil)
     }
 
+    @Test("Translated append moves vertices but preserves the parent scissor")
+    func translatedAppend() {
+        let source = DrawList()
+        source.pushClip(UIRect(x: 0, y: 0, width: 100, height: 80))
+        source.addRect(UIRect(x: 10, y: 20, width: 30, height: 40), color: .white)
+
+        let destination = DrawList()
+        destination.addRect(UIRect(x: 0, y: 0, width: 1, height: 1), color: .black)
+        destination.append(source, vertexTranslationX: 7, vertexTranslationY: -5)
+
+        #expect(destination.vertices[4].posX == 17)
+        #expect(destination.vertices[4].posY == 15)
+        #expect(destination.indices[6] == 4)
+        #expect(destination.batches[1].indexOffset == 6)
+        #expect(destination.batches[1].scissor == UIRect(x: 0, y: 0, width: 100, height: 80))
+    }
+
+    @Test("Appending into an empty list keeps source storage immutable")
+    func emptyAppendCopyOnWrite() {
+        let source = DrawList()
+        source.addRect(UIRect(x: 10, y: 20, width: 30, height: 40), color: .white)
+
+        let destination = DrawList()
+        destination.append(source)
+        #expect(destination.vertices.count == source.vertices.count)
+        #expect(destination.vertices.first?.posX == source.vertices.first?.posX)
+        #expect(destination.vertices.first?.posY == source.vertices.first?.posY)
+        #expect(destination.indices == source.indices)
+        #expect(destination.batches == source.batches)
+
+        destination.addRect(UIRect(x: 50, y: 60, width: 10, height: 10), color: .black)
+        #expect(destination.vertices.count == 8)
+        #expect(source.vertices.count == 4)
+        #expect(source.indices.count == 6)
+
+        destination.reset()
+        #expect(destination.vertices.isEmpty)
+        #expect(source.vertices.count == 4)
+        #expect(source.indices.count == 6)
+    }
+
     private func roundedRectGeometryCounts(radii: [Float]) -> (vertices: Int, indices: Int) {
         radii.reduce(into: (vertices: 0, indices: 0)) { result, radius in
             let segments = cornerSegmentCount(radius: radius)
