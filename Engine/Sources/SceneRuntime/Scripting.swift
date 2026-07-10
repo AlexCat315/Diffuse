@@ -2,7 +2,18 @@
 
 public protocol RuntimeScriptDriver: AnyObject, Sendable {
     func run(context: inout RuntimeScriptPhaseContext)
+    func prepareFrame(context: inout RuntimeScriptPhaseContext)
+    func runPrePhysics(context: inout RuntimeScriptPhaseContext)
+    func runPostPhysics(context: inout RuntimeScriptPhaseContext)
     func reset()
+}
+
+public extension RuntimeScriptDriver {
+    func prepareFrame(context: inout RuntimeScriptPhaseContext) {}
+    func runPrePhysics(context: inout RuntimeScriptPhaseContext) {}
+    func runPostPhysics(context: inout RuntimeScriptPhaseContext) {
+        run(context: &context)
+    }
 }
 
 public struct RuntimeScriptPhaseContext {

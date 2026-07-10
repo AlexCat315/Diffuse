@@ -12,6 +12,25 @@ public enum PhysicsBackendKind: String, Sendable, Equatable {
     case jolt
 }
 
+public enum PhysicsBackendErrorCode: String, Sendable, Equatable {
+    case abiMismatch
+    case invalidArgument
+    case invalidShape
+    case bodyCreationFailed
+    case updateFailed
+    case unknown
+}
+
+public struct PhysicsBackendError: Error, Sendable, Equatable {
+    public var code: PhysicsBackendErrorCode
+    public var message: String
+
+    public init(code: PhysicsBackendErrorCode, message: String) {
+        self.code = code
+        self.message = message
+    }
+}
+
 public enum RigidBodyMotionType: String, CaseIterable, Sendable, Equatable {
     case `static`
     case dynamic
@@ -163,6 +182,139 @@ public struct Collider: RuntimeComponent, Sendable, Equatable {
     }
 }
 
+public enum CharacterStance: UInt8, Sendable, Equatable, Codable {
+    case standing
+    case crouching
+}
+
+/// Authored configuration for a native Jolt virtual character.
+/// Character entities do not require a `RigidBody` or `Collider`; this component owns
+/// the capsule used by the character solver.
+public struct CharacterController: RuntimeComponent, Sendable, Equatable {
+    public var radius: Float
+    public var standingHalfHeight: Float
+    public var crouchingHalfHeight: Float
+    public var center: SIMD3<Float>
+    public var maxSlopeDegrees: Float
+    public var stepHeight: Float
+    public var skinWidth: Float
+    public var mass: Float
+    public var maxStrength: Float
+    public var gravityScale: Float
+    public var layerID: UInt16
+    public var layerMask: UInt16
+
+    public init(
+        radius: Float = 0.4,
+        standingHalfHeight: Float = 0.6,
+        crouchingHalfHeight: Float = 0.25,
+        center: SIMD3<Float> = .zero,
+        maxSlopeDegrees: Float = 50,
+        stepHeight: Float = 0.4,
+        skinWidth: Float = 0.02,
+        mass: Float = 70,
+        maxStrength: Float = 100,
+        gravityScale: Float = 1,
+        layerID: UInt16 = 0,
+        layerMask: UInt16 = .max
+    ) {
+        self.radius = max(0.01, radius)
+        self.standingHalfHeight = max(0.01, standingHalfHeight)
+        self.crouchingHalfHeight = max(0.01, min(crouchingHalfHeight, standingHalfHeight))
+        self.center = center
+        self.maxSlopeDegrees = max(0, min(maxSlopeDegrees, 89.9))
+        self.stepHeight = max(0, stepHeight)
+        self.skinWidth = max(0.001, skinWidth)
+        self.mass = max(0.01, mass)
+        self.maxStrength = max(0, maxStrength)
+        self.gravityScale = gravityScale
+        self.layerID = layerID
+        self.layerMask = layerMask
+    }
+}
+
+public struct CharacterCommand: Sendable, Equatable {
+    public var desiredVelocity: SIMD3<Float>
+    public var jumpRequested: Bool
+    public var jumpSpeed: Float
+    public var stance: CharacterStance
+
+    public init(
+        desiredVelocity: SIMD3<Float> = .zero,
+        jumpRequested: Bool = false,
+        jumpSpeed: Float = 8,
+        stance: CharacterStance = .standing
+    ) {
+        self.desiredVelocity = desiredVelocity
+        self.jumpRequested = jumpRequested
+        self.jumpSpeed = max(0, jumpSpeed)
+        self.stance = stance
+    }
+}
+
+public struct CharacterCommandFrameResource: Sendable, Equatable {
+    public var commands: [EntityID: CharacterCommand]
+
+    public init(commands: [EntityID: CharacterCommand] = [:]) {
+        self.commands = commands
+    }
+
+    public static let empty = CharacterCommandFrameResource()
+}
+
+public enum CharacterGroundState: UInt8, Sendable, Equatable {
+    case onGround
+    case onSteepGround
+    case notSupported
+    case inAir
+}
+
+public struct CharacterState: Sendable, Equatable {
+    public var entity: EntityID
+    public var position: SIMD3<Float>
+    public var rotation: SIMD4<Float>
+    public var linearVelocity: SIMD3<Float>
+    public var groundState: CharacterGroundState
+    public var groundNormal: SIMD3<Float>
+    public var groundVelocity: SIMD3<Float>
+    public var groundEntity: EntityID?
+    public var stance: CharacterStance
+
+    public init(
+        entity: EntityID,
+        position: SIMD3<Float>,
+        rotation: SIMD4<Float> = SIMD4<Float>(0, 0, 0, 1),
+        linearVelocity: SIMD3<Float> = .zero,
+        groundState: CharacterGroundState = .inAir,
+        groundNormal: SIMD3<Float> = .zero,
+        groundVelocity: SIMD3<Float> = .zero,
+        groundEntity: EntityID? = nil,
+        stance: CharacterStance = .standing
+    ) {
+        self.entity = entity
+        self.position = position
+        self.rotation = rotation
+        self.linearVelocity = linearVelocity
+        self.groundState = groundState
+        self.groundNormal = groundNormal
+        self.groundVelocity = groundVelocity
+        self.groundEntity = groundEntity
+        self.stance = stance
+    }
+
+    public var isGrounded: Bool { groundState == .onGround }
+}
+
+public struct CharacterStateFrameResource: Sendable, Equatable {
+    public var states: [EntityID: CharacterState]
+
+    public init(states: [EntityID: CharacterState] = [:]) {
+        self.states = states
+    }
+
+    public static let empty = CharacterStateFrameResource()
+}
+
 public enum ConstraintType: String, Sendable, Equatable {
     case pointToPoint
     case hinge
@@ -241,17 +393,23 @@ public struct PhysicsStepClockResource: Sendable, Equatable {
     public var simulatedSteps: Int
     public var lastStepCount: Int
     public var lastSteppedSeconds: Double
+    public var droppedSteps: Int
+    public var lastDroppedStepCount: Int
 
     public init(
         accumulatedSeconds: Double = 0,
         simulatedSteps: Int = 0,
         lastStepCount: Int = 0,
-        lastSteppedSeconds: Double = 0
+        lastSteppedSeconds: Double = 0,
+        droppedSteps: Int = 0,
+        lastDroppedStepCount: Int = 0
     ) {
         self.accumulatedSeconds = accumulatedSeconds
         self.simulatedSteps = simulatedSteps
         self.lastStepCount = lastStepCount
         self.lastSteppedSeconds = lastSteppedSeconds
+        self.droppedSteps = droppedSteps
+        self.lastDroppedStepCount = lastDroppedStepCount
     }
 }
 
@@ -263,6 +421,13 @@ public struct PhysicsFrameStateResource: Sendable, Equatable {
     public var writebackCount: Int
     public var simulatedSteps: Int
     public var simulatedSeconds: Double
+    public var synchronizedBodyCount: Int
+    public var synchronizedConstraintCount: Int
+    public var activeBodyCount: Int
+    public var droppedStepCount: Int
+    public var synchronizationNanoseconds: UInt64
+    public var stepNanoseconds: UInt64
+    public var lastError: PhysicsBackendError?
 
     public init(
         backendIdentifier: String = "none",
@@ -271,7 +436,14 @@ public struct PhysicsFrameStateResource: Sendable, Equatable {
         contactCount: Int = 0,
         writebackCount: Int = 0,
         simulatedSteps: Int = 0,
-        simulatedSeconds: Double = 0
+        simulatedSeconds: Double = 0,
+        synchronizedBodyCount: Int = 0,
+        synchronizedConstraintCount: Int = 0,
+        activeBodyCount: Int = 0,
+        droppedStepCount: Int = 0,
+        synchronizationNanoseconds: UInt64 = 0,
+        stepNanoseconds: UInt64 = 0,
+        lastError: PhysicsBackendError? = nil
     ) {
         self.backendIdentifier = backendIdentifier
         self.bodyCount = bodyCount
@@ -280,7 +452,84 @@ public struct PhysicsFrameStateResource: Sendable, Equatable {
         self.writebackCount = writebackCount
         self.simulatedSteps = simulatedSteps
         self.simulatedSeconds = simulatedSeconds
+        self.synchronizedBodyCount = synchronizedBodyCount
+        self.synchronizedConstraintCount = synchronizedConstraintCount
+        self.activeBodyCount = activeBodyCount
+        self.droppedStepCount = droppedStepCount
+        self.synchronizationNanoseconds = synchronizationNanoseconds
+        self.stepNanoseconds = stepNanoseconds
+        self.lastError = lastError
     }
+}
+
+public struct PhysicsDebugBody: Sendable, Equatable {
+    public var entity: EntityID
+    public var shape: ColliderShape
+    public var worldTransform: WorldTransform
+    public var bounds: SpatialAABB
+    public var motionType: RigidBodyMotionType
+    public var isTrigger: Bool
+    public var isSleeping: Bool
+
+    public init(
+        entity: EntityID,
+        shape: ColliderShape,
+        worldTransform: WorldTransform,
+        bounds: SpatialAABB,
+        motionType: RigidBodyMotionType,
+        isTrigger: Bool,
+        isSleeping: Bool
+    ) {
+        self.entity = entity
+        self.shape = shape
+        self.worldTransform = worldTransform
+        self.bounds = bounds
+        self.motionType = motionType
+        self.isTrigger = isTrigger
+        self.isSleeping = isSleeping
+    }
+}
+
+public struct PhysicsDebugConstraint: Sendable, Equatable {
+    public var entity: EntityID
+    public var constraintType: ConstraintType
+    public var entityA: EntityID
+    public var entityB: EntityID
+    public var pivotA: SIMD3<Float>
+    public var pivotB: SIMD3<Float>
+    public var axisA: SIMD3<Float>
+    public var axisB: SIMD3<Float>
+    public var isEnabled: Bool
+
+    public init(entity: EntityID, constraint: Constraint) {
+        self.entity = entity
+        constraintType = constraint.constraintType
+        entityA = constraint.entityA
+        entityB = constraint.entityB
+        pivotA = constraint.pivotA
+        pivotB = constraint.pivotB
+        axisA = constraint.axisA
+        axisB = constraint.axisB
+        isEnabled = constraint.isEnabled
+    }
+}
+
+public struct PhysicsDebugFrameResource: Sendable, Equatable {
+    public var bodies: [PhysicsDebugBody]
+    public var constraints: [PhysicsDebugConstraint]
+    public var contacts: [PhysicsContactEvent]
+
+    public init(
+        bodies: [PhysicsDebugBody] = [],
+        constraints: [PhysicsDebugConstraint] = [],
+        contacts: [PhysicsContactEvent] = []
+    ) {
+        self.bodies = bodies
+        self.constraints = constraints
+        self.contacts = contacts
+    }
+
+    public static let empty = PhysicsDebugFrameResource()
 }
 
 public enum PhysicsContactEventKind: String, Sendable, Equatable {
@@ -542,6 +791,18 @@ public struct PhysicsConstraintDescriptor: Sendable, Equatable {
     }
 }
 
+public struct PhysicsCharacterDescriptor: Sendable, Equatable {
+    public var entity: EntityID
+    public var worldTransform: WorldTransform
+    public var controller: CharacterController
+
+    public init(entity: EntityID, worldTransform: WorldTransform, controller: CharacterController) {
+        self.entity = entity
+        self.worldTransform = worldTransform
+        self.controller = controller
+    }
+}
+
 public enum PhysicsSyncEvent: Sendable, Equatable {
     case bodyUpsert(PhysicsBodyDescriptor)
     case bodyRemove(EntityID)
@@ -555,19 +816,22 @@ public struct PhysicsPrepareContext: Sendable {
     public var activeBodies: [PhysicsBodyDescriptor]
     public var activeConstraints: [PhysicsConstraintDescriptor]
     public var syncEvents: [PhysicsSyncEvent]
+    public var activeCharacters: [PhysicsCharacterDescriptor]
 
     public init(
         settings: PhysicsSettingsResource,
         deltaTimeSeconds: Double,
         activeBodies: [PhysicsBodyDescriptor],
         activeConstraints: [PhysicsConstraintDescriptor],
-        syncEvents: [PhysicsSyncEvent]
+        syncEvents: [PhysicsSyncEvent],
+        activeCharacters: [PhysicsCharacterDescriptor] = []
     ) {
         self.settings = settings
         self.deltaTimeSeconds = deltaTimeSeconds
         self.activeBodies = activeBodies
         self.activeConstraints = activeConstraints
         self.syncEvents = syncEvents
+        self.activeCharacters = activeCharacters
     }
 }
 
@@ -576,17 +840,20 @@ public struct PhysicsPrepareResult: Sendable, Equatable {
     public var synchronizedConstraints: Int
     public var removedBodies: Int
     public var removedConstraints: Int
+    public var error: PhysicsBackendError?
 
     public init(
         synchronizedBodies: Int = 0,
         synchronizedConstraints: Int = 0,
         removedBodies: Int = 0,
-        removedConstraints: Int = 0
+        removedConstraints: Int = 0,
+        error: PhysicsBackendError? = nil
     ) {
         self.synchronizedBodies = synchronizedBodies
         self.synchronizedConstraints = synchronizedConstraints
         self.removedBodies = removedBodies
         self.removedConstraints = removedConstraints
+        self.error = error
     }
 }
 
@@ -596,19 +863,25 @@ public struct PhysicsStepContext: Sendable {
     public var stepIndex: Int
     public var activeBodies: [PhysicsBodyDescriptor]
     public var activeConstraints: [PhysicsConstraintDescriptor]
+    public var activeCharacters: [PhysicsCharacterDescriptor]
+    public var characterCommands: [EntityID: CharacterCommand]
 
     public init(
         settings: PhysicsSettingsResource,
         stepDeltaSeconds: Double,
         stepIndex: Int,
         activeBodies: [PhysicsBodyDescriptor],
-        activeConstraints: [PhysicsConstraintDescriptor]
+        activeConstraints: [PhysicsConstraintDescriptor],
+        activeCharacters: [PhysicsCharacterDescriptor] = [],
+        characterCommands: [EntityID: CharacterCommand] = [:]
     ) {
         self.settings = settings
         self.stepDeltaSeconds = stepDeltaSeconds
         self.stepIndex = stepIndex
         self.activeBodies = activeBodies
         self.activeConstraints = activeConstraints
+        self.activeCharacters = activeCharacters
+        self.characterCommands = characterCommands
     }
 }
 
@@ -640,19 +913,25 @@ public struct PhysicsStepResult: Sendable, Equatable {
     public var contactCount: Int
     public var writebacks: [PhysicsBodyWriteback]
     public var contactEvents: [PhysicsContactEvent]
+    public var characterStates: [CharacterState]
+    public var error: PhysicsBackendError?
 
     public init(
         bodyCount: Int = 0,
         constraintCount: Int = 0,
         contactCount: Int = 0,
         writebacks: [PhysicsBodyWriteback] = [],
-        contactEvents: [PhysicsContactEvent] = []
+        contactEvents: [PhysicsContactEvent] = [],
+        error: PhysicsBackendError? = nil,
+        characterStates: [CharacterState] = []
     ) {
         self.bodyCount = bodyCount
         self.constraintCount = constraintCount
         self.contactCount = contactCount
         self.writebacks = writebacks
         self.contactEvents = contactEvents
+        self.error = error
+        self.characterStates = characterStates
     }
 }
 
