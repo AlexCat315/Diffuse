@@ -117,7 +117,7 @@ public struct KeyboardShortcut: Sendable, Equatable, Hashable {
     }
 }
 
-public enum MenuItemRole: Sendable {
+public enum MenuItemRole: Sendable, Equatable {
     case normal
     case destructive
 }
@@ -298,6 +298,14 @@ private struct _MenuItemRowHost: _PrimitiveView {
     let showsSelectionColumn: Bool
     let onActivate: () -> Void
 
+    private struct PaintIdentity: Equatable {
+        let id: AnyHashable
+        let isEnabled: Bool
+        let isSelected: Bool
+        let role: MenuItemRole
+        let isHighlighted: Bool
+    }
+
     func _makeNode() -> Node {
         let node = Node()
         node.isHitTestable = true
@@ -323,7 +331,11 @@ private struct _MenuItemRowHost: _PrimitiveView {
             }
         }
         node.cursor = item.isEnabled ? .pointer : .notAllowed
-        node.draw = { [weak node, item, isHighlighted] list, origin in
+        node.updateDraw(identity: PaintIdentity(id: item.id,
+                                                isEnabled: item.isEnabled,
+                                                isSelected: item.isSelected,
+                                                role: item.role,
+                                                isHighlighted: isHighlighted)) { [weak node, item, isHighlighted] list, origin in
             guard let node,
                   let background = Self.backgroundColor(for: node,
                                                         item: item,
@@ -498,7 +510,7 @@ public extension Menu {
     }
 }
 
-public enum PopoverPlacement: Sendable {
+public enum PopoverPlacement: Sendable, Equatable {
     case start
     case end
 }
@@ -560,6 +572,11 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
     let content: Content
     let keyHandler: ((KeyEvent, EventPhase) -> EventResult)?
 
+    private struct PositionIdentity: Equatable {
+        let width: Float?
+        let placement: PopoverPlacement
+    }
+
     init(width: Float?,
          placement: PopoverPlacement,
          keyHandler: ((KeyEvent, EventPhase) -> EventResult)? = nil,
@@ -590,7 +607,8 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
         // node reliably re-shows the menu.
         node.firstResource(PortalResource.self)?
             .present(position: position, width: width, content: AnyView(content))
-        node.overlayDraw = { [weak node] _, _ in
+        node.updateOverlayDraw(identity: PositionIdentity(width: width,
+                                                          placement: placement)) { [weak node] _, _ in
             guard let node else { return }
             node.firstResource(PortalResource.self)?
                 .updatePosition(Self.popoverPosition(for: node,

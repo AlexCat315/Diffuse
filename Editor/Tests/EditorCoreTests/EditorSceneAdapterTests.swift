@@ -163,6 +163,74 @@ struct EditorSceneAdapterTests {
         }
     }
 
+    @Test("Scene manifest preserves Jolt CCD and pending impulses")
+    func sceneManifestPreservesCompleteJoltRigidBodyState() throws {
+        let source = EditorSceneAdapter()
+        source.scene = SceneRuntime()
+        let entity = source.scene.createEntity()
+        _ = source.scene.setComponent(SceneNameComponent(value: "Jolt Body"), for: entity)
+        _ = source.scene.setComponent(
+            RigidBody(
+                linearVelocity: SIMD3<Float>(1, 2, 3),
+                angularVelocity: SIMD3<Float>(4, 5, 6),
+                accumulatedForce: SIMD3<Float>(7, 8, 9),
+                accumulatedTorque: SIMD3<Float>(10, 11, 12),
+                accumulatedLinearImpulse: SIMD3<Float>(13, 14, 15),
+                accumulatedAngularImpulse: SIMD3<Float>(16, 17, 18),
+                continuousCollisionDetection: true
+            ),
+            for: entity
+        )
+
+        let manifest = source.manifest(selectedEntityID: entity.rawValue)
+        let encoded = try JSONEncoder().encode(manifest)
+        let decoded = try JSONDecoder().decode(EditorSceneManifest.self, from: encoded)
+        let restored = EditorSceneAdapter()
+        _ = restored.load(manifest: decoded)
+
+        let restoredNode = try #require(flatten(restored.roots).first { $0.name == "Jolt Body" })
+        let body = try #require(
+            restored.scene.component(RigidBody.self, for: entityID(restoredNode.id))
+        )
+        #expect(body.linearVelocity == SIMD3<Float>(1, 2, 3))
+        #expect(body.angularVelocity == SIMD3<Float>(4, 5, 6))
+        #expect(body.accumulatedForce == SIMD3<Float>(7, 8, 9))
+        #expect(body.accumulatedTorque == SIMD3<Float>(10, 11, 12))
+        #expect(body.accumulatedLinearImpulse == SIMD3<Float>(13, 14, 15))
+        #expect(body.accumulatedAngularImpulse == SIMD3<Float>(16, 17, 18))
+        #expect(body.continuousCollisionDetection)
+    }
+
+    @Test("Scene manifest preserves collision steps and restores Jolt backend")
+    func sceneManifestPreservesCompleteJoltSettings() throws {
+        let source = EditorSceneAdapter()
+        source.scene.setResource(
+            PhysicsSettingsResource(
+                simulationMode: .bake,
+                backendKind: .none,
+                gravity: SIMD3<Float>(1, -15, 2),
+                fixedTimeStepSeconds: 1.0 / 120.0,
+                maxSubstepsPerFrame: 8,
+                allowSleep: false,
+                collisionSteps: 4
+            )
+        )
+
+        let encoded = try JSONEncoder().encode(source.manifest())
+        let decoded = try JSONDecoder().decode(EditorSceneManifest.self, from: encoded)
+        let restored = EditorSceneAdapter()
+        _ = restored.load(manifest: decoded)
+
+        let settings = try #require(restored.scene.resource(PhysicsSettingsResource.self))
+        #expect(settings.backendKind == .jolt)
+        #expect(settings.simulationMode == .bake)
+        #expect(settings.gravity == SIMD3<Float>(1, -15, 2))
+        #expect(abs(settings.fixedTimeStepSeconds - (1.0 / 120.0)) < 0.000_001)
+        #expect(settings.maxSubstepsPerFrame == 8)
+        #expect(settings.collisionSteps == 4)
+        #expect(!settings.allowSleep)
+    }
+
     @Test("Scene manifest round-trips particle scalability settings")
     func sceneManifestRoundTripsParticleScalabilitySettings() throws {
         let source = EditorSceneAdapter()

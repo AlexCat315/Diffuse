@@ -48,14 +48,20 @@ private struct _ScrollViewContentSizeCache {
 /// - Wheel routing requires the cursor to be over the ScrollView (handled by
 ///   `EventDispatcher`'s wheel hit-test).
 public struct ScrollView<Content: View>: _PrimitiveView {
-    public enum Axis: Sendable { case vertical, horizontal, both }
+    public enum Axis: Sendable, Equatable { case vertical, horizontal, both }
 
     /// How the vertical scrollbar relates to the content area.
     /// `.overlay` floats the bar over the content (default; canvas-style
     /// surfaces). `.stable` reserves a fixed lane on the trailing edge — form
     /// surfaces use it so trailing controls (steppers, toggles) are never
     /// covered by the bar or its grab area.
-    public enum ScrollbarGutter: Sendable { case overlay, stable }
+    public enum ScrollbarGutter: Sendable, Equatable { case overlay, stable }
+
+    private struct PaintIdentity: Equatable {
+        let axes: Axis
+        let trackColor: Color
+        let thumbColor: Color
+    }
 
     public let axes: Axis
     public let content: Content
@@ -221,7 +227,9 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         // overlay node on first update.
         let trackColor = theme.colors.surfaceVariant
         let thumbColor = theme.colors.onSurfaceMuted
-        node.overlayDraw = { [weak node] list, origin in
+        node.updateOverlayDraw(identity: PaintIdentity(axes: axes,
+                                                       trackColor: trackColor,
+                                                       thumbColor: thumbColor)) { [weak node] list, origin in
             guard let node else { return }
             let viewport = Self.visibleViewportRect(for: node)
             let viewW = Float(viewport.width)

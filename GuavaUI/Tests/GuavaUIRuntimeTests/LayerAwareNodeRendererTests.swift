@@ -84,6 +84,7 @@ struct LayerAwareNodeRendererTests {
         let t = Tree()
         let renderer = LayerAwareNodeRenderer()
         renderer.render(tree: t.render, into: DrawList())
+        t.nodeTree.flush()
 
         let rootObj = t.render.root!
         let leafObj = t.render.renderObject(for: t.b)!
@@ -101,6 +102,7 @@ struct LayerAwareNodeRendererTests {
         let t = Tree()
         let renderer = LayerAwareNodeRenderer()
         renderer.render(tree: t.render, into: DrawList())
+        t.nodeTree.flush()
 
         let rootObj = t.render.root!
         let leafObj = t.render.renderObject(for: t.b)!
@@ -118,6 +120,7 @@ struct LayerAwareNodeRendererTests {
         let t = Tree()
         let renderer = LayerAwareNodeRenderer()
         renderer.render(tree: t.render, into: DrawList())
+        t.nodeTree.flush()
 
         let rootObj = t.render.root!
         let firstCache = rootObj.cachedLayerList
@@ -139,5 +142,44 @@ struct LayerAwareNodeRendererTests {
 
         t.a.opacity = 0.5
         #expect(aObj.isLayerRoot == true)
+    }
+
+    @Test("Stable custom painter identity preserves its retained layer cache")
+    func stablePainterIdentityPreservesCache() {
+        let t = Tree()
+        t.a.updateDraw(identity: "same") { list, origin in
+            list.addRect(UIRect(x: Float(origin.x), y: Float(origin.y), width: 4, height: 4),
+                         color: .white)
+        }
+        let renderer = LayerAwareNodeRenderer()
+        renderer.render(tree: t.render, into: DrawList())
+
+        let object = t.render.renderObject(for: t.a)!
+        #expect(object.isLayerRoot)
+        let firstCache = object.cachedLayerList
+
+        t.nodeTree.flush()
+        t.a.updateDraw(identity: "same") { _, _ in }
+
+        #expect(!t.root.renderDirty)
+        #expect(!object.cacheInvalid)
+        renderer.render(tree: t.render, into: DrawList())
+        #expect(object.cachedLayerList === firstCache)
+    }
+
+    @Test("Changed custom painter identity invalidates only its retained path")
+    func changedPainterIdentityInvalidates() {
+        let t = Tree()
+        t.a.updateDraw(identity: 1) { _, _ in }
+        let renderer = LayerAwareNodeRenderer()
+        renderer.render(tree: t.render, into: DrawList())
+        t.nodeTree.flush()
+
+        let object = t.render.renderObject(for: t.a)!
+        t.a.updateDraw(identity: 2) { _, _ in }
+
+        #expect(object.cacheInvalid)
+        #expect(t.render.root?.cacheInvalid == true)
+        #expect(t.root.renderDirty)
     }
 }

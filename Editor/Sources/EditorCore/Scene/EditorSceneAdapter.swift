@@ -177,6 +177,17 @@ public struct EditorSceneManifestPhysicsSettings: Codable, Sendable, Equatable {
     public let fixedTimeStepSeconds: Double
     public let maxSubstepsPerFrame: Int
     public let allowSleep: Bool
+    public let collisionSteps: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case simulationMode
+        case backendKind
+        case gravity
+        case fixedTimeStepSeconds
+        case maxSubstepsPerFrame
+        case allowSleep
+        case collisionSteps
+    }
 
     public init(_ settings: PhysicsSettingsResource) {
         self.simulationMode = settings.simulationMode.rawValue
@@ -185,16 +196,30 @@ public struct EditorSceneManifestPhysicsSettings: Codable, Sendable, Equatable {
         self.fixedTimeStepSeconds = settings.fixedTimeStepSeconds
         self.maxSubstepsPerFrame = settings.maxSubstepsPerFrame
         self.allowSleep = settings.allowSleep
+        self.collisionSteps = settings.collisionSteps
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        simulationMode = try c.decode(String.self, forKey: .simulationMode)
+        backendKind = try c.decodeIfPresent(String.self, forKey: .backendKind)
+            ?? PhysicsBackendKind.jolt.rawValue
+        gravity = try c.decode(EditorSceneManifestVector3.self, forKey: .gravity)
+        fixedTimeStepSeconds = try c.decode(Double.self, forKey: .fixedTimeStepSeconds)
+        maxSubstepsPerFrame = try c.decode(Int.self, forKey: .maxSubstepsPerFrame)
+        allowSleep = try c.decode(Bool.self, forKey: .allowSleep)
+        collisionSteps = try c.decodeIfPresent(Int.self, forKey: .collisionSteps) ?? 1
     }
 
     var settings: PhysicsSettingsResource {
         PhysicsSettingsResource(
             simulationMode: PhysicsSimulationMode(rawValue: simulationMode) ?? .off,
-            backendKind: PhysicsBackendKind(rawValue: backendKind) ?? .none,
+            backendKind: .jolt,
             gravity: gravity.simdValue,
             fixedTimeStepSeconds: fixedTimeStepSeconds,
             maxSubstepsPerFrame: maxSubstepsPerFrame,
-            allowSleep: allowSleep
+            allowSleep: allowSleep,
+            collisionSteps: collisionSteps
         )
     }
 }
@@ -600,11 +625,31 @@ public struct EditorSceneManifestRigidBody: Codable, Sendable, Equatable {
     public let angularVelocity: EditorSceneManifestVector3
     public let accumulatedForce: EditorSceneManifestVector3
     public let accumulatedTorque: EditorSceneManifestVector3
+    public let accumulatedLinearImpulse: EditorSceneManifestVector3
+    public let accumulatedAngularImpulse: EditorSceneManifestVector3
     public let gravityScale: Float
     public let linearDamping: Float
     public let angularDamping: Float
     public let allowSleep: Bool
     public let isSleeping: Bool
+    public let continuousCollisionDetection: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case motionType
+        case mass
+        case linearVelocity
+        case angularVelocity
+        case accumulatedForce
+        case accumulatedTorque
+        case accumulatedLinearImpulse
+        case accumulatedAngularImpulse
+        case gravityScale
+        case linearDamping
+        case angularDamping
+        case allowSleep
+        case isSleeping
+        case continuousCollisionDetection
+    }
 
     public init(_ component: RigidBody) {
         self.motionType = component.motionType.rawValue
@@ -613,11 +658,41 @@ public struct EditorSceneManifestRigidBody: Codable, Sendable, Equatable {
         self.angularVelocity = EditorSceneManifestVector3(component.angularVelocity)
         self.accumulatedForce = EditorSceneManifestVector3(component.accumulatedForce)
         self.accumulatedTorque = EditorSceneManifestVector3(component.accumulatedTorque)
+        self.accumulatedLinearImpulse = EditorSceneManifestVector3(component.accumulatedLinearImpulse)
+        self.accumulatedAngularImpulse = EditorSceneManifestVector3(component.accumulatedAngularImpulse)
         self.gravityScale = component.gravityScale
         self.linearDamping = component.linearDamping
         self.angularDamping = component.angularDamping
         self.allowSleep = component.allowSleep
         self.isSleeping = component.isSleeping
+        self.continuousCollisionDetection = component.continuousCollisionDetection
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        motionType = try c.decode(String.self, forKey: .motionType)
+        mass = try c.decode(Float.self, forKey: .mass)
+        linearVelocity = try c.decode(EditorSceneManifestVector3.self, forKey: .linearVelocity)
+        angularVelocity = try c.decode(EditorSceneManifestVector3.self, forKey: .angularVelocity)
+        accumulatedForce = try c.decode(EditorSceneManifestVector3.self, forKey: .accumulatedForce)
+        accumulatedTorque = try c.decode(EditorSceneManifestVector3.self, forKey: .accumulatedTorque)
+        accumulatedLinearImpulse = try c.decodeIfPresent(
+            EditorSceneManifestVector3.self,
+            forKey: .accumulatedLinearImpulse
+        ) ?? EditorSceneManifestVector3(.zero)
+        accumulatedAngularImpulse = try c.decodeIfPresent(
+            EditorSceneManifestVector3.self,
+            forKey: .accumulatedAngularImpulse
+        ) ?? EditorSceneManifestVector3(.zero)
+        gravityScale = try c.decode(Float.self, forKey: .gravityScale)
+        linearDamping = try c.decode(Float.self, forKey: .linearDamping)
+        angularDamping = try c.decode(Float.self, forKey: .angularDamping)
+        allowSleep = try c.decode(Bool.self, forKey: .allowSleep)
+        isSleeping = try c.decode(Bool.self, forKey: .isSleeping)
+        continuousCollisionDetection = try c.decodeIfPresent(
+            Bool.self,
+            forKey: .continuousCollisionDetection
+        ) ?? false
     }
 
     var component: RigidBody {
@@ -627,11 +702,14 @@ public struct EditorSceneManifestRigidBody: Codable, Sendable, Equatable {
                   angularVelocity: angularVelocity.simdValue,
                   accumulatedForce: accumulatedForce.simdValue,
                   accumulatedTorque: accumulatedTorque.simdValue,
+                  accumulatedLinearImpulse: accumulatedLinearImpulse.simdValue,
+                  accumulatedAngularImpulse: accumulatedAngularImpulse.simdValue,
                   gravityScale: gravityScale,
                   linearDamping: linearDamping,
                   angularDamping: angularDamping,
                   allowSleep: allowSleep,
-                  isSleeping: isSleeping)
+                  isSleeping: isSleeping,
+                  continuousCollisionDetection: continuousCollisionDetection)
     }
 }
 
@@ -1474,6 +1552,7 @@ public enum EditorInspectorFieldValue {
     case color(Binding<Color>)
     case json(Binding<String>, minHeight: Float)
     case lightType(Binding<LightType>)
+    case physicsSimulationMode(Binding<PhysicsSimulationMode>)
     case rigidBodyMotion(Binding<RigidBodyMotionType>)
     case colliderShapeKind(Binding<ColliderShapeKind>)
     case particleEmissionShape(Binding<ParticleEmissionShape>)
@@ -1727,6 +1806,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         var sections: [EditorInspectorSection] = [
             generalSection(for: entity),
             hierarchySection(for: entity),
+            physicsSettingsSection(),
             particleScalabilitySection(),
         ]
 
@@ -2001,6 +2081,20 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                               showsStepper: true)
                 ),
                 EditorInspectorField(
+                    id: "linear-velocity",
+                    label: L("Linear Velocity"),
+                    value: .vector3(x: rigidBodyLinearVelocityBinding(for: entity, axis: \.x),
+                                    y: rigidBodyLinearVelocityBinding(for: entity, axis: \.y),
+                                    z: rigidBodyLinearVelocityBinding(for: entity, axis: \.z))
+                ),
+                EditorInspectorField(
+                    id: "angular-velocity",
+                    label: L("Angular Velocity"),
+                    value: .vector3(x: rigidBodyAngularVelocityBinding(for: entity, axis: \.x),
+                                    y: rigidBodyAngularVelocityBinding(for: entity, axis: \.y),
+                                    z: rigidBodyAngularVelocityBinding(for: entity, axis: \.z))
+                ),
+                EditorInspectorField(
                     id: "gravity-scale",
                     label: L("Gravity"),
                     value: .constrainedNumber(rigidBodyGravityScaleBinding(for: entity),
@@ -2008,6 +2102,29 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                               max: nil,
                                               step: 0.1,
                                               showsStepper: true)
+                ),
+                EditorInspectorField(
+                    id: "linear-damping",
+                    label: L("Linear Damping"),
+                    value: .constrainedNumber(rigidBodyLinearDampingBinding(for: entity),
+                                              min: 0,
+                                              max: nil,
+                                              step: 0.01,
+                                              showsStepper: true)
+                ),
+                EditorInspectorField(
+                    id: "angular-damping",
+                    label: L("Angular Damping"),
+                    value: .constrainedNumber(rigidBodyAngularDampingBinding(for: entity),
+                                              min: 0,
+                                              max: nil,
+                                              step: 0.01,
+                                              showsStepper: true)
+                ),
+                EditorInspectorField(
+                    id: "continuous-collision-detection",
+                    label: L("Continuous Collision"),
+                    value: .bool(rigidBodyContinuousCollisionBinding(for: entity))
                 ),
                 EditorInspectorField(
                     id: "allow-sleep",
@@ -2018,6 +2135,64 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                     id: "sleeping",
                     label: L("Sleeping"),
                     value: .readOnly(body.isSleeping ? L("Yes") : L("No"))
+                ),
+            ]
+        )
+    }
+
+    private func physicsSettingsSection() -> EditorInspectorSection {
+        EditorInspectorSection(
+            id: "physics-settings",
+            title: L("Physics Settings"),
+            fields: [
+                EditorInspectorField(
+                    id: "physics-backend",
+                    label: L("Backend"),
+                    value: .readOnly("Jolt")
+                ),
+                EditorInspectorField(
+                    id: "physics-simulation-mode",
+                    label: L("Simulation Mode"),
+                    value: .physicsSimulationMode(physicsSimulationModeBinding())
+                ),
+                EditorInspectorField(
+                    id: "physics-gravity",
+                    label: L("Gravity"),
+                    value: .vector3(x: physicsGravityBinding(axis: \.x),
+                                    y: physicsGravityBinding(axis: \.y),
+                                    z: physicsGravityBinding(axis: \.z))
+                ),
+                EditorInspectorField(
+                    id: "physics-fixed-step",
+                    label: L("Fixed Time Step"),
+                    value: .constrainedNumber(physicsFixedTimeStepBinding(),
+                                              min: 0.000_001,
+                                              max: 1,
+                                              step: 0.001,
+                                              showsStepper: true)
+                ),
+                EditorInspectorField(
+                    id: "physics-max-substeps",
+                    label: L("Max Substeps"),
+                    value: .constrainedNumber(physicsIntegerSettingBinding(\.maxSubstepsPerFrame),
+                                              min: 1,
+                                              max: 64,
+                                              step: 1,
+                                              showsStepper: true)
+                ),
+                EditorInspectorField(
+                    id: "physics-collision-steps",
+                    label: L("Collision Steps"),
+                    value: .constrainedNumber(physicsIntegerSettingBinding(\.collisionSteps),
+                                              min: 1,
+                                              max: 64,
+                                              step: 1,
+                                              showsStepper: true)
+                ),
+                EditorInspectorField(
+                    id: "physics-allow-sleep",
+                    label: L("Allow Sleep"),
+                    value: .bool(physicsAllowSleepBinding())
                 ),
             ]
         )
@@ -2095,6 +2270,16 @@ public final class EditorSceneAdapter: @unchecked Sendable {
 
         fields.append(
             EditorInspectorField(
+                id: "shape-center",
+                label: L("Center"),
+                value: .vector3(x: colliderCenterBinding(for: entity, axis: \.x),
+                                y: colliderCenterBinding(for: entity, axis: \.y),
+                                z: colliderCenterBinding(for: entity, axis: \.z))
+            )
+        )
+
+        fields.append(
+            EditorInspectorField(
                 id: "trigger",
                 label: L("Trigger"),
                 value: .bool(colliderTriggerBinding(for: entity))
@@ -2131,6 +2316,14 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 id: "layer",
                 label: L("Layer"),
                 value: .constrainedNumber(colliderLayerBinding(for: entity),
+                                          min: 0, max: 65535, step: 1, showsStepper: true)
+            )
+        )
+        fields.append(
+            EditorInspectorField(
+                id: "layer-mask",
+                label: L("Layer Mask"),
+                value: .constrainedNumber(colliderLayerMaskBinding(for: entity),
                                           min: 0, max: 65535, step: 1, showsStepper: true)
             )
         )
@@ -4102,6 +4295,95 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
+    private func updatePhysicsSettings(_ mutate: (inout PhysicsSettingsResource) -> Void) {
+        var next = scene.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()
+        mutate(&next)
+        let sanitized = PhysicsSettingsResource(
+            simulationMode: next.simulationMode,
+            backendKind: .jolt,
+            gravity: next.gravity,
+            fixedTimeStepSeconds: next.fixedTimeStepSeconds,
+            maxSubstepsPerFrame: next.maxSubstepsPerFrame,
+            allowSleep: next.allowSleep,
+            collisionSteps: next.collisionSteps
+        )
+        guard scene.resource(PhysicsSettingsResource.self) != sanitized else { return }
+        scene.setResource(sanitized)
+        notifyRevisionChanged()
+    }
+
+    private func physicsSimulationModeBinding() -> Binding<PhysicsSimulationMode> {
+        Binding(
+            get: { [self] in
+                scene.resource(PhysicsSettingsResource.self)?.simulationMode ?? .off
+            },
+            set: { [self] next in
+                guard scene.resource(PhysicsSettingsResource.self)?.simulationMode != next else { return }
+                updatePhysicsSettings { $0.simulationMode = next }
+            }
+        )
+    }
+
+    private func physicsGravityBinding(
+        axis: WritableKeyPath<SIMD3<Float>, Float>
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                (scene.resource(PhysicsSettingsResource.self)?.gravity
+                    ?? PhysicsSettingsResource().gravity)[keyPath: axis]
+            },
+            set: { [self] next in
+                let current = scene.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()
+                guard current.gravity[keyPath: axis] != next else { return }
+                updatePhysicsSettings { $0.gravity[keyPath: axis] = next }
+            }
+        )
+    }
+
+    private func physicsFixedTimeStepBinding() -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                Float(scene.resource(PhysicsSettingsResource.self)?.fixedTimeStepSeconds
+                    ?? PhysicsSettingsResource().fixedTimeStepSeconds)
+            },
+            set: { [self] next in
+                let clamped = max(0.000_001, min(next, 1))
+                let current = scene.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()
+                guard Float(current.fixedTimeStepSeconds) != clamped else { return }
+                updatePhysicsSettings { $0.fixedTimeStepSeconds = Double(clamped) }
+            }
+        )
+    }
+
+    private func physicsIntegerSettingBinding(
+        _ keyPath: WritableKeyPath<PhysicsSettingsResource, Int>
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                Float((scene.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource())[keyPath: keyPath])
+            },
+            set: { [self] next in
+                let clamped = max(1, min(Int(next.rounded()), 64))
+                let current = scene.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()
+                guard current[keyPath: keyPath] != clamped else { return }
+                updatePhysicsSettings { $0[keyPath: keyPath] = clamped }
+            }
+        )
+    }
+
+    private func physicsAllowSleepBinding() -> Binding<Bool> {
+        Binding(
+            get: { [self] in
+                scene.resource(PhysicsSettingsResource.self)?.allowSleep ?? true
+            },
+            set: { [self] next in
+                let current = scene.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()
+                guard current.allowSleep != next else { return }
+                updatePhysicsSettings { $0.allowSleep = next }
+            }
+        )
+    }
+
     private func rigidBodyAllowSleepBinding(for entity: EntityID) -> Binding<Bool> {
         Binding(
             get: { [self] in
@@ -4167,6 +4449,121 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                           summary: "Update rigid body gravity scale",
                                           targetRawIDs: [entity.rawValue],
                                           mutations: [.setRigidBodyGravityScale(entityID: entity.rawValue, value: next)])
+            }
+        )
+    }
+
+    private func rigidBodyLinearVelocityBinding(
+        for entity: EntityID,
+        axis: WritableKeyPath<SIMD3<Float>, Float>
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(RigidBody.self, for: entity)?.linearVelocity[keyPath: axis] ?? 0
+            },
+            set: { [self] next in
+                guard var body = scene.component(RigidBody.self, for: entity),
+                      body.linearVelocity[keyPath: axis] != next else { return }
+                body.linearVelocity[keyPath: axis] = next
+                _ = applySceneTransaction(intentVerb: "scene.set_rigidbody_linear_velocity",
+                                          summary: "Update rigid body linear velocity",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setRigidBody(entityID: entity.rawValue, body: body)])
+            }
+        )
+    }
+
+    private func rigidBodyAngularVelocityBinding(
+        for entity: EntityID,
+        axis: WritableKeyPath<SIMD3<Float>, Float>
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(RigidBody.self, for: entity)?.angularVelocity[keyPath: axis] ?? 0
+            },
+            set: { [self] next in
+                guard var body = scene.component(RigidBody.self, for: entity),
+                      body.angularVelocity[keyPath: axis] != next else { return }
+                body.angularVelocity[keyPath: axis] = next
+                _ = applySceneTransaction(intentVerb: "scene.set_rigidbody_angular_velocity",
+                                          summary: "Update rigid body angular velocity",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setRigidBody(entityID: entity.rawValue, body: body)])
+            }
+        )
+    }
+
+    private func rigidBodyLinearDampingBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(RigidBody.self, for: entity)?.linearDamping ?? 0
+            },
+            set: { [self] next in
+                let clamped = max(0, next)
+                guard var body = scene.component(RigidBody.self, for: entity),
+                      body.linearDamping != clamped else { return }
+                body.linearDamping = clamped
+                _ = applySceneTransaction(intentVerb: "scene.set_rigidbody_linear_damping",
+                                          summary: "Update rigid body linear damping",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setRigidBody(entityID: entity.rawValue, body: body)])
+            }
+        )
+    }
+
+    private func rigidBodyAngularDampingBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(RigidBody.self, for: entity)?.angularDamping ?? 0
+            },
+            set: { [self] next in
+                let clamped = max(0, next)
+                guard var body = scene.component(RigidBody.self, for: entity),
+                      body.angularDamping != clamped else { return }
+                body.angularDamping = clamped
+                _ = applySceneTransaction(intentVerb: "scene.set_rigidbody_angular_damping",
+                                          summary: "Update rigid body angular damping",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setRigidBody(entityID: entity.rawValue, body: body)])
+            }
+        )
+    }
+
+    private func rigidBodyContinuousCollisionBinding(for entity: EntityID) -> Binding<Bool> {
+        Binding(
+            get: { [self] in
+                scene.component(RigidBody.self, for: entity)?.continuousCollisionDetection ?? false
+            },
+            set: { [self] next in
+                guard var body = scene.component(RigidBody.self, for: entity),
+                      body.continuousCollisionDetection != next else { return }
+                body.continuousCollisionDetection = next
+                _ = applySceneTransaction(intentVerb: "scene.set_rigidbody_ccd",
+                                          summary: "Update rigid body continuous collision detection",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setRigidBody(entityID: entity.rawValue, body: body)])
+            }
+        )
+    }
+
+    private func colliderCenterBinding(
+        for entity: EntityID,
+        axis: WritableKeyPath<SIMD3<Float>, Float>
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(Collider.self, for: entity)?.shape.center[keyPath: axis] ?? 0
+            },
+            set: { [self] next in
+                guard var collider = scene.component(Collider.self, for: entity),
+                      collider.shape.center[keyPath: axis] != next else { return }
+                var center = collider.shape.center
+                center[keyPath: axis] = next
+                collider.shape = collider.shape.replacingCenter(with: center)
+                _ = applySceneTransaction(intentVerb: "scene.set_collider_center",
+                                          summary: "Update collider center",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setCollider(entityID: entity.rawValue, collider: collider)])
             }
         )
     }
@@ -4371,6 +4768,25 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                           targetRawIDs: [entity.rawValue],
                                           mutations: [.setColliderLayer(entityID: entity.rawValue,
                                                                         layerID: clamped)])
+            }
+        )
+    }
+
+    private func colliderLayerMaskBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                Float(scene.component(Collider.self, for: entity)?.layerMask ?? .max)
+            },
+            set: { [self] next in
+                let clamped = UInt16(max(0, min(next, 65535)))
+                guard scene.component(Collider.self, for: entity)?.layerMask != clamped else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_collider_layer_mask",
+                                          summary: "Update collider layer mask",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setColliderLayerMask(entityID: entity.rawValue,
+                                                                            layerMask: clamped)])
             }
         )
     }

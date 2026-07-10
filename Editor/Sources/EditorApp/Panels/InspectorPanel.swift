@@ -219,6 +219,21 @@ struct InspectorPanel: View {
         }
     }
 
+    private struct InspectorPhysicsSimulationModeValue: View {
+        let binding: Binding<PhysicsSimulationMode>
+
+        var body: some View {
+            EnumField(value: binding, width: 150) { mode in
+                switch mode {
+                case .off: return L("Off")
+                case .preview: return L("Preview")
+                case .play: return L("Play")
+                case .bake: return L("Bake")
+                }
+            }
+        }
+    }
+
     private struct InspectorColliderShapeKindValue: View {
         let binding: Binding<ColliderShapeKind>
 
@@ -302,6 +317,8 @@ struct InspectorPanel: View {
             return AnyView(JsonField(text: binding, minHeight: minHeight))
         case let .lightType(binding):
             return AnyView(InspectorLightTypeValue(binding: binding))
+        case let .physicsSimulationMode(binding):
+            return AnyView(InspectorPhysicsSimulationModeValue(binding: binding))
         case let .rigidBodyMotion(binding):
             return AnyView(InspectorRigidBodyMotionValue(binding: binding))
         case let .colliderShapeKind(binding):

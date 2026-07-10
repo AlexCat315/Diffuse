@@ -205,6 +205,13 @@ public struct Text: _PrimitiveView {
     public let color: Color?
     public let lineLimit: Int?
 
+    private struct PaintIdentity: Equatable {
+        let string: String
+        let alignment: TextAlignment
+        let color: Color?
+        let lineLimit: Int?
+    }
+
     public init(_ string: String,
                 alignment: TextAlignment = .leading,
                 color: Color? = nil,
@@ -235,7 +242,10 @@ public struct Text: _PrimitiveView {
     public func _updateNode(_ node: Node) {
         // Bind the draw callback. Captures `string` etc by value.
         let snapshot = self
-        node.draw = { list, origin in
+        node.updateDraw(identity: PaintIdentity(string: string,
+                                                alignment: alignment,
+                                                color: color,
+                                                lineLimit: lineLimit)) { list, origin in
             guard let env = TextEnvironmentHolder.current else { return }
             let fontOverride = node.attachments[StyleAttachmentKey.font] as? Font
             let lineHeightOverride = node.attachments[StyleAttachmentKey.lineHeight] as? Float

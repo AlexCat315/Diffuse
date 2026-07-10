@@ -102,7 +102,7 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
             }
         }
 
-        node.draw = { list, origin in
+        node.updateDraw(identity: snap.surface) { list, origin in
             // Report the drawable in physical pixels: the layout frame is in
             // logical points, so honor the window's content scale or the
             // scene renders at 1/scale² resolution and gets upscaled blurry.

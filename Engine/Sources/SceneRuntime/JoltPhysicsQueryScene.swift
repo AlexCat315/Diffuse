@@ -1,18 +1,99 @@
 import SIMDCompat
 
-func makeJoltQueryBackend(in world: RuntimeWorld) -> JoltPhysicsBackend {
-    let backend = JoltPhysicsBackend()
-    let snapshot = buildPhysicsSceneSnapshot(in: world)
-    _ = backend.prepare(
-        context: PhysicsPrepareContext(
-            settings: snapshot.settings,
-            deltaTimeSeconds: 0,
-            activeBodies: snapshot.bodies,
-            activeConstraints: snapshot.constraints,
-            syncEvents: []
+public struct PhysicsQueryCacheStats: Sendable, Equatable {
+    public var sourceRevision: UInt64?
+    public var bodyCount: Int
+    public var constraintCount: Int
+    public var queryCount: Int
+    public var rebuildCount: Int
+    public var cacheHitCount: Int
+
+    public init(
+        sourceRevision: UInt64? = nil,
+        bodyCount: Int = 0,
+        constraintCount: Int = 0,
+        queryCount: Int = 0,
+        rebuildCount: Int = 0,
+        cacheHitCount: Int = 0
+    ) {
+        self.sourceRevision = sourceRevision
+        self.bodyCount = bodyCount
+        self.constraintCount = constraintCount
+        self.queryCount = queryCount
+        self.rebuildCount = rebuildCount
+        self.cacheHitCount = cacheHitCount
+    }
+}
+
+final class JoltPhysicsQueryScene: @unchecked Sendable {
+    private let backend: JoltPhysicsBackend
+    private var sourceRevision: UInt64?
+    private var bodyCount = 0
+    private var constraintCount = 0
+    private var queryCount = 0
+    private var rebuildCount = 0
+    private var cacheHitCount = 0
+
+    init(backend: JoltPhysicsBackend) {
+        self.backend = backend
+    }
+
+    func backend(in world: RuntimeWorld) -> JoltPhysicsBackend {
+        queryCount += 1
+        if sourceRevision == world.physicsRevision {
+            cacheHitCount += 1
+        }
+        return synchronize(in: world)
+    }
+
+    func synchronize(in world: RuntimeWorld) -> JoltPhysicsBackend {
+        guard sourceRevision != world.physicsRevision else {
+            return backend
+        }
+
+        let snapshot = buildPhysicsSceneSnapshot(in: world)
+        _ = backend.prepare(
+            context: PhysicsPrepareContext(
+                settings: snapshot.settings,
+                deltaTimeSeconds: 0,
+                activeBodies: snapshot.bodies,
+                activeConstraints: snapshot.constraints,
+                syncEvents: []
+            )
         )
-    )
-    return backend
+        sourceRevision = world.physicsRevision
+        bodyCount = snapshot.bodies.count
+        constraintCount = snapshot.constraints.count
+        rebuildCount += 1
+        return backend
+    }
+
+    func adoptSynchronizedWorld(
+        _ world: RuntimeWorld,
+        bodyCount: Int,
+        constraintCount: Int
+    ) {
+        sourceRevision = world.physicsRevision
+        self.bodyCount = bodyCount
+        self.constraintCount = constraintCount
+    }
+
+    func invalidate() {
+        sourceRevision = nil
+        bodyCount = 0
+        constraintCount = 0
+    }
+
+    var stats: PhysicsQueryCacheStats {
+        PhysicsQueryCacheStats(
+            sourceRevision: sourceRevision,
+            bodyCount: bodyCount,
+            constraintCount: constraintCount,
+            queryCount: queryCount,
+            rebuildCount: rebuildCount,
+            cacheHitCount: cacheHitCount
+        )
+    }
 }
 
 func buildPhysicsSceneSnapshot(
