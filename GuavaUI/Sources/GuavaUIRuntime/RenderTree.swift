@@ -84,6 +84,10 @@ public final class RenderObject {
         if node.clipsToBounds { isLayerRoot = true; return }
         if node.opacity < 1 { isLayerRoot = true; return }
         if let shadow = node.shadowColor, shadow.a > 0 { isLayerRoot = true; return }
+        // Custom painters are natural retained-rendering boundaries. A changing
+        // chart/text/control can then re-record its own small DrawList while
+        // unchanged sibling painters keep their cached geometry.
+        if node.draw != nil || node.overlayDraw != nil { isLayerRoot = true; return }
         isLayerRoot = false
     }
 }

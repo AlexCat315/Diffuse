@@ -299,6 +299,7 @@ public struct RuntimeWorld: @unchecked Sendable {
 
     public private(set) var entityCount = 0
     public private(set) var revision: UInt64 = 0
+    private(set) var physicsRevision: UInt64 = 0
 
     public init() {}
 
@@ -344,6 +345,7 @@ public struct RuntimeWorld: @unchecked Sendable {
         entityCount += 1
         rootEntities.append(id)
         revision &+= 1
+        physicsRevision &+= 1
         return id
     }
 
@@ -380,6 +382,7 @@ public struct RuntimeWorld: @unchecked Sendable {
         components.removeAll(for: entity)
         dirtyHierarchyEntities.remove(entity)
         revision &+= 1
+        physicsRevision &+= 1
         return true
     }
 
@@ -398,6 +401,9 @@ public struct RuntimeWorld: @unchecked Sendable {
         guard contains(entity) else { return false }
         components.set(component, for: entity)
         revision &+= 1
+        if componentAffectsPhysics(Component.self) {
+            physicsRevision &+= 1
+        }
         return true
     }
 
@@ -558,6 +564,9 @@ public struct RuntimeWorld: @unchecked Sendable {
         let updated = components.update(type, for: entity, body)
         if updated {
             revision &+= 1
+            if componentAffectsPhysics(Component.self) {
+                physicsRevision &+= 1
+            }
         }
         return updated
     }
@@ -579,6 +588,9 @@ public struct RuntimeWorld: @unchecked Sendable {
         }
         if updatedCount > 0 {
             revision &+= 1
+            if componentAffectsPhysics(Component.self) {
+                physicsRevision &+= 1
+            }
         }
         return updatedCount
     }
@@ -592,6 +604,9 @@ public struct RuntimeWorld: @unchecked Sendable {
         let removed = components.remove(type, for: entity)
         if removed != nil {
             revision &+= 1
+            if componentAffectsPhysics(Component.self) {
+                physicsRevision &+= 1
+            }
         }
         return removed
     }
@@ -599,6 +614,9 @@ public struct RuntimeWorld: @unchecked Sendable {
     public mutating func setResource<Resource: Sendable>(_ resource: Resource) {
         resources.set(resource)
         revision &+= 1
+        if resourceAffectsPhysics(Resource.self) {
+            physicsRevision &+= 1
+        }
     }
 
     public func resource<Resource: Sendable>(_ type: Resource.Type) -> Resource? {
@@ -613,6 +631,9 @@ public struct RuntimeWorld: @unchecked Sendable {
         let updated = resources.update(type, body)
         if updated {
             revision &+= 1
+            if resourceAffectsPhysics(Resource.self) {
+                physicsRevision &+= 1
+            }
         }
         return updated
     }
@@ -622,6 +643,9 @@ public struct RuntimeWorld: @unchecked Sendable {
         let removed = resources.remove(type)
         if removed != nil {
             revision &+= 1
+            if resourceAffectsPhysics(Resource.self) {
+                physicsRevision &+= 1
+            }
         }
         return removed
     }
@@ -651,6 +675,7 @@ public struct RuntimeWorld: @unchecked Sendable {
         components.set(transform, for: entity)
         markHierarchyDirty(entity)
         revision &+= 1
+        physicsRevision &+= 1
         return true
     }
 
@@ -736,6 +761,7 @@ public struct RuntimeWorld: @unchecked Sendable {
 
         markHierarchyDirty(child)
         revision &+= 1
+        physicsRevision &+= 1
         return true
     }
 
@@ -776,6 +802,7 @@ public struct RuntimeWorld: @unchecked Sendable {
 
         markHierarchyDirty(entity)
         revision &+= 1
+        physicsRevision &+= 1
         return true
     }
 
@@ -857,6 +884,7 @@ public struct RuntimeWorld: @unchecked Sendable {
 
         dirtyHierarchyEntities.removeAll(keepingCapacity: true)
         revision &+= 1
+        physicsRevision &+= 1
 
         return JobDispatchReport(
             jobCount: totalJobCount,
@@ -911,6 +939,7 @@ public struct RuntimeWorld: @unchecked Sendable {
         markHierarchyDirty(parent)
         markHierarchyDirty(child)
         revision &+= 1
+        physicsRevision &+= 1
         return true
     }
 
@@ -929,6 +958,7 @@ public struct RuntimeWorld: @unchecked Sendable {
         rootEntities = currentRoots
         markHierarchyDirty(entity)
         revision &+= 1
+        physicsRevision &+= 1
         return true
     }
 
@@ -1178,6 +1208,28 @@ public struct RuntimeWorld: @unchecked Sendable {
                 rigidBody.isSleeping = false
             }
         }
+    }
+
+    private func componentAffectsPhysics<Component: RuntimeComponent>(
+        _ type: Component.Type
+    ) -> Bool {
+        let id = ObjectIdentifier(type)
+        return id == ObjectIdentifier(RigidBody.self)
+            || id == ObjectIdentifier(Collider.self)
+            || id == ObjectIdentifier(Constraint.self)
+            || id == ObjectIdentifier(LocalTransform.self)
+            || id == ObjectIdentifier(WorldTransform.self)
+            || id == ObjectIdentifier(Parent.self)
+            || id == ObjectIdentifier(Children.self)
+    }
+
+    private func resourceAffectsPhysics<Resource: Sendable>(
+        _ type: Resource.Type
+    ) -> Bool {
+        let id = ObjectIdentifier(type)
+        return id == ObjectIdentifier(PhysicsSettingsResource.self)
+            || id == ObjectIdentifier(MeshColliderBoundsResource.self)
+            || id == ObjectIdentifier(MeshColliderGeometryResource.self)
     }
 }
 

@@ -16,9 +16,11 @@ public final class AppDisplayHandle: @unchecked Sendable {
         private let lock = NSLock()
         private var pending = false
 
-        func request() {
+        func request() -> Bool {
             lock.withLock {
+                guard !pending else { return false }
                 pending = true
+                return true
             }
         }
 
@@ -32,6 +34,7 @@ public final class AppDisplayHandle: @unchecked Sendable {
     }
 
     private let signal = Signal()
+    private let wakeEventLoop: @Sendable () -> Void
     private var openAuxiliaryWindow: (@MainActor (AppAuxiliaryWindowRequest) -> WindowID?)?
     private var closeAuxiliaryWindow: (@MainActor (WindowID) -> Void)?
     private var auxiliaryWindowIsOpen: (@MainActor (WindowID) -> Bool)?
@@ -58,10 +61,14 @@ public final class AppDisplayHandle: @unchecked Sendable {
     private var openFolderDialogAction: (@MainActor (String?, @escaping (String?) -> Void) -> Void)?
     private var openFileDialogAction: (@MainActor (String?, [FileDialogFilter], Bool, @escaping ([String]) -> Void) -> Void)?
 
-    public init() {}
+    public init(wakeEventLoop: @escaping @Sendable () -> Void = {}) {
+        self.wakeEventLoop = wakeEventLoop
+    }
 
     public nonisolated func requestDisplay() {
-        signal.request()
+        if signal.request() {
+            wakeEventLoop()
+        }
     }
 
     @MainActor

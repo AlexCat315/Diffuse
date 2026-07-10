@@ -77,6 +77,13 @@ struct SliderHost: _PrimitiveView {
     static let hoveredKey = "__slider_hovered"
     static let appearanceKey = "__slider_appearance"
 
+    private struct PaintIdentity: Equatable {
+        let value: Double
+        let lowerBound: Double
+        let upperBound: Double
+        let isEnabled: Bool
+    }
+
     func _makeNode() -> Node {
         let n = Node()
         n.isHitTestable = true
@@ -106,7 +113,10 @@ struct SliderHost: _PrimitiveView {
 
         // Renderer hook — draws track + filled segment + thumb each frame.
         let snapshot = self
-        node.draw = { list, origin in
+        node.updateDraw(identity: PaintIdentity(value: value.wrappedValue,
+                                                lowerBound: range.lowerBound,
+                                                upperBound: range.upperBound,
+                                                isEnabled: isEnabled)) { list, origin in
             snapshot.render(node: node, style: style, origin: origin, list: list)
         }
 

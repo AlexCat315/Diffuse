@@ -167,6 +167,12 @@ public protocol Shell: AnyObject {
     func initializeWindow(title: String) throws
     @discardableResult func pollEvents() -> [InputEvent]
     @discardableResult func pollWindowEvents() -> [WindowInputEvent]
+    /// Block the main loop until a native event arrives or `timeout` elapses.
+    /// The event must remain queued for the next `pollWindowEvents()` call.
+    @discardableResult func waitForEvents(timeout: TimeInterval) -> Bool
+    /// Interrupt `waitForEvents`. This is intentionally nonisolated because
+    /// render completions and native callbacks may request UI work off-thread.
+    nonisolated func wakeEventLoop()
     func setTextInputArea(_ area: TextInputArea?)
     func setTextInputArea(windowID: WindowID, _ area: TextInputArea?)
     /// Switch the OS mouse cursor to a system style. Defaults to `.arrow`
@@ -262,6 +268,15 @@ public extension Shell {
             routed.windowID == id ? routed.event : nil
         }
     }
+
+    @discardableResult
+    func waitForEvents(timeout: TimeInterval) -> Bool {
+        guard timeout > 0 else { return false }
+        Thread.sleep(forTimeInterval: min(timeout, 0.001))
+        return false
+    }
+
+    nonisolated func wakeEventLoop() {}
 
     func setTextInputArea(_ area: TextInputArea?) {
         guard let id = mainWindowID else { return }
