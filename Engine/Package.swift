@@ -31,6 +31,7 @@ let package = Package(
         .library(name: "SemanticPipeline", targets: ["SemanticPipeline"]),
         .library(name: "EngineCore", targets: ["EngineCore"]),
         .executable(name: "SceneRuntimeBenchmarks", targets: ["SceneRuntimeBenchmarks"]),
+        .executable(name: "PhysicsRuntimeBenchmarks", targets: ["PhysicsRuntimeBenchmarks"]),
         .executable(name: "RenderBackendBenchmarks", targets: ["RenderBackendBenchmarks"]),
         .executable(name: "StylizedCharacterPreviewDemo", targets: ["StylizedCharacterPreviewDemo"]),
     ],
@@ -350,6 +351,14 @@ let package = Package(
                 "SceneRuntime",
             ],
             path: "Benchmarks/SceneRuntimeBenchmarks"
+        ),
+        .executableTarget(
+            name: "PhysicsRuntimeBenchmarks",
+            dependencies: [
+                "SIMDCompat",
+                "SceneRuntime",
+            ],
+            path: "Benchmarks/PhysicsRuntimeBenchmarks"
         ),
         .executableTarget(
             name: "RenderBackendBenchmarks",

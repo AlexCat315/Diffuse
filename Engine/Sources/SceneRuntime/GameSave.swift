@@ -13,7 +13,7 @@ public enum GameSaveError: Error, Equatable {
 /// The embedded scene is captured with `SceneSerializer`, so it reflects the *current* runtime
 /// transforms and components, not just the authored layout.
 public struct GameSave: Sendable, Equatable {
-    public static let currentVersion = 1
+    public static let currentVersion = 2
 
     /// Scene document in `SceneSerializer` format.
     public var scene: Data
