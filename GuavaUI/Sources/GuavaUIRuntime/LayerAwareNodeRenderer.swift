@@ -9,12 +9,12 @@ import Foundation
 ///
 /// Cache invariants per layer-root `RenderObject`:
 /// - `cacheInvalid == false` AND
-/// - `lastAbsoluteOrigin == currentAbsoluteOrigin` AND
 /// - the layer's parent clip stack at composite time matches the one captured
 ///   when the cache was recorded (tracked by `lastClipStack`).
 ///
-/// When all three hold we append `cachedLayerList` and skip the recursive
-/// walk into this layer's subtree. Otherwise the layer is re-recorded.
+/// Stable unclipped leaf layers may move under the same parent clip without
+/// re-recording. Their cached vertices are translated while being appended;
+/// this is the common path for text and controls moving during scrolling.
 ///
 /// Behavioral parity with `NodeRenderer`: the emitted vertex/index/batch
 /// stream matches `NodeRenderer.render(root:into:)` for the same Node tree,
@@ -56,11 +56,45 @@ public final class LayerAwareNodeRenderer {
             } ?? false
             let clipUnchanged = obj.lastClipStack == parentClipStack
             if !obj.cacheInvalid,
-               originUnchanged,
                clipUnchanged,
                let cached = obj.cachedLayerList {
-                frame.append(cached)
-                return
+                if originUnchanged {
+                    frame.append(cached)
+                    return
+                }
+                if obj.children.isEmpty,
+                   !node.clipsToBounds,
+                   let cachedOrigin = obj.lastAbsoluteOrigin {
+                    frame.append(
+                        cached,
+                        vertexTranslationX: Float(origin.x - cachedOrigin.x),
+                        vertexTranslationY: Float(origin.y - cachedOrigin.y)
+                    )
+                    return
+                }
+            }
+
+            if !obj.children.isEmpty {
+                // A changed container renders directly into its parent. This
+                // avoids rebuilding/copying a stack of flattened ancestor
+                // caches during scrolling or live chart updates. If another
+                // frame arrives without invalidation, cache it then; stable
+                // continuous frames subsequently become one bulk append.
+                if obj.cacheInvalid || !originUnchanged || !clipUnchanged {
+                    recordSelfAndDescendants(
+                        obj,
+                        node: node,
+                        into: frame,
+                        originX: absX,
+                        originY: absY,
+                        clipStack: parentClipStack
+                    )
+                    obj.cachedLayerList = nil
+                    obj.lastAbsoluteOrigin = origin
+                    obj.lastClipStack = parentClipStack
+                    obj.cacheInvalid = false
+                    return
+                }
             }
 
             // Re-record. Use a fresh per-layer DrawList so the cache is

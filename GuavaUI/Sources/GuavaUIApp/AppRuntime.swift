@@ -99,6 +99,7 @@ public final class AppRuntime {
         }
     }()
     private var isVSyncEnabled = !AppRuntime.forceVSyncOff
+    private let mainWindowChromeHitTestCollector = WindowChromeHitTestCollector()
     private var lastMainWindowChromeHitTest: WindowChromeHitTest?
 
     /// Lightweight per-second FPS + frame-cost breakdown to stdout, enabled
@@ -108,6 +109,10 @@ public final class AppRuntime {
     /// (→ it does not — look at vsync / cross-adapter present instead).
     private static let fpsLogEnabled =
         ProcessInfo.processInfo.environment["GUAVA_FPS_LOG"] == "1"
+    /// Profiling-only override for measuring a normally event-driven app under
+    /// a steady frame stream. The host still follows the display refresh rate.
+    private static let forceContinuousFrameDrive =
+        ProcessInfo.processInfo.environment["GUAVAUI_FORCE_CONTINUOUS_FRAMES"] == "1"
     private var fpsFrames = 0
     private var fpsWindowStart: Double = 0
     private var fpsLayoutAccum = 0.0
@@ -555,7 +560,7 @@ public final class AppRuntime {
         guard let root = tree.root,
               let id = host.mainSession?.id else { return }
 
-        guard let next = WindowChromeHitTestCollector.collect(root: root) else {
+        guard let next = mainWindowChromeHitTestCollector.collect(root: root) else {
             if lastMainWindowChromeHitTest != nil {
                 host.setWindowChromeHitTest(id, nil)
                 lastMainWindowChromeHitTest = nil
@@ -640,7 +645,7 @@ public final class AppRuntime {
             let buffer = try encoder.finish()
             backend.submit(buffer)
             surface.present()
-            if config.frameDrivePolicy == .continuous {
+            if config.frameDrivePolicy == .continuous || Self.forceContinuousFrameDrive {
                 // Legacy behavior: keep re-rendering at display rate. Under
                 // `.eventDriven` the loop's needsDisplay machinery (input,
                 // recompose, markRenderDirty, animations, requestDisplay)
@@ -990,6 +995,7 @@ private final class AuxiliaryAppWindow {
     private var logicalW: UInt32 = 0
     private var logicalH: UInt32 = 0
     private var didInstallRoot = false
+    private let windowChromeHitTestCollector = WindowChromeHitTestCollector()
     private var lastWindowChromeHitTest: WindowChromeHitTest?
     private let setWindowChromeHitTest: (WindowID, WindowChromeHitTest?) -> Void
 
@@ -1149,7 +1155,7 @@ private final class AuxiliaryAppWindow {
     private func syncWindowChromeHitTest() {
         guard let root = session.tree.root else { return }
 
-        guard let next = WindowChromeHitTestCollector.collect(root: root) else {
+        guard let next = windowChromeHitTestCollector.collect(root: root) else {
             if lastWindowChromeHitTest != nil {
                 setWindowChromeHitTest(session.id, nil)
                 lastWindowChromeHitTest = nil

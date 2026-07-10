@@ -3,8 +3,49 @@ import EngineKernel
 @testable import GuavaUIApp
 import GuavaUICompose
 import GuavaUIRuntime
+import PlatformShell
 
 final class WindowChromeInteractionTests: XCTestCase {
+    func testCollectorIndexesChromeNodesOnceAndReadsGeometryLive() throws {
+        let root = Node()
+        root.frame = CGRect(x: 3, y: 4, width: 900, height: 600)
+        root.contentOffset = CGPoint(x: 0, y: 2)
+
+        let chrome = Node()
+        chrome.attachments[WindowChromeAttachmentKey.configuration] = WindowChromeHitTest(
+            titleBarHeight: 34,
+            resizeBorderWidth: 0,
+            usesExplicitDragRects: true
+        )
+        root.addChild(chrome)
+
+        let drag = Node()
+        drag.frame = CGRect(x: 10, y: 20, width: 100, height: 24)
+        drag.attachments[WindowChromeAttachmentKey.dragRegion] = true
+        chrome.addChild(drag)
+
+        let collector = WindowChromeHitTestCollector()
+        let first = try XCTUnwrap(collector.collect(root: root))
+        XCTAssertEqual(collector.discoveryPassCount, 1)
+        XCTAssertEqual(first.draggableRects.first?.x, 13)
+        XCTAssertEqual(first.draggableRects.first?.y, 22)
+
+        drag.frame.origin.x = 30
+        root.contentOffset.y = 6
+        let moved = try XCTUnwrap(collector.collect(root: root))
+        XCTAssertEqual(collector.discoveryPassCount, 1)
+        XCTAssertEqual(moved.draggableRects.first?.x, 33)
+        XCTAssertEqual(moved.draggableRects.first?.y, 18)
+
+        let interactive = Node()
+        interactive.frame = CGRect(x: 5, y: 7, width: 20, height: 10)
+        interactive.attachments[WindowChromeAttachmentKey.interactiveRegion] = true
+        chrome.addChild(interactive)
+        let structurallyChanged = try XCTUnwrap(collector.collect(root: root))
+        XCTAssertEqual(collector.discoveryPassCount, 2)
+        XCTAssertEqual(structurallyChanged.nonDraggableRects.count, 1)
+    }
+
     func testTitleBarControlsRemainHitTestableAcrossTheWholeBar() throws {
         let registry = InteractionRegistry()
         let capture = PointerCapture()
