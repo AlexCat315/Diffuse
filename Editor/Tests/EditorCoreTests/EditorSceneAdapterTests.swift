@@ -15,7 +15,7 @@ struct EditorSceneAdapterTests {
 
         let manifest = scene.manifest(selectedEntityID: scene.defaultSelectionID)
 
-        #expect(manifest.schemaVersion == 4)
+        #expect(manifest.schemaVersion == 5)
         #expect(manifest.revision == scene.revision)
         #expect(manifest.entityCount == scene.entityCount)
         #expect(manifest.selectedEntityID == scene.defaultSelectionID)
@@ -920,11 +920,11 @@ struct GameSaveDocumentTests {
         #expect(restored?.previousState == "Idle")
     }
 
-    @Test("schemaVersion is 4 for new manifests")
-    func schemaVersionIs4() {
+    @Test("schemaVersion is 5 for new manifests")
+    func schemaVersionIs5() {
         let adapter = EditorSceneAdapter()
         let manifest = adapter.manifest()
-        #expect(manifest.schemaVersion == 4)
+        #expect(manifest.schemaVersion == 5)
     }
 
     @Test("GameSaveDocument write and read round-trip")
