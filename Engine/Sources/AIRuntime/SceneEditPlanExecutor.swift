@@ -391,6 +391,12 @@ public struct SceneEditPlanExecutor: Sendable {
             case .capsule:
                 if case let .capsule(r, hh, c) = collider.shape { collider.shape = .capsule(radius: r, halfHeight: hh, center: c) }
                 else { collider.shape = .capsule(radius: 0.25, halfHeight: 0.5, center: .zero) }
+            case .cylinder:
+                if case let .cylinder(r, hh, c) = collider.shape { collider.shape = .cylinder(radius: r, halfHeight: hh, center: c) }
+                else { collider.shape = .cylinder(radius: 0.5, halfHeight: 0.5, center: .zero) }
+            case .heightField:
+                if case let .heightField(rid, c) = collider.shape { collider.shape = .heightField(resourceID: rid, center: c) }
+                else { collider.shape = .heightField(resourceID: nil, center: .zero) }
             case .mesh:
                 if case let .mesh(rid, c) = collider.shape { collider.shape = .mesh(resourceID: rid, center: c) }
                 else { collider.shape = .mesh(resourceID: nil, center: .zero) }

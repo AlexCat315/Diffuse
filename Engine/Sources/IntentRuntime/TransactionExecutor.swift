@@ -520,6 +520,10 @@ public struct TransactionExecutor {
                     newShape = .sphere(radius: 0.5, center: center)
                 case .capsule:
                     newShape = .capsule(radius: 0.5, halfHeight: 0.5, center: center)
+                case .cylinder:
+                    newShape = .cylinder(radius: 0.5, halfHeight: 0.5, center: center)
+                case .heightField:
+                    newShape = .heightField(resourceID: nil, center: center)
                 case .mesh:
                     newShape = .mesh(resourceID: nil, center: center)
                 case .convex:
