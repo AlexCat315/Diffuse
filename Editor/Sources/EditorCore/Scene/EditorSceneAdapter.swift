@@ -68,6 +68,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
     public let light: EditorSceneManifestLight?
     public let rigidBody: EditorSceneManifestRigidBody?
     public let collider: EditorSceneManifestCollider?
+    public let characterController: EditorSceneManifestCharacterController?
     public let constraint: EditorSceneManifestConstraint?
     public let script: EditorSceneManifestScript?
     public let audioSource: EditorSceneManifestAudioSource?
@@ -90,6 +91,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
                 light: EditorSceneManifestLight? = nil,
                 rigidBody: EditorSceneManifestRigidBody? = nil,
                 collider: EditorSceneManifestCollider? = nil,
+                characterController: EditorSceneManifestCharacterController? = nil,
                 constraint: EditorSceneManifestConstraint? = nil,
                 script: EditorSceneManifestScript? = nil,
                 audioSource: EditorSceneManifestAudioSource? = nil,
@@ -108,6 +110,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.light = light
         self.rigidBody = rigidBody
         self.collider = collider
+        self.characterController = characterController
         self.constraint = constraint
         self.script = script
         self.audioSource = audioSource
@@ -119,7 +122,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case id, name, kind, localTransform, asset, renderMesh, renderMaterial
-        case camera, light, rigidBody, collider, constraint, script, audioSource
+        case camera, light, rigidBody, collider, characterController, constraint, script, audioSource
         case animationPlayer, animationGraphPlayer, particleEmitter, children
     }
 
@@ -136,6 +139,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.light = try c.decodeIfPresent(EditorSceneManifestLight.self, forKey: .light)
         self.rigidBody = try c.decodeIfPresent(EditorSceneManifestRigidBody.self, forKey: .rigidBody)
         self.collider = try c.decodeIfPresent(EditorSceneManifestCollider.self, forKey: .collider)
+        self.characterController = try c.decodeIfPresent(EditorSceneManifestCharacterController.self, forKey: .characterController)
         self.constraint = try c.decodeIfPresent(EditorSceneManifestConstraint.self, forKey: .constraint)
         self.script = try c.decodeIfPresent(EditorSceneManifestScript.self, forKey: .script)
         self.audioSource = try c.decodeIfPresent(EditorSceneManifestAudioSource.self, forKey: .audioSource)
@@ -160,6 +164,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         try c.encodeIfPresent(light, forKey: .light)
         try c.encodeIfPresent(rigidBody, forKey: .rigidBody)
         try c.encodeIfPresent(collider, forKey: .collider)
+        try c.encodeIfPresent(characterController, forKey: .characterController)
         try c.encodeIfPresent(constraint, forKey: .constraint)
         try c.encodeIfPresent(script, forKey: .script)
         try c.encodeIfPresent(audioSource, forKey: .audioSource)
@@ -773,6 +778,20 @@ public struct EditorSceneManifestColliderShape: Codable, Sendable, Equatable {
             self.halfHeight = halfHeight
             self.resourceID = nil
             self.center = EditorSceneManifestVector3(center)
+        case let .cylinder(radius, halfHeight, center):
+            self.kind = "cylinder"
+            self.halfExtents = nil
+            self.radius = radius
+            self.halfHeight = halfHeight
+            self.resourceID = nil
+            self.center = EditorSceneManifestVector3(center)
+        case let .heightField(resourceID, center):
+            self.kind = "heightField"
+            self.halfExtents = nil
+            self.radius = nil
+            self.halfHeight = nil
+            self.resourceID = resourceID
+            self.center = EditorSceneManifestVector3(center)
         case let .mesh(resourceID, center):
             self.kind = "mesh"
             self.halfExtents = nil
@@ -801,6 +820,12 @@ public struct EditorSceneManifestColliderShape: Codable, Sendable, Equatable {
             return .capsule(radius: radius ?? 0.5,
                             halfHeight: halfHeight ?? 0.5,
                             center: center.simdValue)
+        case "cylinder":
+            return .cylinder(radius: radius ?? 0.5,
+                             halfHeight: halfHeight ?? 0.5,
+                             center: center.simdValue)
+        case "heightField":
+            return .heightField(resourceID: resourceID, center: center.simdValue)
         case "mesh":
             return .mesh(resourceID: resourceID, center: center.simdValue)
         case "convex":
@@ -811,8 +836,32 @@ public struct EditorSceneManifestColliderShape: Codable, Sendable, Equatable {
     }
 }
 
+public struct EditorSceneManifestColliderShapeInstance: Codable, Sendable, Equatable {
+    public let shape: EditorSceneManifestColliderShape
+    public let localPosition: EditorSceneManifestVector3
+    public let localRotation: EditorSceneManifestVector4
+    public let localScale: EditorSceneManifestVector3
+
+    public init(_ instance: ColliderShapeInstance) {
+        shape = EditorSceneManifestColliderShape(instance.shape)
+        localPosition = EditorSceneManifestVector3(instance.localPosition)
+        localRotation = EditorSceneManifestVector4(instance.localRotation)
+        localScale = EditorSceneManifestVector3(instance.localScale)
+    }
+
+    var instance: ColliderShapeInstance {
+        ColliderShapeInstance(
+            shape: shape.shape,
+            localPosition: localPosition.simdValue,
+            localRotation: localRotation.simdValue,
+            localScale: localScale.simdValue
+        )
+    }
+}
+
 public struct EditorSceneManifestCollider: Codable, Sendable, Equatable {
     public let shape: EditorSceneManifestColliderShape
+    public let shapes: [EditorSceneManifestColliderShapeInstance]
     public let isTrigger: Bool
     public let layerID: UInt16
     public let layerMask: UInt16
@@ -820,6 +869,7 @@ public struct EditorSceneManifestCollider: Codable, Sendable, Equatable {
 
     public init(_ component: Collider) {
         self.shape = EditorSceneManifestColliderShape(component.shape)
+        self.shapes = component.shapes.map(EditorSceneManifestColliderShapeInstance.init)
         self.isTrigger = component.isTrigger
         self.layerID = component.layerID
         self.layerMask = component.layerMask
@@ -827,11 +877,60 @@ public struct EditorSceneManifestCollider: Codable, Sendable, Equatable {
     }
 
     var component: Collider {
-        Collider(shape: shape.shape,
+        Collider(shapes: shapes.isEmpty
+                    ? [ColliderShapeInstance(shape: shape.shape)]
+                    : shapes.map(\.instance),
                  isTrigger: isTrigger,
                  layerID: layerID,
                  layerMask: layerMask,
                  material: material.material)
+    }
+}
+
+public struct EditorSceneManifestCharacterController: Codable, Sendable, Equatable {
+    public let radius: Float
+    public let standingHalfHeight: Float
+    public let crouchingHalfHeight: Float
+    public let center: EditorSceneManifestVector3
+    public let maxSlopeDegrees: Float
+    public let stepHeight: Float
+    public let skinWidth: Float
+    public let mass: Float
+    public let maxStrength: Float
+    public let gravityScale: Float
+    public let layerID: UInt16
+    public let layerMask: UInt16
+
+    public init(_ component: CharacterController) {
+        radius = component.radius
+        standingHalfHeight = component.standingHalfHeight
+        crouchingHalfHeight = component.crouchingHalfHeight
+        center = EditorSceneManifestVector3(component.center)
+        maxSlopeDegrees = component.maxSlopeDegrees
+        stepHeight = component.stepHeight
+        skinWidth = component.skinWidth
+        mass = component.mass
+        maxStrength = component.maxStrength
+        gravityScale = component.gravityScale
+        layerID = component.layerID
+        layerMask = component.layerMask
+    }
+
+    var component: CharacterController {
+        CharacterController(
+            radius: radius,
+            standingHalfHeight: standingHalfHeight,
+            crouchingHalfHeight: crouchingHalfHeight,
+            center: center.simdValue,
+            maxSlopeDegrees: maxSlopeDegrees,
+            stepHeight: stepHeight,
+            skinWidth: skinWidth,
+            mass: mass,
+            maxStrength: maxStrength,
+            gravityScale: gravityScale,
+            layerID: layerID,
+            layerMask: layerMask
+        )
     }
 }
 
@@ -1734,6 +1833,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             if let collider = node.collider {
                 _ = restoredScene.setComponent(collider.component, for: entity)
             }
+            if let characterController = node.characterController {
+                _ = restoredScene.setComponent(characterController.component, for: entity)
+            }
             if let script = node.script {
                 _ = restoredScene.setComponent(script.component, for: entity)
             }
@@ -1901,6 +2003,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             .map(EditorSceneManifestRigidBody.init)
         let collider = scene.component(Collider.self, for: entity)
             .map(EditorSceneManifestCollider.init)
+        let characterController = scene.component(CharacterController.self, for: entity)
+            .map(EditorSceneManifestCharacterController.init)
         let constraint = scene.component(Constraint.self, for: entity)
             .map(EditorSceneManifestConstraint.init)
         let script = scene.component(ScriptComponent.self, for: entity)
@@ -1931,6 +2035,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             light: light,
             rigidBody: rigidBody,
             collider: collider,
+            characterController: characterController,
             constraint: constraint,
             script: script,
             audioSource: audioSource,
@@ -2260,6 +2365,17 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                               min: 0.01, max: nil, step: 0.1, showsStepper: true)
                 )
             )
+        case .cylinder:
+            if case let .cylinder(radius, halfHeight, _) = collider.shape {
+                fields.append(EditorInspectorField(id: "shape-cylinder-radius", label: L("Radius"), value: .readOnly(format(radius))))
+                fields.append(EditorInspectorField(id: "shape-cylinder-half-height", label: L("Half Height"), value: .readOnly(format(halfHeight))))
+            }
+        case .heightField:
+            fields.append(EditorInspectorField(
+                id: "shape-heightfield-resource",
+                label: L("Resource"),
+                value: .readOnly(collider.shape.resourceID ?? L("(auto)"))
+            ))
             fields.append(
                 EditorInspectorField(
                     id: "shape-capsule-half-height",
@@ -5016,6 +5132,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             return "Sphere r=\(format(radius))"
         case let .capsule(radius, halfHeight, _):
             return "Capsule r=\(format(radius)) h=\(format(halfHeight * 2))"
+        case let .cylinder(radius, halfHeight, _):
+            return "Cylinder r=\(format(radius)) h=\(format(halfHeight * 2))"
+        case let .heightField(resourceID, _):
+            return resourceID.map { "HeightField \($0)" } ?? "HeightField"
         case let .mesh(resourceID, _):
             return resourceID.map { "Mesh \($0)" } ?? "Mesh"
         case let .convex(resourceID, _):
