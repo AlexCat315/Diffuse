@@ -967,6 +967,23 @@ void fill_bounds(const JPH::AABox& bounds,
     max_z = bounds.mMax.GetZ();
 }
 
+bool body_state_changed(const GuavaJoltBodyState& before, const GuavaJoltBodyState& after) {
+    return before.position_x != after.position_x
+        || before.position_y != after.position_y
+        || before.position_z != after.position_z
+        || before.rotation_x != after.rotation_x
+        || before.rotation_y != after.rotation_y
+        || before.rotation_z != after.rotation_z
+        || before.rotation_w != after.rotation_w
+        || before.linear_velocity_x != after.linear_velocity_x
+        || before.linear_velocity_y != after.linear_velocity_y
+        || before.linear_velocity_z != after.linear_velocity_z
+        || before.angular_velocity_x != after.angular_velocity_x
+        || before.angular_velocity_y != after.angular_velocity_y
+        || before.angular_velocity_z != after.angular_velocity_z
+        || before.is_sleeping != after.is_sleeping;
+}
+
 JPH::AABox make_aabb(float min_x, float min_y, float min_z,
                      float max_x, float max_y, float max_z) {
     return JPH::AABox(
@@ -1573,6 +1590,12 @@ struct GuavaJoltContextImpl {
         }
         physics_system.SetGravity(JPH::Vec3(config->gravity_x, config->gravity_y, config->gravity_z));
 
+        std::unordered_map<uint64_t, GuavaJoltBodyState> input_states;
+        input_states.reserve(state_count);
+        for (size_t index = 0; index < state_count; ++index) {
+            input_states[states[index].entity_id] = states[index];
+        }
+
         JPH::BodyInterface& body_interface = physics_system.GetBodyInterface();
         std::vector<uint64_t> target_entities;
         target_entities.reserve(kinematic_targets.size());
@@ -1707,8 +1730,14 @@ struct GuavaJoltContextImpl {
         size_t written = 0;
         for (uint64_t entity : ids) {
             if (written >= state_count) break;
-            fill_state_from_body(states[written], entity, bi, body_ids[entity]);
-            ++written;
+            GuavaJoltBodyState candidate {};
+            fill_state_from_body(candidate, entity, bi, body_ids[entity]);
+            auto previous = input_states.find(entity);
+            if (previous == input_states.end()
+                || body_state_changed(previous->second, candidate)) {
+                states[written] = candidate;
+                ++written;
+            }
         }
 
         out_stats->body_count = static_cast<uint32_t>(body_ids.size());

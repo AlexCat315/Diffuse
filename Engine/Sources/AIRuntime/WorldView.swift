@@ -108,6 +108,11 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     public var animationIsPlaying: Bool?
     // Constraint (authored)
     public var constraintEnabled: Bool?
+    public var ragdollMode: String? = nil
+    public var ragdollBlendWeight: Float? = nil
+    public var ragdollBoneCount: Int? = nil
+    public var ragdollSimulatedBoneCount: Int? = nil
+    public var ragdollIsEnabled: Bool? = nil
     // Script bindings (authored)
     public var scriptBindings: [SceneSemanticSnapshot.ScriptBindingRecord]?
     // Selection state (not authored — updated by selectionChanged events)
@@ -409,6 +414,11 @@ public struct WorldView: Sendable {
             record.animationIsPlaying = e.animationIsPlaying
             record.scriptBindings = e.scriptBindings
             record.constraintEnabled = e.constraintEnabled
+            record.ragdollMode = e.ragdollMode
+            record.ragdollBlendWeight = e.ragdollBlendWeight
+            record.ragdollBoneCount = e.ragdollBoneCount
+            record.ragdollSimulatedBoneCount = e.ragdollSimulatedBoneCount
+            record.ragdollIsEnabled = e.ragdollIsEnabled
             if let wp = e.worldPosition {
                 record.evaluated["worldPosition"] = .vec3(wp[0], wp[1], wp[2])
             }
