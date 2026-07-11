@@ -66,6 +66,14 @@ public struct SceneRuntime {
         world.resource(PhysicsDebugFrameResource.self) ?? schedule.currentPhysicsDebugFrame
     }
 
+    public var physicsEventFrame: PhysicsEventFrameResource {
+        world.resource(PhysicsEventFrameResource.self) ?? schedule.currentPhysicsEventFrame
+    }
+
+    public var characterStateFrame: CharacterStateFrameResource {
+        world.resource(CharacterStateFrameResource.self) ?? .empty
+    }
+
     public mutating func applyParticleSimulationReadbackStats(_ report: ParticleSimulationEventApplyReport) {
         world.setResource(particleFrameStats.mergingGPUReadback(report))
     }
@@ -371,6 +379,34 @@ public struct SceneRuntime {
         schedule.physicsQueryBackend(in: world).raycast(query, filter: filter)
     }
 
+    /// Physics v2 unified ray query. All-hit results are stable-sorted by
+    /// distance, entity ID, then sub-shape ID.
+    public func raycast(
+        _ query: PhysicsRaycastQuery,
+        options: PhysicsQueryOptions = PhysicsQueryOptions()
+    ) -> [PhysicsHit] {
+        let backend = schedule.physicsQueryBackend(in: world)
+        let hits: [PhysicsRaycastHit]
+        switch options.resultMode {
+        case .nearest:
+            hits = backend.raycast(query, filter: options.filter).map { [$0] } ?? []
+        case .all:
+            hits = backend.raycastAll(query, filter: options.filter, maxHits: options.maxHits)
+        }
+        return hits.prefix(options.maxHits).map {
+            PhysicsHit(
+                entity: $0.entity,
+                subShapeID: $0.subShapeID,
+                distance: $0.distance,
+                fraction: query.maxDistance > 0 ? $0.distance / query.maxDistance : 0,
+                position: $0.position,
+                normal: $0.normal,
+                bounds: $0.bounds,
+                isTrigger: $0.isTrigger
+            )
+        }
+    }
+
     public func physicsRaycastWithStats(
         _ query: PhysicsRaycastQuery,
         filter: PhysicsQueryFilter = PhysicsQueryFilter(),
@@ -429,6 +465,30 @@ public struct SceneRuntime {
         schedule.physicsQueryBackend(in: world).overlapShape(query, filter: filter)
     }
 
+    public func overlapShape(
+        _ query: PhysicsOverlapShapeQuery,
+        options: PhysicsQueryOptions = PhysicsQueryOptions(resultMode: .all)
+    ) -> [PhysicsHit] {
+        let limit = options.resultMode == .nearest ? 1 : options.maxHits
+        var limitedQuery = query
+        limitedQuery.maxResults = limit
+        return schedule.physicsQueryBackend(in: world)
+            .overlapShape(limitedQuery, filter: options.filter)
+            .sorted {
+                if $0.entity.rawValue != $1.entity.rawValue { return $0.entity.rawValue < $1.entity.rawValue }
+                return $0.subShapeID < $1.subShapeID
+            }
+            .prefix(limit)
+            .map {
+                PhysicsHit(
+                    entity: $0.entity,
+                    subShapeID: $0.subShapeID,
+                    bounds: $0.bounds,
+                    isTrigger: $0.isTrigger
+                )
+            }
+    }
+
     public func physicsOverlapShapeWithStats(
         _ query: PhysicsOverlapShapeQuery,
         filter: PhysicsQueryFilter = PhysicsQueryFilter(),
@@ -468,6 +528,32 @@ public struct SceneRuntime {
         schedule.physicsQueryBackend(in: world).sweepShape(query, filter: filter)
     }
 
+    public func shapeCast(
+        _ query: PhysicsSweepShapeQuery,
+        options: PhysicsQueryOptions = PhysicsQueryOptions()
+    ) -> [PhysicsHit] {
+        let backend = schedule.physicsQueryBackend(in: world)
+        let hits: [PhysicsSweepHit]
+        switch options.resultMode {
+        case .nearest:
+            hits = backend.sweepShape(query, filter: options.filter).map { [$0] } ?? []
+        case .all:
+            hits = backend.sweepShapeAll(query, filter: options.filter, maxHits: options.maxHits)
+        }
+        return hits.prefix(options.maxHits).map {
+            PhysicsHit(
+                entity: $0.entity,
+                subShapeID: $0.subShapeID,
+                distance: $0.distance,
+                fraction: $0.fraction,
+                position: $0.position,
+                normal: $0.normal,
+                bounds: $0.bounds,
+                isTrigger: $0.isTrigger
+            )
+        }
+    }
+
     public func physicsSweepShapeWithStats(
         _ query: PhysicsSweepShapeQuery,
         filter: PhysicsQueryFilter = PhysicsQueryFilter(),
@@ -498,6 +584,12 @@ public struct SceneRuntime {
 
     public mutating func setResource<Resource: Sendable>(_ resource: Resource) {
         world.setResource(resource)
+    }
+
+    public mutating func submitCharacterCommand(_ command: CharacterCommand, for entity: EntityID) {
+        var frame = world.resource(CharacterCommandFrameResource.self) ?? .empty
+        frame.commands[entity] = command
+        world.setResource(frame)
     }
 
     public func resource<Resource: Sendable>(_ type: Resource.Type) -> Resource? {

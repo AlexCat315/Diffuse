@@ -116,6 +116,34 @@ struct SceneSerializerTests {
 
     // MARK: - Collider shapes
 
+    @Test("round-trip: native character controller")
+    func characterControllerRoundTrip() throws {
+        var original = SceneRuntime()
+        let entity = original.createEntity()
+        _ = original.setLocalTransform(LocalTransform(translation: .zero), for: entity)
+        let controller = CharacterController(
+            radius: 0.35,
+            standingHalfHeight: 0.7,
+            crouchingHalfHeight: 0.3,
+            center: SIMD3<Float>(0.1, 0.2, 0.3),
+            maxSlopeDegrees: 42,
+            stepHeight: 0.25,
+            skinWidth: 0.015,
+            mass: 82,
+            maxStrength: 640,
+            gravityScale: 1.25,
+            layerID: 3,
+            layerMask: 0x00FF
+        )
+        _ = original.setComponent(controller, for: entity)
+
+        let data = try SceneSerializer.serialize(original)
+        var restored = SceneRuntime()
+        try SceneSerializer.deserialize(data, into: &restored)
+        let restoredEntity = try #require(restored.entities().first)
+        #expect(restored.component(CharacterController.self, for: restoredEntity) == controller)
+    }
+
     @Test("round-trip: box collider")
     func boxColliderRoundTrip() throws {
         var original = SceneRuntime()

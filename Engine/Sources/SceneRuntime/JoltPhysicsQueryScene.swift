@@ -58,7 +58,8 @@ final class JoltPhysicsQueryScene: @unchecked Sendable {
                 deltaTimeSeconds: 0,
                 activeBodies: snapshot.bodies,
                 activeConstraints: snapshot.constraints,
-                syncEvents: []
+                syncEvents: [],
+                activeCharacters: snapshot.characters
             )
         )
         sourceRevision = world.physicsRevision
@@ -99,7 +100,12 @@ final class JoltPhysicsQueryScene: @unchecked Sendable {
 func buildPhysicsSceneSnapshot(
     in world: RuntimeWorld,
     settings overrideSettings: PhysicsSettingsResource? = nil
-) -> (settings: PhysicsSettingsResource, bodies: [PhysicsBodyDescriptor], constraints: [PhysicsConstraintDescriptor]) {
+) -> (
+    settings: PhysicsSettingsResource,
+    bodies: [PhysicsBodyDescriptor],
+    constraints: [PhysicsConstraintDescriptor],
+    characters: [PhysicsCharacterDescriptor]
+) {
     var settings = overrideSettings ?? world.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()
     settings.backendKind = .jolt
 
@@ -109,6 +115,7 @@ func buildPhysicsSceneSnapshot(
     let rigidBodies = world.componentSnapshot(RigidBody.self, matching: entities)
     let colliders = world.componentSnapshot(Collider.self, matching: entities)
     let constraints = world.componentSnapshot(Constraint.self, matching: entities)
+    let characters = world.componentSnapshot(CharacterController.self, matching: entities)
     let geometryResource = world.resource(MeshColliderGeometryResource.self)
     let meshBounds = world.resource(MeshColliderBoundsResource.self)
 
@@ -160,5 +167,15 @@ func buildPhysicsSceneSnapshot(
         )
     }
 
-    return (settings, bodies, constraintDescriptors)
+    let characterDescriptors = entities.compactMap { entity -> PhysicsCharacterDescriptor? in
+        guard let controller = characters[entity],
+              let worldTransform = worldTransforms[entity] else { return nil }
+        return PhysicsCharacterDescriptor(
+            entity: entity,
+            worldTransform: worldTransform,
+            controller: controller
+        )
+    }
+
+    return (settings, bodies, constraintDescriptors, characterDescriptors)
 }

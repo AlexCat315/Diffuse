@@ -185,6 +185,12 @@ public struct RuntimeScriptPhaseContext {
         return physicsQueryScene.backend(in: worldPointer.pointee).sweepShape(query, filter: filter)
     }
 
+    public func submitCharacterCommand(_ command: CharacterCommand, for entity: EntityID) {
+        var frame = worldPointer.pointee.resource(CharacterCommandFrameResource.self) ?? .empty
+        frame.commands[entity] = command
+        worldPointer.pointee.setResource(frame)
+    }
+
     public func resource<Resource: Sendable>(_ type: Resource.Type) -> Resource? {
         worldPointer.pointee.resource(type)
     }

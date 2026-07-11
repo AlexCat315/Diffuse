@@ -30,7 +30,32 @@ typedef struct GuavaJoltABILayout {
     uint32_t step_config_size;
     uint32_t body_state_size;
     uint32_t contact_event_size;
+    uint32_t character_desc_size;
+    uint32_t character_command_size;
+    uint32_t character_state_size;
+    uint32_t shape_instance_size;
 } GuavaJoltABILayout;
+
+typedef struct GuavaJoltShapeInstance {
+    uint8_t shape_type; /* 0 box, 1 sphere, 2 capsule, 3 cylinder, 4 mesh, 5 convex, 6 height field */
+    uint8_t reserved0;
+    uint16_t reserved1;
+    float position_x;
+    float position_y;
+    float position_z;
+    float rotation_x;
+    float rotation_y;
+    float rotation_z;
+    float rotation_w;
+    float scale_x;
+    float scale_y;
+    float scale_z;
+    float half_extent_x;
+    float half_extent_y;
+    float half_extent_z;
+    float radius;
+    float half_height;
+} GuavaJoltShapeInstance;
 
 typedef struct GuavaJoltBodyDesc {
     uint64_t entity_id;
@@ -85,6 +110,9 @@ typedef struct GuavaJoltBodyDesc {
     float friction;
     float restitution;
     float density;
+    const GuavaJoltShapeInstance* shape_instances;
+    uint32_t shape_instance_count;
+    uint32_t shape_instances_reserved;
 } GuavaJoltBodyDesc;
 
 typedef struct GuavaJoltConstraintDesc {
@@ -156,6 +184,67 @@ typedef struct GuavaJoltBodyState {
     uint16_t reserved1;
 } GuavaJoltBodyState;
 
+typedef struct GuavaJoltCharacterDesc {
+    uint64_t entity_id;
+    float position_x;
+    float position_y;
+    float position_z;
+    float rotation_x;
+    float rotation_y;
+    float rotation_z;
+    float rotation_w;
+    float center_x;
+    float center_y;
+    float center_z;
+    float radius;
+    float standing_half_height;
+    float crouching_half_height;
+    float max_slope_radians;
+    float step_height;
+    float skin_width;
+    float mass;
+    float max_strength;
+    float gravity_scale;
+    uint16_t layer_id;
+    uint16_t layer_mask;
+} GuavaJoltCharacterDesc;
+
+typedef struct GuavaJoltCharacterCommand {
+    uint64_t entity_id;
+    float desired_velocity_x;
+    float desired_velocity_y;
+    float desired_velocity_z;
+    float jump_speed;
+    uint8_t jump_requested;
+    uint8_t stance; /* 0 standing, 1 crouching */
+    uint16_t reserved;
+} GuavaJoltCharacterCommand;
+
+typedef struct GuavaJoltCharacterState {
+    uint64_t entity_id;
+    float position_x;
+    float position_y;
+    float position_z;
+    float rotation_x;
+    float rotation_y;
+    float rotation_z;
+    float rotation_w;
+    float linear_velocity_x;
+    float linear_velocity_y;
+    float linear_velocity_z;
+    float ground_normal_x;
+    float ground_normal_y;
+    float ground_normal_z;
+    float ground_velocity_x;
+    float ground_velocity_y;
+    float ground_velocity_z;
+    uint64_t ground_entity;
+    uint8_t has_ground_entity;
+    uint8_t ground_state; /* 0 ground, 1 steep, 2 unsupported, 3 air */
+    uint8_t stance;
+    uint8_t reserved;
+} GuavaJoltCharacterState;
+
 typedef struct GuavaJoltStepStats {
     uint32_t body_count;
     uint32_t constraint_count;
@@ -201,6 +290,7 @@ typedef struct GuavaJoltRaycastHit {
     float bounds_max_x;
     float bounds_max_y;
     float bounds_max_z;
+    uint32_t sub_shape_id;
     uint8_t is_trigger;
     uint8_t reserved0;
     uint16_t reserved1;
@@ -224,6 +314,7 @@ typedef struct GuavaJoltOverlapHit {
     float bounds_max_x;
     float bounds_max_y;
     float bounds_max_z;
+    uint32_t sub_shape_id;
     uint8_t is_trigger;
     uint8_t reserved0;
     uint16_t reserved1;
@@ -299,6 +390,7 @@ typedef struct GuavaJoltSweepHit {
     float bounds_max_x;
     float bounds_max_y;
     float bounds_max_z;
+    uint32_t sub_shape_id;
     uint8_t is_trigger;
     uint8_t reserved0;
     uint16_t reserved1;
@@ -318,6 +410,8 @@ typedef struct GuavaJoltContactEvent {
     uint8_t kind; /* 0 began, 1 persisted, 2 ended */
     uint8_t reserved0;
     uint16_t reserved1;
+    uint32_t sub_shape_id_a;
+    uint32_t sub_shape_id_b;
     float position_x;
     float position_y;
     float position_z;
@@ -325,6 +419,10 @@ typedef struct GuavaJoltContactEvent {
     float normal_y;
     float normal_z;
     float penetration_depth;
+    float relative_velocity_x;
+    float relative_velocity_y;
+    float relative_velocity_z;
+    float impulse;
 } GuavaJoltContactEvent;
 
 uint32_t guava_jolt_bridge_abi_version(void);
@@ -353,10 +451,24 @@ bool guava_jolt_context_step(GuavaJoltContext context,
                              GuavaJoltBodyState* states,
                              size_t state_count,
                              GuavaJoltStepStats* out_stats);
+bool guava_jolt_context_sync_characters(GuavaJoltContext context,
+                                        const GuavaJoltCharacterDesc* characters,
+                                        size_t character_count);
+uint32_t guava_jolt_context_step_characters(GuavaJoltContext context,
+                                            const GuavaJoltStepConfig* config,
+                                            const GuavaJoltCharacterCommand* commands,
+                                            size_t command_count,
+                                            GuavaJoltCharacterState* out_states,
+                                            size_t state_capacity);
 bool guava_jolt_context_raycast(GuavaJoltContext context,
                                 const GuavaJoltRaycastQuery* query,
                                 const GuavaJoltQueryFilter* filter,
                                 GuavaJoltRaycastHit* out_hit);
+uint32_t guava_jolt_context_raycast_all(GuavaJoltContext context,
+                                        const GuavaJoltRaycastQuery* query,
+                                        const GuavaJoltQueryFilter* filter,
+                                        GuavaJoltRaycastHit* out_hits,
+                                        size_t hit_capacity);
 uint32_t guava_jolt_context_overlap_aabb(GuavaJoltContext context,
                                          const GuavaJoltOverlapAABBQuery* query,
                                          const GuavaJoltQueryFilter* filter,
@@ -375,6 +487,11 @@ bool guava_jolt_context_sweep_shape(GuavaJoltContext context,
                                     const GuavaJoltSweepShapeQuery* query,
                                     const GuavaJoltQueryFilter* filter,
                                     GuavaJoltSweepHit* out_hit);
+uint32_t guava_jolt_context_sweep_shape_all(GuavaJoltContext context,
+                                            const GuavaJoltSweepShapeQuery* query,
+                                            const GuavaJoltQueryFilter* filter,
+                                            GuavaJoltSweepHit* out_hits,
+                                            size_t hit_capacity);
 uint32_t guava_jolt_context_detect_triggers(GuavaJoltContext context,
                                             GuavaJoltTriggerEvent* out_events,
                                             size_t event_capacity);

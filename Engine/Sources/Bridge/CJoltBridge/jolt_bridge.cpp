@@ -12,10 +12,12 @@
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/CylinderShape.h>
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/ScaledShape.h>
+#include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
 #include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
 #include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
 #include <Jolt/Physics/Collision/RayCast.h>
@@ -23,6 +25,7 @@
 #include <Jolt/Physics/Collision/ShapeCast.h>
 #include <Jolt/Physics/Collision/CollideShape.h>
 #include <Jolt/Physics/Collision/ContactListener.h>
+#include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
 #include <Jolt/Physics/Body/BodyLock.h>
@@ -54,6 +57,7 @@ constexpr uint32_t kRigidBodyAllowSleepFlag = 1u << 4;
 constexpr uint32_t kColliderHasCapsuleFlag = 1u << 5;
 constexpr uint32_t kColliderHasConvexFlag  = 1u << 6;
 constexpr uint32_t kRigidBodyContinuousCollisionFlag = 1u << 7;
+constexpr uint32_t kColliderHasCylinderFlag = 1u << 8;
 
 constexpr uint32_t kMotionStatic    = 0u;
 constexpr uint32_t kMotionDynamic   = 1u;
@@ -122,6 +126,8 @@ struct BodySignature {
     uint32_t mesh_vertex_count = 0;
     uint32_t mesh_index_count = 0;
     uint64_t mesh_hash = 0;
+    uint32_t shape_instance_count = 0;
+    uint64_t shape_instance_hash = 0;
 
     bool operator==(const BodySignature& other) const {
         return motion_type == other.motion_type
@@ -148,7 +154,9 @@ struct BodySignature {
             && restitution == other.restitution
             && mesh_vertex_count == other.mesh_vertex_count
             && mesh_index_count == other.mesh_index_count
-            && mesh_hash == other.mesh_hash;
+            && mesh_hash == other.mesh_hash
+            && shape_instance_count == other.shape_instance_count
+            && shape_instance_hash == other.shape_instance_hash;
     }
 
     bool operator!=(const BodySignature& other) const {
@@ -177,14 +185,20 @@ struct PendingContactEvent {
     uint64_t entity_a = 0;
     uint64_t entity_b = 0;
     uint8_t kind = kContactBegan;
+    uint32_t sub_shape_id_a = 0;
+    uint32_t sub_shape_id_b = 0;
     JPH::RVec3 position = JPH::RVec3::sZero();
     JPH::Vec3 normal = JPH::Vec3::sZero();
     float penetration_depth = 0.0f;
+    JPH::Vec3 relative_velocity = JPH::Vec3::sZero();
+    float impulse = 0.0f;
 };
 
 struct ActiveContactPair {
     uint64_t entity_a = 0;
     uint64_t entity_b = 0;
+    uint32_t sub_shape_id_a = 0;
+    uint32_t sub_shape_id_b = 0;
 };
 
 uint64_t hash_mesh_data(const std::vector<float>* vertices, const std::vector<uint32_t>* indices) {
@@ -202,6 +216,18 @@ uint64_t hash_mesh_data(const std::vector<float>* vertices, const std::vector<ui
         const uint8_t* bytes = reinterpret_cast<const uint8_t*>(indices->data());
         size_t count = indices->size() * sizeof(uint32_t);
         for (size_t i = 0; i < count; ++i) mix_byte(bytes[i]);
+    }
+    return hash;
+}
+
+uint64_t hash_shape_instances(const GuavaJoltShapeInstance* instances, uint32_t count) {
+    if (!instances || count == 0) return 0;
+    uint64_t hash = 1469598103934665603ull;
+    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(instances);
+    const size_t byte_count = sizeof(GuavaJoltShapeInstance) * count;
+    for (size_t index = 0; index < byte_count; ++index) {
+        hash ^= bytes[index];
+        hash *= 1099511628211ull;
     }
     return hash;
 }
@@ -235,6 +261,10 @@ BodySignature make_signature(const GuavaJoltBodyDesc& desc,
     signature.mesh_vertex_count = vertices ? static_cast<uint32_t>(vertices->size() / 3) : 0u;
     signature.mesh_index_count = indices ? static_cast<uint32_t>(indices->size()) : 0u;
     signature.mesh_hash = hash_mesh_data(vertices, indices);
+    signature.shape_instance_count = desc.shape_instance_count;
+    signature.shape_instance_hash = hash_shape_instances(
+        desc.shape_instances,
+        desc.shape_instance_count);
     return signature;
 }
 
@@ -298,6 +328,27 @@ private:
     BodyMetadata mTriggerMetadata;
 };
 
+class CharacterMetadataBodyFilter final : public JPH::BodyFilter {
+public:
+    CharacterMetadataBodyFilter(
+        const std::unordered_map<uint64_t, BodyMetadata>& metadata,
+        uint16_t character_layer,
+        uint16_t character_mask)
+        : mMetadata(metadata), mCharacterLayer(character_layer), mCharacterMask(character_mask) {}
+
+    bool ShouldCollideLocked(const JPH::Body& inBody) const override {
+        auto it = mMetadata.find(inBody.GetUserData());
+        if (it == mMetadata.end() || it->second.is_trigger) return false;
+        return layers_overlap(mCharacterMask, it->second.layer_id)
+            && layers_overlap(it->second.layer_mask, mCharacterLayer);
+    }
+
+private:
+    const std::unordered_map<uint64_t, BodyMetadata>& mMetadata;
+    uint16_t mCharacterLayer;
+    uint16_t mCharacterMask;
+};
+
 class LayerMaskContactListener final : public JPH::ContactListener {
 public:
     explicit LayerMaskContactListener(const std::unordered_map<uint64_t, BodyMetadata>& metadata)
@@ -343,7 +394,11 @@ public:
             it->second.entity_a,
             it->second.entity_b,
             kContactEnded,
+            it->second.sub_shape_id_a,
+            it->second.sub_shape_id_b,
             JPH::RVec3::sZero(),
+            JPH::Vec3::sZero(),
+            0.0f,
             JPH::Vec3::sZero(),
             0.0f
         });
@@ -390,6 +445,8 @@ public:
                 out_events[i].kind = event.kind;
                 out_events[i].reserved0 = 0;
                 out_events[i].reserved1 = 0;
+                out_events[i].sub_shape_id_a = event.sub_shape_id_a;
+                out_events[i].sub_shape_id_b = event.sub_shape_id_b;
                 out_events[i].position_x = event.position.GetX();
                 out_events[i].position_y = event.position.GetY();
                 out_events[i].position_z = event.position.GetZ();
@@ -397,6 +454,10 @@ public:
                 out_events[i].normal_y = event.normal.GetY();
                 out_events[i].normal_z = event.normal.GetZ();
                 out_events[i].penetration_depth = event.penetration_depth;
+                out_events[i].relative_velocity_x = event.relative_velocity.GetX();
+                out_events[i].relative_velocity_y = event.relative_velocity.GetY();
+                out_events[i].relative_velocity_z = event.relative_velocity.GetZ();
+                out_events[i].impulse = event.impulse;
             }
         }
         return static_cast<uint32_t>(events.size());
@@ -407,7 +468,6 @@ private:
         auto it1 = mMetadata.find(entity1);
         auto it2 = mMetadata.find(entity2);
         if (it1 == mMetadata.end() || it2 == mMetadata.end()) return false;
-        if (it1->second.is_trigger || it2->second.is_trigger) return false;
         return body_layers_collide(it1->second, it2->second);
     }
 
@@ -440,13 +500,23 @@ private:
             entity1,
             entity2,
             kind,
+            manifold.mSubShapeID1.GetValue(),
+            manifold.mSubShapeID2.GetValue(),
             contact_position(manifold),
             manifold.mWorldSpaceNormal,
-            manifold.mPenetrationDepth
+            manifold.mPenetrationDepth,
+            body2.GetPointVelocity(contact_position(manifold))
+                - body1.GetPointVelocity(contact_position(manifold)),
+            0.0f
         };
 
         std::lock_guard<std::mutex> lock(mMutex);
-        mActiveContacts[sub_shape_pair] = ActiveContactPair{ entity1, entity2 };
+        mActiveContacts[sub_shape_pair] = ActiveContactPair{
+            entity1,
+            entity2,
+            manifold.mSubShapeID1.GetValue(),
+            manifold.mSubShapeID2.GetValue()
+        };
         mEvents.push_back(event);
     }
 
@@ -557,7 +627,7 @@ JPH::ShapeRefC with_shape_center(JPH::Vec3Arg center, JPH::ShapeRefC shape) {
     JPH::RotatedTranslatedShapeSettings settings(center, JPH::Quat::sIdentity(), shape);
     settings.SetEmbedded();
     JPH::ShapeSettings::ShapeResult result = settings.Create();
-    return result.IsValid() ? result.Get() : shape;
+    return result.IsValid() ? result.Get() : nullptr;
 }
 
 JPH::ShapeRefC with_shape_scale(JPH::Vec3Arg scale, JPH::ShapeRefC shape) {
@@ -567,7 +637,7 @@ JPH::ShapeRefC with_shape_scale(JPH::Vec3Arg scale, JPH::ShapeRefC shape) {
     JPH::ScaledShapeSettings settings(shape.GetPtr(), scale);
     settings.SetEmbedded();
     JPH::ShapeSettings::ShapeResult result = settings.Create();
-    return result.IsValid() ? result.Get() : shape;
+    return result.IsValid() ? result.Get() : nullptr;
 }
 
 JPH::ShapeRefC finalize_shape(const GuavaJoltBodyDesc& desc, JPH::ShapeRefC shape) {
@@ -589,6 +659,61 @@ JPH::ShapeRefC finalize_shape(const GuavaJoltBodyDesc& desc, JPH::ShapeRefC shap
 JPH::ShapeRefC build_shape(const GuavaJoltBodyDesc& desc,
                             const float* mesh_vertices, uint32_t mesh_vertex_count,
                             const uint32_t* mesh_indices, uint32_t mesh_index_count) {
+    if (desc.shape_instance_count > 0) {
+        if (!desc.shape_instances) return nullptr;
+        JPH::StaticCompoundShapeSettings compound;
+        for (uint32_t index = 0; index < desc.shape_instance_count; ++index) {
+            const GuavaJoltShapeInstance& instance = desc.shape_instances[index];
+            GuavaJoltBodyDesc child {};
+            child.shape_scale_x = instance.scale_x;
+            child.shape_scale_y = instance.scale_y;
+            child.shape_scale_z = instance.scale_z;
+            switch (instance.shape_type) {
+            case 0:
+                child.flags = kColliderHasBoxFlag;
+                child.box_half_extent_x = instance.half_extent_x;
+                child.box_half_extent_y = instance.half_extent_y;
+                child.box_half_extent_z = instance.half_extent_z;
+                break;
+            case 1:
+                child.flags = kColliderHasSphereFlag;
+                child.sphere_radius = instance.radius;
+                break;
+            case 2:
+                child.flags = kColliderHasCapsuleFlag;
+                child.capsule_radius = instance.radius;
+                child.capsule_half_height = instance.half_height;
+                break;
+            case 3:
+                child.flags = kColliderHasCylinderFlag;
+                child.capsule_radius = instance.radius;
+                child.capsule_half_height = instance.half_height;
+                break;
+            case 4:
+            case 6:
+                child.flags = kColliderHasMeshFlag;
+                break;
+            case 5:
+                child.flags = kColliderHasConvexFlag;
+                break;
+            default:
+                return nullptr;
+            }
+            JPH::ShapeRefC child_shape = build_shape(
+                child,
+                mesh_vertices,
+                mesh_vertex_count,
+                mesh_indices,
+                mesh_index_count);
+            if (!child_shape) return nullptr;
+            compound.AddShape(
+                JPH::Vec3(instance.position_x, instance.position_y, instance.position_z),
+                JPH::Quat(instance.rotation_x, instance.rotation_y, instance.rotation_z, instance.rotation_w),
+                child_shape);
+        }
+        JPH::ShapeSettings::ShapeResult result = compound.Create();
+        return result.IsValid() ? result.Get() : nullptr;
+    }
     if (desc.flags & kColliderHasBoxFlag) {
         JPH::BoxShapeSettings settings(JPH::Vec3(
             desc.box_half_extent_x, desc.box_half_extent_y, desc.box_half_extent_z));
@@ -604,6 +729,12 @@ JPH::ShapeRefC build_shape(const GuavaJoltBodyDesc& desc,
     }
     if (desc.flags & kColliderHasCapsuleFlag) {
         JPH::CapsuleShapeSettings settings(desc.capsule_half_height, desc.capsule_radius);
+        settings.SetEmbedded();
+        JPH::ShapeSettings::ShapeResult r = settings.Create();
+        if (r.IsValid()) return finalize_shape(desc, r.Get());
+    }
+    if (desc.flags & kColliderHasCylinderFlag) {
+        JPH::CylinderShapeSettings settings(desc.capsule_half_height, desc.capsule_radius);
         settings.SetEmbedded();
         JPH::ShapeSettings::ShapeResult r = settings.Create();
         if (r.IsValid()) return finalize_shape(desc, r.Get());
@@ -762,6 +893,11 @@ JPH::Vec3 safe_normalized(JPH::Vec3 value, JPH::Vec3 fallback) {
 }  // namespace
 
 struct GuavaJoltContextImpl {
+    struct NativeCharacter {
+        std::unique_ptr<JPH::CharacterVirtual> character;
+        GuavaJoltCharacterDesc desc {};
+        uint8_t stance = 0;
+    };
     BPLayerInterfaceImpl bp_layer_interface;
     ObjectVsBPLayerFilterImpl object_vs_bp_filter;
     ObjectLayerPairFilterImpl object_layer_filter;
@@ -773,6 +909,7 @@ struct GuavaJoltContextImpl {
     std::unordered_map<uint64_t, JPH::Ref<JPH::Constraint>> constraints; // entity → constraint
     std::unordered_map<uint64_t, BodyMetadata> body_metadata;
     std::unordered_map<uint64_t, BodySignature> body_signatures;
+    std::unordered_map<uint64_t, NativeCharacter> characters;
     std::unordered_map<uint64_t, std::vector<float>>    mesh_vertices;
     std::unordered_map<uint64_t, std::vector<uint32_t>> mesh_indices;
     std::unordered_set<TriggerPair, TriggerPairHash> previous_trigger_pairs;
@@ -797,6 +934,7 @@ struct GuavaJoltContextImpl {
 
     ~GuavaJoltContextImpl() {
         physics_system.SetContactListener(nullptr);
+        characters.clear();
         // Remove all bodies and constraints before destruction.
         JPH::BodyInterface& bi = physics_system.GetBodyInterface();
         for (auto& kv : body_ids) {
@@ -814,6 +952,7 @@ struct GuavaJoltContextImpl {
             if (kv.second) physics_system.RemoveConstraint(kv.second);
         }
         constraints.clear();
+        characters.clear();
         for (auto& kv : body_ids) {
             bi.RemoveBody(kv.second);
             bi.DestroyBody(kv.second);
@@ -843,6 +982,19 @@ struct GuavaJoltContextImpl {
                      const std::vector<uint32_t>* mi,
                      const BodySignature& signature,
                      JPH::BodyInterface& bi) {
+        const bool contains_non_convex_mesh = [&desc]() {
+            if ((desc.flags & kColliderHasMeshFlag) != 0) return true;
+            for (uint32_t index = 0; index < desc.shape_instance_count; ++index) {
+                const uint8_t type = desc.shape_instances[index].shape_type;
+                if (type == 4 || type == 6) return true;
+            }
+            return false;
+        }();
+        if (desc.motion_type == kMotionDynamic && contains_non_convex_mesh) {
+            last_error = GUAVA_JOLT_ERROR_INVALID_SHAPE;
+            return false;
+        }
+
         JPH::ShapeRefC shape = build_shape(
             desc,
             mv ? mv->data() : nullptr,
@@ -855,7 +1007,11 @@ struct GuavaJoltContextImpl {
         }
 
         JPH::EMotionType motion = to_motion_type(desc.motion_type);
-        JPH::ObjectLayer layer = object_layer_for(motion);
+        // Sensors must participate in broadphase pairs even when authored without
+        // a RigidBody (static-static pairs are normally suppressed by Jolt).
+        JPH::ObjectLayer layer = (desc.flags & kColliderIsTriggerFlag) != 0
+            ? Layers::MOVING
+            : object_layer_for(motion);
 
         JPH::BodyCreationSettings settings(
             shape,
@@ -1134,6 +1290,228 @@ struct GuavaJoltContextImpl {
 	        return true;
 	    }
 
+    static bool character_shape_changed(
+        const GuavaJoltCharacterDesc& lhs,
+        const GuavaJoltCharacterDesc& rhs) {
+        return lhs.radius != rhs.radius
+            || lhs.standing_half_height != rhs.standing_half_height
+            || lhs.crouching_half_height != rhs.crouching_half_height
+            || lhs.center_x != rhs.center_x
+            || lhs.center_y != rhs.center_y
+            || lhs.center_z != rhs.center_z
+            || lhs.skin_width != rhs.skin_width;
+    }
+
+    static JPH::RefConst<JPH::Shape> create_character_shape(float half_height, float radius) {
+        JPH::CapsuleShapeSettings capsule_settings(
+            std::max(half_height, 0.01f),
+            std::max(radius, 0.01f));
+        JPH::ShapeSettings::ShapeResult capsule_result = capsule_settings.Create();
+        if (!capsule_result.IsValid()) return nullptr;
+
+        // CharacterVirtual treats its position as the character's ground/foot
+        // position. Keep the capsule above that origin as recommended by Jolt.
+        const float center_height = std::max(half_height, 0.01f) + std::max(radius, 0.01f);
+        JPH::RotatedTranslatedShapeSettings translated_settings(
+            JPH::Vec3(0, center_height, 0),
+            JPH::Quat::sIdentity(),
+            capsule_result.Get());
+        JPH::ShapeSettings::ShapeResult translated_result = translated_settings.Create();
+        return translated_result.IsValid() ? translated_result.Get() : nullptr;
+    }
+
+    std::unique_ptr<JPH::CharacterVirtual> create_character(const GuavaJoltCharacterDesc& desc) {
+        JPH::RefConst<JPH::Shape> shape = create_character_shape(
+            desc.standing_half_height,
+            desc.radius);
+        if (shape == nullptr) {
+            last_error = GUAVA_JOLT_ERROR_INVALID_SHAPE;
+            return nullptr;
+        }
+
+        JPH::CharacterVirtualSettings settings;
+        settings.mShape = shape;
+        settings.mShapeOffset = JPH::Vec3(desc.center_x, desc.center_y, desc.center_z);
+        settings.mSupportingVolume = JPH::Plane(
+            JPH::Vec3::sAxisY(),
+            -2.0f * std::max(desc.standing_half_height, 0.01f));
+        settings.mCharacterPadding = std::max(desc.skin_width, 0.001f);
+        settings.mMass = std::max(desc.mass, 0.01f);
+        settings.mMaxStrength = std::max(desc.max_strength, 0.0f);
+        settings.mUp = JPH::Vec3::sAxisY();
+        auto character = std::make_unique<JPH::CharacterVirtual>(
+            &settings,
+            JPH::RVec3(desc.position_x, desc.position_y, desc.position_z),
+            JPH::Quat(desc.rotation_x, desc.rotation_y, desc.rotation_z, desc.rotation_w),
+            desc.entity_id,
+            &physics_system);
+        character->SetMaxSlopeAngle(desc.max_slope_radians);
+        return character;
+    }
+
+    bool sync_characters(const GuavaJoltCharacterDesc* descriptors, size_t count) {
+        last_error = GUAVA_JOLT_ERROR_NONE;
+        if (count > 0 && !descriptors) {
+            last_error = GUAVA_JOLT_ERROR_INVALID_ARGUMENT;
+            return false;
+        }
+
+        std::unordered_map<uint64_t, const GuavaJoltCharacterDesc*> incoming;
+        for (size_t i = 0; i < count; ++i) incoming[descriptors[i].entity_id] = &descriptors[i];
+        for (auto it = characters.begin(); it != characters.end();) {
+            if (incoming.find(it->first) == incoming.end()) it = characters.erase(it);
+            else ++it;
+        }
+
+        std::vector<uint64_t> ids;
+        ids.reserve(incoming.size());
+        for (const auto& item : incoming) ids.push_back(item.first);
+        std::sort(ids.begin(), ids.end());
+        for (uint64_t entity : ids) {
+            const GuavaJoltCharacterDesc& desc = *incoming[entity];
+            auto existing = characters.find(entity);
+            if (existing == characters.end() || character_shape_changed(existing->second.desc, desc)) {
+                auto character = create_character(desc);
+                if (!character) return false;
+                NativeCharacter native;
+                native.character = std::move(character);
+                native.desc = desc;
+                characters[entity] = std::move(native);
+                continue;
+            }
+            NativeCharacter& native = existing->second;
+            native.desc = desc;
+            native.character->SetPosition(JPH::RVec3(desc.position_x, desc.position_y, desc.position_z));
+            native.character->SetRotation(JPH::Quat(
+                desc.rotation_x, desc.rotation_y, desc.rotation_z, desc.rotation_w));
+            native.character->SetMass(std::max(desc.mass, 0.01f));
+            native.character->SetMaxStrength(std::max(desc.max_strength, 0.0f));
+            native.character->SetMaxSlopeAngle(desc.max_slope_radians);
+        }
+        return true;
+    }
+
+    uint32_t step_characters(
+        const GuavaJoltStepConfig* config,
+        const GuavaJoltCharacterCommand* commands,
+        size_t command_count,
+        GuavaJoltCharacterState* out_states,
+        size_t state_capacity) {
+        if (!config || (command_count > 0 && !commands) || (state_capacity > 0 && !out_states)) {
+            last_error = GUAVA_JOLT_ERROR_INVALID_ARGUMENT;
+            return 0;
+        }
+        std::unordered_map<uint64_t, const GuavaJoltCharacterCommand*> commands_by_entity;
+        for (size_t i = 0; i < command_count; ++i) {
+            commands_by_entity[commands[i].entity_id] = &commands[i];
+        }
+
+        std::vector<uint64_t> ids;
+        ids.reserve(characters.size());
+        for (const auto& item : characters) ids.push_back(item.first);
+        std::sort(ids.begin(), ids.end());
+
+        uint32_t written = 0;
+        for (uint64_t entity : ids) {
+            NativeCharacter& native = characters[entity];
+            JPH::CharacterVirtual& character = *native.character;
+            CharacterMetadataBodyFilter body_filter(
+                body_metadata, native.desc.layer_id, native.desc.layer_mask);
+            const auto broadphase_filter = physics_system.GetDefaultBroadPhaseLayerFilter(Layers::MOVING);
+            const auto layer_filter = physics_system.GetDefaultLayerFilter(Layers::MOVING);
+
+            const GuavaJoltCharacterCommand* command = nullptr;
+            auto command_it = commands_by_entity.find(entity);
+            if (command_it != commands_by_entity.end()) command = command_it->second;
+            const uint8_t requested_stance = command ? command->stance : native.stance;
+            if (requested_stance != native.stance) {
+                const float half_height = requested_stance == 1
+                    ? native.desc.crouching_half_height
+                    : native.desc.standing_half_height;
+                JPH::RefConst<JPH::Shape> shape = create_character_shape(
+                    half_height,
+                    native.desc.radius);
+                if (shape != nullptr
+                    && character.SetShape(
+                        shape,
+                        0.0f,
+                        broadphase_filter,
+                        layer_filter,
+                        body_filter,
+                        {},
+                        *temp_allocator)) {
+                    native.stance = requested_stance;
+                }
+            }
+
+            const JPH::Vec3 gravity(
+                config->gravity_x * native.desc.gravity_scale,
+                config->gravity_y * native.desc.gravity_scale,
+                config->gravity_z * native.desc.gravity_scale);
+            const JPH::Vec3 up = character.GetUp();
+            JPH::Vec3 velocity = character.GetLinearVelocity();
+            float vertical_speed = velocity.Dot(up);
+            const bool grounded = character.GetGroundState() == JPH::CharacterBase::EGroundState::OnGround;
+            if (grounded && vertical_speed < 0.0f) vertical_speed = 0.0f;
+            if (command && command->jump_requested && grounded) {
+                vertical_speed = std::max(command->jump_speed, 0.0f);
+            } else {
+                vertical_speed += gravity.Dot(up) * config->delta_seconds;
+            }
+            JPH::Vec3 desired = command
+                ? JPH::Vec3(command->desired_velocity_x, command->desired_velocity_y, command->desired_velocity_z)
+                : JPH::Vec3::sZero();
+            desired -= up * desired.Dot(up);
+            const JPH::Vec3 ground_velocity = grounded ? character.GetGroundVelocity() : JPH::Vec3::sZero();
+            character.SetLinearVelocity(desired + up * vertical_speed + ground_velocity);
+
+            JPH::CharacterVirtual::ExtendedUpdateSettings update_settings;
+            update_settings.mWalkStairsStepUp = up * native.desc.step_height;
+            update_settings.mStickToFloorStepDown = -up * std::max(native.desc.step_height, native.desc.skin_width);
+            character.ExtendedUpdate(
+                config->delta_seconds,
+                gravity,
+                update_settings,
+                broadphase_filter,
+                layer_filter,
+                body_filter,
+                {},
+                *temp_allocator);
+
+            if (written < state_capacity) {
+                const JPH::RVec3 position = character.GetPosition();
+                const JPH::Quat rotation = character.GetRotation();
+                const JPH::Vec3 current_velocity = character.GetLinearVelocity();
+                const JPH::Vec3 ground_normal = character.GetGroundNormal();
+                const JPH::Vec3 current_ground_velocity = character.GetGroundVelocity();
+                const uint64_t ground_entity = character.GetGroundUserData();
+                uint8_t ground_state = 3;
+                switch (character.GetGroundState()) {
+                case JPH::CharacterBase::EGroundState::OnGround: ground_state = 0; break;
+                case JPH::CharacterBase::EGroundState::OnSteepGround: ground_state = 1; break;
+                case JPH::CharacterBase::EGroundState::NotSupported: ground_state = 2; break;
+                case JPH::CharacterBase::EGroundState::InAir: ground_state = 3; break;
+                }
+                out_states[written++] = GuavaJoltCharacterState{
+                    entity,
+                    static_cast<float>(position.GetX()),
+                    static_cast<float>(position.GetY()),
+                    static_cast<float>(position.GetZ()),
+                    rotation.GetX(), rotation.GetY(), rotation.GetZ(), rotation.GetW(),
+                    current_velocity.GetX(), current_velocity.GetY(), current_velocity.GetZ(),
+                    ground_normal.GetX(), ground_normal.GetY(), ground_normal.GetZ(),
+                    current_ground_velocity.GetX(), current_ground_velocity.GetY(), current_ground_velocity.GetZ(),
+                    ground_entity,
+                    ground_entity != 0 ? uint8_t(1) : uint8_t(0),
+                    ground_state,
+                    native.stance,
+                    0
+                };
+            }
+        }
+        return written;
+    }
+
 	    bool raycast(const GuavaJoltRaycastQuery* query,
 	                 const GuavaJoltQueryFilter* filter,
 	                 GuavaJoltRaycastHit* out_hit) const {
@@ -1175,11 +1553,60 @@ struct GuavaJoltContextImpl {
 	        fill_bounds(bounds,
 	                    out_hit->bounds_min_x, out_hit->bounds_min_y, out_hit->bounds_min_z,
 	                    out_hit->bounds_max_x, out_hit->bounds_max_y, out_hit->bounds_max_z);
+	        out_hit->sub_shape_id = hit.mSubShapeID2.GetValue();
 	        out_hit->is_trigger = metadata_it->second.is_trigger ? 1u : 0u;
 	        out_hit->reserved0 = 0;
 	        out_hit->reserved1 = 0;
 	        return true;
 	    }
+
+        uint32_t raycast_all(const GuavaJoltRaycastQuery* query,
+                             const GuavaJoltQueryFilter* filter,
+                             GuavaJoltRaycastHit* out_hits,
+                             size_t hit_capacity) const {
+            if (!query) return 0;
+            JPH::Vec3 direction(query->direction_x, query->direction_y, query->direction_z);
+            const float direction_length = direction.Length();
+            const float max_distance = std::max(query->max_distance, 0.0f);
+            if (direction_length <= 1.0e-6f || max_distance <= 0.0f) return 0;
+            direction = direction / direction_length * max_distance;
+            JPH::RRayCast ray(JPH::RVec3(query->origin_x, query->origin_y, query->origin_z), direction);
+            MetadataBodyFilter body_filter(body_metadata, filter);
+            JPH::AllHitCollisionCollector<JPH::CastRayCollector> collector;
+            physics_system.GetNarrowPhaseQuery().CastRay(ray, {}, collector, {}, {}, body_filter);
+
+            std::vector<GuavaJoltRaycastHit> hits;
+            hits.reserve(collector.mHits.size());
+            for (const JPH::RayCastResult& result : collector.mHits) {
+                JPH::BodyLockRead lock(physics_system.GetBodyLockInterface(), result.mBodyID);
+                if (!lock.Succeeded()) continue;
+                const JPH::Body& body = lock.GetBody();
+                const uint64_t entity = body.GetUserData();
+                auto metadata_it = body_metadata.find(entity);
+                if (metadata_it == body_metadata.end()) continue;
+                const JPH::RVec3 position = ray.GetPointOnRay(result.mFraction);
+                const JPH::Vec3 normal = body.GetWorldSpaceSurfaceNormal(result.mSubShapeID2, position);
+                GuavaJoltRaycastHit hit {};
+                hit.entity_id = entity;
+                hit.distance = result.mFraction * max_distance;
+                hit.position_x = position.GetX(); hit.position_y = position.GetY(); hit.position_z = position.GetZ();
+                hit.normal_x = normal.GetX(); hit.normal_y = normal.GetY(); hit.normal_z = normal.GetZ();
+                fill_bounds(body.GetWorldSpaceBounds(),
+                    hit.bounds_min_x, hit.bounds_min_y, hit.bounds_min_z,
+                    hit.bounds_max_x, hit.bounds_max_y, hit.bounds_max_z);
+                hit.sub_shape_id = result.mSubShapeID2.GetValue();
+                hit.is_trigger = metadata_it->second.is_trigger ? 1u : 0u;
+                hits.push_back(hit);
+            }
+            std::sort(hits.begin(), hits.end(), [](const auto& lhs, const auto& rhs) {
+                if (lhs.distance != rhs.distance) return lhs.distance < rhs.distance;
+                if (lhs.entity_id != rhs.entity_id) return lhs.entity_id < rhs.entity_id;
+                return lhs.sub_shape_id < rhs.sub_shape_id;
+            });
+            const size_t count = std::min(hit_capacity, hits.size());
+            if (out_hits) for (size_t index = 0; index < count; ++index) out_hits[index] = hits[index];
+            return static_cast<uint32_t>(hits.size());
+        }
 
 	    uint32_t overlap_aabb(const GuavaJoltOverlapAABBQuery* query,
 	                          const GuavaJoltQueryFilter* filter,
@@ -1233,6 +1660,7 @@ struct GuavaJoltContextImpl {
 	                        hit.bounds_min_x, hit.bounds_min_y, hit.bounds_min_z,
 	                        hit.bounds_max_x, hit.bounds_max_y, hit.bounds_max_z);
 	            hit.is_trigger = metadata_it->second.is_trigger ? 1u : 0u;
+	            hit.sub_shape_id = result.mSubShapeID2.GetValue();
 	            hits.push_back(hit);
 	        }
 
@@ -1304,6 +1732,7 @@ struct GuavaJoltContextImpl {
                             hit.bounds_min_x, hit.bounds_min_y, hit.bounds_min_z,
                             hit.bounds_max_x, hit.bounds_max_y, hit.bounds_max_z);
                 hit.is_trigger = metadata_it->second.is_trigger ? 1u : 0u;
+                hit.sub_shape_id = result.mSubShapeID2.GetValue();
                 hits.push_back(hit);
             }
 
@@ -1382,6 +1811,7 @@ struct GuavaJoltContextImpl {
 	        fill_bounds(body.GetWorldSpaceBounds(),
 	                    out_hit->bounds_min_x, out_hit->bounds_min_y, out_hit->bounds_min_z,
 	                    out_hit->bounds_max_x, out_hit->bounds_max_y, out_hit->bounds_max_z);
+	        out_hit->sub_shape_id = result.mSubShapeID2.GetValue();
 	        out_hit->is_trigger = metadata_it->second.is_trigger ? 1u : 0u;
 	        out_hit->reserved0 = 0;
 	        out_hit->reserved1 = 0;
@@ -1456,10 +1886,73 @@ struct GuavaJoltContextImpl {
             fill_bounds(body.GetWorldSpaceBounds(),
                         out_hit->bounds_min_x, out_hit->bounds_min_y, out_hit->bounds_min_z,
                         out_hit->bounds_max_x, out_hit->bounds_max_y, out_hit->bounds_max_z);
+            out_hit->sub_shape_id = result.mSubShapeID2.GetValue();
             out_hit->is_trigger = metadata_it->second.is_trigger ? 1u : 0u;
             out_hit->reserved0 = 0;
             out_hit->reserved1 = 0;
             return true;
+        }
+
+        uint32_t sweep_shape_all(const GuavaJoltSweepShapeQuery* query,
+                                 const GuavaJoltQueryFilter* filter,
+                                 GuavaJoltSweepHit* out_hits,
+                                 size_t hit_capacity) const {
+            if (!query) return 0;
+            JPH::ShapeRefC shape = build_query_shape(
+                query->shape_type,
+                query->box_half_extent_x, query->box_half_extent_y, query->box_half_extent_z,
+                query->sphere_radius, query->capsule_radius, query->capsule_half_height);
+            if (!shape) return 0;
+            const JPH::Vec3 translation(query->translation_x, query->translation_y, query->translation_z);
+            const float travel_distance = translation.Length();
+            if (travel_distance <= 1.0e-6f) return 0;
+            const JPH::RMat44 transform = query_transform(
+                query->position_x, query->position_y, query->position_z,
+                query->rotation_x, query->rotation_y, query->rotation_z, query->rotation_w);
+            JPH::RShapeCast shape_cast = JPH::RShapeCast::sFromWorldTransform(
+                shape, JPH::Vec3::sOne(), transform, translation);
+            JPH::ShapeCastSettings settings;
+            settings.mReturnDeepestPoint = true;
+            MetadataBodyFilter body_filter(body_metadata, filter);
+            JPH::AllHitCollisionCollector<JPH::CastShapeCollector> collector;
+            physics_system.GetNarrowPhaseQuery().CastShape(
+                shape_cast, settings,
+                JPH::RVec3(query->position_x, query->position_y, query->position_z),
+                collector, {}, {}, body_filter, {});
+
+            std::vector<GuavaJoltSweepHit> hits;
+            hits.reserve(collector.mHits.size());
+            for (const JPH::ShapeCastResult& result : collector.mHits) {
+                JPH::BodyLockRead lock(physics_system.GetBodyLockInterface(), result.mBodyID2);
+                if (!lock.Succeeded()) continue;
+                const JPH::Body& body = lock.GetBody();
+                const uint64_t entity = body.GetUserData();
+                auto metadata_it = body_metadata.find(entity);
+                if (metadata_it == body_metadata.end()) continue;
+                const JPH::Vec3 normal = safe_normalized(-result.mPenetrationAxis, -translation / travel_distance);
+                const JPH::Vec3 position = JPH::Vec3(query->position_x, query->position_y, query->position_z)
+                    + translation * result.mFraction;
+                GuavaJoltSweepHit hit {};
+                hit.entity_id = entity;
+                hit.fraction = result.mFraction;
+                hit.distance = result.mFraction * travel_distance;
+                hit.position_x = position.GetX(); hit.position_y = position.GetY(); hit.position_z = position.GetZ();
+                hit.normal_x = normal.GetX(); hit.normal_y = normal.GetY(); hit.normal_z = normal.GetZ();
+                fill_bounds(body.GetWorldSpaceBounds(),
+                    hit.bounds_min_x, hit.bounds_min_y, hit.bounds_min_z,
+                    hit.bounds_max_x, hit.bounds_max_y, hit.bounds_max_z);
+                hit.sub_shape_id = result.mSubShapeID2.GetValue();
+                hit.is_trigger = metadata_it->second.is_trigger ? 1u : 0u;
+                hits.push_back(hit);
+            }
+            std::sort(hits.begin(), hits.end(), [](const auto& lhs, const auto& rhs) {
+                if (lhs.distance != rhs.distance) return lhs.distance < rhs.distance;
+                if (lhs.entity_id != rhs.entity_id) return lhs.entity_id < rhs.entity_id;
+                return lhs.sub_shape_id < rhs.sub_shape_id;
+            });
+            const size_t count = std::min(hit_capacity, hits.size());
+            if (out_hits) for (size_t index = 0; index < count; ++index) out_hits[index] = hits[index];
+            return static_cast<uint32_t>(hits.size());
         }
 
 	    uint32_t detect_triggers(GuavaJoltTriggerEvent* out_events, size_t event_capacity) {
@@ -1550,6 +2043,10 @@ bool guava_jolt_bridge_get_abi_layout(GuavaJoltABILayout* out_layout) {
     out_layout->step_config_size = static_cast<uint32_t>(sizeof(GuavaJoltStepConfig));
     out_layout->body_state_size = static_cast<uint32_t>(sizeof(GuavaJoltBodyState));
     out_layout->contact_event_size = static_cast<uint32_t>(sizeof(GuavaJoltContactEvent));
+    out_layout->character_desc_size = static_cast<uint32_t>(sizeof(GuavaJoltCharacterDesc));
+    out_layout->character_command_size = static_cast<uint32_t>(sizeof(GuavaJoltCharacterCommand));
+    out_layout->character_state_size = static_cast<uint32_t>(sizeof(GuavaJoltCharacterState));
+    out_layout->shape_instance_size = static_cast<uint32_t>(sizeof(GuavaJoltShapeInstance));
     return true;
 }
 
@@ -1600,12 +2097,39 @@ bool guava_jolt_context_step(GuavaJoltContext context, const GuavaJoltStepConfig
     return context->step(config, states, state_count, out_stats);
 }
 
+bool guava_jolt_context_sync_characters(GuavaJoltContext context,
+                                        const GuavaJoltCharacterDesc* characters,
+                                        size_t character_count) {
+    if (!context) return false;
+    return context->sync_characters(characters, character_count);
+}
+
+uint32_t guava_jolt_context_step_characters(GuavaJoltContext context,
+                                            const GuavaJoltStepConfig* config,
+                                            const GuavaJoltCharacterCommand* commands,
+                                            size_t command_count,
+                                            GuavaJoltCharacterState* out_states,
+                                            size_t state_capacity) {
+    if (!context) return 0;
+    return context->step_characters(
+        config, commands, command_count, out_states, state_capacity);
+}
+
 bool guava_jolt_context_raycast(GuavaJoltContext context,
                                 const GuavaJoltRaycastQuery* query,
                                 const GuavaJoltQueryFilter* filter,
                                 GuavaJoltRaycastHit* out_hit) {
     if (!context) return false;
     return context->raycast(query, filter, out_hit);
+}
+
+uint32_t guava_jolt_context_raycast_all(GuavaJoltContext context,
+                                        const GuavaJoltRaycastQuery* query,
+                                        const GuavaJoltQueryFilter* filter,
+                                        GuavaJoltRaycastHit* out_hits,
+                                        size_t hit_capacity) {
+    if (!context || (hit_capacity > 0 && !out_hits)) return 0;
+    return context->raycast_all(query, filter, out_hits, hit_capacity);
 }
 
 uint32_t guava_jolt_context_overlap_aabb(GuavaJoltContext context,
@@ -1642,6 +2166,15 @@ bool guava_jolt_context_sweep_shape(GuavaJoltContext context,
                                     GuavaJoltSweepHit* out_hit) {
     if (!context) return false;
     return context->sweep_shape(query, filter, out_hit);
+}
+
+uint32_t guava_jolt_context_sweep_shape_all(GuavaJoltContext context,
+                                            const GuavaJoltSweepShapeQuery* query,
+                                            const GuavaJoltQueryFilter* filter,
+                                            GuavaJoltSweepHit* out_hits,
+                                            size_t hit_capacity) {
+    if (!context || (hit_capacity > 0 && !out_hits)) return 0;
+    return context->sweep_shape_all(query, filter, out_hits, hit_capacity);
 }
 
 uint32_t guava_jolt_context_detect_triggers(GuavaJoltContext context,

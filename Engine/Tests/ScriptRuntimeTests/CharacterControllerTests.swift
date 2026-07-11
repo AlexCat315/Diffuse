@@ -12,12 +12,19 @@ struct CharacterControllerTests {
         let scripts = ScriptRuntime()
         runtime.setScriptDriver(scripts)
 
-        let ccScript = scripts.register(Script.characterController())
+        runtime.setPhysicsSettings(
+            PhysicsSettingsResource(
+                simulationMode: .play,
+                backendKind: .jolt,
+                fixedTimeStepSeconds: 1.0 / 60.0,
+                maxSubstepsPerFrame: 60
+            )
+        )
+        let ccScript = scripts.register(Script.characterInputController())
         let entity = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 5, 0)), for: entity)
         _ = runtime.setComponent(
-            Collider(shape: .box(halfExtents: SIMD3<Float>(0.5, 1, 0.5), center: .zero),
-                     isTrigger: false, layerID: 1, layerMask: .max),
+            CharacterController(layerID: 1),
             for: entity
         )
         _ = runtime.setComponent(
@@ -39,9 +46,9 @@ struct CharacterControllerTests {
 
     private func addGround(to runtime: inout SceneRuntime, at y: Float = 0) {
         let ground = runtime.createEntity()
-        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, y, 0)), for: ground)
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, y - 0.5, 0)), for: ground)
         _ = runtime.setComponent(
-            Collider(shape: .box(halfExtents: SIMD3<Float>(10, 1, 10), center: .zero),
+            Collider(shape: .box(halfExtents: SIMD3<Float>(10, 0.5, 10), center: .zero),
                      isTrigger: false, layerID: 1, layerMask: .max),
             for: ground
         )
@@ -88,7 +95,7 @@ struct CharacterControllerTests {
 
         let pos = runtime.localTransform(for: entity)?.translation
         #expect(pos != nil)
-        #expect(abs(pos!.y - 2.0) < 0.5)
+        #expect(abs(pos!.y) < 0.1)
     }
 
     @Test("entity does not fall through ground")
@@ -100,7 +107,7 @@ struct CharacterControllerTests {
 
         let pos = runtime.localTransform(for: entity)?.translation
         #expect(pos != nil)
-        #expect(pos!.y >= 1.0)
+        #expect(pos!.y >= -0.1)
     }
 
     // MARK: - Jump

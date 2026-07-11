@@ -227,6 +227,14 @@ public final class ScriptContext {
         phaseContext.physicsSweepShape(query, filter: filter)
     }
 
+    public func submitCharacterCommand(_ command: CharacterCommand) {
+        phaseContext.submitCharacterCommand(command, for: entity)
+    }
+
+    public var characterState: CharacterState? {
+        phaseContext.resource(CharacterStateFrameResource.self)?.states[entity]
+    }
+
     public func sweep(
         bounds: SpatialAABB,
         translation: SIMD3<Float>,

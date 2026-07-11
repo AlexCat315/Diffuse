@@ -336,7 +336,16 @@ private func colliderBounds(shape: ColliderShape,
             min: simd_min(top, bottom) - radiusVector,
             max: simd_max(top, bottom) + radiusVector
         )
-    case let .mesh(_, center),
+    case let .cylinder(radius, halfHeight, center):
+        return transformedBounds(
+            corners: boxCorners(
+                center: center,
+                halfExtents: SIMD3<Float>(radius, halfHeight, radius)
+            ),
+            matrix: worldTransform.matrix
+        )
+    case let .heightField(_, center),
+         let .mesh(_, center),
          let .convex(_, center):
         let localBounds = meshGeometry?.localBounds
             ?? SpatialAABB(center: .zero, halfExtents: SIMD3<Float>(repeating: 0.5))
@@ -350,7 +359,8 @@ private func colliderBounds(shape: ColliderShape,
 private func meshColliderGeometry(for shape: ColliderShape,
                                   resource: MeshColliderGeometryResource?) -> MeshColliderGeometry? {
     switch shape {
-    case let .mesh(resourceID, _),
+    case let .heightField(resourceID, _),
+         let .mesh(resourceID, _),
          let .convex(resourceID, _):
         return resource?.geometry(for: resourceID)
     default:
@@ -365,7 +375,8 @@ func resolvedColliderShape(_ shape: ColliderShape,
         return shape
     }
     switch shape {
-    case let .mesh(resourceID, center),
+    case let .heightField(resourceID, center),
+         let .mesh(resourceID, center),
          let .convex(resourceID, center):
         if let localBounds = meshBounds?.bounds(for: resourceID) {
             return .box(halfExtents: localBounds.halfExtents,
