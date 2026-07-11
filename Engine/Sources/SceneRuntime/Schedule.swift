@@ -186,6 +186,7 @@ public struct RuntimeWorldSchedule {
     private var physicsDebugFrame = PhysicsDebugFrameResource.empty
     private var physicsEventFrame = PhysicsEventFrameResource.empty
     private var characterStateFrame = CharacterStateFrameResource.empty
+    private var ragdollSimulatedBodies: Set<EntityID> = []
     private var physicsSyncCache = PhysicsSyncCache()
     private var resolvedPhysicsBackendKind: PhysicsBackendKind = .none
     private var jobSystem = JobSystem.shared
@@ -336,6 +337,7 @@ public struct RuntimeWorldSchedule {
                         }
                     }
                 }
+                applyRagdollAnimationToBodies(in: &world)
                 if world.hierarchyNeedsPropagation() {
                     let report = world.propagateTransforms(using: jobSystem)
                     recordJobReport(report, for: .inputAndPrePhysicsScripts)
@@ -496,6 +498,10 @@ public struct RuntimeWorldSchedule {
                 characterStateFrame = CharacterStateFrameResource(states: pendingCharacterStates)
                 world.setDerivedResource(physicsClock)
                 world.setDerivedResource(physicsFrameState)
+                world.setDerivedResource(PhysicsStateHashFrameResource(
+                    simulatedStep: physicsClock.simulatedSteps,
+                    hash: physicsStateHash(in: world)
+                ))
                 world.setDerivedResource(physicsContactFrame)
                 world.setDerivedResource(characterStateFrame)
                 if usesSharedJoltBackend {
@@ -519,6 +525,7 @@ public struct RuntimeWorldSchedule {
                         }
                     }
                 }
+                writeRagdollPhysicsToAnimation(in: &world)
                 if world.hierarchyNeedsPropagation() {
                     let report = world.propagateTransforms(using: jobSystem)
                     recordJobReport(report, for: .postPhysicsScripts)
@@ -1718,6 +1725,212 @@ public struct RuntimeWorldSchedule {
             characters: world.componentSnapshot(CharacterController.self, matching: entities),
             meshGeometries: meshGeometries
         )
+    }
+
+    private mutating func applyRagdollAnimationToBodies(in world: inout RuntimeWorld) {
+        let paletteMap = world.resource(JointPaletteMap.self) ?? JointPaletteMap()
+        var nextSimulatedBodies: Set<EntityID> = []
+        for entity in world.entities(with: Ragdoll.self).sorted(by: { $0.rawValue < $1.rawValue }) {
+            guard let ragdoll = world.component(Ragdoll.self, for: entity),
+                  let rootWorld = world.worldTransform(for: entity)
+            else { continue }
+            let palette = paletteMap.palette(for: entity)?.matrices ?? []
+            for bone in ragdoll.bones {
+                guard world.contains(bone.bodyEntity),
+                      var rigidBody = world.component(RigidBody.self, for: bone.bodyEntity)
+                else { continue }
+                let shouldSimulate = ragdoll.isEnabled
+                    && ragdoll.mode != .animated
+                    && bone.isSimulationEnabled
+                let paletteMatrix = palette.indices.contains(bone.paletteIndex)
+                    ? palette[bone.paletteIndex]
+                    : nil
+                let desiredWorld = paletteMatrix.map {
+                    WorldTransform(matrix: rootWorld.matrix * $0 * bone.bodyFromPalette)
+                }
+
+                if shouldSimulate {
+                    if !ragdollSimulatedBodies.contains(bone.bodyEntity), let desiredWorld {
+                        _ = world.applyPhysicsWriteback(PhysicsBodyWriteback(
+                            entity: bone.bodyEntity,
+                            worldTransform: desiredWorld
+                        ))
+                    }
+                    rigidBody.motionType = bone.simulatedMotionType
+                    rigidBody.kinematicTarget = nil
+                    rigidBody.isSleeping = false
+                    if desiredWorld != nil || ragdollSimulatedBodies.contains(bone.bodyEntity) {
+                        nextSimulatedBodies.insert(bone.bodyEntity)
+                    }
+                } else {
+                    rigidBody.motionType = .kinematic
+                    if let desiredWorld {
+                        let transform = LocalTransform(matrix: desiredWorld.matrix)
+                        rigidBody.kinematicTarget = PhysicsKinematicTarget(
+                            position: desiredWorld.translation,
+                            rotation: transform.rotation.vector
+                        )
+                        _ = world.applyPhysicsWriteback(PhysicsBodyWriteback(
+                            entity: bone.bodyEntity,
+                            worldTransform: desiredWorld
+                        ))
+                    } else {
+                        rigidBody.kinematicTarget = nil
+                    }
+                }
+                _ = world.setComponent(rigidBody, for: bone.bodyEntity)
+            }
+        }
+        ragdollSimulatedBodies = nextSimulatedBodies
+    }
+
+    private func writeRagdollPhysicsToAnimation(in world: inout RuntimeWorld) {
+        var paletteMap = world.resource(JointPaletteMap.self) ?? JointPaletteMap()
+        var states: [EntityID: RagdollState] = [:]
+        for entity in world.entities(with: Ragdoll.self).sorted(by: { $0.rawValue < $1.rawValue }) {
+            guard let ragdoll = world.component(Ragdoll.self, for: entity),
+                  let rootWorld = world.worldTransform(for: entity)
+            else { continue }
+            var matrices = paletteMap.palette(for: entity)?.matrices ?? []
+            let maximumIndex = ragdoll.bones.map { $0.paletteIndex }.max() ?? -1
+            if matrices.count <= maximumIndex {
+                matrices.append(contentsOf: repeatElement(
+                    matrix_identity_float4x4,
+                    count: maximumIndex + 1 - matrices.count
+                ))
+            }
+            var boneStates: [RagdollBoneState] = []
+            boneStates.reserveCapacity(ragdoll.bones.count)
+            let inverseRoot = simd_inverse(rootWorld.matrix)
+            for bone in ragdoll.bones {
+                guard let bodyWorld = world.worldTransform(for: bone.bodyEntity) else { continue }
+                let isSimulated = ragdoll.isEnabled
+                    && ragdoll.mode != .animated
+                    && bone.isSimulationEnabled
+                let weight: Float
+                switch ragdoll.mode {
+                case .animated:
+                    weight = 0
+                case .simulated:
+                    weight = isSimulated ? bone.blendWeight : 0
+                case .blended:
+                    weight = isSimulated ? ragdoll.blendWeight * bone.blendWeight : 0
+                }
+                if weight > 0, matrices.indices.contains(bone.paletteIndex) {
+                    let physicsPalette = inverseRoot
+                        * bodyWorld.matrix
+                        * simd_inverse(bone.bodyFromPalette)
+                    matrices[bone.paletteIndex] = blendTransformMatrices(
+                        matrices[bone.paletteIndex],
+                        physicsPalette,
+                        weight: weight
+                    )
+                }
+                boneStates.append(RagdollBoneState(
+                    boneName: bone.boneName,
+                    paletteIndex: bone.paletteIndex,
+                    bodyEntity: bone.bodyEntity,
+                    worldTransform: bodyWorld,
+                    isSimulated: isSimulated
+                ))
+            }
+            paletteMap.palettes[entity] = JointPalette(matrices: matrices)
+            states[entity] = RagdollState(entity: entity, mode: ragdoll.mode, bones: boneStates)
+        }
+        world.setDerivedResource(paletteMap)
+        world.setDerivedResource(RagdollStateFrameResource(states: states))
+    }
+
+    private func blendTransformMatrices(
+        _ animation: simd_float4x4,
+        _ physics: simd_float4x4,
+        weight: Float
+    ) -> simd_float4x4 {
+        let t = max(0, min(weight, 1))
+        guard t > 0 else { return animation }
+        guard t < 1 else { return physics }
+        let animationTransform = LocalTransform(matrix: animation)
+        let physicsTransform = LocalTransform(matrix: physics)
+        let translation = simd_mix(
+            animationTransform.translation,
+            physicsTransform.translation,
+            SIMD3<Float>(repeating: t)
+        )
+        let rotation = simd_slerp(
+            animationTransform.rotation,
+            physicsTransform.rotation,
+            t
+        )
+        let animationScale = transformScale(animation)
+        let physicsScale = transformScale(physics)
+        let scale = simd_mix(animationScale, physicsScale, SIMD3<Float>(repeating: t))
+        var result = simd_float4x4(rotation)
+        result.columns.0 *= scale.x
+        result.columns.1 *= scale.y
+        result.columns.2 *= scale.z
+        result.columns.3 = SIMD4<Float>(translation, 1)
+        return result
+    }
+
+    private func transformScale(_ matrix: simd_float4x4) -> SIMD3<Float> {
+        SIMD3<Float>(
+            simd_length(SIMD3<Float>(matrix.columns.0.x, matrix.columns.0.y, matrix.columns.0.z)),
+            simd_length(SIMD3<Float>(matrix.columns.1.x, matrix.columns.1.y, matrix.columns.1.z)),
+            simd_length(SIMD3<Float>(matrix.columns.2.x, matrix.columns.2.y, matrix.columns.2.z))
+        )
+    }
+
+    private func physicsStateHash(in world: RuntimeWorld) -> UInt64 {
+        var hash: UInt64 = 1_469_598_103_934_665_603
+        @inline(__always) func combine(_ value: UInt64, into hash: inout UInt64) {
+            var bytes = value.littleEndian
+            withUnsafeBytes(of: &bytes) { buffer in
+                for byte in buffer {
+                    hash ^= UInt64(byte)
+                    hash &*= 1_099_511_628_211
+                }
+            }
+        }
+        @inline(__always) func combineFloat(_ value: Float, into hash: inout UInt64) {
+            combine(UInt64(value.bitPattern), into: &hash)
+        }
+        let entities = world.entities(with: RigidBody.self)
+            .sorted { $0.rawValue < $1.rawValue }
+        for entity in entities {
+            guard let body = world.component(RigidBody.self, for: entity),
+                  let transform = world.worldTransform(for: entity)
+            else { continue }
+            combine(entity.rawValue, into: &hash)
+            for column in [transform.matrix.columns.0, transform.matrix.columns.1,
+                           transform.matrix.columns.2, transform.matrix.columns.3] {
+                combineFloat(column.x, into: &hash)
+                combineFloat(column.y, into: &hash)
+                combineFloat(column.z, into: &hash)
+                combineFloat(column.w, into: &hash)
+            }
+            for value in [body.linearVelocity.x, body.linearVelocity.y, body.linearVelocity.z,
+                          body.angularVelocity.x, body.angularVelocity.y, body.angularVelocity.z] {
+                combineFloat(value, into: &hash)
+            }
+            combine(body.isSleeping ? 1 : 0, into: &hash)
+        }
+        let joints = world.entities(with: PhysicsJoint.self).sorted { $0.rawValue < $1.rawValue }
+        for entity in joints {
+            guard let joint = world.component(PhysicsJoint.self, for: entity) else { continue }
+            combine(entity.rawValue, into: &hash)
+            combine(joint.isEnabled ? 1 : 0, into: &hash)
+        }
+        let characters = (world.resource(CharacterStateFrameResource.self) ?? .empty).states
+            .values.sorted { $0.entity.rawValue < $1.entity.rawValue }
+        for character in characters {
+            combine(character.entity.rawValue, into: &hash)
+            for value in [character.position.x, character.position.y, character.position.z,
+                          character.linearVelocity.x, character.linearVelocity.y, character.linearVelocity.z] {
+                combineFloat(value, into: &hash)
+            }
+            combine(UInt64(character.groundState.rawValue), into: &hash)
+        }
+        return hash
     }
 
     private func buildPhysicsDebugFrame(

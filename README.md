@@ -38,6 +38,18 @@ swift build --package-path Editor
 
 > **强制重编译原生依赖**：`python bootstrap.py --force`
 
+### 本地运行官方网站
+
+项目官网与文档门户位于 `website/`，使用 Vue 3、TypeScript 和 Vite：
+
+```bash
+cd website
+npm install
+npm run dev
+```
+
+运行 `npm run build` 可完成内容校验、类型检查、测试和静态站点构建。
+
 ### 按包独立构建
 
 ```bash
@@ -74,6 +86,7 @@ Guava-Engine/
 ├── GuavaUI/Sources/      声明式 UI 框架（Compose API + wgpu 渲染器）
 ├── Editor/Sources/       桌面编辑器（状态机、面板、AI 宿主）
 ├── guava-mcp/Sources/    MCP 服务器（暴露 Guava 能力给 LLM agent）
+├── website/              Vue 3 官方网站、文档与社区门户
 ├── docs/                 架构、路线图、组件与蓝图文档
 └── .github/workflows/    CI 矩阵与 release
 ```

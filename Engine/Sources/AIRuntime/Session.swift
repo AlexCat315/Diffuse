@@ -954,6 +954,11 @@ public actor Session {
         if let v = e.animationLoop      { d["animationLoop"] = v }
         if let v = e.animationIsPlaying { d["animationIsPlaying"] = v }
         if let v = e.constraintEnabled  { d["constraintEnabled"] = v }
+        if let v = e.ragdollMode { d["ragdollMode"] = v }
+        if let v = e.ragdollBlendWeight { d["ragdollBlendWeight"] = v }
+        if let v = e.ragdollBoneCount { d["ragdollBoneCount"] = v }
+        if let v = e.ragdollSimulatedBoneCount { d["ragdollSimulatedBoneCount"] = v }
+        if let v = e.ragdollIsEnabled { d["ragdollIsEnabled"] = v }
         if let bindings = e.scriptBindings, !bindings.isEmpty {
             d["scriptBindings"] = bindings.map { b -> [String: Any] in
                 var entry: [String: Any] = ["handle": b.handle, "enabled": b.isEnabled]
@@ -1285,6 +1290,11 @@ public actor Session {
             if let v = e.animationIsPlaying  { entry["animationIsPlaying"] = v }
             // Constraint
             if let v = e.constraintEnabled   { entry["constraintEnabled"] = v }
+            if let v = e.ragdollMode { entry["ragdollMode"] = v }
+            if let v = e.ragdollBlendWeight { entry["ragdollBlendWeight"] = v }
+            if let v = e.ragdollBoneCount { entry["ragdollBoneCount"] = v }
+            if let v = e.ragdollSimulatedBoneCount { entry["ragdollSimulatedBoneCount"] = v }
+            if let v = e.ragdollIsEnabled { entry["ragdollIsEnabled"] = v }
             // Script
             if let bindings = e.scriptBindings, !bindings.isEmpty {
                 entry["scriptBindings"] = bindings.map { b -> [String: Any] in
