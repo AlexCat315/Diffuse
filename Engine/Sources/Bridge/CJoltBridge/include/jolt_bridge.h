@@ -34,6 +34,7 @@ typedef struct GuavaJoltABILayout {
     uint32_t character_command_size;
     uint32_t character_state_size;
     uint32_t shape_instance_size;
+    uint32_t joint_break_event_size;
 } GuavaJoltABILayout;
 
 typedef struct GuavaJoltShapeInstance {
@@ -113,6 +114,28 @@ typedef struct GuavaJoltBodyDesc {
     const GuavaJoltShapeInstance* shape_instances;
     uint32_t shape_instance_count;
     uint32_t shape_instances_reserved;
+    uint8_t mass_mode; /* 0 authored mass, 1 shape density */
+    uint8_t motion_quality; /* 0 discrete, 1 linear cast */
+    uint8_t allowed_dofs;
+    uint8_t has_center_of_mass_override;
+    uint8_t has_inertia_override;
+    uint8_t has_kinematic_target;
+    uint16_t rigid_body_reserved;
+    float max_linear_velocity;
+    float max_angular_velocity;
+    float center_of_mass_x;
+    float center_of_mass_y;
+    float center_of_mass_z;
+    float inertia_x;
+    float inertia_y;
+    float inertia_z;
+    float target_position_x;
+    float target_position_y;
+    float target_position_z;
+    float target_rotation_x;
+    float target_rotation_y;
+    float target_rotation_z;
+    float target_rotation_w;
 } GuavaJoltBodyDesc;
 
 typedef struct GuavaJoltConstraintDesc {
@@ -136,10 +159,37 @@ typedef struct GuavaJoltConstraintDesc {
     float axis_b_z;
     float min_limit;
     float max_limit;
+    float break_force;
+    float break_torque;
+    float spring_frequency;
+    float spring_damping;
+    uint8_t motor_mode;
+    uint8_t angular_motor_mode;
+    uint16_t joint_reserved;
+    float motor_target_position;
+    float motor_target_velocity;
+    float motor_max_force;
+    float angular_motor_target_position;
+    float angular_motor_target_velocity;
+    float angular_motor_max_force;
+    float half_cone_angle;
+    float linear_min_x;
+    float linear_min_y;
+    float linear_min_z;
+    float linear_max_x;
+    float linear_max_y;
+    float linear_max_z;
+    float angular_min_x;
+    float angular_min_y;
+    float angular_min_z;
+    float angular_max_x;
+    float angular_max_y;
+    float angular_max_z;
 } GuavaJoltConstraintDesc;
 
 typedef struct GuavaJoltMeshGeometry {
     uint64_t entity_id;
+    uint64_t geometry_revision;
     const float* vertices;
     uint32_t vertex_count;
     const uint32_t* indices;
@@ -425,6 +475,14 @@ typedef struct GuavaJoltContactEvent {
     float impulse;
 } GuavaJoltContactEvent;
 
+typedef struct GuavaJoltJointBreakEvent {
+    uint64_t joint_entity;
+    uint64_t entity_a;
+    uint64_t entity_b;
+    float force;
+    float torque;
+} GuavaJoltJointBreakEvent;
+
 uint32_t guava_jolt_bridge_abi_version(void);
 bool guava_jolt_bridge_get_abi_layout(GuavaJoltABILayout* out_layout);
 GuavaJoltContext guava_jolt_context_create(void);
@@ -498,6 +556,9 @@ uint32_t guava_jolt_context_detect_triggers(GuavaJoltContext context,
 uint32_t guava_jolt_context_copy_contact_events(GuavaJoltContext context,
                                                 GuavaJoltContactEvent* out_events,
                                                 size_t event_capacity);
+uint32_t guava_jolt_context_drain_joint_break_events(GuavaJoltContext context,
+                                                     GuavaJoltJointBreakEvent* out_events,
+                                                     size_t event_capacity);
 
 #ifdef __cplusplus
 }

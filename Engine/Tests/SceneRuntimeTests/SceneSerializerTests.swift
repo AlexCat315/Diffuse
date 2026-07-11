@@ -998,6 +998,43 @@ struct SceneSerializerTests {
         #expect(c!.maxLimit == 1.2)
     }
 
+    @Test("round-trip: typed six-DOF joint preserves independent configuration")
+    func typedJointRoundTrip() throws {
+        var original = SceneRuntime()
+        let bodyA = original.createEntity()
+        _ = original.setComponent(SceneNameComponent(value: "A"), for: bodyA)
+        let bodyB = original.createEntity()
+        _ = original.setComponent(SceneNameComponent(value: "B"), for: bodyB)
+        let configuration = SixDOFJointConfiguration(
+            axisA: SIMD3<Float>(1, 0, 0),
+            axisB: SIMD3<Float>(0, 0, 1),
+            linearMinimum: SIMD3<Float>(-1, -2, -3),
+            linearMaximum: SIMD3<Float>(1, 2, 3),
+            angularMinimum: SIMD3<Float>(-0.1, -0.2, -0.3),
+            angularMaximum: SIMD3<Float>(0.1, 0.2, 0.3),
+            linearMotor: PhysicsJointMotor(mode: .velocity, targetVelocity: 4, maxForce: 50),
+            angularMotor: PhysicsJointMotor(mode: .position, targetPosition: 0.25, maxForce: 60),
+            spring: PhysicsJointSpring(frequency: 3, damping: 0.7)
+        )
+        let joint = PhysicsJoint(
+            configuration: .sixDOF(configuration),
+            entityA: bodyA,
+            entityB: bodyB,
+            breakForce: 100,
+            breakTorque: 200
+        )
+        _ = original.setComponent(joint, for: bodyA)
+
+        let data = try SceneSerializer.serialize(original)
+        var restored = SceneRuntime()
+        try SceneSerializer.deserialize(data, into: &restored)
+        let restoredA = try #require(restored.findEntity(named: "A"))
+        let restoredJoint = try #require(restored.component(PhysicsJoint.self, for: restoredA))
+        #expect(restoredJoint.configuration == .sixDOF(configuration))
+        #expect(restoredJoint.breakForce == 100)
+        #expect(restoredJoint.breakTorque == 200)
+    }
+
     @Test("prefab capture drops a constraint whose endpoint is outside the subtree")
     func prefabDropsDanglingConstraint() throws {
         var scene = SceneRuntime()
