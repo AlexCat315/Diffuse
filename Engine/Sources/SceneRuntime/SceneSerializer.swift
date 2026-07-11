@@ -225,26 +225,57 @@ public enum SceneSerializer {
     // MARK: - Component serializers
 
     private static func serializeRigidBody(_ c: RigidBody) -> [String: Any] {
-        [
+        var d: [String: Any] = [
             "motionType": c.motionType.rawValue,
             "mass": c.mass,
+            "massMode": c.massMode.rawValue,
             "linearDamping": c.linearDamping,
             "angularDamping": c.angularDamping,
             "gravityScale": c.gravityScale,
             "allowSleep": c.allowSleep,
             "continuousCollisionDetection": c.continuousCollisionDetection,
+            "axisLocks": c.axisLocks.rawValue,
+            "maxLinearVelocity": c.maxLinearVelocity,
+            "maxAngularVelocity": c.maxAngularVelocity,
+            "motionQuality": c.motionQuality.rawValue,
         ]
+        if let centerOfMassOverride = c.centerOfMassOverride {
+            d["centerOfMassOverride"] = vec3ToJSON(centerOfMassOverride)
+        }
+        if let inertiaDiagonalOverride = c.inertiaDiagonalOverride {
+            d["inertiaDiagonalOverride"] = vec3ToJSON(inertiaDiagonalOverride)
+        }
+        if let target = c.kinematicTarget {
+            d["kinematicTarget"] = [
+                "position": vec3ToJSON(target.position),
+                "rotation": vec4ToJSON(target.rotation),
+            ]
+        }
+        return d
     }
 
     private static func deserializeRigidBody(_ d: [String: Any]) -> RigidBody {
         RigidBody(
             motionType: RigidBodyMotionType(rawValue: jsonToString(d["motionType"]) ?? "dynamic") ?? .dynamic,
             mass: jsonToFloat(d["mass"]) ?? 1,
+            massMode: RigidBodyMassMode(rawValue: jsonToString(d["massMode"]) ?? "mass") ?? .mass,
             gravityScale: jsonToFloat(d["gravityScale"]) ?? 1,
             linearDamping: jsonToFloat(d["linearDamping"]) ?? 0.04,
             angularDamping: jsonToFloat(d["angularDamping"]) ?? 0.04,
             allowSleep: jsonToBool(d["allowSleep"]) ?? true,
-            continuousCollisionDetection: jsonToBool(d["continuousCollisionDetection"]) ?? false
+            continuousCollisionDetection: jsonToBool(d["continuousCollisionDetection"]) ?? false,
+            centerOfMassOverride: jsonToFloatArray(d["centerOfMassOverride"]).flatMap(jsonToVec3),
+            inertiaDiagonalOverride: jsonToFloatArray(d["inertiaDiagonalOverride"]).flatMap(jsonToVec3),
+            axisLocks: RigidBodyAxisLocks(rawValue: UInt8(jsonToInt(d["axisLocks"]) ?? 0)),
+            maxLinearVelocity: jsonToFloat(d["maxLinearVelocity"]) ?? 500,
+            maxAngularVelocity: jsonToFloat(d["maxAngularVelocity"]) ?? (0.25 * .pi * 60),
+            motionQuality: RigidBodyMotionQuality(rawValue: jsonToString(d["motionQuality"]) ?? "discrete") ?? .discrete,
+            kinematicTarget: jsonToDict(d["kinematicTarget"]).flatMap { target in
+                guard let position = jsonToFloatArray(target["position"]).flatMap(jsonToVec3) else { return nil }
+                let rotation = jsonToFloatArray(target["rotation"]).flatMap(jsonToVec4)
+                    ?? SIMD4<Float>(0, 0, 0, 1)
+                return PhysicsKinematicTarget(position: position, rotation: rotation)
+            }
         )
     }
 
@@ -745,7 +776,7 @@ public enum SceneSerializer {
     /// Serializes a physics constraint. Endpoints are passed as resolved list indices
     /// (computed by the caller from the entity index map).
     private static func serializeConstraint(_ c: Constraint, entityA: Int, entityB: Int) -> [String: Any] {
-        [
+        var result: [String: Any] = [
             "type": c.constraintType.rawValue,
             "entityA": entityA,
             "entityB": entityB,
@@ -756,21 +787,105 @@ public enum SceneSerializer {
             "minLimit": c.minLimit,
             "maxLimit": c.maxLimit,
             "isEnabled": c.isEnabled,
+            "breakForce": c.breakForce,
+            "breakTorque": c.breakTorque,
         ]
+        func storeSpring(_ spring: PhysicsJointSpring) {
+            result["springFrequency"] = spring.frequency
+            result["springDamping"] = spring.damping
+        }
+        func storeMotor(_ motor: PhysicsJointMotor, prefix: String = "motor") {
+            result["\(prefix)Mode"] = motor.mode.rawValue
+            result["\(prefix)TargetPosition"] = motor.targetPosition
+            result["\(prefix)TargetVelocity"] = motor.targetVelocity
+            result["\(prefix)MaxForce"] = motor.maxForce
+        }
+        switch c.configuration {
+        case .point, .fixed:
+            break
+        case let .distance(value):
+            storeSpring(value.spring)
+        case let .hinge(value):
+            storeSpring(value.spring); storeMotor(value.motor)
+        case let .slider(value):
+            storeSpring(value.spring); storeMotor(value.motor)
+        case let .cone(value):
+            result["halfConeAngle"] = value.halfConeAngle
+            storeSpring(value.spring)
+        case let .sixDOF(value):
+            result["linearMinimum"] = vec3ToJSON(value.linearMinimum)
+            result["linearMaximum"] = vec3ToJSON(value.linearMaximum)
+            result["angularMinimum"] = vec3ToJSON(value.angularMinimum)
+            result["angularMaximum"] = vec3ToJSON(value.angularMaximum)
+            storeSpring(value.spring)
+            storeMotor(value.linearMotor)
+            storeMotor(value.angularMotor, prefix: "angularMotor")
+        }
+        return result
     }
 
     private static func deserializeConstraint(_ d: [String: Any], entityA: EntityID, entityB: EntityID) -> Constraint {
-        Constraint(
-            constraintType: ConstraintType(rawValue: jsonToString(d["type"]) ?? "pointToPoint") ?? .pointToPoint,
+        let kind = PhysicsJointKind(rawValue: jsonToString(d["type"]) ?? "pointToPoint") ?? .pointToPoint
+        let axisA = jsonToFloatArray(d["axisA"]).flatMap(jsonToVec3) ?? SIMD3<Float>(0, 1, 0)
+        let axisB = jsonToFloatArray(d["axisB"]).flatMap(jsonToVec3) ?? SIMD3<Float>(0, 1, 0)
+        let minimum = jsonToFloat(d["minLimit"]) ?? 0
+        let maximum = jsonToFloat(d["maxLimit"]) ?? 0
+        let spring = PhysicsJointSpring(
+            frequency: jsonToFloat(d["springFrequency"]) ?? 0,
+            damping: jsonToFloat(d["springDamping"]) ?? 0
+        )
+        func motor(prefix: String = "motor") -> PhysicsJointMotor {
+            PhysicsJointMotor(
+                mode: PhysicsJointMotorMode(rawValue: jsonToString(d["\(prefix)Mode"]) ?? "disabled") ?? .disabled,
+                targetPosition: jsonToFloat(d["\(prefix)TargetPosition"]) ?? 0,
+                targetVelocity: jsonToFloat(d["\(prefix)TargetVelocity"]) ?? 0,
+                maxForce: jsonToFloat(d["\(prefix)MaxForce"]) ?? .greatestFiniteMagnitude
+            )
+        }
+        let configuration: PhysicsJointConfiguration
+        switch kind {
+        case .pointToPoint:
+            configuration = .point
+        case .fixed:
+            configuration = .fixed(axisA: axisA, axisB: axisB)
+        case .distance:
+            configuration = .distance(DistanceJointConfiguration(
+                minimumDistance: minimum, maximumDistance: maximum, spring: spring))
+        case .hinge:
+            configuration = .hinge(HingeJointConfiguration(
+                axisA: axisA, axisB: axisB, minimumAngle: minimum, maximumAngle: maximum,
+                motor: motor(), spring: spring))
+        case .slider:
+            configuration = .slider(SliderJointConfiguration(
+                axisA: axisA, axisB: axisB, minimumDistance: minimum, maximumDistance: maximum,
+                motor: motor(), spring: spring))
+        case .cone:
+            configuration = .cone(ConeJointConfiguration(
+                twistAxisA: axisA, twistAxisB: axisB,
+                halfConeAngle: jsonToFloat(d["halfConeAngle"]) ?? .pi / 4,
+                minimumTwistAngle: minimum, maximumTwistAngle: maximum, spring: spring))
+        case .sixDOF:
+            configuration = .sixDOF(SixDOFJointConfiguration(
+                axisA: axisA,
+                axisB: axisB,
+                linearMinimum: jsonToFloatArray(d["linearMinimum"]).flatMap(jsonToVec3) ?? .zero,
+                linearMaximum: jsonToFloatArray(d["linearMaximum"]).flatMap(jsonToVec3) ?? .zero,
+                angularMinimum: jsonToFloatArray(d["angularMinimum"]).flatMap(jsonToVec3) ?? .zero,
+                angularMaximum: jsonToFloatArray(d["angularMaximum"]).flatMap(jsonToVec3) ?? .zero,
+                linearMotor: motor(),
+                angularMotor: motor(prefix: "angularMotor"),
+                spring: spring
+            ))
+        }
+        return Constraint(
+            configuration: configuration,
             entityA: entityA,
             entityB: entityB,
             pivotA: jsonToFloatArray(d["pivotA"]).flatMap(jsonToVec3) ?? .zero,
             pivotB: jsonToFloatArray(d["pivotB"]).flatMap(jsonToVec3) ?? .zero,
-            axisA: jsonToFloatArray(d["axisA"]).flatMap(jsonToVec3) ?? SIMD3<Float>(0, 1, 0),
-            axisB: jsonToFloatArray(d["axisB"]).flatMap(jsonToVec3) ?? SIMD3<Float>(0, 1, 0),
-            minLimit: jsonToFloat(d["minLimit"]) ?? 0,
-            maxLimit: jsonToFloat(d["maxLimit"]) ?? 0,
-            isEnabled: jsonToBool(d["isEnabled"]) ?? true
+            isEnabled: jsonToBool(d["isEnabled"]) ?? true,
+            breakForce: jsonToFloat(d["breakForce"]) ?? .greatestFiniteMagnitude,
+            breakTorque: jsonToFloat(d["breakTorque"]) ?? .greatestFiniteMagnitude
         )
     }
 

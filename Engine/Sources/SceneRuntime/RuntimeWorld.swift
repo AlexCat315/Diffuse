@@ -1097,6 +1097,20 @@ public struct RuntimeWorld: @unchecked Sendable {
     }
 
     @discardableResult
+    public mutating func applyForce(
+        _ force: SIMD3<Float>,
+        at worldPoint: SIMD3<Float>,
+        to entity: EntityID,
+        wake: Bool = true
+    ) -> Bool {
+        guard let center = worldTransform(for: entity)?.translation else { return false }
+        return updateDynamicRigidBody(for: entity, wake: wake) { body in
+            body.accumulatedForce += force
+            body.accumulatedTorque += simd_cross(worldPoint - center, force)
+        }
+    }
+
+    @discardableResult
     public mutating func applyTorque(_ torque: SIMD3<Float>, to entity: EntityID, wake: Bool = true) -> Bool {
         updateDynamicRigidBody(for: entity, wake: wake) { body in
             body.accumulatedTorque += torque
@@ -1107,6 +1121,20 @@ public struct RuntimeWorld: @unchecked Sendable {
     public mutating func applyLinearImpulse(_ impulse: SIMD3<Float>, to entity: EntityID, wake: Bool = true) -> Bool {
         updateDynamicRigidBody(for: entity, wake: wake) { body in
             body.accumulatedLinearImpulse += impulse
+        }
+    }
+
+    @discardableResult
+    public mutating func applyLinearImpulse(
+        _ impulse: SIMD3<Float>,
+        at worldPoint: SIMD3<Float>,
+        to entity: EntityID,
+        wake: Bool = true
+    ) -> Bool {
+        guard let center = worldTransform(for: entity)?.translation else { return false }
+        return updateDynamicRigidBody(for: entity, wake: wake) { body in
+            body.accumulatedLinearImpulse += impulse
+            body.accumulatedAngularImpulse += simd_cross(worldPoint - center, impulse)
         }
     }
 
