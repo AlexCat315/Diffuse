@@ -90,6 +90,8 @@ public enum ColliderShapeKind: String, CaseIterable, Sendable, Equatable {
     case box
     case sphere
     case capsule
+    case cylinder
+    case heightField
     case mesh
     case convex
 }
@@ -98,6 +100,8 @@ public enum ColliderShape: Sendable, Equatable {
     case box(halfExtents: SIMD3<Float>, center: SIMD3<Float>)
     case sphere(radius: Float, center: SIMD3<Float>)
     case capsule(radius: Float, halfHeight: Float, center: SIMD3<Float>)
+    case cylinder(radius: Float, halfHeight: Float, center: SIMD3<Float>)
+    case heightField(resourceID: String?, center: SIMD3<Float>)
     case mesh(resourceID: String?, center: SIMD3<Float>)
     case convex(resourceID: String?, center: SIMD3<Float>)
 
@@ -106,6 +110,8 @@ public enum ColliderShape: Sendable, Equatable {
         case .box: return .box
         case .sphere: return .sphere
         case .capsule: return .capsule
+        case .cylinder: return .cylinder
+        case .heightField: return .heightField
         case .mesh: return .mesh
         case .convex: return .convex
         }
@@ -116,6 +122,8 @@ public enum ColliderShape: Sendable, Equatable {
         case let .box(_, center),
              let .sphere(_, center),
              let .capsule(_, _, center),
+             let .cylinder(_, _, center),
+             let .heightField(_, center),
              let .mesh(_, center),
              let .convex(_, center):
             return center
@@ -125,6 +133,7 @@ public enum ColliderShape: Sendable, Equatable {
     public var resourceID: String? {
         switch self {
         case let .mesh(resourceID, _),
+             let .heightField(resourceID, _),
              let .convex(resourceID, _):
             return resourceID
         default:
@@ -140,11 +149,35 @@ public enum ColliderShape: Sendable, Equatable {
             return .sphere(radius: radius, center: center)
         case let .capsule(radius, halfHeight, _):
             return .capsule(radius: radius, halfHeight: halfHeight, center: center)
+        case let .cylinder(radius, halfHeight, _):
+            return .cylinder(radius: radius, halfHeight: halfHeight, center: center)
+        case let .heightField(resourceID, _):
+            return .heightField(resourceID: resourceID, center: center)
         case let .mesh(resourceID, _):
             return .mesh(resourceID: resourceID, center: center)
         case let .convex(resourceID, _):
             return .convex(resourceID: resourceID, center: center)
         }
+    }
+}
+
+public struct ColliderShapeInstance: Sendable, Equatable {
+    public var shape: ColliderShape
+    public var localPosition: SIMD3<Float>
+    /// Quaternion encoded as (x, y, z, w).
+    public var localRotation: SIMD4<Float>
+    public var localScale: SIMD3<Float>
+
+    public init(
+        shape: ColliderShape,
+        localPosition: SIMD3<Float> = .zero,
+        localRotation: SIMD4<Float> = SIMD4<Float>(0, 0, 0, 1),
+        localScale: SIMD3<Float> = SIMD3<Float>(repeating: 1)
+    ) {
+        self.shape = shape
+        self.localPosition = localPosition
+        self.localRotation = localRotation
+        self.localScale = localScale
     }
 }
 
@@ -161,7 +194,15 @@ public struct PhysicsMaterial: Sendable, Equatable {
 }
 
 public struct Collider: RuntimeComponent, Sendable, Equatable {
-    public var shape: ColliderShape
+    public var shapes: [ColliderShapeInstance]
+    /// Compatibility access to the first child. New code should author `shapes`.
+    public var shape: ColliderShape {
+        get { shapes.first?.shape ?? .box(halfExtents: SIMD3<Float>(repeating: 0.5), center: .zero) }
+        set {
+            if shapes.isEmpty { shapes = [ColliderShapeInstance(shape: newValue)] }
+            else { shapes[0].shape = newValue }
+        }
+    }
     public var isTrigger: Bool
     public var layerID: UInt16
     public var layerMask: UInt16
@@ -174,7 +215,21 @@ public struct Collider: RuntimeComponent, Sendable, Equatable {
         layerMask: UInt16 = .max,
         material: PhysicsMaterial = PhysicsMaterial()
     ) {
-        self.shape = shape
+        self.shapes = [ColliderShapeInstance(shape: shape)]
+        self.isTrigger = isTrigger
+        self.layerID = layerID
+        self.layerMask = layerMask
+        self.material = material
+    }
+
+    public init(
+        shapes: [ColliderShapeInstance],
+        isTrigger: Bool = false,
+        layerID: UInt16 = 0,
+        layerMask: UInt16 = .max,
+        material: PhysicsMaterial = PhysicsMaterial()
+    ) {
+        self.shapes = shapes
         self.isTrigger = isTrigger
         self.layerID = layerID
         self.layerMask = layerMask
@@ -541,26 +596,56 @@ public enum PhysicsContactEventKind: String, Sendable, Equatable {
 public struct PhysicsContactEvent: Sendable, Equatable {
     public var entityA: EntityID
     public var entityB: EntityID
+    public var subShapeIDA: UInt32
+    public var subShapeIDB: UInt32
     public var kind: PhysicsContactEventKind
     public var position: SIMD3<Float>
     public var normal: SIMD3<Float>
     public var penetrationDepth: Float
+    public var relativeVelocity: SIMD3<Float>
+    public var impulse: Float
 
     public init(
         entityA: EntityID,
         entityB: EntityID,
+        subShapeIDA: UInt32 = 0,
+        subShapeIDB: UInt32 = 0,
         kind: PhysicsContactEventKind,
         position: SIMD3<Float> = .zero,
         normal: SIMD3<Float> = .zero,
-        penetrationDepth: Float = 0
+        penetrationDepth: Float = 0,
+        relativeVelocity: SIMD3<Float> = .zero,
+        impulse: Float = 0
     ) {
         self.entityA = entityA
         self.entityB = entityB
+        self.subShapeIDA = subShapeIDA
+        self.subShapeIDB = subShapeIDB
         self.kind = kind
         self.position = position
         self.normal = normal
         self.penetrationDepth = penetrationDepth
+        self.relativeVelocity = relativeVelocity
+        self.impulse = impulse
     }
+}
+
+public struct PhysicsEventFrameResource: Sendable, Equatable {
+    public var contacts: [PhysicsContactEvent]
+    public var triggers: [TriggerEvent]
+    public var didOverflow: Bool
+
+    public init(
+        contacts: [PhysicsContactEvent] = [],
+        triggers: [TriggerEvent] = [],
+        didOverflow: Bool = false
+    ) {
+        self.contacts = contacts
+        self.triggers = triggers
+        self.didOverflow = didOverflow
+    }
+
+    public static let empty = PhysicsEventFrameResource()
 }
 
 public struct PhysicsContactFrameResource: Sendable, Equatable {
@@ -626,6 +711,7 @@ public struct PhysicsRaycastQuery: Sendable, Equatable {
 
 public struct PhysicsRaycastHit: Sendable, Equatable {
     public var entity: EntityID
+    public var subShapeID: UInt32
     public var distance: Float
     public var position: SIMD3<Float>
     public var normal: SIMD3<Float>
@@ -633,12 +719,14 @@ public struct PhysicsRaycastHit: Sendable, Equatable {
     public var isTrigger: Bool
 
     public init(entity: EntityID,
+                subShapeID: UInt32 = 0,
                 distance: Float,
                 position: SIMD3<Float>,
                 normal: SIMD3<Float>,
                 bounds: SpatialAABB,
                 isTrigger: Bool) {
         self.entity = entity
+        self.subShapeID = subShapeID
         self.distance = distance
         self.position = position
         self.normal = normal
@@ -661,11 +749,13 @@ public struct PhysicsOverlapAABBQuery: Sendable, Equatable {
 
 public struct PhysicsOverlapHit: Sendable, Equatable {
     public var entity: EntityID
+    public var subShapeID: UInt32
     public var bounds: SpatialAABB
     public var isTrigger: Bool
 
-    public init(entity: EntityID, bounds: SpatialAABB, isTrigger: Bool) {
+    public init(entity: EntityID, subShapeID: UInt32 = 0, bounds: SpatialAABB, isTrigger: Bool) {
         self.entity = entity
+        self.subShapeID = subShapeID
         self.bounds = bounds
         self.isTrigger = isTrigger
     }
@@ -730,6 +820,7 @@ public struct PhysicsSweepShapeQuery: Sendable, Equatable {
 
 public struct PhysicsSweepHit: Sendable, Equatable {
     public var entity: EntityID
+    public var subShapeID: UInt32
     public var fraction: Float
     public var distance: Float
     public var position: SIMD3<Float>
@@ -738,6 +829,7 @@ public struct PhysicsSweepHit: Sendable, Equatable {
     public var isTrigger: Bool
 
     public init(entity: EntityID,
+                subShapeID: UInt32 = 0,
                 fraction: Float,
                 distance: Float,
                 position: SIMD3<Float>,
@@ -745,8 +837,61 @@ public struct PhysicsSweepHit: Sendable, Equatable {
                 bounds: SpatialAABB,
                 isTrigger: Bool) {
         self.entity = entity
+        self.subShapeID = subShapeID
         self.fraction = fraction
         self.distance = distance
+        self.position = position
+        self.normal = normal
+        self.bounds = bounds
+        self.isTrigger = isTrigger
+    }
+}
+
+public enum PhysicsQueryResultMode: Sendable, Equatable {
+    case nearest
+    case all
+}
+
+public struct PhysicsQueryOptions: Sendable, Equatable {
+    public var filter: PhysicsQueryFilter
+    public var resultMode: PhysicsQueryResultMode
+    public var maxHits: Int
+
+    public init(
+        filter: PhysicsQueryFilter = PhysicsQueryFilter(),
+        resultMode: PhysicsQueryResultMode = .nearest,
+        maxHits: Int = .max
+    ) {
+        self.filter = filter
+        self.resultMode = resultMode
+        self.maxHits = max(0, maxHits)
+    }
+}
+
+public struct PhysicsHit: Sendable, Equatable {
+    public var entity: EntityID
+    public var subShapeID: UInt32
+    public var distance: Float
+    public var fraction: Float
+    public var position: SIMD3<Float>
+    public var normal: SIMD3<Float>
+    public var bounds: SpatialAABB
+    public var isTrigger: Bool
+
+    public init(
+        entity: EntityID,
+        subShapeID: UInt32 = 0,
+        distance: Float = 0,
+        fraction: Float = 0,
+        position: SIMD3<Float> = .zero,
+        normal: SIMD3<Float> = .zero,
+        bounds: SpatialAABB,
+        isTrigger: Bool
+    ) {
+        self.entity = entity
+        self.subShapeID = subShapeID
+        self.distance = distance
+        self.fraction = fraction
         self.position = position
         self.normal = normal
         self.bounds = bounds
@@ -940,12 +1085,26 @@ public protocol PhysicsBackend: AnyObject, Sendable {
     func prepare(context: PhysicsPrepareContext) -> PhysicsPrepareResult
     func step(context: PhysicsStepContext) -> PhysicsStepResult
     func raycast(_ query: PhysicsRaycastQuery, filter: PhysicsQueryFilter) -> PhysicsRaycastHit?
+    func raycastAll(_ query: PhysicsRaycastQuery, filter: PhysicsQueryFilter, maxHits: Int) -> [PhysicsRaycastHit]
     func overlapAABB(_ query: PhysicsOverlapAABBQuery, filter: PhysicsQueryFilter) -> [PhysicsOverlapHit]
     func overlapShape(_ query: PhysicsOverlapShapeQuery, filter: PhysicsQueryFilter) -> [PhysicsOverlapHit]
     func sweepAABB(_ query: PhysicsSweepAABBQuery, filter: PhysicsQueryFilter) -> PhysicsSweepHit?
     func sweepShape(_ query: PhysicsSweepShapeQuery, filter: PhysicsQueryFilter) -> PhysicsSweepHit?
+    func sweepShapeAll(_ query: PhysicsSweepShapeQuery, filter: PhysicsQueryFilter, maxHits: Int) -> [PhysicsSweepHit]
     func detectTriggerFrame(maxEventCount: Int) -> TriggerFrameResource
     func reset()
+}
+
+public extension PhysicsBackend {
+    func raycastAll(_ query: PhysicsRaycastQuery, filter: PhysicsQueryFilter, maxHits: Int) -> [PhysicsRaycastHit] {
+        guard maxHits > 0, let hit = raycast(query, filter: filter) else { return [] }
+        return [hit]
+    }
+
+    func sweepShapeAll(_ query: PhysicsSweepShapeQuery, filter: PhysicsQueryFilter, maxHits: Int) -> [PhysicsSweepHit] {
+        guard maxHits > 0, let hit = sweepShape(query, filter: filter) else { return [] }
+        return [hit]
+    }
 }
 
 public final class NullPhysicsBackend: PhysicsBackend, @unchecked Sendable {
@@ -995,6 +1154,8 @@ public final class NullPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         nil
     }
 
+    public func raycastAll(_ query: PhysicsRaycastQuery, filter: PhysicsQueryFilter, maxHits: Int) -> [PhysicsRaycastHit] { [] }
+
     public func overlapAABB(_ query: PhysicsOverlapAABBQuery, filter: PhysicsQueryFilter) -> [PhysicsOverlapHit] {
         []
     }
@@ -1010,6 +1171,8 @@ public final class NullPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     public func sweepShape(_ query: PhysicsSweepShapeQuery, filter: PhysicsQueryFilter) -> PhysicsSweepHit? {
         nil
     }
+
+    public func sweepShapeAll(_ query: PhysicsSweepShapeQuery, filter: PhysicsQueryFilter, maxHits: Int) -> [PhysicsSweepHit] { [] }
 
     public func detectTriggerFrame(maxEventCount: Int) -> TriggerFrameResource {
         TriggerFrameResource()

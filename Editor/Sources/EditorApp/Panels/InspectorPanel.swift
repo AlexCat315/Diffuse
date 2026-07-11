@@ -243,6 +243,8 @@ struct InspectorPanel: View {
                 case .box: return L("Box")
                 case .sphere: return L("Sphere")
                 case .capsule: return L("Capsule")
+                case .cylinder: return L("Cylinder")
+                case .heightField: return L("Height Field")
                 case .mesh: return L("Mesh")
                 case .convex: return L("Convex")
                 }
