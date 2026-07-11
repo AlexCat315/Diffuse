@@ -102,6 +102,31 @@ final class DevServerSmokeTests: XCTestCase {
         XCTAssertTrue(inspector.find(id: String(child.id.rawValue)) === child)
     }
 
+    @MainActor
+    func test_tree_changes_do_not_snapshot_without_a_subscriber() {
+        let tree = NodeTree()
+        tree.root = Node()
+        let dev = DevTools(config: DevToolsConfig(enabled: true), tree: tree)
+        var snapshotCount = 0
+        dev.server.snapshotProvider = {
+            snapshotCount += 1
+            return TreeSnapshotPayload(root: nil)
+        }
+
+        dev.notifyTreeChanged()
+
+        XCTAssertEqual(snapshotCount, 0)
+    }
+
+    func test_invalid_bind_host_is_rejected_instead_of_exposing_all_interfaces() {
+        let server = DevServer(config: DevToolsConfig(host: "192.0.2.1", enabled: true))
+        XCTAssertThrowsError(try server.start()) { error in
+            guard case DevServerConfigurationError.unsupportedHost("192.0.2.1") = error else {
+                return XCTFail("unexpected error: \(error)")
+            }
+        }
+    }
+
     // MARK: - Helpers
 
     private static func requestTreeSnapshot(port: UInt16, timeout: TimeInterval) async throws -> DevToolsEnvelope {

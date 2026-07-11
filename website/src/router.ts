@@ -31,5 +31,7 @@ export const routes: RouteRecordRaw[] = [
     props: { entry },
     meta: { locale: entry.locale, translationKey: entry.translationKey, title: entry.title, description: entry.description },
   })),
+  { path: '/zh/:pathMatch(.*)*', component: NotFoundPage, meta: { locale: 'zh', translationKey: '404', title: '404' } },
+  { path: '/en/:pathMatch(.*)*', component: NotFoundPage, meta: { locale: 'en', translationKey: '404', title: '404' } },
   { path: '/:pathMatch(.*)*', component: NotFoundPage, meta: { locale: 'zh', translationKey: '404', title: '404' } },
 ]

@@ -31,10 +31,16 @@ public struct LogTap: LogHandler {
     /// Type-erased delivery point so we don't tangle the LogHandler — which
     /// must be `Sendable` and value-typed — with the DevServer reference.
     public final class Sink: @unchecked Sendable {
+        private let lock = NSLock()
+        private var callback: ((LogEntryPayload) -> Void)?
+
         public init() {}
 
         /// Set by `DevTools` after the server starts.
-        public var deliver: ((LogEntryPayload) -> Void)?
+        public var deliver: ((LogEntryPayload) -> Void)? {
+            get { lock.withLock { callback } }
+            set { lock.withLock { callback = newValue } }
+        }
     }
 
     public var metadata: Logger.Metadata = [:]
@@ -86,6 +92,8 @@ public struct LogTap: LogHandler {
                          file: String,
                          function: String,
                          line: UInt) {
+        // Copy the callback under the sink lock, then invoke it outside the
+        // lock so logging can safely re-enter DevTools.
         guard let deliver = sink.deliver else { return }
         let merged = explicit.map { metadata.merging($0) { _, new in new } } ?? metadata
         let mapped = merged.mapValues { String(describing: $0) }
@@ -124,13 +132,21 @@ public final class LogTapInstaller: @unchecked Sendable {
     private static let shared = LogTapInstaller()
     private let lock = NSLock()
     private var installed = false
+    private let sink = LogTap.Sink()
 
     private init() {}
 
+    /// Stable process-wide sink used by AppRuntime. Reusing it allows a
+    /// second AppRuntime session to attach to the already-bootstrapped
+    /// swift-log factory after the first session shuts down.
+    public static var processSink: LogTap.Sink { shared.sink }
+
     /// Bootstrap LoggingSystem to fan every record into `sink`.
-    /// Returns `true` when this call performed the bootstrap; `false` if
-    /// LoggingSystem was already bootstrapped (either by an earlier
-    /// DevTools start or by user code).
+    /// Returns `true` when this call performed the bootstrap and `false` when
+    /// an earlier DevTools start installed it. swift-log does not expose
+    /// whether user code already bootstrapped the global system; hosts that
+    /// do so must set `DevToolsConfig.autoInstallLogTap` to false and include
+    /// `LogTap` in their own multiplex handler.
     @discardableResult
     public static func bootstrapIfNeeded(sink: LogTap.Sink) -> Bool {
         shared.lock.lock(); defer { shared.lock.unlock() }

@@ -41,8 +41,8 @@ const editUrl = computed(() => `https://github.com/AlexCat315/Guava-Engine/edit/
       <component :is="entry.component" :key="route.fullPath" />
       <a class="edit-link" :href="editUrl" target="_blank" rel="noreferrer"><ExternalLink :size="14" /> {{ entry.locale === 'zh' ? '在 GitHub 编辑此页' : 'Edit this page on GitHub' }}</a>
       <nav class="page-turner" aria-label="Adjacent pages">
-        <RouterLink v-if="previous" :to="previous.path"><ChevronLeft :size="17" /><span><small>Previous</small>{{ previous.title }}</span></RouterLink>
-        <RouterLink v-if="next" :to="next.path" class="next"><span><small>Next</small>{{ next.title }}</span><ChevronRight :size="17" /></RouterLink>
+        <RouterLink v-if="previous" :to="previous.path"><ChevronLeft :size="17" /><span><small>{{ entry.locale === 'zh' ? '上一篇' : 'Previous' }}</small>{{ previous.title }}</span></RouterLink>
+        <RouterLink v-if="next" :to="next.path" class="next"><span><small>{{ entry.locale === 'zh' ? '下一篇' : 'Next' }}</small>{{ next.title }}</span><ChevronRight :size="17" /></RouterLink>
       </nav>
     </article>
 
