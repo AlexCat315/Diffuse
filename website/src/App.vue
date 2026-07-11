@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useHead } from '@unhead/vue'
 import SiteFooter from '@/components/SiteFooter.vue'
 import SiteHeader from '@/components/SiteHeader.vue'
@@ -8,8 +8,15 @@ import SearchDialog from '@/components/SearchDialog.vue'
 import { useGitHub } from '@/composables/useGitHub'
 
 const route = useRoute()
+const router = useRouter()
 const { load } = useGitHub()
 const siteUrl = (import.meta.env.VITE_SITE_URL || 'http://localhost:5173').replace(/\/$/, '')
+function translatedPath(locale: 'zh' | 'en') {
+  const target = router.getRoutes().find((candidate) => candidate.meta.translationKey === route.meta.translationKey && candidate.meta.locale === locale)
+  if (target) return target.path
+  if (String(route.meta.translationKey).startsWith('docs.components.')) return `/${locale}/docs/components`
+  return `/${locale}`
+}
 useHead(() => ({
   htmlAttrs: { lang: route.meta.locale === 'en' ? 'en' : 'zh-CN' },
   title: route.meta.title ? `${route.meta.title} · Guava Engine` : 'Guava Engine',
@@ -23,8 +30,8 @@ useHead(() => ({
   ],
   link: [
     { rel: 'canonical', href: `${siteUrl}${route.path}` },
-    { rel: 'alternate', hreflang: 'zh-CN', href: `${siteUrl}${route.path.replace(/^\/en/, '/zh')}` },
-    { rel: 'alternate', hreflang: 'en', href: `${siteUrl}${route.path.replace(/^\/zh/, '/en')}` },
+    { rel: 'alternate', hreflang: 'zh-CN', href: `${siteUrl}${translatedPath('zh')}` },
+    { rel: 'alternate', hreflang: 'en', href: `${siteUrl}${translatedPath('en')}` },
   ],
 }))
 onMounted(load)

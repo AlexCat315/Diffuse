@@ -27,7 +27,9 @@ body {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -114,6 +116,15 @@ button:not(:disabled):hover {
   background: #1a1b1f;
 }
 
+input,
+select,
+textarea {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  background: #1a1b1f;
+}
+
 .workspace {
   display: grid;
   grid-template-columns: minmax(260px, 28%) 1fr minmax(260px, 28%);
@@ -143,8 +154,8 @@ button:not(:disabled):hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 38px;
-  padding: 6px 10px;
+  height: 38px;
+  padding: 3px 10px;
   border-bottom: 1px solid var(--line);
   color: var(--muted);
   font-size: 13px;
@@ -153,7 +164,35 @@ button:not(:disabled):hover {
 
 .mirrorControls {
   display: flex;
+  align-items: center;
   gap: 8px;
+}
+
+.mirrorControls label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.mirrorControls input {
+  width: 58px;
+  height: 28px;
+  padding: 0 5px;
+}
+
+.filterBar {
+  height: 38px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.filterBar input {
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
 }
 
 .tree,
@@ -165,7 +204,7 @@ button:not(:disabled):hover {
 }
 
 .tree {
-  height: calc(100vh - 48px - 180px - 38px);
+  height: calc(100vh - 48px - 180px - 76px);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
 }
@@ -247,7 +286,7 @@ button:not(:disabled):hover {
 
 .detailsPane {
   display: grid;
-  grid-template-rows: 38px minmax(0, 1.2fr) 38px minmax(0, 1fr) 38px minmax(0, 0.8fr);
+  grid-template-rows: 38px minmax(0, 1.1fr) 38px minmax(0, 0.8fr) 38px minmax(0, 0.65fr) 38px minmax(80px, 0.7fr);
 }
 
 .details {
@@ -257,13 +296,41 @@ button:not(:disabled):hover {
 }
 
 .bottomPane {
+  display: grid;
+  grid-template-rows: 38px minmax(0, 1fr);
   min-height: 0;
   border-top: 1px solid var(--line);
   background: var(--surface);
 }
 
+.stateSnapshot {
+  min-height: 0;
+  margin: 8px;
+  padding: 8px;
+  resize: none;
+  white-space: pre;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.logControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logControls select,
+.logControls input {
+  height: 28px;
+  padding: 0 7px;
+}
+
+.logControls input {
+  width: 210px;
+}
+
 .log {
-  height: 142px;
+  height: auto;
+  min-height: 0;
   font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
@@ -276,6 +343,16 @@ button:not(:disabled):hover {
   display: inline-block;
   min-width: 58px;
   color: var(--accent);
+}
+
+.logEntry.warning .level,
+.logEntry.notice .level {
+  color: #e5bd68;
+}
+
+.logEntry.error .level,
+.logEntry.critical .level {
+  color: var(--error);
 }
 
 .empty {

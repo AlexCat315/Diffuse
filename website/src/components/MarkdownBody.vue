@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { inject, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Check, Copy } from '@lucide/vue'
-import { createApp, h } from 'vue'
 import { contentEntries } from 'virtual:guava-content'
 import type { ContentEntry } from '@/types/content'
 
@@ -34,6 +32,21 @@ function onClick(event: MouseEvent) {
   }
 }
 
+async function copyText(value: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value)
+    return
+  }
+  const textarea = document.createElement('textarea')
+  textarea.value = value
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.append(textarea)
+  textarea.select()
+  document.execCommand('copy')
+  textarea.remove()
+}
+
 onMounted(() => {
   if (!root.value) return
   root.value.addEventListener('click', onClick)
@@ -46,13 +59,15 @@ onMounted(() => {
     button.className = 'copy-code'
     button.type = 'button'
     button.setAttribute('aria-label', 'Copy code')
-    const icon = createApp({ render: () => h(Copy, { size: 14 }) })
-    icon.mount(button)
+    button.textContent = 'Copy'
     button.addEventListener('click', async () => {
-      await navigator.clipboard.writeText(pre.querySelector('code')?.textContent || '')
-      icon.unmount()
-      createApp({ render: () => h(Check, { size: 14 }) }).mount(button)
-      setTimeout(() => { button.textContent = '✓' }, 1000)
+      await copyText(pre.querySelector('code')?.textContent || '')
+      button.textContent = 'Copied'
+      button.setAttribute('aria-label', 'Code copied')
+      setTimeout(() => {
+        button.textContent = 'Copy'
+        button.setAttribute('aria-label', 'Copy code')
+      }, 1400)
     })
     pre.append(button)
   }

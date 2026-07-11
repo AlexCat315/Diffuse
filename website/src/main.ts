@@ -6,7 +6,12 @@ import './styles/main.css'
 
 export const createApp = ViteSSG(
   App,
-  { routes, scrollBehavior: (to) => to.hash ? { el: to.hash, top: 96, behavior: 'smooth' } : { top: 0 } },
+  {
+    routes,
+    scrollBehavior: (to) => to.hash
+      ? { el: `#${encodeURIComponent(to.hash.slice(1))}`, top: 96, behavior: 'smooth' }
+      : { top: 0 },
+  },
   ({ app }) => {
     app.component('MarkdownBody', MarkdownBody)
   },

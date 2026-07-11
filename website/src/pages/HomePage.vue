@@ -58,7 +58,7 @@ const primaryAsset = computed(() => latest.value?.assets.find((asset) => asset.n
         <div class="release-actions">
           <a v-if="primaryAsset" :href="primaryAsset.downloadUrl" class="button"><Download :size="17" /> {{ t.actions.download }}</a>
           <RouterLink v-else :to="`/${locale}/download`" class="button"><Download :size="17" /> {{ t.actions.download }}</RouterLink>
-          <RouterLink :to="`/${locale}/download`" class="text-link">All platforms <ArrowRight :size="15" /></RouterLink>
+          <RouterLink :to="`/${locale}/download`" class="text-link">{{ locale === 'zh' ? '全部平台' : 'All platforms' }} <ArrowRight :size="15" /></RouterLink>
         </div>
       </div>
       <p v-if="snapshot?.stale" class="stale-note">{{ t.github.stale }}</p>
