@@ -19,6 +19,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     private var context: GuavaJoltContext?
     private var lastPreparedBodyCount: Int = 0
     private var initializationError: PhysicsBackendError?
+    private var meshRevisionByEntity: [EntityID: UInt64] = [:]
 
     public init() {
         var layout = GuavaJoltABILayout()
@@ -35,6 +36,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             && layout.character_command_size == UInt32(MemoryLayout<GuavaJoltCharacterCommand>.size)
             && layout.character_state_size == UInt32(MemoryLayout<GuavaJoltCharacterState>.size)
             && layout.shape_instance_size == UInt32(MemoryLayout<GuavaJoltShapeInstance>.size)
+            && layout.joint_break_event_size == UInt32(MemoryLayout<GuavaJoltJointBreakEvent>.size)
         if compatible {
             context = guava_jolt_context_create()
         } else {
@@ -76,14 +78,21 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         var flatIndices: [UInt32] = []
         var meshDescs: [GuavaJoltMeshGeometry] = []
         meshDescs.reserveCapacity(context.activeBodies.count)
+        let activeEntities = Set(context.activeBodies.map(\.entity))
+        meshRevisionByEntity = meshRevisionByEntity.filter { activeEntities.contains($0.key) }
         for descriptor in context.activeBodies {
             guard let geometry = descriptor.meshGeometry,
                   geometry.triangleCount > 0,
                   !geometry.positions.isEmpty else {
                 continue
             }
+            guard meshRevisionByEntity[descriptor.entity] != geometry.revision else {
+                continue
+            }
+            meshRevisionByEntity[descriptor.entity] = geometry.revision
             var desc = GuavaJoltMeshGeometry()
             desc.entity_id = descriptor.entity.rawValue
+            desc.geometry_revision = geometry.revision
             desc.vertex_count = UInt32(geometry.positions.count)
             desc.index_count = UInt32(geometry.triangleIndices.count)
             meshDescs.append(desc)
@@ -233,6 +242,28 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             from: nativeContext,
             expectedCount: Int(stats.contact_count)
         )
+        var nativeBreakEvents = [GuavaJoltJointBreakEvent](
+            repeating: GuavaJoltJointBreakEvent(),
+            count: context.activeConstraints.count
+        )
+        let breakEventCount = nativeBreakEvents.withUnsafeMutableBufferPointer { buffer in
+            guava_jolt_context_drain_joint_break_events(
+                nativeContext,
+                buffer.baseAddress,
+                buffer.count
+            )
+        }
+        let jointBreakEvents = nativeBreakEvents
+            .prefix(min(Int(breakEventCount), nativeBreakEvents.count))
+            .map {
+                PhysicsJointBreakEvent(
+                    jointEntity: EntityID(rawValue: $0.joint_entity),
+                    entityA: EntityID(rawValue: $0.entity_a),
+                    entityB: EntityID(rawValue: $0.entity_b),
+                    force: $0.force,
+                    torque: $0.torque
+                )
+            }
         return PhysicsStepResult(
             bodyCount: Int(stats.body_count),
             constraintCount: Int(stats.constraint_count),
@@ -241,6 +272,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
                 .prefix(Int(stats.state_count))
                 .compactMap { makeWriteback(from: $0, descriptorsByEntity: descriptorsByEntity) },
             contactEvents: contactEvents,
+            jointBreakEvents: jointBreakEvents,
             characterStates: characterStates
                 .prefix(min(Int(characterStateCount), characterStates.count))
                 .map(makeCharacterState)
@@ -248,6 +280,9 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     }
 
     public func raycast(_ query: PhysicsRaycastQuery, filter: PhysicsQueryFilter) -> PhysicsRaycastHit? {
+        if filter.excludedEntities.count > 1 {
+            return raycastAll(query, filter: filter, maxHits: .max).first
+        }
         guard let nativeContext = context else { return nil }
         var cQuery = GuavaJoltRaycastQuery(
             origin_x: query.origin.x,
@@ -277,20 +312,27 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             max_distance: query.maxDistance
         )
         var cFilter = makeQueryFilter(filter)
-        let capacity = maxHits == .max ? max(1, lastPreparedBodyCount * 64) : maxHits
+        let capacity = maxHits == .max || filter.excludedEntities.count > 1
+            ? max(1, lastPreparedBodyCount * 64)
+            : maxHits
         var hits = [GuavaJoltRaycastHit](repeating: GuavaJoltRaycastHit(), count: capacity)
         let count = hits.withUnsafeMutableBufferPointer { buffer in
             guava_jolt_context_raycast_all(
                 nativeContext, &cQuery, &cFilter, buffer.baseAddress, buffer.count)
         }
-        return hits.prefix(min(Int(count), capacity)).map(makeRaycastHit)
+        return hits.prefix(min(Int(count), capacity))
+            .map(makeRaycastHit)
+            .filter { !filter.excludedEntities.contains($0.entity) }
+            .prefix(maxHits)
+            .map { $0 }
     }
 
     public func overlapAABB(_ query: PhysicsOverlapAABBQuery, filter: PhysicsQueryFilter) -> [PhysicsOverlapHit] {
         guard let nativeContext = context else { return [] }
-        let maxResults = query.maxResults == .max
+        let requestedMaxResults = query.maxResults == .max
             ? UInt32.max
             : UInt32(max(0, min(query.maxResults, Int(UInt32.max))))
+        let maxResults = filter.excludedEntities.count > 1 ? UInt32.max : requestedMaxResults
         guard maxResults > 0 else { return [] }
 
         var cQuery = GuavaJoltOverlapAABBQuery(
@@ -317,14 +359,19 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
                 buffer.count
             )
         }
-        return hits.prefix(min(Int(count), hits.count)).map(makeOverlapHit)
+        return hits.prefix(min(Int(count), hits.count))
+            .map(makeOverlapHit)
+            .filter { !filter.excludedEntities.contains($0.entity) }
+            .prefix(Int(requestedMaxResults))
+            .map { $0 }
     }
 
     public func overlapShape(_ query: PhysicsOverlapShapeQuery, filter: PhysicsQueryFilter) -> [PhysicsOverlapHit] {
         guard let nativeContext = context else { return [] }
-        let maxResults = query.maxResults == .max
+        let requestedMaxResults = query.maxResults == .max
             ? UInt32.max
             : UInt32(max(0, min(query.maxResults, Int(UInt32.max))))
+        let maxResults = filter.excludedEntities.count > 1 ? UInt32.max : requestedMaxResults
         guard maxResults > 0 else { return [] }
 
         var cQuery = makeOverlapShapeQuery(query, maxResults: maxResults)
@@ -343,10 +390,29 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
                 buffer.count
             )
         }
-        return hits.prefix(min(Int(count), hits.count)).map(makeOverlapHit)
+        return hits.prefix(min(Int(count), hits.count))
+            .map(makeOverlapHit)
+            .filter { !filter.excludedEntities.contains($0.entity) }
+            .prefix(Int(requestedMaxResults))
+            .map { $0 }
     }
 
     public func sweepAABB(_ query: PhysicsSweepAABBQuery, filter: PhysicsQueryFilter) -> PhysicsSweepHit? {
+        if filter.excludedEntities.count > 1 {
+            // The v2 shape cast collector is also used for a box AABB batch so
+            // multiple exclusions cannot accidentally hide a later valid hit.
+            let center = (query.bounds.min + query.bounds.max) * 0.5
+            let halfExtents = (query.bounds.max - query.bounds.min) * 0.5
+            return sweepShapeAll(
+                PhysicsSweepShapeQuery(
+                    shape: .box(halfExtents: halfExtents),
+                    position: center,
+                    translation: query.translation
+                ),
+                filter: filter,
+                maxHits: .max
+            ).first
+        }
         guard let nativeContext = context else { return nil }
         var cQuery = GuavaJoltSweepAABBQuery(
             bounds_min_x: query.bounds.min.x,
@@ -367,6 +433,9 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     }
 
     public func sweepShape(_ query: PhysicsSweepShapeQuery, filter: PhysicsQueryFilter) -> PhysicsSweepHit? {
+        if filter.excludedEntities.count > 1 {
+            return sweepShapeAll(query, filter: filter, maxHits: .max).first
+        }
         guard let nativeContext = context else { return nil }
         var cQuery = makeSweepShapeQuery(query)
         var cFilter = makeQueryFilter(filter)
@@ -384,13 +453,19 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         guard let nativeContext = context, maxHits > 0 else { return [] }
         var cQuery = makeSweepShapeQuery(query)
         var cFilter = makeQueryFilter(filter)
-        let capacity = maxHits == .max ? max(1, lastPreparedBodyCount * 64) : maxHits
+        let capacity = maxHits == .max || filter.excludedEntities.count > 1
+            ? max(1, lastPreparedBodyCount * 64)
+            : maxHits
         var hits = [GuavaJoltSweepHit](repeating: GuavaJoltSweepHit(), count: capacity)
         let count = hits.withUnsafeMutableBufferPointer { buffer in
             guava_jolt_context_sweep_shape_all(
                 nativeContext, &cQuery, &cFilter, buffer.baseAddress, buffer.count)
         }
-        return hits.prefix(min(Int(count), capacity)).map(makeSweepHit)
+        return hits.prefix(min(Int(count), capacity))
+            .map(makeSweepHit)
+            .filter { !filter.excludedEntities.contains($0.entity) }
+            .prefix(maxHits)
+            .map { $0 }
     }
 
     public func detectTriggerFrame(maxEventCount: Int) -> TriggerFrameResource {
@@ -427,6 +502,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             guava_jolt_context_reset(context)
         }
         lastPreparedBodyCount = 0
+        meshRevisionByEntity.removeAll(keepingCapacity: true)
     }
 
     private func nativeError(from context: GuavaJoltContext) -> PhysicsBackendError {
@@ -451,7 +527,8 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         if descriptor.rigidBody?.allowSleep ?? false {
             flags |= Self.rigidBodyAllowSleepFlag
         }
-        if descriptor.rigidBody?.continuousCollisionDetection ?? false {
+        if descriptor.rigidBody?.continuousCollisionDetection == true
+            || descriptor.rigidBody?.motionQuality == .linearCast {
             flags |= Self.rigidBodyContinuousCollisionFlag
         }
 
@@ -562,7 +639,29 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             density: descriptor.collider?.material.density ?? PhysicsMaterial().density,
             shape_instances: nil,
             shape_instance_count: 0,
-            shape_instances_reserved: 0
+            shape_instances_reserved: 0,
+            mass_mode: descriptor.rigidBody?.massMode == .density ? 1 : 0,
+            motion_quality: descriptor.rigidBody?.motionQuality == .linearCast ? 1 : 0,
+            allowed_dofs: UInt8(0x3F) & ~(descriptor.rigidBody?.axisLocks.rawValue ?? 0),
+            has_center_of_mass_override: descriptor.rigidBody?.centerOfMassOverride == nil ? 0 : 1,
+            has_inertia_override: descriptor.rigidBody?.inertiaDiagonalOverride == nil ? 0 : 1,
+            has_kinematic_target: descriptor.rigidBody?.kinematicTarget == nil ? 0 : 1,
+            rigid_body_reserved: 0,
+            max_linear_velocity: descriptor.rigidBody?.maxLinearVelocity ?? 500,
+            max_angular_velocity: descriptor.rigidBody?.maxAngularVelocity ?? (0.25 * .pi * 60),
+            center_of_mass_x: descriptor.rigidBody?.centerOfMassOverride?.x ?? 0,
+            center_of_mass_y: descriptor.rigidBody?.centerOfMassOverride?.y ?? 0,
+            center_of_mass_z: descriptor.rigidBody?.centerOfMassOverride?.z ?? 0,
+            inertia_x: descriptor.rigidBody?.inertiaDiagonalOverride?.x ?? 0,
+            inertia_y: descriptor.rigidBody?.inertiaDiagonalOverride?.y ?? 0,
+            inertia_z: descriptor.rigidBody?.inertiaDiagonalOverride?.z ?? 0,
+            target_position_x: descriptor.rigidBody?.kinematicTarget?.position.x ?? 0,
+            target_position_y: descriptor.rigidBody?.kinematicTarget?.position.y ?? 0,
+            target_position_z: descriptor.rigidBody?.kinematicTarget?.position.z ?? 0,
+            target_rotation_x: descriptor.rigidBody?.kinematicTarget?.rotation.x ?? 0,
+            target_rotation_y: descriptor.rigidBody?.kinematicTarget?.rotation.y ?? 0,
+            target_rotation_z: descriptor.rigidBody?.kinematicTarget?.rotation.z ?? 0,
+            target_rotation_w: descriptor.rigidBody?.kinematicTarget?.rotation.w ?? 1
         )
     }
 
@@ -702,28 +801,74 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
 
     private func makeConstraintDesc(from descriptor: PhysicsConstraintDescriptor) -> GuavaJoltConstraintDesc {
         let constraint = descriptor.constraint
-        return GuavaJoltConstraintDesc(
-            entity_id: descriptor.entity.rawValue,
-            entity_a: constraint.entityA.rawValue,
-            entity_b: constraint.entityB.rawValue,
-            constraint_type: constraintTypeValue(constraint.constraintType),
-            is_enabled: constraint.isEnabled ? 1 : 0,
-            reserved: 0,
-            pivot_a_x: constraint.pivotA.x,
-            pivot_a_y: constraint.pivotA.y,
-            pivot_a_z: constraint.pivotA.z,
-            pivot_b_x: constraint.pivotB.x,
-            pivot_b_y: constraint.pivotB.y,
-            pivot_b_z: constraint.pivotB.z,
-            axis_a_x: constraint.axisA.x,
-            axis_a_y: constraint.axisA.y,
-            axis_a_z: constraint.axisA.z,
-            axis_b_x: constraint.axisB.x,
-            axis_b_y: constraint.axisB.y,
-            axis_b_z: constraint.axisB.z,
-            min_limit: constraint.minLimit,
-            max_limit: constraint.maxLimit
-        )
+        var result = GuavaJoltConstraintDesc()
+        result.entity_id = descriptor.entity.rawValue
+        result.entity_a = constraint.entityA.rawValue
+        result.entity_b = constraint.entityB.rawValue
+        result.constraint_type = constraintTypeValue(constraint.constraintType)
+        result.is_enabled = constraint.isEnabled ? 1 : 0
+        result.pivot_a_x = constraint.pivotA.x
+        result.pivot_a_y = constraint.pivotA.y
+        result.pivot_a_z = constraint.pivotA.z
+        result.pivot_b_x = constraint.pivotB.x
+        result.pivot_b_y = constraint.pivotB.y
+        result.pivot_b_z = constraint.pivotB.z
+        result.axis_a_x = constraint.axisA.x
+        result.axis_a_y = constraint.axisA.y
+        result.axis_a_z = constraint.axisA.z
+        result.axis_b_x = constraint.axisB.x
+        result.axis_b_y = constraint.axisB.y
+        result.axis_b_z = constraint.axisB.z
+        result.min_limit = constraint.minLimit
+        result.max_limit = constraint.maxLimit
+        result.break_force = constraint.breakForce
+        result.break_torque = constraint.breakTorque
+
+        func apply(_ spring: PhysicsJointSpring) {
+            result.spring_frequency = spring.frequency
+            result.spring_damping = spring.damping
+        }
+        func apply(_ motor: PhysicsJointMotor, angular: Bool = false) {
+            if angular {
+                result.angular_motor_mode = motorModeValue(motor.mode)
+                result.angular_motor_target_position = motor.targetPosition
+                result.angular_motor_target_velocity = motor.targetVelocity
+                result.angular_motor_max_force = motor.maxForce
+            } else {
+                result.motor_mode = motorModeValue(motor.mode)
+                result.motor_target_position = motor.targetPosition
+                result.motor_target_velocity = motor.targetVelocity
+                result.motor_max_force = motor.maxForce
+            }
+        }
+        switch constraint.configuration {
+        case .point, .fixed:
+            break
+        case let .distance(value):
+            apply(value.spring)
+        case let .hinge(value):
+            apply(value.spring); apply(value.motor, angular: true)
+        case let .slider(value):
+            apply(value.spring); apply(value.motor)
+        case let .cone(value):
+            apply(value.spring)
+            result.half_cone_angle = value.halfConeAngle
+        case let .sixDOF(value):
+            apply(value.spring); apply(value.linearMotor); apply(value.angularMotor, angular: true)
+            result.linear_min_x = value.linearMinimum.x
+            result.linear_min_y = value.linearMinimum.y
+            result.linear_min_z = value.linearMinimum.z
+            result.linear_max_x = value.linearMaximum.x
+            result.linear_max_y = value.linearMaximum.y
+            result.linear_max_z = value.linearMaximum.z
+            result.angular_min_x = value.angularMinimum.x
+            result.angular_min_y = value.angularMinimum.y
+            result.angular_min_z = value.angularMinimum.z
+            result.angular_max_x = value.angularMaximum.x
+            result.angular_max_y = value.angularMaximum.y
+            result.angular_max_z = value.angularMaximum.z
+        }
+        return result
     }
 
     private func makeBodyState(from descriptor: PhysicsBodyDescriptor) -> GuavaJoltBodyState {
@@ -750,9 +895,11 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     }
 
     private func makeQueryFilter(_ filter: PhysicsQueryFilter) -> GuavaJoltQueryFilter {
-        GuavaJoltQueryFilter(
-            exclude_entity: filter.excludeEntity?.rawValue ?? 0,
-            has_exclude_entity: filter.excludeEntity == nil ? 0 : 1,
+        let excluded = filter.excludedEntities
+        let nativeExcludedEntity = excluded.count == 1 ? excluded.first : nil
+        return GuavaJoltQueryFilter(
+            exclude_entity: nativeExcludedEntity?.rawValue ?? 0,
+            has_exclude_entity: nativeExcludedEntity == nil ? 0 : 1,
             include_triggers: filter.includeTriggers ? 1 : 0,
             has_layer_id: filter.layerID == nil ? 0 : 1,
             reserved0: 0,
@@ -929,7 +1076,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         }
     }
 
-    private func constraintTypeValue(_ type: ConstraintType) -> UInt8 {
+    private func constraintTypeValue(_ type: PhysicsJointKind) -> UInt8 {
         switch type {
         case .pointToPoint:
             return 0
@@ -941,6 +1088,18 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             return 2
         case .distance:
             return 3
+        case .cone:
+            return 5
+        case .sixDOF:
+            return 6
+        }
+    }
+
+    private func motorModeValue(_ mode: PhysicsJointMotorMode) -> UInt8 {
+        switch mode {
+        case .disabled: return 0
+        case .velocity: return 1
+        case .position: return 2
         }
     }
 

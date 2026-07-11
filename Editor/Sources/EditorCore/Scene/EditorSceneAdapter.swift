@@ -639,6 +639,7 @@ public struct EditorSceneManifestLight: Codable, Sendable, Equatable {
 public struct EditorSceneManifestRigidBody: Codable, Sendable, Equatable {
     public let motionType: String
     public let mass: Float
+    public let massMode: String
     public let linearVelocity: EditorSceneManifestVector3
     public let angularVelocity: EditorSceneManifestVector3
     public let accumulatedForce: EditorSceneManifestVector3
@@ -651,10 +652,19 @@ public struct EditorSceneManifestRigidBody: Codable, Sendable, Equatable {
     public let allowSleep: Bool
     public let isSleeping: Bool
     public let continuousCollisionDetection: Bool
+    public let centerOfMassOverride: EditorSceneManifestVector3?
+    public let inertiaDiagonalOverride: EditorSceneManifestVector3?
+    public let axisLocks: UInt8
+    public let maxLinearVelocity: Float
+    public let maxAngularVelocity: Float
+    public let motionQuality: String
+    public let kinematicTargetPosition: EditorSceneManifestVector3?
+    public let kinematicTargetRotation: EditorSceneManifestVector4?
 
     private enum CodingKeys: String, CodingKey {
         case motionType
         case mass
+        case massMode
         case linearVelocity
         case angularVelocity
         case accumulatedForce
@@ -667,11 +677,15 @@ public struct EditorSceneManifestRigidBody: Codable, Sendable, Equatable {
         case allowSleep
         case isSleeping
         case continuousCollisionDetection
+        case centerOfMassOverride, inertiaDiagonalOverride, axisLocks
+        case maxLinearVelocity, maxAngularVelocity, motionQuality
+        case kinematicTargetPosition, kinematicTargetRotation
     }
 
     public init(_ component: RigidBody) {
         self.motionType = component.motionType.rawValue
         self.mass = component.mass
+        self.massMode = component.massMode.rawValue
         self.linearVelocity = EditorSceneManifestVector3(component.linearVelocity)
         self.angularVelocity = EditorSceneManifestVector3(component.angularVelocity)
         self.accumulatedForce = EditorSceneManifestVector3(component.accumulatedForce)
@@ -684,12 +698,21 @@ public struct EditorSceneManifestRigidBody: Codable, Sendable, Equatable {
         self.allowSleep = component.allowSleep
         self.isSleeping = component.isSleeping
         self.continuousCollisionDetection = component.continuousCollisionDetection
+        self.centerOfMassOverride = component.centerOfMassOverride.map(EditorSceneManifestVector3.init)
+        self.inertiaDiagonalOverride = component.inertiaDiagonalOverride.map(EditorSceneManifestVector3.init)
+        self.axisLocks = component.axisLocks.rawValue
+        self.maxLinearVelocity = component.maxLinearVelocity
+        self.maxAngularVelocity = component.maxAngularVelocity
+        self.motionQuality = component.motionQuality.rawValue
+        self.kinematicTargetPosition = component.kinematicTarget.map { EditorSceneManifestVector3($0.position) }
+        self.kinematicTargetRotation = component.kinematicTarget.map { EditorSceneManifestVector4($0.rotation) }
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         motionType = try c.decode(String.self, forKey: .motionType)
         mass = try c.decode(Float.self, forKey: .mass)
+        massMode = try c.decodeIfPresent(String.self, forKey: .massMode) ?? RigidBodyMassMode.mass.rawValue
         linearVelocity = try c.decode(EditorSceneManifestVector3.self, forKey: .linearVelocity)
         angularVelocity = try c.decode(EditorSceneManifestVector3.self, forKey: .angularVelocity)
         accumulatedForce = try c.decode(EditorSceneManifestVector3.self, forKey: .accumulatedForce)
@@ -711,11 +734,20 @@ public struct EditorSceneManifestRigidBody: Codable, Sendable, Equatable {
             Bool.self,
             forKey: .continuousCollisionDetection
         ) ?? false
+        centerOfMassOverride = try c.decodeIfPresent(EditorSceneManifestVector3.self, forKey: .centerOfMassOverride)
+        inertiaDiagonalOverride = try c.decodeIfPresent(EditorSceneManifestVector3.self, forKey: .inertiaDiagonalOverride)
+        axisLocks = try c.decodeIfPresent(UInt8.self, forKey: .axisLocks) ?? 0
+        maxLinearVelocity = try c.decodeIfPresent(Float.self, forKey: .maxLinearVelocity) ?? 500
+        maxAngularVelocity = try c.decodeIfPresent(Float.self, forKey: .maxAngularVelocity) ?? (0.25 * .pi * 60)
+        motionQuality = try c.decodeIfPresent(String.self, forKey: .motionQuality) ?? RigidBodyMotionQuality.discrete.rawValue
+        kinematicTargetPosition = try c.decodeIfPresent(EditorSceneManifestVector3.self, forKey: .kinematicTargetPosition)
+        kinematicTargetRotation = try c.decodeIfPresent(EditorSceneManifestVector4.self, forKey: .kinematicTargetRotation)
     }
 
     var component: RigidBody {
         RigidBody(motionType: RigidBodyMotionType(rawValue: motionType) ?? .dynamic,
                   mass: mass,
+                  massMode: RigidBodyMassMode(rawValue: massMode) ?? .mass,
                   linearVelocity: linearVelocity.simdValue,
                   angularVelocity: angularVelocity.simdValue,
                   accumulatedForce: accumulatedForce.simdValue,
@@ -727,7 +759,19 @@ public struct EditorSceneManifestRigidBody: Codable, Sendable, Equatable {
                   angularDamping: angularDamping,
                   allowSleep: allowSleep,
                   isSleeping: isSleeping,
-                  continuousCollisionDetection: continuousCollisionDetection)
+                  continuousCollisionDetection: continuousCollisionDetection,
+                  centerOfMassOverride: centerOfMassOverride?.simdValue,
+                  inertiaDiagonalOverride: inertiaDiagonalOverride?.simdValue,
+                  axisLocks: RigidBodyAxisLocks(rawValue: axisLocks),
+                  maxLinearVelocity: maxLinearVelocity,
+                  maxAngularVelocity: maxAngularVelocity,
+                  motionQuality: RigidBodyMotionQuality(rawValue: motionQuality) ?? .discrete,
+                  kinematicTarget: kinematicTargetPosition.map {
+                      PhysicsKinematicTarget(
+                          position: $0.simdValue,
+                          rotation: kinematicTargetRotation?.simdValue ?? SIMD4<Float>(0, 0, 0, 1)
+                      )
+                  })
     }
 }
 
@@ -945,6 +989,23 @@ public struct EditorSceneManifestConstraint: Codable, Sendable, Equatable {
     public let minLimit: Float
     public let maxLimit: Float
     public let isEnabled: Bool
+    public let breakForce: Float?
+    public let breakTorque: Float?
+    public let springFrequency: Float?
+    public let springDamping: Float?
+    public let motorMode: String?
+    public let motorTargetPosition: Float?
+    public let motorTargetVelocity: Float?
+    public let motorMaxForce: Float?
+    public let angularMotorMode: String?
+    public let angularMotorTargetPosition: Float?
+    public let angularMotorTargetVelocity: Float?
+    public let angularMotorMaxForce: Float?
+    public let halfConeAngle: Float?
+    public let linearMinimum: EditorSceneManifestVector3?
+    public let linearMaximum: EditorSceneManifestVector3?
+    public let angularMinimum: EditorSceneManifestVector3?
+    public let angularMaximum: EditorSceneManifestVector3?
 
     public init(_ component: Constraint) {
         self.constraintType = component.constraintType.rawValue
@@ -957,22 +1018,114 @@ public struct EditorSceneManifestConstraint: Codable, Sendable, Equatable {
         self.minLimit = component.minLimit
         self.maxLimit = component.maxLimit
         self.isEnabled = component.isEnabled
+        self.breakForce = component.breakForce
+        self.breakTorque = component.breakTorque
+        var spring: PhysicsJointSpring?
+        var motor: PhysicsJointMotor?
+        var angularMotor: PhysicsJointMotor?
+        var coneAngle: Float?
+        var linearMin: SIMD3<Float>?
+        var linearMax: SIMD3<Float>?
+        var angularMin: SIMD3<Float>?
+        var angularMax: SIMD3<Float>?
+        switch component.configuration {
+        case .point, .fixed:
+            break
+        case let .distance(value):
+            spring = value.spring
+        case let .hinge(value):
+            spring = value.spring; angularMotor = value.motor
+        case let .slider(value):
+            spring = value.spring; motor = value.motor
+        case let .cone(value):
+            spring = value.spring; coneAngle = value.halfConeAngle
+        case let .sixDOF(value):
+            spring = value.spring
+            motor = value.linearMotor
+            angularMotor = value.angularMotor
+            linearMin = value.linearMinimum
+            linearMax = value.linearMaximum
+            angularMin = value.angularMinimum
+            angularMax = value.angularMaximum
+        }
+        self.springFrequency = spring?.frequency
+        self.springDamping = spring?.damping
+        self.motorMode = motor?.mode.rawValue
+        self.motorTargetPosition = motor?.targetPosition
+        self.motorTargetVelocity = motor?.targetVelocity
+        self.motorMaxForce = motor?.maxForce
+        self.angularMotorMode = angularMotor?.mode.rawValue
+        self.angularMotorTargetPosition = angularMotor?.targetPosition
+        self.angularMotorTargetVelocity = angularMotor?.targetVelocity
+        self.angularMotorMaxForce = angularMotor?.maxForce
+        self.halfConeAngle = coneAngle
+        self.linearMinimum = linearMin.map(EditorSceneManifestVector3.init)
+        self.linearMaximum = linearMax.map(EditorSceneManifestVector3.init)
+        self.angularMinimum = angularMin.map(EditorSceneManifestVector3.init)
+        self.angularMaximum = angularMax.map(EditorSceneManifestVector3.init)
     }
 
     func component(idMap: [UInt64: EntityID]) -> Constraint? {
         guard let mappedA = idMap[entityA],
               let mappedB = idMap[entityB]
         else { return nil }
-        return Constraint(constraintType: ConstraintType(rawValue: constraintType) ?? .distance,
-                          entityA: mappedA,
-                          entityB: mappedB,
-                          pivotA: pivotA.simdValue,
-                          pivotB: pivotB.simdValue,
-                          axisA: axisA.simdValue,
-                          axisB: axisB.simdValue,
-                          minLimit: minLimit,
-                          maxLimit: maxLimit,
-                          isEnabled: isEnabled)
+        let spring = PhysicsJointSpring(
+            frequency: springFrequency ?? 0,
+            damping: springDamping ?? 0
+        )
+        func motor(angular: Bool = false) -> PhysicsJointMotor {
+            PhysicsJointMotor(
+                mode: PhysicsJointMotorMode(rawValue: angular ? angularMotorMode ?? "disabled" : motorMode ?? "disabled") ?? .disabled,
+                targetPosition: angular ? angularMotorTargetPosition ?? 0 : motorTargetPosition ?? 0,
+                targetVelocity: angular ? angularMotorTargetVelocity ?? 0 : motorTargetVelocity ?? 0,
+                maxForce: angular ? angularMotorMaxForce ?? .greatestFiniteMagnitude : motorMaxForce ?? .greatestFiniteMagnitude
+            )
+        }
+        let kind = PhysicsJointKind(rawValue: constraintType) ?? .distance
+        let configuration: PhysicsJointConfiguration
+        switch kind {
+        case .pointToPoint:
+            configuration = .point
+        case .fixed:
+            configuration = .fixed(axisA: axisA.simdValue, axisB: axisB.simdValue)
+        case .distance:
+            configuration = .distance(DistanceJointConfiguration(
+                minimumDistance: minLimit, maximumDistance: maxLimit, spring: spring))
+        case .hinge:
+            configuration = .hinge(HingeJointConfiguration(
+                axisA: axisA.simdValue, axisB: axisB.simdValue,
+                minimumAngle: minLimit, maximumAngle: maxLimit,
+                motor: motor(angular: true), spring: spring))
+        case .slider:
+            configuration = .slider(SliderJointConfiguration(
+                axisA: axisA.simdValue, axisB: axisB.simdValue,
+                minimumDistance: minLimit, maximumDistance: maxLimit,
+                motor: motor(), spring: spring))
+        case .cone:
+            configuration = .cone(ConeJointConfiguration(
+                twistAxisA: axisA.simdValue, twistAxisB: axisB.simdValue,
+                halfConeAngle: halfConeAngle ?? .pi / 4,
+                minimumTwistAngle: minLimit, maximumTwistAngle: maxLimit,
+                spring: spring))
+        case .sixDOF:
+            configuration = .sixDOF(SixDOFJointConfiguration(
+                axisA: axisA.simdValue, axisB: axisB.simdValue,
+                linearMinimum: linearMinimum?.simdValue ?? .zero,
+                linearMaximum: linearMaximum?.simdValue ?? .zero,
+                angularMinimum: angularMinimum?.simdValue ?? .zero,
+                angularMaximum: angularMaximum?.simdValue ?? .zero,
+                linearMotor: motor(), angularMotor: motor(angular: true), spring: spring))
+        }
+        return Constraint(
+            configuration: configuration,
+            entityA: mappedA,
+            entityB: mappedB,
+            pivotA: pivotA.simdValue,
+            pivotB: pivotB.simdValue,
+            isEnabled: isEnabled,
+            breakForce: breakForce ?? .greatestFiniteMagnitude,
+            breakTorque: breakTorque ?? .greatestFiniteMagnitude
+        )
     }
 }
 
@@ -1941,6 +2094,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         if let colliderSection = colliderSection(for: entity) {
             sections.append(colliderSection)
         }
+        if let characterControllerSection = characterControllerSection(for: entity) {
+            sections.append(characterControllerSection)
+        }
         if let constraintSection = constraintSection(for: entity) {
             sections.append(constraintSection)
         }
@@ -2205,6 +2361,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                               step: 0.5,
                                               showsStepper: true)
                 ),
+                EditorInspectorField(id: "mass-mode", label: L("Mass Mode"), value: .readOnly(body.massMode.rawValue)),
+                EditorInspectorField(id: "max-linear-velocity", label: L("Max Linear Velocity"), value: .readOnly(format(body.maxLinearVelocity))),
+                EditorInspectorField(id: "max-angular-velocity", label: L("Max Angular Velocity"), value: .readOnly(format(body.maxAngularVelocity))),
+                EditorInspectorField(id: "axis-locks", label: L("Axis Locks"), value: .readOnly(String(body.axisLocks.rawValue))),
                 EditorInspectorField(
                     id: "linear-velocity",
                     label: L("Linear Velocity"),
@@ -2261,6 +2421,30 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                     label: L("Sleeping"),
                     value: .readOnly(body.isSleeping ? L("Yes") : L("No"))
                 ),
+            ]
+        )
+    }
+
+    private func characterControllerSection(for entity: EntityID) -> EditorInspectorSection? {
+        guard scene.hasComponent(CharacterController.self, for: entity) else { return nil }
+        return EditorInspectorSection(
+            id: "character-controller",
+            title: L("Character Controller"),
+            fields: [
+                EditorInspectorField(id: "character-radius", label: L("Radius"), value: .constrainedNumber(characterFloatBinding(for: entity, \.radius, min: 0.01), min: 0.01, max: nil, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "character-standing-height", label: L("Standing Half Height"), value: .constrainedNumber(characterFloatBinding(for: entity, \.standingHalfHeight, min: 0.01), min: 0.01, max: nil, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "character-crouching-height", label: L("Crouching Half Height"), value: .constrainedNumber(characterFloatBinding(for: entity, \.crouchingHalfHeight, min: 0.01), min: 0.01, max: nil, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "character-center", label: L("Center"), value: .vector3(
+                    x: characterVectorBinding(for: entity, axis: \.x),
+                    y: characterVectorBinding(for: entity, axis: \.y),
+                    z: characterVectorBinding(for: entity, axis: \.z)
+                )),
+                EditorInspectorField(id: "character-slope", label: L("Max Slope"), value: .constrainedNumber(characterFloatBinding(for: entity, \.maxSlopeDegrees, min: 0, max: 89.9), min: 0, max: 89.9, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "character-step", label: L("Step Height"), value: .constrainedNumber(characterFloatBinding(for: entity, \.stepHeight, min: 0), min: 0, max: nil, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "character-skin", label: L("Skin Width"), value: .constrainedNumber(characterFloatBinding(for: entity, \.skinWidth, min: 0.001), min: 0.001, max: nil, step: 0.005, showsStepper: true)),
+                EditorInspectorField(id: "character-mass", label: L("Mass"), value: .constrainedNumber(characterFloatBinding(for: entity, \.mass, min: 0.01), min: 0.01, max: nil, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "character-strength", label: L("Push Strength"), value: .constrainedNumber(characterFloatBinding(for: entity, \.maxStrength, min: 0), min: 0, max: nil, step: 10, showsStepper: true)),
+                EditorInspectorField(id: "character-gravity", label: L("Gravity Scale"), value: .constrainedNumber(characterFloatBinding(for: entity, \.gravityScale), min: nil, max: nil, step: 0.1, showsStepper: true)),
             ]
         )
     }
@@ -4472,6 +4656,41 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 let current = scene.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()
                 guard current.gravity[keyPath: axis] != next else { return }
                 updatePhysicsSettings { $0.gravity[keyPath: axis] = next }
+            }
+        )
+    }
+
+    private func characterFloatBinding(
+        for entity: EntityID,
+        _ keyPath: WritableKeyPath<CharacterController, Float>,
+        min minimum: Float? = nil,
+        max maximum: Float? = nil
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in scene.component(CharacterController.self, for: entity)?[keyPath: keyPath] ?? 0 },
+            set: { [self] next in
+                var value = next
+                if let minimum { value = Swift.max(minimum, value) }
+                if let maximum { value = Swift.min(maximum, value) }
+                guard scene.updateComponent(CharacterController.self, for: entity, {
+                    $0[keyPath: keyPath] = value
+                }) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func characterVectorBinding(
+        for entity: EntityID,
+        axis: WritableKeyPath<SIMD3<Float>, Float>
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in scene.component(CharacterController.self, for: entity)?.center[keyPath: axis] ?? 0 },
+            set: { [self] next in
+                guard scene.updateComponent(CharacterController.self, for: entity, {
+                    $0.center[keyPath: axis] = next
+                }) else { return }
+                notifyRevisionChanged()
             }
         )
     }

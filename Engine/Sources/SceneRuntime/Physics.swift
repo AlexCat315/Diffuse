@@ -37,9 +37,45 @@ public enum RigidBodyMotionType: String, CaseIterable, Sendable, Equatable {
     case kinematic
 }
 
+public enum RigidBodyMassMode: String, Sendable, Equatable, Codable {
+    case mass
+    case density
+}
+
+public enum RigidBodyMotionQuality: String, Sendable, Equatable, Codable {
+    case discrete
+    case linearCast
+}
+
+public struct RigidBodyAxisLocks: OptionSet, Sendable, Equatable, Codable {
+    public let rawValue: UInt8
+    public init(rawValue: UInt8) { self.rawValue = rawValue }
+
+    public static let translationX = Self(rawValue: 1 << 0)
+    public static let translationY = Self(rawValue: 1 << 1)
+    public static let translationZ = Self(rawValue: 1 << 2)
+    public static let rotationX = Self(rawValue: 1 << 3)
+    public static let rotationY = Self(rawValue: 1 << 4)
+    public static let rotationZ = Self(rawValue: 1 << 5)
+}
+
+public struct PhysicsKinematicTarget: Sendable, Equatable {
+    public var position: SIMD3<Float>
+    public var rotation: SIMD4<Float>
+
+    public init(
+        position: SIMD3<Float>,
+        rotation: SIMD4<Float> = SIMD4<Float>(0, 0, 0, 1)
+    ) {
+        self.position = position
+        self.rotation = rotation
+    }
+}
+
 public struct RigidBody: RuntimeComponent, Sendable, Equatable {
     public var motionType: RigidBodyMotionType
     public var mass: Float
+    public var massMode: RigidBodyMassMode
     public var linearVelocity: SIMD3<Float>
     public var angularVelocity: SIMD3<Float>
     public var accumulatedForce: SIMD3<Float>
@@ -52,10 +88,18 @@ public struct RigidBody: RuntimeComponent, Sendable, Equatable {
     public var allowSleep: Bool
     public var isSleeping: Bool
     public var continuousCollisionDetection: Bool
+    public var centerOfMassOverride: SIMD3<Float>?
+    public var inertiaDiagonalOverride: SIMD3<Float>?
+    public var axisLocks: RigidBodyAxisLocks
+    public var maxLinearVelocity: Float
+    public var maxAngularVelocity: Float
+    public var motionQuality: RigidBodyMotionQuality
+    public var kinematicTarget: PhysicsKinematicTarget?
 
     public init(
         motionType: RigidBodyMotionType = .dynamic,
         mass: Float = 1,
+        massMode: RigidBodyMassMode = .mass,
         linearVelocity: SIMD3<Float> = .zero,
         angularVelocity: SIMD3<Float> = .zero,
         accumulatedForce: SIMD3<Float> = .zero,
@@ -67,10 +111,18 @@ public struct RigidBody: RuntimeComponent, Sendable, Equatable {
         angularDamping: Float = 0.04,
         allowSleep: Bool = true,
         isSleeping: Bool = false,
-        continuousCollisionDetection: Bool = false
+        continuousCollisionDetection: Bool = false,
+        centerOfMassOverride: SIMD3<Float>? = nil,
+        inertiaDiagonalOverride: SIMD3<Float>? = nil,
+        axisLocks: RigidBodyAxisLocks = [],
+        maxLinearVelocity: Float = 500,
+        maxAngularVelocity: Float = 0.25 * .pi * 60,
+        motionQuality: RigidBodyMotionQuality = .discrete,
+        kinematicTarget: PhysicsKinematicTarget? = nil
     ) {
         self.motionType = motionType
         self.mass = mass
+        self.massMode = massMode
         self.linearVelocity = linearVelocity
         self.angularVelocity = angularVelocity
         self.accumulatedForce = accumulatedForce
@@ -83,6 +135,13 @@ public struct RigidBody: RuntimeComponent, Sendable, Equatable {
         self.allowSleep = allowSleep
         self.isSleeping = isSleeping
         self.continuousCollisionDetection = continuousCollisionDetection
+        self.centerOfMassOverride = centerOfMassOverride
+        self.inertiaDiagonalOverride = inertiaDiagonalOverride
+        self.axisLocks = axisLocks
+        self.maxLinearVelocity = max(0, maxLinearVelocity)
+        self.maxAngularVelocity = max(0, maxAngularVelocity)
+        self.motionQuality = continuousCollisionDetection ? .linearCast : motionQuality
+        self.kinematicTarget = kinematicTarget
     }
 }
 
@@ -370,28 +429,229 @@ public struct CharacterStateFrameResource: Sendable, Equatable {
     public static let empty = CharacterStateFrameResource()
 }
 
-public enum ConstraintType: String, Sendable, Equatable {
+public enum PhysicsJointKind: String, Sendable, Equatable {
     case pointToPoint
     case hinge
     case fixed
     case slider
     case distance
+    case cone
+    case sixDOF
 }
 
-public struct Constraint: RuntimeComponent, Sendable, Equatable {
-    public var constraintType: ConstraintType
+public struct PhysicsJointSpring: Sendable, Equatable {
+    public var frequency: Float
+    public var damping: Float
+
+    public init(frequency: Float = 0, damping: Float = 0) {
+        self.frequency = max(0, frequency)
+        self.damping = max(0, damping)
+    }
+}
+
+public enum PhysicsJointMotorMode: String, Sendable, Equatable {
+    case disabled
+    case position
+    case velocity
+}
+
+public struct PhysicsJointMotor: Sendable, Equatable {
+    public var mode: PhysicsJointMotorMode
+    public var targetPosition: Float
+    public var targetVelocity: Float
+    public var maxForce: Float
+
+    public init(
+        mode: PhysicsJointMotorMode = .disabled,
+        targetPosition: Float = 0,
+        targetVelocity: Float = 0,
+        maxForce: Float = .greatestFiniteMagnitude
+    ) {
+        self.mode = mode
+        self.targetPosition = targetPosition
+        self.targetVelocity = targetVelocity
+        self.maxForce = max(0, maxForce)
+    }
+}
+
+public struct DistanceJointConfiguration: Sendable, Equatable {
+    public var minimumDistance: Float
+    public var maximumDistance: Float
+    public var spring: PhysicsJointSpring
+
+    public init(minimumDistance: Float = 0, maximumDistance: Float = 0,
+                spring: PhysicsJointSpring = PhysicsJointSpring()) {
+        self.minimumDistance = max(0, minimumDistance)
+        self.maximumDistance = max(self.minimumDistance, maximumDistance)
+        self.spring = spring
+    }
+}
+
+public struct HingeJointConfiguration: Sendable, Equatable {
+    public var axisA: SIMD3<Float>
+    public var axisB: SIMD3<Float>
+    public var minimumAngle: Float
+    public var maximumAngle: Float
+    public var motor: PhysicsJointMotor
+    public var spring: PhysicsJointSpring
+
+    public init(
+        axisA: SIMD3<Float> = SIMD3<Float>(0, 1, 0),
+        axisB: SIMD3<Float> = SIMD3<Float>(0, 1, 0),
+        minimumAngle: Float = 0,
+        maximumAngle: Float = 0,
+        motor: PhysicsJointMotor = PhysicsJointMotor(),
+        spring: PhysicsJointSpring = PhysicsJointSpring()
+    ) {
+        self.axisA = axisA
+        self.axisB = axisB
+        self.minimumAngle = min(minimumAngle, maximumAngle)
+        self.maximumAngle = max(minimumAngle, maximumAngle)
+        self.motor = motor
+        self.spring = spring
+    }
+}
+
+public struct SliderJointConfiguration: Sendable, Equatable {
+    public var axisA: SIMD3<Float>
+    public var axisB: SIMD3<Float>
+    public var minimumDistance: Float
+    public var maximumDistance: Float
+    public var motor: PhysicsJointMotor
+    public var spring: PhysicsJointSpring
+
+    public init(
+        axisA: SIMD3<Float> = SIMD3<Float>(1, 0, 0),
+        axisB: SIMD3<Float> = SIMD3<Float>(1, 0, 0),
+        minimumDistance: Float = 0,
+        maximumDistance: Float = 0,
+        motor: PhysicsJointMotor = PhysicsJointMotor(),
+        spring: PhysicsJointSpring = PhysicsJointSpring()
+    ) {
+        self.axisA = axisA
+        self.axisB = axisB
+        self.minimumDistance = min(minimumDistance, maximumDistance)
+        self.maximumDistance = max(minimumDistance, maximumDistance)
+        self.motor = motor
+        self.spring = spring
+    }
+}
+
+public struct ConeJointConfiguration: Sendable, Equatable {
+    public var twistAxisA: SIMD3<Float>
+    public var twistAxisB: SIMD3<Float>
+    public var halfConeAngle: Float
+    public var minimumTwistAngle: Float
+    public var maximumTwistAngle: Float
+    public var spring: PhysicsJointSpring
+
+    public init(
+        twistAxisA: SIMD3<Float> = SIMD3<Float>(1, 0, 0),
+        twistAxisB: SIMD3<Float> = SIMD3<Float>(1, 0, 0),
+        halfConeAngle: Float = .pi / 4,
+        minimumTwistAngle: Float = -.pi,
+        maximumTwistAngle: Float = .pi,
+        spring: PhysicsJointSpring = PhysicsJointSpring()
+    ) {
+        self.twistAxisA = twistAxisA
+        self.twistAxisB = twistAxisB
+        self.halfConeAngle = max(0, halfConeAngle)
+        self.minimumTwistAngle = min(minimumTwistAngle, maximumTwistAngle)
+        self.maximumTwistAngle = max(minimumTwistAngle, maximumTwistAngle)
+        self.spring = spring
+    }
+}
+
+public struct SixDOFJointConfiguration: Sendable, Equatable {
+    public var axisA: SIMD3<Float>
+    public var axisB: SIMD3<Float>
+    public var linearMinimum: SIMD3<Float>
+    public var linearMaximum: SIMD3<Float>
+    public var angularMinimum: SIMD3<Float>
+    public var angularMaximum: SIMD3<Float>
+    public var linearMotor: PhysicsJointMotor
+    public var angularMotor: PhysicsJointMotor
+    public var spring: PhysicsJointSpring
+
+    public init(
+        axisA: SIMD3<Float> = SIMD3<Float>(1, 0, 0),
+        axisB: SIMD3<Float> = SIMD3<Float>(1, 0, 0),
+        linearMinimum: SIMD3<Float> = .zero,
+        linearMaximum: SIMD3<Float> = .zero,
+        angularMinimum: SIMD3<Float> = .zero,
+        angularMaximum: SIMD3<Float> = .zero,
+        linearMotor: PhysicsJointMotor = PhysicsJointMotor(),
+        angularMotor: PhysicsJointMotor = PhysicsJointMotor(),
+        spring: PhysicsJointSpring = PhysicsJointSpring()
+    ) {
+        self.axisA = axisA
+        self.axisB = axisB
+        self.linearMinimum = simd_min(linearMinimum, linearMaximum)
+        self.linearMaximum = simd_max(linearMinimum, linearMaximum)
+        self.angularMinimum = simd_min(angularMinimum, angularMaximum)
+        self.angularMaximum = simd_max(angularMinimum, angularMaximum)
+        self.linearMotor = linearMotor
+        self.angularMotor = angularMotor
+        self.spring = spring
+    }
+}
+
+public enum PhysicsJointConfiguration: Sendable, Equatable {
+    case point
+    case fixed(axisA: SIMD3<Float>, axisB: SIMD3<Float>)
+    case distance(DistanceJointConfiguration)
+    case hinge(HingeJointConfiguration)
+    case slider(SliderJointConfiguration)
+    case cone(ConeJointConfiguration)
+    case sixDOF(SixDOFJointConfiguration)
+
+    public var kind: PhysicsJointKind {
+        switch self {
+        case .point: return .pointToPoint
+        case .fixed: return .fixed
+        case .distance: return .distance
+        case .hinge: return .hinge
+        case .slider: return .slider
+        case .cone: return .cone
+        case .sixDOF: return .sixDOF
+        }
+    }
+}
+
+public struct PhysicsJoint: RuntimeComponent, Sendable, Equatable {
+    public var configuration: PhysicsJointConfiguration
     public var entityA: EntityID
     public var entityB: EntityID
     public var pivotA: SIMD3<Float>
     public var pivotB: SIMD3<Float>
-    public var axisA: SIMD3<Float>
-    public var axisB: SIMD3<Float>
-    public var minLimit: Float
-    public var maxLimit: Float
     public var isEnabled: Bool
+    public var breakForce: Float
+    public var breakTorque: Float
 
     public init(
-        constraintType: ConstraintType = .pointToPoint,
+        configuration: PhysicsJointConfiguration = .point,
+        entityA: EntityID,
+        entityB: EntityID,
+        pivotA: SIMD3<Float> = .zero,
+        pivotB: SIMD3<Float> = .zero,
+        isEnabled: Bool = true,
+        breakForce: Float = .greatestFiniteMagnitude,
+        breakTorque: Float = .greatestFiniteMagnitude
+    ) {
+        self.configuration = configuration
+        self.entityA = entityA
+        self.entityB = entityB
+        self.pivotA = pivotA
+        self.pivotB = pivotB
+        self.isEnabled = isEnabled
+        self.breakForce = max(0, breakForce)
+        self.breakTorque = max(0, breakTorque)
+    }
+
+    /// Compatibility initializer for Physics v1 callers. New code should use
+    /// the typed `configuration` initializer above.
+    public init(
+        constraintType: PhysicsJointKind = .pointToPoint,
         entityA: EntityID,
         entityB: EntityID,
         pivotA: SIMD3<Float> = .zero,
@@ -400,20 +660,114 @@ public struct Constraint: RuntimeComponent, Sendable, Equatable {
         axisB: SIMD3<Float> = SIMD3<Float>(0, 1, 0),
         minLimit: Float = 0,
         maxLimit: Float = 0,
-        isEnabled: Bool = true
+        isEnabled: Bool = true,
+        breakForce: Float = .greatestFiniteMagnitude,
+        breakTorque: Float = .greatestFiniteMagnitude
     ) {
-        self.constraintType = constraintType
+        switch constraintType {
+        case .pointToPoint:
+            configuration = .point
+        case .fixed:
+            configuration = .fixed(axisA: axisA, axisB: axisB)
+        case .distance:
+            configuration = .distance(DistanceJointConfiguration(
+                minimumDistance: minLimit, maximumDistance: maxLimit))
+        case .hinge:
+            configuration = .hinge(HingeJointConfiguration(
+                axisA: axisA, axisB: axisB,
+                minimumAngle: minLimit, maximumAngle: maxLimit))
+        case .slider:
+            configuration = .slider(SliderJointConfiguration(
+                axisA: axisA, axisB: axisB,
+                minimumDistance: minLimit, maximumDistance: maxLimit))
+        case .cone:
+            configuration = .cone(ConeJointConfiguration(
+                twistAxisA: axisA, twistAxisB: axisB,
+                minimumTwistAngle: minLimit, maximumTwistAngle: maxLimit))
+        case .sixDOF:
+            configuration = .sixDOF(SixDOFJointConfiguration(axisA: axisA, axisB: axisB))
+        }
         self.entityA = entityA
         self.entityB = entityB
         self.pivotA = pivotA
         self.pivotB = pivotB
-        self.axisA = axisA
-        self.axisB = axisB
-        self.minLimit = minLimit
-        self.maxLimit = maxLimit
         self.isEnabled = isEnabled
+        self.breakForce = max(0, breakForce)
+        self.breakTorque = max(0, breakTorque)
+    }
+
+    public var constraintType: PhysicsJointKind { configuration.kind }
+
+    public var axisA: SIMD3<Float> {
+        get { axes.0 }
+        set { setAxes(newValue, axes.1) }
+    }
+
+    public var axisB: SIMD3<Float> {
+        get { axes.1 }
+        set { setAxes(axes.0, newValue) }
+    }
+
+    public var minLimit: Float {
+        get { scalarLimits.0 }
+        set { setScalarLimits(newValue, scalarLimits.1) }
+    }
+
+    public var maxLimit: Float {
+        get { scalarLimits.1 }
+        set { setScalarLimits(scalarLimits.0, newValue) }
+    }
+
+    private var axes: (SIMD3<Float>, SIMD3<Float>) {
+        switch configuration {
+        case .point, .distance: return (SIMD3<Float>(0, 1, 0), SIMD3<Float>(0, 1, 0))
+        case let .fixed(a, b): return (a, b)
+        case let .hinge(value): return (value.axisA, value.axisB)
+        case let .slider(value): return (value.axisA, value.axisB)
+        case let .cone(value): return (value.twistAxisA, value.twistAxisB)
+        case let .sixDOF(value): return (value.axisA, value.axisB)
+        }
+    }
+
+    private var scalarLimits: (Float, Float) {
+        switch configuration {
+        case let .distance(value): return (value.minimumDistance, value.maximumDistance)
+        case let .hinge(value): return (value.minimumAngle, value.maximumAngle)
+        case let .slider(value): return (value.minimumDistance, value.maximumDistance)
+        case let .cone(value): return (value.minimumTwistAngle, value.maximumTwistAngle)
+        default: return (0, 0)
+        }
+    }
+
+    private mutating func setAxes(_ axisA: SIMD3<Float>, _ axisB: SIMD3<Float>) {
+        switch configuration {
+        case .point, .distance: break
+        case .fixed: configuration = .fixed(axisA: axisA, axisB: axisB)
+        case var .hinge(value): value.axisA = axisA; value.axisB = axisB; configuration = .hinge(value)
+        case var .slider(value): value.axisA = axisA; value.axisB = axisB; configuration = .slider(value)
+        case var .cone(value): value.twistAxisA = axisA; value.twistAxisB = axisB; configuration = .cone(value)
+        case var .sixDOF(value): value.axisA = axisA; value.axisB = axisB; configuration = .sixDOF(value)
+        }
+    }
+
+    private mutating func setScalarLimits(_ minimum: Float, _ maximum: Float) {
+        switch configuration {
+        case var .distance(value):
+            value.minimumDistance = minimum; value.maximumDistance = maximum; configuration = .distance(value)
+        case var .hinge(value):
+            value.minimumAngle = minimum; value.maximumAngle = maximum; configuration = .hinge(value)
+        case var .slider(value):
+            value.minimumDistance = minimum; value.maximumDistance = maximum; configuration = .slider(value)
+        case var .cone(value):
+            value.minimumTwistAngle = minimum; value.maximumTwistAngle = maximum; configuration = .cone(value)
+        default: break
+        }
     }
 }
+
+public typealias ConstraintType = PhysicsJointKind
+
+public typealias Constraint = PhysicsJoint
 
 public struct PhysicsSettingsResource: Sendable, Equatable {
     public var simulationMode: PhysicsSimulationMode
@@ -633,19 +987,39 @@ public struct PhysicsContactEvent: Sendable, Equatable {
 public struct PhysicsEventFrameResource: Sendable, Equatable {
     public var contacts: [PhysicsContactEvent]
     public var triggers: [TriggerEvent]
+    public var jointBreaks: [PhysicsJointBreakEvent]
     public var didOverflow: Bool
 
     public init(
         contacts: [PhysicsContactEvent] = [],
         triggers: [TriggerEvent] = [],
+        jointBreaks: [PhysicsJointBreakEvent] = [],
         didOverflow: Bool = false
     ) {
         self.contacts = contacts
         self.triggers = triggers
+        self.jointBreaks = jointBreaks
         self.didOverflow = didOverflow
     }
 
     public static let empty = PhysicsEventFrameResource()
+}
+
+public struct PhysicsJointBreakEvent: Sendable, Equatable {
+    public var jointEntity: EntityID
+    public var entityA: EntityID
+    public var entityB: EntityID
+    public var force: Float
+    public var torque: Float
+
+    public init(jointEntity: EntityID, entityA: EntityID, entityB: EntityID,
+                force: Float, torque: Float) {
+        self.jointEntity = jointEntity
+        self.entityA = entityA
+        self.entityB = entityB
+        self.force = force
+        self.torque = torque
+    }
 }
 
 public struct PhysicsContactFrameResource: Sendable, Equatable {
@@ -677,21 +1051,31 @@ public struct PhysicsContactFrameResource: Sendable, Equatable {
 }
 
 public struct PhysicsQueryFilter: Sendable, Equatable {
+    /// Legacy single-entity exclusion. New code can use `ignoredEntities` for
+    /// self hierarchies and other multi-body exclusions.
     public var excludeEntity: EntityID?
+    public var ignoredEntities: Set<EntityID>
     public var includeTriggers: Bool
     public var layerID: UInt16?
     public var layerMask: UInt16
 
     public init(
         excludeEntity: EntityID? = nil,
+        ignoredEntities: Set<EntityID> = [],
         includeTriggers: Bool = false,
         layerID: UInt16? = nil,
         layerMask: UInt16 = .max
     ) {
         self.excludeEntity = excludeEntity
+        self.ignoredEntities = ignoredEntities
         self.includeTriggers = includeTriggers
         self.layerID = layerID
         self.layerMask = layerMask
+    }
+
+    public var excludedEntities: Set<EntityID> {
+        guard let excludeEntity else { return ignoredEntities }
+        return ignoredEntities.union([excludeEntity])
     }
 }
 
@@ -1058,6 +1442,7 @@ public struct PhysicsStepResult: Sendable, Equatable {
     public var contactCount: Int
     public var writebacks: [PhysicsBodyWriteback]
     public var contactEvents: [PhysicsContactEvent]
+    public var jointBreakEvents: [PhysicsJointBreakEvent]
     public var characterStates: [CharacterState]
     public var error: PhysicsBackendError?
 
@@ -1067,6 +1452,7 @@ public struct PhysicsStepResult: Sendable, Equatable {
         contactCount: Int = 0,
         writebacks: [PhysicsBodyWriteback] = [],
         contactEvents: [PhysicsContactEvent] = [],
+        jointBreakEvents: [PhysicsJointBreakEvent] = [],
         error: PhysicsBackendError? = nil,
         characterStates: [CharacterState] = []
     ) {
@@ -1075,6 +1461,7 @@ public struct PhysicsStepResult: Sendable, Equatable {
         self.contactCount = contactCount
         self.writebacks = writebacks
         self.contactEvents = contactEvents
+        self.jointBreakEvents = jointBreakEvents
         self.error = error
         self.characterStates = characterStates
     }

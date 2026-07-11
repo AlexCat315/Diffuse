@@ -298,6 +298,7 @@ public struct RuntimeWorldSchedule {
         var syncEvents: [PhysicsSyncEvent] = []
         var pendingWritebacks: [PhysicsBodyWriteback] = []
         var physicsContactEvents: [PhysicsContactEvent] = []
+        var physicsJointBreakEvents: [PhysicsJointBreakEvent] = []
         var pendingCharacterStates: [EntityID: CharacterState] = [:]
 
         for phase in RuntimeSystemPhase.allCases {
@@ -435,6 +436,12 @@ public struct RuntimeWorldSchedule {
                     physicsStepCount += 1
                     physicsContactCount += stepResult.contactCount
                     physicsContactEvents.append(contentsOf: stepResult.contactEvents)
+                    physicsJointBreakEvents.append(contentsOf: stepResult.jointBreakEvents)
+                    for event in stepResult.jointBreakEvents {
+                        _ = world.updateComponent(PhysicsJoint.self, for: event.jointEntity) {
+                            $0.isEnabled = false
+                        }
+                    }
                     pendingWritebacks = mergeWritebacks(existing: pendingWritebacks, incoming: stepResult.writebacks)
                     for state in stepResult.characterStates {
                         pendingCharacterStates[state.entity] = state
@@ -551,6 +558,22 @@ public struct RuntimeWorldSchedule {
                 world.setDerivedResource(physicsDebugFrame)
                 recordJobReport(spatialIndexBuild.report, for: .spatialIndexUpdate)
             case .triggerDetection:
+                if physicsSettings.simulationMode == .off {
+                    // Edit/query-only worlds do not step Jolt and therefore cannot
+                    // receive contact callbacks. Preserve trigger previews through
+                    // the query scene; play mode exclusively uses the listener path.
+                    let triggerBackend = physicsQueryScene.synchronize(in: world)
+                    let bodyCount = physicsQueryScene.stats.bodyCount
+                    let triggerFrame = triggerBackend.detectTriggerFrame(
+                        maxEventCount: bodyCount * max(1, bodyCount) * 3
+                    )
+                    physicsEventFrame = PhysicsEventFrameResource(
+                        triggers: triggerFrame.enters + triggerFrame.active + triggerFrame.exits
+                    )
+                    world.setDerivedResource(triggerFrame)
+                    world.setDerivedResource(physicsEventFrame)
+                    continue
+                }
                 let triggers = Dictionary(uniqueKeysWithValues: activeBodies.compactMap { body in
                     body.collider.map { (body.entity, $0.isTrigger) }
                 })
@@ -598,7 +621,8 @@ public struct RuntimeWorldSchedule {
                 physicsContactFrame = PhysicsContactFrameResource(events: contactEvents)
                 physicsEventFrame = PhysicsEventFrameResource(
                     contacts: contactEvents,
-                    triggers: triggerEvents
+                    triggers: triggerEvents,
+                    jointBreaks: physicsJointBreakEvents
                 )
                 world.setDerivedResource(triggerFrame)
                 world.setDerivedResource(physicsContactFrame)
