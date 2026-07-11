@@ -15,10 +15,22 @@ struct PhysicsJointTests {
         #expect(layout.constraint_desc_size == UInt32(MemoryLayout<GuavaJoltConstraintDesc>.size))
         #expect(layout.contact_event_size == UInt32(MemoryLayout<GuavaJoltContactEvent>.size))
         #expect(layout.joint_break_event_size == UInt32(MemoryLayout<GuavaJoltJointBreakEvent>.size))
+        #expect(layout.context_config_size == UInt32(MemoryLayout<GuavaJoltContextConfig>.size))
         #expect(MemoryLayout<GuavaJoltConstraintDesc>.offset(of: \.entity_id) == 0)
         #expect(MemoryLayout<GuavaJoltConstraintDesc>.offset(of: \.entity_a) == 8)
         #expect(MemoryLayout<GuavaJoltConstraintDesc>.offset(of: \.entity_b) == 16)
         #expect(MemoryLayout<GuavaJoltJointBreakEvent>.offset(of: \.joint_entity) == 0)
+    }
+
+    @Test("C ABI rejects malformed context capacity configuration")
+    func invalidContextConfiguration() {
+        var config = GuavaJoltContextConfig()
+        config.struct_size = UInt32(MemoryLayout<GuavaJoltContextConfig>.size)
+        config.max_bodies = 0
+        config.max_body_pairs = 64
+        config.max_contact_constraints = 64
+        config.temp_allocator_bytes = 1_024 * 1_024
+        #expect(guava_jolt_context_create_with_config(&config) == nil)
     }
 
     @Test("joint break thresholds emit events and disable the authored joint")

@@ -24,8 +24,11 @@
     <section class="workspace">
       <aside class="treePane">
         <div class="paneHeader">
-          <span>Tree</span>
+          <span>Tree <span id="treeCount" class="panelStatus"></span></span>
           <button id="refreshTree" disabled>Refresh</button>
+        </div>
+        <div class="filterBar">
+          <input id="treeSearch" type="search" placeholder="Filter nodes…" autocomplete="off">
         </div>
         <div id="tree" class="tree empty">Connect to a GuavaUI app to inspect the live node tree.</div>
       </aside>
@@ -34,6 +37,8 @@
         <div class="mirrorHeader">
           <span>Mirror <span id="mirrorStatus" class="panelStatus">Idle</span></span>
           <div class="mirrorControls">
+            <label>FPS <input id="mirrorFPS" type="number" min="1" max="60" value="15"></label>
+            <label>Quality <input id="mirrorQuality" type="number" min="0.1" max="1" step="0.05" value="0.75"></label>
             <button id="startMirror" disabled>Start</button>
             <button id="stopMirror" disabled>Stop</button>
           </div>
@@ -57,13 +62,32 @@
           <span>Timing</span>
         </div>
         <pre id="timing" class="details empty">No timing sample.</pre>
+        <div class="paneHeader">
+          <span>State checkpoint</span>
+          <div>
+            <button id="captureState" disabled>Capture</button>
+            <button id="restoreState" disabled>Restore</button>
+          </div>
+        </div>
+        <textarea id="stateSnapshot" class="stateSnapshot" spellcheck="false" placeholder="Captured host state appears here."></textarea>
       </aside>
     </section>
 
     <section class="bottomPane">
       <div class="paneHeader">
-        <span>Log</span>
-        <button id="clearLog">Clear</button>
+        <span>Log <span id="logCount" class="panelStatus"></span></span>
+        <div class="logControls">
+          <select id="logLevel">
+            <option value="trace">Trace+</option>
+            <option value="debug">Debug+</option>
+            <option value="info" selected>Info+</option>
+            <option value="notice">Notice+</option>
+            <option value="warning">Warning+</option>
+            <option value="error">Error+</option>
+          </select>
+          <input id="logSearch" type="search" placeholder="Filter logs…" autocomplete="off">
+          <button id="clearLog">Clear</button>
+        </div>
       </div>
       <div id="log" class="log empty">No log entries.</div>
     </section>

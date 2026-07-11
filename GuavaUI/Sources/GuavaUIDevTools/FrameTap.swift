@@ -20,9 +20,7 @@ import ImageIO
 ///
 /// The mirror runs on the host's main thread because it shares the wgpu device
 /// and `DrawListRenderer` with the primary surface render path. To avoid
-/// stalling the host every frame the tap is rate-limited (default 15fps) and
-/// silently drops a frame if the previous one's GPU readback has not yet
-/// completed.
+/// stalling the host every frame the tap is rate-limited (default 15fps).
 @MainActor
 public final class FrameTap {
 
@@ -79,7 +77,6 @@ public final class FrameTap {
         self.lastCaptureAt = 0
         self.consecutiveErrors = 0
         self.capturesSinceStart = 0
-        print("[guava.devtools.frameTap] start fps=\(clampedFps) quality=\(self.quality)")
         #if canImport(Logging)
         log.info("mirror start fps=\(clampedFps) quality=\(self.quality)")
         #endif
@@ -117,13 +114,8 @@ public final class FrameTap {
         if !enabled {
             return
         }
-        if capturesSinceStart == 0 && consecutiveErrors == 0 {
-            // Only log first time to confirm the call site is wired.
-            print("[guava.devtools.frameTap] capture() called, enabled, drawable=\(widthPx)x\(heightPx) logical=\(logical.width)x\(logical.height)")
-        }
         guard sink.deliver != nil else {
             if capturesSinceStart == 0, consecutiveErrors == 0 {
-                print("[guava.devtools.frameTap] enabled but sink.deliver is nil")
                 #if canImport(Logging)
                 log.warning("mirror enabled but sink.deliver is nil; broadcaster not wired")
                 #endif
@@ -133,7 +125,6 @@ public final class FrameTap {
         }
         guard widthPx > 0, heightPx > 0 else {
             if capturesSinceStart == 0, consecutiveErrors == 0 {
-                print("[guava.devtools.frameTap] zero-sized drawable \(widthPx)x\(heightPx)")
                 #if canImport(Logging)
                 log.warning("mirror capture skipped: zero-sized drawable \(widthPx)x\(heightPx)")
                 #endif
@@ -199,14 +190,9 @@ public final class FrameTap {
             capturesSinceStart &+= 1
             consecutiveErrors = 0
             if capturesSinceStart == 1 {
-                // Dump the first frame to disk so the user can verify the
-                // JPEG itself is well-formed independently of the webview.
-                let url = URL(fileURLWithPath: "/tmp/guava-mirror-first.jpg")
-                try? jpeg.write(to: url)
-                print("[guava.devtools.frameTap] first frame seq=\(seq) px=\(widthPx)x\(heightPx) jpeg=\(jpeg.count)B (dumped to \(url.path))")
-            }
-            if capturesSinceStart % 30 == 0 {
-                print("[guava.devtools.frameTap] frame seq=\(seq) total=\(capturesSinceStart) jpeg=\(jpeg.count)B")
+                #if canImport(Logging)
+                log.debug("mirror first frame seq=\(seq) px=\(widthPx)x\(heightPx) jpeg=\(jpeg.count)B")
+                #endif
             }
             sink.deliver?(MirrorFramePayload(
                 seq: seq,
@@ -221,7 +207,6 @@ public final class FrameTap {
             // Log the first 3 failures and every 60th after that to avoid
             // flooding the host log when wgpu is in a permanently bad state.
             if consecutiveErrors <= 3 || consecutiveErrors % 60 == 0 {
-                print("[guava.devtools.frameTap] capture failed (#\(consecutiveErrors)): \(error)")
                 #if canImport(Logging)
                 log.warning("mirror capture failed (#\(consecutiveErrors)): \(error)")
                 #endif

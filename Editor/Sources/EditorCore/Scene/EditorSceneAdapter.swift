@@ -188,6 +188,7 @@ public struct EditorSceneManifestPhysicsSettings: Codable, Sendable, Equatable {
     public let maxSubstepsPerFrame: Int
     public let allowSleep: Bool
     public let collisionSteps: Int
+    public let capacity: PhysicsCapacitySettings
 
     private enum CodingKeys: String, CodingKey {
         case simulationMode
@@ -197,6 +198,7 @@ public struct EditorSceneManifestPhysicsSettings: Codable, Sendable, Equatable {
         case maxSubstepsPerFrame
         case allowSleep
         case collisionSteps
+        case capacity
     }
 
     public init(_ settings: PhysicsSettingsResource) {
@@ -207,6 +209,7 @@ public struct EditorSceneManifestPhysicsSettings: Codable, Sendable, Equatable {
         self.maxSubstepsPerFrame = settings.maxSubstepsPerFrame
         self.allowSleep = settings.allowSleep
         self.collisionSteps = settings.collisionSteps
+        self.capacity = settings.capacity
     }
 
     public init(from decoder: Decoder) throws {
@@ -219,6 +222,8 @@ public struct EditorSceneManifestPhysicsSettings: Codable, Sendable, Equatable {
         maxSubstepsPerFrame = try c.decode(Int.self, forKey: .maxSubstepsPerFrame)
         allowSleep = try c.decode(Bool.self, forKey: .allowSleep)
         collisionSteps = try c.decodeIfPresent(Int.self, forKey: .collisionSteps) ?? 1
+        capacity = try c.decodeIfPresent(PhysicsCapacitySettings.self, forKey: .capacity)
+            ?? PhysicsCapacitySettings()
     }
 
     var settings: PhysicsSettingsResource {
@@ -229,7 +234,8 @@ public struct EditorSceneManifestPhysicsSettings: Codable, Sendable, Equatable {
             fixedTimeStepSeconds: fixedTimeStepSeconds,
             maxSubstepsPerFrame: maxSubstepsPerFrame,
             allowSleep: allowSleep,
-            collisionSteps: collisionSteps
+            collisionSteps: collisionSteps,
+            capacity: capacity
         )
     }
 }
@@ -2607,6 +2613,36 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                     label: L("Allow Sleep"),
                     value: .bool(physicsAllowSleepBinding())
                 ),
+                EditorInspectorField(
+                    id: "physics-max-bodies",
+                    label: L("Max Bodies"),
+                    value: .constrainedNumber(physicsCapacityBinding(\.maxBodies, min: 1, max: 1_000_000),
+                                              min: 1, max: 1_000_000, step: 1_024, showsStepper: true)
+                ),
+                EditorInspectorField(
+                    id: "physics-max-body-pairs",
+                    label: L("Max Body Pairs"),
+                    value: .constrainedNumber(physicsCapacityBinding(\.maxBodyPairs, min: 1, max: 4_000_000),
+                                              min: 1, max: 4_000_000, step: 1_024, showsStepper: true)
+                ),
+                EditorInspectorField(
+                    id: "physics-max-contacts",
+                    label: L("Max Contacts"),
+                    value: .constrainedNumber(physicsCapacityBinding(\.maxContactConstraints, min: 1, max: 1_000_000),
+                                              min: 1, max: 1_000_000, step: 1_024, showsStepper: true)
+                ),
+                EditorInspectorField(
+                    id: "physics-temp-memory",
+                    label: L("Temp Memory (MiB)"),
+                    value: .constrainedNumber(physicsTempAllocatorMiBBinding(),
+                                              min: 1, max: 4_095, step: 1, showsStepper: true)
+                ),
+                EditorInspectorField(
+                    id: "physics-workers",
+                    label: L("Worker Threads (0 = Auto)"),
+                    value: .constrainedNumber(physicsCapacityBinding(\.workerThreadCount, min: 0, max: 1_024),
+                                              min: 0, max: 1_024, step: 1, showsStepper: true)
+                ),
             ]
         )
     }
@@ -4729,7 +4765,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             fixedTimeStepSeconds: next.fixedTimeStepSeconds,
             maxSubstepsPerFrame: next.maxSubstepsPerFrame,
             allowSleep: next.allowSleep,
-            collisionSteps: next.collisionSteps
+            collisionSteps: next.collisionSteps,
+            capacity: next.capacity
         )
         guard scene.resource(PhysicsSettingsResource.self) != sanitized else { return }
         scene.setResource(sanitized)
@@ -4862,6 +4899,41 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 let current = scene.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()
                 guard current.allowSleep != next else { return }
                 updatePhysicsSettings { $0.allowSleep = next }
+            }
+        )
+    }
+
+    private func physicsCapacityBinding(
+        _ keyPath: WritableKeyPath<PhysicsCapacitySettings, Int>,
+        min minimum: Int,
+        max maximum: Int
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                Float((scene.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource())
+                    .capacity[keyPath: keyPath])
+            },
+            set: { [self] next in
+                let clamped = max(minimum, min(Int(next.rounded()), maximum))
+                let current = scene.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()
+                guard current.capacity[keyPath: keyPath] != clamped else { return }
+                updatePhysicsSettings { $0.capacity[keyPath: keyPath] = clamped }
+            }
+        )
+    }
+
+    private func physicsTempAllocatorMiBBinding() -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                let settings = scene.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()
+                return Float(settings.capacity.tempAllocatorBytes) / Float(1_024 * 1_024)
+            },
+            set: { [self] next in
+                let mebibytes = max(1, min(Int(next.rounded()), 4_095))
+                let bytes = mebibytes * 1_024 * 1_024
+                let current = scene.resource(PhysicsSettingsResource.self) ?? PhysicsSettingsResource()
+                guard current.capacity.tempAllocatorBytes != bytes else { return }
+                updatePhysicsSettings { $0.capacity.tempAllocatorBytes = bytes }
             }
         )
     }

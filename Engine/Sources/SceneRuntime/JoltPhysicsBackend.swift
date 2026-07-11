@@ -20,6 +20,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     private var lastPreparedBodyCount: Int = 0
     private var initializationError: PhysicsBackendError?
     private var meshRevisionByEntity: [EntityID: UInt64] = [:]
+    private var activeCapacity: PhysicsCapacitySettings?
 
     public init() {
         var layout = GuavaJoltABILayout()
@@ -37,9 +38,8 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             && layout.character_state_size == UInt32(MemoryLayout<GuavaJoltCharacterState>.size)
             && layout.shape_instance_size == UInt32(MemoryLayout<GuavaJoltShapeInstance>.size)
             && layout.joint_break_event_size == UInt32(MemoryLayout<GuavaJoltJointBreakEvent>.size)
-        if compatible {
-            context = guava_jolt_context_create()
-        } else {
+            && layout.context_config_size == UInt32(MemoryLayout<GuavaJoltContextConfig>.size)
+        if !compatible {
             initializationError = PhysicsBackendError(
                 code: .abiMismatch,
                 message: "CJoltBridge ABI layout does not match the Swift bindings"
@@ -58,6 +58,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     }
 
     public func prepare(context: PhysicsPrepareContext) -> PhysicsPrepareResult {
+        ensureNativeContext(capacity: context.settings.capacity)
         guard let nativeContext = self.context else {
             lastPreparedBodyCount = context.activeBodies.count
             return PhysicsPrepareResult(
@@ -503,6 +504,46 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         }
         lastPreparedBodyCount = 0
         meshRevisionByEntity.removeAll(keepingCapacity: true)
+    }
+
+    private func ensureNativeContext(capacity: PhysicsCapacitySettings) {
+        guard initializationError?.code != .abiMismatch else { return }
+        let capacity = PhysicsCapacitySettings(
+            maxBodies: capacity.maxBodies,
+            bodyMutexCount: capacity.bodyMutexCount,
+            maxBodyPairs: capacity.maxBodyPairs,
+            maxContactConstraints: capacity.maxContactConstraints,
+            tempAllocatorBytes: capacity.tempAllocatorBytes,
+            workerThreadCount: capacity.workerThreadCount
+        )
+        guard context == nil || activeCapacity != capacity else { return }
+
+        if let context {
+            guava_jolt_context_destroy(context)
+            self.context = nil
+        }
+        lastPreparedBodyCount = 0
+        meshRevisionByEntity.removeAll(keepingCapacity: true)
+
+        var config = GuavaJoltContextConfig()
+        config.struct_size = UInt32(MemoryLayout<GuavaJoltContextConfig>.size)
+        config.max_bodies = UInt32(capacity.maxBodies)
+        config.body_mutex_count = UInt32(capacity.bodyMutexCount)
+        config.max_body_pairs = UInt32(capacity.maxBodyPairs)
+        config.max_contact_constraints = UInt32(capacity.maxContactConstraints)
+        config.worker_thread_count = UInt32(capacity.workerThreadCount)
+        config.temp_allocator_bytes = UInt64(capacity.tempAllocatorBytes)
+        guard let newContext = guava_jolt_context_create_with_config(&config) else {
+            activeCapacity = nil
+            initializationError = PhysicsBackendError(
+                code: .invalidArgument,
+                message: "Jolt context capacity configuration is invalid"
+            )
+            return
+        }
+        context = newContext
+        activeCapacity = capacity
+        initializationError = nil
     }
 
     private func nativeError(from context: GuavaJoltContext) -> PhysicsBackendError {

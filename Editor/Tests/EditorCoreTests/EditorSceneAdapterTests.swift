@@ -212,7 +212,15 @@ struct EditorSceneAdapterTests {
                 fixedTimeStepSeconds: 1.0 / 120.0,
                 maxSubstepsPerFrame: 8,
                 allowSleep: false,
-                collisionSteps: 4
+                collisionSteps: 4,
+                capacity: PhysicsCapacitySettings(
+                    maxBodies: 20_000,
+                    bodyMutexCount: 128,
+                    maxBodyPairs: 40_000,
+                    maxContactConstraints: 12_000,
+                    tempAllocatorBytes: 32 * 1_024 * 1_024,
+                    workerThreadCount: 3
+                )
             )
         )
 
@@ -229,6 +237,14 @@ struct EditorSceneAdapterTests {
         #expect(settings.maxSubstepsPerFrame == 8)
         #expect(settings.collisionSteps == 4)
         #expect(!settings.allowSleep)
+        #expect(settings.capacity == PhysicsCapacitySettings(
+            maxBodies: 20_000,
+            bodyMutexCount: 128,
+            maxBodyPairs: 40_000,
+            maxContactConstraints: 12_000,
+            tempAllocatorBytes: 32 * 1_024 * 1_024,
+            workerThreadCount: 3
+        ))
     }
 
     @Test("Scene manifest round-trips particle scalability settings")

@@ -301,6 +301,8 @@ public struct RuntimeWorldSchedule {
         var physicsContactEvents: [PhysicsContactEvent] = []
         var physicsJointBreakEvents: [PhysicsJointBreakEvent] = []
         var pendingCharacterStates: [EntityID: CharacterState] = [:]
+        var recordedBodyCommands: [PhysicsRecordedBodyCommand] = []
+        var recordedCharacterCommands: [PhysicsRecordedCharacterCommand] = []
 
         for phase in RuntimeSystemPhase.allCases {
             switch phase {
@@ -323,7 +325,8 @@ public struct RuntimeWorldSchedule {
                 let report = world.propagateTransforms(using: jobSystem)
                 recordJobReport(report, for: .hierarchyPropagate)
             case .inputAndPrePhysicsScripts:
-                if let scriptDriver {
+                let isReplaying = world.resource(PhysicsCommandReplayControlResource.self)?.isReplaying == true
+                if !isReplaying, let scriptDriver {
                     withUnsafeMutablePointer(to: &world) { worldPointer in
                         withUnsafeMutablePointer(to: &commands) { commandPointer in
                             var scriptContext = RuntimeScriptPhaseContext(
@@ -371,6 +374,28 @@ public struct RuntimeWorldSchedule {
                 let constraintCollection = collectPhysicsConstraints(from: physicsReadView)
                 activeConstraints = constraintCollection.constraints
                 activeCharacters = collectPhysicsCharacters(from: physicsReadView)
+                if world.resource(PhysicsCommandRecordingResource.self)?.isRecording == true,
+                   world.resource(PhysicsCommandReplayControlResource.self)?.isReplaying != true {
+                    recordedBodyCommands = activeBodies.compactMap { descriptor in
+                        guard let body = descriptor.rigidBody else { return nil }
+                        let hasCommand = body.accumulatedForce != .zero
+                            || body.accumulatedTorque != .zero
+                            || body.accumulatedLinearImpulse != .zero
+                            || body.accumulatedAngularImpulse != .zero
+                        guard hasCommand else { return nil }
+                        return PhysicsRecordedBodyCommand(
+                            entity: descriptor.entity,
+                            force: body.accumulatedForce,
+                            torque: body.accumulatedTorque,
+                            linearImpulse: body.accumulatedLinearImpulse,
+                            angularImpulse: body.accumulatedAngularImpulse,
+                            wake: !body.isSleeping
+                        )
+                    }
+                    recordedCharacterCommands = (world.resource(CharacterCommandFrameResource.self)?.commands ?? [:])
+                        .map { PhysicsRecordedCharacterCommand(entity: $0.key, command: $0.value) }
+                        .sorted { $0.entity.rawValue < $1.entity.rawValue }
+                }
                 recordJobReport(bodyCollection.report, for: .fixedPhysicsPrepare)
                 recordJobReport(constraintCollection.report, for: .fixedPhysicsPrepare)
                 physicsBodyCount = activeBodies.count
@@ -498,10 +523,29 @@ public struct RuntimeWorldSchedule {
                 characterStateFrame = CharacterStateFrameResource(states: pendingCharacterStates)
                 world.setDerivedResource(physicsClock)
                 world.setDerivedResource(physicsFrameState)
-                world.setDerivedResource(PhysicsStateHashFrameResource(
+                let stateHashFrame = PhysicsStateHashFrameResource(
                     simulatedStep: physicsClock.simulatedSteps,
                     hash: physicsStateHash(in: world)
-                ))
+                )
+                world.setDerivedResource(stateHashFrame)
+                if var recording = world.resource(PhysicsCommandRecordingResource.self),
+                   recording.isRecording,
+                   world.resource(PhysicsCommandReplayControlResource.self)?.isReplaying != true {
+                    if recording.frames.count < recording.maxFrames {
+                        recording.frames.append(PhysicsCommandFrame(
+                            deltaTimeSeconds: deltaTimeSeconds,
+                            settings: physicsSettings,
+                            bodyCommands: physicsStepCount > 0 ? recordedBodyCommands : [],
+                            characterCommands: physicsStepCount > 0 ? recordedCharacterCommands : [],
+                            expectedSimulatedStep: stateHashFrame.simulatedStep,
+                            expectedStateHash: stateHashFrame.hash
+                        ))
+                    }
+                    if recording.frames.count >= recording.maxFrames {
+                        recording.isRecording = false
+                    }
+                    world.setDerivedResource(recording)
+                }
                 world.setDerivedResource(physicsContactFrame)
                 world.setDerivedResource(characterStateFrame)
                 if usesSharedJoltBackend {
