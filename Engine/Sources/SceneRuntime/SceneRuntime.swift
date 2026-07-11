@@ -330,6 +330,16 @@ public struct SceneRuntime {
     }
 
     @discardableResult
+    public mutating func applyForce(
+        _ force: SIMD3<Float>,
+        at worldPoint: SIMD3<Float>,
+        to entity: EntityID,
+        wake: Bool = true
+    ) -> Bool {
+        world.applyForce(force, at: worldPoint, to: entity, wake: wake)
+    }
+
+    @discardableResult
     public mutating func applyTorque(_ torque: SIMD3<Float>, to entity: EntityID, wake: Bool = true) -> Bool {
         world.applyTorque(torque, to: entity, wake: wake)
     }
@@ -337,6 +347,16 @@ public struct SceneRuntime {
     @discardableResult
     public mutating func applyLinearImpulse(_ impulse: SIMD3<Float>, to entity: EntityID, wake: Bool = true) -> Bool {
         world.applyLinearImpulse(impulse, to: entity, wake: wake)
+    }
+
+    @discardableResult
+    public mutating func applyLinearImpulse(
+        _ impulse: SIMD3<Float>,
+        at worldPoint: SIMD3<Float>,
+        to entity: EntityID,
+        wake: Bool = true
+    ) -> Bool {
+        world.applyLinearImpulse(impulse, at: worldPoint, to: entity, wake: wake)
     }
 
     @discardableResult
@@ -405,6 +425,14 @@ public struct SceneRuntime {
                 isTrigger: $0.isTrigger
             )
         }
+    }
+
+    /// Executes a stable batch using the same synchronized physics snapshot.
+    public func raycastBatch(
+        _ queries: [PhysicsRaycastQuery],
+        options: PhysicsQueryOptions = PhysicsQueryOptions()
+    ) -> [[PhysicsHit]] {
+        queries.map { raycast($0, options: options) }
     }
 
     public func physicsRaycastWithStats(
@@ -489,6 +517,14 @@ public struct SceneRuntime {
             }
     }
 
+    /// Executes shape overlaps against one synchronized physics snapshot.
+    public func overlapShapeBatch(
+        _ queries: [PhysicsOverlapShapeQuery],
+        options: PhysicsQueryOptions = PhysicsQueryOptions(resultMode: .all)
+    ) -> [[PhysicsHit]] {
+        queries.map { overlapShape($0, options: options) }
+    }
+
     public func physicsOverlapShapeWithStats(
         _ query: PhysicsOverlapShapeQuery,
         filter: PhysicsQueryFilter = PhysicsQueryFilter(),
@@ -552,6 +588,14 @@ public struct SceneRuntime {
                 isTrigger: $0.isTrigger
             )
         }
+    }
+
+    /// Executes shape casts against one synchronized physics snapshot.
+    public func shapeCastBatch(
+        _ queries: [PhysicsSweepShapeQuery],
+        options: PhysicsQueryOptions = PhysicsQueryOptions()
+    ) -> [[PhysicsHit]] {
+        queries.map { shapeCast($0, options: options) }
     }
 
     public func physicsSweepShapeWithStats(
