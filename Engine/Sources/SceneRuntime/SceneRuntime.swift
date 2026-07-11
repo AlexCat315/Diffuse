@@ -74,6 +74,41 @@ public struct SceneRuntime {
         world.resource(CharacterStateFrameResource.self) ?? .empty
     }
 
+    public var ragdollStateFrame: RagdollStateFrameResource {
+        world.resource(RagdollStateFrameResource.self) ?? .empty
+    }
+
+    public var physicsStateHashFrame: PhysicsStateHashFrameResource {
+        world.resource(PhysicsStateHashFrameResource.self) ?? .empty
+    }
+
+    @discardableResult
+    public mutating func setRagdollMode(
+        _ mode: RagdollMode,
+        for entity: EntityID,
+        blendWeight: Float? = nil
+    ) -> Bool {
+        world.updateComponent(Ragdoll.self, for: entity) {
+            $0.mode = mode
+            if let blendWeight { $0.blendWeight = max(0, min(blendWeight, 1)) }
+        }
+    }
+
+    @discardableResult
+    public mutating func setRagdollBoneSimulation(
+        _ enabled: Bool,
+        paletteIndex: Int,
+        for entity: EntityID
+    ) -> Bool {
+        guard let ragdoll = world.component(Ragdoll.self, for: entity),
+              ragdoll.bones.contains(where: { $0.paletteIndex == paletteIndex })
+        else { return false }
+        return world.updateComponent(Ragdoll.self, for: entity) { ragdoll in
+            guard let index = ragdoll.bones.firstIndex(where: { $0.paletteIndex == paletteIndex }) else { return }
+            ragdoll.bones[index].isSimulationEnabled = enabled
+        }
+    }
+
     public mutating func applyParticleSimulationReadbackStats(_ report: ParticleSimulationEventApplyReport) {
         world.setResource(particleFrameStats.mergingGPUReadback(report))
     }

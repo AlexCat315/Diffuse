@@ -1246,6 +1246,7 @@ public struct RuntimeWorld: @unchecked Sendable {
             || id == ObjectIdentifier(Collider.self)
             || id == ObjectIdentifier(Constraint.self)
             || id == ObjectIdentifier(CharacterController.self)
+            || id == ObjectIdentifier(Ragdoll.self)
             || id == ObjectIdentifier(LocalTransform.self)
             || id == ObjectIdentifier(WorldTransform.self)
             || id == ObjectIdentifier(Parent.self)
