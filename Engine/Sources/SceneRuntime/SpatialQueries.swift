@@ -90,13 +90,16 @@ public struct MeshColliderBoundsResource: Sendable, Equatable {
 }
 
 public struct MeshColliderGeometry: Sendable, Equatable {
+    public var revision: UInt64
     public var positions: [SIMD3<Float>]
     public var triangleIndices: [UInt32]
     public var localBounds: SpatialAABB
 
     public init(positions: [SIMD3<Float>],
                 triangleIndices: [UInt32],
-                localBounds: SpatialAABB? = nil) {
+                localBounds: SpatialAABB? = nil,
+                revision: UInt64 = 0) {
+        self.revision = revision
         self.positions = positions
         self.triangleIndices = triangleIndices
         self.localBounds = localBounds ?? Self.computeBounds(positions)

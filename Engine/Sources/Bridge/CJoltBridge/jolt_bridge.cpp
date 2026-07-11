@@ -18,6 +18,7 @@
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/ScaledShape.h>
 #include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
+#include <Jolt/Physics/Collision/Shape/OffsetCenterOfMassShape.h>
 #include <Jolt/Physics/Collision/CollisionCollectorImpl.h>
 #include <Jolt/Physics/Collision/NarrowPhaseQuery.h>
 #include <Jolt/Physics/Collision/RayCast.h>
@@ -35,6 +36,8 @@
 #include <Jolt/Physics/Constraints/FixedConstraint.h>
 #include <Jolt/Physics/Constraints/SliderConstraint.h>
 #include <Jolt/Physics/Constraints/DistanceConstraint.h>
+#include <Jolt/Physics/Constraints/SwingTwistConstraint.h>
+#include <Jolt/Physics/Constraints/SixDOFConstraint.h>
 
 #include <atomic>
 #include <algorithm>
@@ -68,6 +71,8 @@ constexpr uint8_t kConstraintHinge        = 1u;
 constexpr uint8_t kConstraintSlider       = 2u;
 constexpr uint8_t kConstraintDistance     = 3u;
 constexpr uint8_t kConstraintFixed        = 4u;
+constexpr uint8_t kConstraintCone         = 5u;
+constexpr uint8_t kConstraintSixDOF       = 6u;
 
 constexpr uint8_t kTriggerEnter = 0u;
 constexpr uint8_t kTriggerExit  = 1u;
@@ -128,6 +133,15 @@ struct BodySignature {
     uint64_t mesh_hash = 0;
     uint32_t shape_instance_count = 0;
     uint64_t shape_instance_hash = 0;
+    uint8_t mass_mode = 0;
+    uint8_t motion_quality = 0;
+    uint8_t allowed_dofs = 0x3f;
+    uint8_t has_center_of_mass_override = 0;
+    uint8_t has_inertia_override = 0;
+    float max_linear_velocity = 0.0f;
+    float max_angular_velocity = 0.0f;
+    JPH::Vec3 center_of_mass = JPH::Vec3::sZero();
+    JPH::Vec3 inertia = JPH::Vec3::sZero();
 
     bool operator==(const BodySignature& other) const {
         return motion_type == other.motion_type
@@ -156,7 +170,16 @@ struct BodySignature {
             && mesh_index_count == other.mesh_index_count
             && mesh_hash == other.mesh_hash
             && shape_instance_count == other.shape_instance_count
-            && shape_instance_hash == other.shape_instance_hash;
+            && shape_instance_hash == other.shape_instance_hash
+            && mass_mode == other.mass_mode
+            && motion_quality == other.motion_quality
+            && allowed_dofs == other.allowed_dofs
+            && has_center_of_mass_override == other.has_center_of_mass_override
+            && has_inertia_override == other.has_inertia_override
+            && max_linear_velocity == other.max_linear_velocity
+            && max_angular_velocity == other.max_angular_velocity
+            && center_of_mass == other.center_of_mass
+            && inertia == other.inertia;
     }
 
     bool operator!=(const BodySignature& other) const {
@@ -265,6 +288,15 @@ BodySignature make_signature(const GuavaJoltBodyDesc& desc,
     signature.shape_instance_hash = hash_shape_instances(
         desc.shape_instances,
         desc.shape_instance_count);
+    signature.mass_mode = desc.mass_mode;
+    signature.motion_quality = desc.motion_quality;
+    signature.allowed_dofs = desc.allowed_dofs;
+    signature.has_center_of_mass_override = desc.has_center_of_mass_override;
+    signature.has_inertia_override = desc.has_inertia_override;
+    signature.max_linear_velocity = desc.max_linear_velocity;
+    signature.max_angular_velocity = desc.max_angular_velocity;
+    signature.center_of_mass = JPH::Vec3(desc.center_of_mass_x, desc.center_of_mass_y, desc.center_of_mass_z);
+    signature.inertia = JPH::Vec3(desc.inertia_x, desc.inertia_y, desc.inertia_z);
     return signature;
 }
 
@@ -277,6 +309,58 @@ bool layers_overlap(uint16_t mask, uint16_t layer_id) {
 bool body_layers_collide(const BodyMetadata& a, const BodyMetadata& b) {
     return layers_overlap(a.layer_mask, b.layer_id)
         && layers_overlap(b.layer_mask, a.layer_id);
+}
+
+bool constraint_desc_equal(const GuavaJoltConstraintDesc& a, const GuavaJoltConstraintDesc& b) {
+    return a.entity_a == b.entity_a
+        && a.entity_b == b.entity_b
+        && a.constraint_type == b.constraint_type
+        && a.is_enabled == b.is_enabled
+        && a.pivot_a_x == b.pivot_a_x
+        && a.pivot_a_y == b.pivot_a_y
+        && a.pivot_a_z == b.pivot_a_z
+        && a.pivot_b_x == b.pivot_b_x
+        && a.pivot_b_y == b.pivot_b_y
+        && a.pivot_b_z == b.pivot_b_z
+        && a.axis_a_x == b.axis_a_x
+        && a.axis_a_y == b.axis_a_y
+        && a.axis_a_z == b.axis_a_z
+        && a.axis_b_x == b.axis_b_x
+        && a.axis_b_y == b.axis_b_y
+        && a.axis_b_z == b.axis_b_z
+        && a.min_limit == b.min_limit
+        && a.max_limit == b.max_limit
+        && a.break_force == b.break_force
+        && a.break_torque == b.break_torque
+        && a.spring_frequency == b.spring_frequency
+        && a.spring_damping == b.spring_damping
+        && a.motor_mode == b.motor_mode
+        && a.angular_motor_mode == b.angular_motor_mode
+        && a.motor_target_position == b.motor_target_position
+        && a.motor_target_velocity == b.motor_target_velocity
+        && a.motor_max_force == b.motor_max_force
+        && a.angular_motor_target_position == b.angular_motor_target_position
+        && a.angular_motor_target_velocity == b.angular_motor_target_velocity
+        && a.angular_motor_max_force == b.angular_motor_max_force
+        && a.half_cone_angle == b.half_cone_angle
+        && a.linear_min_x == b.linear_min_x
+        && a.linear_min_y == b.linear_min_y
+        && a.linear_min_z == b.linear_min_z
+        && a.linear_max_x == b.linear_max_x
+        && a.linear_max_y == b.linear_max_y
+        && a.linear_max_z == b.linear_max_z
+        && a.angular_min_x == b.angular_min_x
+        && a.angular_min_y == b.angular_min_y
+        && a.angular_min_z == b.angular_min_z
+        && a.angular_max_x == b.angular_max_x
+        && a.angular_max_y == b.angular_max_y
+        && a.angular_max_z == b.angular_max_z;
+}
+
+JPH::EMotorState motor_state(uint8_t value) {
+    if (value == 1) return JPH::EMotorState::Velocity;
+    if (value == 2) return JPH::EMotorState::Position;
+    return JPH::EMotorState::Off;
 }
 
 bool query_filter_matches(uint64_t entity, const BodyMetadata& metadata, const GuavaJoltQueryFilter* filter) {
@@ -665,6 +749,7 @@ JPH::ShapeRefC build_shape(const GuavaJoltBodyDesc& desc,
         for (uint32_t index = 0; index < desc.shape_instance_count; ++index) {
             const GuavaJoltShapeInstance& instance = desc.shape_instances[index];
             GuavaJoltBodyDesc child {};
+            child.density = desc.density;
             child.shape_scale_x = instance.scale_x;
             child.shape_scale_y = instance.scale_y;
             child.shape_scale_z = instance.scale_z;
@@ -717,24 +802,28 @@ JPH::ShapeRefC build_shape(const GuavaJoltBodyDesc& desc,
     if (desc.flags & kColliderHasBoxFlag) {
         JPH::BoxShapeSettings settings(JPH::Vec3(
             desc.box_half_extent_x, desc.box_half_extent_y, desc.box_half_extent_z));
+        settings.mDensity = std::max(desc.density, 0.0001f);
         settings.SetEmbedded();
         JPH::ShapeSettings::ShapeResult r = settings.Create();
         if (r.IsValid()) return finalize_shape(desc, r.Get());
     }
     if (desc.flags & kColliderHasSphereFlag) {
         JPH::SphereShapeSettings settings(desc.sphere_radius);
+        settings.mDensity = std::max(desc.density, 0.0001f);
         settings.SetEmbedded();
         JPH::ShapeSettings::ShapeResult r = settings.Create();
         if (r.IsValid()) return finalize_shape(desc, r.Get());
     }
     if (desc.flags & kColliderHasCapsuleFlag) {
         JPH::CapsuleShapeSettings settings(desc.capsule_half_height, desc.capsule_radius);
+        settings.mDensity = std::max(desc.density, 0.0001f);
         settings.SetEmbedded();
         JPH::ShapeSettings::ShapeResult r = settings.Create();
         if (r.IsValid()) return finalize_shape(desc, r.Get());
     }
     if (desc.flags & kColliderHasCylinderFlag) {
         JPH::CylinderShapeSettings settings(desc.capsule_half_height, desc.capsule_radius);
+        settings.mDensity = std::max(desc.density, 0.0001f);
         settings.SetEmbedded();
         JPH::ShapeSettings::ShapeResult r = settings.Create();
         if (r.IsValid()) return finalize_shape(desc, r.Get());
@@ -766,6 +855,7 @@ JPH::ShapeRefC build_shape(const GuavaJoltBodyDesc& desc,
             points.emplace_back(mesh_vertices[i*3+0], mesh_vertices[i*3+1], mesh_vertices[i*3+2]);
         }
         JPH::ConvexHullShapeSettings settings(points);
+        settings.mDensity = std::max(desc.density, 0.0001f);
         settings.SetEmbedded();
         JPH::ShapeSettings::ShapeResult r = settings.Create();
         if (r.IsValid()) return finalize_shape(desc, r.Get());
@@ -893,6 +983,10 @@ JPH::Vec3 safe_normalized(JPH::Vec3 value, JPH::Vec3 fallback) {
 }  // namespace
 
 struct GuavaJoltContextImpl {
+    struct NativeKinematicTarget {
+        JPH::RVec3 position;
+        JPH::Quat rotation;
+    };
     struct NativeCharacter {
         std::unique_ptr<JPH::CharacterVirtual> character;
         GuavaJoltCharacterDesc desc {};
@@ -907,11 +1001,16 @@ struct GuavaJoltContextImpl {
 
     std::unordered_map<uint64_t, JPH::BodyID> body_ids;            // entity → Jolt body
     std::unordered_map<uint64_t, JPH::Ref<JPH::Constraint>> constraints; // entity → constraint
+    std::unordered_map<uint64_t, GuavaJoltConstraintDesc> constraint_descriptors;
+    std::unordered_map<uint64_t, std::pair<uint64_t, uint64_t>> constraint_bodies;
+    std::vector<GuavaJoltJointBreakEvent> joint_break_events;
     std::unordered_map<uint64_t, BodyMetadata> body_metadata;
     std::unordered_map<uint64_t, BodySignature> body_signatures;
     std::unordered_map<uint64_t, NativeCharacter> characters;
+    std::unordered_map<uint64_t, NativeKinematicTarget> kinematic_targets;
     std::unordered_map<uint64_t, std::vector<float>>    mesh_vertices;
     std::unordered_map<uint64_t, std::vector<uint32_t>> mesh_indices;
+    std::unordered_map<uint64_t, uint64_t> mesh_revisions;
     std::unordered_set<TriggerPair, TriggerPairHash> previous_trigger_pairs;
     LayerMaskContactListener contact_listener;
     uint32_t last_error = GUAVA_JOLT_ERROR_NONE;
@@ -935,6 +1034,7 @@ struct GuavaJoltContextImpl {
     ~GuavaJoltContextImpl() {
         physics_system.SetContactListener(nullptr);
         characters.clear();
+        kinematic_targets.clear();
         // Remove all bodies and constraints before destruction.
         JPH::BodyInterface& bi = physics_system.GetBodyInterface();
         for (auto& kv : body_ids) {
@@ -952,6 +1052,9 @@ struct GuavaJoltContextImpl {
             if (kv.second) physics_system.RemoveConstraint(kv.second);
         }
         constraints.clear();
+        constraint_descriptors.clear();
+        constraint_bodies.clear();
+        joint_break_events.clear();
         characters.clear();
         for (auto& kv : body_ids) {
             bi.RemoveBody(kv.second);
@@ -962,6 +1065,7 @@ struct GuavaJoltContextImpl {
         body_signatures.clear();
         mesh_vertices.clear();
         mesh_indices.clear();
+        mesh_revisions.clear();
         previous_trigger_pairs.clear();
         contact_listener.reset();
     }
@@ -974,6 +1078,32 @@ struct GuavaJoltContextImpl {
         body_ids.erase(existing);
         body_metadata.erase(entity);
         body_signatures.erase(entity);
+        kinematic_targets.erase(entity);
+    }
+
+    bool destroy_constraint(uint64_t entity) {
+        auto existing = constraints.find(entity);
+        if (existing == constraints.end()) return false;
+        if (existing->second) physics_system.RemoveConstraint(existing->second);
+        constraints.erase(existing);
+        constraint_descriptors.erase(entity);
+        constraint_bodies.erase(entity);
+        return true;
+    }
+
+    uint32_t destroy_constraints_for_body(uint64_t body_entity) {
+        std::vector<uint64_t> affected;
+        for (const auto& entry : constraint_bodies) {
+            if (entry.second.first == body_entity || entry.second.second == body_entity) {
+                affected.push_back(entry.first);
+            }
+        }
+        std::sort(affected.begin(), affected.end());
+        uint32_t removed = 0;
+        for (uint64_t constraint_entity : affected) {
+            if (destroy_constraint(constraint_entity)) ++removed;
+        }
+        return removed;
     }
 
     bool create_body(uint64_t entity,
@@ -1005,8 +1135,23 @@ struct GuavaJoltContextImpl {
             last_error = GUAVA_JOLT_ERROR_INVALID_SHAPE;
             return false;
         }
+        if (desc.has_center_of_mass_override) {
+            JPH::OffsetCenterOfMassShapeSettings center_settings(
+                JPH::Vec3(desc.center_of_mass_x, desc.center_of_mass_y, desc.center_of_mass_z),
+                shape);
+            JPH::ShapeSettings::ShapeResult centered = center_settings.Create();
+            if (!centered.IsValid()) {
+                last_error = GUAVA_JOLT_ERROR_INVALID_SHAPE;
+                return false;
+            }
+            shape = centered.Get();
+        }
 
         JPH::EMotionType motion = to_motion_type(desc.motion_type);
+        if ((desc.flags & kColliderIsTriggerFlag) != 0
+            && motion == JPH::EMotionType::Static) {
+            motion = JPH::EMotionType::Kinematic;
+        }
         // Sensors must participate in broadphase pairs even when authored without
         // a RigidBody (static-static pairs are normally suppressed by Jolt).
         JPH::ObjectLayer layer = (desc.flags & kColliderIsTriggerFlag) != 0
@@ -1030,14 +1175,33 @@ struct GuavaJoltContextImpl {
         settings.mFriction = desc.friction;
         settings.mRestitution = desc.restitution;
         settings.mIsSensor = (desc.flags & kColliderIsTriggerFlag) != 0;
+        settings.mCollideKinematicVsNonDynamic = settings.mIsSensor;
         settings.mAllowSleeping = (desc.flags & kRigidBodyAllowSleepFlag) != 0;
+        settings.mAllowedDOFs = static_cast<JPH::EAllowedDOFs>(desc.allowed_dofs);
+        settings.mMaxLinearVelocity = std::max(desc.max_linear_velocity, 0.0f);
+        settings.mMaxAngularVelocity = std::max(desc.max_angular_velocity, 0.0f);
         if (motion == JPH::EMotionType::Dynamic
             && (desc.flags & kRigidBodyContinuousCollisionFlag) != 0) {
             settings.mMotionQuality = JPH::EMotionQuality::LinearCast;
         }
         if (motion == JPH::EMotionType::Dynamic) {
-            settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
-            settings.mMassPropertiesOverride.mMass = desc.mass > 0.0f ? desc.mass : std::max(desc.density, 1.0f);
+            if (desc.allowed_dofs == 0) {
+                last_error = GUAVA_JOLT_ERROR_INVALID_ARGUMENT;
+                return false;
+            }
+            if (desc.has_inertia_override) {
+                settings.mOverrideMassProperties = JPH::EOverrideMassProperties::MassAndInertiaProvided;
+                settings.mMassPropertiesOverride.mMass = std::max(desc.mass, 0.0001f);
+                settings.mMassPropertiesOverride.mInertia = JPH::Mat44::sScale(JPH::Vec3(
+                    std::max(desc.inertia_x, 0.0001f),
+                    std::max(desc.inertia_y, 0.0001f),
+                    std::max(desc.inertia_z, 0.0001f)));
+            } else if (desc.mass_mode == 1) {
+                settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateMassAndInertia;
+            } else {
+                settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+                settings.mMassPropertiesOverride.mMass = std::max(desc.mass, 0.0001f);
+            }
         }
 
         JPH::Body* body = bi.CreateBody(settings);
@@ -1046,13 +1210,13 @@ struct GuavaJoltContextImpl {
             return false;
         }
 
-        bi.AddBody(body->GetID(), JPH::EActivation::Activate);
-        body_ids[entity] = body->GetID();
         body_metadata[entity] = BodyMetadata{
             (desc.flags & kColliderIsTriggerFlag) != 0,
             desc.layer_id,
             desc.layer_mask
         };
+        bi.AddBody(body->GetID(), JPH::EActivation::Activate);
+        body_ids[entity] = body->GetID();
         body_signatures[entity] = signature;
         if (motion == JPH::EMotionType::Dynamic) {
             apply_dynamic_inputs(bi, body->GetID(), desc);
@@ -1065,6 +1229,11 @@ struct GuavaJoltContextImpl {
 	                 const GuavaJoltMeshGeometry* meshes, size_t mesh_count,
 	                 GuavaJoltPrepareStats* out_stats) {
 	        last_error = GUAVA_JOLT_ERROR_NONE;
+        // Begin the rendered-frame event window before synchronization. Body
+        // insertion can immediately emit sensor/contact callbacks, and multiple
+        // fixed substeps should accumulate into one PhysicsEventFrameResource.
+        contact_listener.begin_step();
+        joint_break_events.clear();
         if ((body_count > 0 && !bodies)
             || (constraint_count > 0 && !constraints_in)
             || (mesh_count > 0 && !meshes)) {
@@ -1072,31 +1241,36 @@ struct GuavaJoltContextImpl {
             return false;
         }
 
-	        // Capture mesh geometry keyed by entity_id (deep-copy so pointers stay valid).
-        std::unordered_map<uint64_t, std::pair<const float*, std::pair<uint32_t, std::pair<const uint32_t*, uint32_t>>>> mesh_lookup;
-        mesh_vertices.clear();
-        mesh_indices.clear();
+	        // Cache mesh geometry by entity and explicit geometry revision. Swift only
+        // sends changed revisions, so unchanged meshes avoid crossing and copying the
+        // C ABI boundary on every rendered frame.
         if (meshes) {
             for (size_t i = 0; i < mesh_count; ++i) {
                 const auto& m = meshes[i];
+                auto revision = mesh_revisions.find(m.entity_id);
+                if (revision != mesh_revisions.end()
+                    && revision->second == m.geometry_revision) {
+                    continue;
+                }
                 if (m.vertices && m.vertex_count > 0) {
                     mesh_vertices[m.entity_id].assign(m.vertices, m.vertices + m.vertex_count * 3);
+                } else {
+                    mesh_vertices.erase(m.entity_id);
                 }
                 if (m.indices && m.index_count > 0) {
                     mesh_indices[m.entity_id].assign(m.indices, m.indices + m.index_count);
+                } else {
+                    mesh_indices.erase(m.entity_id);
                 }
+                mesh_revisions[m.entity_id] = m.geometry_revision;
             }
         }
 	
 	        JPH::BodyInterface& bi = physics_system.GetBodyInterface();
 
-	        // Constraints refer to BodyIDs, so drop them before bodies are removed or
-	        // recreated and rebuild them after all bodies are synchronized.
-	        uint32_t removed_constraints = static_cast<uint32_t>(constraints.size());
-	        for (auto& kv : constraints) {
-	            if (kv.second) physics_system.RemoveConstraint(kv.second);
-	        }
-	        constraints.clear();
+	        // Stable joints survive prepare. Only dirty/deleted joints, or joints
+        // attached to a body that must be recreated, are rebuilt below.
+	        uint32_t removed_constraints = 0;
 	
 	        // Track which entities are present this frame.
 	        std::unordered_map<uint64_t, const GuavaJoltBodyDesc*> incoming;
@@ -1108,10 +1282,15 @@ struct GuavaJoltContextImpl {
 	        uint32_t removed_bodies = 0;
 	        for (auto it = body_ids.begin(); it != body_ids.end(); ) {
 	            if (incoming.find(it->first) == incoming.end()) {
+	                removed_constraints += destroy_constraints_for_body(it->first);
 	                bi.RemoveBody(it->second);
 	                bi.DestroyBody(it->second);
 	                body_metadata.erase(it->first);
 	                body_signatures.erase(it->first);
+                    kinematic_targets.erase(it->first);
+	                mesh_vertices.erase(it->first);
+	                mesh_indices.erase(it->first);
+	                mesh_revisions.erase(it->first);
 	                it = body_ids.erase(it);
 	                ++removed_bodies;
 	            } else {
@@ -1127,6 +1306,15 @@ struct GuavaJoltContextImpl {
 
 	        for (uint64_t entity : incoming_entities) {
 	            const GuavaJoltBodyDesc& desc = *incoming[entity];
+                if (desc.motion_type == kMotionKinematic && desc.has_kinematic_target) {
+                    kinematic_targets[entity] = NativeKinematicTarget{
+                        JPH::RVec3(desc.target_position_x, desc.target_position_y, desc.target_position_z),
+                        JPH::Quat(desc.target_rotation_x, desc.target_rotation_y,
+                                  desc.target_rotation_z, desc.target_rotation_w)
+                    };
+                } else {
+                    kinematic_targets.erase(entity);
+                }
 	            const std::vector<float>* mv = nullptr;
 	            const std::vector<uint32_t>* mi = nullptr;
 	            auto mv_it = mesh_vertices.find(entity);
@@ -1140,6 +1328,7 @@ struct GuavaJoltContextImpl {
 	                auto previous_signature = body_signatures.find(entity);
 	                if (previous_signature == body_signatures.end()
 	                    || previous_signature->second != signature) {
+	                    removed_constraints += destroy_constraints_for_body(entity);
 	                    destroy_body(entity, bi);
 	                    ++removed_bodies;
 	                    if (!create_body(entity, desc, mv, mi, signature, bi)) return false;
@@ -1173,13 +1362,42 @@ struct GuavaJoltContextImpl {
 	            if (!create_body(entity, desc, mv, mi, signature, bi)) return false;
 	        }
 	
-	        if (constraints_in) {
+	        std::unordered_map<uint64_t, const GuavaJoltConstraintDesc*> incoming_constraints;
+        if (constraints_in) {
             for (size_t i = 0; i < constraint_count; ++i) {
-                const auto& c = constraints_in[i];
+                incoming_constraints[constraints_in[i].entity_id] = &constraints_in[i];
+            }
+        }
+        std::vector<uint64_t> stale_constraints;
+        for (const auto& entry : constraints) {
+            auto incoming_constraint = incoming_constraints.find(entry.first);
+            if (incoming_constraint == incoming_constraints.end()
+                || !incoming_constraint->second->is_enabled) {
+                stale_constraints.push_back(entry.first);
+            }
+        }
+        std::sort(stale_constraints.begin(), stale_constraints.end());
+        for (uint64_t entity : stale_constraints) {
+            if (destroy_constraint(entity)) ++removed_constraints;
+        }
+
+        std::vector<uint64_t> incoming_constraint_entities;
+        incoming_constraint_entities.reserve(incoming_constraints.size());
+        for (const auto& entry : incoming_constraints) incoming_constraint_entities.push_back(entry.first);
+        std::sort(incoming_constraint_entities.begin(), incoming_constraint_entities.end());
+        for (uint64_t constraint_entity : incoming_constraint_entities) {
+                const auto& c = *incoming_constraints[constraint_entity];
                 if (!c.is_enabled) continue;
                 auto it_a = body_ids.find(c.entity_a);
                 auto it_b = body_ids.find(c.entity_b);
                 if (it_a == body_ids.end() || it_b == body_ids.end()) continue;
+                auto previous = constraint_descriptors.find(c.entity_id);
+                if (constraints.find(c.entity_id) != constraints.end()
+                    && previous != constraint_descriptors.end()
+                    && constraint_desc_equal(previous->second, c)) {
+                    continue;
+                }
+                if (destroy_constraint(c.entity_id)) ++removed_constraints;
                 JPH::Body* body_a = physics_system.GetBodyLockInterfaceNoLock().TryGetBody(it_a->second);
                 JPH::Body* body_b = physics_system.GetBodyLockInterfaceNoLock().TryGetBody(it_b->second);
                 if (!body_a || !body_b) continue;
@@ -1221,6 +1439,10 @@ struct GuavaJoltContextImpl {
                     s.mPoint2 = JPH::RVec3(c.pivot_b_x, c.pivot_b_y, c.pivot_b_z);
                     s.mMinDistance = c.min_limit;
                     s.mMaxDistance = c.max_limit;
+                    s.mLimitsSpringSettings = JPH::SpringSettings(
+                        JPH::ESpringMode::FrequencyAndDamping,
+                        c.spring_frequency,
+                        c.spring_damping);
                     s.mSpace = JPH::EConstraintSpace::LocalToBodyCOM;
                     jc = s.Create(*body_a, *body_b);
                 } else if (c.constraint_type == kConstraintFixed) {
@@ -1235,12 +1457,102 @@ struct GuavaJoltContextImpl {
                     s.mAxisY2 = perpendicular_axis(axis2);
                     s.mSpace = JPH::EConstraintSpace::LocalToBodyCOM;
                     jc = s.Create(*body_a, *body_b);
+                } else if (c.constraint_type == kConstraintCone) {
+                    JPH::Vec3 twist1 = safe_normalized(
+                        c.axis_a_x, c.axis_a_y, c.axis_a_z, JPH::Vec3::sAxisX());
+                    JPH::Vec3 twist2 = safe_normalized(
+                        c.axis_b_x, c.axis_b_y, c.axis_b_z, twist1);
+                    JPH::SwingTwistConstraintSettings s;
+                    s.mPosition1 = JPH::RVec3(c.pivot_a_x, c.pivot_a_y, c.pivot_a_z);
+                    s.mPosition2 = JPH::RVec3(c.pivot_b_x, c.pivot_b_y, c.pivot_b_z);
+                    s.mTwistAxis1 = twist1;
+                    s.mTwistAxis2 = twist2;
+                    s.mPlaneAxis1 = perpendicular_axis(twist1);
+                    s.mPlaneAxis2 = perpendicular_axis(twist2);
+                    s.mSwingType = JPH::ESwingType::Cone;
+                    s.mNormalHalfConeAngle = c.half_cone_angle;
+                    s.mPlaneHalfConeAngle = c.half_cone_angle;
+                    s.mTwistMinAngle = c.min_limit;
+                    s.mTwistMaxAngle = c.max_limit;
+                    s.mSpace = JPH::EConstraintSpace::LocalToBodyCOM;
+                    jc = s.Create(*body_a, *body_b);
+                } else if (c.constraint_type == kConstraintSixDOF) {
+                    JPH::Vec3 axis1 = safe_normalized(
+                        c.axis_a_x, c.axis_a_y, c.axis_a_z, JPH::Vec3::sAxisX());
+                    JPH::Vec3 axis2 = safe_normalized(
+                        c.axis_b_x, c.axis_b_y, c.axis_b_z, axis1);
+                    JPH::SixDOFConstraintSettings s;
+                    s.mPosition1 = JPH::RVec3(c.pivot_a_x, c.pivot_a_y, c.pivot_a_z);
+                    s.mPosition2 = JPH::RVec3(c.pivot_b_x, c.pivot_b_y, c.pivot_b_z);
+                    s.mAxisX1 = axis1;
+                    s.mAxisY1 = perpendicular_axis(axis1);
+                    s.mAxisX2 = axis2;
+                    s.mAxisY2 = perpendicular_axis(axis2);
+                    s.SetLimitedAxis(JPH::SixDOFConstraintSettings::EAxis::TranslationX,
+                        c.linear_min_x, c.linear_max_x);
+                    s.SetLimitedAxis(JPH::SixDOFConstraintSettings::EAxis::TranslationY,
+                        c.linear_min_y, c.linear_max_y);
+                    s.SetLimitedAxis(JPH::SixDOFConstraintSettings::EAxis::TranslationZ,
+                        c.linear_min_z, c.linear_max_z);
+                    s.SetLimitedAxis(JPH::SixDOFConstraintSettings::EAxis::RotationX,
+                        c.angular_min_x, c.angular_max_x);
+                    s.SetLimitedAxis(JPH::SixDOFConstraintSettings::EAxis::RotationY,
+                        c.angular_min_y, c.angular_max_y);
+                    s.SetLimitedAxis(JPH::SixDOFConstraintSettings::EAxis::RotationZ,
+                        c.angular_min_z, c.angular_max_z);
+                    for (int axis = 0; axis < JPH::SixDOFConstraintSettings::EAxis::NumTranslation; ++axis) {
+                        s.mLimitsSpringSettings[axis] = JPH::SpringSettings(
+                            JPH::ESpringMode::FrequencyAndDamping,
+                            c.spring_frequency,
+                            c.spring_damping);
+                    }
+                    s.mSpace = JPH::EConstraintSpace::LocalToBodyCOM;
+                    jc = s.Create(*body_a, *body_b);
                 }
                 if (jc) {
+                    if (c.constraint_type == kConstraintHinge) {
+                        auto* hinge = static_cast<JPH::HingeConstraint*>(jc.GetPtr());
+                        hinge->GetLimitsSpringSettings() = JPH::SpringSettings(
+                            JPH::ESpringMode::FrequencyAndDamping,
+                            c.spring_frequency,
+                            c.spring_damping);
+                        hinge->GetMotorSettings().SetTorqueLimit(c.angular_motor_max_force);
+                        hinge->SetTargetAngle(c.angular_motor_target_position);
+                        hinge->SetTargetAngularVelocity(c.angular_motor_target_velocity);
+                        hinge->SetMotorState(motor_state(c.angular_motor_mode));
+                    } else if (c.constraint_type == kConstraintSlider) {
+                        auto* slider = static_cast<JPH::SliderConstraint*>(jc.GetPtr());
+                        slider->GetLimitsSpringSettings() = JPH::SpringSettings(
+                            JPH::ESpringMode::FrequencyAndDamping,
+                            c.spring_frequency,
+                            c.spring_damping);
+                        slider->GetMotorSettings().SetForceLimit(c.motor_max_force);
+                        slider->SetTargetPosition(c.motor_target_position);
+                        slider->SetTargetVelocity(c.motor_target_velocity);
+                        slider->SetMotorState(motor_state(c.motor_mode));
+                    } else if (c.constraint_type == kConstraintSixDOF) {
+                        auto* six_dof = static_cast<JPH::SixDOFConstraint*>(jc.GetPtr());
+                        for (int axis = 0; axis < JPH::SixDOFConstraintSettings::EAxis::NumTranslation; ++axis) {
+                            const auto value = static_cast<JPH::SixDOFConstraint::EAxis>(axis);
+                            six_dof->GetMotorSettings(value).SetForceLimit(c.motor_max_force);
+                            six_dof->SetMotorState(value, motor_state(c.motor_mode));
+                        }
+                        for (int axis = JPH::SixDOFConstraintSettings::EAxis::RotationX;
+                             axis < JPH::SixDOFConstraintSettings::EAxis::Num; ++axis) {
+                            const auto value = static_cast<JPH::SixDOFConstraint::EAxis>(axis);
+                            six_dof->GetMotorSettings(value).SetTorqueLimit(c.angular_motor_max_force);
+                            six_dof->SetMotorState(value, motor_state(c.angular_motor_mode));
+                        }
+                        six_dof->SetTargetPositionCS(JPH::Vec3::sReplicate(c.motor_target_position));
+                        six_dof->SetTargetVelocityCS(JPH::Vec3::sReplicate(c.motor_target_velocity));
+                        six_dof->SetTargetAngularVelocityCS(
+                            JPH::Vec3::sReplicate(c.angular_motor_target_velocity));
+                    }
                     physics_system.AddConstraint(jc);
                     constraints[c.entity_id] = jc;
+                    constraint_descriptors[c.entity_id] = c;
+                    constraint_bodies[c.entity_id] = {c.entity_a, c.entity_b};
                 }
-            }
         }
 
         if (out_stats) {
@@ -1261,10 +1573,129 @@ struct GuavaJoltContextImpl {
         }
         physics_system.SetGravity(JPH::Vec3(config->gravity_x, config->gravity_y, config->gravity_z));
 
+        JPH::BodyInterface& body_interface = physics_system.GetBodyInterface();
+        std::vector<uint64_t> target_entities;
+        target_entities.reserve(kinematic_targets.size());
+        for (const auto& item : kinematic_targets) target_entities.push_back(item.first);
+        std::sort(target_entities.begin(), target_entities.end());
+        for (uint64_t entity : target_entities) {
+            auto body_it = body_ids.find(entity);
+            if (body_it == body_ids.end()) continue;
+            const NativeKinematicTarget& target = kinematic_targets[entity];
+            body_interface.MoveKinematic(
+                body_it->second,
+                target.position,
+                target.rotation,
+                config->delta_seconds);
+        }
+
         const int collision_steps = static_cast<int>(std::max<uint32_t>(1u, config->collision_steps));
-        contact_listener.begin_step();
         physics_system.Update(config->delta_seconds, collision_steps,
                               temp_allocator.get(), job_system.get());
+
+        // Jolt exposes accumulated constraint impulses. Convert them to force /
+        // torque for this fixed step and remove joints that exceeded authored
+        // break thresholds in deterministic joint-entity order.
+        std::vector<uint64_t> joint_ids;
+        joint_ids.reserve(constraints.size());
+        for (const auto& entry : constraints) joint_ids.push_back(entry.first);
+        std::sort(joint_ids.begin(), joint_ids.end());
+        std::vector<uint64_t> broken_joints;
+        const float inverse_delta = config->delta_seconds > 0.0f ? 1.0f / config->delta_seconds : 0.0f;
+        for (uint64_t joint_entity : joint_ids) {
+            auto constraint_it = constraints.find(joint_entity);
+            auto descriptor_it = constraint_descriptors.find(joint_entity);
+            if (constraint_it == constraints.end() || descriptor_it == constraint_descriptors.end()) continue;
+            const GuavaJoltConstraintDesc& desc = descriptor_it->second;
+            float force_impulse = 0.0f;
+            float torque_impulse = 0.0f;
+            JPH::Constraint* base = constraint_it->second.GetPtr();
+            switch (desc.constraint_type) {
+            case kConstraintPointToPoint:
+                force_impulse = static_cast<JPH::PointConstraint*>(base)->GetTotalLambdaPosition().Length();
+                break;
+            case kConstraintHinge: {
+                auto* value = static_cast<JPH::HingeConstraint*>(base);
+                force_impulse = value->GetTotalLambdaPosition().Length();
+                torque_impulse = value->GetTotalLambdaRotation().Length()
+                    + std::abs(value->GetTotalLambdaRotationLimits())
+                    + std::abs(value->GetTotalLambdaMotor());
+                break;
+            }
+            case kConstraintSlider: {
+                auto* value = static_cast<JPH::SliderConstraint*>(base);
+                force_impulse = value->GetTotalLambdaPosition().Length()
+                    + std::abs(value->GetTotalLambdaPositionLimits())
+                    + std::abs(value->GetTotalLambdaMotor());
+                torque_impulse = value->GetTotalLambdaRotation().Length();
+                break;
+            }
+            case kConstraintDistance:
+                force_impulse = std::abs(
+                    static_cast<JPH::DistanceConstraint*>(base)->GetTotalLambdaPosition());
+                break;
+            case kConstraintFixed: {
+                auto* value = static_cast<JPH::FixedConstraint*>(base);
+                force_impulse = value->GetTotalLambdaPosition().Length();
+                torque_impulse = value->GetTotalLambdaRotation().Length();
+                break;
+            }
+            case kConstraintCone: {
+                auto* value = static_cast<JPH::SwingTwistConstraint*>(base);
+                force_impulse = value->GetTotalLambdaPosition().Length();
+                const float twist = value->GetTotalLambdaTwist();
+                const float swing_y = value->GetTotalLambdaSwingY();
+                const float swing_z = value->GetTotalLambdaSwingZ();
+                torque_impulse = std::sqrt(twist * twist + swing_y * swing_y + swing_z * swing_z);
+                break;
+            }
+            case kConstraintSixDOF: {
+                auto* value = static_cast<JPH::SixDOFConstraint*>(base);
+                force_impulse = value->GetTotalLambdaPosition().Length()
+                    + value->GetTotalLambdaMotorTranslation().Length();
+                torque_impulse = value->GetTotalLambdaRotation().Length()
+                    + value->GetTotalLambdaMotorRotation().Length();
+                break;
+            }
+            default:
+                break;
+            }
+            // Some constraint implementations can report a zero accumulated
+            // lambda after a position-only correction. Preserve break semantics
+            // with a deterministic positional-error estimate in that case.
+            if (force_impulse <= 1.0e-8f) {
+                auto bodies_it = constraint_bodies.find(joint_entity);
+                if (bodies_it != constraint_bodies.end()) {
+                    auto body_a_it = body_ids.find(bodies_it->second.first);
+                    auto body_b_it = body_ids.find(bodies_it->second.second);
+                    if (body_a_it != body_ids.end() && body_b_it != body_ids.end()) {
+                        const JPH::RVec3 position_a = body_interface.GetCenterOfMassPosition(body_a_it->second);
+                        const JPH::RVec3 position_b = body_interface.GetCenterOfMassPosition(body_b_it->second);
+                        const float separation = static_cast<float>((position_b - position_a).Length());
+                        float positional_error = 0.0f;
+                        if (desc.constraint_type == kConstraintDistance) {
+                            positional_error = std::max(
+                                std::max(desc.min_limit - separation, separation - desc.max_limit),
+                                0.0f);
+                        } else if (desc.constraint_type == kConstraintPointToPoint
+                                   || desc.constraint_type == kConstraintFixed
+                                   || desc.constraint_type == kConstraintCone) {
+                            positional_error = separation;
+                        }
+                        force_impulse = positional_error * inverse_delta;
+                    }
+                }
+            }
+            const float force = force_impulse * inverse_delta;
+            const float torque = torque_impulse * inverse_delta;
+            if (force > desc.break_force || torque > desc.break_torque) {
+                joint_break_events.push_back(GuavaJoltJointBreakEvent{
+                    joint_entity, desc.entity_a, desc.entity_b, force, torque
+                });
+                broken_joints.push_back(joint_entity);
+            }
+        }
+        for (uint64_t joint_entity : broken_joints) destroy_constraint(joint_entity);
 
         // Write back states in deterministic entity_id order (matches existing semantics).
         std::vector<uint64_t> ids;
@@ -2026,6 +2457,18 @@ struct GuavaJoltContextImpl {
         uint32_t copy_contact_events(GuavaJoltContactEvent* out_events, size_t event_capacity) const {
             return contact_listener.copy_events(out_events, event_capacity);
         }
+
+        uint32_t drain_joint_break_events(
+            GuavaJoltJointBreakEvent* out_events,
+            size_t event_capacity) {
+            const uint32_t total = static_cast<uint32_t>(joint_break_events.size());
+            const size_t count = std::min(event_capacity, joint_break_events.size());
+            if (out_events) {
+                for (size_t index = 0; index < count; ++index) out_events[index] = joint_break_events[index];
+            }
+            joint_break_events.clear();
+            return total;
+        }
 	};
 
 extern "C" {
@@ -2047,6 +2490,7 @@ bool guava_jolt_bridge_get_abi_layout(GuavaJoltABILayout* out_layout) {
     out_layout->character_command_size = static_cast<uint32_t>(sizeof(GuavaJoltCharacterCommand));
     out_layout->character_state_size = static_cast<uint32_t>(sizeof(GuavaJoltCharacterState));
     out_layout->shape_instance_size = static_cast<uint32_t>(sizeof(GuavaJoltShapeInstance));
+    out_layout->joint_break_event_size = static_cast<uint32_t>(sizeof(GuavaJoltJointBreakEvent));
     return true;
 }
 
@@ -2191,6 +2635,14 @@ uint32_t guava_jolt_context_copy_contact_events(GuavaJoltContext context,
     if (!context) return 0;
     if (event_capacity > 0 && !out_events) return 0;
     return context->copy_contact_events(out_events, event_capacity);
+}
+
+uint32_t guava_jolt_context_drain_joint_break_events(GuavaJoltContext context,
+                                                     GuavaJoltJointBreakEvent* out_events,
+                                                     size_t event_capacity) {
+    if (!context) return 0;
+    if (event_capacity > 0 && !out_events) return 0;
+    return context->drain_joint_break_events(out_events, event_capacity);
 }
 
 }  // extern "C"
