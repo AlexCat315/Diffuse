@@ -69,6 +69,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
     public let rigidBody: EditorSceneManifestRigidBody?
     public let collider: EditorSceneManifestCollider?
     public let characterController: EditorSceneManifestCharacterController?
+    public let ragdoll: EditorSceneManifestRagdoll?
     public let constraint: EditorSceneManifestConstraint?
     public let script: EditorSceneManifestScript?
     public let audioSource: EditorSceneManifestAudioSource?
@@ -92,6 +93,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
                 rigidBody: EditorSceneManifestRigidBody? = nil,
                 collider: EditorSceneManifestCollider? = nil,
                 characterController: EditorSceneManifestCharacterController? = nil,
+                ragdoll: EditorSceneManifestRagdoll? = nil,
                 constraint: EditorSceneManifestConstraint? = nil,
                 script: EditorSceneManifestScript? = nil,
                 audioSource: EditorSceneManifestAudioSource? = nil,
@@ -111,6 +113,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.rigidBody = rigidBody
         self.collider = collider
         self.characterController = characterController
+        self.ragdoll = ragdoll
         self.constraint = constraint
         self.script = script
         self.audioSource = audioSource
@@ -122,7 +125,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case id, name, kind, localTransform, asset, renderMesh, renderMaterial
-        case camera, light, rigidBody, collider, characterController, constraint, script, audioSource
+        case camera, light, rigidBody, collider, characterController, ragdoll, constraint, script, audioSource
         case animationPlayer, animationGraphPlayer, particleEmitter, children
     }
 
@@ -140,6 +143,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.rigidBody = try c.decodeIfPresent(EditorSceneManifestRigidBody.self, forKey: .rigidBody)
         self.collider = try c.decodeIfPresent(EditorSceneManifestCollider.self, forKey: .collider)
         self.characterController = try c.decodeIfPresent(EditorSceneManifestCharacterController.self, forKey: .characterController)
+        self.ragdoll = try c.decodeIfPresent(EditorSceneManifestRagdoll.self, forKey: .ragdoll)
         self.constraint = try c.decodeIfPresent(EditorSceneManifestConstraint.self, forKey: .constraint)
         self.script = try c.decodeIfPresent(EditorSceneManifestScript.self, forKey: .script)
         self.audioSource = try c.decodeIfPresent(EditorSceneManifestAudioSource.self, forKey: .audioSource)
@@ -165,6 +169,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         try c.encodeIfPresent(rigidBody, forKey: .rigidBody)
         try c.encodeIfPresent(collider, forKey: .collider)
         try c.encodeIfPresent(characterController, forKey: .characterController)
+        try c.encodeIfPresent(ragdoll, forKey: .ragdoll)
         try c.encodeIfPresent(constraint, forKey: .constraint)
         try c.encodeIfPresent(script, forKey: .script)
         try c.encodeIfPresent(audioSource, forKey: .audioSource)
@@ -974,6 +979,65 @@ public struct EditorSceneManifestCharacterController: Codable, Sendable, Equatab
             gravityScale: gravityScale,
             layerID: layerID,
             layerMask: layerMask
+        )
+    }
+}
+
+public struct EditorSceneManifestRagdollBone: Codable, Sendable, Equatable {
+    public let boneName: String
+    public let paletteIndex: Int
+    public let bodyEntity: UInt64
+    public let jointEntity: UInt64?
+    public let bodyFromPalette: EditorSceneManifestMatrix
+    public let simulatedMotionType: String
+    public let isSimulationEnabled: Bool
+    public let blendWeight: Float
+
+    public init(_ bone: RagdollBoneMapping) {
+        boneName = bone.boneName
+        paletteIndex = bone.paletteIndex
+        bodyEntity = bone.bodyEntity.rawValue
+        jointEntity = bone.jointEntity?.rawValue
+        bodyFromPalette = EditorSceneManifestMatrix(bone.bodyFromPalette)
+        simulatedMotionType = bone.simulatedMotionType.rawValue
+        isSimulationEnabled = bone.isSimulationEnabled
+        blendWeight = bone.blendWeight
+    }
+
+    func component(idMap: [UInt64: EntityID]) -> RagdollBoneMapping? {
+        guard let body = idMap[bodyEntity] else { return nil }
+        return RagdollBoneMapping(
+            boneName: boneName,
+            paletteIndex: paletteIndex,
+            bodyEntity: body,
+            jointEntity: jointEntity.flatMap { idMap[$0] },
+            bodyFromPalette: bodyFromPalette.simdValue ?? matrix_identity_float4x4,
+            simulatedMotionType: RigidBodyMotionType(rawValue: simulatedMotionType) ?? .dynamic,
+            isSimulationEnabled: isSimulationEnabled,
+            blendWeight: blendWeight
+        )
+    }
+}
+
+public struct EditorSceneManifestRagdoll: Codable, Sendable, Equatable {
+    public let mode: String
+    public let blendWeight: Float
+    public let isEnabled: Bool
+    public let bones: [EditorSceneManifestRagdollBone]
+
+    public init(_ component: Ragdoll) {
+        mode = component.mode.rawValue
+        blendWeight = component.blendWeight
+        isEnabled = component.isEnabled
+        bones = component.bones.map(EditorSceneManifestRagdollBone.init)
+    }
+
+    func component(idMap: [UInt64: EntityID]) -> Ragdoll {
+        Ragdoll(
+            mode: RagdollMode(rawValue: mode) ?? .animated,
+            blendWeight: blendWeight,
+            isEnabled: isEnabled,
+            bones: bones.compactMap { $0.component(idMap: idMap) }
         )
     }
 }
@@ -2011,13 +2075,17 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             return entity
         }
 
-        func restoreConstraints(_ node: EditorSceneManifestNode) {
-            if let entity = idMap[node.id],
-               let constraint = node.constraint?.component(idMap: idMap) {
-                _ = restoredScene.setComponent(constraint, for: entity)
+        func restoreReferencedComponents(_ node: EditorSceneManifestNode) {
+            if let entity = idMap[node.id] {
+                if let constraint = node.constraint?.component(idMap: idMap) {
+                    _ = restoredScene.setComponent(constraint, for: entity)
+                }
+                if let ragdoll = node.ragdoll?.component(idMap: idMap) {
+                    _ = restoredScene.setComponent(ragdoll, for: entity)
+                }
             }
             for child in node.children {
-                restoreConstraints(child)
+                restoreReferencedComponents(child)
             }
         }
 
@@ -2025,7 +2093,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             restoreNode(root)
         }
         for root in manifest.roots {
-            restoreConstraints(root)
+            restoreReferencedComponents(root)
         }
         if let physicsSettings = manifest.physicsSettings {
             restoredScene.setResource(physicsSettings.settings)
@@ -2097,6 +2165,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         if let characterControllerSection = characterControllerSection(for: entity) {
             sections.append(characterControllerSection)
         }
+        if let ragdollSection = ragdollSection(for: entity) {
+            sections.append(ragdollSection)
+        }
         if let constraintSection = constraintSection(for: entity) {
             sections.append(constraintSection)
         }
@@ -2161,6 +2232,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             .map(EditorSceneManifestCollider.init)
         let characterController = scene.component(CharacterController.self, for: entity)
             .map(EditorSceneManifestCharacterController.init)
+        let ragdoll = scene.component(Ragdoll.self, for: entity)
+            .map(EditorSceneManifestRagdoll.init)
         let constraint = scene.component(Constraint.self, for: entity)
             .map(EditorSceneManifestConstraint.init)
         let script = scene.component(ScriptComponent.self, for: entity)
@@ -2192,6 +2265,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             rigidBody: rigidBody,
             collider: collider,
             characterController: characterController,
+            ragdoll: ragdoll,
             constraint: constraint,
             script: script,
             audioSource: audioSource,
@@ -2445,6 +2519,36 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 EditorInspectorField(id: "character-mass", label: L("Mass"), value: .constrainedNumber(characterFloatBinding(for: entity, \.mass, min: 0.01), min: 0.01, max: nil, step: 1, showsStepper: true)),
                 EditorInspectorField(id: "character-strength", label: L("Push Strength"), value: .constrainedNumber(characterFloatBinding(for: entity, \.maxStrength, min: 0), min: 0, max: nil, step: 10, showsStepper: true)),
                 EditorInspectorField(id: "character-gravity", label: L("Gravity Scale"), value: .constrainedNumber(characterFloatBinding(for: entity, \.gravityScale), min: nil, max: nil, step: 0.1, showsStepper: true)),
+            ]
+        )
+    }
+
+    private func ragdollSection(for entity: EntityID) -> EditorInspectorSection? {
+        guard let ragdoll = scene.component(Ragdoll.self, for: entity) else { return nil }
+        let state = scene.ragdollStateFrame.states[entity]
+        return EditorInspectorSection(
+            id: "ragdoll",
+            title: L("Ragdoll"),
+            fields: [
+                EditorInspectorField(id: "ragdoll-enabled", label: L("Enabled"), value: .bool(ragdollEnabledBinding(for: entity))),
+                EditorInspectorField(id: "ragdoll-mode", label: L("Mode"), value: .readOnly(ragdoll.mode.rawValue)),
+                EditorInspectorField(
+                    id: "ragdoll-blend-weight",
+                    label: L("Blend Weight"),
+                    value: .constrainedNumber(
+                        ragdollBlendWeightBinding(for: entity),
+                        min: 0,
+                        max: 1,
+                        step: 0.05,
+                        showsStepper: true
+                    )
+                ),
+                EditorInspectorField(id: "ragdoll-bones", label: L("Bones"), value: .readOnly(String(ragdoll.bones.count))),
+                EditorInspectorField(
+                    id: "ragdoll-simulated-bones",
+                    label: L("Simulated Bones"),
+                    value: .readOnly(String(state?.bones.filter(\.isSimulated).count ?? 0))
+                ),
             ]
         )
     }
@@ -4680,6 +4784,29 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
+    private func ragdollEnabledBinding(for entity: EntityID) -> Binding<Bool> {
+        Binding(
+            get: { [self] in scene.component(Ragdoll.self, for: entity)?.isEnabled ?? false },
+            set: { [self] value in
+                guard scene.component(Ragdoll.self, for: entity)?.isEnabled != value else { return }
+                _ = scene.updateComponent(Ragdoll.self, for: entity) { $0.isEnabled = value }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func ragdollBlendWeightBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in scene.component(Ragdoll.self, for: entity)?.blendWeight ?? 1 },
+            set: { [self] value in
+                let clamped = max(0, min(value, 1))
+                guard scene.component(Ragdoll.self, for: entity)?.blendWeight != clamped else { return }
+                _ = scene.updateComponent(Ragdoll.self, for: entity) { $0.blendWeight = clamped }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
     private func characterVectorBinding(
         for entity: EntityID,
         axis: WritableKeyPath<SIMD3<Float>, Float>
@@ -5325,6 +5452,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         }
         if scene.hasComponent(Constraint.self, for: entity) {
             return "Constraint"
+        }
+        if scene.hasComponent(Ragdoll.self, for: entity) {
+            return "Ragdoll"
         }
         if scene.hasComponent(RigidBody.self, for: entity) || scene.hasComponent(Collider.self, for: entity) {
             return "Physics Entity"

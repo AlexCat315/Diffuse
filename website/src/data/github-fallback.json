@@ -1,0 +1,27 @@
+{
+  "repository": {
+    "stars": 3,
+    "forks": 0,
+    "openIssues": 0,
+    "updatedAt": "2026-07-11T08:09:33Z",
+    "url": "https://github.com/AlexCat315/Guava-Engine"
+  },
+  "releases": [
+    {
+      "tag": "v0.0.7",
+      "name": "v0.0.7",
+      "publishedAt": "2026-07-05T07:14:19Z",
+      "url": "https://github.com/AlexCat315/Guava-Engine/releases/tag/v0.0.7",
+      "assets": [
+        { "id": 1, "name": "guava-editor-linux-x86_64.tar.gz", "size": 0, "downloadCount": 0, "downloadUrl": "https://github.com/AlexCat315/Guava-Engine/releases/download/v0.0.7/guava-editor-linux-x86_64.tar.gz" },
+        { "id": 2, "name": "guava-editor-macos-arm64.zip", "size": 0, "downloadCount": 0, "downloadUrl": "https://github.com/AlexCat315/Guava-Engine/releases/download/v0.0.7/guava-editor-macos-arm64.zip" },
+        { "id": 3, "name": "guava-editor-windows-x86_64.zip", "size": 0, "downloadCount": 0, "downloadUrl": "https://github.com/AlexCat315/Guava-Engine/releases/download/v0.0.7/guava-editor-windows-x86_64.zip" }
+      ]
+    }
+  ],
+  "contributors": [
+    { "login": "AlexCat315", "avatarUrl": "https://avatars.githubusercontent.com/u/99124972?v=4", "profileUrl": "https://github.com/AlexCat315", "contributions": 1836 },
+    { "login": "cyke666", "avatarUrl": "https://avatars.githubusercontent.com/u/273960066?v=4", "profileUrl": "https://github.com/cyke666", "contributions": 8 }
+  ],
+  "fetchedAt": "2026-07-11T08:09:33Z"
+}

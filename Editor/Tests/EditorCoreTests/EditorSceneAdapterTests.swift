@@ -301,6 +301,77 @@ struct EditorSceneAdapterTests {
         #expect(restored.scene.component(CameraComponent.self, for: entityID(restoredID))?.aspectRatio == 1.777)
     }
 
+    @Test("Scene manifest remaps ragdoll bodies and exposes its inspector")
+    func sceneManifestRoundTripsRagdoll() throws {
+        let source = EditorSceneAdapter()
+        source.scene = SceneRuntime()
+        let root = source.scene.createEntity()
+        _ = source.scene.setComponent(SceneNameComponent(value: "Ragdoll Root"), for: root)
+        let body = source.scene.createEntity()
+        _ = source.scene.setComponent(SceneNameComponent(value: "Hips Body"), for: body)
+        _ = source.scene.setComponent(Ragdoll(
+            mode: .blended,
+            blendWeight: 0.4,
+            bones: [RagdollBoneMapping(boneName: "hips", paletteIndex: 0, bodyEntity: body)]
+        ), for: root)
+
+        let data = try JSONEncoder().encode(source.manifest(selectedEntityID: root.rawValue))
+        let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
+        let restored = EditorSceneAdapter()
+        _ = restored.load(manifest: manifest)
+        let restoredRootRaw = try #require(flatten(restored.roots).first { $0.name == "Ragdoll Root" }?.id)
+        let restoredBodyRaw = try #require(flatten(restored.roots).first { $0.name == "Hips Body" }?.id)
+        let ragdoll = try #require(restored.scene.component(Ragdoll.self, for: entityID(restoredRootRaw)))
+        #expect(ragdoll.mode == .blended)
+        #expect(ragdoll.blendWeight == 0.4)
+        #expect(ragdoll.bones.first?.bodyEntity == entityID(restoredBodyRaw))
+        #expect(restored.inspectorSections(for: restoredRootRaw).contains { $0.id == "ragdoll" })
+    }
+
+    @Test("Ragdoll generator builds bodies, colliders, joints and palette mappings")
+    func generatesRagdollFromSkin() throws {
+        let meshIndex = 98_765
+        AssetRegistry.shared.registerForTesting(MeshAsset(
+            name: "ragdoll-test",
+            vertices: [],
+            indices: [],
+            nodes: [
+                MeshNode(name: "hips"),
+                MeshNode(name: "spine", parentIndex: 0, localTranslation: SIMD3<Float>(0, 1, 0)),
+            ],
+            skins: [MeshSkin(
+                jointNodeIndices: [0, 1],
+                inverseBindMatrices: [matrix_identity_float4x4, translationMatrix(SIMD3<Float>(0, -1, 0))]
+            )]
+        ), at: meshIndex)
+        let adapter = EditorSceneAdapter()
+        adapter.scene = SceneRuntime()
+        let root = adapter.scene.createEntity()
+        _ = adapter.scene.setLocalTransform(.identity, for: root)
+        _ = adapter.scene.setComponent(SceneNameComponent(value: "Hero"), for: root)
+        _ = adapter.scene.setComponent(AssetReferenceComponent(
+            assetID: "test",
+            name: "Hero",
+            relativePath: "hero.gltf",
+            absolutePath: "/hero.gltf",
+            kind: "gltf",
+            meshIndex: meshIndex
+        ), for: root)
+
+        let result = adapter.generateRagdoll(for: root.rawValue)
+        #expect(result.error == nil)
+        #expect(result.bodyCount == 2)
+        #expect(result.jointCount == 1)
+        let ragdoll = try #require(adapter.scene.component(Ragdoll.self, for: root))
+        #expect(ragdoll.bones.count == 2)
+        for mapping in ragdoll.bones {
+            #expect(adapter.scene.hasComponent(RigidBody.self, for: mapping.bodyEntity))
+            #expect(adapter.scene.hasComponent(Collider.self, for: mapping.bodyEntity))
+        }
+        let jointEntity = try #require(ragdoll.bones.first { $0.boneName == "spine" }?.jointEntity)
+        #expect(adapter.scene.hasComponent(PhysicsJoint.self, for: jointEntity))
+    }
+
     @Test("Scene manifest round-trips the renderable scene contract")
     func sceneManifestRoundTripsRenderableSceneContract() {
         let source = EditorSceneAdapter()
@@ -967,6 +1038,12 @@ private func findNode(in nodes: [EditorSceneManifestNode], id: UInt64) -> Editor
         }
     }
     return nil
+}
+
+private func translationMatrix(_ value: SIMD3<Float>) -> simd_float4x4 {
+    var matrix = matrix_identity_float4x4
+    matrix.columns.3 = SIMD4<Float>(value, 1)
+    return matrix
 }
 
 private func entityID(_ rawValue: UInt64) -> EntityID {

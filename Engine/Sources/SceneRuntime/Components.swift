@@ -34,6 +34,7 @@ public enum ComponentCatalog {
         ComponentTypeID(Collider.self),
         ComponentTypeID(Constraint.self),
         ComponentTypeID(CharacterController.self),
+        ComponentTypeID(Ragdoll.self),
 
         // Scene metadata
         ComponentTypeID(SceneNameComponent.self),
