@@ -111,6 +111,7 @@ public enum SceneSerializer {
         var comps: [String: Any] = [:]
         if let c = scene.component(RigidBody.self, for: entity) { comps["rigidbody"] = serializeRigidBody(c) }
         if let c = scene.component(Collider.self, for: entity) { comps["collider"] = serializeCollider(c) }
+        if let c = scene.component(CharacterController.self, for: entity) { comps["characterController"] = serializeCharacterController(c) }
         if let c = scene.component(Constraint.self, for: entity),
            let a = entityIndexMap[c.entityA], let b = entityIndexMap[c.entityB] {
             comps["constraint"] = serializeConstraint(c, entityA: a, entityB: b)
@@ -169,6 +170,7 @@ public enum SceneSerializer {
         guard let comps = jsonToDict(obj["components"]) else { return entity }
         if let c = jsonToDict(comps["rigidbody"]) { _ = scene.setComponent(deserializeRigidBody(c), for: entity) }
         if let c = jsonToDict(comps["collider"]) { _ = scene.setComponent(deserializeCollider(c), for: entity) }
+        if let c = jsonToDict(comps["characterController"]) { _ = scene.setComponent(deserializeCharacterController(c), for: entity) }
         if let c = jsonToDict(comps["renderMesh"]) { _ = scene.setComponent(deserializeRenderMesh(c), for: entity) }
         if let c = jsonToDict(comps["renderMaterial"]) { _ = scene.setComponent(deserializeRenderMaterial(c), for: entity) }
         if let c = jsonToDict(comps["assetReference"]) { _ = scene.setComponent(deserializeAssetReference(c), for: entity) }
@@ -253,7 +255,15 @@ public enum SceneSerializer {
             "layerMask": c.layerMask,
             "friction": c.material.friction,
             "restitution": c.material.restitution,
+            "density": c.material.density,
         ]
+        d["shapes"] = c.shapes.map { instance in
+            var encoded = serializeColliderShape(instance.shape)
+            encoded["localPosition"] = vec3ToJSON(instance.localPosition)
+            encoded["localRotation"] = vec4ToJSON(instance.localRotation)
+            encoded["localScale"] = vec3ToJSON(instance.localScale)
+            return encoded
+        }
         switch c.shape {
         case let .box(he, center):
             d["shape"] = "box"
@@ -268,6 +278,15 @@ public enum SceneSerializer {
             d["radius"] = radius
             d["halfHeight"] = halfHeight
             d["center"] = vec3ToJSON(center)
+        case let .cylinder(radius, halfHeight, center):
+            d["shape"] = "cylinder"
+            d["radius"] = radius
+            d["halfHeight"] = halfHeight
+            d["center"] = vec3ToJSON(center)
+        case let .heightField(resourceID, center):
+            d["shape"] = "heightField"
+            d["resourceID"] = resourceID ?? ""
+            d["center"] = vec3ToJSON(center)
         case let .mesh(resourceID, center):
             d["shape"] = "mesh"
             d["resourceID"] = resourceID ?? ""
@@ -276,6 +295,27 @@ public enum SceneSerializer {
             d["shape"] = "convex"
             d["resourceID"] = resourceID ?? ""
             d["center"] = vec3ToJSON(center)
+        }
+        return d
+    }
+
+    private static func serializeColliderShape(_ shape: ColliderShape) -> [String: Any] {
+        var d: [String: Any] = ["center": vec3ToJSON(shape.center)]
+        switch shape {
+        case let .box(halfExtents, _):
+            d["shape"] = "box"; d["halfExtents"] = vec3ToJSON(halfExtents)
+        case let .sphere(radius, _):
+            d["shape"] = "sphere"; d["radius"] = radius
+        case let .capsule(radius, halfHeight, _):
+            d["shape"] = "capsule"; d["radius"] = radius; d["halfHeight"] = halfHeight
+        case let .cylinder(radius, halfHeight, _):
+            d["shape"] = "cylinder"; d["radius"] = radius; d["halfHeight"] = halfHeight
+        case let .heightField(resourceID, _):
+            d["shape"] = "heightField"; d["resourceID"] = resourceID ?? ""
+        case let .mesh(resourceID, _):
+            d["shape"] = "mesh"; d["resourceID"] = resourceID ?? ""
+        case let .convex(resourceID, _):
+            d["shape"] = "convex"; d["resourceID"] = resourceID ?? ""
         }
         return d
     }
@@ -289,6 +329,12 @@ public enum SceneSerializer {
         case "capsule":
             shape = .capsule(radius: jsonToFloat(d["radius"]) ?? 0.5,
                            halfHeight: jsonToFloat(d["halfHeight"]) ?? 1, center: center)
+        case "cylinder":
+            shape = .cylinder(radius: jsonToFloat(d["radius"]) ?? 0.5,
+                              halfHeight: jsonToFloat(d["halfHeight"]) ?? 0.5,
+                              center: center)
+        case "heightField":
+            shape = .heightField(resourceID: jsonToString(d["resourceID"]), center: center)
         case "mesh":
             shape = .mesh(resourceID: jsonToString(d["resourceID"]), center: center)
         case "convex":
@@ -297,15 +343,86 @@ public enum SceneSerializer {
             let he = jsonToFloatArray(d["halfExtents"]).flatMap(jsonToVec3) ?? SIMD3<Float>(repeating: 0.5)
             shape = .box(halfExtents: he, center: center)
         }
+        let instances = jsonToArray(d["shapes"])?.compactMap { value -> ColliderShapeInstance? in
+            guard let encoded = jsonToDict(value) else { return nil }
+            let localPosition = jsonToFloatArray(encoded["localPosition"]).flatMap(jsonToVec3) ?? .zero
+            let localRotation = jsonToFloatArray(encoded["localRotation"]).flatMap(jsonToVec4)
+                ?? SIMD4<Float>(0, 0, 0, 1)
+            let localScale = jsonToFloatArray(encoded["localScale"]).flatMap(jsonToVec3)
+                ?? SIMD3<Float>(repeating: 1)
+            return ColliderShapeInstance(
+                shape: deserializeColliderShape(encoded),
+                localPosition: localPosition,
+                localRotation: localRotation,
+                localScale: localScale
+            )
+        }
         return Collider(
-            shape: shape,
+            shapes: instances ?? [ColliderShapeInstance(shape: shape)],
             isTrigger: jsonToBool(d["isTrigger"]) ?? false,
             layerID: UInt16(jsonToInt(d["layerID"]) ?? 0),
             layerMask: UInt16(jsonToInt(d["layerMask"]) ?? Int(UInt16.max)),
             material: PhysicsMaterial(
                 friction: jsonToFloat(d["friction"]) ?? 0.6,
-                restitution: jsonToFloat(d["restitution"]) ?? 0
+                restitution: jsonToFloat(d["restitution"]) ?? 0,
+                density: jsonToFloat(d["density"]) ?? 1
             )
+        )
+    }
+
+    private static func deserializeColliderShape(_ d: [String: Any]) -> ColliderShape {
+        let center = jsonToFloatArray(d["center"]).flatMap(jsonToVec3) ?? .zero
+        switch jsonToString(d["shape"]) ?? "box" {
+        case "sphere": return .sphere(radius: jsonToFloat(d["radius"]) ?? 0.5, center: center)
+        case "capsule": return .capsule(radius: jsonToFloat(d["radius"]) ?? 0.5,
+                                         halfHeight: jsonToFloat(d["halfHeight"]) ?? 0.5,
+                                         center: center)
+        case "cylinder": return .cylinder(radius: jsonToFloat(d["radius"]) ?? 0.5,
+                                            halfHeight: jsonToFloat(d["halfHeight"]) ?? 0.5,
+                                            center: center)
+        case "heightField": return .heightField(resourceID: jsonToString(d["resourceID"]), center: center)
+        case "mesh": return .mesh(resourceID: jsonToString(d["resourceID"]), center: center)
+        case "convex": return .convex(resourceID: jsonToString(d["resourceID"]), center: center)
+        default:
+            return .box(
+                halfExtents: jsonToFloatArray(d["halfExtents"]).flatMap(jsonToVec3)
+                    ?? SIMD3<Float>(repeating: 0.5),
+                center: center
+            )
+        }
+    }
+
+    private static func serializeCharacterController(_ c: CharacterController) -> [String: Any] {
+        [
+            "radius": c.radius,
+            "standingHalfHeight": c.standingHalfHeight,
+            "crouchingHalfHeight": c.crouchingHalfHeight,
+            "center": vec3ToJSON(c.center),
+            "maxSlopeDegrees": c.maxSlopeDegrees,
+            "stepHeight": c.stepHeight,
+            "skinWidth": c.skinWidth,
+            "mass": c.mass,
+            "maxStrength": c.maxStrength,
+            "gravityScale": c.gravityScale,
+            "layerID": c.layerID,
+            "layerMask": c.layerMask,
+        ]
+    }
+
+    private static func deserializeCharacterController(_ d: [String: Any]) -> CharacterController {
+        CharacterController(
+            radius: jsonToFloat(d["radius"]) ?? 0.4,
+            standingHalfHeight: jsonToFloat(d["standingHalfHeight"]) ?? 0.6,
+            crouchingHalfHeight: jsonToFloat(d["crouchingHalfHeight"]) ?? 0.25,
+            center: jsonToFloatArray(d["center"]).flatMap(jsonToVec3) ?? .zero,
+            maxSlopeDegrees: jsonToFloat(d["maxSlopeDegrees"]) ?? 50,
+            stepHeight: jsonToFloat(d["stepHeight"]) ?? 0.4,
+            skinWidth: jsonToFloat(d["skinWidth"]) ?? 0.02,
+            mass: jsonToFloat(d["mass"]) ?? 70,
+            maxStrength: jsonToFloat(d["maxStrength"]) ?? 100,
+            gravityScale: jsonToFloat(d["gravityScale"]) ?? 1,
+            layerID: UInt16(jsonToInt(d["layerID"]) ?? 0),
+            layerMask: UInt16(jsonToInt(d["layerMask"]) ?? Int(UInt16.max))
         )
     }
 

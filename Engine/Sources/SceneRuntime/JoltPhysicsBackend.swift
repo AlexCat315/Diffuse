@@ -11,6 +11,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     private static let colliderHasCapsuleFlag: UInt32 = 1 << 5
     private static let colliderHasConvexFlag: UInt32 = 1 << 6
     private static let rigidBodyContinuousCollisionFlag: UInt32 = 1 << 7
+    private static let colliderHasCylinderFlag: UInt32 = 1 << 8
     private static let queryShapeBox: UInt8 = 0
     private static let queryShapeSphere: UInt8 = 1
     private static let queryShapeCapsule: UInt8 = 2
@@ -30,6 +31,10 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             && layout.step_config_size == UInt32(MemoryLayout<GuavaJoltStepConfig>.size)
             && layout.body_state_size == UInt32(MemoryLayout<GuavaJoltBodyState>.size)
             && layout.contact_event_size == UInt32(MemoryLayout<GuavaJoltContactEvent>.size)
+            && layout.character_desc_size == UInt32(MemoryLayout<GuavaJoltCharacterDesc>.size)
+            && layout.character_command_size == UInt32(MemoryLayout<GuavaJoltCharacterCommand>.size)
+            && layout.character_state_size == UInt32(MemoryLayout<GuavaJoltCharacterState>.size)
+            && layout.shape_instance_size == UInt32(MemoryLayout<GuavaJoltShapeInstance>.size)
         if compatible {
             context = guava_jolt_context_create()
         } else {
@@ -60,8 +65,10 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             )
         }
 
-        let bodyDescs = context.activeBodies.map(makeBodyDesc)
+        var bodyDescs = context.activeBodies.map(makeBodyDesc)
         let constraintDescs = context.activeConstraints.map(makeConstraintDesc)
+        let shapeInstancesByBody = context.activeBodies.map(makeShapeInstances)
+        let flatShapeInstances = shapeInstancesByBody.flatMap { $0 }
         lastPreparedBodyCount = context.activeBodies.count
 
         // Collect mesh geometry into flat arrays so C pointers stay valid.
@@ -88,34 +95,41 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             flatIndices.append(contentsOf: geometry.triangleIndices)
         }
 
-        // Patch pointers after all data is collected.
-        var vertexCursor: UInt32 = 0
-        var indexCursor: UInt32 = 0
-        for i in 0..<meshDescs.count {
-            let vc = meshDescs[i].vertex_count
-            let ic = meshDescs[i].index_count
-            meshDescs[i].vertices = flatVertices.withUnsafeBufferPointer { $0.baseAddress }.map { $0.advanced(by: Int(vertexCursor * 3)) } ?? nil
-            meshDescs[i].indices = flatIndices.withUnsafeBufferPointer { $0.baseAddress }.map { $0.advanced(by: Int(indexCursor)) } ?? nil
-            vertexCursor += vc
-            indexCursor += ic
-        }
-
         var stats = GuavaJoltPrepareStats()
-        let success = bodyDescs.withUnsafeBufferPointer { bodyBuffer in
-            constraintDescs.withUnsafeBufferPointer { constraintBuffer in
-                flatVertices.withUnsafeBufferPointer { _ in
-                    flatIndices.withUnsafeBufferPointer { _ in
-                        meshDescs.withUnsafeBufferPointer { meshBuffer in
-                            guava_jolt_context_prepare_with_meshes(
-                                nativeContext,
-                                bodyBuffer.baseAddress,
-                                bodyBuffer.count,
-                                constraintBuffer.baseAddress,
-                                constraintBuffer.count,
-                                meshBuffer.baseAddress,
-                                meshBuffer.count,
-                                &stats
-                            )
+        let success = flatVertices.withUnsafeBufferPointer { vertexBuffer in
+            flatIndices.withUnsafeBufferPointer { indexBuffer in
+                flatShapeInstances.withUnsafeBufferPointer { shapeBuffer in
+                    bodyDescs.withUnsafeMutableBufferPointer { bodyBuffer in
+                        var shapeCursor = 0
+                        for index in bodyBuffer.indices {
+                            let count = shapeInstancesByBody[index].count
+                            bodyBuffer[index].shape_instances = count > 0
+                                ? shapeBuffer.baseAddress?.advanced(by: shapeCursor)
+                                : nil
+                            bodyBuffer[index].shape_instance_count = UInt32(count)
+                            shapeCursor += count
+                        }
+                        return constraintDescs.withUnsafeBufferPointer { constraintBuffer in
+                            meshDescs.withUnsafeMutableBufferPointer { meshBuffer in
+                                var vertexCursor = 0
+                                var indexCursor = 0
+                                for index in meshBuffer.indices {
+                                    meshBuffer[index].vertices = vertexBuffer.baseAddress?.advanced(by: vertexCursor)
+                                    meshBuffer[index].indices = indexBuffer.baseAddress?.advanced(by: indexCursor)
+                                    vertexCursor += Int(meshBuffer[index].vertex_count) * 3
+                                    indexCursor += Int(meshBuffer[index].index_count)
+                                }
+                                return guava_jolt_context_prepare_with_meshes(
+                                    nativeContext,
+                                    bodyBuffer.baseAddress,
+                                    bodyBuffer.count,
+                                    constraintBuffer.baseAddress,
+                                    constraintBuffer.count,
+                                    meshBuffer.baseAddress,
+                                    meshBuffer.count,
+                                    &stats
+                                )
+                            }
                         }
                     }
                 }
@@ -126,6 +140,20 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             return PhysicsPrepareResult(
                 synchronizedBodies: 0,
                 synchronizedConstraints: 0,
+                error: nativeError(from: nativeContext)
+            )
+        }
+
+        let characterDescs = context.activeCharacters.map(makeCharacterDesc)
+        let synchronizedCharacters = characterDescs.withUnsafeBufferPointer { buffer in
+            guava_jolt_context_sync_characters(nativeContext, buffer.baseAddress, buffer.count)
+        }
+        guard synchronizedCharacters else {
+            return PhysicsPrepareResult(
+                synchronizedBodies: Int(stats.synchronized_bodies),
+                synchronizedConstraints: Int(stats.synchronized_constraints),
+                removedBodies: Int(stats.removed_bodies),
+                removedConstraints: Int(stats.removed_constraints),
                 error: nativeError(from: nativeContext)
             )
         }
@@ -161,6 +189,25 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             reserved1: 0
         )
         var stats = GuavaJoltStepStats()
+        let commandDescs = context.characterCommands
+            .sorted { $0.key.rawValue < $1.key.rawValue }
+            .map { makeCharacterCommand(entity: $0.key, command: $0.value) }
+        var characterStates = [GuavaJoltCharacterState](
+            repeating: GuavaJoltCharacterState(),
+            count: context.activeCharacters.count
+        )
+        let characterStateCount = commandDescs.withUnsafeBufferPointer { commandBuffer in
+            characterStates.withUnsafeMutableBufferPointer { stateBuffer in
+                guava_jolt_context_step_characters(
+                    nativeContext,
+                    &config,
+                    commandBuffer.baseAddress,
+                    commandBuffer.count,
+                    stateBuffer.baseAddress,
+                    stateBuffer.count
+                )
+            }
+        }
         let descriptorsByEntity = Dictionary(uniqueKeysWithValues: context.activeBodies.map { ($0.entity.rawValue, $0) })
         let success = bodyStates.withUnsafeMutableBufferPointer { stateBuffer in
             guava_jolt_context_step(
@@ -193,7 +240,10 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             writebacks: bodyStates
                 .prefix(Int(stats.state_count))
                 .compactMap { makeWriteback(from: $0, descriptorsByEntity: descriptorsByEntity) },
-            contactEvents: contactEvents
+            contactEvents: contactEvents,
+            characterStates: characterStates
+                .prefix(min(Int(characterStateCount), characterStates.count))
+                .map(makeCharacterState)
         )
     }
 
@@ -213,6 +263,27 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         let success = guava_jolt_context_raycast(nativeContext, &cQuery, &cFilter, &hit)
         guard success else { return nil }
         return makeRaycastHit(hit)
+    }
+
+    public func raycastAll(
+        _ query: PhysicsRaycastQuery,
+        filter: PhysicsQueryFilter,
+        maxHits: Int
+    ) -> [PhysicsRaycastHit] {
+        guard let nativeContext = context, maxHits > 0 else { return [] }
+        var cQuery = GuavaJoltRaycastQuery(
+            origin_x: query.origin.x, origin_y: query.origin.y, origin_z: query.origin.z,
+            direction_x: query.direction.x, direction_y: query.direction.y, direction_z: query.direction.z,
+            max_distance: query.maxDistance
+        )
+        var cFilter = makeQueryFilter(filter)
+        let capacity = maxHits == .max ? max(1, lastPreparedBodyCount * 64) : maxHits
+        var hits = [GuavaJoltRaycastHit](repeating: GuavaJoltRaycastHit(), count: capacity)
+        let count = hits.withUnsafeMutableBufferPointer { buffer in
+            guava_jolt_context_raycast_all(
+                nativeContext, &cQuery, &cFilter, buffer.baseAddress, buffer.count)
+        }
+        return hits.prefix(min(Int(count), capacity)).map(makeRaycastHit)
     }
 
     public func overlapAABB(_ query: PhysicsOverlapAABBQuery, filter: PhysicsQueryFilter) -> [PhysicsOverlapHit] {
@@ -305,6 +376,23 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         return makeSweepHit(hit)
     }
 
+    public func sweepShapeAll(
+        _ query: PhysicsSweepShapeQuery,
+        filter: PhysicsQueryFilter,
+        maxHits: Int
+    ) -> [PhysicsSweepHit] {
+        guard let nativeContext = context, maxHits > 0 else { return [] }
+        var cQuery = makeSweepShapeQuery(query)
+        var cFilter = makeQueryFilter(filter)
+        let capacity = maxHits == .max ? max(1, lastPreparedBodyCount * 64) : maxHits
+        var hits = [GuavaJoltSweepHit](repeating: GuavaJoltSweepHit(), count: capacity)
+        let count = hits.withUnsafeMutableBufferPointer { buffer in
+            guava_jolt_context_sweep_shape_all(
+                nativeContext, &cQuery, &cFilter, buffer.baseAddress, buffer.count)
+        }
+        return hits.prefix(min(Int(count), capacity)).map(makeSweepHit)
+    }
+
     public func detectTriggerFrame(maxEventCount: Int) -> TriggerFrameResource {
         guard let nativeContext = context else { return TriggerFrameResource() }
         let capacity = max(maxEventCount, lastPreparedBodyCount * max(1, lastPreparedBodyCount) * 3)
@@ -386,7 +474,8 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
                 flags |= Self.colliderIsTriggerFlag
             }
 
-            switch collider.shape {
+            if let firstShape = collider.shapes.first?.shape {
+            switch firstShape {
             case let .box(halfExtents, center):
                 flags |= Self.colliderHasBoxFlag
                 boxHalfExtents = halfExtents
@@ -400,12 +489,21 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
                 capsuleRadius = radius
                 capsuleHalfHeight = halfHeight
                 shapeCenter = center
+            case let .cylinder(radius, halfHeight, center):
+                flags |= Self.colliderHasCylinderFlag
+                capsuleRadius = radius
+                capsuleHalfHeight = halfHeight
+                shapeCenter = center
+            case let .heightField(_, center):
+                flags |= Self.colliderHasMeshFlag
+                shapeCenter = center
             case let .mesh(_, center):
                 flags |= Self.colliderHasMeshFlag
                 shapeCenter = center
             case let .convex(_, center):
                 flags |= Self.colliderHasConvexFlag
                 shapeCenter = center
+            }
             }
         }
 
@@ -461,8 +559,145 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             layer_mask: layerMask,
             friction: descriptor.collider?.material.friction ?? PhysicsMaterial().friction,
             restitution: descriptor.collider?.material.restitution ?? PhysicsMaterial().restitution,
-            density: descriptor.collider?.material.density ?? PhysicsMaterial().density
+            density: descriptor.collider?.material.density ?? PhysicsMaterial().density,
+            shape_instances: nil,
+            shape_instance_count: 0,
+            shape_instances_reserved: 0
         )
+    }
+
+    private func makeShapeInstances(from descriptor: PhysicsBodyDescriptor) -> [GuavaJoltShapeInstance] {
+        guard let collider = descriptor.collider else { return [] }
+        let worldScale = matrixScale(of: descriptor.worldTransform.matrix)
+        return collider.shapes.map { instance in
+            let center = instance.shape.center
+            let position = (instance.localPosition + center) * worldScale
+            let scale = instance.localScale * worldScale
+            var shapeType: UInt8 = 0
+            var halfExtents = SIMD3<Float>.zero
+            var radius: Float = 0
+            var halfHeight: Float = 0
+            switch instance.shape {
+            case let .box(value, _):
+                shapeType = 0
+                halfExtents = value
+            case let .sphere(value, _):
+                shapeType = 1
+                radius = value
+            case let .capsule(r, h, _):
+                shapeType = 2
+                radius = r
+                halfHeight = h
+            case let .cylinder(r, h, _):
+                shapeType = 3
+                radius = r
+                halfHeight = h
+            case .mesh:
+                shapeType = 4
+            case .convex:
+                shapeType = 5
+            case .heightField:
+                shapeType = 6
+            }
+            return GuavaJoltShapeInstance(
+                shape_type: shapeType,
+                reserved0: 0,
+                reserved1: 0,
+                position_x: position.x,
+                position_y: position.y,
+                position_z: position.z,
+                rotation_x: instance.localRotation.x,
+                rotation_y: instance.localRotation.y,
+                rotation_z: instance.localRotation.z,
+                rotation_w: instance.localRotation.w,
+                scale_x: scale.x,
+                scale_y: scale.y,
+                scale_z: scale.z,
+                half_extent_x: halfExtents.x,
+                half_extent_y: halfExtents.y,
+                half_extent_z: halfExtents.z,
+                radius: radius,
+                half_height: halfHeight
+            )
+        }
+    }
+
+    private func makeCharacterDesc(from descriptor: PhysicsCharacterDescriptor) -> GuavaJoltCharacterDesc {
+        let controller = descriptor.controller
+        let rotation = rotationQuaternion(from: descriptor.worldTransform.matrix)
+        return GuavaJoltCharacterDesc(
+            entity_id: descriptor.entity.rawValue,
+            position_x: descriptor.worldTransform.translation.x,
+            position_y: descriptor.worldTransform.translation.y,
+            position_z: descriptor.worldTransform.translation.z,
+            rotation_x: rotation.vector.x,
+            rotation_y: rotation.vector.y,
+            rotation_z: rotation.vector.z,
+            rotation_w: rotation.vector.w,
+            center_x: controller.center.x,
+            center_y: controller.center.y,
+            center_z: controller.center.z,
+            radius: controller.radius,
+            standing_half_height: controller.standingHalfHeight,
+            crouching_half_height: controller.crouchingHalfHeight,
+            max_slope_radians: controller.maxSlopeDegrees * .pi / 180,
+            step_height: controller.stepHeight,
+            skin_width: controller.skinWidth,
+            mass: controller.mass,
+            max_strength: controller.maxStrength,
+            gravity_scale: controller.gravityScale,
+            layer_id: controller.layerID,
+            layer_mask: controller.layerMask
+        )
+    }
+
+    private func makeCharacterCommand(
+        entity: EntityID,
+        command: CharacterCommand
+    ) -> GuavaJoltCharacterCommand {
+        GuavaJoltCharacterCommand(
+            entity_id: entity.rawValue,
+            desired_velocity_x: command.desiredVelocity.x,
+            desired_velocity_y: command.desiredVelocity.y,
+            desired_velocity_z: command.desiredVelocity.z,
+            jump_speed: command.jumpSpeed,
+            jump_requested: command.jumpRequested ? 1 : 0,
+            stance: command.stance.rawValue,
+            reserved: 0
+        )
+    }
+
+    private func makeCharacterState(_ state: GuavaJoltCharacterState) -> CharacterState {
+        CharacterState(
+            entity: EntityID(rawValue: state.entity_id),
+            position: SIMD3<Float>(state.position_x, state.position_y, state.position_z),
+            rotation: SIMD4<Float>(
+                state.rotation_x, state.rotation_y, state.rotation_z, state.rotation_w
+            ),
+            linearVelocity: SIMD3<Float>(
+                state.linear_velocity_x, state.linear_velocity_y, state.linear_velocity_z
+            ),
+            groundState: characterGroundState(state.ground_state),
+            groundNormal: SIMD3<Float>(
+                state.ground_normal_x, state.ground_normal_y, state.ground_normal_z
+            ),
+            groundVelocity: SIMD3<Float>(
+                state.ground_velocity_x, state.ground_velocity_y, state.ground_velocity_z
+            ),
+            groundEntity: state.has_ground_entity == 0
+                ? nil
+                : EntityID(rawValue: state.ground_entity),
+            stance: state.stance == 1 ? .crouching : .standing
+        )
+    }
+
+    private func characterGroundState(_ raw: UInt8) -> CharacterGroundState {
+        switch raw {
+        case 0: return .onGround
+        case 1: return .onSteepGround
+        case 2: return .notSupported
+        default: return .inAir
+        }
     }
 
     private func makeConstraintDesc(from descriptor: PhysicsConstraintDescriptor) -> GuavaJoltConstraintDesc {
@@ -603,6 +838,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     private func makeRaycastHit(_ hit: GuavaJoltRaycastHit) -> PhysicsRaycastHit {
         PhysicsRaycastHit(
             entity: EntityID(rawValue: hit.entity_id),
+            subShapeID: hit.sub_shape_id,
             distance: hit.distance,
             position: SIMD3<Float>(hit.position_x, hit.position_y, hit.position_z),
             normal: SIMD3<Float>(hit.normal_x, hit.normal_y, hit.normal_z),
@@ -617,6 +853,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     private func makeOverlapHit(_ hit: GuavaJoltOverlapHit) -> PhysicsOverlapHit {
         PhysicsOverlapHit(
             entity: EntityID(rawValue: hit.entity_id),
+            subShapeID: hit.sub_shape_id,
             bounds: SpatialAABB(
                 min: SIMD3<Float>(hit.bounds_min_x, hit.bounds_min_y, hit.bounds_min_z),
                 max: SIMD3<Float>(hit.bounds_max_x, hit.bounds_max_y, hit.bounds_max_z)
@@ -628,6 +865,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     private func makeSweepHit(_ hit: GuavaJoltSweepHit) -> PhysicsSweepHit {
         PhysicsSweepHit(
             entity: EntityID(rawValue: hit.entity_id),
+            subShapeID: hit.sub_shape_id,
             fraction: hit.fraction,
             distance: hit.distance,
             position: SIMD3<Float>(hit.position_x, hit.position_y, hit.position_z),
@@ -665,10 +903,18 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         PhysicsContactEvent(
             entityA: EntityID(rawValue: event.entity_a),
             entityB: EntityID(rawValue: event.entity_b),
+            subShapeIDA: event.sub_shape_id_a,
+            subShapeIDB: event.sub_shape_id_b,
             kind: contactEventKind(event.kind),
             position: SIMD3<Float>(event.position_x, event.position_y, event.position_z),
             normal: SIMD3<Float>(event.normal_x, event.normal_y, event.normal_z),
-            penetrationDepth: event.penetration_depth
+            penetrationDepth: event.penetration_depth,
+            relativeVelocity: SIMD3<Float>(
+                event.relative_velocity_x,
+                event.relative_velocity_y,
+                event.relative_velocity_z
+            ),
+            impulse: event.impulse
         )
     }
 

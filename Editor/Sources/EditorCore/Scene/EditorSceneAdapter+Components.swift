@@ -7,6 +7,7 @@ import SIMDCompat
 public enum EditorComponentKind: String, CaseIterable, Sendable {
     case rigidBody
     case collider
+    case characterController
     case renderMesh
     case renderMaterial
     case camera
@@ -21,6 +22,7 @@ public enum EditorComponentKind: String, CaseIterable, Sendable {
         switch self {
         case .rigidBody:       return "Rigid Body"
         case .collider:        return "Collider"
+        case .characterController: return "Character Controller"
         case .renderMesh:      return "Render Mesh"
         case .renderMaterial:  return "Render Material"
         case .camera:          return "Camera"
@@ -41,6 +43,7 @@ extension EditorSceneAdapter {
         switch kind {
         case .rigidBody:       return scene.hasComponent(RigidBody.self, for: entity)
         case .collider:        return scene.hasComponent(Collider.self, for: entity)
+        case .characterController: return scene.hasComponent(CharacterController.self, for: entity)
         case .renderMesh:      return scene.hasComponent(RenderMeshComponent.self, for: entity)
         case .renderMaterial:  return scene.hasComponent(RenderMaterialComponent.self, for: entity)
         case .camera:          return scene.hasComponent(CameraComponent.self, for: entity)
@@ -71,6 +74,7 @@ extension EditorSceneAdapter {
         switch kind {
         case .rigidBody:       _ = scene.setComponent(RigidBody(), for: entity)
         case .collider:        _ = scene.setComponent(Collider(shape: .box(halfExtents: SIMD3<Float>(repeating: 0.5), center: .zero)), for: entity)
+        case .characterController: _ = scene.setComponent(CharacterController(), for: entity)
         case .renderMesh:      _ = scene.setComponent(RenderMeshComponent(meshIndex: 0), for: entity)
         case .renderMaterial:  _ = scene.setComponent(RenderMaterialComponent(), for: entity)
         case .camera:          _ = scene.setComponent(CameraComponent(isActive: false), for: entity)
@@ -93,6 +97,7 @@ extension EditorSceneAdapter {
         switch kind {
         case .rigidBody:       _ = scene.removeComponent(RigidBody.self, from: entity)
         case .collider:        _ = scene.removeComponent(Collider.self, from: entity)
+        case .characterController: _ = scene.removeComponent(CharacterController.self, from: entity)
         case .renderMesh:      _ = scene.removeComponent(RenderMeshComponent.self, from: entity)
         case .renderMaterial:  _ = scene.removeComponent(RenderMaterialComponent.self, from: entity)
         case .camera:          _ = scene.removeComponent(CameraComponent.self, from: entity)

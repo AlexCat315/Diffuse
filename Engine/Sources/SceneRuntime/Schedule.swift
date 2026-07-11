@@ -10,9 +10,9 @@ public enum RuntimeSystemPhase: String, CaseIterable, Sendable {
     case fixedPhysicsPrepare
     case fixedPhysicsStep
     case physicsWriteback
+    case triggerDetection
     case postPhysicsScripts
     case spatialIndexUpdate
-    case triggerDetection
     case renderExtract
 }
 
@@ -163,6 +163,7 @@ public struct RuntimeWorldSchedule {
         var rigidBodies: [EntityID: RigidBody]
         var colliders: [EntityID: Collider]
         var constraints: [EntityID: Constraint]
+        var characters: [EntityID: CharacterController]
         var meshGeometries: [EntityID: MeshColliderGeometry]
     }
 
@@ -183,6 +184,8 @@ public struct RuntimeWorldSchedule {
     private var physicsFrameState = PhysicsFrameStateResource()
     private var physicsContactFrame = PhysicsContactFrameResource.empty
     private var physicsDebugFrame = PhysicsDebugFrameResource.empty
+    private var physicsEventFrame = PhysicsEventFrameResource.empty
+    private var characterStateFrame = CharacterStateFrameResource.empty
     private var physicsSyncCache = PhysicsSyncCache()
     private var resolvedPhysicsBackendKind: PhysicsBackendKind = .none
     private var jobSystem = JobSystem.shared
@@ -243,6 +246,8 @@ public struct RuntimeWorldSchedule {
         physicsDebugFrame
     }
 
+    public var currentPhysicsEventFrame: PhysicsEventFrameResource { physicsEventFrame }
+
     public var currentPhysicsQueryCacheStats: PhysicsQueryCacheStats {
         physicsQueryScene.stats
     }
@@ -289,9 +294,11 @@ public struct RuntimeWorldSchedule {
 
         var activeBodies: [PhysicsBodyDescriptor] = []
         var activeConstraints: [PhysicsConstraintDescriptor] = []
+        var activeCharacters: [PhysicsCharacterDescriptor] = []
         var syncEvents: [PhysicsSyncEvent] = []
         var pendingWritebacks: [PhysicsBodyWriteback] = []
         var physicsContactEvents: [PhysicsContactEvent] = []
+        var pendingCharacterStates: [EntityID: CharacterState] = [:]
 
         for phase in RuntimeSystemPhase.allCases {
             switch phase {
@@ -344,10 +351,14 @@ public struct RuntimeWorldSchedule {
                     physicsFrameState = PhysicsFrameStateResource(backendIdentifier: physicsBackend.identifier)
                     physicsContactFrame = .empty
                     physicsDebugFrame = .empty
+                    physicsEventFrame = .empty
+                    characterStateFrame = .empty
                     world.setDerivedResource(physicsClock)
                     world.setDerivedResource(physicsFrameState)
                     world.setDerivedResource(physicsContactFrame)
                     world.setDerivedResource(physicsDebugFrame)
+                    world.setDerivedResource(physicsEventFrame)
+                    world.setDerivedResource(characterStateFrame)
                     continue
                 }
 
@@ -356,6 +367,7 @@ public struct RuntimeWorldSchedule {
                 activeBodies = bodyCollection.bodies
                 let constraintCollection = collectPhysicsConstraints(from: physicsReadView)
                 activeConstraints = constraintCollection.constraints
+                activeCharacters = collectPhysicsCharacters(from: physicsReadView)
                 recordJobReport(bodyCollection.report, for: .fixedPhysicsPrepare)
                 recordJobReport(constraintCollection.report, for: .fixedPhysicsPrepare)
                 physicsBodyCount = activeBodies.count
@@ -371,7 +383,8 @@ public struct RuntimeWorldSchedule {
                     deltaTimeSeconds: deltaTimeSeconds,
                     activeBodies: activeBodies,
                     activeConstraints: activeConstraints,
-                    syncEvents: syncEvents
+                    syncEvents: syncEvents,
+                    activeCharacters: activeCharacters
                 )
                 let prepareStarted = DispatchTime.now().uptimeNanoseconds
                 let prepareResult = physicsBackend.prepare(context: prepareContext)
@@ -406,7 +419,9 @@ public struct RuntimeWorldSchedule {
                             stepDeltaSeconds: fixedStep,
                             stepIndex: substepIndex,
                             activeBodies: activeBodies,
-                            activeConstraints: activeConstraints
+                            activeConstraints: activeConstraints,
+                            activeCharacters: activeCharacters,
+                            characterCommands: world.resource(CharacterCommandFrameResource.self)?.commands ?? [:]
                         )
                     )
                     physicsStepNanoseconds += DispatchTime.now().uptimeNanoseconds - stepStarted
@@ -421,6 +436,9 @@ public struct RuntimeWorldSchedule {
                     physicsContactCount += stepResult.contactCount
                     physicsContactEvents.append(contentsOf: stepResult.contactEvents)
                     pendingWritebacks = mergeWritebacks(existing: pendingWritebacks, incoming: stepResult.writebacks)
+                    for state in stepResult.characterStates {
+                        pendingCharacterStates[state.entity] = state
+                    }
                     substepIndex += 1
                 }
                 if substepIndex >= maxSubsteps,
@@ -436,6 +454,13 @@ public struct RuntimeWorldSchedule {
                     if world.applyPhysicsWriteback(writeback) {
                         physicsWritebackCount += 1
                     }
+                }
+                for state in pendingCharacterStates.values.sorted(by: { $0.entity.rawValue < $1.entity.rawValue }) {
+                    guard var transform = world.worldTransform(for: state.entity) else { continue }
+                    transform.matrix.columns.3 = SIMD4<Float>(state.position, 1)
+                    _ = world.applyPhysicsWriteback(
+                        PhysicsBodyWriteback(entity: state.entity, worldTransform: transform)
+                    )
                 }
                 if physicsStepCount > 0 {
                     _ = world.clearPhysicsAccumulators(for: activeBodies.map(\ .entity))
@@ -461,9 +486,11 @@ public struct RuntimeWorldSchedule {
                     lastError: physicsBackendError
                 )
                 physicsContactFrame = PhysicsContactFrameResource(events: physicsContactEvents)
+                characterStateFrame = CharacterStateFrameResource(states: pendingCharacterStates)
                 world.setDerivedResource(physicsClock)
                 world.setDerivedResource(physicsFrameState)
                 world.setDerivedResource(physicsContactFrame)
+                world.setDerivedResource(characterStateFrame)
                 if usesSharedJoltBackend {
                     physicsQueryScene.adoptSynchronizedWorld(
                         world,
@@ -524,13 +551,58 @@ public struct RuntimeWorldSchedule {
                 world.setDerivedResource(physicsDebugFrame)
                 recordJobReport(spatialIndexBuild.report, for: .spatialIndexUpdate)
             case .triggerDetection:
-                let triggerBackend = physicsQueryScene.synchronize(in: world)
-                let triggerBodyCount = physicsQueryScene.stats.bodyCount
-                world.setDerivedResource(
-                    triggerBackend.detectTriggerFrame(
-                        maxEventCount: triggerBodyCount * max(1, triggerBodyCount) * 3
-                    )
+                let triggers = Dictionary(uniqueKeysWithValues: activeBodies.compactMap { body in
+                    body.collider.map { (body.entity, $0.isTrigger) }
+                })
+                var contactEvents: [PhysicsContactEvent] = []
+                var triggerEvents: [TriggerEvent] = []
+                for event in physicsContactEvents {
+                    let aIsTrigger = triggers[event.entityA] == true
+                    let bIsTrigger = triggers[event.entityB] == true
+                    guard aIsTrigger || bIsTrigger else {
+                        contactEvents.append(event)
+                        continue
+                    }
+                    let trigger: EntityID
+                    let other: EntityID
+                    if aIsTrigger && !bIsTrigger {
+                        trigger = event.entityA; other = event.entityB
+                    } else if bIsTrigger && !aIsTrigger {
+                        trigger = event.entityB; other = event.entityA
+                    } else if event.entityA.rawValue <= event.entityB.rawValue {
+                        trigger = event.entityA; other = event.entityB
+                    } else {
+                        trigger = event.entityB; other = event.entityA
+                    }
+                    let kind: TriggerEventKind
+                    switch event.kind {
+                    case .began: kind = .enter
+                    case .stayed: kind = .active
+                    case .ended: kind = .exit
+                    }
+                    triggerEvents.append(TriggerEvent(triggerEntity: trigger, otherEntity: other, kind: kind))
+                }
+                contactEvents.sort {
+                    ($0.entityA.rawValue, $0.entityB.rawValue, $0.subShapeIDA, $0.subShapeIDB)
+                        < ($1.entityA.rawValue, $1.entityB.rawValue, $1.subShapeIDA, $1.subShapeIDB)
+                }
+                triggerEvents.sort {
+                    ($0.triggerEntity.rawValue, $0.otherEntity.rawValue, $0.kind.rawValue)
+                        < ($1.triggerEntity.rawValue, $1.otherEntity.rawValue, $1.kind.rawValue)
+                }
+                let triggerFrame = TriggerFrameResource(
+                    enters: triggerEvents.filter { $0.kind == .enter },
+                    exits: triggerEvents.filter { $0.kind == .exit },
+                    active: triggerEvents.filter { $0.kind != .exit }
                 )
+                physicsContactFrame = PhysicsContactFrameResource(events: contactEvents)
+                physicsEventFrame = PhysicsEventFrameResource(
+                    contacts: contactEvents,
+                    triggers: triggerEvents
+                )
+                world.setDerivedResource(triggerFrame)
+                world.setDerivedResource(physicsContactFrame)
+                world.setDerivedResource(physicsEventFrame)
             case .renderExtract:
                 let renderExtraction = extractRenderScene(in: world)
                 world.setDerivedResource(renderExtraction.resource)
@@ -540,6 +612,7 @@ public struct RuntimeWorldSchedule {
         }
 
         world.advanceRevision()
+        world.setDerivedResource(CharacterCommandFrameResource.empty)
 
         return RuntimeScheduleReport(
             phases: RuntimeSystemPhase.allCases,
@@ -594,6 +667,18 @@ public struct RuntimeWorldSchedule {
             )
         }
         return (result.0, result.1)
+    }
+
+    private func collectPhysicsCharacters(from view: RuntimePhysicsReadView) -> [PhysicsCharacterDescriptor] {
+        view.entities.compactMap { entity in
+            guard let controller = view.characters[entity],
+                  let worldTransform = view.worldTransforms[entity] else { return nil }
+            return PhysicsCharacterDescriptor(
+                entity: entity,
+                worldTransform: worldTransform,
+                controller: controller
+            )
+        }
     }
 
     private func collectPhysicsConstraints(
@@ -1606,6 +1691,7 @@ public struct RuntimeWorldSchedule {
             rigidBodies: world.componentSnapshot(RigidBody.self, matching: entities),
             colliders: colliders,
             constraints: world.componentSnapshot(Constraint.self, matching: entities),
+            characters: world.componentSnapshot(CharacterController.self, matching: entities),
             meshGeometries: meshGeometries
         )
     }
