@@ -5,6 +5,21 @@ import SIMDCompat
 
 private func vec3ToJSON(_ v: SIMD3<Float>) -> [Float] { [v.x, v.y, v.z] }
 private func vec4ToJSON(_ v: SIMD4<Float>) -> [Float] { [v.x, v.y, v.z, v.w] }
+private func matrixToJSON(_ matrix: simd_float4x4) -> [Float] {
+    [matrix.columns.0.x, matrix.columns.0.y, matrix.columns.0.z, matrix.columns.0.w,
+     matrix.columns.1.x, matrix.columns.1.y, matrix.columns.1.z, matrix.columns.1.w,
+     matrix.columns.2.x, matrix.columns.2.y, matrix.columns.2.z, matrix.columns.2.w,
+     matrix.columns.3.x, matrix.columns.3.y, matrix.columns.3.z, matrix.columns.3.w]
+}
+private func jsonToMatrix(_ values: [Float]) -> simd_float4x4? {
+    guard values.count == 16 else { return nil }
+    return simd_float4x4(columns: (
+        SIMD4<Float>(values[0], values[1], values[2], values[3]),
+        SIMD4<Float>(values[4], values[5], values[6], values[7]),
+        SIMD4<Float>(values[8], values[9], values[10], values[11]),
+        SIMD4<Float>(values[12], values[13], values[14], values[15])
+    ))
+}
 private func jsonToVec3(_ a: [Float]) -> SIMD3<Float>? {
     a.count == 3 ? SIMD3<Float>(a[0], a[1], a[2]) : nil
 }
@@ -116,6 +131,9 @@ public enum SceneSerializer {
            let a = entityIndexMap[c.entityA], let b = entityIndexMap[c.entityB] {
             comps["constraint"] = serializeConstraint(c, entityA: a, entityB: b)
         }
+        if let c = scene.component(Ragdoll.self, for: entity) {
+            comps["ragdoll"] = serializeRagdoll(c, entityIndexMap: entityIndexMap)
+        }
         if let c = scene.component(RenderMeshComponent.self, for: entity) { comps["renderMesh"] = serializeRenderMesh(c) }
         if let c = scene.component(RenderMaterialComponent.self, for: entity) { comps["renderMaterial"] = serializeRenderMaterial(c) }
         if let c = scene.component(AssetReferenceComponent.self, for: entity) { comps["assetReference"] = serializeAssetReference(c) }
@@ -217,6 +235,20 @@ public enum SceneSerializer {
                   let a = entityMap[ai], let b = entityMap[bi]
             else { continue }
             _ = scene.setComponent(deserializeConstraint(cd, entityA: a, entityB: b), for: host)
+        }
+
+        // Deferred ragdolls: bone bodies and optional joint entities are remapped
+        // through the same relocatable entity index table.
+        for (i, raw) in entities.enumerated() {
+            guard let host = entityMap[i],
+                  let obj = jsonToDict(raw),
+                  let comps = jsonToDict(obj["components"]),
+                  let ragdoll = jsonToDict(comps["ragdoll"])
+            else { continue }
+            _ = scene.setComponent(
+                deserializeRagdoll(ragdoll, entityMap: entityMap),
+                for: host
+            )
         }
 
         return entities.indices.compactMap { entityMap[$0] }
@@ -886,6 +918,66 @@ public enum SceneSerializer {
             isEnabled: jsonToBool(d["isEnabled"]) ?? true,
             breakForce: jsonToFloat(d["breakForce"]) ?? .greatestFiniteMagnitude,
             breakTorque: jsonToFloat(d["breakTorque"]) ?? .greatestFiniteMagnitude
+        )
+    }
+
+    private static func serializeRagdoll(
+        _ ragdoll: Ragdoll,
+        entityIndexMap: [EntityID: Int]
+    ) -> [String: Any] {
+        let bones: [[String: Any]] = ragdoll.bones.compactMap { bone in
+            guard let body = entityIndexMap[bone.bodyEntity] else { return nil }
+            var result: [String: Any] = [
+                "boneName": bone.boneName,
+                "paletteIndex": bone.paletteIndex,
+                "bodyEntity": body,
+                "bodyFromPalette": matrixToJSON(bone.bodyFromPalette),
+                "simulatedMotionType": bone.simulatedMotionType.rawValue,
+                "isSimulationEnabled": bone.isSimulationEnabled,
+                "blendWeight": bone.blendWeight,
+            ]
+            if let jointEntity = bone.jointEntity.flatMap({ entityIndexMap[$0] }) {
+                result["jointEntity"] = jointEntity
+            }
+            return result
+        }
+        return [
+            "mode": ragdoll.mode.rawValue,
+            "blendWeight": ragdoll.blendWeight,
+            "isEnabled": ragdoll.isEnabled,
+            "bones": bones,
+        ]
+    }
+
+    private static func deserializeRagdoll(
+        _ dictionary: [String: Any],
+        entityMap: [Int: EntityID]
+    ) -> Ragdoll {
+        let bones = (jsonToArray(dictionary["bones"]) ?? []).compactMap { raw -> RagdollBoneMapping? in
+            guard let bone = jsonToDict(raw),
+                  let bodyIndex = jsonToInt(bone["bodyEntity"]),
+                  let bodyEntity = entityMap[bodyIndex]
+            else { return nil }
+            let jointEntity = jsonToInt(bone["jointEntity"]).flatMap { entityMap[$0] }
+            return RagdollBoneMapping(
+                boneName: jsonToString(bone["boneName"]) ?? "",
+                paletteIndex: jsonToInt(bone["paletteIndex"]) ?? 0,
+                bodyEntity: bodyEntity,
+                jointEntity: jointEntity,
+                bodyFromPalette: jsonToFloatArray(bone["bodyFromPalette"]).flatMap(jsonToMatrix)
+                    ?? matrix_identity_float4x4,
+                simulatedMotionType: RigidBodyMotionType(
+                    rawValue: jsonToString(bone["simulatedMotionType"]) ?? "dynamic"
+                ) ?? .dynamic,
+                isSimulationEnabled: jsonToBool(bone["isSimulationEnabled"]) ?? true,
+                blendWeight: jsonToFloat(bone["blendWeight"]) ?? 1
+            )
+        }
+        return Ragdoll(
+            mode: RagdollMode(rawValue: jsonToString(dictionary["mode"]) ?? "animated") ?? .animated,
+            blendWeight: jsonToFloat(dictionary["blendWeight"]) ?? 1,
+            isEnabled: jsonToBool(dictionary["isEnabled"]) ?? true,
+            bones: bones
         )
     }
 

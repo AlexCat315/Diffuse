@@ -112,6 +112,18 @@ swift build --package-path Editor
 
 > **Force rebuild of native deps:** `python bootstrap.py --force`
 
+### Run the website locally
+
+The official website and documentation portal live under `website/` and use Vue 3, TypeScript, and Vite:
+
+```bash
+cd website
+npm install
+npm run dev
+```
+
+`npm run build` validates content, checks types, runs tests, and generates the static site.
+
 ### Individual packages
 
 ```bash
@@ -177,6 +189,7 @@ Guava-Engine/
 │   ├── EditorApp/            (main.swift, MainWindow, panels)
 │   └── EditorCore/           (editor state, project manager, AI/EditLog, GizmoSystem, etc.)
 ├── guava-mcp/Sources/GuavaMCP/  (MCP server exposing Guava capabilities)
+├── website/                 (Vue 3 website, docs, and community portal)
 ├── docs/                     (architecture, roadmap, component & blueprint docs)
 └── .github/workflows/        (CI matrices for engine / editor / UI / MCP + release)
 ```

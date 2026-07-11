@@ -68,6 +68,7 @@ public struct SceneSemanticEncoder: Sendable {
             if scene.hasComponent(AnimationPlayer.self, for: entity)     { components.append("animation") }
             if scene.hasComponent(ScriptComponent.self, for: entity)     { components.append("script") }
             if scene.hasComponent(Constraint.self, for: entity)          { components.append("constraint") }
+            if scene.hasComponent(Ragdoll.self, for: entity)             { components.append("ragdoll") }
 
             var lightType: String?
             var lightIntensity: Float?
@@ -208,6 +209,8 @@ public struct SceneSemanticEncoder: Sendable {
             if let con = scene.component(Constraint.self, for: entity) {
                 constraintEnabled = con.isEnabled
             }
+            let ragdoll = scene.component(Ragdoll.self, for: entity)
+            let ragdollState = scene.ragdollStateFrame.states[entity]
 
             records.append(SceneSemanticSnapshot.Entity(
                 id: ref,
@@ -264,7 +267,12 @@ public struct SceneSemanticEncoder: Sendable {
                 animationLoop: animationLoop,
                 animationIsPlaying: animationIsPlaying,
                 scriptBindings: scriptBindings,
-                constraintEnabled: constraintEnabled
+                constraintEnabled: constraintEnabled,
+                ragdollMode: ragdoll?.mode.rawValue,
+                ragdollBlendWeight: ragdoll?.blendWeight,
+                ragdollBoneCount: ragdoll?.bones.count,
+                ragdollSimulatedBoneCount: ragdollState?.bones.filter(\.isSimulated).count,
+                ragdollIsEnabled: ragdoll?.isEnabled
             ))
         }
 

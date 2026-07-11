@@ -115,6 +115,13 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
 
         // Constraint extras — non-nil only when `"constraint"` ∈ components
         public var constraintEnabled: Bool? = nil   // nil means component absent
+
+        // Ragdoll extras — non-nil only when `"ragdoll"` ∈ components
+        public var ragdollMode: String? = nil
+        public var ragdollBlendWeight: Float? = nil
+        public var ragdollBoneCount: Int? = nil
+        public var ragdollSimulatedBoneCount: Int? = nil
+        public var ragdollIsEnabled: Bool? = nil
     }
 
     /// Compact snapshot of a single ScriptBinding for AI context.

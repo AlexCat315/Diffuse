@@ -56,7 +56,7 @@ DockSatelliteView(controller: controller,
                   hostBridge: satelliteBridge) { key in ... }
 ```
 
-详见 [`docs/guava-ui-phase8.5-dock-design.md`](../guava-ui-phase8.5-dock-design.md)。
+本页即为 Dock 当前的设计契约；实现变化应同步更新这里的结构、交互与持久化约定。
 
 ## 持久化
 
