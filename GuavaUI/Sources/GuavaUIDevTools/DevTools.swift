@@ -17,7 +17,7 @@ public final class DevTools {
     /// Sink for log records. Install with
     /// `LoggingSystem.bootstrap { LogTap(label: $0, sink: tools.logSink) }`
     /// from the host before any `Logger` is constructed.
-    public let logSink = LogTap.Sink()
+    public let logSink: LogTap.Sink
 
     /// Frame timing publisher; the host calls `record(...)` once per frame.
     public let timing = TimingPublisher()
@@ -53,9 +53,11 @@ public final class DevTools {
     public init(config: DevToolsConfig,
                 tree: NodeTree,
                 invalidationLog: InvalidationLog? = nil,
-                renderTree: RenderTree? = nil) {
+                renderTree: RenderTree? = nil,
+                logSink: LogTap.Sink = LogTap.Sink()) {
         self.config = config
         self.server = DevServer(config: config)
+        self.logSink = logSink
         self.scene = SceneInspector(tree: tree,
                                     invalidationLog: invalidationLog,
                                     renderTree: renderTree)
@@ -65,20 +67,41 @@ public final class DevTools {
         server.selectionHandler = { @MainActor [weak self] id in
             self?.handleSelection(id: id)
         }
+        server.selectionClearHandler = { @MainActor [weak self] in
+            self?.handleSelection(id: nil)
+        }
 
-        wireSinks()
         wireMirror()
         wireState()
     }
 
     public func start() throws {
         guard config.enabled else { return }
-        try server.start()
+        var capabilities = ["tree", "select", "log", "timing"]
+        if frameTap != nil { capabilities.append("mirror") }
+        if stateCheckpointProvider != nil, stateRestoreHandler != nil {
+            capabilities.append("state")
+        }
+        server.advertisedCapabilities = capabilities
+        wireSinks()
+        do {
+            try server.start()
+        } catch {
+            unwireSinks()
+            throw error
+        }
     }
 
     public func stop() {
         frameTap?.stop()
         server.stop()
+        unwireSinks()
+    }
+
+    private func unwireSinks() {
+        logSink.deliver = nil
+        timing.deliver = nil
+        frameTapSink.deliver = nil
     }
 
     /// Hook the FrameTap to the host's wgpu backend + draw list renderer.
@@ -102,17 +125,11 @@ public final class DevTools {
         )
     }
 
-    /// Call once per host frame after layout has settled. The server
-    /// debounces internally — back-to-back calls in the same frame send a
-    /// single delta.
+    /// Call after layout has settled when the tree was changed. The snapshot
+    /// is captured immediately on the main actor; this also works in hosts
+    /// whose synchronous platform loop does not drain DispatchQueue.main.
     public func notifyTreeChanged() {
-        guard !pendingDelta else { return }
-        pendingDelta = true
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.pendingDelta = false
-            self.server.broadcastTreeDelta()
-        }
+        server.broadcastTreeDelta()
     }
 
     /// id of the most recently selected node, for hosts that want to
@@ -128,17 +145,14 @@ public final class DevTools {
         return node.absoluteFrame
     }
 
-    private var pendingDelta = false
-
-    private func handleSelection(id: String) {
-        selectedNodeID = scene.find(id: id) == nil ? nil : id
+    private func handleSelection(id: String?) {
+        selectedNodeID = id.flatMap { scene.find(id: $0) == nil ? nil : $0 }
         onSelectionChanged?()
     }
 
     private func wireSinks() {
-        // The closures live for the lifetime of the process via
-        // LoggingSystem.bootstrap, so capture the server reference, not
-        // self, to avoid a retain cycle through DevTools.
+        // Capture the server reference rather than self. `stop()` clears all
+        // callbacks so a process-wide LogTap does not retain a stopped server.
         let server = self.server
         logSink.deliver = { entry in
             server.broadcastLog(entry)

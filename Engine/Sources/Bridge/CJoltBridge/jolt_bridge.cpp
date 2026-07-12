@@ -1032,18 +1032,21 @@ struct GuavaJoltContextImpl {
     LayerMaskContactListener contact_listener;
     uint32_t last_error = GUAVA_JOLT_ERROR_NONE;
 
-    GuavaJoltContextImpl()
+    explicit GuavaJoltContextImpl(const GuavaJoltContextConfig& config)
         : contact_listener(body_metadata) {
-        const JPH::uint cMaxBodies            = 65536;
-        const JPH::uint cNumBodyMutexes       = 0;
-        const JPH::uint cMaxBodyPairs         = 65536;
-        const JPH::uint cMaxContactConstraints = 10240;
+        const JPH::uint cMaxBodies = config.max_bodies;
+        const JPH::uint cNumBodyMutexes = config.body_mutex_count;
+        const JPH::uint cMaxBodyPairs = config.max_body_pairs;
+        const JPH::uint cMaxContactConstraints = config.max_contact_constraints;
         physics_system.Init(cMaxBodies, cNumBodyMutexes, cMaxBodyPairs, cMaxContactConstraints,
                             bp_layer_interface, object_vs_bp_filter, object_layer_filter);
         physics_system.SetContactListener(&contact_listener);
-        temp_allocator = std::make_unique<JPH::TempAllocatorImpl>(10 * 1024 * 1024);
+        temp_allocator = std::make_unique<JPH::TempAllocatorImpl>(
+            static_cast<uint32_t>(config.temp_allocator_bytes));
         const unsigned hardware_threads = std::thread::hardware_concurrency();
-        const int worker_threads = static_cast<int>(hardware_threads > 1 ? hardware_threads - 1 : 1);
+        const int worker_threads = config.worker_thread_count == 0
+            ? static_cast<int>(hardware_threads > 1 ? hardware_threads - 1 : 1)
+            : static_cast<int>(config.worker_thread_count);
         job_system = std::make_unique<JPH::JobSystemThreadPool>(
             JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, worker_threads);
     }
@@ -1244,6 +1247,9 @@ struct GuavaJoltContextImpl {
 	    bool prepare(const GuavaJoltBodyDesc* bodies, size_t body_count,
 	                 const GuavaJoltConstraintDesc* constraints_in, size_t constraint_count,
 	                 const GuavaJoltMeshGeometry* meshes, size_t mesh_count,
+	                 const uint64_t* body_removals, size_t body_removal_count,
+	                 const uint64_t* constraint_removals, size_t constraint_removal_count,
+	                 bool incremental,
 	                 GuavaJoltPrepareStats* out_stats) {
 	        last_error = GUAVA_JOLT_ERROR_NONE;
         // Begin the rendered-frame event window before synchronization. Body
@@ -1253,7 +1259,9 @@ struct GuavaJoltContextImpl {
         joint_break_events.clear();
         if ((body_count > 0 && !bodies)
             || (constraint_count > 0 && !constraints_in)
-            || (mesh_count > 0 && !meshes)) {
+            || (mesh_count > 0 && !meshes)
+            || (body_removal_count > 0 && !body_removals)
+            || (constraint_removal_count > 0 && !constraint_removals)) {
             last_error = GUAVA_JOLT_ERROR_INVALID_ARGUMENT;
             return false;
         }
@@ -1295,24 +1303,39 @@ struct GuavaJoltContextImpl {
 	            for (size_t i = 0; i < body_count; ++i) incoming[bodies[i].entity_id] = &bodies[i];
         }
 
-        // Remove bodies no longer present.
+        // Full snapshots remove everything absent from the incoming set. Incremental
+        // synchronization removes only the stable, explicitly supplied entity IDs.
 	        uint32_t removed_bodies = 0;
-	        for (auto it = body_ids.begin(); it != body_ids.end(); ) {
-	            if (incoming.find(it->first) == incoming.end()) {
-	                removed_constraints += destroy_constraints_for_body(it->first);
-	                bi.RemoveBody(it->second);
-	                bi.DestroyBody(it->second);
-	                body_metadata.erase(it->first);
-	                body_signatures.erase(it->first);
-                    kinematic_targets.erase(it->first);
-	                mesh_vertices.erase(it->first);
-	                mesh_indices.erase(it->first);
-	                mesh_revisions.erase(it->first);
-	                it = body_ids.erase(it);
-	                ++removed_bodies;
-	            } else {
-	                ++it;
-	            }
+        std::vector<uint64_t> bodies_to_remove;
+        if (incremental) {
+            if (body_removal_count > 0) {
+                bodies_to_remove.assign(body_removals, body_removals + body_removal_count);
+            }
+        } else {
+            for (const auto& entry : body_ids) {
+                if (incoming.find(entry.first) == incoming.end()) {
+                    bodies_to_remove.push_back(entry.first);
+                }
+            }
+        }
+        std::sort(bodies_to_remove.begin(), bodies_to_remove.end());
+        bodies_to_remove.erase(
+            std::unique(bodies_to_remove.begin(), bodies_to_remove.end()),
+            bodies_to_remove.end());
+        for (uint64_t entity : bodies_to_remove) {
+            auto existing = body_ids.find(entity);
+            if (existing == body_ids.end()) continue;
+            removed_constraints += destroy_constraints_for_body(entity);
+            bi.RemoveBody(existing->second);
+            bi.DestroyBody(existing->second);
+            body_metadata.erase(entity);
+            body_signatures.erase(entity);
+            kinematic_targets.erase(entity);
+            mesh_vertices.erase(entity);
+            mesh_indices.erase(entity);
+            mesh_revisions.erase(entity);
+            body_ids.erase(existing);
+            ++removed_bodies;
         }
 
         // Add / refresh bodies in incoming.
@@ -1386,14 +1409,28 @@ struct GuavaJoltContextImpl {
             }
         }
         std::vector<uint64_t> stale_constraints;
-        for (const auto& entry : constraints) {
-            auto incoming_constraint = incoming_constraints.find(entry.first);
-            if (incoming_constraint == incoming_constraints.end()
-                || !incoming_constraint->second->is_enabled) {
-                stale_constraints.push_back(entry.first);
+        if (incremental) {
+            if (constraint_removal_count > 0) {
+                stale_constraints.assign(
+                    constraint_removals,
+                    constraint_removals + constraint_removal_count);
+            }
+            for (const auto& entry : incoming_constraints) {
+                if (!entry.second->is_enabled) stale_constraints.push_back(entry.first);
+            }
+        } else {
+            for (const auto& entry : constraints) {
+                auto incoming_constraint = incoming_constraints.find(entry.first);
+                if (incoming_constraint == incoming_constraints.end()
+                    || !incoming_constraint->second->is_enabled) {
+                    stale_constraints.push_back(entry.first);
+                }
             }
         }
         std::sort(stale_constraints.begin(), stale_constraints.end());
+        stale_constraints.erase(
+            std::unique(stale_constraints.begin(), stale_constraints.end()),
+            stale_constraints.end());
         for (uint64_t entity : stale_constraints) {
             if (destroy_constraint(entity)) ++removed_constraints;
         }
@@ -1573,8 +1610,12 @@ struct GuavaJoltContextImpl {
         }
 
         if (out_stats) {
-            out_stats->synchronized_bodies = static_cast<uint32_t>(body_ids.size());
-            out_stats->synchronized_constraints = static_cast<uint32_t>(constraints.size());
+            out_stats->synchronized_bodies = incremental
+                ? static_cast<uint32_t>(body_count)
+                : static_cast<uint32_t>(body_ids.size());
+            out_stats->synchronized_constraints = incremental
+                ? static_cast<uint32_t>(constraint_count)
+                : static_cast<uint32_t>(constraints.size());
             out_stats->removed_bodies = removed_bodies;
             out_stats->removed_constraints = removed_constraints;
         }
@@ -2520,12 +2561,42 @@ bool guava_jolt_bridge_get_abi_layout(GuavaJoltABILayout* out_layout) {
     out_layout->character_state_size = static_cast<uint32_t>(sizeof(GuavaJoltCharacterState));
     out_layout->shape_instance_size = static_cast<uint32_t>(sizeof(GuavaJoltShapeInstance));
     out_layout->joint_break_event_size = static_cast<uint32_t>(sizeof(GuavaJoltJointBreakEvent));
+    out_layout->context_config_size = static_cast<uint32_t>(sizeof(GuavaJoltContextConfig));
     return true;
 }
 
 GuavaJoltContext guava_jolt_context_create(void) {
+    GuavaJoltContextConfig config{};
+    config.struct_size = static_cast<uint32_t>(sizeof(GuavaJoltContextConfig));
+    config.max_bodies = 65536;
+    config.body_mutex_count = 0;
+    config.max_body_pairs = 65536;
+    config.max_contact_constraints = 10240;
+    config.worker_thread_count = 0;
+    config.temp_allocator_bytes = 10u * 1024u * 1024u;
+    return guava_jolt_context_create_with_config(&config);
+}
+
+GuavaJoltContext guava_jolt_context_create_with_config(const GuavaJoltContextConfig* config) {
+    const bool body_mutex_count_is_valid = config
+        && (config->body_mutex_count == 0
+            || (config->body_mutex_count & (config->body_mutex_count - 1)) == 0);
+    if (!config
+        || config->struct_size != sizeof(GuavaJoltContextConfig)
+        || config->max_bodies == 0
+        || config->max_bodies > JPH::PhysicsSystem::cMaxBodiesLimit
+        || !body_mutex_count_is_valid
+        || config->max_body_pairs == 0
+        || config->max_body_pairs > JPH::PhysicsSystem::cMaxBodyPairsLimit
+        || config->max_contact_constraints == 0
+        || config->max_contact_constraints > JPH::PhysicsSystem::cMaxContactConstraintsLimit
+        || config->worker_thread_count > 1024
+        || config->temp_allocator_bytes < 1024u * 1024u
+        || config->temp_allocator_bytes > UINT32_MAX) {
+        return nullptr;
+    }
     ensure_jolt_initialized();
-    return new (std::nothrow) GuavaJoltContextImpl();
+    return new (std::nothrow) GuavaJoltContextImpl(*config);
 }
 
 uint32_t guava_jolt_context_last_error(GuavaJoltContext context) {
@@ -2548,7 +2619,7 @@ bool guava_jolt_context_prepare(GuavaJoltContext context,
                                 GuavaJoltPrepareStats* out_stats) {
     if (!context || !out_stats) return false;
     return context->prepare(bodies, body_count, constraints, constraint_count,
-                            nullptr, 0, out_stats);
+                            nullptr, 0, nullptr, 0, nullptr, 0, false, out_stats);
 }
 
 bool guava_jolt_context_prepare_with_meshes(GuavaJoltContext context,
@@ -2559,7 +2630,26 @@ bool guava_jolt_context_prepare_with_meshes(GuavaJoltContext context,
                                             GuavaJoltPrepareStats* out_stats) {
     if (!context || !out_stats) return false;
     return context->prepare(bodies, body_count, constraints, constraint_count,
-                            meshes, mesh_count, out_stats);
+                            meshes, mesh_count, nullptr, 0, nullptr, 0, false, out_stats);
+}
+
+bool guava_jolt_context_apply_sync_events(
+    GuavaJoltContext context,
+    const GuavaJoltBodyDesc* body_upserts, size_t body_upsert_count,
+    const uint64_t* body_removals, size_t body_removal_count,
+    const GuavaJoltConstraintDesc* constraint_upserts, size_t constraint_upsert_count,
+    const uint64_t* constraint_removals, size_t constraint_removal_count,
+    const GuavaJoltMeshGeometry* meshes, size_t mesh_count,
+    GuavaJoltPrepareStats* out_stats) {
+    if (!context || !out_stats) return false;
+    return context->prepare(
+        body_upserts, body_upsert_count,
+        constraint_upserts, constraint_upsert_count,
+        meshes, mesh_count,
+        body_removals, body_removal_count,
+        constraint_removals, constraint_removal_count,
+        true,
+        out_stats);
 }
 
 bool guava_jolt_context_step(GuavaJoltContext context, const GuavaJoltStepConfig* config,

@@ -8,7 +8,7 @@ public enum DevToolsProtocol {
 }
 
 /// Generic envelope used for all JSON messages on the wire.
-public struct DevToolsEnvelope: Codable {
+public struct DevToolsEnvelope: Codable, Sendable {
     public var type: String
     public var id: Int?
     public var payload: JSONValue?
@@ -22,7 +22,7 @@ public struct DevToolsEnvelope: Codable {
 
 /// Type-erased JSON value. Lets us route messages without committing to a
 /// concrete payload Codable per inspector before parsing.
-public enum JSONValue: Codable {
+public enum JSONValue: Codable, Sendable {
     case null
     case bool(Bool)
     case number(Double)

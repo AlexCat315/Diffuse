@@ -141,4 +141,128 @@ struct AdvancedRigidBodyTests {
         }
         #expect(first.physicsStateHashFrame.hash != 0)
     }
+
+    @Test("capacity settings create and safely rebuild the native context")
+    func capacitySettingsRebuildContext() {
+        var runtime = SceneRuntime()
+        let initialCapacity = PhysicsCapacitySettings(
+            maxBodies: 64,
+            maxBodyPairs: 128,
+            maxContactConstraints: 64,
+            tempAllocatorBytes: 1_024 * 1_024,
+            workerThreadCount: 1
+        )
+        runtime.setPhysicsSettings(PhysicsSettingsResource(
+            simulationMode: .play,
+            backendKind: .jolt,
+            fixedTimeStepSeconds: 1.0 / 60.0,
+            maxSubstepsPerFrame: 1,
+            allowSleep: false,
+            capacity: initialCapacity
+        ))
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 3, 0)), for: entity)
+        _ = runtime.setComponent(Collider(shape: .sphere(radius: 0.5, center: .zero)), for: entity)
+        _ = runtime.setComponent(RigidBody(allowSleep: false), for: entity)
+
+        let first = runtime.tick(deltaTime: 1.0 / 60.0)
+        let firstY = runtime.worldTransform(for: entity)?.translation.y ?? 3
+        #expect(first.physicsError == nil)
+        #expect(first.physicsBodyCount == 1)
+
+        var settings = runtime.physicsSettings
+        settings.capacity.maxBodies = 128
+        runtime.setPhysicsSettings(settings)
+        let second = runtime.tick(deltaTime: 1.0 / 60.0)
+        let secondY = runtime.worldTransform(for: entity)?.translation.y ?? 3
+        #expect(second.physicsError == nil)
+        #expect(second.physicsBodyCount == 1)
+        #expect(secondY < firstY)
+    }
+
+    @Test("recorded physics commands replay to identical checkpoint hashes")
+    func commandRecordingReplay() {
+        func makeRuntime() -> (SceneRuntime, EntityID) {
+            var runtime = SceneRuntime()
+            runtime.setPhysicsSettings(PhysicsSettingsResource(
+                simulationMode: .play,
+                backendKind: .jolt,
+                gravity: .zero,
+                fixedTimeStepSeconds: 1.0 / 60.0,
+                maxSubstepsPerFrame: 1,
+                allowSleep: false,
+                capacity: PhysicsCapacitySettings(workerThreadCount: 1)
+            ))
+            let entity = runtime.createEntity()
+            _ = runtime.setLocalTransform(.identity, for: entity)
+            _ = runtime.setComponent(Collider(shape: .sphere(radius: 0.5, center: .zero)), for: entity)
+            _ = runtime.setComponent(RigidBody(gravityScale: 0, allowSleep: false), for: entity)
+            return (runtime, entity)
+        }
+
+        var (recordingRuntime, recordedEntity) = makeRuntime()
+        recordingRuntime.beginPhysicsCommandRecording(maxFrames: 120)
+        for frame in 0..<60 {
+            if frame == 0 {
+                _ = recordingRuntime.applyLinearImpulse(SIMD3<Float>(2, 0.5, 0), to: recordedEntity)
+            }
+            if frame.isMultiple(of: 10) {
+                _ = recordingRuntime.applyForce(SIMD3<Float>(0, 1, 0.25), to: recordedEntity)
+            }
+            _ = recordingRuntime.tick(deltaTime: 1.0 / 60.0)
+        }
+        let tape = recordingRuntime.endPhysicsCommandRecording()
+        let expectedTransform = recordingRuntime.worldTransform(for: recordedEntity)
+        #expect(tape.frames.count == 60)
+
+        var (replayRuntime, replayEntity) = makeRuntime()
+        let replay = replayRuntime.replayPhysicsCommands(tape)
+        #expect(replay.isDeterministic)
+        #expect(replay.replayedFrameCount == 60)
+        #expect(replayRuntime.worldTransform(for: replayEntity) == expectedTransform)
+    }
+
+    @Test("native synchronization sends only authored or commanded body changes")
+    func incrementalNativeSynchronization() {
+        var runtime = SceneRuntime()
+        runtime.setPhysicsSettings(PhysicsSettingsResource(
+            simulationMode: .play,
+            backendKind: .jolt,
+            gravity: .zero,
+            fixedTimeStepSeconds: 1.0 / 60.0,
+            maxSubstepsPerFrame: 1,
+            allowSleep: false,
+            capacity: PhysicsCapacitySettings(workerThreadCount: 1)
+        ))
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(.identity, for: entity)
+        _ = runtime.setComponent(Collider(shape: .sphere(radius: 0.5, center: .zero)), for: entity)
+        _ = runtime.setComponent(RigidBody(
+            linearVelocity: SIMD3<Float>(1, 0, 0),
+            gravityScale: 0,
+            allowSleep: false
+        ), for: entity)
+
+        _ = runtime.tick(deltaTime: 1.0 / 60.0)
+        #expect(runtime.physicsFrameState.synchronizedBodyCount == 1)
+
+        _ = runtime.tick(deltaTime: 1.0 / 60.0)
+        #expect(runtime.physicsFrameState.synchronizedBodyCount == 0)
+
+        _ = runtime.applyForce(SIMD3<Float>(0, 2, 0), to: entity)
+        _ = runtime.tick(deltaTime: 1.0 / 60.0)
+        #expect(runtime.physicsFrameState.synchronizedBodyCount == 1)
+
+        _ = runtime.tick(deltaTime: 1.0 / 60.0)
+        #expect(runtime.physicsFrameState.synchronizedBodyCount == 0)
+
+        let destroyed = runtime.destroyEntity(entity)
+        #expect(destroyed)
+        _ = runtime.tick(deltaTime: 1.0 / 60.0)
+        #expect(runtime.physicsRaycast(PhysicsRaycastQuery(
+            origin: SIMD3<Float>(-5, 0, 0),
+            direction: SIMD3<Float>(1, 0, 0),
+            maxDistance: 10
+        )) == nil)
+    }
 }
