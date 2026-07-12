@@ -152,7 +152,10 @@ public final class LogTapInstaller: @unchecked Sendable {
         shared.lock.lock(); defer { shared.lock.unlock() }
         if shared.installed { return false }
         LoggingSystem.bootstrap { label in
-            LogTap(label: label, sink: sink)
+            MultiplexLogHandler([
+                StreamLogHandler.standardError(label: label),
+                LogTap(label: label, sink: sink),
+            ])
         }
         shared.installed = true
         return true

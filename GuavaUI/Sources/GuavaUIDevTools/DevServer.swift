@@ -101,6 +101,10 @@ public final class DevServer: @unchecked Sendable {
     private var clients: [ObjectIdentifier: Client] = [:]
     private var selectionOwner: ObjectIdentifier?
 
+    /// Capabilities announced in `hello`. DevTools configures this before
+    /// start so clients do not expose controls with no host-side provider.
+    public var advertisedCapabilities: [String] = ["tree", "select", "log", "timing"]
+
     /// Provided by AppRuntime; called on the main actor to build a
     /// snapshot when a tree request arrives.
     public var snapshotProvider: SceneSnapshotProvider?
@@ -460,7 +464,7 @@ public final class DevServer: @unchecked Sendable {
                 appTitle: config.appTitle,
                 platform: currentPlatformName()
             ),
-            capabilities: ["tree", "select", "log", "timing", "mirror", "state"]
+            capabilities: advertisedCapabilities
         )
         let env = DevToolsEnvelope(type: "hello", payload: encodeJSON(payload))
         send(env, on: conn)
@@ -630,6 +634,7 @@ private func decodePayload<T: Decodable>(_ type: T.Type, from value: JSONValue?)
 /// Stub DevServer for platforms without Network.framework (Windows, Linux).
 /// All methods are no-ops; the DevTools WebSocket server is not available.
 public final class DevServer: @unchecked Sendable {
+    public var advertisedCapabilities: [String] = ["tree", "select", "log", "timing"]
     public var snapshotProvider: SceneSnapshotProvider?
     public var selectionHandler: NodeSelectionHandler?
     public var selectionClearHandler: NodeSelectionClearHandler?
