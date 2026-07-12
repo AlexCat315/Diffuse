@@ -301,6 +301,8 @@ public struct RuntimeWorldSchedule {
         var physicsContactEvents: [PhysicsContactEvent] = []
         var physicsJointBreakEvents: [PhysicsJointBreakEvent] = []
         var pendingCharacterStates: [EntityID: CharacterState] = [:]
+        var recordedBodyCommands: [PhysicsRecordedBodyCommand] = []
+        var recordedCharacterCommands: [PhysicsRecordedCharacterCommand] = []
 
         for phase in RuntimeSystemPhase.allCases {
             switch phase {
@@ -323,7 +325,8 @@ public struct RuntimeWorldSchedule {
                 let report = world.propagateTransforms(using: jobSystem)
                 recordJobReport(report, for: .hierarchyPropagate)
             case .inputAndPrePhysicsScripts:
-                if let scriptDriver {
+                let isReplaying = world.resource(PhysicsCommandReplayControlResource.self)?.isReplaying == true
+                if !isReplaying, let scriptDriver {
                     withUnsafeMutablePointer(to: &world) { worldPointer in
                         withUnsafeMutablePointer(to: &commands) { commandPointer in
                             var scriptContext = RuntimeScriptPhaseContext(
@@ -371,6 +374,28 @@ public struct RuntimeWorldSchedule {
                 let constraintCollection = collectPhysicsConstraints(from: physicsReadView)
                 activeConstraints = constraintCollection.constraints
                 activeCharacters = collectPhysicsCharacters(from: physicsReadView)
+                if world.resource(PhysicsCommandRecordingResource.self)?.isRecording == true,
+                   world.resource(PhysicsCommandReplayControlResource.self)?.isReplaying != true {
+                    recordedBodyCommands = activeBodies.compactMap { descriptor in
+                        guard let body = descriptor.rigidBody else { return nil }
+                        let hasCommand = body.accumulatedForce != .zero
+                            || body.accumulatedTorque != .zero
+                            || body.accumulatedLinearImpulse != .zero
+                            || body.accumulatedAngularImpulse != .zero
+                        guard hasCommand else { return nil }
+                        return PhysicsRecordedBodyCommand(
+                            entity: descriptor.entity,
+                            force: body.accumulatedForce,
+                            torque: body.accumulatedTorque,
+                            linearImpulse: body.accumulatedLinearImpulse,
+                            angularImpulse: body.accumulatedAngularImpulse,
+                            wake: !body.isSleeping
+                        )
+                    }
+                    recordedCharacterCommands = (world.resource(CharacterCommandFrameResource.self)?.commands ?? [:])
+                        .map { PhysicsRecordedCharacterCommand(entity: $0.key, command: $0.value) }
+                        .sorted { $0.entity.rawValue < $1.entity.rawValue }
+                }
                 recordJobReport(bodyCollection.report, for: .fixedPhysicsPrepare)
                 recordJobReport(constraintCollection.report, for: .fixedPhysicsPrepare)
                 physicsBodyCount = activeBodies.count
@@ -395,7 +420,11 @@ public struct RuntimeWorldSchedule {
                 synchronizedBodyCount += prepareResult.synchronizedBodies
                 synchronizedConstraintCount += prepareResult.synchronizedConstraints
                 physicsBackendError = prepareResult.error
-                replacePhysicsSyncCache(bodies: activeBodies, constraints: activeConstraints)
+                if prepareResult.error == nil {
+                    replacePhysicsSyncCache(bodies: activeBodies, constraints: activeConstraints)
+                } else {
+                    physicsSyncCache = PhysicsSyncCache()
+                }
                 if usesSharedJoltBackend {
                     physicsQueryScene.adoptSynchronizedWorld(
                         world,
@@ -478,6 +507,9 @@ public struct RuntimeWorldSchedule {
                     let report = world.propagateTransforms(using: jobSystem)
                     recordJobReport(report, for: .physicsWriteback)
                 }
+                if physicsStepCount > 0 {
+                    refreshPhysicsSyncCacheAfterWriteback(in: world, activeBodies: activeBodies)
+                }
                 physicsFrameState = PhysicsFrameStateResource(
                     backendIdentifier: physicsBackend.identifier,
                     bodyCount: physicsBodyCount,
@@ -498,10 +530,29 @@ public struct RuntimeWorldSchedule {
                 characterStateFrame = CharacterStateFrameResource(states: pendingCharacterStates)
                 world.setDerivedResource(physicsClock)
                 world.setDerivedResource(physicsFrameState)
-                world.setDerivedResource(PhysicsStateHashFrameResource(
+                let stateHashFrame = PhysicsStateHashFrameResource(
                     simulatedStep: physicsClock.simulatedSteps,
                     hash: physicsStateHash(in: world)
-                ))
+                )
+                world.setDerivedResource(stateHashFrame)
+                if var recording = world.resource(PhysicsCommandRecordingResource.self),
+                   recording.isRecording,
+                   world.resource(PhysicsCommandReplayControlResource.self)?.isReplaying != true {
+                    if recording.frames.count < recording.maxFrames {
+                        recording.frames.append(PhysicsCommandFrame(
+                            deltaTimeSeconds: deltaTimeSeconds,
+                            settings: physicsSettings,
+                            bodyCommands: physicsStepCount > 0 ? recordedBodyCommands : [],
+                            characterCommands: physicsStepCount > 0 ? recordedCharacterCommands : [],
+                            expectedSimulatedStep: stateHashFrame.simulatedStep,
+                            expectedStateHash: stateHashFrame.hash
+                        ))
+                    }
+                    if recording.frames.count >= recording.maxFrames {
+                        recording.isRecording = false
+                    }
+                    world.setDerivedResource(recording)
+                }
                 world.setDerivedResource(physicsContactFrame)
                 world.setDerivedResource(characterStateFrame)
                 if usesSharedJoltBackend {
@@ -676,6 +727,23 @@ public struct RuntimeWorldSchedule {
         physicsSyncCache.constraints = Dictionary(uniqueKeysWithValues: constraints.map { ($0.entity, $0) })
     }
 
+    private mutating func refreshPhysicsSyncCacheAfterWriteback(
+        in world: RuntimeWorld,
+        activeBodies: [PhysicsBodyDescriptor]
+    ) {
+        for original in activeBodies {
+            guard var cached = physicsSyncCache.bodies[original.entity],
+                  let localTransform = world.localTransform(for: original.entity),
+                  let worldTransform = world.worldTransform(for: original.entity)
+            else { continue }
+            cached.localTransform = localTransform
+            cached.worldTransform = worldTransform
+            cached.rigidBody = world.component(RigidBody.self, for: original.entity)
+            cached.collider = world.component(Collider.self, for: original.entity)
+            physicsSyncCache.bodies[original.entity] = cached
+        }
+    }
+
     private func collectPhysicsBodies(
         from view: RuntimePhysicsReadView
     ) -> (bodies: [PhysicsBodyDescriptor], report: JobDispatchReport) {
@@ -738,6 +806,9 @@ public struct RuntimeWorldSchedule {
         let previousConstraints = physicsSyncCache.constraints
         let bodyMap = Dictionary(uniqueKeysWithValues: bodies.map { ($0.entity, $0) })
         let constraintMap = Dictionary(uniqueKeysWithValues: constraints.map { ($0.entity, $0) })
+        let changedBodyEntities = Set(bodies.compactMap { descriptor in
+            previousBodies[descriptor.entity] == descriptor ? nil : descriptor.entity
+        })
 
         let bodyUpserts = jobSystem.parallelCompactMap(items: bodies) { descriptor -> PhysicsSyncEvent? in
             previousBodies[descriptor.entity] == descriptor ? nil : .bodyUpsert(descriptor)
@@ -746,7 +817,11 @@ public struct RuntimeWorldSchedule {
             bodyMap[entity] == nil ? .bodyRemove(entity) : nil
         }
         let constraintUpserts = jobSystem.parallelCompactMap(items: constraints) { descriptor -> PhysicsSyncEvent? in
-            previousConstraints[descriptor.entity] == descriptor ? nil : .constraintUpsert(descriptor)
+            let dependsOnChangedBody = changedBodyEntities.contains(descriptor.constraint.entityA)
+                || changedBodyEntities.contains(descriptor.constraint.entityB)
+            return previousConstraints[descriptor.entity] == descriptor && !dependsOnChangedBody
+                ? nil
+                : .constraintUpsert(descriptor)
         }
         let constraintRemovals = jobSystem.parallelCompactMap(items: Array(previousConstraints.keys)) { entity -> PhysicsSyncEvent? in
             constraintMap[entity] == nil ? .constraintRemove(entity) : nil

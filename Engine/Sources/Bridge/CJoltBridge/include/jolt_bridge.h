@@ -22,6 +22,16 @@ typedef enum GuavaJoltErrorCode {
     GUAVA_JOLT_ERROR_UPDATE_FAILED = 5
 } GuavaJoltErrorCode;
 
+typedef struct GuavaJoltContextConfig {
+    uint32_t struct_size;
+    uint32_t max_bodies;
+    uint32_t body_mutex_count;
+    uint32_t max_body_pairs;
+    uint32_t max_contact_constraints;
+    uint32_t worker_thread_count; /* zero selects hardware concurrency minus one */
+    uint64_t temp_allocator_bytes;
+} GuavaJoltContextConfig;
+
 typedef struct GuavaJoltABILayout {
     uint32_t abi_version;
     uint32_t struct_size;
@@ -35,6 +45,7 @@ typedef struct GuavaJoltABILayout {
     uint32_t character_state_size;
     uint32_t shape_instance_size;
     uint32_t joint_break_event_size;
+    uint32_t context_config_size;
 } GuavaJoltABILayout;
 
 typedef struct GuavaJoltShapeInstance {
@@ -486,6 +497,7 @@ typedef struct GuavaJoltJointBreakEvent {
 uint32_t guava_jolt_bridge_abi_version(void);
 bool guava_jolt_bridge_get_abi_layout(GuavaJoltABILayout* out_layout);
 GuavaJoltContext guava_jolt_context_create(void);
+GuavaJoltContext guava_jolt_context_create_with_config(const GuavaJoltContextConfig* config);
 uint32_t guava_jolt_context_last_error(GuavaJoltContext context);
 void guava_jolt_context_destroy(GuavaJoltContext context);
 void guava_jolt_context_reset(GuavaJoltContext context);
@@ -501,6 +513,19 @@ bool guava_jolt_context_prepare_with_meshes(
     size_t body_count,
     const GuavaJoltConstraintDesc* constraints,
     size_t constraint_count,
+    const GuavaJoltMeshGeometry* meshes,
+    size_t mesh_count,
+    GuavaJoltPrepareStats* out_stats);
+bool guava_jolt_context_apply_sync_events(
+    GuavaJoltContext context,
+    const GuavaJoltBodyDesc* body_upserts,
+    size_t body_upsert_count,
+    const uint64_t* body_removals,
+    size_t body_removal_count,
+    const GuavaJoltConstraintDesc* constraint_upserts,
+    size_t constraint_upsert_count,
+    const uint64_t* constraint_removals,
+    size_t constraint_removal_count,
     const GuavaJoltMeshGeometry* meshes,
     size_t mesh_count,
     GuavaJoltPrepareStats* out_stats);

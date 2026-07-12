@@ -82,8 +82,8 @@ function legacyComponent(path: string, raw: string): ScannedContent {
     description,
     locale: 'zh',
     translationKey: `docs.components.${slug || 'index'}`,
-    category: 'components',
-    order: filename === 'README.md' ? 0 : 100 + filename.charCodeAt(0),
+    category: '组件',
+    order: filename === 'README.md' ? 200 : 210 + filename.charCodeAt(0),
     kind: 'doc',
     text: stripMarkdown(raw),
     headings: extractHeadings(raw),
@@ -96,7 +96,7 @@ function extractHeadings(raw: string): Array<{ level: number; title: string; slu
   return [...raw.matchAll(/^(#{2,3})\s+(.+)$/gm)].map((match) => ({
     level: match[1].length,
     title: match[2].replace(/[`*_]/g, '').trim(),
-    slug: slugify(match[2]),
+    slug: encodeURIComponent(slugify(match[2])),
   }))
 }
 

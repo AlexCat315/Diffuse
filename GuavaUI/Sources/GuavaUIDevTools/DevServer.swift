@@ -13,15 +13,20 @@ public struct DevToolsConfig: Sendable {
     public var port: UInt16
     public var appTitle: String
     public var enabled: Bool
+    /// Automatically bootstraps swift-log with LogTap. Disable this when the
+    /// host already bootstraps LoggingSystem and multiplex LogTap manually.
+    public var autoInstallLogTap: Bool
 
     public init(host: String = "127.0.0.1",
                 port: UInt16 = 9229,
                 appTitle: String = "GuavaUI",
-                enabled: Bool = true) {
+                enabled: Bool = true,
+                autoInstallLogTap: Bool = true) {
         self.host = host
         self.port = port
         self.appTitle = appTitle
         self.enabled = enabled
+        self.autoInstallLogTap = autoInstallLogTap
     }
 
     /// Convenience: enables the server when the `GUAVA_DEVTOOLS=1` env var is set.
@@ -30,7 +35,23 @@ public struct DevToolsConfig: Sendable {
         guard env["GUAVA_DEVTOOLS"] == "1" else { return nil }
         let host = env["GUAVA_DEVTOOLS_HOST"] ?? "127.0.0.1"
         let port = env["GUAVA_DEVTOOLS_PORT"].flatMap(UInt16.init) ?? 9229
-        return DevToolsConfig(host: host, port: port, appTitle: appTitle, enabled: true)
+        let autoInstallLogTap = env["GUAVA_DEVTOOLS_AUTO_LOG_TAP"] != "0"
+        return DevToolsConfig(host: host,
+                              port: port,
+                              appTitle: appTitle,
+                              enabled: true,
+                              autoInstallLogTap: autoInstallLogTap)
+    }
+}
+
+public enum DevServerConfigurationError: LocalizedError {
+    case unsupportedHost(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .unsupportedHost(let host):
+            return "Unsupported DevTools host '\(host)'. Use localhost/127.0.0.1/::1 for loopback or 0.0.0.0/:: for all interfaces."
+        }
     }
 }
 
@@ -42,6 +63,7 @@ public typealias SceneSnapshotProvider = @MainActor () -> TreeSnapshotPayload
 /// Closure invoked when the client requests `select.node`. The host
 /// runtime decides what "selecting" means (e.g. drawing an overlay).
 public typealias NodeSelectionHandler = @MainActor (_ id: String) -> Void
+public typealias NodeSelectionClearHandler = @MainActor () -> Void
 
 /// Schedules DevTools callbacks onto the host's UI thread. AppRuntime uses its
 /// own main-thread inbox because its SDL loop is synchronous and may not yield
@@ -58,10 +80,30 @@ public typealias HostMainExecutor = (@escaping @MainActor () -> Void) -> Void
 /// AppConfig carries a non-nil DevToolsConfig.
 public final class DevServer: @unchecked Sendable {
 
+    private enum Subscription: Hashable {
+        case tree
+        case log
+        case timing
+        case mirror
+    }
+
+    private struct Client {
+        let connection: NWConnection
+        var subscriptions: Set<Subscription> = []
+    }
+
     private let config: DevToolsConfig
     private let queue = DispatchQueue(label: "guava.devtools.server")
+    private let queueKey = DispatchSpecificKey<Void>()
     private var listener: NWListener?
-    private var clients: [ObjectIdentifier: NWConnection] = [:]
+    /// Access only from `queue`. Keeping the connection and its subscriptions
+    /// together prevents stale subscription state after disconnects.
+    private var clients: [ObjectIdentifier: Client] = [:]
+    private var selectionOwner: ObjectIdentifier?
+
+    /// Capabilities announced in `hello`. DevTools configures this before
+    /// start so clients do not expose controls with no host-side provider.
+    public var advertisedCapabilities: [String] = ["tree", "select", "log", "timing"]
 
     /// Provided by AppRuntime; called on the main actor to build a
     /// snapshot when a tree request arrives.
@@ -70,6 +112,7 @@ public final class DevServer: @unchecked Sendable {
     /// Provided by AppRuntime; called on the main actor when the client
     /// asks to highlight a node.
     public var selectionHandler: NodeSelectionHandler?
+    public var selectionClearHandler: NodeSelectionClearHandler?
 
     /// Forwarded mirror.start request → host runtime.
     public var mirrorStartHandler: (@MainActor (MirrorStartPayload) -> Void)?
@@ -94,6 +137,7 @@ public final class DevServer: @unchecked Sendable {
 
     public init(config: DevToolsConfig) {
         self.config = config
+        queue.setSpecific(key: queueKey, value: ())
     }
 
     public func start() throws {
@@ -106,8 +150,10 @@ public final class DevServer: @unchecked Sendable {
 
         // Bind to host. Network.framework treats `requiredInterfaceType = .loopback`
         // as the supported way to restrict to 127.0.0.1.
-        if config.host == "127.0.0.1" || config.host == "localhost" {
+        if ["127.0.0.1", "localhost", "::1"].contains(config.host) {
             params.requiredInterfaceType = .loopback
+        } else if !["0.0.0.0", "::", "*"].contains(config.host) {
+            throw DevServerConfigurationError.unsupportedHost(config.host)
         }
 
         let listener = try NWListener(using: params, on: NWEndpoint.Port(rawValue: config.port)!)
@@ -122,11 +168,18 @@ public final class DevServer: @unchecked Sendable {
     }
 
     public func stop() {
-        queue.sync {
-            for conn in clients.values { conn.cancel() }
+        let shouldClearSelection = onQueueSync { selectionOwner != nil }
+        onQueueSync {
+            for client in clients.values { client.connection.cancel() }
             clients.removeAll()
             listener?.cancel()
             listener = nil
+            selectionOwner = nil
+        }
+        if shouldClearSelection {
+            runOnHostMain { [weak self] in
+                self?.selectionClearHandler?()
+            }
         }
     }
 
@@ -134,27 +187,33 @@ public final class DevServer: @unchecked Sendable {
     /// the main actor; encoding happens synchronously.
     @MainActor
     public func broadcastTreeDelta() {
+        // A snapshot walks the complete live tree, so do not pay that cost
+        // merely because DevTools is enabled.
+        guard hasSubscribers(for: .tree) else { return }
         guard let snapshot = snapshotProvider?() else { return }
         let env = DevToolsEnvelope(
             type: "tree.delta",
             payload: encodeJSON(snapshot)
         )
-        sendToAll(env)
+        send(env, toSubscribersOf: .tree)
     }
 
     public func broadcastLog(_ entry: LogEntryPayload) {
+        guard hasSubscribers(for: .log) else { return }
         let env = DevToolsEnvelope(type: "log.entry", payload: encodeJSON(entry))
-        sendToAll(env)
+        send(env, toSubscribersOf: .log)
     }
 
     public func broadcastTiming(_ frame: TimingFramePayload) {
+        guard hasSubscribers(for: .timing) else { return }
         let env = DevToolsEnvelope(type: "timing.frame", payload: encodeJSON(frame))
-        sendToAll(env)
+        send(env, toSubscribersOf: .timing)
     }
 
     public func broadcastMirrorFrame(_ frame: MirrorFramePayload) {
+        guard hasSubscribers(for: .mirror) else { return }
         let env = DevToolsEnvelope(type: "mirror.frame", payload: encodeJSON(frame))
-        sendToAll(env)
+        send(env, toSubscribersOf: .mirror)
     }
 
     public func broadcastMirrorStopped(reason: String) {
@@ -162,7 +221,7 @@ public final class DevServer: @unchecked Sendable {
             type: "mirror.stopped",
             payload: encodeJSON(MirrorStoppedPayload(reason: reason))
         )
-        sendToAll(env)
+        send(env, toSubscribersOf: .mirror)
     }
 
     // MARK: - Listener
@@ -182,7 +241,7 @@ public final class DevServer: @unchecked Sendable {
 
     private func acceptConnection(_ conn: NWConnection) {
         let key = ObjectIdentifier(conn)
-        clients[key] = conn
+        clients[key] = Client(connection: conn)
 
         conn.stateUpdateHandler = { [weak self, weak conn] state in
             guard let self, let conn else { return }
@@ -191,7 +250,7 @@ public final class DevServer: @unchecked Sendable {
                 self.sendHello(to: conn)
                 self.scheduleReceive(on: conn)
             case .failed(_), .cancelled:
-                self.clients.removeValue(forKey: ObjectIdentifier(conn))
+                self.removeClient(conn)
             default:
                 break
             }
@@ -249,6 +308,7 @@ public final class DevServer: @unchecked Sendable {
             break
 
         case "tree.subscribe":
+            setSubscription(.tree, enabled: true, for: conn)
             runOnHostMain { [weak self] in
                 guard let self else { return }
                 let snap = self.snapshotProvider?() ?? TreeSnapshotPayload(root: nil)
@@ -261,12 +321,13 @@ public final class DevServer: @unchecked Sendable {
             }
 
         case "tree.unsubscribe":
-            // No state to clean up in v0.1 — every client receives every delta.
+            setSubscription(.tree, enabled: false, for: conn)
             sendOK(for: env, on: conn)
 
         case "select.node":
             let nodeId = env.payload?.objectValue?["id"]?.stringValue
             if let nodeId {
+                selectionOwner = ObjectIdentifier(conn)
                 runOnHostMain { [weak self] in
                     self?.selectionHandler?(nodeId)
                 }
@@ -280,18 +341,49 @@ public final class DevServer: @unchecked Sendable {
                 )
             }
 
+        case "select.clear":
+            let key = ObjectIdentifier(conn)
+            if selectionOwner == key {
+                selectionOwner = nil
+                runOnHostMain { [weak self] in
+                    self?.selectionClearHandler?()
+                }
+            }
+            sendOK(for: env, on: conn)
+
         case "bye":
             conn.cancel()
 
-        case "log.subscribe", "log.unsubscribe",
-             "timing.subscribe", "timing.unsubscribe":
-            // v0.1: every client receives every log/timing message; the
-            // subscribe/unsubscribe pair is reserved for forward-compat.
+        case "log.subscribe":
+            setSubscription(.log, enabled: true, for: conn)
+            sendOK(for: env, on: conn)
+
+        case "log.unsubscribe":
+            setSubscription(.log, enabled: false, for: conn)
+            sendOK(for: env, on: conn)
+
+        case "timing.subscribe":
+            setSubscription(.timing, enabled: true, for: conn)
+            sendOK(for: env, on: conn)
+
+        case "timing.unsubscribe":
+            setSubscription(.timing, enabled: false, for: conn)
             sendOK(for: env, on: conn)
 
         case "mirror.start":
-            let payload = decodePayload(MirrorStartPayload.self, from: env.payload)
-                ?? MirrorStartPayload(fps: nil, quality: nil)
+            let payload: MirrorStartPayload
+            if let rawPayload = env.payload {
+                guard let decoded = decodePayload(MirrorStartPayload.self, from: rawPayload) else {
+                    sendError(for: env, on: conn,
+                              code: "bad_request",
+                              message: "mirror.start payload is malformed")
+                    return
+                }
+                payload = decoded
+            } else {
+                payload = MirrorStartPayload(fps: nil, quality: nil)
+            }
+            setSubscription(.mirror, enabled: true, for: conn)
             log.info("recv mirror.start fps=\(payload.fps ?? -1) quality=\(payload.quality ?? -1)")
             runOnHostMain { [weak self] in
                 self?.mirrorStartHandler?(payload)
@@ -299,17 +391,28 @@ public final class DevServer: @unchecked Sendable {
             sendOK(for: env, on: conn)
 
         case "mirror.stop":
-            log.info("recv mirror.stop handlerWired=\(mirrorStopHandler != nil)")
-            runOnHostMain { [weak self] in
-                self?.mirrorStopHandler?()
+            let shouldStopCapture = setSubscription(.mirror, enabled: false, for: conn)
+                && !hasSubscribers(for: .mirror)
+            log.info("recv mirror.stop handlerWired=\(mirrorStopHandler != nil) stopCapture=\(shouldStopCapture)")
+            if shouldStopCapture {
+                runOnHostMain { [weak self] in
+                    self?.mirrorStopHandler?()
+                }
             }
             sendOK(for: env, on: conn)
 
         case "mirror.input":
+            guard isSubscribed(.mirror, connection: conn) else {
+                sendError(for: env, on: conn,
+                          code: "invalid_state",
+                          message: "mirror.input requires an active mirror subscription")
+                return
+            }
             if let input = decodePayload(MirrorInputPayload.self, from: env.payload) {
                 runOnHostMain { [weak self] in
                     self?.mirrorInputHandler?(input)
                 }
+                sendOK(for: env, on: conn)
             } else {
                 sendError(for: env, on: conn,
                           code: "bad_request",
@@ -329,7 +432,14 @@ public final class DevServer: @unchecked Sendable {
             }
 
         case "state.restore":
-            let snapshot = (env.payload?.objectValue ?? [:]).compactMapValues { $0.stringValue }
+            guard let object = env.payload?.objectValue,
+                  object.values.allSatisfy({ $0.stringValue != nil }) else {
+                sendError(for: env, on: conn,
+                          code: "bad_request",
+                          message: "state.restore requires an object with string values")
+                return
+            }
+            let snapshot = object.compactMapValues(\.stringValue)
             runOnHostMain { [weak self] in
                 self?.stateRestoreHandler?(snapshot)
             }
@@ -354,7 +464,7 @@ public final class DevServer: @unchecked Sendable {
                 appTitle: config.appTitle,
                 platform: currentPlatformName()
             ),
-            capabilities: ["tree", "select", "log", "timing", "mirror", "state"]
+            capabilities: advertisedCapabilities
         )
         let env = DevToolsEnvelope(type: "hello", payload: encodeJSON(payload))
         send(env, on: conn)
@@ -378,9 +488,16 @@ public final class DevServer: @unchecked Sendable {
         send(env, on: conn)
     }
 
-    private func sendToAll(_ env: DevToolsEnvelope) {
-        let connections = queue.sync { Array(clients.values) }
-        for conn in connections { send(env, on: conn) }
+    /// Queueing broadcasts instead of synchronously re-entering `queue` is
+    /// essential: DevServer's own Logger can be routed through LogTap while
+    /// already executing on this queue.
+    private func send(_ env: DevToolsEnvelope, toSubscribersOf subscription: Subscription) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            for client in self.clients.values where client.subscriptions.contains(subscription) {
+                self.send(env, on: client.connection)
+            }
+        }
     }
 
     private func send(_ env: DevToolsEnvelope, on conn: NWConnection) {
@@ -413,6 +530,56 @@ public final class DevServer: @unchecked Sendable {
                 operation()
             }
         }
+    }
+
+    @discardableResult
+    private func setSubscription(_ subscription: Subscription,
+                                 enabled: Bool,
+                                 for connection: NWConnection) -> Bool {
+        let key = ObjectIdentifier(connection)
+        guard var client = clients[key] else { return false }
+        let changed: Bool
+        if enabled {
+            changed = client.subscriptions.insert(subscription).inserted
+        } else {
+            changed = client.subscriptions.remove(subscription) != nil
+        }
+        clients[key] = client
+        return changed
+    }
+
+    private func hasSubscribers(for subscription: Subscription) -> Bool {
+        onQueueSync {
+            clients.values.contains { $0.subscriptions.contains(subscription) }
+        }
+    }
+
+    private func isSubscribed(_ subscription: Subscription,
+                              connection: NWConnection) -> Bool {
+        clients[ObjectIdentifier(connection)]?.subscriptions.contains(subscription) == true
+    }
+
+    private func removeClient(_ connection: NWConnection) {
+        let key = ObjectIdentifier(connection)
+        let wasMirroring = clients.removeValue(forKey: key)?.subscriptions.contains(.mirror) == true
+        if selectionOwner == key {
+            selectionOwner = nil
+            runOnHostMain { [weak self] in
+                self?.selectionClearHandler?()
+            }
+        }
+        if wasMirroring, !clients.values.contains(where: { $0.subscriptions.contains(.mirror) }) {
+            runOnHostMain { [weak self] in
+                self?.mirrorStopHandler?()
+            }
+        }
+    }
+
+    private func onQueueSync<T>(_ operation: () -> T) -> T {
+        if DispatchQueue.getSpecific(key: queueKey) != nil {
+            return operation()
+        }
+        return queue.sync(execute: operation)
     }
 
     private func log(_ message: String) {
@@ -467,8 +634,10 @@ private func decodePayload<T: Decodable>(_ type: T.Type, from value: JSONValue?)
 /// Stub DevServer for platforms without Network.framework (Windows, Linux).
 /// All methods are no-ops; the DevTools WebSocket server is not available.
 public final class DevServer: @unchecked Sendable {
+    public var advertisedCapabilities: [String] = ["tree", "select", "log", "timing"]
     public var snapshotProvider: SceneSnapshotProvider?
     public var selectionHandler: NodeSelectionHandler?
+    public var selectionClearHandler: NodeSelectionClearHandler?
     public var mirrorStartHandler: (@MainActor (MirrorStartPayload) -> Void)?
     public var mirrorStopHandler: (@MainActor () -> Void)?
     public var mirrorInputHandler: (@MainActor (MirrorInputPayload) -> Void)?

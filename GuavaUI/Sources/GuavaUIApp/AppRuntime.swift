@@ -34,11 +34,20 @@ public final class AppRuntime {
                                        onTick: ((_ deltaTime: Double) -> Void)? = nil,
                                        onDisplayReady: ((AppDisplayHandle) -> Void)? = nil,
                                        @ViewBuilder rootView: () -> Root) throws {
+        let devToolsLogSink: LogTap.Sink?
+        if let devConfig = config.devTools, devConfig.autoInstallLogTap {
+            let sink = LogTapInstaller.processSink
+            LogTapInstaller.bootstrapIfNeeded(sink: sink)
+            devToolsLogSink = sink
+        } else {
+            devToolsLogSink = nil
+        }
         let runtime = AppRuntime(config: config,
                                  backend: backend,
                                  events: events,
                                  onTick: onTick,
-                                 onDisplayReady: onDisplayReady)
+                                 onDisplayReady: onDisplayReady,
+                                 devToolsLogSink: devToolsLogSink)
         try runtime.start(rootView: rootView())
     }
 
@@ -48,6 +57,7 @@ public final class AppRuntime {
     private let onTick: ((Double) -> Void)?
     private let onDisplayReady: ((AppDisplayHandle) -> Void)?
     private let events: PlatformEventBridge
+    private let devToolsLogSink: LogTap.Sink?
 
     private let tree = NodeTree()
     private let host: SDL3PlatformHost
@@ -124,18 +134,18 @@ public final class AppRuntime {
 
     /// 进程内 DevTools 调试服务器。仅当 `config.devTools != nil` 时创建。
     private var devTools: DevTools?
-    private var devToolsTickedOnce = false
-    private var devToolsFrameCounter: UInt64 = 0
 
     private init(config: AppConfig,
                  backend: WGPUBackend?,
                  events: PlatformEventBridge,
                  onTick: ((Double) -> Void)?,
-                 onDisplayReady: ((AppDisplayHandle) -> Void)?) {
+                 onDisplayReady: ((AppDisplayHandle) -> Void)?,
+                 devToolsLogSink: LogTap.Sink?) {
         self.config = config
         self.onTick = onTick
         self.onDisplayReady = onDisplayReady
         self.events = events
+        self.devToolsLogSink = devToolsLogSink
         let resolvedBackend = backend ?? WGPUBackend(config: config.backendConfig)
         self.backend = resolvedBackend
         self.renderer = DrawListRenderer(backend: resolvedBackend)
@@ -177,10 +187,8 @@ public final class AppRuntime {
             let dev = DevTools(config: devConfig,
                                tree: tree,
                                invalidationLog: host.invalidationLog,
-                               renderTree: graph.renderTree)
-            // Install the log tap before any DevTools-related Logger fires
-            // so the first records also reach the client.
-            LogTapInstaller.bootstrapIfNeeded(sink: dev.logSink)
+                               renderTree: graph.renderTree,
+                               logSink: devToolsLogSink ?? LogTap.Sink())
             dev.attachFrameTap(backend: backend, renderer: renderer)
             dev.server.hostMainExecutor = { [weak self] operation in
                 self?.host.enqueueMainThreadWork {
@@ -251,6 +259,8 @@ public final class AppRuntime {
             self?.releaseGPUSurface(for: windowID)
         }
         host.onTeardown = { [weak self] in
+            self?.devTools?.stop()
+            self?.devTools = nil
             self?.releaseGPUSurfaces()
         }
 
@@ -608,6 +618,12 @@ public final class AppRuntime {
             return false
         }
 
+        if let dev = devTools {
+            if root.isDirty || root.renderDirty {
+                dev.notifyTreeChanged()
+            }
+        }
+
         let acquired: (texture: GPUTexture, view: GPUTextureView)?
         do {
             acquired = try surface.getCurrentTextureView()
@@ -615,6 +631,12 @@ public final class AppRuntime {
             return false
         }
         guard let frame = acquired else {
+            devTools?.mirrorCapture(
+                drawList: drawList,
+                widthPx: drawableW,
+                heightPx: drawableH,
+                logical: (Float(logicalW), Float(logicalH))
+            )
             host.requestDisplay()
             return false
         }
@@ -645,6 +667,17 @@ public final class AppRuntime {
             let buffer = try encoder.finish()
             backend.submit(buffer)
             surface.present()
+            if let dev = devTools {
+                // Keep synchronous mirror readback behind the primary
+                // swapchain submission. Doing it before acquisition can make
+                // the native surface unavailable on subsequent frames.
+                dev.mirrorCapture(
+                    drawList: drawList,
+                    widthPx: drawableW,
+                    heightPx: drawableH,
+                    logical: (Float(logicalW), Float(logicalH))
+                )
+            }
             if config.frameDrivePolicy == .continuous || Self.forceContinuousFrameDrive {
                 // Legacy behavior: keep re-rendering at display rate. Under
                 // `.eventDriven` the loop's needsDisplay machinery (input,
@@ -661,18 +694,6 @@ public final class AppRuntime {
             }
 
             if let dev = devTools {
-                devToolsTickedOnce = true
-                if devToolsFrameCounter % 60 == 0 {
-                    print("[guava.devtools] AppRuntime.handleFrame frame#\(devToolsFrameCounter) drawable=\(drawableW)x\(drawableH) logical=\(logicalW)x\(logicalH) batches=\(drawList.batches.count) mirrorActive=\(dev.mirrorIsActive)")
-                }
-                devToolsFrameCounter &+= 1
-                dev.notifyTreeChanged()
-                dev.mirrorCapture(
-                    drawList: drawList,
-                    widthPx: drawableW,
-                    heightPx: drawableH,
-                    logical: (Float(logicalW), Float(logicalH))
-                )
                 dev.timing.record(
                     layoutMs: (layoutEnd - layoutStart) * 1000,
                     drawMs: (drawEnd - layoutEnd) * 1000,

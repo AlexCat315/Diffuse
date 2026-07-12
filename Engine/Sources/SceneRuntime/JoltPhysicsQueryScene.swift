@@ -59,7 +59,8 @@ final class JoltPhysicsQueryScene: @unchecked Sendable {
                 activeBodies: snapshot.bodies,
                 activeConstraints: snapshot.constraints,
                 syncEvents: [],
-                activeCharacters: snapshot.characters
+                activeCharacters: snapshot.characters,
+                isFullSnapshot: true
             )
         )
         sourceRevision = world.physicsRevision

@@ -870,6 +870,67 @@ public struct RagdollStateFrameResource: Sendable, Equatable {
     public static let empty = RagdollStateFrameResource()
 }
 
+public struct PhysicsCapacitySettings: Sendable, Equatable, Codable {
+    public var maxBodies: Int
+    public var bodyMutexCount: Int
+    public var maxBodyPairs: Int
+    public var maxContactConstraints: Int
+    public var tempAllocatorBytes: Int
+    /// Zero selects the platform default: the available logical core count minus one.
+    public var workerThreadCount: Int
+
+    public init(
+        maxBodies: Int = 65_536,
+        bodyMutexCount: Int = 0,
+        maxBodyPairs: Int = 65_536,
+        maxContactConstraints: Int = 10_240,
+        tempAllocatorBytes: Int = 10 * 1_024 * 1_024,
+        workerThreadCount: Int = 0
+    ) {
+        self.maxBodies = min(Int(UInt32.max), max(1, maxBodies))
+        self.bodyMutexCount = min(Int(UInt32.max), max(0, bodyMutexCount))
+        self.maxBodyPairs = min(Int(UInt32.max), max(1, maxBodyPairs))
+        self.maxContactConstraints = min(Int(UInt32.max), max(1, maxContactConstraints))
+        self.tempAllocatorBytes = min(Int(UInt32.max), max(1_024 * 1_024, tempAllocatorBytes))
+        self.workerThreadCount = min(1_024, max(0, workerThreadCount))
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case maxBodies
+        case bodyMutexCount
+        case maxBodyPairs
+        case maxContactConstraints
+        case tempAllocatorBytes
+        case workerThreadCount
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = PhysicsCapacitySettings()
+        self.init(
+            maxBodies: try values.decodeIfPresent(Int.self, forKey: .maxBodies) ?? defaults.maxBodies,
+            bodyMutexCount: try values.decodeIfPresent(Int.self, forKey: .bodyMutexCount) ?? defaults.bodyMutexCount,
+            maxBodyPairs: try values.decodeIfPresent(Int.self, forKey: .maxBodyPairs) ?? defaults.maxBodyPairs,
+            maxContactConstraints: try values.decodeIfPresent(Int.self, forKey: .maxContactConstraints)
+                ?? defaults.maxContactConstraints,
+            tempAllocatorBytes: try values.decodeIfPresent(Int.self, forKey: .tempAllocatorBytes)
+                ?? defaults.tempAllocatorBytes,
+            workerThreadCount: try values.decodeIfPresent(Int.self, forKey: .workerThreadCount)
+                ?? defaults.workerThreadCount
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(maxBodies, forKey: .maxBodies)
+        try values.encode(bodyMutexCount, forKey: .bodyMutexCount)
+        try values.encode(maxBodyPairs, forKey: .maxBodyPairs)
+        try values.encode(maxContactConstraints, forKey: .maxContactConstraints)
+        try values.encode(tempAllocatorBytes, forKey: .tempAllocatorBytes)
+        try values.encode(workerThreadCount, forKey: .workerThreadCount)
+    }
+}
+
 public struct PhysicsSettingsResource: Sendable, Equatable {
     public var simulationMode: PhysicsSimulationMode
     public var backendKind: PhysicsBackendKind
@@ -878,6 +939,7 @@ public struct PhysicsSettingsResource: Sendable, Equatable {
     public var maxSubstepsPerFrame: Int
     public var allowSleep: Bool
     public var collisionSteps: Int
+    public var capacity: PhysicsCapacitySettings
 
     public init(
         simulationMode: PhysicsSimulationMode = .off,
@@ -886,7 +948,8 @@ public struct PhysicsSettingsResource: Sendable, Equatable {
         fixedTimeStepSeconds: Double = 1.0 / 60.0,
         maxSubstepsPerFrame: Int = 4,
         allowSleep: Bool = true,
-        collisionSteps: Int = 1
+        collisionSteps: Int = 1,
+        capacity: PhysicsCapacitySettings = PhysicsCapacitySettings()
     ) {
         self.simulationMode = simulationMode
         self.backendKind = backendKind
@@ -895,6 +958,14 @@ public struct PhysicsSettingsResource: Sendable, Equatable {
         self.maxSubstepsPerFrame = max(1, maxSubstepsPerFrame)
         self.allowSleep = allowSleep
         self.collisionSteps = max(1, collisionSteps)
+        self.capacity = PhysicsCapacitySettings(
+            maxBodies: capacity.maxBodies,
+            bodyMutexCount: capacity.bodyMutexCount,
+            maxBodyPairs: capacity.maxBodyPairs,
+            maxContactConstraints: capacity.maxContactConstraints,
+            tempAllocatorBytes: capacity.tempAllocatorBytes,
+            workerThreadCount: capacity.workerThreadCount
+        )
     }
 }
 
@@ -982,6 +1053,132 @@ public struct PhysicsStateHashFrameResource: Sendable, Equatable {
     }
 
     public static let empty = PhysicsStateHashFrameResource()
+}
+
+public struct PhysicsRecordedBodyCommand: Sendable, Equatable {
+    public var entity: EntityID
+    public var force: SIMD3<Float>
+    public var torque: SIMD3<Float>
+    public var linearImpulse: SIMD3<Float>
+    public var angularImpulse: SIMD3<Float>
+    public var wake: Bool
+
+    public init(
+        entity: EntityID,
+        force: SIMD3<Float> = .zero,
+        torque: SIMD3<Float> = .zero,
+        linearImpulse: SIMD3<Float> = .zero,
+        angularImpulse: SIMD3<Float> = .zero,
+        wake: Bool = true
+    ) {
+        self.entity = entity
+        self.force = force
+        self.torque = torque
+        self.linearImpulse = linearImpulse
+        self.angularImpulse = angularImpulse
+        self.wake = wake
+    }
+}
+
+public struct PhysicsRecordedCharacterCommand: Sendable, Equatable {
+    public var entity: EntityID
+    public var command: CharacterCommand
+
+    public init(entity: EntityID, command: CharacterCommand) {
+        self.entity = entity
+        self.command = command
+    }
+}
+
+public struct PhysicsCommandFrame: Sendable, Equatable {
+    public var deltaTimeSeconds: Double
+    public var settings: PhysicsSettingsResource
+    public var bodyCommands: [PhysicsRecordedBodyCommand]
+    public var characterCommands: [PhysicsRecordedCharacterCommand]
+    public var expectedSimulatedStep: Int
+    public var expectedStateHash: UInt64
+
+    public init(
+        deltaTimeSeconds: Double,
+        settings: PhysicsSettingsResource,
+        bodyCommands: [PhysicsRecordedBodyCommand] = [],
+        characterCommands: [PhysicsRecordedCharacterCommand] = [],
+        expectedSimulatedStep: Int,
+        expectedStateHash: UInt64
+    ) {
+        self.deltaTimeSeconds = max(0, deltaTimeSeconds)
+        self.settings = settings
+        self.bodyCommands = bodyCommands.sorted { $0.entity.rawValue < $1.entity.rawValue }
+        self.characterCommands = characterCommands.sorted { $0.entity.rawValue < $1.entity.rawValue }
+        self.expectedSimulatedStep = expectedSimulatedStep
+        self.expectedStateHash = expectedStateHash
+    }
+}
+
+public struct PhysicsCommandTape: Sendable, Equatable {
+    public var frames: [PhysicsCommandFrame]
+
+    public init(frames: [PhysicsCommandFrame] = []) {
+        self.frames = frames
+    }
+}
+
+public struct PhysicsCommandRecordingResource: Sendable, Equatable {
+    public var isRecording: Bool
+    public var maxFrames: Int
+    public var frames: [PhysicsCommandFrame]
+
+    public init(isRecording: Bool = false, maxFrames: Int = 36_000, frames: [PhysicsCommandFrame] = []) {
+        self.isRecording = isRecording
+        self.maxFrames = max(1, maxFrames)
+        self.frames = Array(frames.prefix(max(1, maxFrames)))
+    }
+
+    public static let inactive = PhysicsCommandRecordingResource()
+}
+
+public struct PhysicsReplayMismatch: Sendable, Equatable {
+    public var frameIndex: Int
+    public var expectedSimulatedStep: Int
+    public var actualSimulatedStep: Int
+    public var expectedStateHash: UInt64
+    public var actualStateHash: UInt64
+
+    public init(
+        frameIndex: Int,
+        expectedSimulatedStep: Int,
+        actualSimulatedStep: Int,
+        expectedStateHash: UInt64,
+        actualStateHash: UInt64
+    ) {
+        self.frameIndex = frameIndex
+        self.expectedSimulatedStep = expectedSimulatedStep
+        self.actualSimulatedStep = actualSimulatedStep
+        self.expectedStateHash = expectedStateHash
+        self.actualStateHash = actualStateHash
+    }
+}
+
+public struct PhysicsReplayReport: Sendable, Equatable {
+    public var replayedFrameCount: Int
+    public var checkpointHashes: [UInt64]
+    public var mismatches: [PhysicsReplayMismatch]
+
+    public init(
+        replayedFrameCount: Int = 0,
+        checkpointHashes: [UInt64] = [],
+        mismatches: [PhysicsReplayMismatch] = []
+    ) {
+        self.replayedFrameCount = replayedFrameCount
+        self.checkpointHashes = checkpointHashes
+        self.mismatches = mismatches
+    }
+
+    public var isDeterministic: Bool { mismatches.isEmpty }
+}
+
+struct PhysicsCommandReplayControlResource: Sendable, Equatable {
+    var isReplaying: Bool = false
 }
 
 public struct PhysicsDebugBody: Sendable, Equatable {
@@ -1467,6 +1664,9 @@ public struct PhysicsPrepareContext: Sendable {
     public var activeConstraints: [PhysicsConstraintDescriptor]
     public var syncEvents: [PhysicsSyncEvent]
     public var activeCharacters: [PhysicsCharacterDescriptor]
+    /// Full snapshots remove native objects that are absent from `activeBodies` / `activeConstraints`.
+    /// Runtime simulation normally uses ordered incremental `syncEvents` instead.
+    public var isFullSnapshot: Bool
 
     public init(
         settings: PhysicsSettingsResource,
@@ -1474,7 +1674,8 @@ public struct PhysicsPrepareContext: Sendable {
         activeBodies: [PhysicsBodyDescriptor],
         activeConstraints: [PhysicsConstraintDescriptor],
         syncEvents: [PhysicsSyncEvent],
-        activeCharacters: [PhysicsCharacterDescriptor] = []
+        activeCharacters: [PhysicsCharacterDescriptor] = [],
+        isFullSnapshot: Bool = false
     ) {
         self.settings = settings
         self.deltaTimeSeconds = deltaTimeSeconds
@@ -1482,6 +1683,7 @@ public struct PhysicsPrepareContext: Sendable {
         self.activeConstraints = activeConstraints
         self.syncEvents = syncEvents
         self.activeCharacters = activeCharacters
+        self.isFullSnapshot = isFullSnapshot
     }
 }
 
