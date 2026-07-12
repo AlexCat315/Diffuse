@@ -516,6 +516,19 @@ bool guava_jolt_context_prepare_with_meshes(
     const GuavaJoltMeshGeometry* meshes,
     size_t mesh_count,
     GuavaJoltPrepareStats* out_stats);
+bool guava_jolt_context_apply_sync_events(
+    GuavaJoltContext context,
+    const GuavaJoltBodyDesc* body_upserts,
+    size_t body_upsert_count,
+    const uint64_t* body_removals,
+    size_t body_removal_count,
+    const GuavaJoltConstraintDesc* constraint_upserts,
+    size_t constraint_upsert_count,
+    const uint64_t* constraint_removals,
+    size_t constraint_removal_count,
+    const GuavaJoltMeshGeometry* meshes,
+    size_t mesh_count,
+    GuavaJoltPrepareStats* out_stats);
 bool guava_jolt_context_step(GuavaJoltContext context,
                              const GuavaJoltStepConfig* config,
                              GuavaJoltBodyState* states,

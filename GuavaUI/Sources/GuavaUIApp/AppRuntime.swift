@@ -618,6 +618,12 @@ public final class AppRuntime {
             return false
         }
 
+        if let dev = devTools {
+            if root.isDirty || root.renderDirty {
+                dev.notifyTreeChanged()
+            }
+        }
+
         let acquired: (texture: GPUTexture, view: GPUTextureView)?
         do {
             acquired = try surface.getCurrentTextureView()
@@ -625,6 +631,12 @@ public final class AppRuntime {
             return false
         }
         guard let frame = acquired else {
+            devTools?.mirrorCapture(
+                drawList: drawList,
+                widthPx: drawableW,
+                heightPx: drawableH,
+                logical: (Float(logicalW), Float(logicalH))
+            )
             host.requestDisplay()
             return false
         }
@@ -655,6 +667,17 @@ public final class AppRuntime {
             let buffer = try encoder.finish()
             backend.submit(buffer)
             surface.present()
+            if let dev = devTools {
+                // Keep synchronous mirror readback behind the primary
+                // swapchain submission. Doing it before acquisition can make
+                // the native surface unavailable on subsequent frames.
+                dev.mirrorCapture(
+                    drawList: drawList,
+                    widthPx: drawableW,
+                    heightPx: drawableH,
+                    logical: (Float(logicalW), Float(logicalH))
+                )
+            }
             if config.frameDrivePolicy == .continuous || Self.forceContinuousFrameDrive {
                 // Legacy behavior: keep re-rendering at display rate. Under
                 // `.eventDriven` the loop's needsDisplay machinery (input,
@@ -671,15 +694,6 @@ public final class AppRuntime {
             }
 
             if let dev = devTools {
-                if root.isDirty || root.renderDirty {
-                    dev.notifyTreeChanged()
-                }
-                dev.mirrorCapture(
-                    drawList: drawList,
-                    widthPx: drawableW,
-                    heightPx: drawableH,
-                    logical: (Float(logicalW), Float(logicalH))
-                )
                 dev.timing.record(
                     layoutMs: (layoutEnd - layoutStart) * 1000,
                     drawMs: (drawEnd - layoutEnd) * 1000,

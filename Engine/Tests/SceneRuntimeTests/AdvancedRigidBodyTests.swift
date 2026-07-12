@@ -221,4 +221,48 @@ struct AdvancedRigidBodyTests {
         #expect(replay.replayedFrameCount == 60)
         #expect(replayRuntime.worldTransform(for: replayEntity) == expectedTransform)
     }
+
+    @Test("native synchronization sends only authored or commanded body changes")
+    func incrementalNativeSynchronization() {
+        var runtime = SceneRuntime()
+        runtime.setPhysicsSettings(PhysicsSettingsResource(
+            simulationMode: .play,
+            backendKind: .jolt,
+            gravity: .zero,
+            fixedTimeStepSeconds: 1.0 / 60.0,
+            maxSubstepsPerFrame: 1,
+            allowSleep: false,
+            capacity: PhysicsCapacitySettings(workerThreadCount: 1)
+        ))
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(.identity, for: entity)
+        _ = runtime.setComponent(Collider(shape: .sphere(radius: 0.5, center: .zero)), for: entity)
+        _ = runtime.setComponent(RigidBody(
+            linearVelocity: SIMD3<Float>(1, 0, 0),
+            gravityScale: 0,
+            allowSleep: false
+        ), for: entity)
+
+        _ = runtime.tick(deltaTime: 1.0 / 60.0)
+        #expect(runtime.physicsFrameState.synchronizedBodyCount == 1)
+
+        _ = runtime.tick(deltaTime: 1.0 / 60.0)
+        #expect(runtime.physicsFrameState.synchronizedBodyCount == 0)
+
+        _ = runtime.applyForce(SIMD3<Float>(0, 2, 0), to: entity)
+        _ = runtime.tick(deltaTime: 1.0 / 60.0)
+        #expect(runtime.physicsFrameState.synchronizedBodyCount == 1)
+
+        _ = runtime.tick(deltaTime: 1.0 / 60.0)
+        #expect(runtime.physicsFrameState.synchronizedBodyCount == 0)
+
+        let destroyed = runtime.destroyEntity(entity)
+        #expect(destroyed)
+        _ = runtime.tick(deltaTime: 1.0 / 60.0)
+        #expect(runtime.physicsRaycast(PhysicsRaycastQuery(
+            origin: SIMD3<Float>(-5, 0, 0),
+            direction: SIMD3<Float>(1, 0, 0),
+            maxDistance: 10
+        )) == nil)
+    }
 }
