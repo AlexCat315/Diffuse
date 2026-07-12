@@ -77,6 +77,12 @@ public final class DevTools {
 
     public func start() throws {
         guard config.enabled else { return }
+        var capabilities = ["tree", "select", "log", "timing"]
+        if frameTap != nil { capabilities.append("mirror") }
+        if stateCheckpointProvider != nil, stateRestoreHandler != nil {
+            capabilities.append("state")
+        }
+        server.advertisedCapabilities = capabilities
         wireSinks()
         do {
             try server.start()

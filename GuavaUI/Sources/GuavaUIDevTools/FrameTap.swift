@@ -37,6 +37,7 @@ public final class FrameTap {
     private let sink: Sink
     private let backend: WGPUBackend
     private let renderer: DrawListRenderer
+    private var captureRenderer: DrawListRenderer?
 
     private var enabled = false
     private var quality: Double = 0.7
@@ -50,8 +51,6 @@ public final class FrameTap {
 
     private var texture: GPUTexture?
     private var textureView: GPUTextureView?
-    private var msaaTexture: GPUTexture?
-    private var msaaTextureView: GPUTextureView?
     private var readback: GPUBuffer?
 
     #if canImport(Logging)
@@ -90,8 +89,6 @@ public final class FrameTap {
         // Drop GPU resources so the next start() picks up the latest size.
         texture = nil
         textureView = nil
-        msaaTexture = nil
-        msaaTextureView = nil
         readback = nil
         widthPx = 0
         heightPx = 0
@@ -133,28 +130,40 @@ public final class FrameTap {
             return
         }
 
+        // A remote inspector does not need Retina-native pixels. Capturing at
+        // logical resolution (capped for very large windows) cuts GPU readback,
+        // JPEG size, WebSocket traffic, and browser decode pressure sharply.
+        let targetSize = Self.targetSize(logical: logical)
+        let captureWidthPx = targetSize.width
+        let captureHeightPx = targetSize.height
+
         let now = Date().timeIntervalSince1970
         if now - lastCaptureAt < minFrameInterval { return }
         lastCaptureAt = now
 
         do {
-            try ensureResources(widthPx: widthPx, heightPx: heightPx)
-            guard let texture, let textureView, let readback else { return }
+            try ensureResources(widthPx: captureWidthPx, heightPx: captureHeightPx)
+            if captureRenderer == nil {
+                captureRenderer = try renderer.makeSibling(
+                    format: .bgra8Unorm,
+                    sampleCount: 1
+                )
+            } else if let captureRenderer {
+                try captureRenderer.synchronizeTextures(from: renderer)
+            }
+            guard let captureRenderer, let texture, let textureView, let readback else { return }
 
             let encoder = try backend.createCommandEncoder()
-            let passColorView = msaaTextureView ?? textureView
-            let passResolveView = msaaTextureView == nil ? nil : textureView
             let pass = try encoder.beginRenderPass(
-                colorView: passColorView,
-                resolveTargetView: passResolveView,
+                colorView: textureView,
                 loadOp: .clear,
                 storeOp: .store,
                 clearColor: .black
             )
-            try renderer.render(
+            try captureRenderer.render(
                 list: drawList,
                 pass: pass,
-                viewportPx: (widthPx, heightPx),
+                viewportPx: (captureWidthPx, captureHeightPx),
                 coordinateSpace: (logical.width, logical.height)
             )
             pass.end()
@@ -163,23 +172,23 @@ public final class FrameTap {
                 destination: readback,
                 bufferOffset: 0,
                 bytesPerRow: UInt32(bytesPerRow),
-                rowsPerImage: heightPx,
-                width: widthPx,
-                height: heightPx
+                rowsPerImage: captureHeightPx,
+                width: captureWidthPx,
+                height: captureHeightPx
             )
             let commandBuffer = try encoder.finish()
             backend.submit(commandBuffer)
 
             try backend.bufferMapSync(readback)
             defer { readback.unmap() }
-            guard let mapped = readback.getMappedRange(offset: 0, size: UInt64(bytesPerRow * Int(heightPx))) else {
+            guard let mapped = readback.getMappedRange(offset: 0, size: UInt64(bytesPerRow * Int(captureHeightPx))) else {
                 return
             }
 
             guard let jpeg = encodeJPEG(
                 bgra: mapped,
-                width: Int(widthPx),
-                height: Int(heightPx),
+                width: Int(captureWidthPx),
+                height: Int(captureHeightPx),
                 bytesPerRow: bytesPerRow,
                 quality: quality
             ) else {
@@ -191,13 +200,13 @@ public final class FrameTap {
             consecutiveErrors = 0
             if capturesSinceStart == 1 {
                 #if canImport(Logging)
-                log.debug("mirror first frame seq=\(seq) px=\(widthPx)x\(heightPx) jpeg=\(jpeg.count)B")
+                log.debug("mirror first frame seq=\(seq) px=\(captureWidthPx)x\(captureHeightPx) jpeg=\(jpeg.count)B")
                 #endif
             }
             sink.deliver?(MirrorFramePayload(
                 seq: seq,
-                width: Int(widthPx),
-                height: Int(heightPx),
+                width: Int(captureWidthPx),
+                height: Int(captureHeightPx),
                 logicalWidth: Double(logical.width),
                 logicalHeight: Double(logical.height),
                 jpegBase64: jpeg.base64EncodedString()
@@ -231,25 +240,6 @@ public final class FrameTap {
             depthOrLayers: 1
         )
         let view = try tex.createView()
-        let msaaCount = renderer.sampleCount
-        let msaaTex: GPUTexture?
-        let msaaView: GPUTextureView?
-        if msaaCount > 1 {
-            let texture = try backend.createTexture(
-                width: widthPx,
-                height: heightPx,
-                format: .bgra8Unorm,
-                usage: [.renderAttachment],
-                mipLevels: 1,
-                depthOrLayers: 1,
-                sampleCount: msaaCount
-            )
-            msaaTex = texture
-            msaaView = try texture.createView()
-        } else {
-            msaaTex = nil
-            msaaView = nil
-        }
         let buf = try backend.createBuffer(
             size: UInt64(stride * Int(heightPx)),
             usage: [.mapRead, .copyDst],
@@ -257,8 +247,6 @@ public final class FrameTap {
         )
         self.texture = tex
         self.textureView = view
-        self.msaaTexture = msaaTex
-        self.msaaTextureView = msaaView
         self.readback = buf
         self.widthPx = widthPx
         self.heightPx = heightPx
@@ -270,6 +258,16 @@ public final class FrameTap {
         let remainder = raw % copyBytesPerRowAlignment
         if remainder == 0 { return raw }
         return raw + (copyBytesPerRowAlignment - remainder)
+    }
+
+    private static func targetSize(logical: (width: Float, height: Float)) -> (width: UInt32, height: UInt32) {
+        let logicalWidth = max(1, Double(logical.width))
+        let logicalHeight = max(1, Double(logical.height))
+        let scale = min(1, min(1_920 / logicalWidth, 1_080 / logicalHeight))
+        return (
+            width: UInt32(max(1, (logicalWidth * scale).rounded(.up))),
+            height: UInt32(max(1, (logicalHeight * scale).rounded(.up)))
+        )
     }
 
     // MARK: - JPEG

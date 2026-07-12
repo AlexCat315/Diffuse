@@ -33,6 +33,49 @@ struct PhysicsJointTests {
         #expect(guava_jolt_context_create_with_config(&config) == nil)
     }
 
+    @Test("joint is resent when a connected body must be recreated")
+    func jointSurvivesConnectedBodyRecreation() {
+        var runtime = SceneRuntime()
+        runtime.setPhysicsSettings(PhysicsSettingsResource(
+            simulationMode: .play,
+            backendKind: .jolt,
+            gravity: .zero,
+            fixedTimeStepSeconds: 1.0 / 60.0,
+            maxSubstepsPerFrame: 1,
+            allowSleep: false,
+            capacity: PhysicsCapacitySettings(workerThreadCount: 1)
+        ))
+        let first = runtime.createEntity()
+        let second = runtime.createEntity()
+        for (entity, x) in [(first, Float(0)), (second, Float(1))] {
+            _ = runtime.setLocalTransform(
+                LocalTransform(translation: SIMD3<Float>(x, 0, 0)), for: entity)
+            _ = runtime.setComponent(RigidBody(gravityScale: 0, allowSleep: false), for: entity)
+            _ = runtime.setComponent(Collider(shape: .sphere(radius: 0.4, center: .zero)), for: entity)
+        }
+        let joint = runtime.createEntity()
+        _ = runtime.setLocalTransform(.identity, for: joint)
+        _ = runtime.setComponent(PhysicsJoint(
+            configuration: .point,
+            entityA: first,
+            entityB: second
+        ), for: joint)
+
+        _ = runtime.tick(deltaTime: 1.0 / 60.0)
+        #expect(runtime.physicsFrameState.synchronizedConstraintCount == 1)
+        _ = runtime.updateComponent(Collider.self, for: first) {
+            $0.shape = .sphere(radius: 0.6, center: .zero)
+        }
+        let recreated = runtime.tick(deltaTime: 1.0 / 60.0)
+        #expect(recreated.physicsError == nil)
+        #expect(runtime.physicsFrameState.synchronizedBodyCount == 1)
+        #expect(runtime.physicsFrameState.synchronizedConstraintCount == 1)
+
+        _ = runtime.tick(deltaTime: 1.0 / 60.0)
+        #expect(runtime.physicsFrameState.synchronizedBodyCount == 0)
+        #expect(runtime.physicsFrameState.synchronizedConstraintCount == 0)
+    }
+
     @Test("joint break thresholds emit events and disable the authored joint")
     func breakEvent() throws {
         var runtime = SceneRuntime()

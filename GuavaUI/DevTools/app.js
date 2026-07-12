@@ -9,6 +9,9 @@ const state = {
   treeQuery: "",
   mirrorActive: false,
   mirrorFrame: null,
+  mirrorImageLoading: false,
+  pendingMirrorFrame: null,
+  mirrorDecodeGeneration: 0,
   pointerDown: false,
   pointerButton: 0,
   lastPointer: null,
@@ -300,11 +303,42 @@ function renderTiming(payload) {
 function renderMirror(payload) {
   if (!payload?.jpegBase64) return;
   state.mirrorActive = true;
-  state.mirrorFrame = payload;
-  el.mirrorImage.src = `data:image/jpeg;base64,${payload.jpegBase64}`;
-  el.mirror.classList.add("hasFrame");
-  el.mirrorStatus.textContent = `Frame ${payload.seq ?? ""}`.trim();
-  el.mirrorState.textContent = "";
+  if (state.mirrorImageLoading) {
+    // Keep only the newest frame while the browser decodes the current one.
+    // Replacing <img>.src faster than decode can complete leaves the mirror
+    // permanently black on high-DPI windows.
+    state.pendingMirrorFrame = payload;
+    return;
+  }
+  decodeMirrorFrame(payload, state.mirrorDecodeGeneration);
+}
+
+function decodeMirrorFrame(payload, generation) {
+  state.mirrorImageLoading = true;
+  const candidate = new Image();
+  candidate.src = `data:image/jpeg;base64,${payload.jpegBase64}`;
+  const decoded = typeof candidate.decode === "function"
+    ? candidate.decode()
+    : new Promise((resolve, reject) => {
+        candidate.onload = resolve;
+        candidate.onerror = reject;
+      });
+  decoded.then(() => {
+    if (generation !== state.mirrorDecodeGeneration || !state.mirrorActive) return;
+    state.mirrorFrame = payload;
+    el.mirrorImage.src = candidate.src;
+    el.mirror.classList.add("hasFrame");
+    el.mirrorStatus.textContent = `Frame ${payload.seq ?? ""}`.trim();
+    el.mirrorState.textContent = "";
+  }).catch((error) => {
+    appendLog({ level: "error", label: "mirror", message: `Frame decode failed: ${error}` });
+  }).finally(() => {
+    if (generation !== state.mirrorDecodeGeneration) return;
+    state.mirrorImageLoading = false;
+    const pending = state.pendingMirrorFrame;
+    state.pendingMirrorFrame = null;
+    if (pending && state.mirrorActive) decodeMirrorFrame(pending, generation);
+  });
   setControls(state.connected);
 }
 
@@ -336,8 +370,11 @@ function setMirrorWaiting() {
 
 function setMirrorInactive(message) {
   releaseRemoteInput();
+  state.mirrorDecodeGeneration += 1;
   state.mirrorActive = false;
   state.mirrorFrame = null;
+  state.mirrorImageLoading = false;
+  state.pendingMirrorFrame = null;
   state.pointerDown = false;
   el.mirror.classList.remove("hasFrame");
   el.mirrorImage.removeAttribute("src");

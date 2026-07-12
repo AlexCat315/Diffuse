@@ -137,6 +137,7 @@ let package = Package(
                 "GuavaUIRuntime",
                 "GuavaUICompose",
                 "GuavaUIWorkspace",
+                "GuavaUIDevTools",
                 .product(name: "CardBattleRuntime", package: "Engine"),
             ]
         ),

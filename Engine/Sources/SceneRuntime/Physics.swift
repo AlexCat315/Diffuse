@@ -1664,6 +1664,9 @@ public struct PhysicsPrepareContext: Sendable {
     public var activeConstraints: [PhysicsConstraintDescriptor]
     public var syncEvents: [PhysicsSyncEvent]
     public var activeCharacters: [PhysicsCharacterDescriptor]
+    /// Full snapshots remove native objects that are absent from `activeBodies` / `activeConstraints`.
+    /// Runtime simulation normally uses ordered incremental `syncEvents` instead.
+    public var isFullSnapshot: Bool
 
     public init(
         settings: PhysicsSettingsResource,
@@ -1671,7 +1674,8 @@ public struct PhysicsPrepareContext: Sendable {
         activeBodies: [PhysicsBodyDescriptor],
         activeConstraints: [PhysicsConstraintDescriptor],
         syncEvents: [PhysicsSyncEvent],
-        activeCharacters: [PhysicsCharacterDescriptor] = []
+        activeCharacters: [PhysicsCharacterDescriptor] = [],
+        isFullSnapshot: Bool = false
     ) {
         self.settings = settings
         self.deltaTimeSeconds = deltaTimeSeconds
@@ -1679,6 +1683,7 @@ public struct PhysicsPrepareContext: Sendable {
         self.activeConstraints = activeConstraints
         self.syncEvents = syncEvents
         self.activeCharacters = activeCharacters
+        self.isFullSnapshot = isFullSnapshot
     }
 }
 

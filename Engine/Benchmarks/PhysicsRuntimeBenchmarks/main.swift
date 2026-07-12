@@ -19,6 +19,7 @@ private struct Configuration {
     var warmupFrames: Int
     var sampleFrames: Int
     var workerThreadCount: Int
+    var maxResidentGrowthBytes: UInt64
 
     init(environment: [String: String] = ProcessInfo.processInfo.environment) {
         scenario = Scenario(rawValue: environment["GUAVA_PHYSICS_SCENARIO"] ?? "") ?? .activeGrid
@@ -27,6 +28,8 @@ private struct Configuration {
         warmupFrames = Int(environment["GUAVA_PHYSICS_WARMUP_FRAMES"] ?? "") ?? 120
         sampleFrames = Int(environment["GUAVA_PHYSICS_SAMPLE_FRAMES"] ?? "") ?? 600
         workerThreadCount = Int(environment["GUAVA_PHYSICS_WORKERS"] ?? "") ?? 0
+        maxResidentGrowthBytes = UInt64(environment["GUAVA_PHYSICS_MAX_RSS_GROWTH_BYTES"] ?? "")
+            ?? 32 * 1_024 * 1_024
     }
 }
 
@@ -117,6 +120,28 @@ private func peakResidentBytes() -> UInt64 {
     #endif
 }
 
+private func residentBytes() -> UInt64 {
+    #if os(macOS)
+    var info = mach_task_basic_info()
+    var count = mach_msg_type_number_t(
+        MemoryLayout<mach_task_basic_info>.size / MemoryLayout<natural_t>.size)
+    let result = withUnsafeMutablePointer(to: &info) { pointer in
+        pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { rebound in
+            task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), rebound, &count)
+        }
+    }
+    guard result == KERN_SUCCESS else { return 0 }
+    return UInt64(info.resident_size)
+    #elseif os(Linux)
+    guard let contents = try? String(contentsOfFile: "/proc/self/statm", encoding: .utf8),
+          let residentPages = contents.split(separator: " ").dropFirst().first.flatMap({ UInt64($0) })
+    else { return 0 }
+    return residentPages * UInt64(sysconf(Int32(_SC_PAGESIZE)))
+    #else
+    return 0
+    #endif
+}
+
 private let configuration = Configuration()
 var runtime = makeBenchmarkScene(configuration: configuration)
 for frame in 0..<configuration.warmupFrames {
@@ -128,8 +153,10 @@ var syncSamples: [UInt64] = []
 var contactTotal = 0
 var activeBodyPeak = 0
 var droppedSteps = 0
+var residentSamples: [UInt64] = []
 stepSamples.reserveCapacity(configuration.sampleFrames)
 syncSamples.reserveCapacity(configuration.sampleFrames)
+residentSamples.reserveCapacity(configuration.sampleFrames)
 
 for offset in 0..<configuration.sampleFrames {
     let frame = configuration.warmupFrames + offset
@@ -139,14 +166,20 @@ for offset in 0..<configuration.sampleFrames {
     contactTotal += report.physicsContactCount
     activeBodyPeak = max(activeBodyPeak, runtime.physicsFrameState.activeBodyCount)
     droppedSteps += report.physicsDroppedStepCount
+    residentSamples.append(residentBytes())
 }
 
 let sortedSteps = stepSamples.sorted()
 let sortedSync = syncSamples.sorted()
+let windowSize = max(1, configuration.sampleFrames / 10)
+let initialResident = percentile(Array(residentSamples.prefix(windowSize)).sorted(), 0.50)
+let finalResident = percentile(Array(residentSamples.suffix(windowSize)).sorted(), 0.50)
+let residentGrowth = finalResident > initialResident ? finalResident - initialResident : 0
 print("PhysicsRuntimeBenchmarks scenario=\(configuration.scenario.rawValue) bodies=\(configuration.bodyCount) frames=\(configuration.sampleFrames)")
 print("step_ms p50=\(milliseconds(percentile(sortedSteps, 0.50))) p95=\(milliseconds(percentile(sortedSteps, 0.95))) p99=\(milliseconds(percentile(sortedSteps, 0.99)))")
 print("sync_ms p50=\(milliseconds(percentile(sortedSync, 0.50))) p95=\(milliseconds(percentile(sortedSync, 0.95))) p99=\(milliseconds(percentile(sortedSync, 0.99)))")
 print("contacts_total=\(contactTotal) active_body_peak=\(activeBodyPeak) dropped_steps=\(droppedSteps) peak_rss_bytes=\(peakResidentBytes())")
+print("rss_initial_bytes=\(initialResident) rss_final_bytes=\(finalResident) rss_growth_bytes=\(residentGrowth)")
 
 if configuration.scenario == .activeGrid,
    configuration.bodyCount >= 10_000,
@@ -158,5 +191,11 @@ if configuration.scenario == .denseContact,
    configuration.bodyCount >= 2_000,
    droppedSteps > 0 {
     fputs("Physics benchmark gate failed: dense-contact scenario dropped fixed steps.\n", stderr)
+    exit(1)
+}
+if initialResident > 0,
+   finalResident > 0,
+   residentGrowth > configuration.maxResidentGrowthBytes {
+    fputs("Physics benchmark gate failed: sustained resident-memory growth exceeded the configured budget.\n", stderr)
     exit(1)
 }
