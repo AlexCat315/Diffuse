@@ -74,6 +74,7 @@ function switchLocale() {
       </div>
     </div>
     <nav v-if="menuOpen" class="mobile-nav" aria-label="Mobile navigation">
+      <button type="button" @click="openSearch(); menuOpen = false"><Search :size="17" /> {{ t.search.label }}</button>
       <RouterLink v-for="item in nav" :key="item[1]" :to="item[1]" @click="menuOpen = false">{{ item[0] }}</RouterLink>
       <RouterLink :to="`/${locale}/download`" @click="menuOpen = false">{{ t.nav.download }}</RouterLink>
     </nav>

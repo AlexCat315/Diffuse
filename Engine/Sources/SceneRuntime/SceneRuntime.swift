@@ -82,6 +82,77 @@ public struct SceneRuntime {
         world.resource(PhysicsStateHashFrameResource.self) ?? .empty
     }
 
+    public mutating func beginPhysicsCommandRecording(maxFrames: Int = 36_000) {
+        world.setDerivedResource(PhysicsCommandRecordingResource(
+            isRecording: true,
+            maxFrames: maxFrames,
+            frames: []
+        ))
+    }
+
+    public mutating func endPhysicsCommandRecording() -> PhysicsCommandTape {
+        var recording = world.resource(PhysicsCommandRecordingResource.self) ?? .inactive
+        recording.isRecording = false
+        world.setDerivedResource(recording)
+        return PhysicsCommandTape(frames: recording.frames)
+    }
+
+    public var physicsCommandRecording: PhysicsCommandRecordingResource {
+        world.resource(PhysicsCommandRecordingResource.self) ?? .inactive
+    }
+
+    @discardableResult
+    public mutating func replayPhysicsCommandFrame(_ frame: PhysicsCommandFrame) -> RuntimeScheduleReport {
+        setPhysicsSettings(frame.settings)
+        world.setDerivedResource(PhysicsCommandReplayControlResource(isReplaying: true))
+        for command in frame.bodyCommands.sorted(by: { $0.entity.rawValue < $1.entity.rawValue }) {
+            if command.force != .zero {
+                _ = applyForce(command.force, to: command.entity, wake: command.wake)
+            }
+            if command.torque != .zero {
+                _ = applyTorque(command.torque, to: command.entity, wake: command.wake)
+            }
+            if command.linearImpulse != .zero {
+                _ = applyLinearImpulse(command.linearImpulse, to: command.entity, wake: command.wake)
+            }
+            if command.angularImpulse != .zero {
+                _ = applyAngularImpulse(command.angularImpulse, to: command.entity, wake: command.wake)
+            }
+        }
+        for command in frame.characterCommands.sorted(by: { $0.entity.rawValue < $1.entity.rawValue }) {
+            submitCharacterCommand(command.command, for: command.entity)
+        }
+        let report = tick(deltaTime: frame.deltaTimeSeconds)
+        world.setDerivedResource(PhysicsCommandReplayControlResource())
+        return report
+    }
+
+    public mutating func replayPhysicsCommands(_ tape: PhysicsCommandTape) -> PhysicsReplayReport {
+        var hashes: [UInt64] = []
+        var mismatches: [PhysicsReplayMismatch] = []
+        hashes.reserveCapacity(tape.frames.count)
+        for (index, frame) in tape.frames.enumerated() {
+            _ = replayPhysicsCommandFrame(frame)
+            let checkpoint = physicsStateHashFrame
+            hashes.append(checkpoint.hash)
+            if checkpoint.simulatedStep != frame.expectedSimulatedStep
+                || checkpoint.hash != frame.expectedStateHash {
+                mismatches.append(PhysicsReplayMismatch(
+                    frameIndex: index,
+                    expectedSimulatedStep: frame.expectedSimulatedStep,
+                    actualSimulatedStep: checkpoint.simulatedStep,
+                    expectedStateHash: frame.expectedStateHash,
+                    actualStateHash: checkpoint.hash
+                ))
+            }
+        }
+        return PhysicsReplayReport(
+            replayedFrameCount: tape.frames.count,
+            checkpointHashes: hashes,
+            mismatches: mismatches
+        )
+    }
+
     @discardableResult
     public mutating func setRagdollMode(
         _ mode: RagdollMode,

@@ -32,6 +32,10 @@ final class DevServerInputAndStateTests: XCTestCase {
         defer { dev.stop() }
 
         try await Self.connect(port: port) { task in
+            let start = DevToolsEnvelope(type: "mirror.start", id: 1, payload: nil)
+            let startData = try JSONEncoder().encode(start)
+            try await task.send(.string(String(decoding: startData, as: UTF8.self)))
+
             let payload: [String: Any] = [
                 "kind": "pointerDown",
                 "x": 12.5, "y": 34.0,
@@ -110,6 +114,41 @@ final class DevServerInputAndStateTests: XCTestCase {
 
         XCTAssertEqual(captureBox.value, ["foo": "bar", "scroll": "42"])
         XCTAssertEqual(restored.snapshot, ["foo": "bar", "scroll": "42"])
+    }
+
+    @MainActor
+    func test_disconnect_clears_owned_node_selection() async throws {
+        let tree = NodeTree()
+        let root = Node()
+        tree.root = root
+        let port: UInt16 = UInt16.random(in: 49152...65000)
+        let dev = DevTools(
+            config: DevToolsConfig(host: "127.0.0.1", port: port,
+                                   appTitle: "TestApp", enabled: true),
+            tree: tree
+        )
+        let changes = SelectionChanges()
+        dev.onSelectionChanged = { changes.count += 1 }
+        try dev.start()
+        defer { dev.stop() }
+
+        try await Self.connect(port: port) { task in
+            let request = DevToolsEnvelope(
+                type: "select.node",
+                id: 9,
+                payload: .object(["id": .string(String(root.id.rawValue))])
+            )
+            let data = try JSONEncoder().encode(request)
+            try await task.send(.string(String(decoding: data, as: UTF8.self)))
+            _ = try await task.receive()
+        }
+
+        for _ in 0..<50 {
+            if dev.selectedNodeID == nil, changes.count >= 2 { break }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertNil(dev.selectedNodeID)
+        XCTAssertGreaterThanOrEqual(changes.count, 2)
     }
 
     func test_keyboard_input_maps_web_codes_to_scancodes() throws {
@@ -214,6 +253,11 @@ final class DevServerInputAndStateTests: XCTestCase {
     @MainActor
     private final class RestoredSnapshot {
         var snapshot: [String: String]?
+    }
+
+    @MainActor
+    private final class SelectionChanges {
+        var count = 0
     }
 
     private final class CapturedCheckpoint: @unchecked Sendable {

@@ -20,6 +20,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     private var lastPreparedBodyCount: Int = 0
     private var initializationError: PhysicsBackendError?
     private var meshRevisionByEntity: [EntityID: UInt64] = [:]
+    private var activeCapacity: PhysicsCapacitySettings?
 
     public init() {
         var layout = GuavaJoltABILayout()
@@ -37,9 +38,8 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             && layout.character_state_size == UInt32(MemoryLayout<GuavaJoltCharacterState>.size)
             && layout.shape_instance_size == UInt32(MemoryLayout<GuavaJoltShapeInstance>.size)
             && layout.joint_break_event_size == UInt32(MemoryLayout<GuavaJoltJointBreakEvent>.size)
-        if compatible {
-            context = guava_jolt_context_create()
-        } else {
+            && layout.context_config_size == UInt32(MemoryLayout<GuavaJoltContextConfig>.size)
+        if !compatible {
             initializationError = PhysicsBackendError(
                 code: .abiMismatch,
                 message: "CJoltBridge ABI layout does not match the Swift bindings"
@@ -58,6 +58,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     }
 
     public func prepare(context: PhysicsPrepareContext) -> PhysicsPrepareResult {
+        let rebuiltContext = ensureNativeContext(capacity: context.settings.capacity)
         guard let nativeContext = self.context else {
             lastPreparedBodyCount = context.activeBodies.count
             return PhysicsPrepareResult(
@@ -67,9 +68,32 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             )
         }
 
-        var bodyDescs = context.activeBodies.map(makeBodyDesc)
-        let constraintDescs = context.activeConstraints.map(makeConstraintDesc)
-        let shapeInstancesByBody = context.activeBodies.map(makeShapeInstances)
+        let usesFullSnapshot = context.isFullSnapshot
+        var bodyUpserts: [PhysicsBodyDescriptor] = []
+        var bodyRemovals: [UInt64] = []
+        var constraintUpserts: [PhysicsConstraintDescriptor] = []
+        var constraintRemovals: [UInt64] = []
+        if usesFullSnapshot || rebuiltContext {
+            bodyUpserts = context.activeBodies
+            constraintUpserts = context.activeConstraints
+        } else {
+            for event in context.syncEvents {
+                switch event {
+                case let .bodyUpsert(descriptor): bodyUpserts.append(descriptor)
+                case let .bodyRemove(entity): bodyRemovals.append(entity.rawValue)
+                case let .constraintUpsert(descriptor): constraintUpserts.append(descriptor)
+                case let .constraintRemove(entity): constraintRemovals.append(entity.rawValue)
+                }
+            }
+        }
+        bodyUpserts.sort { $0.entity.rawValue < $1.entity.rawValue }
+        bodyRemovals.sort()
+        constraintUpserts.sort { $0.entity.rawValue < $1.entity.rawValue }
+        constraintRemovals.sort()
+
+        var bodyDescs = bodyUpserts.map(makeBodyDesc)
+        let constraintDescs = constraintUpserts.map(makeConstraintDesc)
+        let shapeInstancesByBody = bodyUpserts.map(makeShapeInstances)
         let flatShapeInstances = shapeInstancesByBody.flatMap { $0 }
         lastPreparedBodyCount = context.activeBodies.count
 
@@ -77,10 +101,10 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         var flatVertices: [Float] = []
         var flatIndices: [UInt32] = []
         var meshDescs: [GuavaJoltMeshGeometry] = []
-        meshDescs.reserveCapacity(context.activeBodies.count)
+        meshDescs.reserveCapacity(bodyUpserts.count)
         let activeEntities = Set(context.activeBodies.map(\.entity))
         meshRevisionByEntity = meshRevisionByEntity.filter { activeEntities.contains($0.key) }
-        for descriptor in context.activeBodies {
+        for descriptor in bodyUpserts {
             guard let geometry = descriptor.meshGeometry,
                   geometry.triangleCount > 0,
                   !geometry.positions.isEmpty else {
@@ -128,16 +152,36 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
                                     vertexCursor += Int(meshBuffer[index].vertex_count) * 3
                                     indexCursor += Int(meshBuffer[index].index_count)
                                 }
-                                return guava_jolt_context_prepare_with_meshes(
-                                    nativeContext,
-                                    bodyBuffer.baseAddress,
-                                    bodyBuffer.count,
-                                    constraintBuffer.baseAddress,
-                                    constraintBuffer.count,
-                                    meshBuffer.baseAddress,
-                                    meshBuffer.count,
-                                    &stats
-                                )
+                                return bodyRemovals.withUnsafeBufferPointer { bodyRemovalBuffer in
+                                    constraintRemovals.withUnsafeBufferPointer { constraintRemovalBuffer in
+                                        if usesFullSnapshot {
+                                            return guava_jolt_context_prepare_with_meshes(
+                                                nativeContext,
+                                                bodyBuffer.baseAddress,
+                                                bodyBuffer.count,
+                                                constraintBuffer.baseAddress,
+                                                constraintBuffer.count,
+                                                meshBuffer.baseAddress,
+                                                meshBuffer.count,
+                                                &stats
+                                            )
+                                        }
+                                        return guava_jolt_context_apply_sync_events(
+                                            nativeContext,
+                                            bodyBuffer.baseAddress,
+                                            bodyBuffer.count,
+                                            bodyRemovalBuffer.baseAddress,
+                                            bodyRemovalBuffer.count,
+                                            constraintBuffer.baseAddress,
+                                            constraintBuffer.count,
+                                            constraintRemovalBuffer.baseAddress,
+                                            constraintRemovalBuffer.count,
+                                            meshBuffer.baseAddress,
+                                            meshBuffer.count,
+                                            &stats
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -503,6 +547,48 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         }
         lastPreparedBodyCount = 0
         meshRevisionByEntity.removeAll(keepingCapacity: true)
+    }
+
+    @discardableResult
+    private func ensureNativeContext(capacity: PhysicsCapacitySettings) -> Bool {
+        guard initializationError?.code != .abiMismatch else { return false }
+        let capacity = PhysicsCapacitySettings(
+            maxBodies: capacity.maxBodies,
+            bodyMutexCount: capacity.bodyMutexCount,
+            maxBodyPairs: capacity.maxBodyPairs,
+            maxContactConstraints: capacity.maxContactConstraints,
+            tempAllocatorBytes: capacity.tempAllocatorBytes,
+            workerThreadCount: capacity.workerThreadCount
+        )
+        guard context == nil || activeCapacity != capacity else { return false }
+
+        if let context {
+            guava_jolt_context_destroy(context)
+            self.context = nil
+        }
+        lastPreparedBodyCount = 0
+        meshRevisionByEntity.removeAll(keepingCapacity: true)
+
+        var config = GuavaJoltContextConfig()
+        config.struct_size = UInt32(MemoryLayout<GuavaJoltContextConfig>.size)
+        config.max_bodies = UInt32(capacity.maxBodies)
+        config.body_mutex_count = UInt32(capacity.bodyMutexCount)
+        config.max_body_pairs = UInt32(capacity.maxBodyPairs)
+        config.max_contact_constraints = UInt32(capacity.maxContactConstraints)
+        config.worker_thread_count = UInt32(capacity.workerThreadCount)
+        config.temp_allocator_bytes = UInt64(capacity.tempAllocatorBytes)
+        guard let newContext = guava_jolt_context_create_with_config(&config) else {
+            activeCapacity = nil
+            initializationError = PhysicsBackendError(
+                code: .invalidArgument,
+                message: "Jolt context capacity configuration is invalid"
+            )
+            return false
+        }
+        context = newContext
+        activeCapacity = capacity
+        initializationError = nil
+        return true
     }
 
     private func nativeError(from context: GuavaJoltContext) -> PhysicsBackendError {

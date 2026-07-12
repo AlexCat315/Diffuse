@@ -56,6 +56,43 @@ public final class DrawListRenderer {
         self.backend = backend
     }
 
+    /// Create an independently-buffered renderer that shares this renderer's
+    /// registered GPU textures. Offscreen consumers must not reuse the primary
+    /// renderer's streaming vertex/index buffers: a synchronous readback can
+    /// otherwise race the next swapchain submission and corrupt later frames.
+    public func makeSibling(format: GPUTextureFormat,
+                            sampleCount: UInt32 = 1) throws -> DrawListRenderer {
+        let sibling = DrawListRenderer(backend: backend)
+        try sibling.configure(format: format, sampleCount: sampleCount)
+        try sibling.synchronizeTextures(from: self)
+        return sibling
+    }
+
+    /// Refresh texture bindings from another renderer using the same backend.
+    /// Texture objects are shared; bind groups are rebuilt against this
+    /// renderer's pipeline layout only when a registration actually changes.
+    public func synchronizeTextures(from source: DrawListRenderer) throws {
+        let sourceIDs = Set(source.textures.keys)
+        textures = textures.filter { sourceIDs.contains($0.key) }
+
+        for (id, slot) in source.textures {
+            if let existing = textures[id],
+               existing.texture === slot.texture,
+               existing.sampling == slot.sampling {
+                continue
+            }
+            let bindGroup = try makeBindGroup(view: slot.view, sampling: slot.sampling)
+            textures[id] = GPUTextureSlot(
+                texture: slot.texture,
+                view: slot.view,
+                bindGroup: bindGroup,
+                sampling: slot.sampling,
+                width: slot.width,
+                height: slot.height
+            )
+        }
+    }
+
     // MARK: - Configuration
 
     /// Build the pipeline for the given color attachment format.

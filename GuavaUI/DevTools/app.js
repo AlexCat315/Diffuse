@@ -2,13 +2,22 @@ const state = {
   ws: null,
   requestId: 1,
   connected: false,
+  capabilities: new Set(),
   tree: null,
   snapshot: null,
   selectedId: null,
+  treeQuery: "",
   mirrorActive: false,
   mirrorFrame: null,
+  mirrorImageLoading: false,
+  pendingMirrorFrame: null,
+  mirrorDecodeGeneration: 0,
   pointerDown: false,
+  pointerButton: 0,
+  lastPointer: null,
+  pressedKeys: new Map(),
   logEntries: [],
+  timingFrames: [],
 };
 
 const el = {
@@ -17,8 +26,12 @@ const el = {
   connect: document.getElementById("connect"),
   disconnect: document.getElementById("disconnect"),
   refreshTree: document.getElementById("refreshTree"),
+  treeSearch: document.getElementById("treeSearch"),
+  treeCount: document.getElementById("treeCount"),
   startMirror: document.getElementById("startMirror"),
   stopMirror: document.getElementById("stopMirror"),
+  mirrorFPS: document.getElementById("mirrorFPS"),
+  mirrorQuality: document.getElementById("mirrorQuality"),
   mirror: document.getElementById("mirror"),
   mirrorStatus: document.getElementById("mirrorStatus"),
   mirrorState: document.getElementById("mirrorState"),
@@ -29,13 +42,27 @@ const el = {
   timing: document.getElementById("timing"),
   log: document.getElementById("log"),
   clearLog: document.getElementById("clearLog"),
+  logCount: document.getElementById("logCount"),
+  logLevel: document.getElementById("logLevel"),
+  logSearch: document.getElementById("logSearch"),
+  captureState: document.getElementById("captureState"),
+  restoreState: document.getElementById("restoreState"),
+  stateSnapshot: document.getElementById("stateSnapshot"),
 };
 
 el.connect.addEventListener("click", connect);
 el.disconnect.addEventListener("click", disconnect);
 el.refreshTree.addEventListener("click", () => send("tree.subscribe"));
+el.treeSearch.addEventListener("input", () => {
+  state.treeQuery = el.treeSearch.value.trim().toLocaleLowerCase();
+  renderTree();
+});
 el.startMirror.addEventListener("click", startMirror);
 el.stopMirror.addEventListener("click", stopMirror);
+el.captureState.addEventListener("click", () => send("state.checkpoint"));
+el.restoreState.addEventListener("click", restoreState);
+el.logLevel.addEventListener("change", renderLog);
+el.logSearch.addEventListener("input", renderLog);
 el.clearLog.addEventListener("click", () => {
   state.logEntries = [];
   renderLog();
@@ -47,8 +74,16 @@ function connect() {
   const url = el.endpoint.value.trim();
   if (!url) return;
 
-  const ws = new WebSocket(url);
+  let ws;
+  try {
+    ws = new WebSocket(url);
+  } catch (error) {
+    setStatus("Invalid Endpoint", false);
+    appendLog({ level: "error", label: "client", message: String(error) });
+    return;
+  }
   state.ws = ws;
+  state.capabilities.clear();
   setStatus("Connecting", false);
 
   ws.addEventListener("open", () => {
@@ -56,8 +91,6 @@ function connect() {
     setStatus("Connected", true);
     setControls(true);
     setMirrorInactive("No mirror frame. Click Start after connecting.");
-    send("hello.ack");
-    send("tree.subscribe");
   });
 
   ws.addEventListener("message", (event) => {
@@ -72,39 +105,55 @@ function connect() {
     if (state.ws === ws) {
       state.ws = null;
       state.connected = false;
+      state.capabilities.clear();
       setControls(false);
       setStatus("Disconnected", false);
       setMirrorInactive("Disconnected.");
+      clearSessionViews();
     }
   });
 
   ws.addEventListener("error", () => {
-    setStatus("Connection Error", false);
+    if (state.ws === ws) setStatus("Connection Error", false);
   });
 }
 
 function disconnect() {
+  releaseRemoteInput();
+  if (state.selectedId) send("select.clear");
   if (state.ws) {
     state.ws.close();
   }
   state.ws = null;
   state.connected = false;
+  state.capabilities.clear();
   setControls(false);
   setMirrorInactive("Disconnected.");
+  clearSessionViews();
 }
 
-function send(type, payload = undefined) {
+function send(type, payload = undefined, expectsResponse = true) {
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
-  state.ws.send(JSON.stringify({
-    type,
-    id: state.requestId++,
-    payload,
-  }));
+  const envelope = { type, payload };
+  if (expectsResponse) envelope.id = state.requestId++;
+  state.ws.send(JSON.stringify(envelope));
+}
+
+function sendInput(payload) {
+  // Input is a high-frequency notification stream; request IDs would make
+  // the server emit an unnecessary acknowledgement for every pointer move.
+  send("mirror.input", payload, false);
 }
 
 function handleEnvelope(env) {
   switch (env.type) {
     case "hello":
+      state.capabilities = new Set(env.payload?.capabilities ?? []);
+      send("hello.ack");
+      if (hasCapability("tree")) send("tree.subscribe");
+      if (hasCapability("log")) send("log.subscribe");
+      if (hasCapability("timing")) send("timing.subscribe");
+      setControls(true);
       appendLog({
         level: "info",
         label: "host",
@@ -115,6 +164,7 @@ function handleEnvelope(env) {
     case "tree.delta":
       state.snapshot = env.payload ?? null;
       state.tree = env.payload?.root ?? null;
+      syncSelection();
       renderTree();
       renderRuntime(env.payload);
       break;
@@ -123,6 +173,13 @@ function handleEnvelope(env) {
       break;
     case "timing.frame":
       renderTiming(env.payload);
+      break;
+    case "state.checkpoint.ok":
+      el.stateSnapshot.value = JSON.stringify(env.payload ?? {}, null, 2);
+      appendLog({ level: "info", label: "state", message: "Checkpoint captured." });
+      break;
+    case "state.restore.ok":
+      appendLog({ level: "info", label: "state", message: "Checkpoint restore requested." });
       break;
     case "mirror.frame":
       renderMirror(env.payload);
@@ -153,14 +210,22 @@ function renderTree() {
   if (!state.tree) {
     el.tree.className = "tree empty";
     el.tree.textContent = "No root node.";
+    el.treeCount.textContent = "";
     renderDetails(null);
     return;
   }
   el.tree.className = "tree";
-  renderNode(el.tree, state.tree, 0);
+  const total = countTreeNodes(state.tree);
+  const shown = renderNode(el.tree, state.tree, 0);
+  el.treeCount.textContent = state.treeQuery ? `${shown}/${total}` : String(total);
+  if (shown === 0) {
+    el.tree.className = "tree empty";
+    el.tree.textContent = "No nodes match the current filter.";
+  }
 }
 
 function renderNode(parent, node, depth) {
+  if (state.treeQuery && !treeContainsQuery(node, state.treeQuery)) return 0;
   const button = document.createElement("button");
   button.type = "button";
   button.className = "treeNode" + (nodeId(node) === state.selectedId ? " selected" : "");
@@ -170,9 +235,11 @@ function renderNode(parent, node, depth) {
   button.addEventListener("click", () => selectNode(node));
   parent.appendChild(button);
 
+  let count = 1;
   for (const child of node.children ?? []) {
-    renderNode(parent, child, depth + 1);
+    count += renderNode(parent, child, depth + 1);
   }
+  return count;
 }
 
 function selectNode(node) {
@@ -207,18 +274,71 @@ function renderDetails(node) {
 
 function renderTiming(payload) {
   if (!payload) return;
+  state.timingFrames.push(payload);
+  if (state.timingFrames.length > 120) state.timingFrames.shift();
+  const recent = state.timingFrames.slice(-60);
+  const average = (key) => recent.reduce((sum, frame) => sum + finiteNumber(frame[key]), 0) / recent.length;
+  const totalMs = finiteNumber(payload.totalMs);
   el.timing.className = "details";
-  el.timing.textContent = JSON.stringify(payload, null, 2);
+  el.timing.textContent = JSON.stringify({
+    frame: payload.frame,
+    fps: totalMs > 0 ? round(1000 / totalMs, 1) : null,
+    currentMs: {
+      layout: round(payload.layoutMs),
+      draw: round(payload.drawMs),
+      present: round(payload.presentMs),
+      total: round(payload.totalMs),
+    },
+    average60Ms: {
+      layout: round(average("layoutMs")),
+      draw: round(average("drawMs")),
+      present: round(average("presentMs")),
+      total: round(average("totalMs")),
+    },
+    nodes: payload.nodeCount,
+    batches: payload.batchCount,
+  }, null, 2);
 }
 
 function renderMirror(payload) {
   if (!payload?.jpegBase64) return;
   state.mirrorActive = true;
-  state.mirrorFrame = payload;
-  el.mirrorImage.src = `data:image/jpeg;base64,${payload.jpegBase64}`;
-  el.mirror.classList.add("hasFrame");
-  el.mirrorStatus.textContent = `Frame ${payload.seq ?? ""}`.trim();
-  el.mirrorState.textContent = "";
+  if (state.mirrorImageLoading) {
+    // Keep only the newest frame while the browser decodes the current one.
+    // Replacing <img>.src faster than decode can complete leaves the mirror
+    // permanently black on high-DPI windows.
+    state.pendingMirrorFrame = payload;
+    return;
+  }
+  decodeMirrorFrame(payload, state.mirrorDecodeGeneration);
+}
+
+function decodeMirrorFrame(payload, generation) {
+  state.mirrorImageLoading = true;
+  const candidate = new Image();
+  candidate.src = `data:image/jpeg;base64,${payload.jpegBase64}`;
+  const decoded = typeof candidate.decode === "function"
+    ? candidate.decode()
+    : new Promise((resolve, reject) => {
+        candidate.onload = resolve;
+        candidate.onerror = reject;
+      });
+  decoded.then(() => {
+    if (generation !== state.mirrorDecodeGeneration || !state.mirrorActive) return;
+    state.mirrorFrame = payload;
+    el.mirrorImage.src = candidate.src;
+    el.mirror.classList.add("hasFrame");
+    el.mirrorStatus.textContent = `Frame ${payload.seq ?? ""}`.trim();
+    el.mirrorState.textContent = "";
+  }).catch((error) => {
+    appendLog({ level: "error", label: "mirror", message: `Frame decode failed: ${error}` });
+  }).finally(() => {
+    if (generation !== state.mirrorDecodeGeneration) return;
+    state.mirrorImageLoading = false;
+    const pending = state.pendingMirrorFrame;
+    state.pendingMirrorFrame = null;
+    if (pending && state.mirrorActive) decodeMirrorFrame(pending, generation);
+  });
   setControls(state.connected);
 }
 
@@ -228,10 +348,14 @@ function startMirror() {
   el.mirrorImage.removeAttribute("src");
   el.mirror.classList.remove("hasFrame");
   setMirrorWaiting();
-  send("mirror.start", { fps: 15, quality: 0.75 });
+  send("mirror.start", {
+    fps: clamp(Number(el.mirrorFPS.value), 1, 60, 15),
+    quality: clamp(Number(el.mirrorQuality.value), 0.1, 1, 0.75),
+  });
 }
 
 function stopMirror() {
+  releaseRemoteInput();
   send("mirror.stop");
   setMirrorInactive("Stopping...");
 }
@@ -245,14 +369,35 @@ function setMirrorWaiting() {
 }
 
 function setMirrorInactive(message) {
+  releaseRemoteInput();
+  state.mirrorDecodeGeneration += 1;
   state.mirrorActive = false;
   state.mirrorFrame = null;
+  state.mirrorImageLoading = false;
+  state.pendingMirrorFrame = null;
   state.pointerDown = false;
   el.mirror.classList.remove("hasFrame");
   el.mirrorImage.removeAttribute("src");
   el.mirrorStatus.textContent = state.connected ? "Idle" : "Off";
   el.mirrorState.textContent = message || "No mirror frame. Click Start after connecting.";
   setControls(state.connected);
+}
+
+function restoreState() {
+  let snapshot;
+  try {
+    snapshot = JSON.parse(el.stateSnapshot.value || "{}");
+  } catch (error) {
+    appendLog({ level: "error", label: "state", message: `Invalid JSON: ${error.message}` });
+    return;
+  }
+  const valid = snapshot && !Array.isArray(snapshot) && typeof snapshot === "object" &&
+    Object.values(snapshot).every((value) => typeof value === "string");
+  if (!valid) {
+    appendLog({ level: "error", label: "state", message: "Checkpoint must be an object with string values." });
+    return;
+  }
+  send("state.restore", snapshot);
 }
 
 function renderRuntime(snapshot) {
@@ -288,12 +433,14 @@ function installMirrorInput() {
   el.mirror.addEventListener("pointermove", (event) => {
     const point = mirrorPoint(event);
     if (!point) return;
-    send("mirror.input", {
+    state.lastPointer = point;
+    const scale = mirrorScale();
+    sendInput({
       kind: "pointerMove",
       x: point.x,
       y: point.y,
-      deltaX: event.movementX || 0,
-      deltaY: event.movementY || 0,
+      deltaX: (event.movementX || 0) * scale.x,
+      deltaY: (event.movementY || 0) * scale.y,
       modifiers: modifiers(event),
     });
   });
@@ -302,9 +449,11 @@ function installMirrorInput() {
     const point = mirrorPoint(event);
     if (!point) return;
     state.pointerDown = true;
+    state.pointerButton = event.button;
+    state.lastPointer = point;
     el.mirror.setPointerCapture?.(event.pointerId);
     el.mirror.focus?.();
-    send("mirror.input", {
+    sendInput({
       kind: "pointerDown",
       x: point.x,
       y: point.y,
@@ -317,12 +466,12 @@ function installMirrorInput() {
 
   el.mirror.addEventListener("pointerup", (event) => {
     const point = mirrorPoint(event);
-    if (!point) return;
+    if (!point && !state.lastPointer) return;
     state.pointerDown = false;
-    send("mirror.input", {
+    sendInput({
       kind: "pointerUp",
-      x: point.x,
-      y: point.y,
+      x: (point ?? state.lastPointer).x,
+      y: (point ?? state.lastPointer).y,
       button: event.button,
       clickCount: event.detail || 1,
       modifiers: modifiers(event),
@@ -330,15 +479,18 @@ function installMirrorInput() {
     event.preventDefault();
   });
 
+  el.mirror.addEventListener("pointercancel", releasePointer);
+
   el.mirror.addEventListener("wheel", (event) => {
     const point = mirrorPoint(event);
     if (!point) return;
-    send("mirror.input", {
+    const scale = mirrorScale();
+    sendInput({
       kind: "wheel",
       x: point.x,
       y: point.y,
-      deltaX: event.deltaX,
-      deltaY: event.deltaY,
+      deltaX: event.deltaX * scale.x,
+      deltaY: event.deltaY * scale.y,
       modifiers: modifiers(event),
     });
     event.preventDefault();
@@ -346,7 +498,8 @@ function installMirrorInput() {
 
   el.mirror.addEventListener("keydown", (event) => {
     if (!state.connected) return;
-    send("mirror.input", {
+    if (event.code) state.pressedKeys.set(event.code, keyCode(event));
+    sendInput({
       kind: "keyDown",
       key: event.code,
       keyCode: keyCode(event),
@@ -354,7 +507,7 @@ function installMirrorInput() {
       isRepeat: event.repeat,
     });
     if (isTextKey(event)) {
-      send("mirror.input", {
+      sendInput({
         kind: "text",
         text: event.key,
       });
@@ -364,15 +517,18 @@ function installMirrorInput() {
 
   el.mirror.addEventListener("keyup", (event) => {
     if (!state.connected) return;
-    send("mirror.input", {
+    sendInput({
       kind: "keyUp",
       key: event.code,
       keyCode: keyCode(event),
       modifiers: modifiers(event),
       isRepeat: event.repeat,
     });
+    state.pressedKeys.delete(event.code);
     event.preventDefault();
   });
+
+  el.mirror.addEventListener("blur", releaseRemoteInput);
 }
 
 function mirrorPoint(event) {
@@ -388,6 +544,43 @@ function mirrorPoint(event) {
     x: (localX / rect.width) * state.mirrorFrame.logicalWidth,
     y: (localY / rect.height) * state.mirrorFrame.logicalHeight,
   };
+}
+
+function mirrorScale() {
+  const rect = el.mirrorImage.getBoundingClientRect();
+  if (!state.mirrorFrame || rect.width <= 0 || rect.height <= 0) return { x: 1, y: 1 };
+  return {
+    x: state.mirrorFrame.logicalWidth / rect.width,
+    y: state.mirrorFrame.logicalHeight / rect.height,
+  };
+}
+
+function releasePointer(event) {
+  if (!state.pointerDown) return;
+  const point = (event && mirrorPoint(event)) || state.lastPointer || { x: 0, y: 0 };
+  sendInput({
+    kind: "pointerUp",
+    x: point.x,
+    y: point.y,
+    button: state.pointerButton,
+    clickCount: 1,
+    modifiers: event ? modifiers(event) : 0,
+  });
+  state.pointerDown = false;
+}
+
+function releaseRemoteInput() {
+  releasePointer();
+  for (const [code, codePoint] of state.pressedKeys) {
+    sendInput({
+      kind: "keyUp",
+      key: code,
+      keyCode: codePoint,
+      modifiers: 0,
+      isRepeat: false,
+    });
+  }
+  state.pressedKeys.clear();
 }
 
 function modifiers(event) {
@@ -417,15 +610,24 @@ function appendLog(entry) {
 
 function renderLog() {
   el.log.innerHTML = "";
-  if (state.logEntries.length === 0) {
+  const minimum = logLevelRank(el.logLevel.value);
+  const query = el.logSearch.value.trim().toLocaleLowerCase();
+  const entries = state.logEntries.filter((entry) => {
+    if (logLevelRank(entry.level) < minimum) return false;
+    if (!query) return true;
+    return `${entry.label ?? ""} ${entry.message ?? ""} ${entry.source ?? ""}`
+      .toLocaleLowerCase().includes(query);
+  });
+  el.logCount.textContent = `${entries.length}/${state.logEntries.length}`;
+  if (entries.length === 0) {
     el.log.className = "log empty";
-    el.log.textContent = "No log entries.";
+    el.log.textContent = state.logEntries.length === 0 ? "No log entries." : "No log entries match the filters.";
     return;
   }
   el.log.className = "log";
-  for (const entry of state.logEntries.slice(-250)) {
+  for (const entry of entries.slice(-250)) {
     const row = document.createElement("div");
-    row.className = "logEntry";
+    row.className = `logEntry ${escapeClass(entry.level ?? "info")}`;
     row.innerHTML = `<span class="level">${escapeHtml(entry.level ?? "info")}</span>` +
       `<span>${escapeHtml(entry.label ?? "log")}: ${escapeHtml(entry.message ?? "")}</span>`;
     el.log.appendChild(row);
@@ -435,6 +637,39 @@ function renderLog() {
 
 function nodeId(node) {
   return node.elementID ?? node.id;
+}
+
+function syncSelection() {
+  if (!state.selectedId) return;
+  const selected = findNode(state.tree, state.selectedId);
+  if (selected) {
+    renderDetails(selected);
+  } else {
+    state.selectedId = null;
+    renderDetails(null);
+  }
+}
+
+function findNode(node, id) {
+  if (!node) return null;
+  if (nodeId(node) === id || node.id === id || node.elementID === id) return node;
+  for (const child of node.children ?? []) {
+    const result = findNode(child, id);
+    if (result) return result;
+  }
+  return null;
+}
+
+function countTreeNodes(node) {
+  if (!node) return 0;
+  return 1 + (node.children ?? []).reduce((sum, child) => sum + countTreeNodes(child), 0);
+}
+
+function treeContainsQuery(node, query) {
+  const searchable = [nodeLabel(node), node.viewTag, node.debugName, node.elementID, node.id]
+    .filter(Boolean).join(" ").toLocaleLowerCase();
+  if (searchable.includes(query)) return true;
+  return (node.children ?? []).some((child) => treeContainsQuery(child, query));
 }
 
 function nodeLabel(node) {
@@ -460,9 +695,11 @@ function compactTag(tag) {
 function setControls(enabled) {
   el.connect.disabled = enabled;
   el.disconnect.disabled = !enabled;
-  el.refreshTree.disabled = !enabled;
-  el.startMirror.disabled = !enabled || state.mirrorActive;
-  el.stopMirror.disabled = !enabled || !state.mirrorActive;
+  el.refreshTree.disabled = !enabled || !hasCapability("tree");
+  el.startMirror.disabled = !enabled || !hasCapability("mirror") || state.mirrorActive;
+  el.stopMirror.disabled = !enabled || !hasCapability("mirror") || !state.mirrorActive;
+  el.captureState.disabled = !enabled || !hasCapability("state");
+  el.restoreState.disabled = !enabled || !hasCapability("state");
 }
 
 function setStatus(text, connected) {
@@ -476,4 +713,44 @@ function escapeHtml(value) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+function hasCapability(name) {
+  return state.capabilities.has(name);
+}
+
+function clearSessionViews() {
+  state.tree = null;
+  state.snapshot = null;
+  state.selectedId = null;
+  state.timingFrames = [];
+  el.treeCount.textContent = "";
+  el.tree.className = "tree empty";
+  el.tree.textContent = "Connect to a GuavaUI app to inspect the live node tree.";
+  renderDetails(null);
+  renderRuntime(null);
+  el.timing.className = "details empty";
+  el.timing.textContent = "No timing sample.";
+}
+
+function logLevelRank(level) {
+  return ({ trace: 0, debug: 1, info: 2, notice: 3, warning: 4, error: 5, critical: 6 })[level] ?? 2;
+}
+
+function escapeClass(value) {
+  return String(value).replace(/[^a-z0-9_-]/gi, "");
+}
+
+function finiteNumber(value) {
+  return Number.isFinite(Number(value)) ? Number(value) : 0;
+}
+
+function round(value, digits = 2) {
+  const factor = 10 ** digits;
+  return Math.round(finiteNumber(value) * factor) / factor;
+}
+
+function clamp(value, minimum, maximum, fallback) {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(maximum, Math.max(minimum, value));
 }

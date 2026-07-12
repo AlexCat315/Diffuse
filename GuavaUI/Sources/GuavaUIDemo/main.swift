@@ -3,6 +3,7 @@ import CardBattleRuntime
 import GuavaUIRuntime
 import GuavaUICompose
 import GuavaUIWorkspace
+import GuavaUIDevTools
 import PlatformShell
 import RHIWGPU
 
@@ -1062,6 +1063,16 @@ struct RootView: View {
 
 // MARK: - Compose graph
 
+let demoDevToolsConfig = DevToolsConfig.fromEnvironment(appTitle: "GuavaUI Demo")
+let demoDevToolsLogSink: LogTap.Sink?
+if let config = demoDevToolsConfig, config.autoInstallLogTap {
+    let sink = LogTapInstaller.processSink
+    LogTapInstaller.bootstrapIfNeeded(sink: sink)
+    demoDevToolsLogSink = sink
+} else {
+    demoDevToolsLogSink = nil
+}
+
 let tree = NodeTree()
 let host = SDL3PlatformHost(title: "GuavaUI — Phase 7.5")
 let graph = ViewGraph(tree: tree, recomposer: host.recomposer)
@@ -1182,6 +1193,38 @@ let drawList = DrawList()
 let nodeRenderer = NodeRenderer()
 let demoMSAASampleCount: UInt32 = 4
 
+var devTools: DevTools?
+if let config = demoDevToolsConfig {
+    let tools = DevTools(config: config,
+                         tree: tree,
+                         invalidationLog: host.invalidationLog,
+                         renderTree: graph.renderTree,
+                         logSink: demoDevToolsLogSink ?? LogTap.Sink())
+    tools.attachFrameTap(backend: backend, renderer: renderer)
+    tools.server.hostMainExecutor = { operation in
+        host.enqueueMainThreadWork {
+            MainActor.assumeIsolated {
+                operation()
+            }
+        }
+    }
+    tools.inputDelivery = { event in
+        host.mainSession?.injectEvent(event)
+    }
+    tools.onMirrorStart = {
+        host.requestDisplay()
+    }
+    tools.onSelectionChanged = {
+        host.requestDisplay()
+    }
+    do {
+        try tools.start()
+        devTools = tools
+    } catch {
+        print("[demo] DevTools failed to start: \(error)")
+    }
+}
+
 var surface: GPUSurface?
 var configured = false
 var drawableW: UInt32 = 0
@@ -1190,6 +1233,35 @@ var logicalW: UInt32 = 0
 var logicalH: UInt32 = 0
 var msaaColorTexture: GPUTexture?
 var msaaColorView: GPUTextureView?
+
+@MainActor
+func appendDevToolsSelectionOverlay(to list: DrawList) {
+    guard let frame = devTools?.selectedNodeAbsoluteFrame,
+          frame.width > 0,
+          frame.height > 0 else { return }
+    let rect = UIRect(x: Float(frame.origin.x),
+                      y: Float(frame.origin.y),
+                      width: Float(frame.width),
+                      height: Float(frame.height))
+    list.addRect(rect, color: Color(red: 0x35, green: 0x74, blue: 0xF0, alpha: 0x20))
+    let stroke = Color(red: 0x72, green: 0xB4, blue: 0xFF, alpha: 0xF0)
+    list.addLine(fromX: rect.minX, fromY: rect.minY,
+                 toX: rect.maxX, toY: rect.minY,
+                 thickness: 2, color: stroke)
+    list.addLine(fromX: rect.maxX, fromY: rect.minY,
+                 toX: rect.maxX, toY: rect.maxY,
+                 thickness: 2, color: stroke)
+    list.addLine(fromX: rect.maxX, fromY: rect.maxY,
+                 toX: rect.minX, toY: rect.maxY,
+                 thickness: 2, color: stroke)
+    list.addLine(fromX: rect.minX, fromY: rect.maxY,
+                 toX: rect.minX, toY: rect.minY,
+                 thickness: 2, color: stroke)
+}
+
+func demoNodeCount(_ node: Node) -> Int {
+    1 + node.children.reduce(0) { $0 + demoNodeCount($1) }
+}
 
 @MainActor
 func ensureDemoMSAATarget(width: UInt32, height: UInt32) throws {
@@ -1396,6 +1468,7 @@ var storedNativeSurface: NativeRenderSurface? = nil
 
 host.onFrame = { native in
     guard configured, let surface, let root = tree.root else { return false }
+    let devToolsFrameStart = TimingTrace.now()
     hudTickFrameCount += 1
 
     // Reconfigure surface if vsync state changed since last frame.
@@ -1434,13 +1507,17 @@ host.onFrame = { native in
 
     // 1. Layout against current viewport. Glyphs are rasterised lazily here as
     //    the measure func runs.
+    let devToolsLayoutStart = TimingTrace.now()
     let didLayout = graph.computeLayoutIfNeeded(width: Float(logicalW), height: Float(logicalH))
+    let devToolsLayoutEnd = TimingTrace.now()
     timing.mark("layout")
 
     // 2. Walk node tree -> draw list.
     drawList.reset()
     nodeRenderer.render(root: root, into: drawList)
     appendPerformanceHUD(to: drawList)
+    appendDevToolsSelectionOverlay(to: drawList)
+    let devToolsDrawEnd = TimingTrace.now()
     timing.mark("sceneRender")
 
     var didAtlasUpload = false
@@ -1454,6 +1531,12 @@ host.onFrame = { native in
     }
     timing.mark("atlasUpload")
 
+    if let tools = devTools {
+        if root.isDirty || root.renderDirty {
+            tools.notifyTreeChanged()
+        }
+    }
+
     // 3. Submit to wgpu.
     let acquired: (texture: GPUTexture, view: GPUTextureView)?
     do {
@@ -1463,6 +1546,21 @@ host.onFrame = { native in
         return false
     }
     guard let frame = acquired else {
+        devTools?.mirrorCapture(
+            drawList: drawList,
+            widthPx: drawableW,
+            heightPx: drawableH,
+            logical: (Float(logicalW), Float(logicalH))
+        )
+        let devToolsFrameEnd = TimingTrace.now()
+        devTools?.timing.record(
+            layoutMs: (devToolsLayoutEnd - devToolsLayoutStart) * 1_000,
+            drawMs: (devToolsDrawEnd - devToolsLayoutEnd) * 1_000,
+            presentMs: 0,
+            totalMs: (devToolsFrameEnd - devToolsFrameStart) * 1_000,
+            nodeCount: demoNodeCount(root),
+            batchCount: drawList.batches.count
+        )
         if nextFrameIndex <= 5 || didAtlasUpload || didPreviewUpload {
             print(timing.summary(extra: [
                 "frameAttempt=\(nextFrameIndex)",
@@ -1499,6 +1597,21 @@ host.onFrame = { native in
         let buffer = try encoder.finish()
         backend.submit(buffer)
         surface.present()
+        let devToolsPresentEnd = TimingTrace.now()
+        if let tools = devTools {
+            // Acquire and present the primary swapchain image before doing the
+            // synchronous mirror readback. Capturing first can starve the
+            // swapchain and leave the native window stuck on an older frame.
+            tools.mirrorCapture(
+                drawList: drawList,
+                widthPx: drawableW,
+                heightPx: drawableH,
+                logical: (Float(logicalW), Float(logicalH))
+            )
+            if tools.mirrorIsActive {
+                host.requestDisplay()
+            }
+        }
         hudRenderFrameCount += 1
         demoRenderedFrameCount = nextFrameIndex
         timing.mark("gpuSubmit")
@@ -1521,6 +1634,16 @@ host.onFrame = { native in
                 "previewUploaded=\(didPreviewUpload)",
             ]))
         }
+        if let tools = devTools {
+            tools.timing.record(
+                layoutMs: (devToolsLayoutEnd - devToolsLayoutStart) * 1_000,
+                drawMs: (devToolsDrawEnd - devToolsLayoutEnd) * 1_000,
+                presentMs: (devToolsPresentEnd - devToolsDrawEnd) * 1_000,
+                totalMs: (devToolsPresentEnd - devToolsFrameStart) * 1_000,
+                nodeCount: demoNodeCount(root),
+                batchCount: drawList.batches.count
+            )
+        }
         if DemoFrameModeHolder.current == .benchmark || !DemoVSyncHolder.enabled {
             host.requestDisplay()
         }
@@ -1529,6 +1652,11 @@ host.onFrame = { native in
         print("[demo] frame submit failed: \(error)")
         return false
     }
+}
+
+host.onTeardown = {
+    devTools?.stop()
+    devTools = nil
 }
 
 host.run(tree: tree)
