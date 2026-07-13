@@ -157,6 +157,7 @@ public struct RuntimeWorld: @unchecked Sendable {
 
     private protocol AnyComponentStoreBox: AnyObject {
         func removeValue(for entity: EntityID)
+        func copiedBox() -> any AnyComponentStoreBox
     }
 
     private final class ComponentStoreBox<Component: RuntimeComponent>: AnyComponentStoreBox {
@@ -164,6 +165,12 @@ public struct RuntimeWorld: @unchecked Sendable {
 
         func removeValue(for entity: EntityID) {
             values.removeValue(forKey: entity)
+        }
+
+        func copiedBox() -> any AnyComponentStoreBox {
+            let copy = ComponentStoreBox<Component>()
+            copy.values = values
+            return copy
         }
     }
 
@@ -205,7 +212,8 @@ public struct RuntimeWorld: @unchecked Sendable {
 
         mutating func remove<Component: RuntimeComponent>(_ type: Component.Type, for entity: EntityID) -> Component? {
             let key = ObjectIdentifier(type)
-            guard let box = boxes[key] as? ComponentStoreBox<Component> else { return nil }
+            guard boxes[key] is ComponentStoreBox<Component> else { return nil }
+            let box = mutableBox(for: type)
             return box.values.removeValue(forKey: entity)
         }
 
@@ -215,19 +223,23 @@ public struct RuntimeWorld: @unchecked Sendable {
             _ body: (inout Component) -> Void
         ) -> Bool {
             let key = ObjectIdentifier(type)
-            guard let box = boxes[key] as? ComponentStoreBox<Component>,
-                  var component = box.values[entity]
-            else {
-                return false
-            }
+            guard let current = boxes[key] as? ComponentStoreBox<Component>,
+                  current.values[entity] != nil else { return false }
+            let box = mutableBox(for: type)
+            guard var component = box.values[entity] else { return false }
             body(&component)
             box.values[entity] = component
             return true
         }
 
         mutating func removeAll(for entity: EntityID) {
-            for value in boxes.values {
-                (value as? AnyComponentStoreBox)?.removeValue(for: entity)
+            for key in Array(boxes.keys) {
+                guard var box = boxes.removeValue(forKey: key) as? any AnyComponentStoreBox else { continue }
+                if !isKnownUniquelyReferenced(&box) {
+                    box = box.copiedBox()
+                }
+                box.removeValue(for: entity)
+                boxes[key] = box
             }
         }
 
@@ -235,7 +247,13 @@ public struct RuntimeWorld: @unchecked Sendable {
             for type: Component.Type
         ) -> ComponentStoreBox<Component> {
             let key = ObjectIdentifier(type)
-            if let existing = boxes[key] as? ComponentStoreBox<Component> {
+            if var existing = boxes.removeValue(forKey: key) as? ComponentStoreBox<Component> {
+                if !isKnownUniquelyReferenced(&existing) {
+                    let copy = ComponentStoreBox<Component>()
+                    copy.values = existing.values
+                    existing = copy
+                }
+                boxes[key] = existing
                 return existing
             }
             let created = ComponentStoreBox<Component>()
@@ -259,10 +277,8 @@ public struct RuntimeWorld: @unchecked Sendable {
 
         mutating func set<Resource: Sendable>(_ resource: Resource) {
             let key = ObjectIdentifier(Resource.self)
-            if let box = boxes[key] as? ResourceBox<Resource> {
-                box.value = resource
-                return
-            }
+            // Always replace the reference box. A copied RuntimeWorld may share
+            // the old one, but must never observe this mutation.
             boxes[key] = ResourceBox(resource)
         }
 
@@ -277,8 +293,10 @@ public struct RuntimeWorld: @unchecked Sendable {
             _ body: (inout Resource) -> Void
         ) -> Bool {
             let key = ObjectIdentifier(type)
-            guard let box = boxes[key] as? ResourceBox<Resource> else { return false }
-            body(&box.value)
+            guard let existing = boxes[key] as? ResourceBox<Resource> else { return false }
+            var value = existing.value
+            body(&value)
+            boxes[key] = ResourceBox(value)
             return true
         }
 

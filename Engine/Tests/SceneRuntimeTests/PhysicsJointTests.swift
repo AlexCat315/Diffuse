@@ -8,8 +8,11 @@ struct PhysicsJointTests {
     @Test("C ABI v2 publishes exact physics structure sizes and stable leading offsets")
     func abiLayout() {
         var layout = GuavaJoltABILayout()
+        var vehicleLayout = GuavaJoltVehicleABILayout()
+        vehicleLayout.struct_size = UInt32(MemoryLayout<GuavaJoltVehicleABILayout>.size)
         #expect(guava_jolt_bridge_abi_version() == 2)
         #expect(guava_jolt_bridge_get_abi_layout(&layout))
+        #expect(guava_jolt_bridge_get_vehicle_abi_layout(&vehicleLayout))
         #expect(layout.struct_size == UInt32(MemoryLayout<GuavaJoltABILayout>.size))
         #expect(layout.body_desc_size == UInt32(MemoryLayout<GuavaJoltBodyDesc>.size))
         #expect(layout.constraint_desc_size == UInt32(MemoryLayout<GuavaJoltConstraintDesc>.size))
@@ -20,6 +23,22 @@ struct PhysicsJointTests {
         #expect(MemoryLayout<GuavaJoltConstraintDesc>.offset(of: \.entity_a) == 8)
         #expect(MemoryLayout<GuavaJoltConstraintDesc>.offset(of: \.entity_b) == 16)
         #expect(MemoryLayout<GuavaJoltJointBreakEvent>.offset(of: \.joint_entity) == 0)
+        #expect(vehicleLayout.abi_version == 2)
+        #expect(vehicleLayout.struct_size == UInt32(MemoryLayout<GuavaJoltVehicleABILayout>.size))
+        #expect(vehicleLayout.vehicle_desc_size == UInt32(MemoryLayout<GuavaJoltVehicleDesc>.size))
+        #expect(vehicleLayout.wheel_desc_size == UInt32(MemoryLayout<GuavaJoltVehicleWheelDesc>.size))
+        #expect(vehicleLayout.differential_desc_size == UInt32(MemoryLayout<GuavaJoltVehicleDifferentialDesc>.size))
+        #expect(vehicleLayout.anti_roll_bar_desc_size == UInt32(MemoryLayout<GuavaJoltVehicleAntiRollBarDesc>.size))
+        #expect(vehicleLayout.command_size == UInt32(MemoryLayout<GuavaJoltVehicleCommand>.size))
+        #expect(vehicleLayout.state_size == UInt32(MemoryLayout<GuavaJoltVehicleState>.size))
+        #expect(vehicleLayout.wheel_state_size == UInt32(MemoryLayout<GuavaJoltVehicleWheelState>.size))
+        #expect(vehicleLayout.sync_stats_size == UInt32(MemoryLayout<GuavaJoltVehicleSyncStats>.size))
+        #expect(MemoryLayout<GuavaJoltVehicleDesc>.offset(of: \.entity_id) == 0)
+        #expect(MemoryLayout<GuavaJoltVehicleCommand>.offset(of: \.entity_id) == 0)
+
+        var invalidVehicleLayout = GuavaJoltVehicleABILayout()
+        invalidVehicleLayout.struct_size = 0
+        #expect(!guava_jolt_bridge_get_vehicle_abi_layout(&invalidVehicleLayout))
     }
 
     @Test("C ABI rejects malformed context capacity configuration")

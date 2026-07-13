@@ -191,6 +191,12 @@ public struct RuntimeScriptPhaseContext {
         worldPointer.pointee.setResource(frame)
     }
 
+    public func submitVehicleCommand(_ command: VehicleCommand, for entity: EntityID) {
+        var frame = worldPointer.pointee.resource(VehicleCommandFrameResource.self) ?? .empty
+        frame.commands[entity] = command
+        worldPointer.pointee.setResource(frame)
+    }
+
     public func resource<Resource: Sendable>(_ type: Resource.Type) -> Resource? {
         worldPointer.pointee.resource(type)
     }

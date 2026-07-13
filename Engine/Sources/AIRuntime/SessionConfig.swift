@@ -3,6 +3,7 @@ import Foundation
 /// Which wire format the inference endpoint speaks.
 public enum SessionAPIFormat: Sendable {
     case anthropic
+    case openAIResponses
     case openAICompatible
 }
 
@@ -116,6 +117,43 @@ public struct SessionConfig: Sendable {
                       maxTokens: maxTokens,
                       timeoutInterval: timeoutInterval,
                       baseURL: URL(string: "https://api.openai.com")!,
+                      apiFormat: .openAICompatible,
+                      autoApprove: autoApprove,
+                      assetCatalog: assetCatalog,
+                      retryPolicy: retryPolicy)
+    }
+
+    public static func openAIResponses(apiKey: String,
+                                       model: String = defaultOpenAIModel,
+                                       maxTokens: Int = 2048,
+                                       timeoutInterval: TimeInterval = 90,
+                                       autoApprove: Bool = false,
+                                       assetCatalog: AssetCatalog = AssetCatalog(),
+                                       retryPolicy: RetryPolicy = .default) -> SessionConfig {
+        SessionConfig(apiKey: apiKey,
+                      model: model,
+                      maxTokens: maxTokens,
+                      timeoutInterval: timeoutInterval,
+                      baseURL: URL(string: "https://api.openai.com")!,
+                      apiFormat: .openAIResponses,
+                      autoApprove: autoApprove,
+                      assetCatalog: assetCatalog,
+                      retryPolicy: retryPolicy)
+    }
+
+    public static func openAICompatible(apiKey: String,
+                                        model: String,
+                                        baseURL: URL,
+                                        maxTokens: Int = 2048,
+                                        timeoutInterval: TimeInterval = 90,
+                                        autoApprove: Bool = false,
+                                        assetCatalog: AssetCatalog = AssetCatalog(),
+                                        retryPolicy: RetryPolicy = .default) -> SessionConfig {
+        SessionConfig(apiKey: apiKey,
+                      model: model,
+                      maxTokens: maxTokens,
+                      timeoutInterval: timeoutInterval,
+                      baseURL: baseURL,
                       apiFormat: .openAICompatible,
                       autoApprove: autoApprove,
                       assetCatalog: assetCatalog,

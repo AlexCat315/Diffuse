@@ -317,6 +317,51 @@ struct EditorSceneAdapterTests {
         #expect(restored.scene.component(CameraComponent.self, for: entityID(restoredID))?.aspectRatio == 1.777)
     }
 
+    @Test("Scene manifest round-trips a complete wheel vehicle")
+    func sceneManifestRoundTripsVehicle() throws {
+        let source = EditorSceneAdapter()
+        source.scene = SceneRuntime()
+        let entity = source.scene.createEntity()
+        _ = source.scene.setComponent(SceneNameComponent(value: "Test Vehicle"), for: entity)
+        let vehicle = Vehicle(
+            wheels: [
+                VehicleWheelConfiguration(
+                    position: SIMD3<Float>(0.8, -0.3, 1.2),
+                    suspensionFrequency: 2.25,
+                    radius: 0.42,
+                    maxSteerAngle: 0.6
+                ),
+                VehicleWheelConfiguration(
+                    position: SIMD3<Float>(-0.8, -0.3, 1.2),
+                    suspensionFrequency: 2.25,
+                    radius: 0.42,
+                    maxSteerAngle: 0.6
+                ),
+            ],
+            differentials: [VehicleDifferentialConfiguration(leftWheel: 0, rightWheel: 1)],
+            antiRollBars: [VehicleAntiRollBarConfiguration(leftWheel: 0, rightWheel: 1, stiffness: 1_800)],
+            engine: VehicleEngineConfiguration(maxTorque: 640, minRPM: 850, maxRPM: 7_200),
+            transmission: VehicleTransmissionConfiguration(
+                mode: .manual,
+                gearRatios: [3.2, 2.1, 1.4],
+                reverseGearRatios: [-3.0],
+                clutchStrength: 14
+            ),
+            maxPitchRollAngle: 1.2,
+            isEnabled: false
+        )
+        _ = source.scene.setComponent(vehicle, for: entity)
+
+        let data = try JSONEncoder().encode(source.manifest(selectedEntityID: entity.rawValue))
+        let decoded = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
+        let restored = EditorSceneAdapter()
+        _ = restored.load(manifest: decoded)
+        let restoredRaw = try #require(flatten(restored.roots).first { $0.name == "Test Vehicle" }?.id)
+
+        #expect(restored.scene.component(Vehicle.self, for: entityID(restoredRaw)) == vehicle)
+        #expect(restored.inspectorSections(for: restoredRaw).contains { $0.id == "vehicle" })
+    }
+
     @Test("Scene manifest remaps ragdoll bodies and exposes its inspector")
     func sceneManifestRoundTripsRagdoll() throws {
         let source = EditorSceneAdapter()

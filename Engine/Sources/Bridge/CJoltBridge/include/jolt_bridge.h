@@ -306,6 +306,135 @@ typedef struct GuavaJoltCharacterState {
     uint8_t reserved;
 } GuavaJoltCharacterState;
 
+typedef struct GuavaJoltVehicleWheelDesc {
+    float position_x, position_y, position_z;
+    float suspension_direction_x, suspension_direction_y, suspension_direction_z;
+    float steering_axis_x, steering_axis_y, steering_axis_z;
+    float wheel_up_x, wheel_up_y, wheel_up_z;
+    float wheel_forward_x, wheel_forward_y, wheel_forward_z;
+    float suspension_min_length;
+    float suspension_max_length;
+    float suspension_preload_length;
+    float suspension_frequency;
+    float suspension_damping;
+    float radius;
+    float width;
+    float inertia;
+    float angular_damping;
+    float max_steer_angle;
+    float max_brake_torque;
+    float max_hand_brake_torque;
+} GuavaJoltVehicleWheelDesc;
+
+typedef struct GuavaJoltVehicleDifferentialDesc {
+    int32_t left_wheel;
+    int32_t right_wheel;
+    float differential_ratio;
+    float left_right_split;
+    float limited_slip_ratio;
+    float engine_torque_ratio;
+} GuavaJoltVehicleDifferentialDesc;
+
+typedef struct GuavaJoltVehicleAntiRollBarDesc {
+    int32_t left_wheel;
+    int32_t right_wheel;
+    float stiffness;
+} GuavaJoltVehicleAntiRollBarDesc;
+
+typedef struct GuavaJoltVehicleDesc {
+    uint64_t entity_id;
+    uint8_t is_enabled;
+    uint8_t transmission_mode; /* 0 automatic, 1 manual */
+    uint16_t reserved0;
+    float up_x, up_y, up_z;
+    float forward_x, forward_y, forward_z;
+    float max_pitch_roll_angle;
+    float engine_max_torque;
+    float engine_min_rpm;
+    float engine_max_rpm;
+    float engine_inertia;
+    float engine_angular_damping;
+    float transmission_switch_time;
+    float transmission_clutch_release_time;
+    float transmission_switch_latency;
+    float transmission_shift_up_rpm;
+    float transmission_shift_down_rpm;
+    float transmission_clutch_strength;
+    const GuavaJoltVehicleWheelDesc* wheels;
+    uint32_t wheel_count;
+    uint32_t reserved1;
+    const GuavaJoltVehicleDifferentialDesc* differentials;
+    uint32_t differential_count;
+    uint32_t reserved2;
+    const GuavaJoltVehicleAntiRollBarDesc* anti_roll_bars;
+    uint32_t anti_roll_bar_count;
+    uint32_t reserved3;
+    const float* gear_ratios;
+    uint32_t gear_ratio_count;
+    uint32_t reserved4;
+    const float* reverse_gear_ratios;
+    uint32_t reverse_gear_ratio_count;
+    uint32_t reserved5;
+} GuavaJoltVehicleDesc;
+
+typedef struct GuavaJoltVehicleCommand {
+    uint64_t entity_id;
+    float throttle;
+    float steering;
+    float brake;
+    float hand_brake;
+    int32_t manual_gear;
+    float clutch;
+    uint8_t has_manual_gear;
+    uint8_t reserved0;
+    uint16_t reserved1;
+} GuavaJoltVehicleCommand;
+
+typedef struct GuavaJoltVehicleState {
+    uint64_t entity_id;
+    float forward_speed;
+    float engine_rpm;
+    int32_t current_gear;
+    float clutch_friction;
+    uint32_t wheel_state_offset;
+    uint32_t wheel_state_count;
+} GuavaJoltVehicleState;
+
+typedef struct GuavaJoltVehicleWheelState {
+    uint64_t vehicle_entity_id;
+    uint32_t wheel_index;
+    uint8_t has_contact;
+    uint8_t has_contact_entity;
+    uint16_t reserved0;
+    uint64_t contact_entity_id;
+    float world_position_x, world_position_y, world_position_z;
+    float world_rotation_x, world_rotation_y, world_rotation_z, world_rotation_w;
+    float angular_velocity;
+    float rotation_angle;
+    float steer_angle;
+    float suspension_length;
+    float contact_position_x, contact_position_y, contact_position_z;
+    float contact_normal_x, contact_normal_y, contact_normal_z;
+} GuavaJoltVehicleWheelState;
+
+typedef struct GuavaJoltVehicleSyncStats {
+    uint32_t synchronized_vehicles;
+    uint32_t removed_vehicles;
+} GuavaJoltVehicleSyncStats;
+
+typedef struct GuavaJoltVehicleABILayout {
+    uint32_t abi_version;
+    uint32_t struct_size;
+    uint32_t vehicle_desc_size;
+    uint32_t wheel_desc_size;
+    uint32_t differential_desc_size;
+    uint32_t anti_roll_bar_desc_size;
+    uint32_t command_size;
+    uint32_t state_size;
+    uint32_t wheel_state_size;
+    uint32_t sync_stats_size;
+} GuavaJoltVehicleABILayout;
+
 typedef struct GuavaJoltStepStats {
     uint32_t body_count;
     uint32_t constraint_count;
@@ -543,6 +672,26 @@ uint32_t guava_jolt_context_step_characters(GuavaJoltContext context,
                                             size_t command_count,
                                             GuavaJoltCharacterState* out_states,
                                             size_t state_capacity);
+bool guava_jolt_bridge_get_vehicle_abi_layout(GuavaJoltVehicleABILayout* out_layout);
+bool guava_jolt_context_sync_vehicles(
+    GuavaJoltContext context,
+    const GuavaJoltVehicleDesc* upserts,
+    size_t upsert_count,
+    const uint64_t* removals,
+    size_t removal_count,
+    bool full_snapshot,
+    GuavaJoltVehicleSyncStats* out_stats);
+bool guava_jolt_context_set_vehicle_commands(
+    GuavaJoltContext context,
+    const GuavaJoltVehicleCommand* commands,
+    size_t command_count);
+uint32_t guava_jolt_context_copy_vehicle_states(
+    GuavaJoltContext context,
+    GuavaJoltVehicleState* out_states,
+    size_t state_capacity,
+    GuavaJoltVehicleWheelState* out_wheel_states,
+    size_t wheel_state_capacity,
+    uint32_t* out_wheel_state_count);
 bool guava_jolt_context_raycast(GuavaJoltContext context,
                                 const GuavaJoltRaycastQuery* query,
                                 const GuavaJoltQueryFilter* filter,

@@ -24,6 +24,8 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
 
     public init() {
         var layout = GuavaJoltABILayout()
+        var vehicleLayout = GuavaJoltVehicleABILayout()
+        vehicleLayout.struct_size = UInt32(MemoryLayout<GuavaJoltVehicleABILayout>.size)
         let compatible = guava_jolt_bridge_abi_version() == Self.expectedABIVersion
             && guava_jolt_bridge_get_abi_layout(&layout)
             && layout.abi_version == Self.expectedABIVersion
@@ -39,6 +41,16 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             && layout.shape_instance_size == UInt32(MemoryLayout<GuavaJoltShapeInstance>.size)
             && layout.joint_break_event_size == UInt32(MemoryLayout<GuavaJoltJointBreakEvent>.size)
             && layout.context_config_size == UInt32(MemoryLayout<GuavaJoltContextConfig>.size)
+            && guava_jolt_bridge_get_vehicle_abi_layout(&vehicleLayout)
+            && vehicleLayout.abi_version == Self.expectedABIVersion
+            && vehicleLayout.vehicle_desc_size == UInt32(MemoryLayout<GuavaJoltVehicleDesc>.size)
+            && vehicleLayout.wheel_desc_size == UInt32(MemoryLayout<GuavaJoltVehicleWheelDesc>.size)
+            && vehicleLayout.differential_desc_size == UInt32(MemoryLayout<GuavaJoltVehicleDifferentialDesc>.size)
+            && vehicleLayout.anti_roll_bar_desc_size == UInt32(MemoryLayout<GuavaJoltVehicleAntiRollBarDesc>.size)
+            && vehicleLayout.command_size == UInt32(MemoryLayout<GuavaJoltVehicleCommand>.size)
+            && vehicleLayout.state_size == UInt32(MemoryLayout<GuavaJoltVehicleState>.size)
+            && vehicleLayout.wheel_state_size == UInt32(MemoryLayout<GuavaJoltVehicleWheelState>.size)
+            && vehicleLayout.sync_stats_size == UInt32(MemoryLayout<GuavaJoltVehicleSyncStats>.size)
         if !compatible {
             initializationError = PhysicsBackendError(
                 code: .abiMismatch,
@@ -73,9 +85,12 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         var bodyRemovals: [UInt64] = []
         var constraintUpserts: [PhysicsConstraintDescriptor] = []
         var constraintRemovals: [UInt64] = []
+        var vehicleUpserts: [PhysicsVehicleDescriptor] = []
+        var vehicleRemovals: [UInt64] = []
         if usesFullSnapshot || rebuiltContext {
             bodyUpserts = context.activeBodies
             constraintUpserts = context.activeConstraints
+            vehicleUpserts = context.activeVehicles
         } else {
             for event in context.syncEvents {
                 switch event {
@@ -83,6 +98,8 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
                 case let .bodyRemove(entity): bodyRemovals.append(entity.rawValue)
                 case let .constraintUpsert(descriptor): constraintUpserts.append(descriptor)
                 case let .constraintRemove(entity): constraintRemovals.append(entity.rawValue)
+                case let .vehicleUpsert(descriptor): vehicleUpserts.append(descriptor)
+                case let .vehicleRemove(entity): vehicleRemovals.append(entity.rawValue)
                 }
             }
         }
@@ -90,6 +107,8 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         bodyRemovals.sort()
         constraintUpserts.sort { $0.entity.rawValue < $1.entity.rawValue }
         constraintRemovals.sort()
+        vehicleUpserts.sort { $0.entity.rawValue < $1.entity.rawValue }
+        vehicleRemovals.sort()
 
         var bodyDescs = bodyUpserts.map(makeBodyDesc)
         let constraintDescs = constraintUpserts.map(makeConstraintDesc)
@@ -211,11 +230,31 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             )
         }
 
+        let vehicleSync = synchronizeVehicles(
+            upserts: vehicleUpserts,
+            removals: vehicleRemovals,
+            fullSnapshot: usesFullSnapshot || rebuiltContext,
+            nativeContext: nativeContext
+        )
+        guard vehicleSync.success else {
+            return PhysicsPrepareResult(
+                synchronizedBodies: Int(stats.synchronized_bodies),
+                synchronizedConstraints: Int(stats.synchronized_constraints),
+                removedBodies: Int(stats.removed_bodies),
+                removedConstraints: Int(stats.removed_constraints),
+                synchronizedVehicles: Int(vehicleSync.stats.synchronized_vehicles),
+                removedVehicles: Int(vehicleSync.stats.removed_vehicles),
+                error: nativeError(from: nativeContext)
+            )
+        }
+
         return PhysicsPrepareResult(
             synchronizedBodies: Int(stats.synchronized_bodies),
             synchronizedConstraints: Int(stats.synchronized_constraints),
             removedBodies: Int(stats.removed_bodies),
-            removedConstraints: Int(stats.removed_constraints)
+            removedConstraints: Int(stats.removed_constraints),
+            synchronizedVehicles: Int(vehicleSync.stats.synchronized_vehicles),
+            removedVehicles: Int(vehicleSync.stats.removed_vehicles)
         )
     }
 
@@ -242,6 +281,21 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             reserved1: 0
         )
         var stats = GuavaJoltStepStats()
+        let vehicleCommandDescs = context.vehicleCommands
+            .sorted { $0.key.rawValue < $1.key.rawValue }
+            .map { makeVehicleCommand(entity: $0.key, command: $0.value) }
+        let vehicleCommandsAccepted = vehicleCommandDescs.withUnsafeBufferPointer { buffer in
+            guava_jolt_context_set_vehicle_commands(
+                nativeContext, buffer.baseAddress, buffer.count
+            )
+        }
+        guard vehicleCommandsAccepted else {
+            return PhysicsStepResult(
+                bodyCount: context.activeBodies.count,
+                constraintCount: context.activeConstraints.count,
+                error: nativeError(from: nativeContext)
+            )
+        }
         let commandDescs = context.characterCommands
             .sorted { $0.key.rawValue < $1.key.rawValue }
             .map { makeCharacterCommand(entity: $0.key, command: $0.value) }
@@ -308,6 +362,31 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
                     torque: $0.torque
                 )
             }
+        var nativeVehicleStates = [GuavaJoltVehicleState](
+            repeating: GuavaJoltVehicleState(), count: context.activeVehicles.count
+        )
+        let wheelCapacity = context.activeVehicles.reduce(0) { partial, descriptor in
+            partial + descriptor.vehicle.wheels.count
+        }
+        var nativeWheelStates = [GuavaJoltVehicleWheelState](
+            repeating: GuavaJoltVehicleWheelState(), count: wheelCapacity
+        )
+        var nativeWheelStateCount: UInt32 = 0
+        let nativeVehicleStateCount = nativeVehicleStates.withUnsafeMutableBufferPointer { stateBuffer in
+            nativeWheelStates.withUnsafeMutableBufferPointer { wheelBuffer in
+                guava_jolt_context_copy_vehicle_states(
+                    nativeContext,
+                    stateBuffer.baseAddress,
+                    stateBuffer.count,
+                    wheelBuffer.baseAddress,
+                    wheelBuffer.count,
+                    &nativeWheelStateCount
+                )
+            }
+        }
+        let copiedWheelStates = Array(nativeWheelStates.prefix(
+            min(Int(nativeWheelStateCount), nativeWheelStates.count)
+        ))
         return PhysicsStepResult(
             bodyCount: Int(stats.body_count),
             constraintCount: Int(stats.constraint_count),
@@ -319,7 +398,10 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             jointBreakEvents: jointBreakEvents,
             characterStates: characterStates
                 .prefix(min(Int(characterStateCount), characterStates.count))
-                .map(makeCharacterState)
+                .map(makeCharacterState),
+            vehicleStates: nativeVehicleStates
+                .prefix(min(Int(nativeVehicleStateCount), nativeVehicleStates.count))
+                .map { makeVehicleState($0, wheelStates: copiedWheelStates) }
         )
     }
 
@@ -608,6 +690,169 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         }
     }
 
+    private func synchronizeVehicles(
+        upserts: [PhysicsVehicleDescriptor],
+        removals: [UInt64],
+        fullSnapshot: Bool,
+        nativeContext: GuavaJoltContext
+    ) -> (success: Bool, stats: GuavaJoltVehicleSyncStats) {
+        var vehicleDescs = upserts.map(makeVehicleDesc)
+        let wheelsByVehicle = upserts.map { $0.vehicle.wheels.map(makeVehicleWheelDesc) }
+        let differentialsByVehicle = upserts.map {
+            $0.vehicle.differentials.map(makeVehicleDifferentialDesc)
+        }
+        let antiRollBarsByVehicle = upserts.map {
+            $0.vehicle.antiRollBars.map(makeVehicleAntiRollBarDesc)
+        }
+        let gearsByVehicle = upserts.map { $0.vehicle.transmission.gearRatios }
+        let reverseGearsByVehicle = upserts.map { $0.vehicle.transmission.reverseGearRatios }
+        let flatWheels = wheelsByVehicle.flatMap { $0 }
+        let flatDifferentials = differentialsByVehicle.flatMap { $0 }
+        let flatAntiRollBars = antiRollBarsByVehicle.flatMap { $0 }
+        let flatGears = gearsByVehicle.flatMap { $0 }
+        let flatReverseGears = reverseGearsByVehicle.flatMap { $0 }
+        var stats = GuavaJoltVehicleSyncStats()
+        let success = flatWheels.withUnsafeBufferPointer { wheelBuffer in
+            flatDifferentials.withUnsafeBufferPointer { differentialBuffer in
+                flatAntiRollBars.withUnsafeBufferPointer { antiRollBuffer in
+                    flatGears.withUnsafeBufferPointer { gearBuffer in
+                        flatReverseGears.withUnsafeBufferPointer { reverseGearBuffer in
+                            vehicleDescs.withUnsafeMutableBufferPointer { vehicleBuffer in
+                                var wheelOffset = 0
+                                var differentialOffset = 0
+                                var antiRollOffset = 0
+                                var gearOffset = 0
+                                var reverseGearOffset = 0
+                                for index in vehicleBuffer.indices {
+                                    let wheelCount = wheelsByVehicle[index].count
+                                    let differentialCount = differentialsByVehicle[index].count
+                                    let antiRollCount = antiRollBarsByVehicle[index].count
+                                    let gearCount = gearsByVehicle[index].count
+                                    let reverseGearCount = reverseGearsByVehicle[index].count
+                                    vehicleBuffer[index].wheels = wheelCount > 0
+                                        ? wheelBuffer.baseAddress?.advanced(by: wheelOffset) : nil
+                                    vehicleBuffer[index].differentials = differentialCount > 0
+                                        ? differentialBuffer.baseAddress?.advanced(by: differentialOffset) : nil
+                                    vehicleBuffer[index].anti_roll_bars = antiRollCount > 0
+                                        ? antiRollBuffer.baseAddress?.advanced(by: antiRollOffset) : nil
+                                    vehicleBuffer[index].gear_ratios = gearCount > 0
+                                        ? gearBuffer.baseAddress?.advanced(by: gearOffset) : nil
+                                    vehicleBuffer[index].reverse_gear_ratios = reverseGearCount > 0
+                                        ? reverseGearBuffer.baseAddress?.advanced(by: reverseGearOffset) : nil
+                                    wheelOffset += wheelCount
+                                    differentialOffset += differentialCount
+                                    antiRollOffset += antiRollCount
+                                    gearOffset += gearCount
+                                    reverseGearOffset += reverseGearCount
+                                }
+                                return removals.withUnsafeBufferPointer { removalBuffer in
+                                    guava_jolt_context_sync_vehicles(
+                                        nativeContext,
+                                        vehicleBuffer.baseAddress,
+                                        vehicleBuffer.count,
+                                        removalBuffer.baseAddress,
+                                        removalBuffer.count,
+                                        fullSnapshot,
+                                        &stats
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return (success, stats)
+    }
+
+    private func makeVehicleDesc(_ descriptor: PhysicsVehicleDescriptor) -> GuavaJoltVehicleDesc {
+        let vehicle = descriptor.vehicle
+        let transmission = vehicle.transmission
+        var result = GuavaJoltVehicleDesc()
+        result.entity_id = descriptor.entity.rawValue
+        result.is_enabled = vehicle.isEnabled ? 1 : 0
+        result.transmission_mode = transmission.mode.rawValue
+        result.up_x = vehicle.up.x
+        result.up_y = vehicle.up.y
+        result.up_z = vehicle.up.z
+        result.forward_x = vehicle.forward.x
+        result.forward_y = vehicle.forward.y
+        result.forward_z = vehicle.forward.z
+        result.max_pitch_roll_angle = vehicle.maxPitchRollAngle
+        result.engine_max_torque = vehicle.engine.maxTorque
+        result.engine_min_rpm = vehicle.engine.minRPM
+        result.engine_max_rpm = vehicle.engine.maxRPM
+        result.engine_inertia = vehicle.engine.inertia
+        result.engine_angular_damping = vehicle.engine.angularDamping
+        result.transmission_switch_time = transmission.switchTime
+        result.transmission_clutch_release_time = transmission.clutchReleaseTime
+        result.transmission_switch_latency = transmission.switchLatency
+        result.transmission_shift_up_rpm = transmission.shiftUpRPM
+        result.transmission_shift_down_rpm = transmission.shiftDownRPM
+        result.transmission_clutch_strength = transmission.clutchStrength
+        result.wheel_count = UInt32(vehicle.wheels.count)
+        result.differential_count = UInt32(vehicle.differentials.count)
+        result.anti_roll_bar_count = UInt32(vehicle.antiRollBars.count)
+        result.gear_ratio_count = UInt32(transmission.gearRatios.count)
+        result.reverse_gear_ratio_count = UInt32(transmission.reverseGearRatios.count)
+        return result
+    }
+
+    private func makeVehicleWheelDesc(_ wheel: VehicleWheelConfiguration) -> GuavaJoltVehicleWheelDesc {
+        var result = GuavaJoltVehicleWheelDesc()
+        result.position_x = wheel.position.x
+        result.position_y = wheel.position.y
+        result.position_z = wheel.position.z
+        result.suspension_direction_x = wheel.suspensionDirection.x
+        result.suspension_direction_y = wheel.suspensionDirection.y
+        result.suspension_direction_z = wheel.suspensionDirection.z
+        result.steering_axis_x = wheel.steeringAxis.x
+        result.steering_axis_y = wheel.steeringAxis.y
+        result.steering_axis_z = wheel.steeringAxis.z
+        result.wheel_up_x = wheel.wheelUp.x
+        result.wheel_up_y = wheel.wheelUp.y
+        result.wheel_up_z = wheel.wheelUp.z
+        result.wheel_forward_x = wheel.wheelForward.x
+        result.wheel_forward_y = wheel.wheelForward.y
+        result.wheel_forward_z = wheel.wheelForward.z
+        result.suspension_min_length = wheel.suspensionMinLength
+        result.suspension_max_length = wheel.suspensionMaxLength
+        result.suspension_preload_length = wheel.suspensionPreloadLength
+        result.suspension_frequency = wheel.suspensionFrequency
+        result.suspension_damping = wheel.suspensionDamping
+        result.radius = wheel.radius
+        result.width = wheel.width
+        result.inertia = wheel.inertia
+        result.angular_damping = wheel.angularDamping
+        result.max_steer_angle = wheel.maxSteerAngle
+        result.max_brake_torque = wheel.maxBrakeTorque
+        result.max_hand_brake_torque = wheel.maxHandBrakeTorque
+        return result
+    }
+
+    private func makeVehicleDifferentialDesc(
+        _ differential: VehicleDifferentialConfiguration
+    ) -> GuavaJoltVehicleDifferentialDesc {
+        var result = GuavaJoltVehicleDifferentialDesc()
+        result.left_wheel = Int32(clamping: differential.leftWheel)
+        result.right_wheel = Int32(clamping: differential.rightWheel)
+        result.differential_ratio = differential.differentialRatio
+        result.left_right_split = differential.leftRightSplit
+        result.limited_slip_ratio = differential.limitedSlipRatio
+        result.engine_torque_ratio = differential.engineTorqueRatio
+        return result
+    }
+
+    private func makeVehicleAntiRollBarDesc(
+        _ bar: VehicleAntiRollBarConfiguration
+    ) -> GuavaJoltVehicleAntiRollBarDesc {
+        var result = GuavaJoltVehicleAntiRollBarDesc()
+        result.left_wheel = Int32(clamping: bar.leftWheel)
+        result.right_wheel = Int32(clamping: bar.rightWheel)
+        result.stiffness = bar.stiffness
+        return result
+    }
+
     private func makeBodyDesc(from descriptor: PhysicsBodyDescriptor) -> GuavaJoltBodyDesc {
         var flags: UInt32 = 0
         if descriptor.rigidBody?.allowSleep ?? false {
@@ -873,6 +1118,62 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
                 ? nil
                 : EntityID(rawValue: state.ground_entity),
             stance: state.stance == 1 ? .crouching : .standing
+        )
+    }
+
+    private func makeVehicleCommand(
+        entity: EntityID,
+        command: VehicleCommand
+    ) -> GuavaJoltVehicleCommand {
+        var result = GuavaJoltVehicleCommand()
+        result.entity_id = entity.rawValue
+        result.throttle = command.throttle
+        result.steering = command.steering
+        result.brake = command.brake
+        result.hand_brake = command.handBrake
+        result.manual_gear = Int32(clamping: command.manualGear ?? 0)
+        result.clutch = command.clutch
+        result.has_manual_gear = command.manualGear == nil ? 0 : 1
+        return result
+    }
+
+    private func makeVehicleState(
+        _ state: GuavaJoltVehicleState,
+        wheelStates: [GuavaJoltVehicleWheelState]
+    ) -> VehicleState {
+        let lower = min(Int(state.wheel_state_offset), wheelStates.count)
+        let upper = min(lower + Int(state.wheel_state_count), wheelStates.count)
+        return VehicleState(
+            entity: EntityID(rawValue: state.entity_id),
+            forwardSpeed: state.forward_speed,
+            engineRPM: state.engine_rpm,
+            currentGear: Int(state.current_gear),
+            clutchFriction: state.clutch_friction,
+            wheels: wheelStates[lower..<upper].map { wheel in
+                VehicleWheelState(
+                    index: Int(wheel.wheel_index),
+                    worldPosition: SIMD3<Float>(
+                        wheel.world_position_x, wheel.world_position_y, wheel.world_position_z
+                    ),
+                    worldRotation: SIMD4<Float>(
+                        wheel.world_rotation_x, wheel.world_rotation_y,
+                        wheel.world_rotation_z, wheel.world_rotation_w
+                    ),
+                    angularVelocity: wheel.angular_velocity,
+                    rotationAngle: wheel.rotation_angle,
+                    steerAngle: wheel.steer_angle,
+                    suspensionLength: wheel.suspension_length,
+                    hasContact: wheel.has_contact != 0,
+                    contactEntity: wheel.has_contact_entity == 0
+                        ? nil : EntityID(rawValue: wheel.contact_entity_id),
+                    contactPosition: SIMD3<Float>(
+                        wheel.contact_position_x, wheel.contact_position_y, wheel.contact_position_z
+                    ),
+                    contactNormal: SIMD3<Float>(
+                        wheel.contact_normal_x, wheel.contact_normal_y, wheel.contact_normal_z
+                    )
+                )
+            }
         )
     }
 

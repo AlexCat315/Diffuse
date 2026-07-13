@@ -1,5 +1,19 @@
 import Foundation
 
+public enum CapabilityRegistryIntegrityError: Error, Sendable, Equatable, CustomStringConvertible {
+    case duplicateCapability(String, version: Int)
+    case aliasCollision(String)
+    case toolNameCollision(String)
+
+    public var description: String {
+        switch self {
+        case let .duplicateCapability(id, version): return "duplicate capability \(id) v\(version)"
+        case let .aliasCollision(alias): return "capability alias collision: \(alias)"
+        case let .toolNameCollision(name): return "provider tool-name collision: \(name)"
+        }
+    }
+}
+
 /// Immutable registry of all capabilities known to the system.
 ///
 /// Look up a descriptor by primary verb or by alias. The built-in registry
@@ -11,18 +25,37 @@ public struct CapabilityRegistry: Sendable {
     private let byVerb: [String: CapabilityDescriptor]
     // Alias to primary verb (allows secondary lookup).
     private let aliasByVerb: [String: String]
+    public let integrityErrors: [CapabilityRegistryIntegrityError]
 
     public init(capabilities: [CapabilityDescriptor] = []) {
         var byVerb: [String: CapabilityDescriptor] = [:]
         var aliasByVerb: [String: String] = [:]
+        var integrityErrors: [CapabilityRegistryIntegrityError] = []
         for cap in capabilities {
+            if let existing = byVerb[cap.verb] {
+                integrityErrors.append(.duplicateCapability(cap.verb, version: existing.version))
+                continue
+            }
+            if aliasByVerb[cap.verb] != nil {
+                integrityErrors.append(.aliasCollision(cap.verb))
+                continue
+            }
             byVerb[cap.verb] = cap
             for alias in cap.aliases {
+                if byVerb[alias] != nil || aliasByVerb[alias] != nil {
+                    integrityErrors.append(.aliasCollision(alias))
+                    continue
+                }
                 aliasByVerb[alias] = cap.verb
             }
         }
+        let toolGroups = Dictionary(grouping: byVerb.values, by: { $0.contract.toolName })
+        integrityErrors.append(contentsOf: toolGroups.compactMap { name, descriptors in
+            descriptors.count > 1 ? .toolNameCollision(name) : nil
+        })
         self.byVerb = byVerb
         self.aliasByVerb = aliasByVerb
+        self.integrityErrors = integrityErrors
     }
 
     // MARK: - Lookup
@@ -37,6 +70,83 @@ public struct CapabilityRegistry: Sendable {
     /// All registered primary verbs, sorted.
     public func allVerbs() -> [String] {
         byVerb.keys.sorted()
+    }
+
+    /// All provider-neutral contracts, sorted by capability id.
+    public func allContracts() -> [CapabilityContract] {
+        byVerb.values.map(\.contract).sorted { $0.id < $1.id }
+    }
+
+    public func validateIntegrity() throws {
+        if let first = integrityErrors.first { throw first }
+    }
+
+    /// Builds a fail-closed model exposure allow-list. Plugin capabilities are
+    /// absent until their plugin id is explicitly enabled, and external effects
+    /// are absent unless the caller opts in.
+    public func exposureSnapshot(policy: CapabilityExposurePolicy = CapabilityExposurePolicy(),
+                                 sceneRevision: UInt64? = nil,
+                                 generation: UInt64 = 0,
+                                 preferredCapabilityIDs: [String] = [],
+                                 includedCapabilityIDs: Set<String>? = nil) -> CapabilityExposureSnapshot {
+        guard integrityErrors.isEmpty else {
+            return CapabilityExposureSnapshot(generation: generation,
+                                              sceneRevision: sceneRevision,
+                                              contracts: [])
+        }
+        let gate = ReleasePhaseGate(activePhase: policy.activeReleasePhase)
+        var allowed = byVerb.values.filter { descriptor in
+            guard descriptor.isAIExposed else { return false }
+            if descriptor.access.isWrite && !descriptor.inputSchema.isStrictCapabilityInput { return false }
+            if let includedCapabilityIDs, !includedCapabilityIDs.contains(descriptor.verb) { return false }
+            guard gate.isAllowed(descriptor) else { return false }
+            if let domains = policy.allowedDomains, !domains.contains(descriptor.domain) { return false }
+            if descriptor.access == .externalSideEffect && !policy.allowExternalSideEffects { return false }
+            if descriptor.source.kind == .plugin {
+                guard let pluginID = descriptor.source.pluginID,
+                      policy.enabledPluginIDs.contains(pluginID) else { return false }
+            }
+            return true
+        }
+
+        var preferredOrder: [String: Int] = [:]
+        for (offset, capabilityID) in preferredCapabilityIDs.enumerated()
+            where preferredOrder[capabilityID] == nil {
+            preferredOrder[capabilityID] = offset
+        }
+        allowed.sort { lhs, rhs in
+            switch (preferredOrder[lhs.verb], preferredOrder[rhs.verb]) {
+            case let (left?, right?): return left < right
+            case (_?, nil): return true
+            case (nil, _?): return false
+            case (nil, nil): return lhs.verb < rhs.verb
+            }
+        }
+        let contracts = allowed.prefix(policy.maximumCapabilities).map(\.contract)
+        return CapabilityExposureSnapshot(generation: generation,
+                                          sceneRevision: sceneRevision,
+                                          contracts: contracts)
+    }
+
+    /// Searches only capabilities permitted by `policy`. Search results are
+    /// contracts, never executable closures or scene runtime handles.
+    public func searchContracts(query: String,
+                                policy: CapabilityExposurePolicy = CapabilityExposurePolicy(),
+                                limit: Int = 16) -> [CapabilityContract] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let snapshot = exposureSnapshot(
+            policy: CapabilityExposurePolicy(activeReleasePhase: policy.activeReleasePhase,
+                                             allowedDomains: policy.allowedDomains,
+                                             enabledPluginIDs: policy.enabledPluginIDs,
+                                             allowExternalSideEffects: policy.allowExternalSideEffects,
+                                             maximumCapabilities: max(limit, allVerbs().count))
+        )
+        return snapshot.contracts.filter { contract in
+            needle.isEmpty
+                || contract.id.lowercased().contains(needle)
+                || contract.title.lowercased().contains(needle)
+                || contract.description.lowercased().contains(needle)
+        }.prefix(max(0, limit)).map { $0 }
     }
 
     // MARK: - Composition
@@ -65,7 +175,41 @@ public struct CapabilityRegistry: Sendable {
         let camera = CapabilityPreconditionSpec(kind: .entityHasComponent, componentType: "CameraComponent")
         let renderMesh = CapabilityPreconditionSpec(kind: .entityHasComponent, componentType: "RenderMeshComponent")
 
-        return CapabilityRegistry(capabilities: [
+        let descriptors = [
+
+            // MARK: AI framework
+            CapabilityDescriptor(
+                verb: "system.search_capabilities",
+                releasePhase: .stable,
+                domain: "system",
+                access: .read
+            ),
+            CapabilityDescriptor(
+                verb: "system.submit_plan",
+                releasePhase: .stable,
+                domain: "system",
+                access: .read
+            ),
+
+            // MARK: Read-only AI context
+            CapabilityDescriptor(
+                verb: "scene.get_entities",
+                releasePhase: .stable,
+                domain: "scene",
+                access: .read
+            ),
+            CapabilityDescriptor(
+                verb: "scene.get_selection",
+                releasePhase: .stable,
+                domain: "scene",
+                access: .read
+            ),
+            CapabilityDescriptor(
+                verb: "scene.find_entities",
+                releasePhase: .stable,
+                domain: "scene",
+                access: .read
+            ),
 
             // MARK: Spawn / create
             CapabilityDescriptor(
@@ -371,6 +515,14 @@ public struct CapabilityRegistry: Sendable {
                 preconditions: [editable, entityExists, light]
             ),
             CapabilityDescriptor(
+                verb: "scene.set_light_spot_angles",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, light]
+            ),
+            CapabilityDescriptor(
                 verb: "scene.set_light_spot_outer_angle",
                 releasePhase: .stable,
                 requiresConfirmation: false,
@@ -471,6 +623,7 @@ public struct CapabilityRegistry: Sendable {
                     CapabilityPreconditionSpec(kind: .argumentPresent, argumentName: "root_path"),
                 ]
             ),
-        ])
+        ]
+        return CapabilityRegistry(capabilities: descriptors.map(BuiltInCapabilityCatalog.enrich))
     }()
 }
