@@ -1,4 +1,6 @@
 import Foundation
+import AIRuntime
+import CapabilityRuntime
 
 #if canImport(Darwin)
 import Darwin
@@ -97,112 +99,31 @@ func editorCall(_ request: [String: Any]) -> [String: Any] {
 
 // MARK: - Tool definitions
 
+let executeEditPlanContract = CapabilityContract(
+    id: "system.execute_edit_plan_compatibility",
+    title: "Execute edit plan",
+    description: "Submit a structured Guava scene edit plan for host validation, preview, and user confirmation.",
+    domain: "system",
+    access: .reversibleWrite,
+    releasePhase: .stable,
+    inputSchema: EditPlanTool.jsonSchema()
+)
+
 let toolExecuteEditPlan: [String: Any] = [
     "name": "execute_edit_plan",
-    "description": "Apply a structured edit plan to the Guava scene. Entities use 'scene:<number>' IDs — use get_scene_entities first to discover them.",
-    "inputSchema": [
-        "type": "object",
-        "required": ["summary", "steps"],
-        "properties": [
-            "summary": ["type": "string", "description": "One-line description of what the plan achieves."] as [String: Any],
-            "reasoning": ["type": "string", "description": "Brief reasoning for debugging."] as [String: Any],
-            "steps": [
-                "type": "array",
-                "description": "Ordered list of atomic mutation steps.",
-                "items": [
-                    "type": "object",
-                    "required": ["op"],
-                    "properties": [
-                        "op": ["type": "string",
-                               "enum": ["spawn_entity","delete_entity","duplicate_entity","set_name",
-                                        "reparent_entity","set_transform","snap_to_ground",
-                                        "set_mesh_color","set_material",
-                                        "set_light_type","set_light_intensity","set_light_color",
-                                        "set_light_range","set_light_spot_angles",
-                                        "set_light_cast_shadows",
-                                        "set_camera_pose","set_camera_fov","set_camera_active",
-                                        "set_rigidbody_motion","set_rigidbody_mass","set_rigidbody_gravity",
-                                        "set_rigidbody_allow_sleep",
-                                        "set_collider_trigger","set_collider_layer","set_constraint_enabled",
-                                        "set_collider_shape",
-                                        "set_collider_box_extents","set_collider_sphere_radius","set_collider_capsule",
-                                        "set_collider_material",
-                                        "set_audio_source",
-                                        "set_script_property",
-                                        "set_mesh_visibility",
-                                        "set_animation_player"],
-                               "description": "The mutation op to perform."] as [String: Any],
-                        "entity_id": ["type": "string", "description": "Target entity 'scene:<number>'. Required for all ops except spawn_entity."] as [String: Any],
-                        "parent_id": ["type": "string", "description": "New parent 'scene:<number>' for reparent_entity. Omit for root."] as [String: Any],
-                        "label": ["type": "string"] as [String: Any],
-                        "spawn_position": ["type": "array", "items": ["type": "number"] as [String: Any]] as [String: Any],
-                        "position": ["type": "array", "items": ["type": "number"] as [String: Any], "description": "[x,y,z] metres"] as [String: Any],
-                        "euler_degrees": ["type": "array", "items": ["type": "number"] as [String: Any]] as [String: Any],
-                        "scale": ["type": "array", "items": ["type": "number"] as [String: Any]] as [String: Any],
-                        "name": ["type": "string"] as [String: Any],
-                        "color": ["type": "array", "items": ["type": "number"] as [String: Any], "description": "[r,g,b] linear 0-1. red=[1,0,0] green=[0,1,0] blue=[0,0,1]"] as [String: Any],
-                        "light_type": ["type": "string", "enum": ["directional","point","spot"]] as [String: Any],
-                        "intensity": ["type": "number"] as [String: Any],
-                        "range": ["type": "number"] as [String: Any],
-                        "spot_inner_angle": ["type": "number"] as [String: Any],
-                        "spot_outer_angle": ["type": "number"] as [String: Any],
-                        "light_cast_shadows": ["type": "boolean", "description": "Whether the light casts shadows for set_light_cast_shadows."] as [String: Any],
-                        "camera_fov_y": ["type": "number", "description": "Vertical FOV in degrees (1–179) for set_camera_fov. 30=telephoto 50=normal 75=wide."] as [String: Any],
-                        "camera_is_active": ["type": "boolean", "description": "Whether this camera is the active render camera for set_camera_active."] as [String: Any],
-                        "motion_type": ["type": "string", "enum": ["static","dynamic","kinematic"]] as [String: Any],
-                        "mass": ["type": "number"] as [String: Any],
-                        "gravity_scale": ["type": "number"] as [String: Any],
-                        "allow_sleep": ["type": "boolean", "description": "Whether the rigidbody can go to sleep when at rest."] as [String: Any],
-                        "collider_shape": ["type": "string", "enum": ["box","sphere","capsule","mesh","convex"],
-                                           "description": "Shape kind for set_collider_shape."] as [String: Any],
-                        "half_extents": ["type": "array", "items": ["type": "number"] as [String: Any],
-                                         "description": "[x,y,z] box half-sizes for set_collider_box_extents."] as [String: Any],
-                        "radius": ["type": "number", "description": "Sphere/capsule radius for set_collider_sphere_radius or set_collider_capsule."] as [String: Any],
-                        "half_height": ["type": "number", "description": "Capsule half-height for set_collider_capsule."] as [String: Any],
-                        "friction": ["type": "number", "description": "Collider surface friction (0–1) for set_collider_material."] as [String: Any],
-                        "restitution": ["type": "number", "description": "Collider bounciness (0–1) for set_collider_material."] as [String: Any],
-                        "density": ["type": "number", "description": "Collider material density for set_collider_material."] as [String: Any],
-                        "is_trigger": ["type": "boolean"] as [String: Any],
-                        "is_enabled": ["type": "boolean"] as [String: Any],
-                        "collider_layer_id": ["type": "integer", "description": "Physics layer the collider occupies (0–15) for set_collider_layer."] as [String: Any],
-                        "collider_layer_mask": ["type": "integer", "description": "Bitmask of layers this collider interacts with (e.g. 65535=all) for set_collider_layer."] as [String: Any],
-                        "audio_clip": ["type": "string", "description": "Audio clip asset name (no extension) for set_audio_source."] as [String: Any],
-                        "audio_volume": ["type": "number", "description": "Playback volume 0–1 for set_audio_source."] as [String: Any],
-                        "audio_pitch": ["type": "number", "description": "Pitch multiplier (1=normal) for set_audio_source."] as [String: Any],
-                        "audio_loop": ["type": "boolean", "description": "Whether the clip loops for set_audio_source."] as [String: Any],
-                        "audio_play_on_awake": ["type": "boolean", "description": "Auto-play when simulation starts for set_audio_source."] as [String: Any],
-                        "audio_spatial_blend": ["type": "number", "description": "0=2D, 1=3D positional for set_audio_source."] as [String: Any],
-                        "script_index": ["type": "integer", "description": "Zero-based index of the script component on the entity for set_script_property."] as [String: Any],
-                        "script_property_name": ["type": "string", "description": "Exported property name to set for set_script_property."] as [String: Any],
-                        "script_property_value": ["description": "Value to set (string, number, or boolean) for set_script_property."] as [String: Any],
-                        "is_visible": ["type": "boolean", "description": "Mesh visibility toggle for set_mesh_visibility."] as [String: Any],
-                        "material_base_color": ["type": "array", "items": ["type": "number"] as [String: Any],
-                                                "description": "[r,g,b,a] linear 0-1 base colour for set_material. Omit to leave unchanged."] as [String: Any],
-                        "material_metallic": ["type": "number", "description": "Metallic factor 0–1 for set_material. Omit to leave unchanged."] as [String: Any],
-                        "material_roughness": ["type": "number", "description": "Roughness factor 0–1 for set_material. Omit to leave unchanged."] as [String: Any],
-                        "material_emissive": ["type": "array", "items": ["type": "number"] as [String: Any],
-                                              "description": "[r,g,b] linear 0-1 emission colour for set_material. Omit for no emission."] as [String: Any],
-                        "animation_clip": ["type": "string", "description": "Animation clip asset name for set_animation_player."] as [String: Any],
-                        "animation_speed": ["type": "number", "description": "Playback speed multiplier (1=normal) for set_animation_player."] as [String: Any],
-                        "animation_loop": ["type": "boolean", "description": "Whether the animation loops for set_animation_player."] as [String: Any],
-                        "animation_is_playing": ["type": "boolean", "description": "Whether to start/stop playback for set_animation_player."] as [String: Any],
-                    ] as [String: Any],
-                ] as [String: Any],
-            ] as [String: Any],
-        ] as [String: Any],
-    ] as [String: Any],
+    "description": executeEditPlanContract.description,
+    "inputSchema": executeEditPlanContract.inputSchema.jsonObject(),
 ]
-
 let toolGetScene: [String: Any] = [
     "name": "get_scene_entities",
     "description": "Returns all entities in the open Guava scene with their IDs, names, positions, components, and properties.",
-    "inputSchema": ["type": "object", "properties": [:] as [String: Any]] as [String: Any],
+    "inputSchema": CapabilityRegistry.default.descriptor(for: "scene.get_entities")!.contract.inputSchema.jsonObject(),
 ]
 
 let toolGetSelection: [String: Any] = [
     "name": "get_selection",
     "description": "Returns the entity ref of the currently selected object in the Guava editor, or null if nothing is selected.",
-    "inputSchema": ["type": "object", "properties": [:] as [String: Any]] as [String: Any],
+    "inputSchema": CapabilityRegistry.default.descriptor(for: "scene.get_selection")!.contract.inputSchema.jsonObject(),
 ]
 
 let toolGetAIEntity: [String: Any] = [
@@ -296,17 +217,7 @@ let toolGetContextMemory: [String: Any] = [
 let toolFindEntities: [String: Any] = [
     "name": "find_entities",
     "description": "Searches the scene for entities matching a name substring, kind, or both. Useful when the scene has many entities and you need to locate a specific one. Returns matching entity IDs, names, and kinds.",
-    "inputSchema": [
-        "type": "object",
-        "properties": [
-            "name": ["type": "string",
-                     "description": "Case-insensitive substring to match against entity names. Omit to match all names."] as [String: Any],
-            "kind": ["type": "string",
-                     "description": "Exact kind to match (e.g. 'Static Mesh', 'Point Light', 'Camera', 'Group'). Omit to match all kinds."] as [String: Any],
-            "limit": ["type": "integer",
-                      "description": "Maximum number of results to return. Defaults to 20."] as [String: Any],
-        ] as [String: Any],
-    ] as [String: Any],
+    "inputSchema": CapabilityRegistry.default.descriptor(for: "scene.find_entities")!.contract.inputSchema.jsonObject(),
 ]
 
 // MARK: - MCP stdio protocol
@@ -420,7 +331,8 @@ func handle(_ msg: [String: Any]) {
             let res = editorCall(["action": "execute_plan", "plan": args])
             if let ok = res["ok"] as? Bool, ok {
                 let summary = res["summary"] as? String ?? "Done"
-                toolResult(id: id as Any, text: "Applied: \(summary)")
+                let disposition = res["disposition"] as? String ?? "confirmation_requested"
+                toolResult(id: id as Any, text: "Submitted (\(disposition)): \(summary)")
             } else {
                 toolResult(id: id as Any, text: res["error"] as? String ?? "unknown error", isError: true)
             }

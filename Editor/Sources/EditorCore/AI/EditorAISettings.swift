@@ -1,6 +1,9 @@
 import AIRuntime
 import CapabilityRuntime
 import Foundation
+#if canImport(Security)
+import Security
+#endif
 
 // MARK: - Provider
 
@@ -34,7 +37,8 @@ public enum EditorAIProvider: String, Codable, Sendable, Equatable, CaseIterable
 public struct EditorAISettings: Codable, Sendable, Equatable {
     public var provider: EditorAIProvider
     public var model: String
-    /// When `true`, AI edit plans are applied immediately without a confirmation step.
+    /// Compatibility preference for read-only/legacy flows. Capability-backed
+    /// AI writes always escalate to the required preview confirmation policy.
     public var autoApprove: Bool
 
     public static let `default` = EditorAISettings(
@@ -111,52 +115,102 @@ public struct EditorCapabilitySettings: Codable, Sendable, Equatable {
 
 // MARK: - Key store
 
-/// Stores provider API keys as a JSON file in Application Support.
-/// Avoids Keychain permission dialogs that occur when the binary identity
-/// changes on every `swift build` during development.
+/// Stores provider API keys in the operating-system credential store. Keys are
+/// never written to project files, settings JSON, prompts, logs, or plugins.
 public enum AIKeychain {
-    private static var keysFileURL: URL? {
+    private static let service = "com.guava.editor.ai-provider"
+
+    private static var legacyKeysFileURL: URL? {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
             .first?
             .appendingPathComponent("Guava", isDirectory: true)
             .appendingPathComponent("ai_keys.json")
     }
 
-    private static func loadAll() -> [String: String] {
-        guard let url = keysFileURL,
+    /// One-time migration from older development builds. The plaintext file is
+    /// removed only after every non-empty value is present in Keychain; a
+    /// Keychain failure must not silently destroy the user's credentials.
+    private static func migrateLegacyPlaintextStoreIfNeeded() {
+#if canImport(Security)
+        guard let url = legacyKeysFileURL,
               let data = try? Data(contentsOf: url),
-              let dict = try? JSONDecoder().decode([String: String].self, from: data)
-        else { return [:] }
-        return dict
-    }
+              let keys = try? JSONDecoder().decode([String: String].self, from: data)
+        else { return }
 
-    private static func saveAll(_ dict: [String: String]) {
-        guard let url = keysFileURL else { return }
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
-                                                  withIntermediateDirectories: true)
-        guard let data = try? JSONEncoder().encode(dict) else { return }
-        try? data.write(to: url, options: [.atomic])
+        var migrationSucceeded = true
+        for (account, key) in keys where !key.isEmpty {
+            let itemIdentity: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: account,
+            ]
+            var lookup = itemIdentity
+            lookup[kSecMatchLimit as String] = kSecMatchLimitOne
+            if SecItemCopyMatching(lookup as CFDictionary, nil) == errSecSuccess {
+                continue
+            }
+            var insert = itemIdentity
+            insert[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            insert[kSecValueData as String] = Data(key.utf8)
+            let status = SecItemAdd(insert as CFDictionary, nil)
+            migrationSucceeded = migrationSucceeded && status == errSecSuccess
+        }
+        if migrationSucceeded {
+            try? FileManager.default.removeItem(at: url)
+        }
+#endif
     }
 
     public static func save(key: String, provider: EditorAIProvider) {
+        migrateLegacyPlaintextStoreIfNeeded()
         guard !key.isEmpty else {
             delete(provider: provider)
             return
         }
-        var all = loadAll()
-        all[provider.rawValue] = key
-        saveAll(all)
+#if canImport(Security)
+        delete(provider: provider)
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: provider.rawValue,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            kSecValueData as String: Data(key.utf8),
+        ]
+        _ = SecItemAdd(query as CFDictionary, nil)
+#endif
     }
 
     public static func load(provider: EditorAIProvider) -> String? {
-        guard let key = loadAll()[provider.rawValue], !key.isEmpty else { return nil }
+        migrateLegacyPlaintextStoreIfNeeded()
+#if canImport(Security)
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: provider.rawValue,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data,
+              let key = String(data: data, encoding: .utf8),
+              !key.isEmpty else { return nil }
         return key
+#else
+        return nil
+#endif
     }
 
     public static func delete(provider: EditorAIProvider) {
-        var all = loadAll()
-        all.removeValue(forKey: provider.rawValue)
-        saveAll(all)
+        migrateLegacyPlaintextStoreIfNeeded()
+#if canImport(Security)
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: provider.rawValue,
+        ]
+        _ = SecItemDelete(query as CFDictionary)
+#endif
     }
 
     public static func hasKey(for provider: EditorAIProvider) -> Bool {

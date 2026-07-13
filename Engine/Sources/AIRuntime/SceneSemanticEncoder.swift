@@ -69,6 +69,7 @@ public struct SceneSemanticEncoder: Sendable {
             if scene.hasComponent(ScriptComponent.self, for: entity)     { components.append("script") }
             if scene.hasComponent(Constraint.self, for: entity)          { components.append("constraint") }
             if scene.hasComponent(Ragdoll.self, for: entity)             { components.append("ragdoll") }
+            if scene.hasComponent(Vehicle.self, for: entity)             { components.append("vehicle") }
 
             var lightType: String?
             var lightIntensity: Float?
@@ -211,6 +212,8 @@ public struct SceneSemanticEncoder: Sendable {
             }
             let ragdoll = scene.component(Ragdoll.self, for: entity)
             let ragdollState = scene.ragdollStateFrame.states[entity]
+            let vehicle = scene.component(Vehicle.self, for: entity)
+            let vehicleState = scene.vehicleStateFrame.states[entity]
 
             records.append(SceneSemanticSnapshot.Entity(
                 id: ref,
@@ -272,7 +275,18 @@ public struct SceneSemanticEncoder: Sendable {
                 ragdollBlendWeight: ragdoll?.blendWeight,
                 ragdollBoneCount: ragdoll?.bones.count,
                 ragdollSimulatedBoneCount: ragdollState?.bones.filter(\.isSimulated).count,
-                ragdollIsEnabled: ragdoll?.isEnabled
+                ragdollIsEnabled: ragdoll?.isEnabled,
+                vehicleIsEnabled: vehicle?.isEnabled,
+                vehicleWheelCount: vehicle?.wheels.count,
+                vehicleDifferentialCount: vehicle?.differentials.count,
+                vehicleTransmissionMode: vehicle.map {
+                    $0.transmission.mode == .automatic ? "automatic" : "manual"
+                },
+                vehicleMaxTorque: vehicle?.engine.maxTorque,
+                vehicleForwardSpeed: vehicleState?.forwardSpeed,
+                vehicleEngineRPM: vehicleState?.engineRPM,
+                vehicleCurrentGear: vehicleState?.currentGear,
+                vehicleWheelContactCount: vehicleState?.wheels.filter(\.hasContact).count
             ))
         }
 

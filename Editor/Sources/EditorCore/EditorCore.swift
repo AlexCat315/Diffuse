@@ -1047,7 +1047,8 @@ public final class EditorApplication: @unchecked Sendable {
                     from: proposal.plan,
                     scene: self.scene.scene,
                     baseSceneRevision: proposal.baseSceneRevision,
-                    approvalPolicy: proposal.approvalPolicy
+                    approvalPolicy: proposal.approvalPolicy,
+                    exposureSnapshot: proposal.capabilityExposureSnapshot
                 )
                 self.logConsole("AI inference: \(latencyMs)ms", detail: proposal.plan.summary)
                 self.pendingSessionProposal = proposal
@@ -1353,8 +1354,8 @@ public final class EditorApplication: @unchecked Sendable {
                            initialWorldView: initialWorldView)
         case .openai:
             guard let key = AIKeychain.load(provider: .openai) else { return nil }
-            return Session(config: .openAI(apiKey: key, model: settings.model,
-                                           autoApprove: settings.autoApprove),
+            return Session(config: .openAIResponses(apiKey: key, model: settings.model,
+                                                    autoApprove: settings.autoApprove),
                            initialWorldView: initialWorldView)
         case .deepseek:
             guard let key = AIKeychain.load(provider: .deepseek) else { return nil }
@@ -1802,14 +1803,15 @@ public final class EditorApplication: @unchecked Sendable {
     private func mcpExecutePlan(params: [String: Any]) -> [String: Any] {
         guard let planDict = params["plan"] as? [String: Any],
               let planData = try? JSONSerialization.data(withJSONObject: planDict),
-              let plan = try? JSONDecoder().decode(SceneEditPlan.self, from: planData)
+              let plan = try? JSONDecoder().decode(SceneEditPlan.self, from: planData),
+              plan.sceneRevision != nil
         else { return ["ok": false, "error": "invalid plan"] }
         do {
             let transaction = try SceneEditPlanExecutor().buildTransaction(
                 from: plan,
                 scene: scene.scene,
-                baseSceneRevision: nil,
-                approvalPolicy: .automatic
+                baseSceneRevision: plan.sceneRevision,
+                approvalPolicy: .requiresApproval
             )
             let result = try runPlanTransaction(
                 transaction,

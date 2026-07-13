@@ -127,6 +127,7 @@ public enum SceneSerializer {
         if let c = scene.component(RigidBody.self, for: entity) { comps["rigidbody"] = serializeRigidBody(c) }
         if let c = scene.component(Collider.self, for: entity) { comps["collider"] = serializeCollider(c) }
         if let c = scene.component(CharacterController.self, for: entity) { comps["characterController"] = serializeCharacterController(c) }
+        if let c = scene.component(Vehicle.self, for: entity) { comps["vehicle"] = serializeVehicle(c) }
         if let c = scene.component(Constraint.self, for: entity),
            let a = entityIndexMap[c.entityA], let b = entityIndexMap[c.entityB] {
             comps["constraint"] = serializeConstraint(c, entityA: a, entityB: b)
@@ -189,6 +190,7 @@ public enum SceneSerializer {
         if let c = jsonToDict(comps["rigidbody"]) { _ = scene.setComponent(deserializeRigidBody(c), for: entity) }
         if let c = jsonToDict(comps["collider"]) { _ = scene.setComponent(deserializeCollider(c), for: entity) }
         if let c = jsonToDict(comps["characterController"]) { _ = scene.setComponent(deserializeCharacterController(c), for: entity) }
+        if let c = jsonToDict(comps["vehicle"]) { _ = scene.setComponent(deserializeVehicle(c), for: entity) }
         if let c = jsonToDict(comps["renderMesh"]) { _ = scene.setComponent(deserializeRenderMesh(c), for: entity) }
         if let c = jsonToDict(comps["renderMaterial"]) { _ = scene.setComponent(deserializeRenderMaterial(c), for: entity) }
         if let c = jsonToDict(comps["assetReference"]) { _ = scene.setComponent(deserializeAssetReference(c), for: entity) }
@@ -486,6 +488,159 @@ public enum SceneSerializer {
             gravityScale: jsonToFloat(d["gravityScale"]) ?? 1,
             layerID: UInt16(jsonToInt(d["layerID"]) ?? 0),
             layerMask: UInt16(jsonToInt(d["layerMask"]) ?? Int(UInt16.max))
+        )
+    }
+
+    private static func serializeVehicle(_ vehicle: Vehicle) -> [String: Any] {
+        [
+            "isEnabled": vehicle.isEnabled,
+            "up": vec3ToJSON(vehicle.up),
+            "forward": vec3ToJSON(vehicle.forward),
+            "maxPitchRollAngle": vehicle.maxPitchRollAngle,
+            "engine": [
+                "maxTorque": vehicle.engine.maxTorque,
+                "minRPM": vehicle.engine.minRPM,
+                "maxRPM": vehicle.engine.maxRPM,
+                "inertia": vehicle.engine.inertia,
+                "angularDamping": vehicle.engine.angularDamping,
+            ],
+            "transmission": [
+                "mode": vehicle.transmission.mode.rawValue,
+                "gearRatios": vehicle.transmission.gearRatios,
+                "reverseGearRatios": vehicle.transmission.reverseGearRatios,
+                "switchTime": vehicle.transmission.switchTime,
+                "clutchReleaseTime": vehicle.transmission.clutchReleaseTime,
+                "switchLatency": vehicle.transmission.switchLatency,
+                "shiftUpRPM": vehicle.transmission.shiftUpRPM,
+                "shiftDownRPM": vehicle.transmission.shiftDownRPM,
+                "clutchStrength": vehicle.transmission.clutchStrength,
+            ],
+            "wheels": vehicle.wheels.map { wheel in
+                [
+                    "position": vec3ToJSON(wheel.position),
+                    "suspensionDirection": vec3ToJSON(wheel.suspensionDirection),
+                    "steeringAxis": vec3ToJSON(wheel.steeringAxis),
+                    "wheelUp": vec3ToJSON(wheel.wheelUp),
+                    "wheelForward": vec3ToJSON(wheel.wheelForward),
+                    "suspensionMinLength": wheel.suspensionMinLength,
+                    "suspensionMaxLength": wheel.suspensionMaxLength,
+                    "suspensionPreloadLength": wheel.suspensionPreloadLength,
+                    "suspensionFrequency": wheel.suspensionFrequency,
+                    "suspensionDamping": wheel.suspensionDamping,
+                    "radius": wheel.radius,
+                    "width": wheel.width,
+                    "inertia": wheel.inertia,
+                    "angularDamping": wheel.angularDamping,
+                    "maxSteerAngle": wheel.maxSteerAngle,
+                    "maxBrakeTorque": wheel.maxBrakeTorque,
+                    "maxHandBrakeTorque": wheel.maxHandBrakeTorque,
+                ] as [String: Any]
+            },
+            "differentials": vehicle.differentials.map { differential in
+                [
+                    "leftWheel": differential.leftWheel,
+                    "rightWheel": differential.rightWheel,
+                    "differentialRatio": differential.differentialRatio,
+                    "leftRightSplit": differential.leftRightSplit,
+                    "limitedSlipRatio": differential.limitedSlipRatio,
+                    "engineTorqueRatio": differential.engineTorqueRatio,
+                ] as [String: Any]
+            },
+            "antiRollBars": vehicle.antiRollBars.map { bar in
+                [
+                    "leftWheel": bar.leftWheel,
+                    "rightWheel": bar.rightWheel,
+                    "stiffness": bar.stiffness,
+                ] as [String: Any]
+            },
+        ]
+    }
+
+    private static func deserializeVehicle(_ d: [String: Any]) -> Vehicle {
+        let defaultVehicle = Vehicle()
+        let engineDictionary = jsonToDict(d["engine"])
+        let transmissionDictionary = jsonToDict(d["transmission"])
+        let wheels = jsonToArray(d["wheels"])?.compactMap { raw -> VehicleWheelConfiguration? in
+            guard let wheel = jsonToDict(raw) else { return nil }
+            return VehicleWheelConfiguration(
+                position: jsonToFloatArray(wheel["position"]).flatMap(jsonToVec3) ?? .zero,
+                suspensionDirection: jsonToFloatArray(wheel["suspensionDirection"]).flatMap(jsonToVec3)
+                    ?? SIMD3<Float>(0, -1, 0),
+                steeringAxis: jsonToFloatArray(wheel["steeringAxis"]).flatMap(jsonToVec3)
+                    ?? SIMD3<Float>(0, 1, 0),
+                wheelUp: jsonToFloatArray(wheel["wheelUp"]).flatMap(jsonToVec3)
+                    ?? SIMD3<Float>(0, 1, 0),
+                wheelForward: jsonToFloatArray(wheel["wheelForward"]).flatMap(jsonToVec3)
+                    ?? SIMD3<Float>(0, 0, 1),
+                suspensionMinLength: jsonToFloat(wheel["suspensionMinLength"]) ?? 0.2,
+                suspensionMaxLength: jsonToFloat(wheel["suspensionMaxLength"]) ?? 0.5,
+                suspensionPreloadLength: jsonToFloat(wheel["suspensionPreloadLength"]) ?? 0,
+                suspensionFrequency: jsonToFloat(wheel["suspensionFrequency"]) ?? 1.5,
+                suspensionDamping: jsonToFloat(wheel["suspensionDamping"]) ?? 0.5,
+                radius: jsonToFloat(wheel["radius"]) ?? 0.35,
+                width: jsonToFloat(wheel["width"]) ?? 0.2,
+                inertia: jsonToFloat(wheel["inertia"]) ?? 0.9,
+                angularDamping: jsonToFloat(wheel["angularDamping"]) ?? 0.2,
+                maxSteerAngle: jsonToFloat(wheel["maxSteerAngle"]) ?? 0,
+                maxBrakeTorque: jsonToFloat(wheel["maxBrakeTorque"]) ?? 1_500,
+                maxHandBrakeTorque: jsonToFloat(wheel["maxHandBrakeTorque"]) ?? 0
+            )
+        } ?? defaultVehicle.wheels
+        let differentials = jsonToArray(d["differentials"])?.compactMap { raw -> VehicleDifferentialConfiguration? in
+            guard let differential = jsonToDict(raw),
+                  let left = jsonToInt(differential["leftWheel"]),
+                  let right = jsonToInt(differential["rightWheel"])
+            else { return nil }
+            return VehicleDifferentialConfiguration(
+                leftWheel: left,
+                rightWheel: right,
+                differentialRatio: jsonToFloat(differential["differentialRatio"]) ?? 3.42,
+                leftRightSplit: jsonToFloat(differential["leftRightSplit"]) ?? 0.5,
+                limitedSlipRatio: jsonToFloat(differential["limitedSlipRatio"]) ?? 1.4,
+                engineTorqueRatio: jsonToFloat(differential["engineTorqueRatio"]) ?? 1
+            )
+        } ?? defaultVehicle.differentials
+        let antiRollBars = jsonToArray(d["antiRollBars"])?.compactMap { raw -> VehicleAntiRollBarConfiguration? in
+            guard let bar = jsonToDict(raw),
+                  let left = jsonToInt(bar["leftWheel"]),
+                  let right = jsonToInt(bar["rightWheel"])
+            else { return nil }
+            return VehicleAntiRollBarConfiguration(
+                leftWheel: left,
+                rightWheel: right,
+                stiffness: jsonToFloat(bar["stiffness"]) ?? 1_000
+            )
+        } ?? defaultVehicle.antiRollBars
+        let engine = VehicleEngineConfiguration(
+            maxTorque: jsonToFloat(engineDictionary?["maxTorque"]) ?? 500,
+            minRPM: jsonToFloat(engineDictionary?["minRPM"]) ?? 1_000,
+            maxRPM: jsonToFloat(engineDictionary?["maxRPM"]) ?? 6_000,
+            inertia: jsonToFloat(engineDictionary?["inertia"]) ?? 0.5,
+            angularDamping: jsonToFloat(engineDictionary?["angularDamping"]) ?? 0.2
+        )
+        let transmission = VehicleTransmissionConfiguration(
+            mode: VehicleTransmissionMode(
+                rawValue: UInt8(clamping: jsonToInt(transmissionDictionary?["mode"]) ?? 0)
+            ) ?? .automatic,
+            gearRatios: jsonToFloatArray(transmissionDictionary?["gearRatios"]) ?? [2.66, 1.78, 1.3, 1, 0.74],
+            reverseGearRatios: jsonToFloatArray(transmissionDictionary?["reverseGearRatios"]) ?? [-2.9],
+            switchTime: jsonToFloat(transmissionDictionary?["switchTime"]) ?? 0.5,
+            clutchReleaseTime: jsonToFloat(transmissionDictionary?["clutchReleaseTime"]) ?? 0.3,
+            switchLatency: jsonToFloat(transmissionDictionary?["switchLatency"]) ?? 0.5,
+            shiftUpRPM: jsonToFloat(transmissionDictionary?["shiftUpRPM"]) ?? 4_000,
+            shiftDownRPM: jsonToFloat(transmissionDictionary?["shiftDownRPM"]) ?? 2_000,
+            clutchStrength: jsonToFloat(transmissionDictionary?["clutchStrength"]) ?? 10
+        )
+        return Vehicle(
+            wheels: wheels,
+            differentials: differentials,
+            antiRollBars: antiRollBars,
+            engine: engine,
+            transmission: transmission,
+            up: jsonToFloatArray(d["up"]).flatMap(jsonToVec3) ?? SIMD3<Float>(0, 1, 0),
+            forward: jsonToFloatArray(d["forward"]).flatMap(jsonToVec3) ?? SIMD3<Float>(0, 0, 1),
+            maxPitchRollAngle: jsonToFloat(d["maxPitchRollAngle"]) ?? .pi,
+            isEnabled: jsonToBool(d["isEnabled"]) ?? true
         )
     }
 

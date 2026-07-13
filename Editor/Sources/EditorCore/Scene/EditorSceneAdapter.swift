@@ -69,6 +69,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
     public let rigidBody: EditorSceneManifestRigidBody?
     public let collider: EditorSceneManifestCollider?
     public let characterController: EditorSceneManifestCharacterController?
+    public let vehicle: EditorSceneManifestVehicle?
     public let ragdoll: EditorSceneManifestRagdoll?
     public let constraint: EditorSceneManifestConstraint?
     public let script: EditorSceneManifestScript?
@@ -93,6 +94,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
                 rigidBody: EditorSceneManifestRigidBody? = nil,
                 collider: EditorSceneManifestCollider? = nil,
                 characterController: EditorSceneManifestCharacterController? = nil,
+                vehicle: EditorSceneManifestVehicle? = nil,
                 ragdoll: EditorSceneManifestRagdoll? = nil,
                 constraint: EditorSceneManifestConstraint? = nil,
                 script: EditorSceneManifestScript? = nil,
@@ -113,6 +115,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.rigidBody = rigidBody
         self.collider = collider
         self.characterController = characterController
+        self.vehicle = vehicle
         self.ragdoll = ragdoll
         self.constraint = constraint
         self.script = script
@@ -125,7 +128,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case id, name, kind, localTransform, asset, renderMesh, renderMaterial
-        case camera, light, rigidBody, collider, characterController, ragdoll, constraint, script, audioSource
+        case camera, light, rigidBody, collider, characterController, vehicle, ragdoll, constraint, script, audioSource
         case animationPlayer, animationGraphPlayer, particleEmitter, children
     }
 
@@ -143,6 +146,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.rigidBody = try c.decodeIfPresent(EditorSceneManifestRigidBody.self, forKey: .rigidBody)
         self.collider = try c.decodeIfPresent(EditorSceneManifestCollider.self, forKey: .collider)
         self.characterController = try c.decodeIfPresent(EditorSceneManifestCharacterController.self, forKey: .characterController)
+        self.vehicle = try c.decodeIfPresent(EditorSceneManifestVehicle.self, forKey: .vehicle)
         self.ragdoll = try c.decodeIfPresent(EditorSceneManifestRagdoll.self, forKey: .ragdoll)
         self.constraint = try c.decodeIfPresent(EditorSceneManifestConstraint.self, forKey: .constraint)
         self.script = try c.decodeIfPresent(EditorSceneManifestScript.self, forKey: .script)
@@ -169,6 +173,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         try c.encodeIfPresent(rigidBody, forKey: .rigidBody)
         try c.encodeIfPresent(collider, forKey: .collider)
         try c.encodeIfPresent(characterController, forKey: .characterController)
+        try c.encodeIfPresent(vehicle, forKey: .vehicle)
         try c.encodeIfPresent(ragdoll, forKey: .ragdoll)
         try c.encodeIfPresent(constraint, forKey: .constraint)
         try c.encodeIfPresent(script, forKey: .script)
@@ -985,6 +990,217 @@ public struct EditorSceneManifestCharacterController: Codable, Sendable, Equatab
             gravityScale: gravityScale,
             layerID: layerID,
             layerMask: layerMask
+        )
+    }
+}
+
+public struct EditorSceneManifestVehicleWheel: Codable, Sendable, Equatable {
+    public let position: EditorSceneManifestVector3
+    public let suspensionDirection: EditorSceneManifestVector3
+    public let steeringAxis: EditorSceneManifestVector3
+    public let wheelUp: EditorSceneManifestVector3
+    public let wheelForward: EditorSceneManifestVector3
+    public let suspensionMinLength: Float
+    public let suspensionMaxLength: Float
+    public let suspensionPreloadLength: Float
+    public let suspensionFrequency: Float
+    public let suspensionDamping: Float
+    public let radius: Float
+    public let width: Float
+    public let inertia: Float
+    public let angularDamping: Float
+    public let maxSteerAngle: Float
+    public let maxBrakeTorque: Float
+    public let maxHandBrakeTorque: Float
+
+    public init(_ wheel: VehicleWheelConfiguration) {
+        position = EditorSceneManifestVector3(wheel.position)
+        suspensionDirection = EditorSceneManifestVector3(wheel.suspensionDirection)
+        steeringAxis = EditorSceneManifestVector3(wheel.steeringAxis)
+        wheelUp = EditorSceneManifestVector3(wheel.wheelUp)
+        wheelForward = EditorSceneManifestVector3(wheel.wheelForward)
+        suspensionMinLength = wheel.suspensionMinLength
+        suspensionMaxLength = wheel.suspensionMaxLength
+        suspensionPreloadLength = wheel.suspensionPreloadLength
+        suspensionFrequency = wheel.suspensionFrequency
+        suspensionDamping = wheel.suspensionDamping
+        radius = wheel.radius
+        width = wheel.width
+        inertia = wheel.inertia
+        angularDamping = wheel.angularDamping
+        maxSteerAngle = wheel.maxSteerAngle
+        maxBrakeTorque = wheel.maxBrakeTorque
+        maxHandBrakeTorque = wheel.maxHandBrakeTorque
+    }
+
+    var component: VehicleWheelConfiguration {
+        VehicleWheelConfiguration(
+            position: position.simdValue,
+            suspensionDirection: suspensionDirection.simdValue,
+            steeringAxis: steeringAxis.simdValue,
+            wheelUp: wheelUp.simdValue,
+            wheelForward: wheelForward.simdValue,
+            suspensionMinLength: suspensionMinLength,
+            suspensionMaxLength: suspensionMaxLength,
+            suspensionPreloadLength: suspensionPreloadLength,
+            suspensionFrequency: suspensionFrequency,
+            suspensionDamping: suspensionDamping,
+            radius: radius,
+            width: width,
+            inertia: inertia,
+            angularDamping: angularDamping,
+            maxSteerAngle: maxSteerAngle,
+            maxBrakeTorque: maxBrakeTorque,
+            maxHandBrakeTorque: maxHandBrakeTorque
+        )
+    }
+}
+
+public struct EditorSceneManifestVehicleDifferential: Codable, Sendable, Equatable {
+    public let leftWheel: Int
+    public let rightWheel: Int
+    public let differentialRatio: Float
+    public let leftRightSplit: Float
+    public let limitedSlipRatio: Float
+    public let engineTorqueRatio: Float
+
+    public init(_ value: VehicleDifferentialConfiguration) {
+        leftWheel = value.leftWheel
+        rightWheel = value.rightWheel
+        differentialRatio = value.differentialRatio
+        leftRightSplit = value.leftRightSplit
+        limitedSlipRatio = value.limitedSlipRatio
+        engineTorqueRatio = value.engineTorqueRatio
+    }
+
+    var component: VehicleDifferentialConfiguration {
+        VehicleDifferentialConfiguration(
+            leftWheel: leftWheel,
+            rightWheel: rightWheel,
+            differentialRatio: differentialRatio,
+            leftRightSplit: leftRightSplit,
+            limitedSlipRatio: limitedSlipRatio,
+            engineTorqueRatio: engineTorqueRatio
+        )
+    }
+}
+
+public struct EditorSceneManifestVehicleAntiRollBar: Codable, Sendable, Equatable {
+    public let leftWheel: Int
+    public let rightWheel: Int
+    public let stiffness: Float
+
+    public init(_ value: VehicleAntiRollBarConfiguration) {
+        leftWheel = value.leftWheel
+        rightWheel = value.rightWheel
+        stiffness = value.stiffness
+    }
+
+    var component: VehicleAntiRollBarConfiguration {
+        VehicleAntiRollBarConfiguration(
+            leftWheel: leftWheel, rightWheel: rightWheel, stiffness: stiffness
+        )
+    }
+}
+
+public struct EditorSceneManifestVehicleEngine: Codable, Sendable, Equatable {
+    public let maxTorque: Float
+    public let minRPM: Float
+    public let maxRPM: Float
+    public let inertia: Float
+    public let angularDamping: Float
+
+    public init(_ value: VehicleEngineConfiguration) {
+        maxTorque = value.maxTorque
+        minRPM = value.minRPM
+        maxRPM = value.maxRPM
+        inertia = value.inertia
+        angularDamping = value.angularDamping
+    }
+
+    var component: VehicleEngineConfiguration {
+        VehicleEngineConfiguration(
+            maxTorque: maxTorque,
+            minRPM: minRPM,
+            maxRPM: maxRPM,
+            inertia: inertia,
+            angularDamping: angularDamping
+        )
+    }
+}
+
+public struct EditorSceneManifestVehicleTransmission: Codable, Sendable, Equatable {
+    public let mode: String
+    public let gearRatios: [Float]
+    public let reverseGearRatios: [Float]
+    public let switchTime: Float
+    public let clutchReleaseTime: Float
+    public let switchLatency: Float
+    public let shiftUpRPM: Float
+    public let shiftDownRPM: Float
+    public let clutchStrength: Float
+
+    public init(_ value: VehicleTransmissionConfiguration) {
+        mode = value.mode == .automatic ? "automatic" : "manual"
+        gearRatios = value.gearRatios
+        reverseGearRatios = value.reverseGearRatios
+        switchTime = value.switchTime
+        clutchReleaseTime = value.clutchReleaseTime
+        switchLatency = value.switchLatency
+        shiftUpRPM = value.shiftUpRPM
+        shiftDownRPM = value.shiftDownRPM
+        clutchStrength = value.clutchStrength
+    }
+
+    var component: VehicleTransmissionConfiguration {
+        VehicleTransmissionConfiguration(
+            mode: mode == "manual" ? .manual : .automatic,
+            gearRatios: gearRatios,
+            reverseGearRatios: reverseGearRatios,
+            switchTime: switchTime,
+            clutchReleaseTime: clutchReleaseTime,
+            switchLatency: switchLatency,
+            shiftUpRPM: shiftUpRPM,
+            shiftDownRPM: shiftDownRPM,
+            clutchStrength: clutchStrength
+        )
+    }
+}
+
+public struct EditorSceneManifestVehicle: Codable, Sendable, Equatable {
+    public let wheels: [EditorSceneManifestVehicleWheel]
+    public let differentials: [EditorSceneManifestVehicleDifferential]
+    public let antiRollBars: [EditorSceneManifestVehicleAntiRollBar]
+    public let engine: EditorSceneManifestVehicleEngine
+    public let transmission: EditorSceneManifestVehicleTransmission
+    public let up: EditorSceneManifestVector3
+    public let forward: EditorSceneManifestVector3
+    public let maxPitchRollAngle: Float
+    public let isEnabled: Bool
+
+    public init(_ vehicle: Vehicle) {
+        wheels = vehicle.wheels.map(EditorSceneManifestVehicleWheel.init)
+        differentials = vehicle.differentials.map(EditorSceneManifestVehicleDifferential.init)
+        antiRollBars = vehicle.antiRollBars.map(EditorSceneManifestVehicleAntiRollBar.init)
+        engine = EditorSceneManifestVehicleEngine(vehicle.engine)
+        transmission = EditorSceneManifestVehicleTransmission(vehicle.transmission)
+        up = EditorSceneManifestVector3(vehicle.up)
+        forward = EditorSceneManifestVector3(vehicle.forward)
+        maxPitchRollAngle = vehicle.maxPitchRollAngle
+        isEnabled = vehicle.isEnabled
+    }
+
+    var component: Vehicle {
+        Vehicle(
+            wheels: wheels.map(\.component),
+            differentials: differentials.map(\.component),
+            antiRollBars: antiRollBars.map(\.component),
+            engine: engine.component,
+            transmission: transmission.component,
+            up: up.simdValue,
+            forward: forward.simdValue,
+            maxPitchRollAngle: maxPitchRollAngle,
+            isEnabled: isEnabled
         )
     }
 }
@@ -2059,6 +2275,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             if let characterController = node.characterController {
                 _ = restoredScene.setComponent(characterController.component, for: entity)
             }
+            if let vehicle = node.vehicle {
+                _ = restoredScene.setComponent(vehicle.component, for: entity)
+            }
             if let script = node.script {
                 _ = restoredScene.setComponent(script.component, for: entity)
             }
@@ -2171,6 +2390,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         if let characterControllerSection = characterControllerSection(for: entity) {
             sections.append(characterControllerSection)
         }
+        if let vehicleSection = vehicleSection(for: entity) {
+            sections.append(vehicleSection)
+        }
         if let ragdollSection = ragdollSection(for: entity) {
             sections.append(ragdollSection)
         }
@@ -2238,6 +2460,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             .map(EditorSceneManifestCollider.init)
         let characterController = scene.component(CharacterController.self, for: entity)
             .map(EditorSceneManifestCharacterController.init)
+        let vehicle = scene.component(Vehicle.self, for: entity)
+            .map(EditorSceneManifestVehicle.init)
         let ragdoll = scene.component(Ragdoll.self, for: entity)
             .map(EditorSceneManifestRagdoll.init)
         let constraint = scene.component(Constraint.self, for: entity)
@@ -2271,6 +2495,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             rigidBody: rigidBody,
             collider: collider,
             characterController: characterController,
+            vehicle: vehicle,
             ragdoll: ragdoll,
             constraint: constraint,
             script: script,
@@ -2525,6 +2750,80 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 EditorInspectorField(id: "character-mass", label: L("Mass"), value: .constrainedNumber(characterFloatBinding(for: entity, \.mass, min: 0.01), min: 0.01, max: nil, step: 1, showsStepper: true)),
                 EditorInspectorField(id: "character-strength", label: L("Push Strength"), value: .constrainedNumber(characterFloatBinding(for: entity, \.maxStrength, min: 0), min: 0, max: nil, step: 10, showsStepper: true)),
                 EditorInspectorField(id: "character-gravity", label: L("Gravity Scale"), value: .constrainedNumber(characterFloatBinding(for: entity, \.gravityScale), min: nil, max: nil, step: 0.1, showsStepper: true)),
+            ]
+        )
+    }
+
+    private func vehicleSection(for entity: EntityID) -> EditorInspectorSection? {
+        guard let vehicle = scene.component(Vehicle.self, for: entity) else { return nil }
+        let state = scene.vehicleStateFrame.states[entity]
+        let contactCount = state?.wheels.filter(\.hasContact).count ?? 0
+        return EditorInspectorSection(
+            id: "vehicle",
+            title: L("Vehicle"),
+            fields: [
+                EditorInspectorField(
+                    id: "vehicle-enabled",
+                    label: L("Enabled"),
+                    value: .bool(vehicleEnabledBinding(for: entity))
+                ),
+                EditorInspectorField(
+                    id: "vehicle-wheels",
+                    label: L("Wheels"),
+                    value: .readOnly(String(vehicle.wheels.count))
+                ),
+                EditorInspectorField(
+                    id: "vehicle-differentials",
+                    label: L("Differentials"),
+                    value: .readOnly(String(vehicle.differentials.count))
+                ),
+                EditorInspectorField(
+                    id: "vehicle-transmission",
+                    label: L("Transmission"),
+                    value: .readOnly(vehicle.transmission.mode == .automatic ? L("Automatic") : L("Manual"))
+                ),
+                EditorInspectorField(
+                    id: "vehicle-max-torque",
+                    label: L("Max Torque"),
+                    value: .constrainedNumber(
+                        vehicleEngineFloatBinding(for: entity, \.maxTorque, min: 0),
+                        min: 0,
+                        max: nil,
+                        step: 10,
+                        showsStepper: true
+                    )
+                ),
+                EditorInspectorField(
+                    id: "vehicle-clutch-strength",
+                    label: L("Clutch Strength"),
+                    value: .constrainedNumber(
+                        vehicleTransmissionFloatBinding(for: entity, \.clutchStrength, min: 0),
+                        min: 0,
+                        max: nil,
+                        step: 0.5,
+                        showsStepper: true
+                    )
+                ),
+                EditorInspectorField(
+                    id: "vehicle-speed",
+                    label: L("Forward Speed"),
+                    value: .readOnly(format(state?.forwardSpeed ?? 0))
+                ),
+                EditorInspectorField(
+                    id: "vehicle-engine-rpm",
+                    label: L("Engine RPM"),
+                    value: .readOnly(format(state?.engineRPM ?? 0))
+                ),
+                EditorInspectorField(
+                    id: "vehicle-current-gear",
+                    label: L("Current Gear"),
+                    value: .readOnly(String(state?.currentGear ?? 0))
+                ),
+                EditorInspectorField(
+                    id: "vehicle-wheel-contacts",
+                    label: L("Wheel Contacts"),
+                    value: .readOnly("\(contactCount) / \(vehicle.wheels.count)")
+                ),
             ]
         )
     }
@@ -4821,6 +5120,55 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
+    private func vehicleEnabledBinding(for entity: EntityID) -> Binding<Bool> {
+        Binding(
+            get: { [self] in scene.component(Vehicle.self, for: entity)?.isEnabled ?? false },
+            set: { [self] value in
+                guard scene.component(Vehicle.self, for: entity)?.isEnabled != value else { return }
+                _ = scene.updateComponent(Vehicle.self, for: entity) { $0.isEnabled = value }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func vehicleEngineFloatBinding(
+        for entity: EntityID,
+        _ keyPath: WritableKeyPath<VehicleEngineConfiguration, Float>,
+        min minimum: Float? = nil
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(Vehicle.self, for: entity)?.engine[keyPath: keyPath] ?? 0
+            },
+            set: { [self] next in
+                let value = minimum.map { Swift.max($0, next) } ?? next
+                guard scene.updateComponent(Vehicle.self, for: entity, {
+                    $0.engine[keyPath: keyPath] = value
+                }) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func vehicleTransmissionFloatBinding(
+        for entity: EntityID,
+        _ keyPath: WritableKeyPath<VehicleTransmissionConfiguration, Float>,
+        min minimum: Float? = nil
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(Vehicle.self, for: entity)?.transmission[keyPath: keyPath] ?? 0
+            },
+            set: { [self] next in
+                let value = minimum.map { Swift.max($0, next) } ?? next
+                guard scene.updateComponent(Vehicle.self, for: entity, {
+                    $0.transmission[keyPath: keyPath] = value
+                }) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
     private func ragdollEnabledBinding(for entity: EntityID) -> Binding<Bool> {
         Binding(
             get: { [self] in scene.component(Ragdoll.self, for: entity)?.isEnabled ?? false },
@@ -5527,6 +5875,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         }
         if scene.hasComponent(Ragdoll.self, for: entity) {
             return "Ragdoll"
+        }
+        if scene.hasComponent(Vehicle.self, for: entity) {
+            return "Vehicle"
         }
         if scene.hasComponent(RigidBody.self, for: entity) || scene.hasComponent(Collider.self, for: entity) {
             return "Physics Entity"

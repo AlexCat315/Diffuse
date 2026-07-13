@@ -1474,12 +1474,12 @@ final class AIRuntimeTests: XCTestCase {
         let ref = "scene:\(entity.rawValue)"
 
         let json = """
-        {"summary":"bad","steps":[{"op":"set_collider_shape","entity_id":"\(ref)","collider_shape":"cylinder"}]}
+        {"summary":"bad","steps":[{"op":"set_collider_shape","entity_id":"\(ref)","collider_shape":"torus"}]}
         """
         let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
         XCTAssertThrowsError(try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)) { err in
             if case SceneEditPlanExecutorError.unknownColliderShape(let s) = err {
-                XCTAssertEqual(s, "cylinder")
+                XCTAssertEqual(s, "torus")
             } else {
                 XCTFail("expected unknownColliderShape, got \(err)")
             }
@@ -1683,6 +1683,34 @@ final class AIRuntimeTests: XCTestCase {
                                                      workspaceMode: nil, localeIdentifier: nil)
         let record = snapshot.entities.first { $0.id == "scene:\(entity.rawValue)" }
         XCTAssertEqual(record?.constraintEnabled, false)
+    }
+
+    func testSceneSemanticEncoderSurfacesVehicleConfiguration() {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(
+            Vehicle(
+                engine: VehicleEngineConfiguration(maxTorque: 725),
+                transmission: VehicleTransmissionConfiguration(mode: .manual),
+                isEnabled: false
+            ),
+            for: entity
+        )
+
+        let snapshot = SceneSemanticEncoder().encode(
+            scene,
+            selectedEntityID: nil,
+            workspaceMode: nil,
+            localeIdentifier: nil
+        )
+        let record = snapshot.entities.first { $0.id == "scene:\(entity.rawValue)" }
+        XCTAssertEqual(record?.components.contains("vehicle"), true)
+        XCTAssertEqual(record?.vehicleIsEnabled, false)
+        XCTAssertEqual(record?.vehicleWheelCount, 4)
+        XCTAssertEqual(record?.vehicleDifferentialCount, 1)
+        XCTAssertEqual(record?.vehicleTransmissionMode, "manual")
+        XCTAssertEqual(record?.vehicleMaxTorque ?? 0, 725, accuracy: 0.001)
+        XCTAssertNil(record?.vehicleForwardSpeed)
     }
 
     func testSetAudioSourceExecutorProducesMutation() throws {

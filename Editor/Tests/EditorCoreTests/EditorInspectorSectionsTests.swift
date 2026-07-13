@@ -169,6 +169,35 @@ struct EditorInspectorSectionsTests {
         #expect(body.continuousCollisionDetection)
     }
 
+    @Test("vehicle inspector exposes authored controls and writes them back")
+    func vehicleBindings() throws {
+        let adapter = EditorSceneAdapter()
+        let id = makeEntity(in: adapter)
+        let entity = try #require(EntityID(rawValue: id))
+        #expect(!hasSection(adapter, id, "vehicle"))
+        #expect(adapter.addComponent(.vehicle, to: id))
+        #expect(hasSection(adapter, id, "vehicle"))
+
+        guard case let .bool(enabled) =
+                field(adapter, id, section: "vehicle", field: "vehicle-enabled"),
+              case let .constrainedNumber(maxTorque, _, _, _, _) =
+                field(adapter, id, section: "vehicle", field: "vehicle-max-torque"),
+              case let .constrainedNumber(clutchStrength, _, _, _, _) =
+                field(adapter, id, section: "vehicle", field: "vehicle-clutch-strength") else {
+            Issue.record("expected vehicle authored controls"); return
+        }
+        enabled.wrappedValue = false
+        maxTorque.wrappedValue = 780
+        clutchStrength.wrappedValue = 18
+
+        let vehicle = try #require(adapter.scene.component(Vehicle.self, for: entity))
+        #expect(!vehicle.isEnabled)
+        #expect(vehicle.engine.maxTorque == 780)
+        #expect(vehicle.transmission.clutchStrength == 18)
+        #expect(adapter.removeComponent(.vehicle, from: id))
+        #expect(!hasSection(adapter, id, "vehicle"))
+    }
+
     @Test("collider inspector edits Jolt shape center and collision mask")
     func colliderJoltSettingsBindings() throws {
         let adapter = EditorSceneAdapter()
