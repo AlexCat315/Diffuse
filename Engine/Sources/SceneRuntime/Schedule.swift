@@ -154,6 +154,7 @@ public struct RuntimeWorldSchedule {
     private struct PhysicsSyncCache {
         var bodies: [EntityID: PhysicsBodyDescriptor] = [:]
         var constraints: [EntityID: PhysicsConstraintDescriptor] = [:]
+        var vehicles: [EntityID: PhysicsVehicleDescriptor] = [:]
     }
 
     private struct RuntimePhysicsReadView {
@@ -164,6 +165,7 @@ public struct RuntimeWorldSchedule {
         var colliders: [EntityID: Collider]
         var constraints: [EntityID: Constraint]
         var characters: [EntityID: CharacterController]
+        var vehicles: [EntityID: Vehicle]
         var meshGeometries: [EntityID: MeshColliderGeometry]
     }
 
@@ -186,6 +188,7 @@ public struct RuntimeWorldSchedule {
     private var physicsDebugFrame = PhysicsDebugFrameResource.empty
     private var physicsEventFrame = PhysicsEventFrameResource.empty
     private var characterStateFrame = CharacterStateFrameResource.empty
+    private var vehicleStateFrame = VehicleStateFrameResource.empty
     private var ragdollSimulatedBodies: Set<EntityID> = []
     private var physicsSyncCache = PhysicsSyncCache()
     private var resolvedPhysicsBackendKind: PhysicsBackendKind = .none
@@ -296,13 +299,16 @@ public struct RuntimeWorldSchedule {
         var activeBodies: [PhysicsBodyDescriptor] = []
         var activeConstraints: [PhysicsConstraintDescriptor] = []
         var activeCharacters: [PhysicsCharacterDescriptor] = []
+        var activeVehicles: [PhysicsVehicleDescriptor] = []
         var syncEvents: [PhysicsSyncEvent] = []
         var pendingWritebacks: [PhysicsBodyWriteback] = []
         var physicsContactEvents: [PhysicsContactEvent] = []
         var physicsJointBreakEvents: [PhysicsJointBreakEvent] = []
         var pendingCharacterStates: [EntityID: CharacterState] = [:]
+        var pendingVehicleStates: [EntityID: VehicleState] = [:]
         var recordedBodyCommands: [PhysicsRecordedBodyCommand] = []
         var recordedCharacterCommands: [PhysicsRecordedCharacterCommand] = []
+        var recordedVehicleCommands: [PhysicsRecordedVehicleCommand] = []
 
         for phase in RuntimeSystemPhase.allCases {
             switch phase {
@@ -359,12 +365,14 @@ public struct RuntimeWorldSchedule {
                     physicsDebugFrame = .empty
                     physicsEventFrame = .empty
                     characterStateFrame = .empty
+                    vehicleStateFrame = .empty
                     world.setDerivedResource(physicsClock)
                     world.setDerivedResource(physicsFrameState)
                     world.setDerivedResource(physicsContactFrame)
                     world.setDerivedResource(physicsDebugFrame)
                     world.setDerivedResource(physicsEventFrame)
                     world.setDerivedResource(characterStateFrame)
+                    world.setDerivedResource(vehicleStateFrame)
                     continue
                 }
 
@@ -374,6 +382,7 @@ public struct RuntimeWorldSchedule {
                 let constraintCollection = collectPhysicsConstraints(from: physicsReadView)
                 activeConstraints = constraintCollection.constraints
                 activeCharacters = collectPhysicsCharacters(from: physicsReadView)
+                activeVehicles = collectPhysicsVehicles(from: physicsReadView)
                 if world.resource(PhysicsCommandRecordingResource.self)?.isRecording == true,
                    world.resource(PhysicsCommandReplayControlResource.self)?.isReplaying != true {
                     recordedBodyCommands = activeBodies.compactMap { descriptor in
@@ -395,6 +404,9 @@ public struct RuntimeWorldSchedule {
                     recordedCharacterCommands = (world.resource(CharacterCommandFrameResource.self)?.commands ?? [:])
                         .map { PhysicsRecordedCharacterCommand(entity: $0.key, command: $0.value) }
                         .sorted { $0.entity.rawValue < $1.entity.rawValue }
+                    recordedVehicleCommands = (world.resource(VehicleCommandFrameResource.self)?.commands ?? [:])
+                        .map { PhysicsRecordedVehicleCommand(entity: $0.key, command: $0.value) }
+                        .sorted { $0.entity.rawValue < $1.entity.rawValue }
                 }
                 recordJobReport(bodyCollection.report, for: .fixedPhysicsPrepare)
                 recordJobReport(constraintCollection.report, for: .fixedPhysicsPrepare)
@@ -402,7 +414,8 @@ public struct RuntimeWorldSchedule {
                 physicsConstraintCount = activeConstraints.count
                 let syncEventDiff = diffPhysicsSyncEvents(
                     bodies: activeBodies,
-                    constraints: activeConstraints
+                    constraints: activeConstraints,
+                    vehicles: activeVehicles
                 )
                 syncEvents = syncEventDiff.events
                 recordJobReport(syncEventDiff.report, for: .fixedPhysicsPrepare)
@@ -412,7 +425,8 @@ public struct RuntimeWorldSchedule {
                     activeBodies: activeBodies,
                     activeConstraints: activeConstraints,
                     syncEvents: syncEvents,
-                    activeCharacters: activeCharacters
+                    activeCharacters: activeCharacters,
+                    activeVehicles: activeVehicles
                 )
                 let prepareStarted = DispatchTime.now().uptimeNanoseconds
                 let prepareResult = physicsBackend.prepare(context: prepareContext)
@@ -421,7 +435,11 @@ public struct RuntimeWorldSchedule {
                 synchronizedConstraintCount += prepareResult.synchronizedConstraints
                 physicsBackendError = prepareResult.error
                 if prepareResult.error == nil {
-                    replacePhysicsSyncCache(bodies: activeBodies, constraints: activeConstraints)
+                    replacePhysicsSyncCache(
+                        bodies: activeBodies,
+                        constraints: activeConstraints,
+                        vehicles: activeVehicles
+                    )
                 } else {
                     physicsSyncCache = PhysicsSyncCache()
                 }
@@ -453,7 +471,9 @@ public struct RuntimeWorldSchedule {
                             activeBodies: activeBodies,
                             activeConstraints: activeConstraints,
                             activeCharacters: activeCharacters,
-                            characterCommands: world.resource(CharacterCommandFrameResource.self)?.commands ?? [:]
+                            characterCommands: world.resource(CharacterCommandFrameResource.self)?.commands ?? [:],
+                            activeVehicles: activeVehicles,
+                            vehicleCommands: world.resource(VehicleCommandFrameResource.self)?.commands ?? [:]
                         )
                     )
                     physicsStepNanoseconds += DispatchTime.now().uptimeNanoseconds - stepStarted
@@ -476,6 +496,9 @@ public struct RuntimeWorldSchedule {
                     pendingWritebacks = mergeWritebacks(existing: pendingWritebacks, incoming: stepResult.writebacks)
                     for state in stepResult.characterStates {
                         pendingCharacterStates[state.entity] = state
+                    }
+                    for state in stepResult.vehicleStates {
+                        pendingVehicleStates[state.entity] = state
                     }
                     substepIndex += 1
                 }
@@ -528,8 +551,11 @@ public struct RuntimeWorldSchedule {
                 )
                 physicsContactFrame = PhysicsContactFrameResource(events: physicsContactEvents)
                 characterStateFrame = CharacterStateFrameResource(states: pendingCharacterStates)
+                vehicleStateFrame = VehicleStateFrameResource(states: pendingVehicleStates)
                 world.setDerivedResource(physicsClock)
                 world.setDerivedResource(physicsFrameState)
+                world.setDerivedResource(characterStateFrame)
+                world.setDerivedResource(vehicleStateFrame)
                 let stateHashFrame = PhysicsStateHashFrameResource(
                     simulatedStep: physicsClock.simulatedSteps,
                     hash: physicsStateHash(in: world)
@@ -544,6 +570,7 @@ public struct RuntimeWorldSchedule {
                             settings: physicsSettings,
                             bodyCommands: physicsStepCount > 0 ? recordedBodyCommands : [],
                             characterCommands: physicsStepCount > 0 ? recordedCharacterCommands : [],
+                            vehicleCommands: physicsStepCount > 0 ? recordedVehicleCommands : [],
                             expectedSimulatedStep: stateHashFrame.simulatedStep,
                             expectedStateHash: stateHashFrame.hash
                         ))
@@ -554,7 +581,6 @@ public struct RuntimeWorldSchedule {
                     world.setDerivedResource(recording)
                 }
                 world.setDerivedResource(physicsContactFrame)
-                world.setDerivedResource(characterStateFrame)
                 if usesSharedJoltBackend {
                     physicsQueryScene.adoptSynchronizedWorld(
                         world,
@@ -695,6 +721,7 @@ public struct RuntimeWorldSchedule {
 
         world.advanceRevision()
         world.setDerivedResource(CharacterCommandFrameResource.empty)
+        world.setDerivedResource(VehicleCommandFrameResource.empty)
 
         return RuntimeScheduleReport(
             phases: RuntimeSystemPhase.allCases,
@@ -721,10 +748,12 @@ public struct RuntimeWorldSchedule {
 
     private mutating func replacePhysicsSyncCache(
         bodies: [PhysicsBodyDescriptor],
-        constraints: [PhysicsConstraintDescriptor]
+        constraints: [PhysicsConstraintDescriptor],
+        vehicles: [PhysicsVehicleDescriptor]
     ) {
         physicsSyncCache.bodies = Dictionary(uniqueKeysWithValues: bodies.map { ($0.entity, $0) })
         physicsSyncCache.constraints = Dictionary(uniqueKeysWithValues: constraints.map { ($0.entity, $0) })
+        physicsSyncCache.vehicles = Dictionary(uniqueKeysWithValues: vehicles.map { ($0.entity, $0) })
     }
 
     private mutating func refreshPhysicsSyncCacheAfterWriteback(
@@ -780,6 +809,13 @@ public struct RuntimeWorldSchedule {
         }
     }
 
+    private func collectPhysicsVehicles(from view: RuntimePhysicsReadView) -> [PhysicsVehicleDescriptor] {
+        view.entities.compactMap { entity in
+            guard let vehicle = view.vehicles[entity], vehicle.isEnabled else { return nil }
+            return PhysicsVehicleDescriptor(entity: entity, vehicle: vehicle)
+        }
+    }
+
     private func collectPhysicsConstraints(
         from view: RuntimePhysicsReadView
     ) -> (constraints: [PhysicsConstraintDescriptor], report: JobDispatchReport) {
@@ -800,12 +836,15 @@ public struct RuntimeWorldSchedule {
 
     private func diffPhysicsSyncEvents(
         bodies: [PhysicsBodyDescriptor],
-        constraints: [PhysicsConstraintDescriptor]
+        constraints: [PhysicsConstraintDescriptor],
+        vehicles: [PhysicsVehicleDescriptor]
     ) -> (events: [PhysicsSyncEvent], report: JobDispatchReport) {
         let previousBodies = physicsSyncCache.bodies
         let previousConstraints = physicsSyncCache.constraints
+        let previousVehicles = physicsSyncCache.vehicles
         let bodyMap = Dictionary(uniqueKeysWithValues: bodies.map { ($0.entity, $0) })
         let constraintMap = Dictionary(uniqueKeysWithValues: constraints.map { ($0.entity, $0) })
+        let vehicleMap = Dictionary(uniqueKeysWithValues: vehicles.map { ($0.entity, $0) })
         let changedBodyEntities = Set(bodies.compactMap { descriptor in
             previousBodies[descriptor.entity] == descriptor ? nil : descriptor.entity
         })
@@ -826,10 +865,21 @@ public struct RuntimeWorldSchedule {
         let constraintRemovals = jobSystem.parallelCompactMap(items: Array(previousConstraints.keys)) { entity -> PhysicsSyncEvent? in
             constraintMap[entity] == nil ? .constraintRemove(entity) : nil
         }
+        let vehicleUpserts = jobSystem.parallelCompactMap(items: vehicles) { descriptor -> PhysicsSyncEvent? in
+            let dependsOnChangedBody = changedBodyEntities.contains(descriptor.entity)
+            return previousVehicles[descriptor.entity] == descriptor && !dependsOnChangedBody
+                ? nil
+                : .vehicleUpsert(descriptor)
+        }
+        let vehicleRemovals = jobSystem.parallelCompactMap(items: Array(previousVehicles.keys)) { entity -> PhysicsSyncEvent? in
+            vehicleMap[entity] == nil ? .vehicleRemove(entity) : nil
+        }
 
-        let reports = [bodyUpserts.1, bodyRemovals.1, constraintUpserts.1, constraintRemovals.1]
+        let reports = [bodyUpserts.1, bodyRemovals.1, constraintUpserts.1, constraintRemovals.1,
+                       vehicleUpserts.1, vehicleRemovals.1]
         return (
-            bodyUpserts.0 + bodyRemovals.0 + constraintUpserts.0 + constraintRemovals.0,
+            bodyUpserts.0 + bodyRemovals.0 + constraintUpserts.0 + constraintRemovals.0
+                + vehicleUpserts.0 + vehicleRemovals.0,
             mergeDispatchReports(reports)
         )
     }
@@ -1798,6 +1848,7 @@ public struct RuntimeWorldSchedule {
             colliders: colliders,
             constraints: world.componentSnapshot(Constraint.self, matching: entities),
             characters: world.componentSnapshot(CharacterController.self, matching: entities),
+            vehicles: world.componentSnapshot(Vehicle.self, matching: entities),
             meshGeometries: meshGeometries
         )
     }
@@ -2004,6 +2055,24 @@ public struct RuntimeWorldSchedule {
                 combineFloat(value, into: &hash)
             }
             combine(UInt64(character.groundState.rawValue), into: &hash)
+        }
+        let vehicles = (world.resource(VehicleStateFrameResource.self) ?? .empty).states
+            .values.sorted { $0.entity.rawValue < $1.entity.rawValue }
+        for vehicle in vehicles {
+            combine(vehicle.entity.rawValue, into: &hash)
+            combineFloat(vehicle.forwardSpeed, into: &hash)
+            combineFloat(vehicle.engineRPM, into: &hash)
+            combine(UInt64(bitPattern: Int64(vehicle.currentGear)), into: &hash)
+            combineFloat(vehicle.clutchFriction, into: &hash)
+            for wheel in vehicle.wheels {
+                combine(UInt64(wheel.index), into: &hash)
+                combineFloat(wheel.angularVelocity, into: &hash)
+                combineFloat(wheel.rotationAngle, into: &hash)
+                combineFloat(wheel.steerAngle, into: &hash)
+                combineFloat(wheel.suspensionLength, into: &hash)
+                combine(wheel.hasContact ? 1 : 0, into: &hash)
+                combine(wheel.contactEntity?.rawValue ?? 0, into: &hash)
+            }
         }
         return hash
     }

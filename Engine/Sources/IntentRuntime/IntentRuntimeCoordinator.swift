@@ -36,6 +36,7 @@ public struct CapabilityInvocationResult: Sendable, Equatable {
 public enum IntentRuntimeCoordinatorError: Error, CustomStringConvertible {
     case noPendingConfirmation
     case confirmationBatchMismatch(expected: String, actual: String)
+    case missingCapabilityContext
 
     public var description: String {
         switch self {
@@ -43,6 +44,8 @@ public enum IntentRuntimeCoordinatorError: Error, CustomStringConvertible {
             return "no confirmation batch is currently staged"
         case let .confirmationBatchMismatch(expected, actual):
             return "confirmation batch mismatch: expected \(expected), actual \(actual)"
+        case .missingCapabilityContext:
+            return "capability-backed transactions require an invocation context"
         }
     }
 }
@@ -50,6 +53,9 @@ public enum IntentRuntimeCoordinatorError: Error, CustomStringConvertible {
 private struct PendingInvocation {
     var transaction: TransactionIR
     var request: ConfirmationRequestBatch
+    var remainingQuestions: [ConfirmationQuestion]
+    var preview: TransactionPreviewResult
+    var capabilityContext: CapabilityInvocationContext?
 }
 
 public final class IntentRuntimeCoordinator: @unchecked Sendable {
@@ -87,6 +93,9 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
     public func submitPlan(_ transaction: TransactionIR,
                            executionContext: inout TransactionExecutionContext,
                            capabilityContext: CapabilityInvocationContext? = nil) throws -> CapabilityInvocationResult {
+        if !transaction.capabilityInvocations.isEmpty, capabilityContext == nil {
+            throw IntentRuntimeCoordinatorError.missingCapabilityContext
+        }
         var plannedTransaction = transaction
         var plannedQuestions: [ConfirmationQuestion] = []
         var warnings: [String] = []
@@ -103,20 +112,23 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
         return try submitPlannedTransaction(plannedTransaction,
                                             plannedQuestions: plannedQuestions,
                                             warnings: warnings,
+                                            capabilityContext: capabilityContext,
                                             executionContext: &executionContext)
     }
 
     private func submitPlannedTransaction(_ transaction: TransactionIR,
                                           plannedQuestions: [ConfirmationQuestion],
                                           warnings: [String],
+                                          capabilityContext: CapabilityInvocationContext?,
                                            executionContext: inout TransactionExecutionContext) throws -> CapabilityInvocationResult {
         guard transaction.approvalPolicy != .forbidden else {
             throw CapabilityInvocationPlannerError.approvalForbidden(transaction.id)
         }
 
         if transaction.approvalPolicy == .automatic {
-            if let scene = executionContext.sceneRuntime { undoStack.push(scene) }
+            let undoSnapshot = executionContext.sceneRuntime
             let applyResult = try executor.apply(transaction, to: &executionContext)
+            if let undoSnapshot { undoStack.push(undoSnapshot) }
             return CapabilityInvocationResult(disposition: .applied,
                                               transactionID: transaction.id,
                                               applyResult: applyResult,
@@ -124,8 +136,15 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
         }
 
         let stagedResult = try stagedStore.stage(transaction, from: executionContext)
+        // AI destructive writes use two separate confirmation rounds: first the
+        // whole-plan preview, then the destructive capability warning. Legacy
+        // human intents retain their existing single-round questions.
+        let destructiveQuestions = transaction.capabilityInvocations.isEmpty
+            ? []
+            : plannedQuestions.filter { $0.kind == .approveDestructive }
+        let initialQuestions = destructiveQuestions.isEmpty ? plannedQuestions : []
         let request = makeConfirmationRequest(for: transaction,
-                                              plannedQuestions: plannedQuestions)
+                                              plannedQuestions: initialQuestions)
         do {
             if let bus = executionContext.observationBus {
                 _ = try bus.publish(kind: .confirmationRequested,
@@ -137,7 +156,13 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
                                     correlationID: request.correlationID,
                                     provenance: .authored)
             }
-            lock.withLock { pending = PendingInvocation(transaction: transaction, request: request) }
+            lock.withLock {
+                pending = PendingInvocation(transaction: transaction,
+                                            request: request,
+                                            remainingQuestions: destructiveQuestions,
+                                            preview: stagedResult.preview,
+                                            capabilityContext: capabilityContext)
+            }
         } catch {
             _ = try? stagedStore.discardStagedTransaction(using: executionContext)
             throw error
@@ -186,8 +211,65 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
         }
 
         if shouldApply(resolution) {
-            if let scene = executionContext.sceneRuntime { undoStack.push(scene) }
+            if !p.remainingQuestions.isEmpty {
+                let nextRequest = ConfirmationRequestBatch(
+                    batchID: "cfm:destructive:\(p.transaction.id)",
+                    origin: "intent_runtime",
+                    correlationID: p.transaction.id,
+                    questions: p.remainingQuestions
+                )
+                if let bus = executionContext.observationBus {
+                    _ = try bus.publish(kind: .confirmationRequested,
+                                        streamID: executionContext.uiStreamID,
+                                        payload: .inline(confirmationRequestedPayload(
+                                            request: nextRequest,
+                                            preview: p.preview
+                                        )),
+                                        origin: executionContext.eventOrigin,
+                                        causationID: p.transaction.id,
+                                        correlationID: nextRequest.correlationID,
+                                        provenance: .authored)
+                }
+                lock.withLock {
+                    pending = PendingInvocation(transaction: p.transaction,
+                                                request: nextRequest,
+                                                remainingQuestions: [],
+                                                preview: p.preview,
+                                                capabilityContext: p.capabilityContext)
+                }
+                return CapabilityInvocationResult(disposition: .confirmationRequested,
+                                                  transactionID: p.transaction.id,
+                                                  confirmationRequest: nextRequest)
+            }
+            // Confirmation may be open while entities, release gates, plugin
+            // authorisation, or registry contracts change. Re-run the exact
+            // invocation checks against the latest scene immediately before
+            // applying the staged transaction.
+            if !p.transaction.capabilityInvocations.isEmpty,
+               let originalContext = p.capabilityContext {
+                var currentContext = originalContext
+                if let scene = executionContext.sceneRuntime {
+                    currentContext = CapabilityInvocationContext(
+                        sceneRuntime: scene,
+                        selectedEntityID: originalContext.selectedEntityID,
+                        isSceneEditable: originalContext.isSceneEditable,
+                        defaultSource: originalContext.defaultSource,
+                        defaultConfidence: originalContext.defaultConfidence,
+                        defaultEvidence: originalContext.defaultEvidence
+                    )
+                }
+                do {
+                    let planner = lock.withLock { capabilityPlanner }
+                    _ = try planner.plan(transaction: p.transaction, context: currentContext)
+                } catch {
+                    _ = try? stagedStore.discardStagedTransaction(using: executionContext)
+                    lock.withLock { pending = nil }
+                    throw error
+                }
+            }
+            let undoSnapshot = executionContext.sceneRuntime
             let applied = try stagedStore.applyStagedTransaction(to: &executionContext)
+            if let undoSnapshot { undoStack.push(undoSnapshot) }
             lock.withLock { pending = nil }
             return CapabilityInvocationResult(disposition: .applied,
                                               transactionID: p.transaction.id,
@@ -262,6 +344,7 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
                 "changed_domains": .array(preview.changedDomains.map { .string($0.rawValue) }),
                 "created_entity_ids": .array(preview.createdEntityIDs.map { .integer(Int64($0)) }),
                 "deleted_entity_ids": .array(preview.deletedEntityIDs.map { .integer(Int64($0)) }),
+                "mutations": .array(preview.mutationSummaries.map(EventValue.string)),
             ]),
         ]
         if let uri = request.contextSnapshotURI {

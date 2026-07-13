@@ -231,6 +231,10 @@ public final class ScriptContext {
         phaseContext.submitCharacterCommand(command, for: entity)
     }
 
+    public func submitVehicleCommand(_ command: VehicleCommand) {
+        phaseContext.submitVehicleCommand(command, for: entity)
+    }
+
     public var characterState: CharacterState? {
         phaseContext.resource(CharacterStateFrameResource.self)?.states[entity]
     }

@@ -19,6 +19,7 @@ Guava Engine 是一个使用 Swift 构建的 AI-Native 3D 游戏与影视引擎�
 2. [安装与快速开始](getting-started.md)：完成原生依赖和编辑器构建。
 3. [编辑器工作流](editor-workflow.md)：打开项目、编辑场景并运行模拟。
 4. [架构](architecture.md)与[模块地图](module-map.md)：深入世界模型和 Swift 包结构。
+5. [Physics v2](physics-v2.md)：了解固定步阶段、轮式载具 API 与当前能力边界。
 
 ## 当前阶段
 
