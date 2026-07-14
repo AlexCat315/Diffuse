@@ -78,7 +78,7 @@ struct EditorSceneAdapterTests {
         #expect(stats.maxParticleCount >= 100)
     }
 
-    @Test("Editor scene adapter exposes selected particle GPU simulation plan")
+    @Test("Editor scene adapter exposes supported particle GPU simulation plan")
     func editorSceneAdapterExposesSelectedParticleGPUPlan() throws {
         let adapter = EditorSceneAdapter()
         let entity = adapter.scene.createEntity()
@@ -93,14 +93,14 @@ struct EditorSceneAdapterTests {
 
         let plan = try #require(adapter.currentParticleGPUSimulationPlan(for: entity.rawValue))
 
-        #expect(plan.status == .requiredButUnsupported)
+        #expect(plan.status == .supported)
         #expect(plan.dispatchWorkgroups == 4)
         #expect(plan.workgroupSize == 32)
-        #expect(plan.unsupportedReasons == [.distanceEmission])
+        #expect(plan.unsupportedReasons.isEmpty)
         #expect(adapter.currentParticleGPUSimulationPlan(for: nil) == nil)
 
         let issues = adapter.currentParticleModuleValidationIssues(for: entity.rawValue)
-        #expect(issues.contains {
+        #expect(!issues.contains {
             $0.moduleID == "gpuSimulation" && $0.code == "gpuRequiredButUnsupported"
         })
         #expect(adapter.currentParticleModuleValidationIssues(for: nil).isEmpty)
@@ -535,6 +535,70 @@ struct EditorSceneAdapterTests {
         ])
     }
 
+    @Test("destruction viewport overlay exposes stable world-space connection lines")
+    func destructionConnectionOverlay() {
+        let adapter = EditorSceneAdapter()
+        adapter.scene = SceneRuntime()
+        adapter.scene.setResource(DestructibleAssetResource(assetsByResourceID: [
+            "wall.fracture": DestructibleAsset(
+                fragments: [
+                    DestructibleFragmentAsset(
+                        fragmentID: 2,
+                        colliderResourceID: "fragment.2",
+                        localTransform: LocalTransform(translation: SIMD3<Float>(1, 0, 0))
+                    ),
+                    DestructibleFragmentAsset(
+                        fragmentID: 0,
+                        colliderResourceID: "fragment.0",
+                        localTransform: LocalTransform(translation: SIMD3<Float>(-1, 0, 0))
+                    ),
+                    DestructibleFragmentAsset(
+                        fragmentID: 1,
+                        colliderResourceID: "fragment.1"
+                    ),
+                ],
+                connections: [
+                    DestructibleConnectionAsset(
+                        connectionID: 8,
+                        fragmentA: 1,
+                        fragmentB: 2
+                    ),
+                    DestructibleConnectionAsset(
+                        connectionID: 4,
+                        fragmentA: 0,
+                        fragmentB: 1
+                    ),
+                ]
+            ),
+        ]))
+        let entity = adapter.scene.createEntity()
+        _ = adapter.scene.setLocalTransform(
+            LocalTransform(translation: SIMD3<Float>(2, 3, 4)), for: entity
+        )
+        _ = adapter.scene.setComponent(
+            Destructible(assetResourceID: "wall.fracture"), for: entity
+        )
+        _ = adapter.scene.tick(deltaTime: 0)
+
+        let lines = adapter.viewportDestructionConnections(entityID: entity.rawValue)
+        #expect(lines.map(\.connectionID) == [4, 8])
+        #expect(lines.map(\.positionA) == [
+            SIMD3<Float>(1, 3, 4), SIMD3<Float>(2, 3, 4),
+        ])
+        #expect(lines.map(\.positionB) == [
+            SIMD3<Float>(2, 3, 4), SIMD3<Float>(3, 3, 4),
+        ])
+        #expect(lines.allSatisfy { !$0.isBroken && !$0.isSourceFractured })
+        #expect(adapter.viewportDestructionConnections(
+            entityID: entity.rawValue,
+            maxConnections: 1
+        ).map(\.connectionID) == [4])
+        #expect(adapter.viewportDestructionConnections(
+            entityID: entity.rawValue,
+            maxConnections: 0
+        ).isEmpty)
+    }
+
     @Test("Scene manifest remaps ragdoll bodies and exposes its inspector")
     func sceneManifestRoundTripsRagdoll() throws {
         let source = EditorSceneAdapter()
@@ -662,6 +726,7 @@ struct EditorSceneAdapterTests {
     }
 
     @Test("Scene manifest round-trips a particle emitter through JSON")
+    @MainActor
     func sceneManifestRoundTripsParticleEmitter() throws {
         let source = EditorSceneAdapter()
         guard let hero = flatten(source.roots).first(where: { $0.name == "Hero" }) else {

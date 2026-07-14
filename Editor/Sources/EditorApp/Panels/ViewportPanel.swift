@@ -502,6 +502,7 @@ struct ViewportPanel: View {
         }
         if let selectedID {
             drawSoftBodyConstraintOverlay(list: list, frame: frame, entityID: selectedID)
+            drawDestructionConnectionOverlay(list: list, frame: frame, entityID: selectedID)
         }
         drawMarqueeOverlay(list: list)
 
@@ -784,6 +785,41 @@ struct ViewportPanel: View {
                     height: radius * 2
                 ),
                 color: fixedColor
+            )
+        }
+    }
+
+    private func drawDestructionConnectionOverlay(
+        list: DrawList,
+        frame: ViewportScreenFrame,
+        entityID: UInt64
+    ) {
+        let lines = scene.viewportDestructionConnections(entityID: entityID)
+        for line in lines {
+            let color: Color = if line.isBroken {
+                Color(r: 1.0, g: 0.24, b: 0.18, a: 0.95)
+            } else {
+                Color(r: 0.24, g: 0.92, b: 0.48, a: 0.82)
+            }
+            drawWorldLine(
+                list: list,
+                frame: frame,
+                a: line.positionA,
+                b: line.positionB,
+                color: color,
+                thickness: line.isBroken ? 2.5 : 1.5
+            )
+            let anchor = (line.positionA + line.positionB) * 0.5
+            guard let point = projectToViewport(anchor, frame: frame) else { continue }
+            let radius: Float = line.isBroken ? 3.5 : 2.5
+            list.addRect(
+                UIRect(
+                    x: point.x - radius,
+                    y: point.y - radius,
+                    width: radius * 2,
+                    height: radius * 2
+                ),
+                color: color
             )
         }
     }
