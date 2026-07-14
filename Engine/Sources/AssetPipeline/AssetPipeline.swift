@@ -269,6 +269,12 @@ public struct MeshAsset: Sendable {
         return SIMD3<Float>(vertices[offset], vertices[offset + 1], vertices[offset + 2])
     }
 
+    public func textureCoordinate(at vertexIndex: Int) -> SIMD2<Float>? {
+        guard vertexIndex >= 0, vertexIndex < vertexCount else { return nil }
+        let offset = vertexIndex * MeshAsset.vertexFloatCount + MeshAsset.uvFloatOffset
+        return SIMD2<Float>(vertices[offset], vertices[offset + 1])
+    }
+
     public mutating func setPosition(_ position: SIMD3<Float>, at vertexIndex: Int) {
         guard vertexIndex >= 0, vertexIndex < vertexCount else { return }
         let offset = vertexIndex * MeshAsset.vertexFloatCount + MeshAsset.positionFloatOffset

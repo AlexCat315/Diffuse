@@ -36,6 +36,9 @@ public enum ComponentCatalog {
         ComponentTypeID(CharacterController.self),
         ComponentTypeID(Vehicle.self),
         ComponentTypeID(Ragdoll.self),
+        ComponentTypeID(SoftBody.self),
+        ComponentTypeID(Cloth.self),
+        ComponentTypeID(SoftBodyMesh.self),
 
         // Scene metadata
         ComponentTypeID(SceneNameComponent.self),

@@ -417,6 +417,21 @@ struct EditorSceneAdapterTests {
         )
         _ = source.scene.setComponent(softBody, for: entity)
         _ = source.scene.setComponent(cloth, for: entity)
+        let meshEntity = source.scene.createEntity()
+        _ = source.scene.setComponent(
+            SceneNameComponent(value: "Soft Tetra"), for: meshEntity
+        )
+        let softBodyMesh = SoftBodyMesh(
+            resourceID: "asset:soft-tetra",
+            fixedVertexIndices: [1, 3],
+            compliance: 0.005,
+            shearCompliance: 0.006,
+            bendCompliance: 0.007,
+            volumeCompliance: 0.008,
+            bendType: .distance
+        )
+        _ = source.scene.setComponent(softBody, for: meshEntity)
+        _ = source.scene.setComponent(softBodyMesh, for: meshEntity)
 
         let data = try JSONEncoder().encode(source.manifest())
         let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
@@ -430,6 +445,63 @@ struct EditorSceneAdapterTests {
         #expect(restored.scene.component(Cloth.self, for: restoredEntity) == cloth)
         #expect(restored.inspectorSections(for: restoredRaw).contains { $0.id == "soft-body" })
         #expect(restored.inspectorSections(for: restoredRaw).contains { $0.id == "cloth" })
+        let restoredMeshRaw = try #require(
+            flatten(restored.roots).first { $0.name == "Soft Tetra" }?.id
+        )
+        let restoredMeshEntity = entityID(restoredMeshRaw)
+        #expect(restored.scene.component(SoftBody.self, for: restoredMeshEntity) == softBody)
+        #expect(restored.scene.component(SoftBodyMesh.self, for: restoredMeshEntity) == softBodyMesh)
+        #expect(restored.inspectorSections(for: restoredMeshRaw).contains {
+            $0.id == "soft-body-mesh"
+        })
+    }
+
+    @Test("soft-body viewport overlay exposes stable volume edges and fixed anchors")
+    func softBodyConstraintOverlay() throws {
+        let adapter = EditorSceneAdapter()
+        adapter.scene = SceneRuntime()
+        adapter.scene.setResource(MeshColliderGeometryResource(geometryByResourceID: [
+            "soft.tetra": MeshColliderGeometry(
+                positions: [
+                    .zero,
+                    SIMD3<Float>(1, 0, 0),
+                    SIMD3<Float>(0, 1, 0),
+                    SIMD3<Float>(0, 0, 1),
+                ],
+                triangleIndices: [0, 2, 1, 0, 1, 3, 1, 2, 3, 2, 0, 3],
+                tetrahedronIndices: [0, 1, 2, 3]
+            ),
+        ]))
+        let entity = adapter.scene.createEntity()
+        _ = adapter.scene.setLocalTransform(
+            LocalTransform(translation: SIMD3<Float>(2, 3, 4)), for: entity
+        )
+        _ = adapter.scene.setComponent(SoftBody(), for: entity)
+        _ = adapter.scene.setComponent(
+            SoftBodyMesh(resourceID: "soft.tetra", fixedVertexIndices: [3]),
+            for: entity
+        )
+
+        let overlay = try #require(
+            adapter.viewportSoftBodyConstraints(entityID: entity.rawValue)
+        )
+        #expect(!overlay.usesSimulatedPositions)
+        #expect(overlay.lines.count == 6)
+        #expect(overlay.lines.allSatisfy { $0.kind == .volume })
+        #expect(overlay.lines.map {
+            (UInt64($0.vertexA) << 32) | UInt64($0.vertexB)
+        } == [
+            1, 2, 3,
+            (UInt64(1) << 32) | 2,
+            (UInt64(1) << 32) | 3,
+            (UInt64(2) << 32) | 3,
+        ])
+        #expect(overlay.fixedVertices == [
+            EditorSoftBodyFixedVertexMarker(
+                vertex: 3,
+                position: SIMD3<Float>(2, 3, 5)
+            ),
+        ])
     }
 
     @Test("Scene manifest remaps ragdoll bodies and exposes its inspector")

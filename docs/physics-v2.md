@@ -1,7 +1,7 @@
 ---
 path: /zh/docs/physics-v2
 title: Physics v2
-description: Guava 的 Jolt 物理运行阶段、载具、布料状态资源与当前能力边界。
+description: Guava 的 Jolt 物理运行阶段、载具、布料与表面软体状态资源，以及当前能力边界。
 locale: zh
 translationKey: docs.physics-v2
 category: 核心概念
@@ -11,7 +11,7 @@ kind: doc
 
 # Physics v2
 
-Guava Physics v2 使用 Jolt 作为唯一生产物理后端。当前已完成复合碰撞体、统一查询与事件、原生角色控制器、类型化关节、布娃娃、增量同步、确定性命令回放、M5 的三类载具控制器，以及 M6 的首个原生布料切片。
+Guava Physics v2 使用 Jolt 作为唯一生产物理后端。当前已完成复合碰撞体、统一查询与事件、原生角色控制器、类型化关节、布娃娃、增量同步、确定性命令回放、M5 的三类载具控制器，以及 M6 的规则布料与任意三角表面软体。
 
 ## 帧阶段
 
@@ -71,7 +71,7 @@ let bike = Vehicle.motorcycle()
 
 ## 布料与软体状态流
 
-首个 M6 切片由同一实体上的 `SoftBody` 和 `Cloth` 组成。`Cloth` 定义规则网格、间距、固定顶点、拉伸/剪切/弯曲柔度和弯曲约束类型；`SoftBody` 定义质量、压力、阻尼、摩擦、反弹、重力倍率、顶点半径、求解迭代和碰撞层。
+软体实体由 `SoftBody` 与一种拓扑组件组成。`Cloth` 定义规则网格、间距、固定顶点、拉伸/剪切/弯曲柔度和弯曲约束类型；`SoftBodyMesh` 引用 `MeshColliderGeometryResource` 中的任意三角表面资产，并为它定义固定顶点与约束柔度。资源可额外提供每组四个索引的 `tetrahedronIndices`；此时后端会补齐四面体内部边并创建 Jolt 体积约束，`volumeCompliance` 控制其柔度。两种拓扑不能同时添加。`SoftBody` 统一定义质量、压力、阻尼、摩擦、反弹、重力倍率、顶点半径、求解迭代和碰撞层。
 
 ```swift
 let banner = scene.createEntity()
@@ -89,19 +89,47 @@ _ = scene.tick(deltaTime: 1.0 / 60.0)
 let deformedMesh = scene.softBodyStateFrame.states[banner]
 ```
 
+导入网格可以直接复用按资源 ID 和 revision 缓存的顶点、三角形及 UV 数据：
+
+```swift
+let softProp = scene.createEntity()
+scene.setResource(MeshColliderGeometryResource(geometryByResourceID: [
+    "asset:soft-tetra": MeshColliderGeometry(
+        positions: tetraVertices,
+        triangleIndices: surfaceTriangles,
+        tetrahedronIndices: volumeTetrahedra,
+        revision: 1
+    )
+]))
+_ = scene.setComponent(
+    SoftBodyMesh(
+        resourceID: "asset:soft-tetra",
+        fixedVertexIndices: [0, 3],
+        volumeCompliance: 1.0e-6,
+        bendType: .distance
+    ),
+    for: softProp
+)
+_ = scene.setComponent(SoftBody(allowSleep: false), for: softProp)
+```
+
+`SoftBodyMesh.resourceID` 未解析、拓扑索引越界、退化三角形、零体积/重复顶点四面体或同时存在 `Cloth` 与 `SoftBodyMesh` 时，当前物理帧返回明确的 `invalidArgument`，不会创建替代形状。四面体索引必须由导入流程预先生成；运行时不会对普通表面网格自动四面体化。
+
 变形后的世界空间顶点和三角形索引写入 `SoftBodyStateFrameResource`，不会逐顶点写回普通 ECS `Transform`。带有可见 `RenderMeshComponent` 的布料还会提取为 `RenderDeformableMesh`：渲染后端按实体维护动态 GPU 顶点/索引缓冲区，内容 revision 未变化时不重复上传，拓扑未变化时只更新顶点。深度、阴影、基础、描边和 Render Bundle 路径都使用同一份变形网格，阴影范围也按当前世界空间顶点计算。创建、增量重建、删除、状态复制和渲染提取按 `EntityID` 稳定排序。
 
 `RenderFrameStats` 分别记录变形网格数、顶点数、三角形数、拒绝的无效网格、上传字节和上传耗时；Editor 的 Render 调试面板直接显示这些指标。没有固定物理子步的渲染帧会继续复用最近一次软体状态和 GPU 缓冲区，不会让布料闪退一帧。当前 Jolt 版本没有暴露软体自碰撞设置，因此 `selfCollision: true` 会返回明确的 `invalidArgument`，不会静默降低能力。
+
+Editor 选中软体实体时会在视口叠加约束拓扑：青色表示表面边，紫色表示参与四面体体积约束的边，黄色锚点表示固定顶点。播放期间叠加层直接使用最新模拟顶点，停止时使用资源静止姿态；边按顶点索引稳定排序，并将单实体显示上限限制为 4096 条。
 
 ## 稳定性和序列化
 
 - 车辆创建、删除、命令和状态按 `EntityID` 稳定排序。
 - 发动机、档位、离合器和逐轮状态参与物理检查点哈希。
 - 车辆配置支持 Scene v2 与 Editor Manifest v5 往返。
-- C ABI v4 校验刚体、角色、载具和软体结构尺寸，并对无效配置返回明确错误。
-- AI 场景语义包含载具、软体和布料的配置，以及可用的最新运行状态摘要。
+- C ABI v6 校验刚体、角色、载具和软体结构尺寸，并对规则网格、任意表面及四面体拓扑的无效配置返回明确错误。
+- AI 场景语义包含载具、软体、布料和表面网格资源的配置，以及可用的最新运行状态摘要。
 - `cloth-64` 和 `soft-body-instances` 基准分别对 64×64 单布料、8 个 32×32 实例统计 step 与顶点流 p50/p95/p99、内存和丢弃子步，并使用独立预算门禁。
 
 ## 当前边界
 
-M5 已完成。M6 当前具备 Jolt 原生规则网格布料、固定点、压力/阻尼等参数、增量同步、Scene v2 与 Manifest v5 往返、专用变形顶点流、按 revision 缓存的真实 GPU 网格上传、所有网格渲染通道与阴影范围集成、静态/动态刚体/角色碰撞验收、Editor 参数/固定点编辑与上传性能统计，以及 64×64 和多实例性能门禁。任意网格/体积软体资产、自碰撞和 Editor 约束可视化仍在后续切片中。
+M5 已完成。M6 当前具备 Jolt 原生规则网格布料、任意三角表面软体与预四面体化体积资产、固定点、内部边/体积约束、压力/阻尼等参数、按资源 revision 缓存的导入几何与 UV、增量同步、Scene v2 与 Manifest v5 往返、专用变形顶点流、真实 GPU 网格上传、所有网格渲染通道与阴影范围集成、静态/动态刚体/角色碰撞验收、Editor 参数/固定点编辑、实时约束可视化与上传性能统计，以及 64×64 和多实例性能门禁。软体自碰撞和运行时自动四面体化仍在后续切片中。

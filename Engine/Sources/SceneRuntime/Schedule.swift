@@ -175,7 +175,9 @@ public struct RuntimeWorldSchedule {
         var vehicles: [EntityID: Vehicle]
         var softBodies: [EntityID: SoftBody]
         var cloths: [EntityID: Cloth]
+        var softBodyMeshes: [EntityID: SoftBodyMesh]
         var meshGeometries: [EntityID: MeshColliderGeometry]
+        var softBodyMeshGeometries: [EntityID: MeshColliderGeometry]
     }
 
     private struct RuntimeRenderReadView {
@@ -186,6 +188,8 @@ public struct RuntimeWorldSchedule {
         var renderMaterials: [EntityID: RenderMaterialComponent]
         var lights: [EntityID: LightComponent]
         var cloths: [EntityID: Cloth]
+        var softBodyMeshes: [EntityID: SoftBodyMesh]
+        var softBodyMeshGeometries: [EntityID: MeshColliderGeometry]
         var assetReferences: [EntityID: AssetReferenceComponent]
     }
 
@@ -874,14 +878,28 @@ public struct RuntimeWorldSchedule {
     ) -> [PhysicsSoftBodyDescriptor] {
         view.entities.compactMap { entity in
             guard let softBody = view.softBodies[entity], softBody.isEnabled,
-                  let cloth = view.cloths[entity],
                   let worldTransform = view.worldTransforms[entity]
             else { return nil }
+            let cloth = view.cloths[entity]
+            let mesh = view.softBodyMeshes[entity]
+            let topology: PhysicsSoftBodyTopology
+            switch (cloth, mesh) {
+            case let (.some(cloth), .none):
+                topology = .cloth(cloth)
+            case let (.none, .some(mesh)):
+                topology = .surfaceMesh(mesh, view.softBodyMeshGeometries[entity])
+            case (.some, .some):
+                // A soft body must have exactly one topology provider. Forward
+                // the conflict so the native backend reports invalidArgument.
+                topology = .invalid
+            case (.none, .none):
+                return nil
+            }
             return PhysicsSoftBodyDescriptor(
                 entity: entity,
                 worldTransform: worldTransform,
                 softBody: softBody,
-                cloth: cloth
+                topology: topology
             )
         }
     }
@@ -1906,10 +1924,18 @@ public struct RuntimeWorldSchedule {
                 view.cloths[state.entity],
                 vertexCount: state.positions.count
             )
+            let resolvedTextureCoordinates: [SIMD2<Float>]
+            if textureCoordinates.isEmpty,
+               let geometry = view.softBodyMeshGeometries[state.entity],
+               geometry.textureCoordinates.count == state.positions.count {
+                resolvedTextureCoordinates = geometry.textureCoordinates
+            } else {
+                resolvedTextureCoordinates = textureCoordinates
+            }
             if let cached = renderDeformableMeshes[state.entity],
                cached.positions == state.positions,
                cached.triangleIndices == state.triangleIndices,
-               cached.textureCoordinates == textureCoordinates {
+               cached.textureCoordinates == resolvedTextureCoordinates {
                 meshes.append(cached)
                 continue
             }
@@ -1922,7 +1948,7 @@ public struct RuntimeWorldSchedule {
                 revision: max(simulatedRevision, nextRevision),
                 positions: state.positions,
                 triangleIndices: state.triangleIndices,
-                textureCoordinates: textureCoordinates
+                textureCoordinates: resolvedTextureCoordinates
             )
             if mesh.isValid {
                 meshes.append(mesh)
@@ -1977,6 +2003,14 @@ public struct RuntimeWorldSchedule {
 
     private func buildRenderReadView(in world: RuntimeWorld) -> RuntimeRenderReadView {
         let entities = world.entities()
+        let softBodyMeshes = world.componentSnapshot(SoftBodyMesh.self, matching: entities)
+        let geometryResource = world.resource(MeshColliderGeometryResource.self)
+        var softBodyMeshGeometries: [EntityID: MeshColliderGeometry] = [:]
+        for (entity, mesh) in softBodyMeshes {
+            if let geometry = geometryResource?.geometry(for: mesh.resourceID) {
+                softBodyMeshGeometries[entity] = geometry
+            }
+        }
         return RuntimeRenderReadView(
             entities: entities,
             worldTransforms: world.worldTransformSnapshot(matching: entities),
@@ -1985,6 +2019,8 @@ public struct RuntimeWorldSchedule {
             renderMaterials: world.componentSnapshot(RenderMaterialComponent.self, matching: entities),
             lights: world.componentSnapshot(LightComponent.self, matching: entities),
             cloths: world.componentSnapshot(Cloth.self, matching: entities),
+            softBodyMeshes: softBodyMeshes,
+            softBodyMeshGeometries: softBodyMeshGeometries,
             assetReferences: world.componentSnapshot(AssetReferenceComponent.self, matching: entities)
         )
     }
@@ -1992,12 +2028,19 @@ public struct RuntimeWorldSchedule {
     private func buildPhysicsReadView(in world: RuntimeWorld) -> RuntimePhysicsReadView {
         let entities = world.entities()
         let colliders = world.componentSnapshot(Collider.self, matching: entities)
+        let softBodyMeshes = world.componentSnapshot(SoftBodyMesh.self, matching: entities)
         let geometryResource = world.resource(MeshColliderGeometryResource.self)
         var meshGeometries: [EntityID: MeshColliderGeometry] = [:]
         for (entity, collider) in colliders {
             let resourceID = collider.shape.resourceID
             if let geometry = geometryResource?.geometry(for: resourceID) {
                 meshGeometries[entity] = geometry
+            }
+        }
+        var softBodyMeshGeometries: [EntityID: MeshColliderGeometry] = [:]
+        for (entity, mesh) in softBodyMeshes {
+            if let geometry = geometryResource?.geometry(for: mesh.resourceID) {
+                softBodyMeshGeometries[entity] = geometry
             }
         }
         return RuntimePhysicsReadView(
@@ -2011,7 +2054,9 @@ public struct RuntimeWorldSchedule {
             vehicles: world.componentSnapshot(Vehicle.self, matching: entities),
             softBodies: world.componentSnapshot(SoftBody.self, matching: entities),
             cloths: world.componentSnapshot(Cloth.self, matching: entities),
-            meshGeometries: meshGeometries
+            softBodyMeshes: softBodyMeshes,
+            meshGeometries: meshGeometries,
+            softBodyMeshGeometries: softBodyMeshGeometries
         )
     }
 

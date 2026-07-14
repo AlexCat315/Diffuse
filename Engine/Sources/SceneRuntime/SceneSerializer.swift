@@ -130,6 +130,7 @@ public enum SceneSerializer {
         if let c = scene.component(Vehicle.self, for: entity) { comps["vehicle"] = serializeVehicle(c) }
         if let c = scene.component(SoftBody.self, for: entity) { comps["softBody"] = serializeSoftBody(c) }
         if let c = scene.component(Cloth.self, for: entity) { comps["cloth"] = serializeCloth(c) }
+        if let c = scene.component(SoftBodyMesh.self, for: entity) { comps["softBodyMesh"] = serializeSoftBodyMesh(c) }
         if let c = scene.component(Constraint.self, for: entity),
            let a = entityIndexMap[c.entityA], let b = entityIndexMap[c.entityB] {
             comps["constraint"] = serializeConstraint(c, entityA: a, entityB: b)
@@ -195,6 +196,7 @@ public enum SceneSerializer {
         if let c = jsonToDict(comps["vehicle"]) { _ = scene.setComponent(deserializeVehicle(c), for: entity) }
         if let c = jsonToDict(comps["softBody"]) { _ = scene.setComponent(deserializeSoftBody(c), for: entity) }
         if let c = jsonToDict(comps["cloth"]) { _ = scene.setComponent(deserializeCloth(c), for: entity) }
+        if let c = jsonToDict(comps["softBodyMesh"]) { _ = scene.setComponent(deserializeSoftBodyMesh(c), for: entity) }
         if let c = jsonToDict(comps["renderMesh"]) { _ = scene.setComponent(deserializeRenderMesh(c), for: entity) }
         if let c = jsonToDict(comps["renderMaterial"]) { _ = scene.setComponent(deserializeRenderMaterial(c), for: entity) }
         if let c = jsonToDict(comps["assetReference"]) { _ = scene.setComponent(deserializeAssetReference(c), for: entity) }
@@ -808,6 +810,35 @@ public enum SceneSerializer {
             bendType: ClothBendType(
                 rawValue: UInt8(clamping: jsonToInt(d["bendType"]) ?? 1)
             ) ?? .distance
+        )
+    }
+
+    private static func serializeSoftBodyMesh(_ mesh: SoftBodyMesh) -> [String: Any] {
+        var result: [String: Any] = [
+            "fixedVertexIndices": mesh.fixedVertexIndices,
+            "compliance": mesh.compliance,
+            "shearCompliance": mesh.shearCompliance,
+            "bendCompliance": mesh.bendCompliance,
+            "volumeCompliance": mesh.volumeCompliance,
+            "bendType": mesh.bendType.rawValue,
+        ]
+        if let resourceID = mesh.resourceID {
+            result["resourceID"] = resourceID
+        }
+        return result
+    }
+
+    private static func deserializeSoftBodyMesh(_ d: [String: Any]) -> SoftBodyMesh {
+        SoftBodyMesh(
+            resourceID: jsonToString(d["resourceID"]),
+            fixedVertexIndices: (jsonToArray(d["fixedVertexIndices"]) ?? []).compactMap(jsonToInt),
+            compliance: jsonToFloat(d["compliance"]) ?? 1.0e-5,
+            shearCompliance: jsonToFloat(d["shearCompliance"]) ?? 1.0e-5,
+            bendCompliance: jsonToFloat(d["bendCompliance"]) ?? 1.0e-5,
+            volumeCompliance: jsonToFloat(d["volumeCompliance"]) ?? 1.0e-6,
+            bendType: ClothBendType(
+                rawValue: UInt8(clamping: jsonToInt(d["bendType"]) ?? 2)
+            ) ?? .dihedral
         )
     }
 

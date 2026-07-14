@@ -11,6 +11,7 @@ public enum EditorComponentKind: String, CaseIterable, Sendable {
     case vehicle
     case softBody
     case cloth
+    case softBodyMesh
     case ragdoll
     case renderMesh
     case renderMaterial
@@ -30,6 +31,7 @@ public enum EditorComponentKind: String, CaseIterable, Sendable {
         case .vehicle:         return "Vehicle"
         case .softBody:        return "Soft Body"
         case .cloth:           return "Cloth"
+        case .softBodyMesh:   return "Soft Body Mesh"
         case .ragdoll:         return "Ragdoll"
         case .renderMesh:      return "Render Mesh"
         case .renderMaterial:  return "Render Material"
@@ -55,6 +57,7 @@ extension EditorSceneAdapter {
         case .vehicle:         return scene.hasComponent(Vehicle.self, for: entity)
         case .softBody:        return scene.hasComponent(SoftBody.self, for: entity)
         case .cloth:           return scene.hasComponent(Cloth.self, for: entity)
+        case .softBodyMesh:   return scene.hasComponent(SoftBodyMesh.self, for: entity)
         case .ragdoll:         return scene.hasComponent(Ragdoll.self, for: entity)
         case .renderMesh:      return scene.hasComponent(RenderMeshComponent.self, for: entity)
         case .renderMaterial:  return scene.hasComponent(RenderMaterialComponent.self, for: entity)
@@ -75,7 +78,12 @@ extension EditorSceneAdapter {
 
     /// Kinds that can still be added to the entity (those not already present).
     public func addableComponentKinds(on rawID: UInt64) -> [EditorComponentKind] {
-        EditorComponentKind.allCases.filter { !hasComponent($0, on: rawID) }
+        EditorComponentKind.allCases.filter { kind in
+            guard !hasComponent(kind, on: rawID) else { return false }
+            if kind == .cloth, hasComponent(.softBodyMesh, on: rawID) { return false }
+            if kind == .softBodyMesh, hasComponent(.cloth, on: rawID) { return false }
+            return true
+        }
     }
 
     /// Adds a default-constructed component of `kind` to the entity. Returns false if the
@@ -83,6 +91,8 @@ extension EditorSceneAdapter {
     @discardableResult
     public func addComponent(_ kind: EditorComponentKind, to rawID: UInt64) -> Bool {
         guard let entity = resolveEntity(rawID), !hasComponent(kind, on: rawID) else { return false }
+        if kind == .cloth, hasComponent(.softBodyMesh, on: rawID) { return false }
+        if kind == .softBodyMesh, hasComponent(.cloth, on: rawID) { return false }
         switch kind {
         case .rigidBody:       _ = scene.setComponent(RigidBody(), for: entity)
         case .collider:        _ = scene.setComponent(Collider(shape: .box(halfExtents: SIMD3<Float>(repeating: 0.5), center: .zero)), for: entity)
@@ -90,6 +100,10 @@ extension EditorSceneAdapter {
         case .vehicle:         _ = scene.setComponent(Vehicle(), for: entity)
         case .softBody:        _ = scene.setComponent(SoftBody(), for: entity)
         case .cloth:           _ = scene.setComponent(Cloth.fixedTopEdge(), for: entity)
+        case .softBodyMesh:
+            let resourceID = scene.component(AssetReferenceComponent.self, for: entity)
+                .map { "meshIndex:\($0.meshIndex)" }
+            _ = scene.setComponent(SoftBodyMesh(resourceID: resourceID), for: entity)
         case .ragdoll:         _ = scene.setComponent(Ragdoll(), for: entity)
         case .renderMesh:      _ = scene.setComponent(RenderMeshComponent(meshIndex: 0), for: entity)
         case .renderMaterial:  _ = scene.setComponent(RenderMaterialComponent(), for: entity)
@@ -117,6 +131,7 @@ extension EditorSceneAdapter {
         case .vehicle:         _ = scene.removeComponent(Vehicle.self, from: entity)
         case .softBody:        _ = scene.removeComponent(SoftBody.self, from: entity)
         case .cloth:           _ = scene.removeComponent(Cloth.self, from: entity)
+        case .softBodyMesh:   _ = scene.removeComponent(SoftBodyMesh.self, from: entity)
         case .ragdoll:         _ = scene.removeComponent(Ragdoll.self, from: entity)
         case .renderMesh:      _ = scene.removeComponent(RenderMeshComponent.self, from: entity)
         case .renderMaterial:  _ = scene.removeComponent(RenderMaterialComponent.self, from: entity)
