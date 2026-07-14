@@ -72,6 +72,7 @@ public struct SceneSemanticEncoder: Sendable {
             if scene.hasComponent(Vehicle.self, for: entity)             { components.append("vehicle") }
             if scene.hasComponent(SoftBody.self, for: entity)            { components.append("softbody") }
             if scene.hasComponent(Cloth.self, for: entity)               { components.append("cloth") }
+            if scene.hasComponent(SoftBodyMesh.self, for: entity)        { components.append("softbody_mesh") }
 
             var lightType: String?
             var lightIntensity: Float?
@@ -218,6 +219,10 @@ public struct SceneSemanticEncoder: Sendable {
             let vehicleState = scene.vehicleStateFrame.states[entity]
             let softBody = scene.component(SoftBody.self, for: entity)
             let cloth = scene.component(Cloth.self, for: entity)
+            let softBodyMesh = scene.component(SoftBodyMesh.self, for: entity)
+            let softBodyMeshGeometry = softBodyMesh.flatMap {
+                scene.resource(MeshColliderGeometryResource.self)?.geometry(for: $0.resourceID)
+            }
             let softBodyState = scene.softBodyStateFrame.states[entity]
 
             records.append(SceneSemanticSnapshot.Entity(
@@ -303,7 +308,21 @@ public struct SceneSemanticEncoder: Sendable {
                 clothGridSizeZ: cloth?.gridSizeZ,
                 clothSpacing: cloth?.spacing,
                 clothFixedVertexCount: cloth?.fixedVertexIndices.count,
-                clothBendType: cloth.map { String(describing: $0.bendType) }
+                clothBendType: cloth.map { String(describing: $0.bendType) },
+                softBodyTopologyKind: cloth != nil
+                    ? "cloth"
+                    : softBodyMesh != nil
+                        ? ((softBodyMeshGeometry?.tetrahedronCount ?? 0) > 0
+                            ? "volume_mesh" : "surface_mesh")
+                        : nil,
+                softBodyMeshResourceID: softBodyMesh?.resourceID,
+                softBodyMeshVertexCount: softBodyMeshGeometry?.positions.count,
+                softBodyMeshTriangleCount: softBodyMeshGeometry?.triangleCount,
+                softBodyMeshTetrahedronCount: softBodyMeshGeometry?.tetrahedronCount,
+                softBodyMeshFixedVertexCount: softBodyMesh?.fixedVertexIndices.count,
+                softBodyMeshBendType: softBodyMesh.map { String(describing: $0.bendType) },
+                softBodyMeshVolumeCompliance: softBodyMesh?.volumeCompliance,
+                softBodyMeshGeometryRevision: softBodyMeshGeometry?.revision
             ))
         }
 
