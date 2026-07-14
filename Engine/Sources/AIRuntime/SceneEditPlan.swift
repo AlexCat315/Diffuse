@@ -111,6 +111,58 @@ public enum SceneEditOp: String, Codable, Sendable, CaseIterable {
     case setAnimationPlayer   = "set_animation_player"
 }
 
+public extension SceneEditOp {
+    /// Registered capability that authorises this compatibility plan operation.
+    /// This is the only mapping between the legacy wire name and the capability id.
+    var capabilityID: String {
+        switch self {
+        case .spawnEntity: return "scene.spawn_entity"
+        case .deleteEntity: return "scene.delete_entity"
+        case .duplicateEntity: return "scene.duplicate_entity"
+        case .setName: return "scene.set_name"
+        case .reparentEntity: return "scene.reparent_entity"
+        case .setTransform: return "scene.set_transform"
+        case .snapToGround: return "scene.snap_to_ground"
+        case .setLightType: return "scene.set_light_type"
+        case .setLightIntensity: return "scene.set_light_intensity"
+        case .setLightColor: return "scene.set_light_color"
+        case .setLightRange: return "scene.set_light_range"
+        case .setLightSpotAngles: return "scene.set_light_spot_angles"
+        case .setLightCastShadows: return "scene.set_light_cast_shadows"
+        case .setCameraPose: return "scene.set_camera_pose"
+        case .setCameraFOV: return "scene.set_camera_fov"
+        case .setCameraAspectRatio: return "scene.set_camera_aspect_ratio"
+        case .setCameraActive: return "scene.set_camera_active"
+        case .setMeshColor: return "scene.set_mesh_color"
+        case .setMaterial: return "scene.set_material"
+        case .setRigidBodyMotion: return "scene.set_rigid_body_motion_type"
+        case .setRigidBodyMass: return "scene.set_rigid_body_mass"
+        case .setRigidBodyGravity: return "scene.set_rigid_body_gravity_scale"
+        case .setRigidBodyAllowSleep: return "scene.set_rigid_body_allow_sleep"
+        case .setColliderShape: return "scene.set_collider_shape"
+        case .setColliderBoxExtents: return "scene.set_collider_box_extents"
+        case .setColliderSphereRadius: return "scene.set_collider_sphere_radius"
+        case .setColliderCapsule: return "scene.set_collider_capsule"
+        case .setColliderMaterial: return "scene.set_collider_material"
+        case .setColliderTrigger: return "scene.set_collider_trigger"
+        case .setColliderLayer: return "scene.set_collider_layer"
+        case .setConstraintEnabled: return "scene.set_constraint_enabled"
+        case .setAudioSource: return "scene.set_audio_source"
+        case .setScriptProperty: return "scene.set_script_property"
+        case .setScriptEnabled: return "scene.set_script_bindings"
+        case .setMeshVisibility: return "scene.set_mesh_visibility"
+        case .setAnimationPlayer: return "scene.set_animation_player"
+        }
+    }
+
+    init?(capabilityID: String) {
+        guard let operation = Self.allCases.first(where: { $0.capabilityID == capabilityID }) else {
+            return nil
+        }
+        self = operation
+    }
+}
+
 /// One atomic mutation step in a `SceneEditPlan`.
 ///
 /// All fields except `op` and `entityRef` are optional. Which fields are
@@ -309,5 +361,14 @@ public struct SceneEditPlan: Codable, Sendable {
     /// Ordered list of mutations to execute atomically.
     public var steps: [SceneEditStep]
 
+    /// Compatibility transports such as MCP echo the scene revision they read.
+    /// Native AI sessions carry the same authority on `Proposal`.
+    public var sceneRevision: UInt64? = nil
+
     public var isEmpty: Bool { steps.isEmpty }
+
+    enum CodingKeys: String, CodingKey {
+        case summary, reasoning, steps
+        case sceneRevision = "scene_revision"
+    }
 }

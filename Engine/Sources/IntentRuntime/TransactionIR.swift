@@ -1,5 +1,6 @@
 ﻿import AssetPipeline
 import Foundation
+import CapabilityRuntime
 import SceneRuntime
 import SequenceRuntime
 import ScriptRuntime
@@ -45,19 +46,22 @@ public struct TransactionPreviewResult: Sendable, Equatable {
     public var sceneRevision: UInt64?
     public var sequenceRevisionID: String?
     public var assetEntryCount: Int?
+    public var mutationSummaries: [String]
 
     public init(changedDomains: [TransactionDomain],
                 createdEntityIDs: [UInt64] = [],
                 deletedEntityIDs: [UInt64] = [],
                 sceneRevision: UInt64? = nil,
                 sequenceRevisionID: String? = nil,
-                assetEntryCount: Int? = nil) {
+                assetEntryCount: Int? = nil,
+                mutationSummaries: [String] = []) {
         self.changedDomains = changedDomains
         self.createdEntityIDs = createdEntityIDs
         self.deletedEntityIDs = deletedEntityIDs
         self.sceneRevision = sceneRevision
         self.sequenceRevisionID = sequenceRevisionID
         self.assetEntryCount = assetEntryCount
+        self.mutationSummaries = mutationSummaries
     }
 }
 
@@ -212,11 +216,59 @@ public enum TransactionOperation: Sendable, Equatable {
     }
 }
 
+/// Exact capability provenance for operations produced by AI or a plugin.
+/// Carrying this record prevents policy from having to infer a verb from a
+/// lower-level mutation.
+public struct CapabilityInvocationRecord: Codable, Sendable, Equatable {
+    public var capabilityID: String
+    public var capabilityVersion: Int
+    public var schemaHash: String
+    public var sourcePluginID: String?
+    public var inputDigest: String
+    public var argumentNames: [String]
+    public var targetReferences: [String]
+    public var access: CapabilityAccess
+    public var exposureSnapshotID: UUID
+
+    public init(capabilityID: String,
+                capabilityVersion: Int,
+                schemaHash: String,
+                sourcePluginID: String? = nil,
+                inputDigest: String,
+                argumentNames: [String] = [],
+                targetReferences: [String] = [],
+                access: CapabilityAccess,
+                exposureSnapshotID: UUID) {
+        self.capabilityID = capabilityID
+        self.capabilityVersion = capabilityVersion
+        self.schemaHash = schemaHash
+        self.sourcePluginID = sourcePluginID
+        self.inputDigest = inputDigest
+        self.argumentNames = argumentNames.sorted()
+        self.targetReferences = targetReferences
+        self.access = access
+        self.exposureSnapshotID = exposureSnapshotID
+    }
+}
+
+/// Host-owned, deterministic checks evaluated after all operations have been
+/// applied but before success is published. A failed assertion aborts the
+/// transaction and restores the in-memory scene/sequence snapshots.
+public enum TransactionVerificationAssertion: Codable, Sendable, Equatable {
+    case entityExists(UInt64)
+    case entityIsAbsent(UInt64)
+    case createdEntityCount(Int)
+    case deletedEntity(UInt64)
+    case sceneRevisionAdvanced(from: UInt64)
+}
+
 public struct TransactionIR: Sendable, Equatable {
     public var id: String
     public var intent: IntentIR?
     public var summary: String
     public var operations: [TransactionOperation]
+    public var capabilityInvocations: [CapabilityInvocationRecord]
+    public var verificationAssertions: [TransactionVerificationAssertion]
     public var baseRevisions: TransactionBaseRevisions
     public var approvalPolicy: TransactionApprovalPolicy
     public var preview: TransactionPreviewResult?
@@ -228,6 +280,8 @@ public struct TransactionIR: Sendable, Equatable {
                 intent: IntentIR? = nil,
                 summary: String,
                 operations: [TransactionOperation],
+                capabilityInvocations: [CapabilityInvocationRecord] = [],
+                verificationAssertions: [TransactionVerificationAssertion] = [],
                 baseRevisions: TransactionBaseRevisions = TransactionBaseRevisions(),
                 approvalPolicy: TransactionApprovalPolicy = .automatic,
                 preview: TransactionPreviewResult? = nil,
@@ -238,6 +292,8 @@ public struct TransactionIR: Sendable, Equatable {
         self.intent = intent
         self.summary = summary
         self.operations = operations
+        self.capabilityInvocations = capabilityInvocations
+        self.verificationAssertions = verificationAssertions
         self.baseRevisions = baseRevisions
         self.approvalPolicy = approvalPolicy
         self.preview = preview

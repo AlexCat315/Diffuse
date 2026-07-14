@@ -50,7 +50,9 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         public var worldScale: [Float]? = nil  // [x, y, z]
 
         /// Component type names present on this entity.
-        /// Possible values: `"transform"`, `"mesh"`, `"light"`, `"camera"`, `"rigidbody"`, `"collider"`, `"script"`
+        /// Possible values include `"transform"`, `"mesh"`, `"light"`, `"camera"`,
+        /// `"rigidbody"`, `"collider"`, `"vehicle"`, `"softbody"`, `"cloth"`,
+        /// and `"script"`.
         public var components: [String]
 
         // Light extras — non-nil only when `"light"` ∈ components
@@ -122,6 +124,31 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         public var ragdollBoneCount: Int? = nil
         public var ragdollSimulatedBoneCount: Int? = nil
         public var ragdollIsEnabled: Bool? = nil
+
+        // Vehicle extras — authored configuration plus the latest physics frame state.
+        public var vehicleIsEnabled: Bool? = nil
+        public var vehicleControllerKind: String? = nil
+        public var vehicleWheelCount: Int? = nil
+        public var vehicleDifferentialCount: Int? = nil
+        public var vehicleTransmissionMode: String? = nil
+        public var vehicleMaxTorque: Float? = nil
+        public var vehicleForwardSpeed: Float? = nil
+        public var vehicleEngineRPM: Float? = nil
+        public var vehicleCurrentGear: Int? = nil
+        public var vehicleWheelContactCount: Int? = nil
+
+        // Soft-body / cloth extras — authored topology plus latest streamed state.
+        public var softBodyIsEnabled: Bool? = nil
+        public var softBodyPressure: Float? = nil
+        public var softBodyLinearDamping: Float? = nil
+        public var softBodyVertexRadius: Float? = nil
+        public var softBodyIsSleeping: Bool? = nil
+        public var softBodyDeformedVertexCount: Int? = nil
+        public var clothGridSizeX: Int? = nil
+        public var clothGridSizeZ: Int? = nil
+        public var clothSpacing: Float? = nil
+        public var clothFixedVertexCount: Int? = nil
+        public var clothBendType: String? = nil
     }
 
     /// Compact snapshot of a single ScriptBinding for AI context.

@@ -23,6 +23,7 @@ let package = Package(
         .library(name: "CardBattleRuntime", targets: ["CardBattleRuntime"]),
         .library(name: "AudioRuntime", targets: ["AudioRuntime"]),
         .library(name: "CapabilityRuntime", targets: ["CapabilityRuntime"]),
+        .library(name: "PluginRuntime", targets: ["PluginRuntime"]),
         .library(name: "IntentRuntime", targets: ["IntentRuntime"]),
         .library(name: "PerceptionRuntime", targets: ["PerceptionRuntime"]),
         .library(name: "AIRuntime", targets: ["AIRuntime"]),
@@ -34,6 +35,7 @@ let package = Package(
         .executable(name: "PhysicsRuntimeBenchmarks", targets: ["PhysicsRuntimeBenchmarks"]),
         .executable(name: "RenderBackendBenchmarks", targets: ["RenderBackendBenchmarks"]),
         .executable(name: "StylizedCharacterPreviewDemo", targets: ["StylizedCharacterPreviewDemo"]),
+        .executable(name: "GuavaPluginHost", targets: ["GuavaPluginHost"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log.git", from: "1.12.0"),
@@ -274,6 +276,10 @@ let package = Package(
             name: "CapabilityRuntime"
         ),
         .target(
+            name: "PluginRuntime",
+            dependencies: ["CapabilityRuntime"]
+        ),
+        .target(
             name: "IntentRuntime",
             dependencies: [
                 "SIMDCompat",
@@ -380,6 +386,10 @@ let package = Package(
             ],
             path: "Demos/StylizedCharacterPreviewDemo"
         ),
+        .executableTarget(
+            name: "GuavaPluginHost",
+            dependencies: ["CapabilityRuntime", "IntentRuntime", "PluginRuntime"]
+        ),
         .testTarget(
             name: "EngineCoreTests",
             dependencies: [
@@ -462,6 +472,10 @@ let package = Package(
             ]
         ),
         .testTarget(
+            name: "PluginRuntimeTests",
+            dependencies: ["CapabilityRuntime", "PluginRuntime"]
+        ),
+        .testTarget(
             name: "IntentRuntimeTests",
             dependencies: [
                 "SIMDCompat",
@@ -497,6 +511,7 @@ let package = Package(
             name: "AIRuntimeTests",
             dependencies: [
                 "AIRuntime",
+                "CapabilityRuntime",
                 "ContextMemory",
                 "IntentRuntime",
                 "PerceptionRuntime",
