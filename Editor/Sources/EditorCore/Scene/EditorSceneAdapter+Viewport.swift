@@ -7,6 +7,30 @@ import RenderBackend
 import SceneRuntime
 import SIMDCompat
 
+public enum EditorSoftBodyConstraintKind: Sendable, Equatable {
+    case surface
+    case volume
+}
+
+public struct EditorSoftBodyConstraintLine: Sendable, Equatable {
+    public var vertexA: UInt32
+    public var vertexB: UInt32
+    public var positionA: SIMD3<Float>
+    public var positionB: SIMD3<Float>
+    public var kind: EditorSoftBodyConstraintKind
+}
+
+public struct EditorSoftBodyFixedVertexMarker: Sendable, Equatable {
+    public var vertex: UInt32
+    public var position: SIMD3<Float>
+}
+
+public struct EditorSoftBodyConstraintOverlay: Sendable, Equatable {
+    public var lines: [EditorSoftBodyConstraintLine]
+    public var fixedVertices: [EditorSoftBodyFixedVertexMarker]
+    public var usesSimulatedPositions: Bool
+}
+
 extension EditorSceneAdapter {
 
     // MARK: - Picking
@@ -139,6 +163,165 @@ extension EditorSceneAdapter {
             }
         }
         return lines
+    }
+
+    /// Builds a stable, bounded constraint overlay for the selected soft body.
+    /// Surface edges are derived from render triangles; an edge participating
+    /// in a tetrahedron is marked as a volume edge. Fixed vertices are emitted
+    /// separately so the viewport can draw anchors above the line overlay.
+    public func viewportSoftBodyConstraints(
+        entityID rawID: UInt64,
+        maxEdges: Int = 4_096
+    ) -> EditorSoftBodyConstraintOverlay? {
+        let entity = EntityID(rawValue: rawID)
+        guard scene.component(SoftBody.self, for: entity) != nil else { return nil }
+        if scene.hierarchyNeedsPropagation() {
+            scene.propagateTransforms()
+        }
+
+        let cloth = scene.component(Cloth.self, for: entity)
+        let mesh = scene.component(SoftBodyMesh.self, for: entity)
+        guard (cloth != nil) != (mesh != nil) else { return nil }
+
+        let authoredPositions: [SIMD3<Float>]
+        let triangleIndices: [UInt32]
+        let tetrahedronIndices: [UInt32]
+        let fixedVertexIndices: [Int]
+        if let cloth {
+            let offsetX = -0.5 * cloth.spacing * Float(cloth.gridSizeX - 1)
+            let offsetZ = -0.5 * cloth.spacing * Float(cloth.gridSizeZ - 1)
+            authoredPositions = (0..<cloth.gridSizeZ).flatMap { z in
+                (0..<cloth.gridSizeX).map { x in
+                    SIMD3<Float>(
+                        offsetX + Float(x) * cloth.spacing,
+                        0,
+                        offsetZ + Float(z) * cloth.spacing
+                    )
+                }
+            }
+            let cellCount = (cloth.gridSizeX - 1) * (cloth.gridSizeZ - 1)
+            let sampledCellCount = maxEdges > 0
+                ? min(cellCount, max(1, maxEdges / 3))
+                : 0
+            var sampledTriangles: [UInt32] = []
+            sampledTriangles.reserveCapacity(sampledCellCount * 6)
+            if sampledCellCount > 0 {
+                let cellStride = max(1, cellCount / sampledCellCount)
+                var cell = 0
+                while cell < cellCount && sampledTriangles.count < sampledCellCount * 6 {
+                    let x = cell % (cloth.gridSizeX - 1)
+                    let z = cell / (cloth.gridSizeX - 1)
+                    let topLeft = UInt32(x + z * cloth.gridSizeX)
+                    let bottomLeft = UInt32(x + (z + 1) * cloth.gridSizeX)
+                    let bottomRight = UInt32(x + 1 + (z + 1) * cloth.gridSizeX)
+                    let topRight = UInt32(x + 1 + z * cloth.gridSizeX)
+                    sampledTriangles.append(contentsOf: [
+                        topLeft, bottomLeft, bottomRight,
+                        topLeft, bottomRight, topRight,
+                    ])
+                    cell += cellStride
+                }
+            }
+            triangleIndices = sampledTriangles
+            tetrahedronIndices = []
+            fixedVertexIndices = cloth.fixedVertexIndices
+        } else if let mesh,
+                  let geometry = scene.resource(MeshColliderGeometryResource.self)?
+                    .geometry(for: mesh.resourceID) {
+            authoredPositions = geometry.positions
+            triangleIndices = geometry.triangleIndices
+            tetrahedronIndices = geometry.tetrahedronIndices
+            fixedVertexIndices = mesh.fixedVertexIndices
+        } else {
+            return nil
+        }
+
+        let simulatedPositions = scene.softBodyStateFrame.states[entity]?.positions
+        let usesSimulatedPositions = simulatedPositions?.count == authoredPositions.count
+        let positions: [SIMD3<Float>]
+        if usesSimulatedPositions, let simulatedPositions {
+            positions = simulatedPositions
+        } else {
+            let world = scene.worldTransform(for: entity)?.matrix
+                ?? scene.localTransform(for: entity)?.matrix
+                ?? matrix_identity_float4x4
+            positions = authoredPositions.map { position in
+                let transformed = world * SIMD4<Float>(position, 1)
+                return SIMD3<Float>(transformed.x, transformed.y, transformed.z)
+            }
+        }
+
+        let edgeKey: (UInt32, UInt32) -> UInt64 = { a, b in
+            let low = min(a, b)
+            let high = max(a, b)
+            return (UInt64(low) << 32) | UInt64(high)
+        }
+        let positionCount = UInt32(clamping: positions.count)
+        let edgeLimit = max(0, maxEdges)
+        var edges = Set<UInt64>()
+        var volumeEdges = Set<UInt64>()
+        var tetrahedronOffset = 0
+        while edgeLimit > 0,
+              edges.count < edgeLimit,
+              tetrahedronOffset + 3 < tetrahedronIndices.count {
+            let a = tetrahedronIndices[tetrahedronOffset]
+            let b = tetrahedronIndices[tetrahedronOffset + 1]
+            let c = tetrahedronIndices[tetrahedronOffset + 2]
+            let d = tetrahedronIndices[tetrahedronOffset + 3]
+            if a < positionCount, b < positionCount,
+               c < positionCount, d < positionCount {
+                for key in [
+                    edgeKey(a, b), edgeKey(a, c), edgeKey(a, d),
+                    edgeKey(b, c), edgeKey(b, d), edgeKey(c, d),
+                ] where edges.count < edgeLimit {
+                    edges.insert(key)
+                    volumeEdges.insert(key)
+                }
+            }
+            tetrahedronOffset += 4
+        }
+
+        var triangleOffset = 0
+        while edgeLimit > 0,
+              edges.count < edgeLimit,
+              triangleOffset + 2 < triangleIndices.count {
+            let a = triangleIndices[triangleOffset]
+            let b = triangleIndices[triangleOffset + 1]
+            let c = triangleIndices[triangleOffset + 2]
+            if a < positionCount, b < positionCount, c < positionCount {
+                for key in [edgeKey(a, b), edgeKey(b, c), edgeKey(c, a)]
+                    where edges.count < edgeLimit {
+                    edges.insert(key)
+                }
+            }
+            triangleOffset += 3
+        }
+
+        let lines = edges.sorted().map { key in
+            let a = UInt32(key >> 32)
+            let b = UInt32(key & 0xffff_ffff)
+            return EditorSoftBodyConstraintLine(
+                vertexA: a,
+                vertexB: b,
+                positionA: positions[Int(a)],
+                positionB: positions[Int(b)],
+                kind: volumeEdges.contains(key) ? .volume : .surface
+            )
+        }
+        let fixedVertices: [EditorSoftBodyFixedVertexMarker] = fixedVertexIndices
+            .prefix(4_096).compactMap {
+            index -> EditorSoftBodyFixedVertexMarker? in
+            guard index >= 0, index < positions.count else { return nil }
+            return EditorSoftBodyFixedVertexMarker(
+                vertex: UInt32(index),
+                position: positions[index]
+            )
+        }
+        return EditorSoftBodyConstraintOverlay(
+            lines: lines,
+            fixedVertices: fixedVertices,
+            usesSimulatedPositions: usesSimulatedPositions
+        )
     }
 
     private func worldAABB(forLocalMin lo: SIMD3<Float>,

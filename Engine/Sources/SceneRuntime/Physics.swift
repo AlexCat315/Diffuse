@@ -1,4 +1,5 @@
-﻿import SIMDCompat
+﻿import Foundation
+import SIMDCompat
 
 public enum PhysicsSimulationMode: String, CaseIterable, Sendable, Equatable {
     case off
@@ -992,9 +993,45 @@ public struct Cloth: RuntimeComponent, Sendable, Equatable {
     }
 }
 
+/// An arbitrary triangle surface used as Jolt soft-body topology.
+///
+/// Geometry remains in `MeshColliderGeometryResource`, keyed by `resourceID`,
+/// so scenes and prefabs serialize only a stable asset reference and constraint
+/// configuration instead of duplicating large vertex/index arrays. A geometry
+/// with four-index `tetrahedronIndices` additionally creates internal edge and
+/// volume constraints.
+public struct SoftBodyMesh: RuntimeComponent, Sendable, Equatable {
+    public var resourceID: String?
+    public var fixedVertexIndices: [Int]
+    public var compliance: Float
+    public var shearCompliance: Float
+    public var bendCompliance: Float
+    public var volumeCompliance: Float
+    public var bendType: ClothBendType
+
+    public init(
+        resourceID: String? = nil,
+        fixedVertexIndices: [Int] = [],
+        compliance: Float = 1.0e-5,
+        shearCompliance: Float = 1.0e-5,
+        bendCompliance: Float = 1.0e-5,
+        volumeCompliance: Float = 1.0e-6,
+        bendType: ClothBendType = .dihedral
+    ) {
+        let trimmedResourceID = resourceID?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.resourceID = trimmedResourceID?.isEmpty == false ? trimmedResourceID : nil
+        self.fixedVertexIndices = Array(Set(fixedVertexIndices.filter { $0 >= 0 })).sorted()
+        self.compliance = max(0, compliance)
+        self.shearCompliance = max(0, shearCompliance)
+        self.bendCompliance = max(0, bendCompliance)
+        self.volumeCompliance = max(0, volumeCompliance)
+        self.bendType = bendType
+    }
+}
+
 /// Simulation and collision settings shared by deformable assets.
-/// The first M6 slice supports `Cloth`; volumetric soft-body assets use the same
-/// component and will be added without changing the streamed state format.
+/// M6 supports `Cloth` and arbitrary triangle-surface `SoftBodyMesh` topologies;
+/// volumetric assets can use the same component without changing the state stream.
 public struct SoftBody: RuntimeComponent, Sendable, Equatable {
     public var vertexMass: Float
     public var pressure: Float
@@ -2335,11 +2372,62 @@ public struct PhysicsVehicleDescriptor: Sendable, Equatable {
     }
 }
 
+public enum PhysicsSoftBodyTopology: Sendable, Equatable {
+    case cloth(Cloth)
+    case surfaceMesh(SoftBodyMesh, MeshColliderGeometry?)
+    case invalid
+
+    public var vertexCount: Int {
+        switch self {
+        case let .cloth(cloth):
+            return cloth.vertexCount
+        case let .surfaceMesh(_, geometry):
+            return geometry?.positions.count ?? 0
+        case .invalid:
+            return 0
+        }
+    }
+
+    public var triangleIndices: [UInt32] {
+        switch self {
+        case let .cloth(cloth):
+            return cloth.triangleIndices
+        case let .surfaceMesh(_, geometry):
+            return geometry?.triangleIndices ?? []
+        case .invalid:
+            return []
+        }
+    }
+
+    public var fixedVertexIndices: [Int] {
+        switch self {
+        case let .cloth(cloth):
+            return cloth.fixedVertexIndices
+        case let .surfaceMesh(mesh, _):
+            return mesh.fixedVertexIndices
+        case .invalid:
+            return []
+        }
+    }
+}
+
 public struct PhysicsSoftBodyDescriptor: Sendable, Equatable {
     public var entity: EntityID
     public var worldTransform: WorldTransform
     public var softBody: SoftBody
-    public var cloth: Cloth
+    public var topology: PhysicsSoftBodyTopology
+
+    public init(
+        entity: EntityID,
+        worldTransform: WorldTransform,
+        softBody: SoftBody,
+        topology: PhysicsSoftBodyTopology
+    ) {
+        self.entity = entity
+        self.worldTransform = worldTransform
+        self.softBody = softBody
+        self.topology = topology
+    }
 
     public init(
         entity: EntityID,
@@ -2347,10 +2435,12 @@ public struct PhysicsSoftBodyDescriptor: Sendable, Equatable {
         softBody: SoftBody,
         cloth: Cloth
     ) {
-        self.entity = entity
-        self.worldTransform = worldTransform
-        self.softBody = softBody
-        self.cloth = cloth
+        self.init(
+            entity: entity,
+            worldTransform: worldTransform,
+            softBody: softBody,
+            topology: .cloth(cloth)
+        )
     }
 }
 

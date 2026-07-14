@@ -283,6 +283,76 @@ struct EditorInspectorSectionsTests {
         #expect(!hasSection(adapter, id, "soft-body"))
     }
 
+    @Test("surface soft-body inspector edits asset topology and excludes cloth")
+    func softBodyMeshBindings() throws {
+        let adapter = EditorSceneAdapter()
+        let id = makeEntity(in: adapter)
+        let entity = try #require(EntityID(rawValue: id))
+        _ = adapter.scene.setComponent(
+            AssetReferenceComponent(
+                assetID: "mesh-12",
+                name: "Tetra",
+                relativePath: "Tetra.glb",
+                absolutePath: "/tmp/Tetra.glb",
+                kind: "model",
+                meshIndex: 12
+            ),
+            for: entity
+        )
+        adapter.scene.setResource(MeshColliderGeometryResource(geometryByResourceID: [
+            "meshIndex:12": MeshColliderGeometry(
+                positions: [
+                    .zero,
+                    SIMD3<Float>(1, 0, 0),
+                    SIMD3<Float>(0, 1, 0),
+                    SIMD3<Float>(0, 0, 1),
+                ],
+                triangleIndices: [0, 2, 1, 0, 1, 3, 1, 2, 3, 2, 0, 3],
+                tetrahedronIndices: [0, 1, 2, 3]
+            ),
+        ]))
+
+        #expect(adapter.addComponent(.softBody, to: id))
+        #expect(adapter.addComponent(.softBodyMesh, to: id))
+        #expect(hasSection(adapter, id, "soft-body-mesh"))
+        #expect(!adapter.addableComponentKinds(on: id).contains(.cloth))
+        #expect(!adapter.addComponent(.cloth, to: id))
+
+        guard case let .text(resource) =
+                field(adapter, id, section: "soft-body-mesh", field: "soft-body-mesh-resource"),
+              case let .json(fixedVertices, _) =
+                field(adapter, id, section: "soft-body-mesh", field: "soft-body-mesh-fixed"),
+              case let .constrainedNumber(compliance, _, _, _, _) =
+                field(adapter, id, section: "soft-body-mesh", field: "soft-body-mesh-compliance"),
+              case let .constrainedNumber(volumeCompliance, _, _, _, _) =
+                field(adapter, id, section: "soft-body-mesh", field: "soft-body-mesh-volume"),
+              case let .text(bendType) =
+                field(adapter, id, section: "soft-body-mesh", field: "soft-body-mesh-bend-type"),
+              case let .readOnly(tetrahedronCount) =
+                field(adapter, id, section: "soft-body-mesh", field: "soft-body-mesh-tetrahedra") else {
+            Issue.record("expected surface soft-body authored controls"); return
+        }
+
+        #expect(resource.wrappedValue == "meshIndex:12")
+        #expect(tetrahedronCount == "1")
+        resource.wrappedValue = "soft.tetra"
+        fixedVertices.wrappedValue = "[7,2,-1,2]"
+        compliance.wrappedValue = 0.006
+        volumeCompliance.wrappedValue = 0.002
+        bendType.wrappedValue = "distance"
+
+        let mesh = try #require(adapter.scene.component(SoftBodyMesh.self, for: entity))
+        #expect(mesh.resourceID == "soft.tetra")
+        #expect(mesh.fixedVertexIndices == [2, 7])
+        #expect(mesh.compliance == 0.006)
+        #expect(mesh.volumeCompliance == 0.002)
+        #expect(mesh.bendType == .distance)
+
+        #expect(adapter.removeComponent(.softBodyMesh, from: id))
+        #expect(!hasSection(adapter, id, "soft-body-mesh"))
+        #expect(adapter.addableComponentKinds(on: id).contains(.cloth))
+    }
+
     @Test("collider inspector edits Jolt shape center and collision mask")
     func colliderJoltSettingsBindings() throws {
         let adapter = EditorSceneAdapter()

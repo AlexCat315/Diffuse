@@ -11,7 +11,7 @@ extern "C" {
 
 typedef struct GuavaJoltContextImpl* GuavaJoltContext;
 
-#define GUAVA_JOLT_ABI_VERSION 4u
+#define GUAVA_JOLT_ABI_VERSION 6u
 
 typedef enum GuavaJoltErrorCode {
     GUAVA_JOLT_ERROR_NONE = 0,
@@ -656,19 +656,30 @@ typedef struct GuavaJoltSoftBodyDesc {
     uint64_t entity_id;
     float position_x, position_y, position_z;
     float rotation_x, rotation_y, rotation_z, rotation_w;
-    uint32_t grid_size_x;
-    uint32_t grid_size_z;
-    float spacing;
-    const uint32_t* fixed_vertices;
-    uint32_t fixed_vertex_count;
+    float scale_x, scale_y, scale_z;
+    uint8_t topology_kind; /* 0 regular grid, 1 arbitrary triangle surface */
     uint8_t bend_type; /* 0 none, 1 distance, 2 dihedral */
     uint8_t allow_sleep;
     uint8_t faces_double_sided;
     uint8_t self_collision;
+    uint8_t reserved0;
+    uint16_t reserved1;
+    uint32_t grid_size_x;
+    uint32_t grid_size_z;
+    float spacing;
+    const float* surface_positions_xyz;
+    uint32_t surface_vertex_count;
+    const uint32_t* surface_triangle_indices;
+    uint32_t surface_triangle_index_count;
+    const uint32_t* tetrahedron_indices;
+    uint32_t tetrahedron_index_count;
+    const uint32_t* fixed_vertices;
+    uint32_t fixed_vertex_count;
     float vertex_mass;
     float compliance;
     float shear_compliance;
     float bend_compliance;
+    float volume_compliance;
     float pressure;
     float linear_damping;
     float friction;

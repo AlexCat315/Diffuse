@@ -500,6 +500,9 @@ struct ViewportPanel: View {
         } else {
             drawSelectionHighlight(list: list, frame: frame, selectedIDs: selectedIDs)
         }
+        if let selectedID {
+            drawSoftBodyConstraintOverlay(list: list, frame: frame, entityID: selectedID)
+        }
         drawMarqueeOverlay(list: list)
 
         guard let snap = EditorGizmoController.shared.snapshot,
@@ -744,6 +747,44 @@ struct ViewportPanel: View {
                           b: line.b,
                           color: color,
                           thickness: line.entityID == selected ? 2 : 1)
+        }
+    }
+
+    private func drawSoftBodyConstraintOverlay(
+        list: DrawList,
+        frame: ViewportScreenFrame,
+        entityID: UInt64
+    ) {
+        guard let overlay = scene.viewportSoftBodyConstraints(entityID: entityID) else { return }
+        for line in overlay.lines {
+            let color: Color = switch line.kind {
+            case .surface:
+                Color(r: 0.24, g: 0.86, b: 0.92, a: 0.78)
+            case .volume:
+                Color(r: 0.88, g: 0.39, b: 1.0, a: 0.9)
+            }
+            drawWorldLine(
+                list: list,
+                frame: frame,
+                a: line.positionA,
+                b: line.positionB,
+                color: color,
+                thickness: line.kind == .volume ? 2 : 1.25
+            )
+        }
+        let fixedColor = Color(r: 1.0, g: 0.76, b: 0.16, a: 0.98)
+        for marker in overlay.fixedVertices {
+            guard let point = projectToViewport(marker.position, frame: frame) else { continue }
+            let radius: Float = 4
+            list.addRect(
+                UIRect(
+                    x: point.x - radius,
+                    y: point.y - radius,
+                    width: radius * 2,
+                    height: radius * 2
+                ),
+                color: fixedColor
+            )
         }
     }
 

@@ -52,7 +52,7 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         /// Component type names present on this entity.
         /// Possible values include `"transform"`, `"mesh"`, `"light"`, `"camera"`,
         /// `"rigidbody"`, `"collider"`, `"vehicle"`, `"softbody"`, `"cloth"`,
-        /// and `"script"`.
+        /// `"softbody_mesh"`, and `"script"`.
         public var components: [String]
 
         // Light extras — non-nil only when `"light"` ∈ components
@@ -149,6 +149,15 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         public var clothSpacing: Float? = nil
         public var clothFixedVertexCount: Int? = nil
         public var clothBendType: String? = nil
+        public var softBodyTopologyKind: String? = nil
+        public var softBodyMeshResourceID: String? = nil
+        public var softBodyMeshVertexCount: Int? = nil
+        public var softBodyMeshTriangleCount: Int? = nil
+        public var softBodyMeshTetrahedronCount: Int? = nil
+        public var softBodyMeshFixedVertexCount: Int? = nil
+        public var softBodyMeshBendType: String? = nil
+        public var softBodyMeshVolumeCompliance: Float? = nil
+        public var softBodyMeshGeometryRevision: UInt64? = nil
     }
 
     /// Compact snapshot of a single ScriptBinding for AI context.
