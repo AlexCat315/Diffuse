@@ -125,27 +125,27 @@ Editor 选中软体实体时会在视口叠加约束拓扑：青色表示表面�
 
 ## 预破碎破坏
 
-M7 首版使用离线预破碎资产。`DestructibleAssetBaker` 接收已经分块的闭合凸网格、密度和局部变换，按 fragment ID 排序并生成稳定的 `asset#convex:<fragmentID>` 几何资源 ID；质量由闭合网格体积乘密度得到。未提供显式连接时，导入器先以变换后 AABB 筛选候选，再按顶点—三角面距离和可配置容差生成稳定连接图；显式连接优先，也可关闭自动生成。重复 ID、无效连接或容差、非有限顶点、越界索引和零体积几何会明确失败，不会生成替代 Box。烘焙结果可一次安装到 `MeshColliderGeometryResource` 与 `DestructibleAssetResource`。
+M7 首版使用离线预破碎资产。`DestructibleAssetBaker` 接收已经分块的闭合凸网格、密度和局部变换，按 fragment ID 排序并生成稳定的 `asset#convex:<fragmentID>` 几何资源 ID；质量由闭合网格体积乘密度得到。未提供显式连接时，导入器先以变换后 AABB 筛选候选，再按顶点—三角面距离和可配置容差生成稳定连接图；显式连接优先，也可关闭自动生成。重复 ID、无效连接或容差、非有限顶点、越界索引和零体积几何会明确失败，不会生成替代 Box。初始连接图必须完全连通或完全无边；部分连通图会在烘焙时按 fragment ID 报告不可达碎块，运行时也会拒绝绕过烘焙器注入的无效图。烘焙结果可一次安装到 `MeshColliderGeometryResource` 与 `DestructibleAssetResource`；同一资源缩减碎块后重装会清理其 `#convex:` 命名空间内已淘汰的几何，同时保留无关共享几何。
 
 场景实体通过 `Destructible` 引用资产，并配置累计伤害阈值、接触冲量阈值、单实体碎块预算、最大存活时间、休眠回收延迟和分离冲量。脚本可在 `onPrePhysics` 提交 `DestructionCommand`；直接命令会在本帧刚体同步前完成断裂，使新碎块参与当前固定步。Jolt 统一接触监听使用求解前速度与接触设置估算非零求解冲量，接触触发的断裂在该固定步结束后生成，下一固定步同步到 Jolt。
 
-连接边可以覆盖伤害或冲量阈值；零值继承实体阈值。带 `worldPoint` 的非强制命令以两端碎块原点的世界空间中点作为连接锚点，只打断距离最近的合格边，并以空碎块数组的 `connectionBreak` 事件报告尚未造成分离的增量断裂；不带命中点的命令用于全局/范围伤害，会打断全部合格边。距离相同时按 connection ID 决胜，累计伤害采用有限值饱和。运行时按 EntityID、命令序号、fragment ID 和 connection ID 稳定处理。达到实体阈值、强制断裂或连接图与根碎块失去连通时，完整预破碎资产被激活。当前版本不会只激活某个连通子图，也不做运行时任意布尔切割。
+连接边可以覆盖伤害或冲量阈值；零值继承实体阈值。带 `worldPoint` 的非强制命令以两端碎块原点的世界空间中点作为连接锚点，只打断距离最近的合格边，并以空碎块数组的 `connectionBreak` 事件报告尚未造成分离的增量断裂；不带命中点的命令用于全局/范围伤害，会打断全部合格边。距离相同时按 connection ID 决胜，累计伤害采用有限值饱和。运行时按 EntityID、命令序号、fragment ID 和 connection ID 稳定处理。连接图分离且每个碎块都提供独立 `renderMesh` 时，包含最小 fragment ID 的根岛继续由源实体承载：Collider 按碎块局部变换重建为 Compound，完整源网格隐藏并由运行时子级代理绘制保留碎块；脱离岛按 fragment ID 激活为动态碎块，岛内连接同时断开。后续强制命令或实体级阈值只释放剩余根岛，不会重复生成已经释放或因预算丢弃的碎块。缺少独立碎块网格的兼容资产仍采用全量激活，避免完整网格与碎块视觉重叠。本路线不实现运行时任意布尔切割。
 
-全局 `DestructionSettingsResource` 限制活动碎块和逐帧事件容量；碎块预算按最小 fragment ID 稳定截断，并在事件中报告丢弃数量。碎块可按寿命、连续休眠时间或源实体删除回收。`DestructionEventFrameResource` 汇总断裂、失败、回收与容量溢出，`DestructionStateFrameResource` 提供累计伤害、断裂连接及活动碎块。Scene v2 和 Prefab v2 采用资产语义：过滤运行时碎块，并用断裂前快照恢复源刚体、碰撞体和可见网格；Prefab 不能以运行时碎块为根。GameSave v2 采用运行快照语义：保存累计伤害、断裂连接、碎块归属、刚体速度/待处理力与冲量/睡眠状态，以及寿命和休眠回收的剩余预算，并在读档时重映射所有实体引用。源实体的 `Destructible` 策略同时支持 Editor Manifest v5 往返。
+全局 `DestructionSettingsResource` 限制活动碎块和逐帧事件容量；碎块预算按最小 fragment ID 稳定截断，并在事件中报告丢弃数量。碎块可按寿命、连续休眠时间或源实体删除回收。`DestructionEventFrameResource` 汇总断裂、失败、回收与容量溢出，`DestructionStateFrameResource` 另外区分部分/完全破碎并提供已释放、根岛保留及活动碎块 ID。Scene v2 和 Prefab v2 采用资产语义：过滤动态碎块与 `DestructibleRetainedFragment` 代理，并用断裂前快照恢复源刚体、碰撞体和可见网格；Prefab 不能以任一运行时碎块或代理为根。GameSave v2 采用运行快照语义：保存累计伤害、断裂连接、部分/完全状态、已释放 ID、Compound 源 Collider、代理层级、碎块归属、刚体速度/待处理力与冲量/睡眠状态，以及寿命和休眠回收的剩余预算，并在读档时重映射所有实体引用。源实体的 `Destructible` 策略同时支持 Editor Manifest v5 往返。
 
-统一 `PhysicsDebugFrameResource` 按 source EntityID 和 connection ID 输出破坏连接的两端世界坐标、断裂标志及源断裂标志。Editor 选中 `Destructible` 时直接消费该帧：完整边和锚点显示绿色，断裂边和锚点显示红色，单实体最多绘制 4096 条连接。Inspector 可编辑全部破坏策略，并显示资产碎块/连接数及最新活动/断裂状态；AI 场景语义暴露资产 ID、阈值、预算和运行摘要。`destruction-fragments` 基准会稳定激活指定数量的简单凸碎块，分别门禁激活耗时、固定步分位数、内存增长、活动碎块数和丢弃子步。
+统一 `PhysicsDebugFrameResource` 按 source EntityID 和 connection ID 输出破坏连接的两端世界坐标、断裂标志及源断裂标志。Editor 选中 `Destructible` 时直接消费该帧：完整边和锚点显示绿色，断裂边和锚点显示红色，单实体最多绘制 4096 条连接。Inspector 可编辑全部破坏策略，并显示资产碎块/连接数及最新活动/断裂状态；AI 场景语义暴露资产 ID、阈值、预算和运行摘要。`destruction-fragments` 基准稳定激活指定数量的完整预破碎资产；`destruction-islands` 则保留每个源的根碎块并释放其余碎块，额外门禁部分/完全源数量、Compound 根岛、渲染代理和保留碎块数量。两者都独立检查激活耗时、固定步分位数、内存增长、活动碎块数和丢弃子步，并在 macOS CI 以 Release 配置运行 4096 碎块场景。
 
 ## 稳定性和序列化
 
 - 车辆创建、删除、命令和状态按 `EntityID` 稳定排序。
 - 发动机、档位、离合器和逐轮状态参与物理检查点哈希。
-- 累计破坏伤害、断裂连接和活动碎块映射参与物理检查点哈希；破坏命令纳入录制与回放。
+- 累计破坏伤害、部分/完全状态、断裂连接、已释放/根岛 fragment ID 和活动碎块映射参与物理检查点哈希；破坏命令纳入录制与回放。
 - 即使运行时资源被调用方重排，破坏碎块、连接、预算截断和事件仍分别按 fragment ID 与 connection ID 归一化。
 - 车辆配置支持 Scene v2 与 Editor Manifest v5 往返。
 - C ABI v6 校验刚体、角色、载具和软体结构尺寸，并对规则网格、任意表面及四面体拓扑的无效配置返回明确错误。
 - AI 场景语义包含载具、软体、布料、表面网格和预破碎资产的配置，以及可用的最新运行状态摘要。
-- `cloth-64`、`soft-body-instances` 和 `destruction-fragments` 基准分别对开启自碰撞的 64×64 单布料、8 个 32×32 实例和批量预破碎激活统计独立预算。
+- `cloth-64`、`soft-body-instances`、`destruction-fragments` 和 `destruction-islands` 基准分别门禁自碰撞 64×64 单布料、8 个 32×32 实例、批量完整破碎和增量连通岛释放。
 
 ## 当前边界
 
-M5、M6 与 M7 已完成。M7 的生产边界是离线预破碎：导入流程负责提供闭合凸碎块和连接图，运行时负责局部/全局伤害与冲量阈值、增量连接断裂、确定性激活、预算、回收、事件、录制回放、Editor 与 AI 语义。连接图断开后仍会激活完整资产，不支持局部连通岛分批释放，也不实现运行时任意布尔切割。
+M5、M6 与 M7 已完成。M7 的生产边界是离线预破碎：导入流程负责提供闭合凸碎块、逐碎块渲染资源和连接图，运行时负责局部/全局伤害与冲量阈值、增量连接断裂、根岛 Compound 重建、确定性岛释放、预算、回收、事件、录制回放、Editor 与 AI 语义。缺少逐碎块渲染资源或包含无法表示为 Collider TRS 的碎块资产会回退到全量激活；不实现运行时任意布尔切割。

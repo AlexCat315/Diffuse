@@ -343,8 +343,11 @@ public struct SceneSemanticEncoder: Sendable {
                 destructibleAssetFragmentCount: destructibleAsset?.fragments.count,
                 destructibleAssetConnectionCount: destructibleAsset?.connections.count,
                 destructibleHasFractured: destructionState?.hasFractured,
+                destructibleIsFullyFractured: destructionState?.isFullyFractured,
                 destructibleActiveFragmentCount: destructionState?.activeFragmentEntities.count,
-                destructibleBrokenConnectionCount: destructionState?.brokenConnectionIDs.count
+                destructibleBrokenConnectionCount: destructionState?.brokenConnectionIDs.count,
+                destructibleReleasedFragmentCount: destructionState?.releasedFragmentIDs.count,
+                destructibleRetainedFragmentCount: destructionState?.retainedFragmentIDs.count
             ))
         }
 
