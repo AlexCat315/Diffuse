@@ -3192,7 +3192,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .bool(softBodyBoolBinding(for: entity, \.allowSleep))),
                 EditorInspectorField(id: "soft-body-double-sided", label: L("Double Sided"),
                                      value: .bool(softBodyBoolBinding(for: entity, \.facesDoubleSided))),
-                EditorInspectorField(id: "soft-body-self-collision", label: L("Self Collision (Unsupported)"),
+                EditorInspectorField(id: "soft-body-self-collision", label: L("Self Collision"),
                                      value: .bool(softBodyBoolBinding(for: entity, \.selfCollision))),
                 EditorInspectorField(id: "soft-body-streamed-vertices", label: L("Streamed Vertices"),
                                      value: .readOnly(String(state?.positions.count ?? 0))),

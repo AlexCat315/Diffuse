@@ -249,6 +249,8 @@ struct EditorInspectorSectionsTests {
 
         guard case let .bool(enabled) =
                 field(adapter, id, section: "soft-body", field: "soft-body-enabled"),
+              case let .bool(selfCollision) =
+                field(adapter, id, section: "soft-body", field: "soft-body-self-collision"),
               case let .constrainedNumber(pressure, _, _, _, _) =
                 field(adapter, id, section: "soft-body", field: "soft-body-pressure"),
               case let .constrainedNumber(iterations, _, _, _, _) =
@@ -262,6 +264,7 @@ struct EditorInspectorSectionsTests {
             Issue.record("expected soft-body and cloth authored controls"); return
         }
         enabled.wrappedValue = false
+        selfCollision.wrappedValue = true
         pressure.wrappedValue = 2.5
         iterations.wrappedValue = 11
         gridX.wrappedValue = 6
@@ -271,6 +274,7 @@ struct EditorInspectorSectionsTests {
         let softBody = try #require(adapter.scene.component(SoftBody.self, for: entity))
         let cloth = try #require(adapter.scene.component(Cloth.self, for: entity))
         #expect(!softBody.isEnabled)
+        #expect(softBody.selfCollision)
         #expect(softBody.pressure == 2.5)
         #expect(softBody.solverIterations == 11)
         #expect(cloth.gridSizeX == 6)

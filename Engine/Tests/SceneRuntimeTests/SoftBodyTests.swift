@@ -111,7 +111,10 @@ struct SoftBodyTests {
         var runtime = makeRuntime(gravity: .zero)
         let entity = runtime.createEntity()
         _ = runtime.setComponent(Cloth(gridSizeX: 3, gridSizeZ: 3), for: entity)
-        _ = runtime.setComponent(SoftBody(allowSleep: false), for: entity)
+        _ = runtime.setComponent(
+            SoftBody(vertexRadius: 0.03, allowSleep: false, selfCollision: true),
+            for: entity
+        )
 
         var report = runtime.tick(deltaTime: 1.0 / 60.0)
         #expect(report.physicsError == nil)
@@ -291,12 +294,82 @@ struct SoftBodyTests {
         #expect(first.physicsStateHashFrame.hash != 0)
     }
 
-    @Test("unsupported self collision returns an explicit native argument error")
-    func selfCollisionIsRejected() {
-        var runtime = makeRuntime()
+    @Test("self collision separates disconnected folded surfaces deterministically")
+    func selfCollisionSeparatesFoldedSurfaces() throws {
+        let positions: [SIMD3<Float>] = [
+            SIMD3<Float>(-0.5, 0, -0.5),
+            SIMD3<Float>(0.5, 0, -0.5),
+            SIMD3<Float>(0, 0, 0.5),
+            SIMD3<Float>(-0.5, 0.01, -0.5),
+            SIMD3<Float>(0.5, 0.01, -0.5),
+            SIMD3<Float>(0, 0.01, 0.5),
+        ]
+        let triangles: [UInt32] = [0, 2, 1, 3, 5, 4]
+
+        func configuredRuntime() -> (SceneRuntime, EntityID) {
+            var runtime = makeRuntime(gravity: .zero)
+            runtime.setResource(MeshColliderGeometryResource(geometryByResourceID: [
+                "self-collision.fold": MeshColliderGeometry(
+                    positions: positions,
+                    triangleIndices: triangles,
+                    revision: 1
+                ),
+            ]))
+            let entity = runtime.createEntity()
+            _ = runtime.setComponent(
+                SoftBodyMesh(
+                    resourceID: "self-collision.fold",
+                    compliance: 0,
+                    shearCompliance: 0,
+                    bendCompliance: 0,
+                    bendType: .none
+                ),
+                for: entity
+            )
+            _ = runtime.setComponent(
+                SoftBody(
+                    linearDamping: 0,
+                    gravityScale: 0,
+                    vertexRadius: 0.05,
+                    solverIterations: 4,
+                    maxLinearVelocity: 20,
+                    allowSleep: false,
+                    selfCollision: true
+                ),
+                for: entity
+            )
+            return (runtime, entity)
+        }
+
+        var (first, firstEntity) = configuredRuntime()
+        var (second, secondEntity) = configuredRuntime()
+        for frame in 0..<12 {
+            #expect(first.tick(
+                deltaTime: 1.0 / 60.0,
+                frameIndex: UInt64(frame)
+            ).physicsError == nil)
+            #expect(second.tick(
+                deltaTime: 1.0 / 60.0,
+                frameIndex: UInt64(frame)
+            ).physicsError == nil)
+        }
+
+        let firstState = try #require(first.softBodyStateFrame.states[firstEntity])
+        let secondState = try #require(second.softBodyStateFrame.states[secondEntity])
+        #expect(firstState.positions == secondState.positions)
+        let lowerY = firstState.positions[0..<3].reduce(Float.zero) { $0 + $1.y } / 3
+        let upperY = firstState.positions[3..<6].reduce(Float.zero) { $0 + $1.y } / 3
+        #expect(abs(upperY - lowerY) >= 0.045)
+    }
+
+    @Test("self collision with zero vertex radius returns an explicit native error")
+    func selfCollisionRejectsZeroRadius() {
+        var runtime = makeRuntime(gravity: .zero)
         let entity = runtime.createEntity()
         _ = runtime.setComponent(Cloth(gridSizeX: 3, gridSizeZ: 3), for: entity)
-        _ = runtime.setComponent(SoftBody(selfCollision: true), for: entity)
+        _ = runtime.setComponent(
+            SoftBody(vertexRadius: 0, selfCollision: true), for: entity
+        )
 
         let report = runtime.tick(deltaTime: 1.0 / 60.0)
         #expect(report.physicsError?.code == .invalidArgument)
@@ -656,6 +729,7 @@ struct SoftBodyTests {
             layerMask: 0x00FF,
             allowSleep: false,
             facesDoubleSided: false,
+            selfCollision: true,
             isEnabled: true
         )
         let cloth = Cloth(
