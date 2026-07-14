@@ -2313,10 +2313,19 @@ public struct RuntimeWorldSchedule {
         for source in destructionSources {
             combine(source.sourceEntity.rawValue, into: &hash)
             combine(source.hasFractured ? 1 : 0, into: &hash)
+            combine(source.isFullyFractured ? 1 : 0, into: &hash)
             combineFloat(source.accumulatedDamage, into: &hash)
             combine(UInt64(source.brokenConnectionIDs.count), into: &hash)
             for connectionID in source.brokenConnectionIDs {
                 combine(UInt64(connectionID), into: &hash)
+            }
+            combine(UInt64(source.releasedFragmentIDs.count), into: &hash)
+            for fragmentID in source.releasedFragmentIDs {
+                combine(UInt64(fragmentID), into: &hash)
+            }
+            combine(UInt64(source.retainedFragmentIDs.count), into: &hash)
+            for fragmentID in source.retainedFragmentIDs {
+                combine(UInt64(fragmentID), into: &hash)
             }
             combine(UInt64(source.activeFragmentEntities.count), into: &hash)
             for index in source.activeFragmentEntities.indices {

@@ -1854,6 +1854,9 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(record?.destructibleAssetFragmentCount, 2)
         XCTAssertEqual(record?.destructibleAssetConnectionCount, 1)
         XCTAssertNil(record?.destructibleHasFractured)
+        XCTAssertNil(record?.destructibleIsFullyFractured)
+        XCTAssertNil(record?.destructibleReleasedFragmentCount)
+        XCTAssertNil(record?.destructibleRetainedFragmentCount)
     }
 
     func testSetAudioSourceExecutorProducesMutation() throws {

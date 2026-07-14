@@ -15,12 +15,15 @@ public struct Prefab: Sendable, Equatable {
     /// Returns `nil` if `root` is not part of `scene` or is a runtime destruction fragment.
     public static func capture(from scene: SceneRuntime, root: EntityID) throws -> Prefab? {
         guard scene.contains(root),
-              scene.component(DestructibleFragment.self, for: root) == nil
+              scene.component(DestructibleFragment.self, for: root) == nil,
+              scene.component(DestructibleRetainedFragment.self, for: root) == nil
         else { return nil }
 
         var ordered: [EntityID] = []
         func visit(_ entity: EntityID) {
-            guard scene.component(DestructibleFragment.self, for: entity) == nil else { return }
+            guard scene.component(DestructibleFragment.self, for: entity) == nil,
+                  scene.component(DestructibleRetainedFragment.self, for: entity) == nil
+            else { return }
             ordered.append(entity)
             for child in scene.children(of: entity) { visit(child) }
         }

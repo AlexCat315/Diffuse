@@ -117,3 +117,19 @@ jobs:
           swift test --filter CardBattleRuntimeTests
           swift test --filter IntentRuntimeTests
           swift test --filter AIRuntimeTests
+
+      - name: Run M7 destruction performance gates
+        if: runner.os == 'macOS'
+        shell: bash
+        working-directory: Engine
+        run: |
+          GUAVA_PHYSICS_SCENARIO=destruction-fragments \
+          GUAVA_PHYSICS_BODIES=4096 \
+          GUAVA_PHYSICS_WARMUP_FRAMES=30 \
+          GUAVA_PHYSICS_SAMPLE_FRAMES=120 \
+          swift run -c release PhysicsRuntimeBenchmarks
+          GUAVA_PHYSICS_SCENARIO=destruction-islands \
+          GUAVA_PHYSICS_BODIES=4096 \
+          GUAVA_PHYSICS_WARMUP_FRAMES=30 \
+          GUAVA_PHYSICS_SAMPLE_FRAMES=120 \
+          swift run -c release PhysicsRuntimeBenchmarks

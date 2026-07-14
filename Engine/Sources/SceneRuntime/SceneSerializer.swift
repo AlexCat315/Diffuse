@@ -94,7 +94,8 @@ public enum SceneSerializer {
     ) throws -> Data {
         let entities = scene.entities().filter { entity in
             purpose == .gameSave
-                || scene.component(DestructibleFragment.self, for: entity) == nil
+                || (scene.component(DestructibleFragment.self, for: entity) == nil
+                    && scene.component(DestructibleRetainedFragment.self, for: entity) == nil)
         }
         var entityIndexMap: [EntityID: Int] = [:]
         for (i, entity) in entities.enumerated() {
@@ -219,6 +220,13 @@ public enum SceneSerializer {
                     entity: entity,
                     runtime: destructionRuntime
                 )
+            }
+            if let retained = scene.component(DestructibleRetainedFragment.self, for: entity),
+               let sourceIndex = entityIndexMap[retained.sourceEntity] {
+                comps["destructibleRetainedFragment"] = [
+                    "sourceEntity": sourceIndex,
+                    "fragmentID": Int(retained.fragmentID),
+                ]
             }
         }
         if !comps.isEmpty { obj["components"] = comps }
@@ -367,8 +375,10 @@ public enum SceneSerializer {
     ) -> [String: Any] {
         var encoded: [String: Any] = [
             "hasFractured": source.hasFractured,
+            "isFullyFractured": source.isFullyFractured,
             "accumulatedDamage": source.accumulatedDamage,
             "brokenConnectionIDs": source.brokenConnectionIDs.sorted().map(Int.init),
+            "releasedFragmentIDs": source.releasedFragmentIDs.sorted().map(Int.init),
         ]
         if source.hasAuthoredSourceSnapshot {
             var snapshot: [String: Any] = [
@@ -443,9 +453,16 @@ public enum SceneSerializer {
 
             var source = DestructionRuntimeSourceState(
                 hasFractured: jsonToBool(encoded["hasFractured"]) ?? false,
+                isFullyFractured: jsonToBool(encoded["isFullyFractured"])
+                    ?? (jsonToBool(encoded["hasFractured"]) ?? false),
                 accumulatedDamage: jsonToFloat(encoded["accumulatedDamage"]) ?? 0,
                 brokenConnectionIDs: Set(
                     (jsonToArray(encoded["brokenConnectionIDs"]) ?? []).compactMap {
+                        jsonToInt($0).flatMap { UInt32(exactly: $0) }
+                    }
+                ),
+                releasedFragmentIDs: Set(
+                    (jsonToArray(encoded["releasedFragmentIDs"]) ?? []).compactMap {
                         jsonToInt($0).flatMap { UInt32(exactly: $0) }
                     }
                 )
@@ -505,6 +522,26 @@ public enum SceneSerializer {
                 ?? DestructionRuntimeSourceState()
             source.hasFractured = true
             runtime.sources[sourceEntity] = source
+            restoredRuntimeState = true
+        }
+
+        for (index, raw) in entities.enumerated() {
+            guard let entity = entityMap[index],
+                  let obj = jsonToDict(raw),
+                  let components = jsonToDict(obj["components"]),
+                  let encoded = jsonToDict(components["destructibleRetainedFragment"]),
+                  let sourceIndex = jsonToInt(encoded["sourceEntity"]),
+                  let sourceEntity = entityMap[sourceIndex],
+                  let fragmentIDValue = jsonToInt(encoded["fragmentID"]),
+                  let fragmentID = UInt32(exactly: fragmentIDValue)
+            else { continue }
+            _ = scene.setComponent(
+                DestructibleRetainedFragment(
+                    sourceEntity: sourceEntity,
+                    fragmentID: fragmentID
+                ),
+                for: entity
+            )
             restoredRuntimeState = true
         }
 

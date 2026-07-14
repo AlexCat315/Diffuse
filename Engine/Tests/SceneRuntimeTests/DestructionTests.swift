@@ -129,6 +129,19 @@ struct DestructionTests {
         }
     }
 
+    private func configureFragmentRendering(in runtime: inout SceneRuntime) throws {
+        var assets = try #require(runtime.resource(DestructibleAssetResource.self))
+        var asset = try #require(assets.assetsByResourceID[resourceID])
+        for index in asset.fragments.indices {
+            let fragmentID = asset.fragments[index].fragmentID
+            asset.fragments[index].renderMesh = RenderMeshComponent(
+                meshIndex: 100 + Int(fragmentID)
+            )
+        }
+        assets.assetsByResourceID[resourceID] = asset
+        runtime.setResource(assets)
+    }
+
     @Test("damage accumulates and fragments participate in the current physics prepare")
     func currentFrameActivation() throws {
         var (runtime, source) = makeRuntime()
@@ -216,6 +229,144 @@ struct DestructionTests {
         let fracturedDebug = runtime.physicsDebugFrame.destructionConnections
         #expect(fracturedDebug.map(\.isBroken) == [true, true, true])
         #expect(fracturedDebug.allSatisfy { $0.isSourceFractured })
+    }
+
+    @Test("render-complete assets release detached islands and retain a compound root")
+    func incrementalIslandRelease() throws {
+        var (runtime, source) = makeRuntime()
+        try configureLocalizedLoop(in: &runtime, source: source)
+        try configureFragmentRendering(in: &runtime)
+
+        runtime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            impulse: SIMD3<Float>(3, 0, 0),
+            worldPoint: SIMD3<Float>(1.875, 3, 4)
+        ))
+        _ = runtime.tick(deltaTime: 0)
+        #expect(runtime.destructionStateFrame.sources[source]?.hasFractured == false)
+
+        runtime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            impulse: SIMD3<Float>(3, 0, 0),
+            worldPoint: SIMD3<Float>(2, 3, 4)
+        ))
+        let partialReport = runtime.tick(deltaTime: 0)
+
+        let event = try #require(runtime.destructionEventFrame.events.first)
+        #expect(event.cause == .connectionBreak)
+        #expect(event.fragmentIDs == [1, 2])
+        #expect(event.brokenConnectionIDs == [11, 12])
+        #expect(partialReport.physicsBodyCount == 3)
+        let state = try #require(runtime.destructionStateFrame.sources[source])
+        #expect(state.hasFractured)
+        #expect(!state.isFullyFractured)
+        #expect(state.brokenConnectionIDs == [10, 11, 12])
+        #expect(state.releasedFragmentIDs == [1, 2])
+        #expect(state.retainedFragmentIDs == [0])
+        #expect(state.activeFragmentIDs == [1, 2])
+
+        let sourceCollider = try #require(runtime.component(Collider.self, for: source))
+        #expect(sourceCollider.shapes.count == 1)
+        #expect(sourceCollider.shapes[0].shape.resourceID == "fragment.0")
+        #expect(sourceCollider.shapes[0].localPosition == SIMD3<Float>(-0.5, 0, 0))
+        #expect(runtime.component(RigidBody.self, for: source) != nil)
+        #expect(runtime.component(RenderMeshComponent.self, for: source)?.isVisible == false)
+
+        let proxies = runtime.entities(with: DestructibleRetainedFragment.self)
+        let proxy = try #require(proxies.first)
+        #expect(proxies.count == 1)
+        #expect(runtime.parent(of: proxy) == source)
+        #expect(runtime.component(DestructibleRetainedFragment.self, for: proxy)?.fragmentID == 0)
+        #expect(runtime.component(RenderMeshComponent.self, for: proxy)?.meshIndex == 100)
+        #expect(runtime.localTransform(for: proxy)?.translation == SIMD3<Float>(-0.5, 0, 0))
+
+        runtime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            forceFracture: true
+        ))
+        _ = runtime.tick(deltaTime: 0)
+        let finalEvent = try #require(runtime.destructionEventFrame.events.first)
+        #expect(finalEvent.fragmentIDs == [0])
+        #expect(runtime.entities(with: DestructibleRetainedFragment.self).isEmpty)
+        #expect(runtime.entities(with: DestructibleFragment.self).count == 3)
+        #expect(runtime.component(Collider.self, for: source) == nil)
+        let finalState = try #require(runtime.destructionStateFrame.sources[source])
+        #expect(finalState.isFullyFractured)
+        #expect(finalState.releasedFragmentIDs == [0, 1, 2])
+        #expect(finalState.retainedFragmentIDs.isEmpty)
+        #expect(finalState.activeFragmentIDs == [0, 1, 2])
+    }
+
+    @Test("incremental island budgets never recreate a dropped fragment")
+    func incrementalIslandBudget() throws {
+        var (runtime, source) = makeRuntime(
+            fragmentBudget: 1,
+            maximumLifetime: 0.01,
+            sleepingRecycleDelay: 0
+        )
+        try configureLocalizedLoop(in: &runtime, source: source)
+        try configureFragmentRendering(in: &runtime)
+        runtime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            impulse: SIMD3<Float>(3, 0, 0),
+            worldPoint: SIMD3<Float>(1.875, 3, 4)
+        ))
+        _ = runtime.tick(deltaTime: 0)
+        runtime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            impulse: SIMD3<Float>(3, 0, 0),
+            worldPoint: SIMD3<Float>(2, 3, 4)
+        ))
+        _ = runtime.tick(deltaTime: 0)
+
+        let partialEvent = try #require(runtime.destructionEventFrame.events.first)
+        #expect(partialEvent.fragmentIDs == [1])
+        #expect(partialEvent.droppedFragmentCount == 1)
+        #expect(runtime.destructionStateFrame.sources[source]?.releasedFragmentIDs == [1, 2])
+        #expect(runtime.destructionStateFrame.sources[source]?.activeFragmentIDs == [1])
+
+        _ = runtime.tick(deltaTime: 0.02)
+        #expect(runtime.entities(with: DestructibleFragment.self).isEmpty)
+        runtime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            forceFracture: true
+        ))
+        _ = runtime.tick(deltaTime: 0)
+        #expect(runtime.destructionEventFrame.events.first?.fragmentIDs == [0])
+        #expect(runtime.entities(with: DestructibleFragment.self).compactMap {
+            runtime.component(DestructibleFragment.self, for: $0)?.fragmentID
+        } == [0])
+        #expect(runtime.destructionStateFrame.sources[source]?.releasedFragmentIDs == [0, 1, 2])
+    }
+
+    @Test("removing a partially fractured source cleans proxies and owned fragments")
+    func partialIslandSourceRemoval() throws {
+        var (runtime, source) = makeRuntime(maximumLifetime: 0, sleepingRecycleDelay: 0)
+        try configureLocalizedLoop(in: &runtime, source: source)
+        try configureFragmentRendering(in: &runtime)
+        runtime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            impulse: SIMD3<Float>(3, 0, 0),
+            worldPoint: SIMD3<Float>(1.875, 3, 4)
+        ))
+        _ = runtime.tick(deltaTime: 0)
+        runtime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            impulse: SIMD3<Float>(3, 0, 0),
+            worldPoint: SIMD3<Float>(2, 3, 4)
+        ))
+        _ = runtime.tick(deltaTime: 0)
+        #expect(runtime.entities(with: DestructibleRetainedFragment.self).count == 1)
+        let destroyed = runtime.destroyEntity(source)
+        #expect(destroyed)
+
+        _ = runtime.tick(deltaTime: 0)
+        #expect(runtime.entities(with: DestructibleRetainedFragment.self).isEmpty)
+        #expect(runtime.entities(with: DestructibleFragment.self).isEmpty)
+        #expect(runtime.destructionEventFrame.recycledFragments.count == 2)
+        #expect(runtime.destructionEventFrame.recycledFragments.allSatisfy {
+            $0.reason == .sourceRemoved
+        })
     }
 
     @Test("fragment budgets use stable fragment-ID truncation")
@@ -317,6 +468,33 @@ struct DestructionTests {
         #expect(runtime.destructionEventFrame.failures.first?.reason == .invalidConfiguration)
         #expect(runtime.component(Collider.self, for: source) != nil)
         #expect(runtime.component(RigidBody.self, for: source) != nil)
+    }
+
+    @Test("a mutable partially connected asset is rejected before activation")
+    func disconnectedMutableAsset() throws {
+        var (runtime, source) = makeRuntime()
+        var assets = try #require(runtime.resource(DestructibleAssetResource.self))
+        assets.assetsByResourceID[resourceID]?.connections = [
+            DestructibleConnectionAsset(
+                connectionID: 10,
+                fragmentA: 0,
+                fragmentB: 1
+            ),
+        ]
+        runtime.setResource(assets)
+
+        runtime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            forceFracture: true
+        ))
+        _ = runtime.tick(deltaTime: 0)
+
+        let failure = try #require(runtime.destructionEventFrame.failures.first)
+        #expect(failure.reason == .invalidAsset)
+        #expect(failure.message.contains("initially disconnected"))
+        #expect(runtime.component(Collider.self, for: source) != nil)
+        #expect(runtime.component(RigidBody.self, for: source) != nil)
+        #expect(runtime.entities(with: DestructibleFragment.self).isEmpty)
     }
 
     @Test("finite damage accumulation saturates instead of overflowing")
@@ -560,6 +738,80 @@ struct DestructionTests {
         #expect(restored.destructionStateFrame.activeFragmentCount == 3)
     }
 
+    @Test("game save preserves a partially released compound island and its render proxy")
+    func partialIslandGameSaveRoundTrip() throws {
+        var (runtime, source) = makeRuntime(maximumLifetime: 0, sleepingRecycleDelay: 0)
+        try configureLocalizedLoop(in: &runtime, source: source)
+        try configureFragmentRendering(in: &runtime)
+        runtime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            impulse: SIMD3<Float>(3, 0, 0),
+            worldPoint: SIMD3<Float>(1.875, 3, 4)
+        ))
+        _ = runtime.tick(deltaTime: 0)
+        runtime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            impulse: SIMD3<Float>(3, 0, 0),
+            worldPoint: SIMD3<Float>(2, 3, 4)
+        ))
+        _ = runtime.tick(deltaTime: 0)
+
+        // Runtime proxy children and detached fragments never leak into authored data.
+        let authoredData = try SceneSerializer.serialize(runtime)
+        var authoredRestore = SceneRuntime()
+        try SceneSerializer.deserialize(authoredData, into: &authoredRestore)
+        let authoredSource = try #require(
+            authoredRestore.entities(with: Destructible.self).first
+        )
+        #expect(authoredRestore.entities().count == 1)
+        #expect(authoredRestore.entities(with: DestructibleRetainedFragment.self).isEmpty)
+        #expect(authoredRestore.component(Collider.self, for: authoredSource)?.shape.kind == .box)
+        #expect(authoredRestore.component(RenderMeshComponent.self, for: authoredSource)?.isVisible == true)
+
+        let prefab = try #require(try Prefab.capture(from: runtime, root: source))
+        var prefabRestore = SceneRuntime()
+        let prefabSource = try #require(try prefab.instantiate(into: &prefabRestore))
+        #expect(prefabRestore.entities().count == 1)
+        #expect(prefabRestore.entities(with: DestructibleRetainedFragment.self).isEmpty)
+        #expect(prefabRestore.component(Collider.self, for: prefabSource)?.shape.kind == .box)
+
+        let assets = try #require(runtime.resource(DestructibleAssetResource.self))
+        let geometry = try #require(runtime.resource(MeshColliderGeometryResource.self))
+        let save = try GameSave.capture(scene: runtime)
+        var restored = SceneRuntime()
+        _ = restored.createEntity()
+        try GameSave.load(save.serialized()).restoreScene(into: &restored)
+        restored.setResource(assets)
+        restored.setResource(geometry)
+        let restoredSource = try #require(restored.entities(with: Destructible.self).first)
+        _ = restored.tick(deltaTime: 0)
+
+        let restoredState = try #require(
+            restored.destructionStateFrame.sources[restoredSource]
+        )
+        #expect(restoredState.hasFractured)
+        #expect(!restoredState.isFullyFractured)
+        #expect(restoredState.releasedFragmentIDs == [1, 2])
+        #expect(restoredState.retainedFragmentIDs == [0])
+        #expect(restoredState.activeFragmentIDs == [1, 2])
+        #expect(restored.component(Collider.self, for: restoredSource)?.shapes.count == 1)
+        let proxy = try #require(
+            restored.entities(with: DestructibleRetainedFragment.self).first
+        )
+        #expect(restored.parent(of: proxy) == restoredSource)
+        #expect(restored.component(RenderMeshComponent.self, for: proxy)?.meshIndex == 100)
+
+        restored.submitDestructionCommand(DestructionCommand(
+            entity: restoredSource,
+            forceFracture: true
+        ))
+        _ = restored.tick(deltaTime: 0)
+        #expect(restored.destructionEventFrame.events.first?.fragmentIDs == [0])
+        #expect(restored.entities(with: DestructibleRetainedFragment.self).isEmpty)
+        #expect(restored.entities(with: DestructibleFragment.self).count == 3)
+        #expect(restored.destructionStateFrame.sources[restoredSource]?.isFullyFractured == true)
+    }
+
     @Test("destruction commands are captured by deterministic physics recording")
     func recording() throws {
         var (runtime, source) = makeRuntime()
@@ -663,5 +915,39 @@ struct DestructionTests {
         #expect(replay.replayedFrameCount == 2)
         #expect(replayRuntime.destructionStateFrame == expectedState)
         #expect(replayRuntime.destructionStateFrame.sources[replaySource]?.hasFractured == true)
+    }
+
+    @Test("incremental island release replays to the same compound and fragment state")
+    func incrementalIslandDeterministicReplay() throws {
+        var (recordingRuntime, source) = makeRuntime()
+        try configureLocalizedLoop(in: &recordingRuntime, source: source)
+        try configureFragmentRendering(in: &recordingRuntime)
+        recordingRuntime.beginPhysicsCommandRecording(maxFrames: 3)
+        recordingRuntime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            impulse: SIMD3<Float>(3, 0, 0),
+            worldPoint: SIMD3<Float>(1.875, 3, 4)
+        ))
+        _ = recordingRuntime.tick(deltaTime: 0)
+        recordingRuntime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            impulse: SIMD3<Float>(3, 0, 0),
+            worldPoint: SIMD3<Float>(2, 3, 4)
+        ))
+        _ = recordingRuntime.tick(deltaTime: 0)
+        let expectedState = recordingRuntime.destructionStateFrame
+        let tape = recordingRuntime.endPhysicsCommandRecording()
+
+        var (replayRuntime, replaySource) = makeRuntime()
+        try configureLocalizedLoop(in: &replayRuntime, source: replaySource)
+        try configureFragmentRendering(in: &replayRuntime)
+        let report = replayRuntime.replayPhysicsCommands(tape)
+
+        #expect(report.isDeterministic)
+        #expect(replayRuntime.destructionStateFrame == expectedState)
+        #expect(replayRuntime.destructionStateFrame.sources[replaySource]?.isFullyFractured == false)
+        #expect(replayRuntime.destructionStateFrame.sources[replaySource]?.releasedFragmentIDs == [1, 2])
+        #expect(replayRuntime.component(Collider.self, for: replaySource)?.shapes.count == 1)
+        #expect(replayRuntime.entities(with: DestructibleRetainedFragment.self).count == 1)
     }
 }
