@@ -66,7 +66,7 @@ public struct SceneEditPlanExecutor: Sendable {
         baseSceneRevision: UInt64? = nil,
         approvalPolicy: TransactionApprovalPolicy = .automatic,
         exposureSnapshot: CapabilityExposureSnapshot? = nil,
-        registry: CapabilityRegistry = .default
+        registry: CapabilityRegistry = .aiDefault
     ) throws -> TransactionIR {
         var mutations: [SceneMutation] = []
         var invocations: [CapabilityInvocationRecord] = []
@@ -77,7 +77,6 @@ public struct SceneEditPlanExecutor: Sendable {
         // set_collider_sphere_radius) don't silently overwrite each other's changes.
         var localScene = scene
         for step in plan.steps {
-            let stepMutations = try buildMutations(step, scene: localScene)
             let descriptor = registry.descriptor(for: step.op.capabilityID)
             guard let descriptor, descriptor.isAIExposed else {
                 throw SceneEditPlanExecutorError.capabilityUnavailable(step.op.capabilityID)
@@ -93,6 +92,13 @@ public struct SceneEditPlanExecutor: Sendable {
             } else {
                 contract = descriptor.contract
             }
+            // SceneEditPlan is the compatibility transport while callers move
+            // to direct capability Drafts. Preserve its established diagnostic
+            // errors, but discard the legacy mutations: authority and actual
+            // operations still come from strict validation + typed prepare.
+            if let compatibilityError = legacyValidationError(for: step, scene: localScene) {
+                throw compatibilityError
+            }
             let input = try canonicalCapabilityInput(for: step)
             do {
                 try JSONSchemaValidator.validate(data: input.data, against: contract.inputSchema)
@@ -102,8 +108,41 @@ public struct SceneEditPlanExecutor: Sendable {
                     reason: String(describing: error)
                 )
             }
+            let stepMutations: [SceneMutation]
+            let stepAssertions: [TransactionVerificationAssertion]
+            if let registration = BuiltInTypedCapabilityCatalog.registration(for: contract.id) {
+                guard registration.contract.schemaHash == contract.schemaHash else {
+                    throw SceneEditPlanExecutorError.capabilityUnavailable(contract.id)
+                }
+                do {
+                    let prepared = try registration.prepare(
+                        validatedInput: input.data,
+                        context: preparationContext(for: localScene)
+                    )
+                    stepMutations = try prepared.operations.map { operation in
+                        guard case let .scene(mutation) = operation else {
+                            throw SceneEditPlanExecutorError.invalidCapabilityInput(
+                                capabilityID: contract.id,
+                                reason: "a scene capability prepared a non-scene operation"
+                            )
+                        }
+                        return mutation
+                    }
+                    stepAssertions = prepared.assertions
+                } catch let error as SceneEditPlanExecutorError {
+                    throw error
+                } catch {
+                    throw SceneEditPlanExecutorError.invalidCapabilityInput(
+                        capabilityID: contract.id,
+                        reason: String(describing: error)
+                    )
+                }
+            } else {
+                stepMutations = try buildMutations(step, scene: localScene)
+                stepAssertions = verificationAssertions(for: stepMutations)
+            }
             mutations.append(contentsOf: stepMutations)
-            assertions.append(contentsOf: verificationAssertions(for: stepMutations))
+            assertions.append(contentsOf: stepAssertions)
             invocations.append(CapabilityInvocationRecord(
                 capabilityID: contract.id,
                 capabilityVersion: contract.version,
@@ -143,6 +182,37 @@ public struct SceneEditPlanExecutor: Sendable {
         )
     }
 
+    private func preparationContext(for scene: SceneRuntime) -> CapabilityPreparationContext {
+        CapabilityPreparationContext(
+            sceneRevision: scene.snapshot.revision,
+            entities: scene.entities().map { entity in
+                let transform = scene.localTransform(for: entity).flatMap { local in
+                    let matrix = local.matrix
+                    return CapabilityPreparationTransform(columnMajorMatrix: [
+                        matrix.columns.0.x, matrix.columns.0.y,
+                        matrix.columns.0.z, matrix.columns.0.w,
+                        matrix.columns.1.x, matrix.columns.1.y,
+                        matrix.columns.1.z, matrix.columns.1.w,
+                        matrix.columns.2.x, matrix.columns.2.y,
+                        matrix.columns.2.z, matrix.columns.2.w,
+                        matrix.columns.3.x, matrix.columns.3.y,
+                        matrix.columns.3.z, matrix.columns.3.w,
+                    ])
+                }
+                var componentTypes: [String] = []
+                if transform != nil { componentTypes.append("LocalTransform") }
+                if scene.hasComponent(LightComponent.self, for: entity) {
+                    componentTypes.append("LightComponent")
+                }
+                return CapabilityPreparationEntity(
+                    reference: "scene:\(entity.rawValue)",
+                    componentTypes: componentTypes,
+                    localTransform: transform
+                )
+            }
+        )
+    }
+
     private func verificationAssertions(
         for mutations: [SceneMutation]
     ) -> [TransactionVerificationAssertion] {
@@ -162,6 +232,20 @@ public struct SceneEditPlanExecutor: Sendable {
             }
         }
         return assertions
+    }
+
+    private func legacyValidationError(
+        for step: SceneEditStep,
+        scene: SceneRuntime
+    ) -> SceneEditPlanExecutorError? {
+        do {
+            _ = try buildMutations(step, scene: scene)
+            return nil
+        } catch let error as SceneEditPlanExecutorError {
+            return error
+        } catch {
+            return nil
+        }
     }
 
     private func canonicalCapabilityInput(for step: SceneEditStep) throws
@@ -184,6 +268,11 @@ public struct SceneEditPlanExecutor: Sendable {
     private func applyToLocalScene(_ scene: inout SceneRuntime, mutations: [SceneMutation]) {
         for m in mutations {
             switch m {
+            case let .deleteEntity(rawID):
+                _ = scene.destroyEntity(entityID(fromRaw: rawID))
+            case let .setSceneName(rawID, value):
+                _ = scene.setComponent(SceneNameComponent(value: value),
+                                       for: entityID(fromRaw: rawID))
             case let .setCollider(rawID, collider):
                 _ = scene.setComponent(collider, for: entityID(fromRaw: rawID))
             case let .setRigidBody(rawID, body):

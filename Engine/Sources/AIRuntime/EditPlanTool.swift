@@ -1,10 +1,11 @@
 import CapabilityRuntime
 import Foundation
+import IntentRuntime
 
 /// Compatibility multi-step tool. Its schema is assembled exclusively from the
 /// same capability contracts used by validation, MCP, and permission planning.
 public enum EditPlanTool {
-    public static func definition(registry: CapabilityRegistry = .default) -> [String: Any] {
+    public static func definition(registry: CapabilityRegistry = .aiDefault) -> [String: Any] {
         [
             "name": "execute_edit_plan",
             "description": "Propose an ordered scene edit plan. This call never bypasses capability validation or confirmation.",
@@ -12,7 +13,7 @@ public enum EditPlanTool {
         ]
     }
 
-    public static func openAIDefinition(registry: CapabilityRegistry = .default) -> [String: Any] {
+    public static func openAIDefinition(registry: CapabilityRegistry = .aiDefault) -> [String: Any] {
         [
             "type": "function",
             "function": [
@@ -23,13 +24,13 @@ public enum EditPlanTool {
         ]
     }
 
-    public static func schema(registry: CapabilityRegistry = .default) -> [String: Any] {
+    public static func schema(registry: CapabilityRegistry = .aiDefault) -> [String: Any] {
         jsonSchema(registry: registry).jsonObject()
     }
 
     /// The typed form is used by registries and transports that need to retain
     /// the contract metadata instead of immediately serializing it.
-    public static func jsonSchema(registry: CapabilityRegistry = .default) -> JSONSchema {
+    public static func jsonSchema(registry: CapabilityRegistry = .aiDefault) -> JSONSchema {
         let stepSchemas = registry.integrityErrors.isEmpty
             ? SceneEditOp.allCases.compactMap { operation -> JSONSchema? in
             guard let descriptor = registry.descriptor(for: operation.capabilityID),

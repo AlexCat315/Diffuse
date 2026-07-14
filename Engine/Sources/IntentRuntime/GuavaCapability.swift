@@ -7,13 +7,48 @@ public protocol GuavaCapabilityInput: Codable, Sendable {
     static var inputSchema: JSONSchema { get }
 }
 
+/// Column-major local transform copied out of SceneRuntime for pure capability
+/// preparation. Keeping this as plain values prevents a capability from
+/// retaining or mutating the live scene object.
+public struct CapabilityPreparationTransform: Codable, Sendable, Equatable {
+    public var columnMajorMatrix: [Float]
+
+    public init?(columnMajorMatrix: [Float]) {
+        guard columnMajorMatrix.count == 16,
+              columnMajorMatrix.allSatisfy({ $0.isFinite }) else {
+            return nil
+        }
+        self.columnMajorMatrix = columnMajorMatrix
+    }
+
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.singleValueContainer().decode([Float].self)
+        guard values.count == 16, values.allSatisfy({ $0.isFinite }) else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "a capability preparation transform must contain 16 finite values"
+            ))
+        }
+        columnMajorMatrix = values
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(columnMajorMatrix)
+    }
+}
+
 public struct CapabilityPreparationEntity: Codable, Sendable, Equatable {
     public var reference: String
     public var componentTypes: [String]
+    public var localTransform: CapabilityPreparationTransform?
 
-    public init(reference: String, componentTypes: [String] = []) {
+    public init(reference: String,
+                componentTypes: [String] = [],
+                localTransform: CapabilityPreparationTransform? = nil) {
         self.reference = reference
         self.componentTypes = componentTypes.sorted()
+        self.localTransform = localTransform
     }
 }
 

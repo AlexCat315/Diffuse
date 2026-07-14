@@ -585,8 +585,104 @@ public struct VehicleTransmissionConfiguration: Sendable, Equatable {
     }
 }
 
-/// A wheeled Jolt vehicle attached to the same entity's dynamic `RigidBody`.
+public enum VehicleControllerKind: UInt8, Sendable, Equatable, Codable, CaseIterable {
+    case wheeled
+    case tracked
+    case motorcycle
+}
+
+public struct VehicleTrackConfiguration: Sendable, Equatable {
+    public var drivenWheel: Int
+    public var wheels: [Int]
+    public var inertia: Float
+    public var angularDamping: Float
+    public var maxBrakeTorque: Float
+    public var differentialRatio: Float
+
+    public init(
+        drivenWheel: Int,
+        wheels: [Int],
+        inertia: Float = 10,
+        angularDamping: Float = 0.5,
+        maxBrakeTorque: Float = 15_000,
+        differentialRatio: Float = 6
+    ) {
+        self.drivenWheel = drivenWheel
+        self.wheels = wheels
+        self.inertia = max(0.001, inertia)
+        self.angularDamping = max(0, angularDamping)
+        self.maxBrakeTorque = max(0, maxBrakeTorque)
+        self.differentialRatio = max(0.001, differentialRatio)
+    }
+}
+
+public struct TrackedVehicleConfiguration: Sendable, Equatable {
+    public var leftTrack: VehicleTrackConfiguration
+    public var rightTrack: VehicleTrackConfiguration
+    public var longitudinalFriction: Float
+    public var lateralFriction: Float
+
+    public init(
+        leftTrack: VehicleTrackConfiguration,
+        rightTrack: VehicleTrackConfiguration,
+        longitudinalFriction: Float = 4,
+        lateralFriction: Float = 2
+    ) {
+        self.leftTrack = leftTrack
+        self.rightTrack = rightTrack
+        self.longitudinalFriction = max(0, longitudinalFriction)
+        self.lateralFriction = max(0, lateralFriction)
+    }
+}
+
+public struct MotorcycleVehicleConfiguration: Sendable, Equatable {
+    public var maxLeanAngle: Float
+    public var leanSpringConstant: Float
+    public var leanSpringDamping: Float
+    public var leanSpringIntegrationCoefficient: Float
+    public var leanSpringIntegrationCoefficientDecay: Float
+    public var leanSmoothingFactor: Float
+    public var isLeanControllerEnabled: Bool
+    public var isLeanSteeringLimitEnabled: Bool
+
+    public init(
+        maxLeanAngle: Float = .pi / 4,
+        leanSpringConstant: Float = 5_000,
+        leanSpringDamping: Float = 1_000,
+        leanSpringIntegrationCoefficient: Float = 0,
+        leanSpringIntegrationCoefficientDecay: Float = 4,
+        leanSmoothingFactor: Float = 0.8,
+        isLeanControllerEnabled: Bool = true,
+        isLeanSteeringLimitEnabled: Bool = true
+    ) {
+        self.maxLeanAngle = max(0, min(maxLeanAngle, .pi / 2))
+        self.leanSpringConstant = max(0, leanSpringConstant)
+        self.leanSpringDamping = max(0, leanSpringDamping)
+        self.leanSpringIntegrationCoefficient = max(0, leanSpringIntegrationCoefficient)
+        self.leanSpringIntegrationCoefficientDecay = max(0, leanSpringIntegrationCoefficientDecay)
+        self.leanSmoothingFactor = max(0, min(leanSmoothingFactor, 1))
+        self.isLeanControllerEnabled = isLeanControllerEnabled
+        self.isLeanSteeringLimitEnabled = isLeanSteeringLimitEnabled
+    }
+}
+
+public enum VehicleControllerConfiguration: Sendable, Equatable {
+    case wheeled
+    case tracked(TrackedVehicleConfiguration)
+    case motorcycle(MotorcycleVehicleConfiguration)
+
+    public var kind: VehicleControllerKind {
+        switch self {
+        case .wheeled: return .wheeled
+        case .tracked: return .tracked
+        case .motorcycle: return .motorcycle
+        }
+    }
+}
+
+/// A Jolt vehicle attached to the same entity's dynamic `RigidBody`.
 public struct Vehicle: RuntimeComponent, Sendable, Equatable {
+    public var controller: VehicleControllerConfiguration
     public var wheels: [VehicleWheelConfiguration]
     public var differentials: [VehicleDifferentialConfiguration]
     public var antiRollBars: [VehicleAntiRollBarConfiguration]
@@ -598,6 +694,7 @@ public struct Vehicle: RuntimeComponent, Sendable, Equatable {
     public var isEnabled: Bool
 
     public init(
+        controller: VehicleControllerConfiguration = .wheeled,
         wheels: [VehicleWheelConfiguration] = Vehicle.defaultWheels,
         differentials: [VehicleDifferentialConfiguration] = [
             VehicleDifferentialConfiguration(leftWheel: 2, rightWheel: 3)
@@ -613,6 +710,7 @@ public struct Vehicle: RuntimeComponent, Sendable, Equatable {
         maxPitchRollAngle: Float = .pi,
         isEnabled: Bool = true
     ) {
+        self.controller = controller
         self.wheels = wheels
         self.differentials = differentials
         self.antiRollBars = antiRollBars
@@ -630,6 +728,84 @@ public struct Vehicle: RuntimeComponent, Sendable, Equatable {
         VehicleWheelConfiguration(position: SIMD3<Float>(0.9, -0.2, -1.4), maxHandBrakeTorque: 4_000),
         VehicleWheelConfiguration(position: SIMD3<Float>(-0.9, -0.2, -1.4), maxHandBrakeTorque: 4_000),
     ]
+
+    public static func tracked(
+        engine: VehicleEngineConfiguration = VehicleEngineConfiguration(maxTorque: 1_500),
+        transmission: VehicleTransmissionConfiguration = VehicleTransmissionConfiguration()
+    ) -> Vehicle {
+        let wheels = [
+            VehicleWheelConfiguration(position: SIMD3<Float>(0.9, -0.25, 1.2), width: 0.35),
+            VehicleWheelConfiguration(position: SIMD3<Float>(0.9, -0.25, 0), width: 0.35),
+            VehicleWheelConfiguration(position: SIMD3<Float>(0.9, -0.25, -1.2), width: 0.35),
+            VehicleWheelConfiguration(position: SIMD3<Float>(-0.9, -0.25, 1.2), width: 0.35),
+            VehicleWheelConfiguration(position: SIMD3<Float>(-0.9, -0.25, 0), width: 0.35),
+            VehicleWheelConfiguration(position: SIMD3<Float>(-0.9, -0.25, -1.2), width: 0.35),
+        ]
+        let tracked = TrackedVehicleConfiguration(
+            leftTrack: VehicleTrackConfiguration(drivenWheel: 2, wheels: [0, 1, 2]),
+            rightTrack: VehicleTrackConfiguration(drivenWheel: 5, wheels: [3, 4, 5])
+        )
+        return Vehicle(
+            controller: .tracked(tracked),
+            wheels: wheels,
+            differentials: [],
+            antiRollBars: [],
+            engine: engine,
+            transmission: transmission,
+            maxPitchRollAngle: .pi / 3
+        )
+    }
+
+    public static func motorcycle(
+        configuration: MotorcycleVehicleConfiguration = MotorcycleVehicleConfiguration(),
+        engine: VehicleEngineConfiguration = VehicleEngineConfiguration(
+            maxTorque: 150, minRPM: 1_000, maxRPM: 10_000
+        ),
+        transmission: VehicleTransmissionConfiguration = VehicleTransmissionConfiguration(
+            gearRatios: [2.27, 1.63, 1.3, 1.09, 0.96, 0.88],
+            reverseGearRatios: [-4],
+            shiftUpRPM: 8_000,
+            shiftDownRPM: 2_000,
+            clutchStrength: 2
+        )
+    ) -> Vehicle {
+        let front = VehicleWheelConfiguration(
+            position: SIMD3<Float>(0, -0.25, 0.75),
+            suspensionDirection: SIMD3<Float>(0, -0.866_025_4, 0.5),
+            steeringAxis: SIMD3<Float>(0, 0.866_025_4, -0.5),
+            suspensionMinLength: 0.3,
+            suspensionMaxLength: 0.5,
+            suspensionFrequency: 1.5,
+            radius: 0.31,
+            width: 0.08,
+            maxSteerAngle: .pi / 6,
+            maxBrakeTorque: 500
+        )
+        let rear = VehicleWheelConfiguration(
+            position: SIMD3<Float>(0, -0.25, -0.75),
+            suspensionMinLength: 0.3,
+            suspensionMaxLength: 0.5,
+            suspensionFrequency: 2,
+            radius: 0.31,
+            width: 0.08,
+            maxBrakeTorque: 250
+        )
+        return Vehicle(
+            controller: .motorcycle(configuration),
+            wheels: [front, rear],
+            differentials: [
+                VehicleDifferentialConfiguration(
+                    leftWheel: -1,
+                    rightWheel: 1,
+                    differentialRatio: 4.825
+                )
+            ],
+            antiRollBars: [],
+            engine: engine,
+            transmission: transmission,
+            maxPitchRollAngle: .pi / 3
+        )
+    }
 }
 
 public struct VehicleCommand: Sendable, Equatable {
@@ -740,6 +916,167 @@ public struct VehicleStateFrameResource: Sendable, Equatable {
     }
 
     public static let empty = VehicleStateFrameResource()
+}
+
+public enum ClothBendType: UInt8, Sendable, Equatable, Codable, CaseIterable {
+    case none
+    case distance
+    case dihedral
+}
+
+/// Grid topology authored for a Jolt soft-body cloth.
+public struct Cloth: RuntimeComponent, Sendable, Equatable {
+    public var gridSizeX: Int
+    public var gridSizeZ: Int
+    public var spacing: Float
+    public var fixedVertexIndices: [Int]
+    public var compliance: Float
+    public var shearCompliance: Float
+    public var bendCompliance: Float
+    public var bendType: ClothBendType
+
+    public init(
+        gridSizeX: Int = 16,
+        gridSizeZ: Int = 16,
+        spacing: Float = 0.2,
+        fixedVertexIndices: [Int] = [],
+        compliance: Float = 1.0e-5,
+        shearCompliance: Float = 1.0e-5,
+        bendCompliance: Float = 1.0e-5,
+        bendType: ClothBendType = .distance
+    ) {
+        self.gridSizeX = max(2, min(gridSizeX, 512))
+        self.gridSizeZ = max(2, min(gridSizeZ, 512))
+        self.spacing = max(0.001, spacing)
+        let vertexCount = self.gridSizeX * self.gridSizeZ
+        self.fixedVertexIndices = Array(Set(fixedVertexIndices.filter {
+            $0 >= 0 && $0 < vertexCount
+        })).sorted()
+        self.compliance = max(0, compliance)
+        self.shearCompliance = max(0, shearCompliance)
+        self.bendCompliance = max(0, bendCompliance)
+        self.bendType = bendType
+    }
+
+    public static func fixedTopEdge(
+        gridSizeX: Int = 16,
+        gridSizeZ: Int = 16,
+        spacing: Float = 0.2
+    ) -> Cloth {
+        let width = max(2, min(gridSizeX, 512))
+        return Cloth(
+            gridSizeX: width,
+            gridSizeZ: gridSizeZ,
+            spacing: spacing,
+            fixedVertexIndices: Array(0..<width)
+        )
+    }
+
+    public var vertexCount: Int { gridSizeX * gridSizeZ }
+    public var triangleIndexCount: Int { (gridSizeX - 1) * (gridSizeZ - 1) * 6 }
+
+    public var triangleIndices: [UInt32] {
+        var result: [UInt32] = []
+        result.reserveCapacity(triangleIndexCount)
+        for z in 0..<(gridSizeZ - 1) {
+            for x in 0..<(gridSizeX - 1) {
+                let topLeft = UInt32(x + z * gridSizeX)
+                let bottomLeft = UInt32(x + (z + 1) * gridSizeX)
+                let bottomRight = UInt32(x + 1 + (z + 1) * gridSizeX)
+                let topRight = UInt32(x + 1 + z * gridSizeX)
+                result.append(contentsOf: [topLeft, bottomLeft, bottomRight,
+                                           topLeft, bottomRight, topRight])
+            }
+        }
+        return result
+    }
+}
+
+/// Simulation and collision settings shared by deformable assets.
+/// The first M6 slice supports `Cloth`; volumetric soft-body assets use the same
+/// component and will be added without changing the streamed state format.
+public struct SoftBody: RuntimeComponent, Sendable, Equatable {
+    public var vertexMass: Float
+    public var pressure: Float
+    public var linearDamping: Float
+    public var friction: Float
+    public var restitution: Float
+    public var gravityScale: Float
+    public var vertexRadius: Float
+    public var solverIterations: Int
+    public var maxLinearVelocity: Float
+    public var layerID: UInt16
+    public var layerMask: UInt16
+    public var allowSleep: Bool
+    public var facesDoubleSided: Bool
+    public var selfCollision: Bool
+    public var isEnabled: Bool
+
+    public init(
+        vertexMass: Float = 1,
+        pressure: Float = 0,
+        linearDamping: Float = 0.1,
+        friction: Float = 0.2,
+        restitution: Float = 0,
+        gravityScale: Float = 1,
+        vertexRadius: Float = 0.02,
+        solverIterations: Int = 5,
+        maxLinearVelocity: Float = 500,
+        layerID: UInt16 = 0,
+        layerMask: UInt16 = .max,
+        allowSleep: Bool = true,
+        facesDoubleSided: Bool = true,
+        selfCollision: Bool = false,
+        isEnabled: Bool = true
+    ) {
+        self.vertexMass = max(0.0001, vertexMass)
+        self.pressure = max(0, pressure)
+        self.linearDamping = max(0, linearDamping)
+        self.friction = max(0, friction)
+        self.restitution = max(0, min(restitution, 1))
+        self.gravityScale = gravityScale
+        self.vertexRadius = max(0, vertexRadius)
+        self.solverIterations = max(1, min(solverIterations, 128))
+        self.maxLinearVelocity = max(0, maxLinearVelocity)
+        self.layerID = layerID
+        self.layerMask = layerMask
+        self.allowSleep = allowSleep
+        self.facesDoubleSided = facesDoubleSided
+        self.selfCollision = selfCollision
+        self.isEnabled = isEnabled
+    }
+}
+
+/// Deformed vertices are streamed independently from ordinary ECS transforms.
+public struct SoftBodyMeshState: Sendable, Equatable {
+    public var entity: EntityID
+    public var positions: [SIMD3<Float>]
+    public var triangleIndices: [UInt32]
+    public var isSleeping: Bool
+
+    public init(
+        entity: EntityID,
+        positions: [SIMD3<Float>] = [],
+        triangleIndices: [UInt32] = [],
+        isSleeping: Bool = false
+    ) {
+        self.entity = entity
+        self.positions = positions
+        self.triangleIndices = triangleIndices
+        self.isSleeping = isSleeping
+    }
+}
+
+public struct SoftBodyStateFrameResource: Sendable, Equatable {
+    public var states: [EntityID: SoftBodyMeshState]
+    public var vertexCount: Int
+
+    public init(states: [EntityID: SoftBodyMeshState] = [:]) {
+        self.states = states
+        vertexCount = states.values.reduce(0) { $0 + $1.positions.count }
+    }
+
+    public static let empty = SoftBodyStateFrameResource()
 }
 
 public enum PhysicsJointKind: String, Sendable, Equatable {
@@ -1310,14 +1647,18 @@ public struct PhysicsStepClockResource: Sendable, Equatable {
 public struct PhysicsFrameStateResource: Sendable, Equatable {
     public var backendIdentifier: String
     public var bodyCount: Int
+    public var softBodyCount: Int
+    public var softBodyVertexCount: Int
     public var constraintCount: Int
     public var contactCount: Int
     public var writebackCount: Int
     public var simulatedSteps: Int
     public var simulatedSeconds: Double
     public var synchronizedBodyCount: Int
+    public var synchronizedSoftBodyCount: Int
     public var synchronizedConstraintCount: Int
     public var activeBodyCount: Int
+    public var activeSoftBodyCount: Int
     public var droppedStepCount: Int
     public var synchronizationNanoseconds: UInt64
     public var stepNanoseconds: UInt64
@@ -1326,14 +1667,18 @@ public struct PhysicsFrameStateResource: Sendable, Equatable {
     public init(
         backendIdentifier: String = "none",
         bodyCount: Int = 0,
+        softBodyCount: Int = 0,
+        softBodyVertexCount: Int = 0,
         constraintCount: Int = 0,
         contactCount: Int = 0,
         writebackCount: Int = 0,
         simulatedSteps: Int = 0,
         simulatedSeconds: Double = 0,
         synchronizedBodyCount: Int = 0,
+        synchronizedSoftBodyCount: Int = 0,
         synchronizedConstraintCount: Int = 0,
         activeBodyCount: Int = 0,
+        activeSoftBodyCount: Int = 0,
         droppedStepCount: Int = 0,
         synchronizationNanoseconds: UInt64 = 0,
         stepNanoseconds: UInt64 = 0,
@@ -1341,14 +1686,18 @@ public struct PhysicsFrameStateResource: Sendable, Equatable {
     ) {
         self.backendIdentifier = backendIdentifier
         self.bodyCount = bodyCount
+        self.softBodyCount = softBodyCount
+        self.softBodyVertexCount = softBodyVertexCount
         self.constraintCount = constraintCount
         self.contactCount = contactCount
         self.writebackCount = writebackCount
         self.simulatedSteps = simulatedSteps
         self.simulatedSeconds = simulatedSeconds
         self.synchronizedBodyCount = synchronizedBodyCount
+        self.synchronizedSoftBodyCount = synchronizedSoftBodyCount
         self.synchronizedConstraintCount = synchronizedConstraintCount
         self.activeBodyCount = activeBodyCount
+        self.activeSoftBodyCount = activeSoftBodyCount
         self.droppedStepCount = droppedStepCount
         self.synchronizationNanoseconds = synchronizationNanoseconds
         self.stepNanoseconds = stepNanoseconds
@@ -1986,6 +2335,25 @@ public struct PhysicsVehicleDescriptor: Sendable, Equatable {
     }
 }
 
+public struct PhysicsSoftBodyDescriptor: Sendable, Equatable {
+    public var entity: EntityID
+    public var worldTransform: WorldTransform
+    public var softBody: SoftBody
+    public var cloth: Cloth
+
+    public init(
+        entity: EntityID,
+        worldTransform: WorldTransform,
+        softBody: SoftBody,
+        cloth: Cloth
+    ) {
+        self.entity = entity
+        self.worldTransform = worldTransform
+        self.softBody = softBody
+        self.cloth = cloth
+    }
+}
+
 public enum PhysicsSyncEvent: Sendable, Equatable {
     case bodyUpsert(PhysicsBodyDescriptor)
     case bodyRemove(EntityID)
@@ -1993,6 +2361,8 @@ public enum PhysicsSyncEvent: Sendable, Equatable {
     case constraintRemove(EntityID)
     case vehicleUpsert(PhysicsVehicleDescriptor)
     case vehicleRemove(EntityID)
+    case softBodyUpsert(PhysicsSoftBodyDescriptor)
+    case softBodyRemove(EntityID)
 }
 
 public struct PhysicsPrepareContext: Sendable {
@@ -2003,6 +2373,7 @@ public struct PhysicsPrepareContext: Sendable {
     public var syncEvents: [PhysicsSyncEvent]
     public var activeCharacters: [PhysicsCharacterDescriptor]
     public var activeVehicles: [PhysicsVehicleDescriptor]
+    public var activeSoftBodies: [PhysicsSoftBodyDescriptor]
     /// Full snapshots remove native objects that are absent from `activeBodies` / `activeConstraints`.
     /// Runtime simulation normally uses ordered incremental `syncEvents` instead.
     public var isFullSnapshot: Bool
@@ -2015,6 +2386,7 @@ public struct PhysicsPrepareContext: Sendable {
         syncEvents: [PhysicsSyncEvent],
         activeCharacters: [PhysicsCharacterDescriptor] = [],
         activeVehicles: [PhysicsVehicleDescriptor] = [],
+        activeSoftBodies: [PhysicsSoftBodyDescriptor] = [],
         isFullSnapshot: Bool = false
     ) {
         self.settings = settings
@@ -2024,6 +2396,7 @@ public struct PhysicsPrepareContext: Sendable {
         self.syncEvents = syncEvents
         self.activeCharacters = activeCharacters
         self.activeVehicles = activeVehicles
+        self.activeSoftBodies = activeSoftBodies
         self.isFullSnapshot = isFullSnapshot
     }
 }
@@ -2035,6 +2408,8 @@ public struct PhysicsPrepareResult: Sendable, Equatable {
     public var removedConstraints: Int
     public var synchronizedVehicles: Int
     public var removedVehicles: Int
+    public var synchronizedSoftBodies: Int
+    public var removedSoftBodies: Int
     public var error: PhysicsBackendError?
 
     public init(
@@ -2044,6 +2419,8 @@ public struct PhysicsPrepareResult: Sendable, Equatable {
         removedConstraints: Int = 0,
         synchronizedVehicles: Int = 0,
         removedVehicles: Int = 0,
+        synchronizedSoftBodies: Int = 0,
+        removedSoftBodies: Int = 0,
         error: PhysicsBackendError? = nil
     ) {
         self.synchronizedBodies = synchronizedBodies
@@ -2052,6 +2429,8 @@ public struct PhysicsPrepareResult: Sendable, Equatable {
         self.removedConstraints = removedConstraints
         self.synchronizedVehicles = synchronizedVehicles
         self.removedVehicles = removedVehicles
+        self.synchronizedSoftBodies = synchronizedSoftBodies
+        self.removedSoftBodies = removedSoftBodies
         self.error = error
     }
 }
@@ -2066,6 +2445,7 @@ public struct PhysicsStepContext: Sendable {
     public var characterCommands: [EntityID: CharacterCommand]
     public var activeVehicles: [PhysicsVehicleDescriptor]
     public var vehicleCommands: [EntityID: VehicleCommand]
+    public var activeSoftBodies: [PhysicsSoftBodyDescriptor]
 
     public init(
         settings: PhysicsSettingsResource,
@@ -2076,7 +2456,8 @@ public struct PhysicsStepContext: Sendable {
         activeCharacters: [PhysicsCharacterDescriptor] = [],
         characterCommands: [EntityID: CharacterCommand] = [:],
         activeVehicles: [PhysicsVehicleDescriptor] = [],
-        vehicleCommands: [EntityID: VehicleCommand] = [:]
+        vehicleCommands: [EntityID: VehicleCommand] = [:],
+        activeSoftBodies: [PhysicsSoftBodyDescriptor] = []
     ) {
         self.settings = settings
         self.stepDeltaSeconds = stepDeltaSeconds
@@ -2087,6 +2468,7 @@ public struct PhysicsStepContext: Sendable {
         self.characterCommands = characterCommands
         self.activeVehicles = activeVehicles
         self.vehicleCommands = vehicleCommands
+        self.activeSoftBodies = activeSoftBodies
     }
 }
 
@@ -2121,6 +2503,7 @@ public struct PhysicsStepResult: Sendable, Equatable {
     public var jointBreakEvents: [PhysicsJointBreakEvent]
     public var characterStates: [CharacterState]
     public var vehicleStates: [VehicleState]
+    public var softBodyStates: [SoftBodyMeshState]
     public var error: PhysicsBackendError?
 
     public init(
@@ -2132,7 +2515,8 @@ public struct PhysicsStepResult: Sendable, Equatable {
         jointBreakEvents: [PhysicsJointBreakEvent] = [],
         error: PhysicsBackendError? = nil,
         characterStates: [CharacterState] = [],
-        vehicleStates: [VehicleState] = []
+        vehicleStates: [VehicleState] = [],
+        softBodyStates: [SoftBodyMeshState] = []
     ) {
         self.bodyCount = bodyCount
         self.constraintCount = constraintCount
@@ -2143,6 +2527,7 @@ public struct PhysicsStepResult: Sendable, Equatable {
         self.error = error
         self.characterStates = characterStates
         self.vehicleStates = vehicleStates
+        self.softBodyStates = softBodyStates
     }
 }
 
@@ -2187,6 +2572,8 @@ public final class NullPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         var removedConstraints = 0
         var upsertedVehicles = 0
         var removedVehicles = 0
+        var upsertedSoftBodies = 0
+        var removedSoftBodies = 0
 
         for event in context.syncEvents {
             switch event {
@@ -2202,6 +2589,10 @@ public final class NullPhysicsBackend: PhysicsBackend, @unchecked Sendable {
                 upsertedVehicles += 1
             case .vehicleRemove:
                 removedVehicles += 1
+            case .softBodyUpsert:
+                upsertedSoftBodies += 1
+            case .softBodyRemove:
+                removedSoftBodies += 1
             }
         }
 
@@ -2211,7 +2602,9 @@ public final class NullPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             removedBodies: removedBodies,
             removedConstraints: removedConstraints,
             synchronizedVehicles: upsertedVehicles,
-            removedVehicles: removedVehicles
+            removedVehicles: removedVehicles,
+            synchronizedSoftBodies: upsertedSoftBodies,
+            removedSoftBodies: removedSoftBodies
         )
     }
 

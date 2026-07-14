@@ -81,6 +81,76 @@ struct VehicleTests {
         #expect(state?.wheels.count == 4)
     }
 
+    @Test("tracked controller drives six wheels and pivots through the shared command API")
+    func trackedVehicleDrivesAndPivots() {
+        var (runtime, vehicle) = makeRuntime()
+        _ = runtime.setComponent(Vehicle.tracked(), for: vehicle)
+
+        for frame in 0..<120 {
+            runtime.submitVehicleCommand(VehicleCommand(), for: vehicle)
+            #expect(runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame)).physicsError == nil)
+        }
+        #expect(runtime.vehicleStateFrame.states[vehicle]?.wheels.contains(where: \.hasContact) == true)
+        let before = runtime.worldTransform(for: vehicle)?.translation.z ?? 0
+        for frame in 120..<300 {
+            runtime.submitVehicleCommand(VehicleCommand(throttle: 1), for: vehicle)
+            #expect(runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame)).physicsError == nil)
+        }
+        let after = runtime.worldTransform(for: vehicle)?.translation.z ?? 0
+        let drivenState = runtime.vehicleStateFrame.states[vehicle]
+        #expect(after > before + 1)
+        #expect(drivenState?.wheels.count == 6)
+        #expect(drivenState?.wheels.contains(where: \.hasContact) == true)
+
+        let rotationBefore = runtime.worldTransform(for: vehicle)?.matrix
+        for frame in 300..<390 {
+            runtime.submitVehicleCommand(VehicleCommand(steering: 1), for: vehicle)
+            #expect(runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame)).physicsError == nil)
+        }
+        let rotationAfter = runtime.worldTransform(for: vehicle)?.matrix
+        #expect(rotationBefore != rotationAfter)
+    }
+
+    @Test("motorcycle controller balances and drives two wheels through the shared state frame")
+    func motorcycleDrives() {
+        var (runtime, vehicle) = makeRuntime()
+        _ = runtime.setComponent(
+            Collider(
+                shape: .box(halfExtents: SIMD3<Float>(0.2, 0.3, 0.4), center: .zero),
+                material: PhysicsMaterial(friction: 0.8, restitution: 0)
+            ),
+            for: vehicle
+        )
+        _ = runtime.setComponent(
+            RigidBody(
+                motionType: .dynamic,
+                mass: 240,
+                linearDamping: 0.02,
+                angularDamping: 0.05,
+                allowSleep: false,
+                centerOfMassOverride: SIMD3<Float>(0, -0.3, 0)
+            ),
+            for: vehicle
+        )
+        _ = runtime.setComponent(Vehicle.motorcycle(), for: vehicle)
+
+        for frame in 0..<120 {
+            runtime.submitVehicleCommand(VehicleCommand(), for: vehicle)
+            #expect(runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame)).physicsError == nil)
+        }
+        let before = runtime.worldTransform(for: vehicle)?.translation.z ?? 0
+        for frame in 120..<300 {
+            runtime.submitVehicleCommand(VehicleCommand(throttle: 1, steering: 0.1), for: vehicle)
+            #expect(runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame)).physicsError == nil)
+        }
+        let after = runtime.worldTransform(for: vehicle)?.translation.z ?? 0
+        let state = runtime.vehicleStateFrame.states[vehicle]
+        #expect(after > before + 0.5)
+        #expect(state?.wheels.count == 2)
+        #expect(state?.wheels.contains(where: \.hasContact) == true)
+        #expect((state?.engineRPM ?? 0) > 1_000)
+    }
+
     @Test("vehicle configuration is incrementally rebuilt and removal clears frame state")
     func incrementalRebuildAndRemoval() {
         var (runtime, vehicle) = makeRuntime()
@@ -134,6 +204,22 @@ struct VehicleTests {
         #expect(report.physicsError?.code == .invalidArgument)
     }
 
+    @Test("tracked controller rejects a track that does not contain its driven wheel")
+    func invalidTrackedConfigurationReportsError() {
+        var (runtime, vehicle) = makeRuntime()
+        var tracked = Vehicle.tracked()
+        guard case var .tracked(configuration) = tracked.controller else {
+            Issue.record("Vehicle.tracked() returned the wrong controller")
+            return
+        }
+        configuration.leftTrack.wheels = [0, 1]
+        tracked.controller = .tracked(configuration)
+        _ = runtime.setComponent(tracked, for: vehicle)
+
+        let report = runtime.tick(deltaTime: 1.0 / 60.0)
+        #expect(report.physicsError?.code == .invalidArgument)
+    }
+
     @Test("manual gear commands are checked against the configured transmission")
     func invalidManualGearReportsError() {
         var (runtime, vehicle) = makeRuntime()
@@ -174,5 +260,20 @@ struct VehicleTests {
         try SceneSerializer.deserialize(data, into: &restored)
         let restoredEntity = try #require(restored.entities().first)
         #expect(restored.component(Vehicle.self, for: restoredEntity) == vehicle)
+    }
+
+    @Test("tracked and motorcycle controller configurations survive Scene v2 round-trip")
+    func controllerSceneRoundTrip() throws {
+        for vehicle in [Vehicle.tracked(), Vehicle.motorcycle()] {
+            var original = SceneRuntime()
+            let entity = original.createEntity()
+            _ = original.setComponent(vehicle, for: entity)
+
+            let data = try SceneSerializer.serialize(original)
+            var restored = SceneRuntime()
+            try SceneSerializer.deserialize(data, into: &restored)
+            let restoredEntity = try #require(restored.entities().first)
+            #expect(restored.component(Vehicle.self, for: restoredEntity) == vehicle)
+        }
     }
 }

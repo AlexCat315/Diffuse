@@ -203,24 +203,39 @@ public struct AIField<Value: CapabilitySchemaValue>: Codable, Sendable {
     public var description: String
     public var minimum: Double?
     public var maximum: Double?
+    public var minimumLength: Int?
+    public var maximumLength: Int?
+    public var pattern: String?
 
     public init(wrappedValue: Value,
                 description: String = "",
                 minimum: Double? = nil,
-                maximum: Double? = nil) {
+                maximum: Double? = nil,
+                minLength: Int? = nil,
+                maxLength: Int? = nil,
+                pattern: String? = nil) {
         self.wrappedValue = wrappedValue
         self.description = description
         self.minimum = minimum
         self.maximum = maximum
+        self.minimumLength = minLength
+        self.maximumLength = maxLength
+        self.pattern = pattern
     }
 
     public init(description: String = "",
                 minimum: Double? = nil,
-                maximum: Double? = nil) {
+                maximum: Double? = nil,
+                minLength: Int? = nil,
+                maxLength: Int? = nil,
+                pattern: String? = nil) {
         self.init(wrappedValue: Value.capabilityPlaceholder,
                   description: description,
                   minimum: minimum,
-                  maximum: maximum)
+                  maximum: maximum,
+                  minLength: minLength,
+                  maxLength: maxLength,
+                  pattern: pattern)
     }
 
     public init(from decoder: Decoder) throws {
@@ -228,6 +243,9 @@ public struct AIField<Value: CapabilitySchemaValue>: Codable, Sendable {
         description = ""
         minimum = nil
         maximum = nil
+        minimumLength = nil
+        maximumLength = nil
+        pattern = nil
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -239,7 +257,10 @@ extension AIField: AnyDeclaredCapabilityField {
     fileprivate var declaredSchema: JSONSchema {
         Value.capabilitySchema.applying(description: description,
                                         minimum: minimum,
-                                        maximum: maximum)
+                                        maximum: maximum,
+                                        minimumLength: minimumLength,
+                                        maximumLength: maximumLength,
+                                        pattern: pattern)
     }
     fileprivate var isOptional: Bool { Value.capabilityIsOptional }
 }
@@ -275,7 +296,10 @@ extension ValueRange: AnyDeclaredCapabilityField {
     fileprivate var declaredSchema: JSONSchema {
         Value.capabilitySchema.applying(description: nil,
                                         minimum: minimum,
-                                        maximum: maximum)
+                                        maximum: maximum,
+                                        minimumLength: nil,
+                                        maximumLength: nil,
+                                        pattern: nil)
     }
     fileprivate var isOptional: Bool { Value.capabilityIsOptional }
 }
@@ -375,14 +399,22 @@ public extension KeyedDecodingContainer {
 private extension JSONSchema {
     func applying(description: String?,
                   minimum: Double?,
-                  maximum: Double?) -> JSONSchema {
+                  maximum: Double?,
+                  minimumLength: Int? = nil,
+                  maximumLength: Int? = nil,
+                  pattern: String? = nil) -> JSONSchema {
         var copy = self
         if let description, !description.isEmpty {
             copy.description = CapabilityContract.sanitiseMetadata(description, maximumLength: 1_024)
         }
         if !copy.oneOf.isEmpty {
             copy.oneOf = copy.oneOf.map {
-                $0.applying(description: nil, minimum: minimum, maximum: maximum)
+                $0.applying(description: nil,
+                            minimum: minimum,
+                            maximum: maximum,
+                            minimumLength: minimumLength,
+                            maximumLength: maximumLength,
+                            pattern: pattern)
             }
             return copy
         }
@@ -395,6 +427,14 @@ private extension JSONSchema {
             copy.maximum = maximum
         } else if minimum != nil || maximum != nil {
             return .any(description: "ValueRange can only constrain numbers and numeric vectors.")
+        }
+        if minimumLength != nil || maximumLength != nil || pattern != nil {
+            guard copy.type == .string else {
+                return .any(description: "String constraints can only be applied to strings.")
+            }
+            copy.minimumLength = minimumLength
+            copy.maximumLength = maximumLength
+            copy.pattern = pattern
         }
         return copy
     }

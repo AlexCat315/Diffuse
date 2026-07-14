@@ -362,6 +362,76 @@ struct EditorSceneAdapterTests {
         #expect(restored.inspectorSections(for: restoredRaw).contains { $0.id == "vehicle" })
     }
 
+    @Test("Scene manifest preserves tracked and motorcycle controller settings")
+    func sceneManifestRoundTripsVehicleControllers() throws {
+        for (name, vehicle) in [
+            ("Tracked Vehicle", Vehicle.tracked()),
+            ("Motorcycle", Vehicle.motorcycle()),
+        ] {
+            let source = EditorSceneAdapter()
+            source.scene = SceneRuntime()
+            let entity = source.scene.createEntity()
+            _ = source.scene.setComponent(SceneNameComponent(value: name), for: entity)
+            _ = source.scene.setComponent(vehicle, for: entity)
+
+            let data = try JSONEncoder().encode(source.manifest())
+            let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
+            let restored = EditorSceneAdapter()
+            _ = restored.load(manifest: manifest)
+            let restoredRaw = try #require(flatten(restored.roots).first { $0.name == name }?.id)
+            #expect(restored.scene.component(Vehicle.self, for: entityID(restoredRaw)) == vehicle)
+        }
+    }
+
+    @Test("Scene manifest round-trips soft-body and cloth configuration")
+    func sceneManifestRoundTripsSoftBodyAndCloth() throws {
+        let source = EditorSceneAdapter()
+        source.scene = SceneRuntime()
+        let entity = source.scene.createEntity()
+        _ = source.scene.setComponent(SceneNameComponent(value: "Cloth Banner"), for: entity)
+        let softBody = SoftBody(
+            vertexMass: 0.6,
+            pressure: 1.25,
+            linearDamping: 0.3,
+            friction: 0.7,
+            restitution: 0.15,
+            gravityScale: 0.8,
+            vertexRadius: 0.04,
+            solverIterations: 12,
+            maxLinearVelocity: 75,
+            layerID: 4,
+            layerMask: 0x00FF,
+            allowSleep: false,
+            facesDoubleSided: false,
+            isEnabled: true
+        )
+        let cloth = Cloth(
+            gridSizeX: 9,
+            gridSizeZ: 7,
+            spacing: 0.18,
+            fixedVertexIndices: [0, 4, 8],
+            compliance: 0.002,
+            shearCompliance: 0.003,
+            bendCompliance: 0.004,
+            bendType: .dihedral
+        )
+        _ = source.scene.setComponent(softBody, for: entity)
+        _ = source.scene.setComponent(cloth, for: entity)
+
+        let data = try JSONEncoder().encode(source.manifest())
+        let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
+        let restored = EditorSceneAdapter()
+        _ = restored.load(manifest: manifest)
+        let restoredRaw = try #require(
+            flatten(restored.roots).first { $0.name == "Cloth Banner" }?.id
+        )
+        let restoredEntity = entityID(restoredRaw)
+        #expect(restored.scene.component(SoftBody.self, for: restoredEntity) == softBody)
+        #expect(restored.scene.component(Cloth.self, for: restoredEntity) == cloth)
+        #expect(restored.inspectorSections(for: restoredRaw).contains { $0.id == "soft-body" })
+        #expect(restored.inspectorSections(for: restoredRaw).contains { $0.id == "cloth" })
+    }
+
     @Test("Scene manifest remaps ragdoll bodies and exposes its inspector")
     func sceneManifestRoundTripsRagdoll() throws {
         let source = EditorSceneAdapter()

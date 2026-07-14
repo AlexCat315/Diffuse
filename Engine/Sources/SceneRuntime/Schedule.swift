@@ -71,6 +71,8 @@ public struct RuntimeScheduleReport: Sendable {
     public var physicsStepCount: Int
     public var physicsWritebackCount: Int
     public var physicsBodyCount: Int
+    public var physicsSoftBodyCount: Int
+    public var physicsSoftBodyVertexCount: Int
     public var physicsConstraintCount: Int
     public var physicsContactCount: Int
     public var physicsBackendIdentifier: String
@@ -92,6 +94,8 @@ public struct RuntimeScheduleReport: Sendable {
         physicsStepCount: Int = 0,
         physicsWritebackCount: Int = 0,
         physicsBodyCount: Int = 0,
+        physicsSoftBodyCount: Int = 0,
+        physicsSoftBodyVertexCount: Int = 0,
         physicsConstraintCount: Int = 0,
         physicsContactCount: Int = 0,
         physicsBackendIdentifier: String = "none",
@@ -112,6 +116,8 @@ public struct RuntimeScheduleReport: Sendable {
         self.physicsStepCount = physicsStepCount
         self.physicsWritebackCount = physicsWritebackCount
         self.physicsBodyCount = physicsBodyCount
+        self.physicsSoftBodyCount = physicsSoftBodyCount
+        self.physicsSoftBodyVertexCount = physicsSoftBodyVertexCount
         self.physicsConstraintCount = physicsConstraintCount
         self.physicsContactCount = physicsContactCount
         self.physicsBackendIdentifier = physicsBackendIdentifier
@@ -155,6 +161,7 @@ public struct RuntimeWorldSchedule {
         var bodies: [EntityID: PhysicsBodyDescriptor] = [:]
         var constraints: [EntityID: PhysicsConstraintDescriptor] = [:]
         var vehicles: [EntityID: PhysicsVehicleDescriptor] = [:]
+        var softBodies: [EntityID: PhysicsSoftBodyDescriptor] = [:]
     }
 
     private struct RuntimePhysicsReadView {
@@ -166,6 +173,8 @@ public struct RuntimeWorldSchedule {
         var constraints: [EntityID: Constraint]
         var characters: [EntityID: CharacterController]
         var vehicles: [EntityID: Vehicle]
+        var softBodies: [EntityID: SoftBody]
+        var cloths: [EntityID: Cloth]
         var meshGeometries: [EntityID: MeshColliderGeometry]
     }
 
@@ -176,6 +185,7 @@ public struct RuntimeWorldSchedule {
         var renderMeshes: [EntityID: RenderMeshComponent]
         var renderMaterials: [EntityID: RenderMaterialComponent]
         var lights: [EntityID: LightComponent]
+        var cloths: [EntityID: Cloth]
         var assetReferences: [EntityID: AssetReferenceComponent]
     }
 
@@ -189,6 +199,8 @@ public struct RuntimeWorldSchedule {
     private var physicsEventFrame = PhysicsEventFrameResource.empty
     private var characterStateFrame = CharacterStateFrameResource.empty
     private var vehicleStateFrame = VehicleStateFrameResource.empty
+    private var softBodyStateFrame = SoftBodyStateFrameResource.empty
+    private var renderDeformableMeshes: [EntityID: RenderDeformableMesh] = [:]
     private var ragdollSimulatedBodies: Set<EntityID> = []
     private var physicsSyncCache = PhysicsSyncCache()
     private var resolvedPhysicsBackendKind: PhysicsBackendKind = .none
@@ -276,12 +288,14 @@ public struct RuntimeWorldSchedule {
         var physicsStepCount = 0
         var physicsWritebackCount = 0
         var physicsBodyCount = 0
+        var physicsSoftBodyCount = 0
         var physicsConstraintCount = 0
         var physicsContactCount = 0
         var physicsSynchronizationNanoseconds: UInt64 = 0
         var physicsStepNanoseconds: UInt64 = 0
         var physicsBackendError: PhysicsBackendError?
         var synchronizedBodyCount = 0
+        var synchronizedSoftBodyCount = 0
         var synchronizedConstraintCount = 0
         var scheduledJobCount = 0
         var parallelPhases = Set<RuntimeSystemPhase>()
@@ -300,12 +314,17 @@ public struct RuntimeWorldSchedule {
         var activeConstraints: [PhysicsConstraintDescriptor] = []
         var activeCharacters: [PhysicsCharacterDescriptor] = []
         var activeVehicles: [PhysicsVehicleDescriptor] = []
+        var activeSoftBodies: [PhysicsSoftBodyDescriptor] = []
         var syncEvents: [PhysicsSyncEvent] = []
         var pendingWritebacks: [PhysicsBodyWriteback] = []
         var physicsContactEvents: [PhysicsContactEvent] = []
         var physicsJointBreakEvents: [PhysicsJointBreakEvent] = []
         var pendingCharacterStates: [EntityID: CharacterState] = [:]
         var pendingVehicleStates: [EntityID: VehicleState] = [:]
+        // Preserve the last complete vertex stream when a render frame does not
+        // accumulate enough time for a fixed physics step. Removed soft bodies
+        // are pruned after descriptor collection below.
+        var pendingSoftBodyStates = softBodyStateFrame.states
         var recordedBodyCommands: [PhysicsRecordedBodyCommand] = []
         var recordedCharacterCommands: [PhysicsRecordedCharacterCommand] = []
         var recordedVehicleCommands: [PhysicsRecordedVehicleCommand] = []
@@ -366,6 +385,7 @@ public struct RuntimeWorldSchedule {
                     physicsEventFrame = .empty
                     characterStateFrame = .empty
                     vehicleStateFrame = .empty
+                    softBodyStateFrame = .empty
                     world.setDerivedResource(physicsClock)
                     world.setDerivedResource(physicsFrameState)
                     world.setDerivedResource(physicsContactFrame)
@@ -373,6 +393,7 @@ public struct RuntimeWorldSchedule {
                     world.setDerivedResource(physicsEventFrame)
                     world.setDerivedResource(characterStateFrame)
                     world.setDerivedResource(vehicleStateFrame)
+                    world.setDerivedResource(softBodyStateFrame)
                     continue
                 }
 
@@ -383,6 +404,11 @@ public struct RuntimeWorldSchedule {
                 activeConstraints = constraintCollection.constraints
                 activeCharacters = collectPhysicsCharacters(from: physicsReadView)
                 activeVehicles = collectPhysicsVehicles(from: physicsReadView)
+                activeSoftBodies = collectPhysicsSoftBodies(from: physicsReadView)
+                let activeSoftBodyEntities = Set(activeSoftBodies.map(\.entity))
+                pendingSoftBodyStates = pendingSoftBodyStates.filter {
+                    activeSoftBodyEntities.contains($0.key)
+                }
                 if world.resource(PhysicsCommandRecordingResource.self)?.isRecording == true,
                    world.resource(PhysicsCommandReplayControlResource.self)?.isReplaying != true {
                     recordedBodyCommands = activeBodies.compactMap { descriptor in
@@ -411,11 +437,13 @@ public struct RuntimeWorldSchedule {
                 recordJobReport(bodyCollection.report, for: .fixedPhysicsPrepare)
                 recordJobReport(constraintCollection.report, for: .fixedPhysicsPrepare)
                 physicsBodyCount = activeBodies.count
+                physicsSoftBodyCount = activeSoftBodies.count
                 physicsConstraintCount = activeConstraints.count
                 let syncEventDiff = diffPhysicsSyncEvents(
                     bodies: activeBodies,
                     constraints: activeConstraints,
-                    vehicles: activeVehicles
+                    vehicles: activeVehicles,
+                    softBodies: activeSoftBodies
                 )
                 syncEvents = syncEventDiff.events
                 recordJobReport(syncEventDiff.report, for: .fixedPhysicsPrepare)
@@ -426,19 +454,22 @@ public struct RuntimeWorldSchedule {
                     activeConstraints: activeConstraints,
                     syncEvents: syncEvents,
                     activeCharacters: activeCharacters,
-                    activeVehicles: activeVehicles
+                    activeVehicles: activeVehicles,
+                    activeSoftBodies: activeSoftBodies
                 )
                 let prepareStarted = DispatchTime.now().uptimeNanoseconds
                 let prepareResult = physicsBackend.prepare(context: prepareContext)
                 physicsSynchronizationNanoseconds += DispatchTime.now().uptimeNanoseconds - prepareStarted
                 synchronizedBodyCount += prepareResult.synchronizedBodies
+                synchronizedSoftBodyCount += prepareResult.synchronizedSoftBodies
                 synchronizedConstraintCount += prepareResult.synchronizedConstraints
                 physicsBackendError = prepareResult.error
                 if prepareResult.error == nil {
                     replacePhysicsSyncCache(
                         bodies: activeBodies,
                         constraints: activeConstraints,
-                        vehicles: activeVehicles
+                        vehicles: activeVehicles,
+                        softBodies: activeSoftBodies
                     )
                 } else {
                     physicsSyncCache = PhysicsSyncCache()
@@ -452,6 +483,10 @@ public struct RuntimeWorldSchedule {
                 }
             case .fixedPhysicsStep:
                 guard physicsSettings.simulationMode != .off else { continue }
+                // A failed synchronization means the native world does not match
+                // the descriptors for this frame. Preserve the original native
+                // error and never advance a partially synchronized world.
+                guard physicsBackendError == nil else { continue }
                 physicsClock.accumulatedSeconds += deltaTimeSeconds
                 physicsClock.lastStepCount = 0
                 physicsClock.lastSteppedSeconds = 0
@@ -473,7 +508,8 @@ public struct RuntimeWorldSchedule {
                             activeCharacters: activeCharacters,
                             characterCommands: world.resource(CharacterCommandFrameResource.self)?.commands ?? [:],
                             activeVehicles: activeVehicles,
-                            vehicleCommands: world.resource(VehicleCommandFrameResource.self)?.commands ?? [:]
+                            vehicleCommands: world.resource(VehicleCommandFrameResource.self)?.commands ?? [:],
+                            activeSoftBodies: activeSoftBodies
                         )
                     )
                     physicsStepNanoseconds += DispatchTime.now().uptimeNanoseconds - stepStarted
@@ -499,6 +535,9 @@ public struct RuntimeWorldSchedule {
                     }
                     for state in stepResult.vehicleStates {
                         pendingVehicleStates[state.entity] = state
+                    }
+                    for state in stepResult.softBodyStates {
+                        pendingSoftBodyStates[state.entity] = state
                     }
                     substepIndex += 1
                 }
@@ -536,14 +575,22 @@ public struct RuntimeWorldSchedule {
                 physicsFrameState = PhysicsFrameStateResource(
                     backendIdentifier: physicsBackend.identifier,
                     bodyCount: physicsBodyCount,
+                    softBodyCount: physicsSoftBodyCount,
+                    softBodyVertexCount: pendingSoftBodyStates.values.reduce(0) {
+                        $0 + $1.positions.count
+                    },
                     constraintCount: physicsConstraintCount,
                     contactCount: physicsContactCount,
                     writebackCount: physicsWritebackCount,
                     simulatedSteps: physicsStepCount,
                     simulatedSeconds: physicsClock.lastSteppedSeconds,
                     synchronizedBodyCount: synchronizedBodyCount,
+                    synchronizedSoftBodyCount: synchronizedSoftBodyCount,
                     synchronizedConstraintCount: synchronizedConstraintCount,
                     activeBodyCount: pendingWritebacks.filter { $0.isSleeping == false }.count,
+                    activeSoftBodyCount: pendingSoftBodyStates.values.filter {
+                        !$0.isSleeping
+                    }.count,
                     droppedStepCount: physicsClock.lastDroppedStepCount,
                     synchronizationNanoseconds: physicsSynchronizationNanoseconds,
                     stepNanoseconds: physicsStepNanoseconds,
@@ -552,10 +599,12 @@ public struct RuntimeWorldSchedule {
                 physicsContactFrame = PhysicsContactFrameResource(events: physicsContactEvents)
                 characterStateFrame = CharacterStateFrameResource(states: pendingCharacterStates)
                 vehicleStateFrame = VehicleStateFrameResource(states: pendingVehicleStates)
+                softBodyStateFrame = SoftBodyStateFrameResource(states: pendingSoftBodyStates)
                 world.setDerivedResource(physicsClock)
                 world.setDerivedResource(physicsFrameState)
                 world.setDerivedResource(characterStateFrame)
                 world.setDerivedResource(vehicleStateFrame)
+                world.setDerivedResource(softBodyStateFrame)
                 let stateHashFrame = PhysicsStateHashFrameResource(
                     simulatedStep: physicsClock.simulatedSteps,
                     hash: physicsStateHash(in: world)
@@ -731,6 +780,8 @@ public struct RuntimeWorldSchedule {
             physicsStepCount: physicsStepCount,
             physicsWritebackCount: physicsWritebackCount,
             physicsBodyCount: physicsBodyCount,
+            physicsSoftBodyCount: physicsSoftBodyCount,
+            physicsSoftBodyVertexCount: softBodyStateFrame.vertexCount,
             physicsConstraintCount: physicsConstraintCount,
             physicsContactCount: physicsContactCount,
             physicsBackendIdentifier: physicsBackend.identifier,
@@ -749,11 +800,13 @@ public struct RuntimeWorldSchedule {
     private mutating func replacePhysicsSyncCache(
         bodies: [PhysicsBodyDescriptor],
         constraints: [PhysicsConstraintDescriptor],
-        vehicles: [PhysicsVehicleDescriptor]
+        vehicles: [PhysicsVehicleDescriptor],
+        softBodies: [PhysicsSoftBodyDescriptor]
     ) {
         physicsSyncCache.bodies = Dictionary(uniqueKeysWithValues: bodies.map { ($0.entity, $0) })
         physicsSyncCache.constraints = Dictionary(uniqueKeysWithValues: constraints.map { ($0.entity, $0) })
         physicsSyncCache.vehicles = Dictionary(uniqueKeysWithValues: vehicles.map { ($0.entity, $0) })
+        physicsSyncCache.softBodies = Dictionary(uniqueKeysWithValues: softBodies.map { ($0.entity, $0) })
     }
 
     private mutating func refreshPhysicsSyncCacheAfterWriteback(
@@ -816,6 +869,23 @@ public struct RuntimeWorldSchedule {
         }
     }
 
+    private func collectPhysicsSoftBodies(
+        from view: RuntimePhysicsReadView
+    ) -> [PhysicsSoftBodyDescriptor] {
+        view.entities.compactMap { entity in
+            guard let softBody = view.softBodies[entity], softBody.isEnabled,
+                  let cloth = view.cloths[entity],
+                  let worldTransform = view.worldTransforms[entity]
+            else { return nil }
+            return PhysicsSoftBodyDescriptor(
+                entity: entity,
+                worldTransform: worldTransform,
+                softBody: softBody,
+                cloth: cloth
+            )
+        }
+    }
+
     private func collectPhysicsConstraints(
         from view: RuntimePhysicsReadView
     ) -> (constraints: [PhysicsConstraintDescriptor], report: JobDispatchReport) {
@@ -837,14 +907,17 @@ public struct RuntimeWorldSchedule {
     private func diffPhysicsSyncEvents(
         bodies: [PhysicsBodyDescriptor],
         constraints: [PhysicsConstraintDescriptor],
-        vehicles: [PhysicsVehicleDescriptor]
+        vehicles: [PhysicsVehicleDescriptor],
+        softBodies: [PhysicsSoftBodyDescriptor]
     ) -> (events: [PhysicsSyncEvent], report: JobDispatchReport) {
         let previousBodies = physicsSyncCache.bodies
         let previousConstraints = physicsSyncCache.constraints
         let previousVehicles = physicsSyncCache.vehicles
+        let previousSoftBodies = physicsSyncCache.softBodies
         let bodyMap = Dictionary(uniqueKeysWithValues: bodies.map { ($0.entity, $0) })
         let constraintMap = Dictionary(uniqueKeysWithValues: constraints.map { ($0.entity, $0) })
         let vehicleMap = Dictionary(uniqueKeysWithValues: vehicles.map { ($0.entity, $0) })
+        let softBodyMap = Dictionary(uniqueKeysWithValues: softBodies.map { ($0.entity, $0) })
         let changedBodyEntities = Set(bodies.compactMap { descriptor in
             previousBodies[descriptor.entity] == descriptor ? nil : descriptor.entity
         })
@@ -874,12 +947,22 @@ public struct RuntimeWorldSchedule {
         let vehicleRemovals = jobSystem.parallelCompactMap(items: Array(previousVehicles.keys)) { entity -> PhysicsSyncEvent? in
             vehicleMap[entity] == nil ? .vehicleRemove(entity) : nil
         }
+        let softBodyUpserts = jobSystem.parallelCompactMap(items: softBodies) { descriptor -> PhysicsSyncEvent? in
+            previousSoftBodies[descriptor.entity] == descriptor ? nil : .softBodyUpsert(descriptor)
+        }
+        let softBodyRemovals = jobSystem.parallelCompactMap(
+            items: Array(previousSoftBodies.keys)
+        ) { entity -> PhysicsSyncEvent? in
+            softBodyMap[entity] == nil ? .softBodyRemove(entity) : nil
+        }
 
         let reports = [bodyUpserts.1, bodyRemovals.1, constraintUpserts.1, constraintRemovals.1,
-                       vehicleUpserts.1, vehicleRemovals.1]
+                       vehicleUpserts.1, vehicleRemovals.1,
+                       softBodyUpserts.1, softBodyRemovals.1]
         return (
             bodyUpserts.0 + bodyRemovals.0 + constraintUpserts.0 + constraintRemovals.0
-                + vehicleUpserts.0 + vehicleRemovals.0,
+                + vehicleUpserts.0 + vehicleRemovals.0
+                + softBodyUpserts.0 + softBodyRemovals.0,
             mergeDispatchReports(reports)
         )
     }
@@ -930,12 +1013,17 @@ public struct RuntimeWorldSchedule {
         return state.applying(to: baseOptions)
     }
 
-    private func extractRenderScene(
+    private mutating func extractRenderScene(
         in world: RuntimeWorld
     ) -> (resource: ExtractedRenderSceneResource, report: JobDispatchReport) {
         let view = buildRenderReadView(in: world)
         let cameraSelection = selectRenderCamera(from: view)
-        let instanceCollection = collectRenderInstances(from: view)
+        let deformableMeshes = collectRenderDeformableMeshes(in: world, from: view)
+        let deformableEntities = Set(deformableMeshes.map(\.entity))
+        let instanceCollection = collectRenderInstances(
+            from: view,
+            deformableEntities: deformableEntities
+        )
         let lightCollection = collectRenderLights(from: view)
         let instances = instanceCollection.instances
         let lights = lightCollection.lights
@@ -954,6 +1042,7 @@ public struct RuntimeWorldSchedule {
                     camera: cameraSelection.camera,
                     instances: instances.map(\.instance),
                     lights: lights.map(\.light),
+                    deformableMeshes: deformableMeshes,
                     particles: particleCollection.particles,
                     particleSimulationBatches: particleSimulationBatches,
                     particleSummary: particleSummary
@@ -1764,7 +1853,8 @@ public struct RuntimeWorldSchedule {
     }
 
     private func collectRenderInstances(
-        from view: RuntimeRenderReadView
+        from view: RuntimeRenderReadView,
+        deformableEntities: Set<EntityID> = []
     ) -> (instances: [ExtractedRenderInstance], report: JobDispatchReport) {
         let result = jobSystem.parallelCompactMap(items: view.entities) { entity -> ExtractedRenderInstance? in
             guard let renderMesh = view.renderMeshes[entity],
@@ -1779,7 +1869,11 @@ public struct RuntimeWorldSchedule {
                 instance: RenderInstance(
                     mesh: RenderMeshHandle(meshIndex: renderMesh.meshIndex,
                                            assetID: renderMesh.assetID ?? view.assetReferences[entity]?.assetID),
-                    transform: worldTransform.matrix,
+                    // Jolt streams soft-body vertices in world space. Drawing
+                    // them with the authored ECS transform would apply it twice.
+                    transform: deformableEntities.contains(entity)
+                        ? matrix_identity_float4x4
+                        : worldTransform.matrix,
                     colorTint: renderMesh.colorTint,
                     material: view.renderMaterials[entity]?.renderMaterial ?? .fallback,
                     entity: entity
@@ -1787,6 +1881,71 @@ public struct RuntimeWorldSchedule {
             )
         }
         return (result.0, result.1)
+    }
+
+    private mutating func collectRenderDeformableMeshes(
+        in world: RuntimeWorld,
+        from view: RuntimeRenderReadView
+    ) -> [RenderDeformableMesh] {
+        let states = world.resource(SoftBodyStateFrameResource.self)?.states
+            ?? softBodyStateFrame.states
+        let simulatedRevision = UInt64(max(
+            0,
+            world.resource(PhysicsStepClockResource.self)?.simulatedSteps
+                ?? physicsClock.simulatedSteps
+        ))
+        var meshes: [RenderDeformableMesh] = []
+        for state in states.values.sorted(by: {
+            $0.entity.rawValue < $1.entity.rawValue
+        }) {
+            guard !state.positions.isEmpty,
+                  !state.triangleIndices.isEmpty,
+                  view.renderMeshes[state.entity]?.isVisible == true
+            else { continue }
+            let textureCoordinates = clothTextureCoordinates(
+                view.cloths[state.entity],
+                vertexCount: state.positions.count
+            )
+            if let cached = renderDeformableMeshes[state.entity],
+               cached.positions == state.positions,
+               cached.triangleIndices == state.triangleIndices,
+               cached.textureCoordinates == textureCoordinates {
+                meshes.append(cached)
+                continue
+            }
+            let previousRevision = renderDeformableMeshes[state.entity]?.revision ?? 0
+            let nextRevision = previousRevision == UInt64.max
+                ? previousRevision
+                : previousRevision + 1
+            let mesh = RenderDeformableMesh(
+                entity: state.entity,
+                revision: max(simulatedRevision, nextRevision),
+                positions: state.positions,
+                triangleIndices: state.triangleIndices,
+                textureCoordinates: textureCoordinates
+            )
+            if mesh.isValid {
+                meshes.append(mesh)
+            }
+        }
+        renderDeformableMeshes = Dictionary(
+            uniqueKeysWithValues: meshes.map { ($0.entity, $0) }
+        )
+        return meshes
+    }
+
+    private func clothTextureCoordinates(
+        _ cloth: Cloth?,
+        vertexCount: Int
+    ) -> [SIMD2<Float>] {
+        guard let cloth, cloth.vertexCount == vertexCount else { return [] }
+        let denominatorX = Float(max(1, cloth.gridSizeX - 1))
+        let denominatorZ = Float(max(1, cloth.gridSizeZ - 1))
+        return (0..<vertexCount).map { index in
+            let x = index % cloth.gridSizeX
+            let z = index / cloth.gridSizeX
+            return SIMD2<Float>(Float(x) / denominatorX, Float(z) / denominatorZ)
+        }
     }
 
     private func collectRenderLights(
@@ -1825,6 +1984,7 @@ public struct RuntimeWorldSchedule {
             renderMeshes: world.componentSnapshot(RenderMeshComponent.self, matching: entities),
             renderMaterials: world.componentSnapshot(RenderMaterialComponent.self, matching: entities),
             lights: world.componentSnapshot(LightComponent.self, matching: entities),
+            cloths: world.componentSnapshot(Cloth.self, matching: entities),
             assetReferences: world.componentSnapshot(AssetReferenceComponent.self, matching: entities)
         )
     }
@@ -1849,6 +2009,8 @@ public struct RuntimeWorldSchedule {
             constraints: world.componentSnapshot(Constraint.self, matching: entities),
             characters: world.componentSnapshot(CharacterController.self, matching: entities),
             vehicles: world.componentSnapshot(Vehicle.self, matching: entities),
+            softBodies: world.componentSnapshot(SoftBody.self, matching: entities),
+            cloths: world.componentSnapshot(Cloth.self, matching: entities),
             meshGeometries: meshGeometries
         )
     }
@@ -2073,6 +2235,18 @@ public struct RuntimeWorldSchedule {
                 combine(wheel.hasContact ? 1 : 0, into: &hash)
                 combine(wheel.contactEntity?.rawValue ?? 0, into: &hash)
             }
+        }
+        let softBodies = (world.resource(SoftBodyStateFrameResource.self) ?? .empty).states
+            .values.sorted { $0.entity.rawValue < $1.entity.rawValue }
+        for softBody in softBodies {
+            combine(softBody.entity.rawValue, into: &hash)
+            combine(UInt64(softBody.positions.count), into: &hash)
+            for position in softBody.positions {
+                combineFloat(position.x, into: &hash)
+                combineFloat(position.y, into: &hash)
+                combineFloat(position.z, into: &hash)
+            }
+            combine(softBody.isSleeping ? 1 : 0, into: &hash)
         }
         return hash
     }

@@ -1,9 +1,12 @@
 import Foundation
+import CapabilityRuntime
+import IntentRuntime
 import PluginRuntime
 
 let runtime: any WASIComponentRuntime = (try? WasmtimeCLIComponentRuntime())
     ?? FailClosedWASIComponentRuntime()
-let loader = PluginPackageLoader()
+let capabilityRegistry = CapabilityRegistry.aiDefault
+let loader = PluginPackageLoader(registry: capabilityRegistry)
 let limits = PluginResourceLimits.secureDefault
 let stagingRoot = FileManager.default.temporaryDirectory
     .appendingPathComponent("GuavaPluginHost-\(UUID().uuidString)", isDirectory: true)
@@ -174,6 +177,7 @@ func response(for request: PluginHostRequest) -> PluginHostResponse {
             let validated = try PluginCompositionValidator.validate(
                 calls,
                 manifest: package.manifest,
+                registry: capabilityRegistry,
                 limits: limits
             )
             return PluginHostResponse(id: request.id,

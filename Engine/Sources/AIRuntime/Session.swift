@@ -111,7 +111,7 @@ public actor Session {
                 urlSession: URLSession = .shared,
                 maxHistoryTurns: Int = 40,
                 initialWorldView: WorldView = WorldView(),
-                capabilityRegistry: CapabilityRegistry = .default) {
+                capabilityRegistry: CapabilityRegistry = .aiDefault) {
         self.id = id
         self.config = config
         self.workflowContext = workflowContext
@@ -1342,25 +1342,34 @@ public actor Session {
             let policy = CapabilityExposurePolicy(activeReleasePhase: .stable,
                                                   allowedDomains: domain.map { [$0] },
                                                   maximumCapabilities: 64)
-            let matches = capabilityRegistry.searchContracts(query: query, policy: policy, limit: 64)
+            let candidates = capabilityRegistry.searchContracts(query: query, policy: policy, limit: 64)
                 .filter { !$0.id.hasPrefix("system.") }
                 .filter { requestedAccess == nil || $0.access == requestedAccess }
-                .prefix(13)
             let coreReadIDs: Set<String> = [
                 "scene.get_entities", "scene.get_selection", "scene.find_entities",
             ]
-            let included = coreReadIDs.union(matches.map(\.id))
+            let existingIDs = snapshot.contracts.map(\.id)
+            let existingSet = Set(existingIDs)
+            let available = max(0, 16 - existingIDs.count)
+            let additions = candidates.filter { !existingSet.contains($0.id) }.prefix(available)
+            let preferredIDs = existingIDs + additions.map(\.id)
+            let included = coreReadIDs.union(preferredIDs)
             capabilityExposureGeneration &+= 1
-            let nextSnapshot = capabilityRegistry.exposureSnapshot(
+            var nextSnapshot = capabilityRegistry.exposureSnapshot(
                 policy: CapabilityExposurePolicy(activeReleasePhase: .stable,
                                                  allowedDomains: ["scene"],
                                                  maximumCapabilities: 16),
                 sceneRevision: revision,
                 generation: capabilityExposureGeneration,
-                preferredCapabilityIDs: Array(included).sorted(),
+                preferredCapabilityIDs: preferredIDs,
                 includedCapabilityIDs: included
             )
-            return .exchange(resultJSON: CapabilityToolset.searchResult(contracts: Array(matches)),
+            // Searching expands the current authority set. Keeping the snapshot
+            // identity means Drafts created before a later search remain valid.
+            nextSnapshot.id = snapshot.id
+            nextSnapshot.createdAt = snapshot.createdAt
+            let activated = candidates.filter { nextSnapshot.contract(id: $0.id) != nil }
+            return .exchange(resultJSON: CapabilityToolset.searchResult(contracts: activated),
                              snapshot: nextSnapshot)
         }
 

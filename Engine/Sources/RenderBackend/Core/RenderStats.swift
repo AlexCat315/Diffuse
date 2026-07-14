@@ -103,6 +103,12 @@ public struct RenderFrameStats: Sendable {
     public var gpuParticleCullCandidateCount: Int
     public var gpuParticleCullDispatchWorkgroups: Int
     public var gpuParticleSimulationEncodeNS: UInt64
+    public var deformableMeshCount: Int
+    public var deformableVertexCount: Int
+    public var deformableTriangleCount: Int
+    public var deformableRejectedMeshCount: Int
+    public var deformableUploadedBytes: UInt64
+    public var deformableUploadNS: UInt64
     public var shadowedLightCount: Int
     public var shadowTileCount: Int
     public var shadowCascadeCount: Int
@@ -142,6 +148,12 @@ public struct RenderFrameStats: Sendable {
         gpuParticleCullCandidateCount: Int = 0,
         gpuParticleCullDispatchWorkgroups: Int = 0,
         gpuParticleSimulationEncodeNS: UInt64 = 0,
+        deformableMeshCount: Int = 0,
+        deformableVertexCount: Int = 0,
+        deformableTriangleCount: Int = 0,
+        deformableRejectedMeshCount: Int = 0,
+        deformableUploadedBytes: UInt64 = 0,
+        deformableUploadNS: UInt64 = 0,
         shadowedLightCount: Int = 0,
         shadowTileCount: Int = 0,
         shadowCascadeCount: Int = 0,
@@ -180,6 +192,12 @@ public struct RenderFrameStats: Sendable {
         self.gpuParticleCullCandidateCount = gpuParticleCullCandidateCount
         self.gpuParticleCullDispatchWorkgroups = gpuParticleCullDispatchWorkgroups
         self.gpuParticleSimulationEncodeNS = gpuParticleSimulationEncodeNS
+        self.deformableMeshCount = deformableMeshCount
+        self.deformableVertexCount = deformableVertexCount
+        self.deformableTriangleCount = deformableTriangleCount
+        self.deformableRejectedMeshCount = deformableRejectedMeshCount
+        self.deformableUploadedBytes = deformableUploadedBytes
+        self.deformableUploadNS = deformableUploadNS
         self.shadowedLightCount = shadowedLightCount
         self.shadowTileCount = shadowTileCount
         self.shadowCascadeCount = shadowCascadeCount
