@@ -144,7 +144,8 @@ private func makeBenchmarkScene(configuration: Configuration) -> SceneRuntime {
                     vertexMass: 0.05,
                     linearDamping: 0.05,
                     solverIterations: 5,
-                    allowSleep: false
+                    allowSleep: false,
+                    selfCollision: configuration.scenario == .cloth64
                 ),
                 for: entity
             )

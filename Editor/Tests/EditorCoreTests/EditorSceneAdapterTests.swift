@@ -403,6 +403,7 @@ struct EditorSceneAdapterTests {
             layerMask: 0x00FF,
             allowSleep: false,
             facesDoubleSided: false,
+            selfCollision: true,
             isEnabled: true
         )
         let cloth = Cloth(
