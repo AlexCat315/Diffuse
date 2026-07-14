@@ -383,6 +383,36 @@ struct EditorSceneAdapterTests {
         }
     }
 
+    @Test("Scene manifest round-trips destructible configuration")
+    func sceneManifestRoundTripsDestructible() throws {
+        let source = EditorSceneAdapter()
+        source.scene = SceneRuntime()
+        let entity = source.scene.createEntity()
+        _ = source.scene.setComponent(SceneNameComponent(value: "Breakable Tower"), for: entity)
+        let destructible = Destructible(
+            assetResourceID: "tower.prefractured",
+            damageThreshold: 90,
+            impulseThreshold: 18,
+            fragmentBudget: 144,
+            maximumFragmentLifetimeSeconds: 22,
+            sleepingRecycleDelaySeconds: 3.5,
+            separationImpulse: 0.4,
+            isEnabled: false
+        )
+        _ = source.scene.setComponent(destructible, for: entity)
+
+        let data = try JSONEncoder().encode(source.manifest())
+        let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
+        let restored = EditorSceneAdapter()
+        let result = restored.load(manifest: manifest)
+        #expect(result.succeeded)
+        let restoredRaw = try #require(
+            flatten(restored.roots).first { $0.name == "Breakable Tower" }?.id
+        )
+        #expect(restored.scene.component(Destructible.self, for: entityID(restoredRaw)) == destructible)
+        #expect(restored.inspectorSections(for: restoredRaw).contains { $0.id == "destructible" })
+    }
+
     @Test("Scene manifest round-trips soft-body and cloth configuration")
     func sceneManifestRoundTripsSoftBodyAndCloth() throws {
         let source = EditorSceneAdapter()
@@ -403,6 +433,7 @@ struct EditorSceneAdapterTests {
             layerMask: 0x00FF,
             allowSleep: false,
             facesDoubleSided: false,
+            selfCollision: true,
             isEnabled: true
         )
         let cloth = Cloth(
