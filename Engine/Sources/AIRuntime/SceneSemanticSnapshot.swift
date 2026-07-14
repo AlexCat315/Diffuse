@@ -172,8 +172,11 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         public var destructibleAssetFragmentCount: Int? = nil
         public var destructibleAssetConnectionCount: Int? = nil
         public var destructibleHasFractured: Bool? = nil
+        public var destructibleIsFullyFractured: Bool? = nil
         public var destructibleActiveFragmentCount: Int? = nil
         public var destructibleBrokenConnectionCount: Int? = nil
+        public var destructibleReleasedFragmentCount: Int? = nil
+        public var destructibleRetainedFragmentCount: Int? = nil
     }
 
     /// Compact snapshot of a single ScriptBinding for AI context.

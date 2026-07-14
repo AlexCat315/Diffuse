@@ -397,6 +397,22 @@ struct EditorInspectorSectionsTests {
         #expect(destructible.fragmentBudget == 96)
         #expect(destructible.maximumFragmentLifetimeSeconds == 25)
         #expect(destructible.sleepingRecycleDelaySeconds == 4)
+        guard case let .readOnly(fractureState)? = field(
+                adapter,
+                id,
+                section: "destructible",
+                field: "destructible-fracture-state"
+              ),
+              case let .readOnly(retainedFragments)? = field(
+                adapter,
+                id,
+                section: "destructible",
+                field: "destructible-retained-fragments"
+              ) else {
+            Issue.record("expected destructible runtime state fields"); return
+        }
+        #expect(fractureState == "Intact")
+        #expect(retainedFragments == "0")
 
         #expect(adapter.removeComponent(.destructible, from: id))
         #expect(!hasSection(adapter, id, "destructible"))
