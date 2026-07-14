@@ -12,6 +12,7 @@ public enum EditorComponentKind: String, CaseIterable, Sendable {
     case softBody
     case cloth
     case softBodyMesh
+    case destructible
     case ragdoll
     case renderMesh
     case renderMaterial
@@ -32,6 +33,7 @@ public enum EditorComponentKind: String, CaseIterable, Sendable {
         case .softBody:        return "Soft Body"
         case .cloth:           return "Cloth"
         case .softBodyMesh:   return "Soft Body Mesh"
+        case .destructible:   return "Destructible"
         case .ragdoll:         return "Ragdoll"
         case .renderMesh:      return "Render Mesh"
         case .renderMaterial:  return "Render Material"
@@ -58,6 +60,7 @@ extension EditorSceneAdapter {
         case .softBody:        return scene.hasComponent(SoftBody.self, for: entity)
         case .cloth:           return scene.hasComponent(Cloth.self, for: entity)
         case .softBodyMesh:   return scene.hasComponent(SoftBodyMesh.self, for: entity)
+        case .destructible:   return scene.hasComponent(Destructible.self, for: entity)
         case .ragdoll:         return scene.hasComponent(Ragdoll.self, for: entity)
         case .renderMesh:      return scene.hasComponent(RenderMeshComponent.self, for: entity)
         case .renderMaterial:  return scene.hasComponent(RenderMaterialComponent.self, for: entity)
@@ -104,6 +107,7 @@ extension EditorSceneAdapter {
             let resourceID = scene.component(AssetReferenceComponent.self, for: entity)
                 .map { "meshIndex:\($0.meshIndex)" }
             _ = scene.setComponent(SoftBodyMesh(resourceID: resourceID), for: entity)
+        case .destructible:   _ = scene.setComponent(Destructible(), for: entity)
         case .ragdoll:         _ = scene.setComponent(Ragdoll(), for: entity)
         case .renderMesh:      _ = scene.setComponent(RenderMeshComponent(meshIndex: 0), for: entity)
         case .renderMaterial:  _ = scene.setComponent(RenderMaterialComponent(), for: entity)
@@ -132,6 +136,7 @@ extension EditorSceneAdapter {
         case .softBody:        _ = scene.removeComponent(SoftBody.self, from: entity)
         case .cloth:           _ = scene.removeComponent(Cloth.self, from: entity)
         case .softBodyMesh:   _ = scene.removeComponent(SoftBodyMesh.self, from: entity)
+        case .destructible:   _ = scene.removeComponent(Destructible.self, from: entity)
         case .ragdoll:         _ = scene.removeComponent(Ragdoll.self, from: entity)
         case .renderMesh:      _ = scene.removeComponent(RenderMeshComponent.self, from: entity)
         case .renderMaterial:  _ = scene.removeComponent(RenderMaterialComponent.self, from: entity)

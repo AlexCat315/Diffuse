@@ -39,6 +39,7 @@ public enum ComponentCatalog {
         ComponentTypeID(SoftBody.self),
         ComponentTypeID(Cloth.self),
         ComponentTypeID(SoftBodyMesh.self),
+        ComponentTypeID(Destructible.self),
 
         // Scene metadata
         ComponentTypeID(SceneNameComponent.self),
