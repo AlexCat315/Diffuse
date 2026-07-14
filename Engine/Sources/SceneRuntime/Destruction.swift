@@ -130,6 +130,8 @@ public struct DestructionCommand: Sendable, Equatable {
     public var entity: EntityID
     public var damage: Float
     public var impulse: SIMD3<Float>
+    /// Optional world-space hit point. When present, a non-forced command breaks only
+    /// the nearest eligible connection; `nil` applies to every eligible connection.
     public var worldPoint: SIMD3<Float>?
     public var forceFracture: Bool
 
@@ -168,6 +170,7 @@ public enum DestructionCause: String, Sendable, Equatable {
 public struct DestructionEvent: Sendable, Equatable {
     public var sourceEntity: EntityID
     public var cause: DestructionCause
+    /// Empty for an incremental `.connectionBreak` that has not separated the graph.
     public var fragmentEntities: [EntityID]
     public var fragmentIDs: [UInt32]
     public var brokenConnectionIDs: [UInt32]

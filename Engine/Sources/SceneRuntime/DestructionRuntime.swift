@@ -162,19 +162,46 @@ private func applyDestruction(
         return false
     }
 
-    sourceState.accumulatedDamage += command.damage
+    sourceState.accumulatedDamage = min(
+        Float.greatestFiniteMagnitude,
+        sourceState.accumulatedDamage + command.damage
+    )
     let impulseMagnitude = simd_length(command.impulse)
-    for connection in asset.connections {
-        guard !sourceState.brokenConnectionIDs.contains(connection.connectionID) else { continue }
-        let damageThreshold = connection.damageThreshold > 0
-            ? connection.damageThreshold : destructible.damageThreshold
-        let impulseThreshold = connection.impulseThreshold > 0
-            ? connection.impulseThreshold : destructible.impulseThreshold
-        let damageBreak = damageThreshold > 0 && sourceState.accumulatedDamage >= damageThreshold
-        let impulseBreak = impulseThreshold > 0 && impulseMagnitude >= impulseThreshold
-        if damageBreak || impulseBreak || command.forceFracture {
-            sourceState.brokenConnectionIDs.insert(connection.connectionID)
+    let sourceTransform = world.worldTransform(for: command.entity)?.matrix
+        ?? world.localTransform(for: command.entity)?.matrix
+        ?? matrix_identity_float4x4
+    let eligibleConnections = asset.connections
+        .sorted { $0.connectionID < $1.connectionID }
+        .filter { connection in
+            guard !sourceState.brokenConnectionIDs.contains(connection.connectionID) else {
+                return false
+            }
+            let damageThreshold = connection.damageThreshold > 0
+                ? connection.damageThreshold : destructible.damageThreshold
+            let impulseThreshold = connection.impulseThreshold > 0
+                ? connection.impulseThreshold : destructible.impulseThreshold
+            let damageBreak = damageThreshold > 0
+                && sourceState.accumulatedDamage >= damageThreshold
+            let impulseBreak = impulseThreshold > 0
+                && impulseMagnitude >= impulseThreshold
+            return damageBreak || impulseBreak || command.forceFracture
         }
+    let connectionsToBreak: [DestructibleConnectionAsset]
+    if !command.forceFracture,
+       let worldPoint = command.worldPoint,
+       let nearest = nearestConnection(
+           to: worldPoint,
+           among: eligibleConnections,
+           in: asset,
+           sourceTransform: sourceTransform
+       ) {
+        connectionsToBreak = [nearest]
+    } else {
+        connectionsToBreak = eligibleConnections
+    }
+    let newlyBrokenConnectionIDs = connectionsToBreak.map(\.connectionID)
+    for connectionID in newlyBrokenConnectionIDs {
+        sourceState.brokenConnectionIDs.insert(connectionID)
     }
     runtime.sources[command.entity] = sourceState
 
@@ -185,6 +212,21 @@ private func applyDestruction(
     let connectionDisconnected = !asset.connections.isEmpty
         && graphIsDisconnected(asset, brokenConnections: sourceState.brokenConnectionIDs)
     guard command.forceFracture || damageExceeded || impulseExceeded || connectionDisconnected else {
+        if !newlyBrokenConnectionIDs.isEmpty {
+            appendEvent(
+                DestructionEvent(
+                    sourceEntity: command.entity,
+                    cause: .connectionBreak,
+                    fragmentEntities: [],
+                    fragmentIDs: [],
+                    brokenConnectionIDs: newlyBrokenConnectionIDs,
+                    appliedDamage: sourceState.accumulatedDamage,
+                    appliedImpulse: impulseMagnitude
+                ),
+                in: world,
+                frame: &frame
+            )
+        }
         return false
     }
 
@@ -192,7 +234,8 @@ private func applyDestruction(
         ?? DestructionSettingsResource()
     let activeCount = world.entities(with: DestructibleFragment.self).count
     let globalAvailable = max(0, settings.maximumActiveFragmentCount - activeCount)
-    let allowedCount = min(globalAvailable, destructible.fragmentBudget, asset.fragments.count)
+    let orderedFragments = asset.fragments.sorted { $0.fragmentID < $1.fragmentID }
+    let allowedCount = min(globalAvailable, destructible.fragmentBudget, orderedFragments.count)
     guard allowedCount > 0 else {
         appendFailure(
             DestructionFailureEvent(
@@ -206,10 +249,7 @@ private func applyDestruction(
         return false
     }
 
-    let fragments = Array(asset.fragments.prefix(allowedCount))
-    let sourceTransform = world.worldTransform(for: command.entity)?.matrix
-        ?? world.localTransform(for: command.entity)?.matrix
-        ?? matrix_identity_float4x4
+    let fragments = Array(orderedFragments.prefix(allowedCount))
     let sourcePosition = SIMD3<Float>(
         sourceTransform.columns.3.x,
         sourceTransform.columns.3.y,
@@ -310,8 +350,9 @@ private func applyDestruction(
     _ = world.updateComponent(RenderMeshComponent.self, for: command.entity) {
         $0.isVisible = false
     }
+    let allConnectionIDs = asset.connections.map(\.connectionID).sorted()
     sourceState.hasFractured = true
-    sourceState.brokenConnectionIDs = Set(asset.connections.map(\.connectionID))
+    sourceState.brokenConnectionIDs = Set(allConnectionIDs)
     runtime.sources[command.entity] = sourceState
 
     let cause: DestructionCause
@@ -330,10 +371,10 @@ private func applyDestruction(
             cause: cause,
             fragmentEntities: fragmentEntities,
             fragmentIDs: fragmentIDs,
-            brokenConnectionIDs: asset.connections.map(\.connectionID),
+            brokenConnectionIDs: allConnectionIDs,
             appliedDamage: sourceState.accumulatedDamage,
             appliedImpulse: impulseMagnitude,
-            droppedFragmentCount: asset.fragments.count - fragments.count
+            droppedFragmentCount: orderedFragments.count - fragments.count
         ),
         in: world,
         frame: &frame
@@ -432,7 +473,7 @@ private func validateDestructibleAsset(
         return "Destructible asset contains duplicate connection IDs"
     }
     let fragmentIDSet = Set(fragmentIDs)
-    for connection in asset.connections {
+    for connection in asset.connections.sorted(by: { $0.connectionID < $1.connectionID }) {
         guard connection.fragmentA != connection.fragmentB,
               fragmentIDSet.contains(connection.fragmentA),
               fragmentIDSet.contains(connection.fragmentB),
@@ -444,7 +485,7 @@ private func validateDestructibleAsset(
         }
     }
     let geometries = world.resource(MeshColliderGeometryResource.self)
-    for fragment in asset.fragments {
+    for fragment in asset.fragments.sorted(by: { $0.fragmentID < $1.fragmentID }) {
         guard fragment.mass.isFinite,
               fragment.mass > 0,
               isFinite(fragment.localTransform.matrix),
@@ -457,13 +498,47 @@ private func validateDestructibleAsset(
     return nil
 }
 
+private func nearestConnection(
+    to worldPoint: SIMD3<Float>,
+    among connections: [DestructibleConnectionAsset],
+    in asset: DestructibleAsset,
+    sourceTransform: simd_float4x4
+) -> DestructibleConnectionAsset? {
+    let positionsByFragmentID = Dictionary(uniqueKeysWithValues: asset.fragments.map {
+        fragment -> (UInt32, SIMD3<Float>) in
+        let transform = sourceTransform * fragment.localTransform.matrix
+        return (
+            fragment.fragmentID,
+            SIMD3<Float>(
+                transform.columns.3.x,
+                transform.columns.3.y,
+                transform.columns.3.z
+            )
+        )
+    })
+    func squaredDistance(_ connection: DestructibleConnectionAsset) -> Float {
+        guard let positionA = positionsByFragmentID[connection.fragmentA],
+              let positionB = positionsByFragmentID[connection.fragmentB]
+        else { return .greatestFiniteMagnitude }
+        let anchor = (positionA + positionB) * 0.5
+        return simd_length_squared(worldPoint - anchor)
+    }
+    return connections.min { lhs, rhs in
+        let lhsDistance = squaredDistance(lhs)
+        let rhsDistance = squaredDistance(rhs)
+        if lhsDistance != rhsDistance { return lhsDistance < rhsDistance }
+        return lhs.connectionID < rhs.connectionID
+    }
+}
+
 private func graphIsDisconnected(
     _ asset: DestructibleAsset,
     brokenConnections: Set<UInt32>
 ) -> Bool {
-    guard let root = asset.fragments.first?.fragmentID else { return false }
+    guard let root = asset.fragments.map(\.fragmentID).min() else { return false }
     var adjacency: [UInt32: [UInt32]] = [:]
-    for connection in asset.connections where !brokenConnections.contains(connection.connectionID) {
+    for connection in asset.connections.sorted(by: { $0.connectionID < $1.connectionID })
+    where !brokenConnections.contains(connection.connectionID) {
         adjacency[connection.fragmentA, default: []].append(connection.fragmentB)
         adjacency[connection.fragmentB, default: []].append(connection.fragmentA)
     }

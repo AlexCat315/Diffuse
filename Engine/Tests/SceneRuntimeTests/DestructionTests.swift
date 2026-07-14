@@ -96,6 +96,39 @@ struct DestructionTests {
         return (runtime, source)
     }
 
+    private func configureLocalizedLoop(
+        in runtime: inout SceneRuntime,
+        source: EntityID
+    ) throws {
+        var assets = try #require(runtime.resource(DestructibleAssetResource.self))
+        assets.assetsByResourceID[resourceID]?.connections = [
+            DestructibleConnectionAsset(
+                connectionID: 12,
+                fragmentA: 0,
+                fragmentB: 2,
+                impulseThreshold: 2
+            ),
+            DestructibleConnectionAsset(
+                connectionID: 11,
+                fragmentA: 1,
+                fragmentB: 2,
+                impulseThreshold: 2
+            ),
+            DestructibleConnectionAsset(
+                connectionID: 10,
+                fragmentA: 0,
+                fragmentB: 1,
+                impulseThreshold: 2
+            ),
+        ]
+        assets.assetsByResourceID[resourceID]?.fragments.reverse()
+        runtime.setResource(assets)
+        _ = runtime.updateComponent(Destructible.self, for: source) {
+            $0.damageThreshold = 100
+            $0.impulseThreshold = 100
+        }
+    }
+
     @Test("damage accumulates and fragments participate in the current physics prepare")
     func currentFrameActivation() throws {
         var (runtime, source) = makeRuntime()
@@ -139,6 +172,50 @@ struct DestructionTests {
         #expect(event.cause == .connectionBreak)
         #expect(event.appliedImpulse == 3)
         #expect(event.brokenConnectionIDs == [10, 11])
+    }
+
+    @Test("localized hits break the nearest eligible edge before the graph disconnects")
+    func localizedConnectionBreaking() throws {
+        var (runtime, source) = makeRuntime()
+        try configureLocalizedLoop(in: &runtime, source: source)
+
+        runtime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            impulse: SIMD3<Float>(3, 0, 0),
+            worldPoint: SIMD3<Float>(1.875, 3, 4)
+        ))
+        _ = runtime.tick(deltaTime: 0)
+
+        let edgeEvent = try #require(runtime.destructionEventFrame.events.first)
+        #expect(edgeEvent.cause == .connectionBreak)
+        #expect(edgeEvent.fragmentEntities.isEmpty)
+        #expect(edgeEvent.brokenConnectionIDs == [10])
+        #expect(runtime.destructionStateFrame.sources[source]?.hasFractured == false)
+        #expect(runtime.destructionStateFrame.sources[source]?.brokenConnectionIDs == [10])
+        #expect(runtime.entities(with: DestructibleFragment.self).isEmpty)
+        #expect(runtime.component(RigidBody.self, for: source) != nil)
+        let partialDebug = runtime.physicsDebugFrame.destructionConnections
+        #expect(partialDebug.map(\.connectionID) == [10, 11, 12])
+        #expect(partialDebug.map(\.isBroken) == [true, false, false])
+        #expect(partialDebug.allSatisfy { !$0.isSourceFractured })
+        #expect(partialDebug[0].worldPointA == SIMD3<Float>(1.5, 3, 4))
+        #expect(partialDebug[0].worldPointB == SIMD3<Float>(2, 3, 4))
+
+        runtime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            impulse: SIMD3<Float>(3, 0, 0),
+            worldPoint: SIMD3<Float>(2, 3, 4)
+        ))
+        _ = runtime.tick(deltaTime: 0)
+
+        let fractureEvent = try #require(runtime.destructionEventFrame.events.first)
+        #expect(fractureEvent.cause == .connectionBreak)
+        #expect(fractureEvent.fragmentIDs == [0, 1, 2])
+        #expect(fractureEvent.brokenConnectionIDs == [10, 11, 12])
+        #expect(runtime.destructionStateFrame.sources[source]?.hasFractured == true)
+        let fracturedDebug = runtime.physicsDebugFrame.destructionConnections
+        #expect(fracturedDebug.map(\.isBroken) == [true, true, true])
+        #expect(fracturedDebug.allSatisfy { $0.isSourceFractured })
     }
 
     @Test("fragment budgets use stable fragment-ID truncation")
@@ -240,6 +317,27 @@ struct DestructionTests {
         #expect(runtime.destructionEventFrame.failures.first?.reason == .invalidConfiguration)
         #expect(runtime.component(Collider.self, for: source) != nil)
         #expect(runtime.component(RigidBody.self, for: source) != nil)
+    }
+
+    @Test("finite damage accumulation saturates instead of overflowing")
+    func saturatingDamage() {
+        var (runtime, source) = makeRuntime()
+        _ = runtime.updateComponent(Destructible.self, for: source) {
+            $0.damageThreshold = 0
+            $0.impulseThreshold = 0
+        }
+        for _ in 0..<2 {
+            runtime.submitDestructionCommand(DestructionCommand(
+                entity: source,
+                damage: .greatestFiniteMagnitude
+            ))
+            _ = runtime.tick(deltaTime: 0)
+        }
+
+        let damage = runtime.destructionStateFrame.sources[source]?.accumulatedDamage
+        #expect(damage == Float.greatestFiniteMagnitude)
+        #expect(damage?.isFinite == true)
+        #expect(runtime.destructionStateFrame.sources[source]?.hasFractured == false)
     }
 
     @Test("fragments recycle after their maximum lifetime")
@@ -424,6 +522,44 @@ struct DestructionTests {
         #expect(restored.entities(with: DestructibleFragment.self).isEmpty)
     }
 
+    @Test("game save preserves a partially broken localized connection graph")
+    func partialConnectionGameSaveRoundTrip() throws {
+        var (runtime, source) = makeRuntime()
+        try configureLocalizedLoop(in: &runtime, source: source)
+        runtime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            impulse: SIMD3<Float>(3, 0, 0),
+            worldPoint: SIMD3<Float>(1.875, 3, 4)
+        ))
+        _ = runtime.tick(deltaTime: 0)
+        #expect(runtime.destructionStateFrame.sources[source]?.brokenConnectionIDs == [10])
+
+        let assets = try #require(runtime.resource(DestructibleAssetResource.self))
+        let geometry = try #require(runtime.resource(MeshColliderGeometryResource.self))
+        let save = try GameSave.capture(scene: runtime)
+        var restored = SceneRuntime()
+        _ = restored.createEntity()
+        try GameSave.load(save.serialized()).restoreScene(into: &restored)
+        restored.setResource(assets)
+        restored.setResource(geometry)
+        let restoredSource = try #require(restored.entities(with: Destructible.self).first)
+
+        _ = restored.tick(deltaTime: 0)
+        #expect(restored.destructionStateFrame.sources[restoredSource]?.hasFractured == false)
+        #expect(restored.destructionStateFrame.sources[restoredSource]?.brokenConnectionIDs == [10])
+        #expect(restored.entities(with: DestructibleFragment.self).isEmpty)
+        #expect(restored.component(RigidBody.self, for: restoredSource) != nil)
+
+        restored.submitDestructionCommand(DestructionCommand(
+            entity: restoredSource,
+            impulse: SIMD3<Float>(3, 0, 0),
+            worldPoint: SIMD3<Float>(2, 3, 4)
+        ))
+        _ = restored.tick(deltaTime: 0)
+        #expect(restored.destructionStateFrame.sources[restoredSource]?.hasFractured == true)
+        #expect(restored.destructionStateFrame.activeFragmentCount == 3)
+    }
+
     @Test("destruction commands are captured by deterministic physics recording")
     func recording() throws {
         var (runtime, source) = makeRuntime()
@@ -495,5 +631,37 @@ struct DestructionTests {
         #expect(replay.replayedFrameCount == 2)
         #expect(replayRuntime.destructionStateFrame == expectedState)
         #expect(replayRuntime.destructionStateFrame.sources[replaySource]?.activeFragmentIDs == [0, 1, 2])
+    }
+
+    @Test("localized connection breaks replay to identical intermediate and final hashes")
+    func localizedDeterministicReplay() throws {
+        var (recordingRuntime, source) = makeRuntime()
+        try configureLocalizedLoop(in: &recordingRuntime, source: source)
+        recordingRuntime.beginPhysicsCommandRecording(maxFrames: 4)
+        recordingRuntime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            impulse: SIMD3<Float>(3, 0, 0),
+            worldPoint: SIMD3<Float>(1.875, 3, 4)
+        ))
+        _ = recordingRuntime.tick(deltaTime: 0)
+        recordingRuntime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            impulse: SIMD3<Float>(3, 0, 0),
+            worldPoint: SIMD3<Float>(2, 3, 4)
+        ))
+        _ = recordingRuntime.tick(deltaTime: 0)
+        let tape = recordingRuntime.endPhysicsCommandRecording()
+        let expectedState = recordingRuntime.destructionStateFrame
+        #expect(tape.frames.count == 2)
+        #expect(tape.frames[0].expectedStateHash != tape.frames[1].expectedStateHash)
+
+        var (replayRuntime, replaySource) = makeRuntime()
+        try configureLocalizedLoop(in: &replayRuntime, source: replaySource)
+        let replay = replayRuntime.replayPhysicsCommands(tape)
+
+        #expect(replay.isDeterministic)
+        #expect(replay.replayedFrameCount == 2)
+        #expect(replayRuntime.destructionStateFrame == expectedState)
+        #expect(replayRuntime.destructionStateFrame.sources[replaySource]?.hasFractured == true)
     }
 }

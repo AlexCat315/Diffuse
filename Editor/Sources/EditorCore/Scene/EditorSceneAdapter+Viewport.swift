@@ -31,6 +31,16 @@ public struct EditorSoftBodyConstraintOverlay: Sendable, Equatable {
     public var usesSimulatedPositions: Bool
 }
 
+public struct EditorDestructionConnectionLine: Sendable, Equatable {
+    public var connectionID: UInt32
+    public var fragmentA: UInt32
+    public var fragmentB: UInt32
+    public var positionA: SIMD3<Float>
+    public var positionB: SIMD3<Float>
+    public var isBroken: Bool
+    public var isSourceFractured: Bool
+}
+
 extension EditorSceneAdapter {
 
     // MARK: - Picking
@@ -322,6 +332,31 @@ extension EditorSceneAdapter {
             fixedVertices: fixedVertices,
             usesSimulatedPositions: usesSimulatedPositions
         )
+    }
+
+    /// Returns the selected destructible's stable connection graph from the unified
+    /// physics debug frame. The viewport colors intact and broken edges separately.
+    public func viewportDestructionConnections(
+        entityID rawID: UInt64,
+        maxConnections: Int = 4_096
+    ) -> [EditorDestructionConnectionLine] {
+        let entity = EntityID(rawValue: rawID)
+        guard scene.component(Destructible.self, for: entity) != nil else { return [] }
+        return scene.physicsDebugFrame.destructionConnections
+            .lazy
+            .filter { $0.sourceEntity == entity }
+            .prefix(max(0, maxConnections))
+            .map {
+                EditorDestructionConnectionLine(
+                    connectionID: $0.connectionID,
+                    fragmentA: $0.fragmentA,
+                    fragmentB: $0.fragmentB,
+                    positionA: $0.worldPointA,
+                    positionB: $0.worldPointB,
+                    isBroken: $0.isBroken,
+                    isSourceFractured: $0.isSourceFractured
+                )
+            }
     }
 
     private func worldAABB(forLocalMin lo: SIMD3<Float>,
