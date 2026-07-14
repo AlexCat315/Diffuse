@@ -86,17 +86,22 @@ struct SceneSerializerTests {
         var original = SceneRuntime()
         let entity = original.createEntity()
         _ = original.setLocalTransform(LocalTransform(translation: .zero), for: entity)
-        _ = original.setComponent(
-            RigidBody(
-                motionType: .dynamic,
-                mass: 80,
-                gravityScale: 2,
-                linearDamping: 0.1,
-                allowSleep: false,
-                continuousCollisionDetection: true
-            ),
-            for: entity
+        let body = RigidBody(
+            motionType: .dynamic,
+            mass: 80,
+            linearVelocity: SIMD3<Float>(1, 2, 3),
+            angularVelocity: SIMD3<Float>(4, 5, 6),
+            accumulatedForce: SIMD3<Float>(7, 8, 9),
+            accumulatedTorque: SIMD3<Float>(10, 11, 12),
+            accumulatedLinearImpulse: SIMD3<Float>(13, 14, 15),
+            accumulatedAngularImpulse: SIMD3<Float>(16, 17, 18),
+            gravityScale: 2,
+            linearDamping: 0.1,
+            allowSleep: false,
+            isSleeping: true,
+            continuousCollisionDetection: true
         )
+        _ = original.setComponent(body, for: entity)
 
         let data = try SceneSerializer.serialize(original)
         var restored = SceneRuntime()
@@ -112,6 +117,7 @@ struct SceneSerializerTests {
         #expect(rb!.linearDamping == 0.1)
         #expect(rb!.allowSleep == false)
         #expect(rb!.continuousCollisionDetection)
+        #expect(rb == body)
     }
 
     // MARK: - Collider shapes

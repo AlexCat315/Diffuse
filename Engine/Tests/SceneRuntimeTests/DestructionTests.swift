@@ -205,6 +205,16 @@ struct DestructionTests {
         _ = runtime.updateComponent(Destructible.self, for: source) {
             $0.assetResourceID = resourceID
         }
+        var assets = try #require(runtime.resource(DestructibleAssetResource.self))
+        assets.assetsByResourceID[resourceID]?.connections[0].damageThreshold = .nan
+        runtime.setResource(assets)
+        runtime.submitDestructionCommand(DestructionCommand(entity: source, forceFracture: true))
+        _ = runtime.tick(deltaTime: 0)
+        #expect(runtime.destructionEventFrame.failures.first?.reason == .invalidAsset)
+        #expect(runtime.component(RigidBody.self, for: source) != nil)
+
+        assets.assetsByResourceID[resourceID]?.connections[0].damageThreshold = 0
+        runtime.setResource(assets)
         runtime.setResource(MeshColliderGeometryResource())
         runtime.submitDestructionCommand(DestructionCommand(entity: source, forceFracture: true))
         _ = runtime.tick(deltaTime: 0)
@@ -290,6 +300,127 @@ struct DestructionTests {
         try SceneSerializer.deserialize(data, into: &restored)
         let restoredEntity = try #require(restored.entities().first)
         #expect(restored.component(Destructible.self, for: restoredEntity) == destructible)
+        #expect(restored.entities(with: DestructibleFragment.self).isEmpty)
+    }
+
+    @Test("authored scene capture after fracture restores the intact source only")
+    func fracturedSceneCaptureRestoresAuthoredSource() throws {
+        var (runtime, source) = makeRuntime()
+        let authoredBody = try #require(runtime.component(RigidBody.self, for: source))
+        let authoredCollider = try #require(runtime.component(Collider.self, for: source))
+        let authoredMesh = try #require(runtime.component(RenderMeshComponent.self, for: source))
+
+        runtime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            forceFracture: true
+        ))
+        _ = runtime.tick(deltaTime: 0)
+        #expect(runtime.entities(with: DestructibleFragment.self).count == 3)
+
+        let data = try SceneSerializer.serialize(runtime)
+        var restored = SceneRuntime()
+        try SceneSerializer.deserialize(data, into: &restored)
+
+        let restoredSource = try #require(restored.entities(with: Destructible.self).first)
+        #expect(restored.entities().count == 1)
+        #expect(restored.entities(with: DestructibleFragment.self).isEmpty)
+        #expect(restored.component(RigidBody.self, for: restoredSource) == authoredBody)
+        #expect(restored.component(Collider.self, for: restoredSource) == authoredCollider)
+        #expect(restored.component(RenderMeshComponent.self, for: restoredSource) == authoredMesh)
+    }
+
+    @Test("prefab capture after fracture restores the intact source and rejects fragment roots")
+    func fracturedPrefabCaptureRestoresAuthoredSource() throws {
+        var (runtime, source) = makeRuntime()
+        let authoredCollider = try #require(runtime.component(Collider.self, for: source))
+        runtime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            forceFracture: true
+        ))
+        _ = runtime.tick(deltaTime: 0)
+        let fragment = try #require(runtime.entities(with: DestructibleFragment.self).first)
+
+        #expect(try Prefab.capture(from: runtime, root: fragment) == nil)
+        let prefab = try #require(try Prefab.capture(from: runtime, root: source))
+        var restored = SceneRuntime()
+        let restoredSource = try #require(try prefab.instantiate(into: &restored))
+
+        #expect(restored.entities().count == 1)
+        #expect(restored.entities(with: DestructibleFragment.self).isEmpty)
+        #expect(restored.component(RigidBody.self, for: restoredSource)?.motionType == .static)
+        #expect(restored.component(Collider.self, for: restoredSource) == authoredCollider)
+        #expect(restored.component(RenderMeshComponent.self, for: restoredSource)?.isVisible == true)
+    }
+
+    @Test("game save preserves fractured ownership, source snapshot, damage, and remaining lifetime")
+    func fracturedGameSaveRoundTrip() throws {
+        var (runtime, source) = makeRuntime(maximumLifetime: 1, sleepingRecycleDelay: 0)
+        runtime.submitDestructionCommand(DestructionCommand(entity: source, damage: 4))
+        _ = runtime.tick(deltaTime: 0)
+        runtime.submitDestructionCommand(DestructionCommand(
+            entity: source,
+            forceFracture: true
+        ))
+        _ = runtime.tick(deltaTime: 0.1)
+        _ = runtime.tick(deltaTime: 0.35)
+        let movingFragment = try #require(
+            runtime.entities(with: DestructibleFragment.self).first {
+                runtime.component(DestructibleFragment.self, for: $0)?.fragmentID == 0
+            }
+        )
+        _ = runtime.updateComponent(RigidBody.self, for: movingFragment) {
+            $0.linearVelocity = SIMD3<Float>(7, 8, 9)
+            $0.angularVelocity = SIMD3<Float>(1, 2, 3)
+            $0.accumulatedLinearImpulse = SIMD3<Float>(4, 5, 6)
+        }
+        let savedFragmentBody = try #require(
+            runtime.component(RigidBody.self, for: movingFragment)
+        )
+
+        let save = try GameSave.capture(scene: runtime)
+        let loaded = try GameSave.load(save.serialized())
+        var restored = SceneRuntime()
+        _ = restored.createEntity() // Prove ownership references are relocatable.
+        try loaded.restoreScene(into: &restored)
+
+        let restoredSource = try #require(restored.entities(with: Destructible.self).first)
+        let fragments = restored.entities(with: DestructibleFragment.self)
+        #expect(restored.entities().count == 5)
+        #expect(fragments.count == 3)
+        #expect(restored.component(RigidBody.self, for: restoredSource) == nil)
+        #expect(restored.component(Collider.self, for: restoredSource) == nil)
+        #expect(restored.component(RenderMeshComponent.self, for: restoredSource)?.isVisible == false)
+        #expect(fragments.allSatisfy {
+            restored.component(DestructibleFragment.self, for: $0)?.sourceEntity == restoredSource
+        })
+        #expect(fragments.compactMap {
+            restored.component(DestructibleFragment.self, for: $0)?.fragmentID
+        }.sorted() == [0, 1, 2])
+        let restoredMovingFragment = try #require(fragments.first {
+            restored.component(DestructibleFragment.self, for: $0)?.fragmentID == 0
+        })
+        #expect(restored.component(RigidBody.self, for: restoredMovingFragment) == savedFragmentBody)
+
+        _ = restored.tick(deltaTime: 0)
+        #expect(restored.destructionStateFrame.sources[restoredSource]?.hasFractured == true)
+        #expect(restored.destructionStateFrame.sources[restoredSource]?.accumulatedDamage == 4)
+        #expect(restored.destructionStateFrame.activeFragmentCount == 3)
+
+        // Scene capture from a loaded game still has the authored source snapshot.
+        let authoredData = try SceneSerializer.serialize(restored)
+        var authoredRestore = SceneRuntime()
+        try SceneSerializer.deserialize(authoredData, into: &authoredRestore)
+        let authoredSource = try #require(
+            authoredRestore.entities(with: Destructible.self).first
+        )
+        #expect(authoredRestore.entities(with: DestructibleFragment.self).isEmpty)
+        #expect(authoredRestore.component(RigidBody.self, for: authoredSource)?.motionType == .static)
+        #expect(authoredRestore.component(Collider.self, for: authoredSource) != nil)
+        #expect(authoredRestore.component(RenderMeshComponent.self, for: authoredSource)?.isVisible == true)
+
+        _ = restored.tick(deltaTime: 0.60)
+        #expect(restored.entities(with: DestructibleFragment.self).count == 3)
+        _ = restored.tick(deltaTime: 0.06)
         #expect(restored.entities(with: DestructibleFragment.self).isEmpty)
     }
 
