@@ -1758,6 +1758,52 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertNil(record?.softBodyDeformedVertexCount)
     }
 
+    func testSceneSemanticEncoderSurfacesArbitrarySoftBodyTopology() {
+        var scene = SceneRuntime()
+        scene.setResource(MeshColliderGeometryResource(geometryByResourceID: [
+            "soft.tetra": MeshColliderGeometry(
+                positions: [
+                    SIMD3<Float>(0, 0, 0),
+                    SIMD3<Float>(1, 0, 0),
+                    SIMD3<Float>(0, 1, 0),
+                    SIMD3<Float>(0, 0, 1),
+                ],
+                triangleIndices: [0, 2, 1, 0, 1, 3, 1, 2, 3, 2, 0, 3],
+                tetrahedronIndices: [0, 1, 2, 3],
+                revision: 9
+            ),
+        ]))
+        let entity = scene.createEntity()
+        _ = scene.setComponent(SoftBody(), for: entity)
+        _ = scene.setComponent(
+            SoftBodyMesh(
+                resourceID: "soft.tetra",
+                fixedVertexIndices: [0, 3],
+                volumeCompliance: 0.004,
+                bendType: .distance
+            ),
+            for: entity
+        )
+
+        let snapshot = SceneSemanticEncoder().encode(
+            scene,
+            selectedEntityID: nil,
+            workspaceMode: nil,
+            localeIdentifier: nil
+        )
+        let record = snapshot.entities.first { $0.id == "scene:\(entity.rawValue)" }
+        XCTAssertEqual(record?.components.contains("softbody_mesh"), true)
+        XCTAssertEqual(record?.softBodyTopologyKind, "volume_mesh")
+        XCTAssertEqual(record?.softBodyMeshResourceID, "soft.tetra")
+        XCTAssertEqual(record?.softBodyMeshVertexCount, 4)
+        XCTAssertEqual(record?.softBodyMeshTriangleCount, 4)
+        XCTAssertEqual(record?.softBodyMeshTetrahedronCount, 1)
+        XCTAssertEqual(record?.softBodyMeshFixedVertexCount, 2)
+        XCTAssertEqual(record?.softBodyMeshBendType, "distance")
+        XCTAssertEqual(record?.softBodyMeshVolumeCompliance ?? 0, 0.004, accuracy: 0.0001)
+        XCTAssertEqual(record?.softBodyMeshGeometryRevision, 9)
+    }
+
     func testSetAudioSourceExecutorProducesMutation() throws {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
