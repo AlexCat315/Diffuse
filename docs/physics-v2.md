@@ -125,13 +125,13 @@ Editor 选中软体实体时会在视口叠加约束拓扑：青色表示表面�
 
 ## 预破碎破坏
 
-M7 首版使用离线预破碎资产。`DestructibleAssetBaker` 接收已经分块的闭合凸网格、密度、局部变换和连接图，按 fragment ID 排序并生成稳定的 `asset#convex:<fragmentID>` 几何资源 ID；质量由闭合网格体积乘密度得到。重复 ID、无效连接、非有限顶点、越界索引和零体积几何会明确失败，不会生成替代 Box。烘焙结果可一次安装到 `MeshColliderGeometryResource` 与 `DestructibleAssetResource`。
+M7 首版使用离线预破碎资产。`DestructibleAssetBaker` 接收已经分块的闭合凸网格、密度和局部变换，按 fragment ID 排序并生成稳定的 `asset#convex:<fragmentID>` 几何资源 ID；质量由闭合网格体积乘密度得到。未提供显式连接时，导入器先以变换后 AABB 筛选候选，再按顶点—三角面距离和可配置容差生成稳定连接图；显式连接优先，也可关闭自动生成。重复 ID、无效连接或容差、非有限顶点、越界索引和零体积几何会明确失败，不会生成替代 Box。烘焙结果可一次安装到 `MeshColliderGeometryResource` 与 `DestructibleAssetResource`。
 
 场景实体通过 `Destructible` 引用资产，并配置累计伤害阈值、接触冲量阈值、单实体碎块预算、最大存活时间、休眠回收延迟和分离冲量。脚本可在 `onPrePhysics` 提交 `DestructionCommand`；直接命令会在本帧刚体同步前完成断裂，使新碎块参与当前固定步。Jolt 统一接触监听使用求解前速度与接触设置估算非零求解冲量，接触触发的断裂在该固定步结束后生成，下一固定步同步到 Jolt。
 
 连接边可以覆盖伤害或冲量阈值；零值继承实体阈值。运行时按 EntityID、命令序号、fragment ID 和 connection ID 稳定处理。达到实体阈值、强制断裂或连接图与根碎块失去连通时，完整预破碎资产被激活。当前版本不会只激活某个连通子图，也不做运行时任意布尔切割。
 
-全局 `DestructionSettingsResource` 限制活动碎块和逐帧事件容量；碎块预算按最小 fragment ID 稳定截断，并在事件中报告丢弃数量。碎块可按寿命、连续休眠时间或源实体删除回收。`DestructionEventFrameResource` 汇总断裂、失败、回收与容量溢出，`DestructionStateFrameResource` 提供累计伤害、断裂连接及活动碎块。运行时 `DestructibleFragment` 不写入 Scene 或 Prefab；源实体的 `Destructible` 策略支持 Scene v2 与 Editor Manifest v5 往返。
+全局 `DestructionSettingsResource` 限制活动碎块和逐帧事件容量；碎块预算按最小 fragment ID 稳定截断，并在事件中报告丢弃数量。碎块可按寿命、连续休眠时间或源实体删除回收。`DestructionEventFrameResource` 汇总断裂、失败、回收与容量溢出，`DestructionStateFrameResource` 提供累计伤害、断裂连接及活动碎块。Scene v2 和 Prefab v2 采用资产语义：过滤运行时碎块，并用断裂前快照恢复源刚体、碰撞体和可见网格；Prefab 不能以运行时碎块为根。GameSave v2 采用运行快照语义：保存累计伤害、断裂连接、碎块归属、刚体速度/待处理力与冲量/睡眠状态，以及寿命和休眠回收的剩余预算，并在读档时重映射所有实体引用。源实体的 `Destructible` 策略同时支持 Editor Manifest v5 往返。
 
 Editor Inspector 可编辑全部破坏策略，并显示资产碎块/连接数及最新活动/断裂状态；AI 场景语义暴露资产 ID、阈值、预算和运行摘要。`destruction-fragments` 基准会稳定激活指定数量的简单凸碎块，分别门禁激活耗时、固定步分位数、内存增长、活动碎块数和丢弃子步。
 

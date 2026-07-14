@@ -12,12 +12,15 @@ public struct Prefab: Sendable, Equatable {
     public init(data: Data) { self.data = data }
 
     /// Captures the subtree rooted at `root` (root + descendants, depth-first) into a prefab.
-    /// Returns `nil` if `root` is not part of `scene`.
+    /// Returns `nil` if `root` is not part of `scene` or is a runtime destruction fragment.
     public static func capture(from scene: SceneRuntime, root: EntityID) throws -> Prefab? {
-        guard scene.contains(root) else { return nil }
+        guard scene.contains(root),
+              scene.component(DestructibleFragment.self, for: root) == nil
+        else { return nil }
 
         var ordered: [EntityID] = []
         func visit(_ entity: EntityID) {
+            guard scene.component(DestructibleFragment.self, for: entity) == nil else { return }
             ordered.append(entity)
             for child in scene.children(of: entity) { visit(child) }
         }
@@ -45,6 +48,10 @@ public struct Prefab: Sendable, Equatable {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let entities = jsonToArrayValue(json["entities"])
         else { throw SceneSerializerError.invalidFormat }
+        let version = (json["version"] as? NSNumber)?.intValue ?? 0
+        guard version == SceneSerializer.prefabVersion else {
+            throw SceneSerializerError.unsupportedVersion(version)
+        }
 
         let created = SceneSerializer.loadEntities(entities, into: &scene)
         guard let root = created.first else { return nil }
