@@ -217,6 +217,7 @@ private func applyDestruction(
     )
     let sourceBody = world.component(RigidBody.self, for: command.entity)
     let sourceCollider = world.component(Collider.self, for: command.entity)
+    let sourceRenderMesh = world.component(RenderMeshComponent.self, for: command.entity)
     let sourceMaterial = world.component(RenderMaterialComponent.self, for: command.entity)
     let totalMass = fragments.reduce(Float(0)) { $0 + $1.mass }
     var fragmentEntities: [EntityID] = []
@@ -298,6 +299,12 @@ private func applyDestruction(
         fragmentIDs.append(fragment.fragmentID)
     }
 
+    if !sourceState.hasAuthoredSourceSnapshot {
+        sourceState.hasAuthoredSourceSnapshot = true
+        sourceState.authoredRigidBody = sourceBody
+        sourceState.authoredCollider = sourceCollider
+        sourceState.authoredRenderMesh = sourceRenderMesh
+    }
     _ = world.removeComponent(Collider.self, from: command.entity)
     _ = world.removeComponent(RigidBody.self, from: command.entity)
     _ = world.updateComponent(RenderMeshComponent.self, for: command.entity) {
@@ -428,8 +435,12 @@ private func validateDestructibleAsset(
     for connection in asset.connections {
         guard connection.fragmentA != connection.fragmentB,
               fragmentIDSet.contains(connection.fragmentA),
-              fragmentIDSet.contains(connection.fragmentB) else {
-            return "Connection \(connection.connectionID) references an invalid fragment"
+              fragmentIDSet.contains(connection.fragmentB),
+              connection.damageThreshold.isFinite,
+              connection.damageThreshold >= 0,
+              connection.impulseThreshold.isFinite,
+              connection.impulseThreshold >= 0 else {
+            return "Connection \(connection.connectionID) is invalid"
         }
     }
     let geometries = world.resource(MeshColliderGeometryResource.self)
