@@ -3283,6 +3283,22 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                     value: .readOnly(String(state?.activeFragmentEntities.count ?? 0))
                 ),
                 EditorInspectorField(
+                    id: "destructible-retained-fragments", label: L("Retained Fragments"),
+                    value: .readOnly(String(state?.retainedFragmentIDs.count ?? 0))
+                ),
+                EditorInspectorField(
+                    id: "destructible-released-fragments", label: L("Released Fragments"),
+                    value: .readOnly(String(state?.releasedFragmentIDs.count ?? 0))
+                ),
+                EditorInspectorField(
+                    id: "destructible-fracture-state", label: L("Fracture State"),
+                    value: .readOnly(
+                        state?.isFullyFractured == true ? L("Fully Fractured")
+                            : state?.hasFractured == true ? L("Partially Fractured")
+                            : L("Intact")
+                    )
+                ),
+                EditorInspectorField(
                     id: "destructible-broken-connections", label: L("Broken Connections"),
                     value: .readOnly(String(state?.brokenConnectionIDs.count ?? 0))
                 ),

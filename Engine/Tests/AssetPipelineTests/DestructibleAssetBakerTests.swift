@@ -153,4 +153,65 @@ struct DestructibleAssetBakerTests {
         )
         #expect(disabled.asset.connections.isEmpty)
     }
+
+    @Test("rejects a partially connected graph but permits an explicit edge-free asset")
+    func connectionGraphConnectivity() throws {
+        var left = tetrahedron(fragmentID: 10)
+        left.localTransform = LocalTransform(translation: .zero)
+        var middle = tetrahedron(fragmentID: 20)
+        middle.localTransform = LocalTransform(translation: SIMD3<Float>(1, 0, 0))
+        var isolated = tetrahedron(fragmentID: 30)
+        isolated.localTransform = LocalTransform(translation: SIMD3<Float>(10, 0, 0))
+
+        let baker = DestructibleAssetBaker()
+        #expect(throws: DestructibleAssetBakeError.disconnectedConnectionGraph(
+            fragmentIDs: [30]
+        )) {
+            try baker.bake(
+                assetResourceID: "partially.connected",
+                fragments: [isolated, middle, left]
+            )
+        }
+
+        let edgeFree = try baker.bake(
+            assetResourceID: "threshold.only",
+            fragments: [isolated, middle, left],
+            automaticallyGenerateConnections: false
+        )
+        #expect(edgeFree.asset.connections.isEmpty)
+    }
+
+    @Test("reinstalling a smaller bake removes only stale owned convex geometry")
+    func replacementGeometryCleanup() throws {
+        let baker = DestructibleAssetBaker()
+        let initial = try baker.bake(
+            assetResourceID: "replaceable",
+            revision: 1,
+            fragments: [tetrahedron(fragmentID: 1), tetrahedron(fragmentID: 0)]
+        )
+        var surviving = tetrahedron(fragmentID: 0)
+        surviving.geometryRevision = 99
+        let replacement = try baker.bake(
+            assetResourceID: "replaceable",
+            revision: 2,
+            fragments: [surviving]
+        )
+        let sharedGeometry = try #require(
+            initial.geometryByResourceID["replaceable#convex:0"]
+        )
+        var runtime = SceneRuntime()
+        runtime.setResource(MeshColliderGeometryResource(geometryByResourceID: [
+            "shared.convex": sharedGeometry,
+        ]))
+
+        initial.install(into: &runtime)
+        replacement.install(into: &runtime)
+
+        let geometries = try #require(runtime.resource(MeshColliderGeometryResource.self))
+        #expect(geometries.geometry(for: "replaceable#convex:0")?.revision == 99)
+        #expect(geometries.geometry(for: "replaceable#convex:1") == nil)
+        #expect(geometries.geometry(for: "shared.convex") == sharedGeometry)
+        #expect(runtime.resource(DestructibleAssetResource.self)?
+            .asset(for: "replaceable")?.revision == 2)
+    }
 }
