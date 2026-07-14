@@ -40,6 +40,18 @@ extension WGPURenderer {
         }
         hasher.combine(instanceAccumulator)
 
+        var deformableAccumulator = 0
+        for mesh in packet.scene.deformableMeshes {
+            var sub = Hasher()
+            sub.combine(mesh.entity)
+            sub.combine(mesh.revision)
+            sub.combine(mesh.topologyRevision)
+            sub.combine(mesh.vertexCount)
+            sub.combine(mesh.triangleCount)
+            deformableAccumulator ^= sub.finalize()
+        }
+        hasher.combine(deformableAccumulator)
+
         var lightAccumulator = 0
         for light in packet.scene.lights {
             lightAccumulator ^= lightHash(light)

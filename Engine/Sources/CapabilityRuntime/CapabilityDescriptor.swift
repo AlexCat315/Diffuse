@@ -74,13 +74,32 @@ public struct CapabilityDescriptor: Sendable, Codable, Equatable {
     /// Ordered list of preconditions that must pass before building a TransactionIR.
     public var preconditions: [CapabilityPreconditionSpec]
 
+    /// Versioned AI/MCP contract metadata. These fields live on the descriptor so
+    /// registry lookup, permission policy, and model exposure cannot drift apart.
+    public var version: Int
+    public var title: String
+    public var capabilityDescription: String
+    public var access: CapabilityAccess
+    public var inputSchema: JSONSchema
+    public var source: CapabilitySource
+    /// Explicit opt-in. A registered UI capability is not automatically safe to
+    /// place in a model tool list.
+    public var isAIExposed: Bool
+
     public init(verb: String,
                 aliases: [String] = [],
                 releasePhase: CapabilityReleasePhase = .stable,
                 requiresConfirmation: Bool = false,
                 isDestructive: Bool = false,
                 domain: String = "scene",
-                preconditions: [CapabilityPreconditionSpec] = []) {
+                preconditions: [CapabilityPreconditionSpec] = [],
+                version: Int = 1,
+                title: String? = nil,
+                description: String = "",
+                access: CapabilityAccess? = nil,
+                inputSchema: JSONSchema = .object(properties: [:]),
+                source: CapabilitySource = .builtin,
+                isAIExposed: Bool = false) {
         self.verb = verb
         self.aliases = aliases
         self.releasePhase = releasePhase
@@ -88,6 +107,25 @@ public struct CapabilityDescriptor: Sendable, Codable, Equatable {
         self.isDestructive = isDestructive
         self.domain = domain
         self.preconditions = preconditions
+        self.version = version
+        self.title = title ?? verb
+        self.capabilityDescription = description.isEmpty ? verb : description
+        self.access = access ?? (isDestructive ? .destructiveWrite : .reversibleWrite)
+        self.inputSchema = inputSchema
+        self.source = source
+        self.isAIExposed = isAIExposed
+    }
+
+    public var contract: CapabilityContract {
+        CapabilityContract(id: verb,
+                           version: version,
+                           title: title,
+                           description: capabilityDescription,
+                           domain: domain,
+                           access: access,
+                           releasePhase: releasePhase,
+                           inputSchema: inputSchema,
+                           source: source)
     }
 
     public var requiredArgumentNames: Set<String> {

@@ -1833,6 +1833,16 @@ private struct RenderPipelineSummary: View {
                 StatRow(label: "Settings Gen", value: "\(renderStats.settingsGeneration)")
             }
             .flex(1, shrink: 1, basis: 150)
+
+            StatGroup(title: "Deformable Meshes") {
+                StatRow(label: "Meshes", value: "\(renderStats.deformableMeshCount)")
+                StatRow(label: "Vertices", value: "\(renderStats.deformableVertexCount)")
+                StatRow(label: "Triangles", value: "\(renderStats.deformableTriangleCount)")
+                StatRow(label: "Upload", value: formatNs(renderStats.deformableUploadNS))
+                StatRow(label: "Uploaded", value: formatByteCount(renderStats.deformableUploadedBytes))
+                StatRow(label: "Rejected", value: "\(renderStats.deformableRejectedMeshCount)")
+            }
+            .flex(1, shrink: 1, basis: 175)
         }
     }
 }
@@ -3291,6 +3301,14 @@ private func formatNs(_ ns: UInt64) -> String {
     if ms < 10 { return String(format: "%.2fms", ms) }
     if ms < 100 { return String(format: "%.1fms", ms) }
     return String(format: "%.0fms", ms)
+}
+
+private func formatByteCount(_ bytes: UInt64) -> String {
+    if bytes == 0 { return "0 B" }
+    if bytes < 1_024 { return "\(bytes) B" }
+    let kib = Double(bytes) / 1_024
+    if kib < 1_024 { return String(format: "%.1f KiB", kib) }
+    return String(format: "%.1f MiB", kib / 1_024)
 }
 
 private func formatSignedMs(_ ms: Double) -> String {

@@ -12,6 +12,8 @@ private struct Configuration {
     enum Scenario: String {
         case activeGrid = "active-grid"
         case denseContact = "dense-contact"
+        case cloth64 = "cloth-64"
+        case softBodyInstances = "soft-body-instances"
     }
 
     var scenario: Scenario
@@ -20,16 +22,33 @@ private struct Configuration {
     var sampleFrames: Int
     var workerThreadCount: Int
     var maxResidentGrowthBytes: UInt64
+    var clothGridSize: Int
+    var maxSoftBodyStepNanoseconds: UInt64
+    var maxVertexStreamNanoseconds: UInt64
 
     init(environment: [String: String] = ProcessInfo.processInfo.environment) {
         scenario = Scenario(rawValue: environment["GUAVA_PHYSICS_SCENARIO"] ?? "") ?? .activeGrid
-        let defaultBodyCount = scenario == .denseContact ? 2_000 : 10_000
+        let defaultBodyCount: Int
+        switch scenario {
+        case .activeGrid: defaultBodyCount = 10_000
+        case .denseContact: defaultBodyCount = 2_000
+        case .cloth64: defaultBodyCount = 1
+        case .softBodyInstances: defaultBodyCount = 8
+        }
         bodyCount = Int(environment["GUAVA_PHYSICS_BODIES"] ?? "") ?? defaultBodyCount
         warmupFrames = Int(environment["GUAVA_PHYSICS_WARMUP_FRAMES"] ?? "") ?? 120
         sampleFrames = Int(environment["GUAVA_PHYSICS_SAMPLE_FRAMES"] ?? "") ?? 600
         workerThreadCount = Int(environment["GUAVA_PHYSICS_WORKERS"] ?? "") ?? 0
         maxResidentGrowthBytes = UInt64(environment["GUAVA_PHYSICS_MAX_RSS_GROWTH_BYTES"] ?? "")
             ?? 32 * 1_024 * 1_024
+        clothGridSize = Int(environment["GUAVA_PHYSICS_CLOTH_GRID"] ?? "")
+            ?? (scenario == .cloth64 ? 64 : 32)
+        let stepBudgetMS = Double(environment["GUAVA_PHYSICS_SOFT_STEP_BUDGET_MS"] ?? "")
+            ?? 16.67
+        let streamBudgetMS = Double(environment["GUAVA_PHYSICS_VERTEX_STREAM_BUDGET_MS"] ?? "")
+            ?? 2.0
+        maxSoftBodyStepNanoseconds = UInt64(max(0, stepBudgetMS) * 1_000_000)
+        maxVertexStreamNanoseconds = UInt64(max(0, streamBudgetMS) * 1_000_000)
     }
 }
 
@@ -63,40 +82,74 @@ private func makeBenchmarkScene(configuration: Configuration) -> SceneRuntime {
         )
     }
 
-    let activeColumns = max(1, Int(ceil(sqrt(Double(configuration.bodyCount)))))
-    let denseColumns = 20
-    for index in 0..<configuration.bodyCount {
-        let position: SIMD3<Float>
-        switch configuration.scenario {
-        case .activeGrid:
-            position = SIMD3<Float>(
-                Float(index % activeColumns) * 1.1 - Float(activeColumns) * 0.55,
-                1 + Float(index % 5) * 1.1,
-                Float(index / activeColumns) * 1.1 - Float(activeColumns) * 0.55
-            )
-        case .denseContact:
-            let layerSize = denseColumns * denseColumns
-            position = SIMD3<Float>(
-                Float(index % denseColumns) * 0.92 - Float(denseColumns) * 0.46,
-                0.5 + Float(index / layerSize) * 0.92,
-                Float((index / denseColumns) % denseColumns) * 0.92 - Float(denseColumns) * 0.46
+    switch configuration.scenario {
+    case .activeGrid, .denseContact:
+        let activeColumns = max(1, Int(ceil(sqrt(Double(configuration.bodyCount)))))
+        let denseColumns = 20
+        for index in 0..<configuration.bodyCount {
+            let position: SIMD3<Float>
+            if configuration.scenario == .activeGrid {
+                position = SIMD3<Float>(
+                    Float(index % activeColumns) * 1.1 - Float(activeColumns) * 0.55,
+                    1 + Float(index % 5) * 1.1,
+                    Float(index / activeColumns) * 1.1 - Float(activeColumns) * 0.55
+                )
+            } else {
+                let layerSize = denseColumns * denseColumns
+                position = SIMD3<Float>(
+                    Float(index % denseColumns) * 0.92 - Float(denseColumns) * 0.46,
+                    0.5 + Float(index / layerSize) * 0.92,
+                    Float((index / denseColumns) % denseColumns) * 0.92 - Float(denseColumns) * 0.46
+                )
+            }
+            let entity = runtime.createEntity()
+            _ = runtime.setLocalTransform(LocalTransform(translation: position), for: entity)
+            let velocity = configuration.scenario == .activeGrid
+                ? SIMD3<Float>(0.25, 0.1, 0.15)
+                : .zero
+            _ = runtime.setComponent(RigidBody(
+                motionType: .dynamic,
+                mass: 1,
+                linearVelocity: velocity,
+                allowSleep: false
+            ), for: entity)
+            _ = runtime.setComponent(
+                Collider(shape: .box(halfExtents: SIMD3<Float>(repeating: 0.5), center: .zero)),
+                for: entity
             )
         }
-        let entity = runtime.createEntity()
-        _ = runtime.setLocalTransform(LocalTransform(translation: position), for: entity)
-        let velocity = configuration.scenario == .activeGrid
-            ? SIMD3<Float>(0.25, 0.1, 0.15)
-            : .zero
-        _ = runtime.setComponent(RigidBody(
-            motionType: .dynamic,
-            mass: 1,
-            linearVelocity: velocity,
-            allowSleep: false
-        ), for: entity)
-        _ = runtime.setComponent(
-            Collider(shape: .box(halfExtents: SIMD3<Float>(repeating: 0.5), center: .zero)),
-            for: entity
-        )
+    case .cloth64, .softBodyInstances:
+        let gridSize = max(2, min(configuration.clothGridSize, 512))
+        let instanceCount = configuration.scenario == .cloth64
+            ? 1 : max(1, configuration.bodyCount)
+        let columns = max(1, Int(ceil(sqrt(Double(instanceCount)))))
+        for index in 0..<instanceCount {
+            let entity = runtime.createEntity()
+            let position = SIMD3<Float>(
+                Float(index % columns) * Float(gridSize) * 0.06,
+                8 + Float(index % 3),
+                Float(index / columns) * Float(gridSize) * 0.06
+            )
+            _ = runtime.setLocalTransform(LocalTransform(translation: position), for: entity)
+            _ = runtime.setComponent(
+                Cloth.fixedTopEdge(
+                    gridSizeX: gridSize,
+                    gridSizeZ: gridSize,
+                    spacing: 0.05
+                ),
+                for: entity
+            )
+            _ = runtime.setComponent(
+                SoftBody(
+                    vertexMass: 0.05,
+                    linearDamping: 0.05,
+                    solverIterations: 5,
+                    allowSleep: false
+                ),
+                for: entity
+            )
+            _ = runtime.setComponent(RenderMeshComponent(meshIndex: 0), for: entity)
+        }
     }
     return runtime
 }
@@ -152,11 +205,16 @@ var stepSamples: [UInt64] = []
 var syncSamples: [UInt64] = []
 var contactTotal = 0
 var activeBodyPeak = 0
+var activeSoftBodyPeak = 0
 var droppedSteps = 0
 var residentSamples: [UInt64] = []
+var vertexStreamSamples: [UInt64] = []
+var streamedVertexPeak = 0
+var vertexChecksum: Float = 0
 stepSamples.reserveCapacity(configuration.sampleFrames)
 syncSamples.reserveCapacity(configuration.sampleFrames)
 residentSamples.reserveCapacity(configuration.sampleFrames)
+vertexStreamSamples.reserveCapacity(configuration.sampleFrames)
 
 for offset in 0..<configuration.sampleFrames {
     let frame = configuration.warmupFrames + offset
@@ -165,12 +223,30 @@ for offset in 0..<configuration.sampleFrames {
     syncSamples.append(report.physicsSynchronizationNanoseconds)
     contactTotal += report.physicsContactCount
     activeBodyPeak = max(activeBodyPeak, runtime.physicsFrameState.activeBodyCount)
+    activeSoftBodyPeak = max(
+        activeSoftBodyPeak, runtime.physicsFrameState.activeSoftBodyCount
+    )
     droppedSteps += report.physicsDroppedStepCount
     residentSamples.append(residentBytes())
+    let streamStarted = DispatchTime.now().uptimeNanoseconds
+    let deformableMeshes = runtime.renderScene.deformableMeshes
+    streamedVertexPeak = max(
+        streamedVertexPeak,
+        deformableMeshes.reduce(0) { $0 + $1.vertexCount }
+    )
+    for mesh in deformableMeshes {
+        for position in mesh.positions {
+            vertexChecksum += position.x * 0.000_001
+                + position.y * 0.000_002
+                + position.z * 0.000_003
+        }
+    }
+    vertexStreamSamples.append(DispatchTime.now().uptimeNanoseconds - streamStarted)
 }
 
 let sortedSteps = stepSamples.sorted()
 let sortedSync = syncSamples.sorted()
+let sortedVertexStream = vertexStreamSamples.sorted()
 let windowSize = max(1, configuration.sampleFrames / 10)
 let initialResident = percentile(Array(residentSamples.prefix(windowSize)).sorted(), 0.50)
 let finalResident = percentile(Array(residentSamples.suffix(windowSize)).sorted(), 0.50)
@@ -178,7 +254,8 @@ let residentGrowth = finalResident > initialResident ? finalResident - initialRe
 print("PhysicsRuntimeBenchmarks scenario=\(configuration.scenario.rawValue) bodies=\(configuration.bodyCount) frames=\(configuration.sampleFrames)")
 print("step_ms p50=\(milliseconds(percentile(sortedSteps, 0.50))) p95=\(milliseconds(percentile(sortedSteps, 0.95))) p99=\(milliseconds(percentile(sortedSteps, 0.99)))")
 print("sync_ms p50=\(milliseconds(percentile(sortedSync, 0.50))) p95=\(milliseconds(percentile(sortedSync, 0.95))) p99=\(milliseconds(percentile(sortedSync, 0.99)))")
-print("contacts_total=\(contactTotal) active_body_peak=\(activeBodyPeak) dropped_steps=\(droppedSteps) peak_rss_bytes=\(peakResidentBytes())")
+print("vertex_stream_ms p50=\(milliseconds(percentile(sortedVertexStream, 0.50))) p95=\(milliseconds(percentile(sortedVertexStream, 0.95))) p99=\(milliseconds(percentile(sortedVertexStream, 0.99))) vertices_peak=\(streamedVertexPeak) checksum=\(vertexChecksum)")
+print("contacts_total=\(contactTotal) active_body_peak=\(activeBodyPeak) active_soft_body_peak=\(activeSoftBodyPeak) dropped_steps=\(droppedSteps) peak_rss_bytes=\(peakResidentBytes())")
 print("rss_initial_bytes=\(initialResident) rss_final_bytes=\(finalResident) rss_growth_bytes=\(residentGrowth)")
 
 if configuration.scenario == .activeGrid,
@@ -191,6 +268,23 @@ if configuration.scenario == .denseContact,
    configuration.bodyCount >= 2_000,
    droppedSteps > 0 {
     fputs("Physics benchmark gate failed: dense-contact scenario dropped fixed steps.\n", stderr)
+    exit(1)
+}
+if configuration.scenario == .cloth64,
+   configuration.clothGridSize >= 64,
+   percentile(sortedSteps, 0.95) > configuration.maxSoftBodyStepNanoseconds
+        || percentile(sortedVertexStream, 0.95) > configuration.maxVertexStreamNanoseconds
+        || droppedSteps > 0 {
+    fputs("Physics benchmark gate failed: 64x64 cloth exceeded the step/vertex-stream budget or dropped fixed steps.\n", stderr)
+    exit(1)
+}
+if configuration.scenario == .softBodyInstances,
+   configuration.bodyCount >= 8,
+   configuration.clothGridSize >= 32,
+   percentile(sortedSteps, 0.95) > configuration.maxSoftBodyStepNanoseconds
+        || percentile(sortedVertexStream, 0.95) > configuration.maxVertexStreamNanoseconds
+        || droppedSteps > 0 {
+    fputs("Physics benchmark gate failed: medium soft-body instances exceeded the step/vertex-stream budget or dropped fixed steps.\n", stderr)
     exit(1)
 }
 if initialResident > 0,

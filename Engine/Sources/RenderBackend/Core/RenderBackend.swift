@@ -58,7 +58,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var ldrPostProcessTarget: RenderTextureTarget?
     private var historyTarget: RenderTextureTarget?
 
-    private var meshes: [GPUMesh] = []
+    var meshes: [GPUMesh] = []
+    var deformableMeshResources: [EntityID: GPUDeformableMeshResource] = [:]
     var meshTextureResources: [Int: [Int: GPUMeshTextureResource]] = [:]
     var instanceResources: [InstanceResources] = []
     var instanceResourceKeys: [InstanceResourceKey] = []
@@ -223,6 +224,12 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 drawableSize: packet.drawableSize
             )
             let meshPipeline = try ensureMeshPipeline(hdr: usesHDRFrameGraph)
+            let deformableUploadStartNS = DispatchTime.now().uptimeNanoseconds
+            let deformableUploadReport = try syncDeformableMeshes(
+                packet.scene.deformableMeshes
+            )
+            let deformableUploadNS = DispatchTime.now().uptimeNanoseconds
+                - deformableUploadStartNS
             try ensureStylizedCharacterUniformBuffer()
             writeStylizedCharacterUniforms()
             try ensureSceneLightUniformBuffer()
@@ -667,6 +674,12 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 gpuParticleCullCandidateCount: particleCullCandidateCount,
                 gpuParticleCullDispatchWorkgroups: particleCullDispatchWorkgroups,
                 gpuParticleSimulationEncodeNS: particleSimulationEncodeNS,
+                deformableMeshCount: deformableUploadReport.meshCount,
+                deformableVertexCount: deformableUploadReport.vertexCount,
+                deformableTriangleCount: deformableUploadReport.triangleCount,
+                deformableRejectedMeshCount: deformableUploadReport.rejectedMeshCount,
+                deformableUploadedBytes: deformableUploadReport.uploadedBytes,
+                deformableUploadNS: deformableUploadNS,
                 shadowedLightCount: shadowPlan.uniforms.isEnabled
                     ? shadowPlan.shadowedLightCount
                     : 0,
@@ -1466,8 +1479,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 retainedBindGroups.append(bindGroup)
                 for i in drawOrder {
                     let instance = scene.instances[i]
-                    guard meshes.indices.contains(instance.meshIndex) else { continue }
-                    let mesh = meshes[instance.meshIndex]
+                    guard let mesh = resolvedMesh(for: instance) else { continue }
                     let drawOffset = UInt64(i) * dyn.stride
                     guard drawOffset <= UInt64(UInt32.max) else { continue }
                     pass.setBindGroup(bindGroup, index: 0, dynamicOffsets: [UInt32(drawOffset)])
@@ -1479,8 +1491,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             } else {
                 for i in drawOrder where i < instanceResources.count {
                     let instance = scene.instances[i]
-                    guard meshes.indices.contains(instance.meshIndex) else { continue }
-                    let mesh = meshes[instance.meshIndex]
+                    guard let mesh = resolvedMesh(for: instance) else { continue }
                     let uniformBuffer = instanceResources[i].uniformBuffer
                     guard let paletteBuffer = instance.entity.flatMap({ jointPaletteBuffers[$0] }) ?? fallbackJointPaletteBuffer else {
                         continue
@@ -1530,8 +1541,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         if let dyn = dynamicInstanceResources {
             for i in drawOrder {
                 let instance = scene.instances[i]
-                guard meshes.indices.contains(instance.meshIndex) else { continue }
-                let mesh = meshes[instance.meshIndex]
+                guard let mesh = resolvedMesh(for: instance) else { continue }
                 let drawOffset = UInt64(i) * dyn.stride
                 guard drawOffset <= UInt64(UInt32.max) else { continue }
                 pass.setBindGroup(dyn.bindGroup, index: 0, dynamicOffsets: [UInt32(drawOffset)])
@@ -1543,8 +1553,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         } else {
             for i in drawOrder where i < instanceResources.count {
                 let instance = scene.instances[i]
-                guard meshes.indices.contains(instance.meshIndex) else { continue }
-                let mesh = meshes[instance.meshIndex]
+                guard let mesh = resolvedMesh(for: instance) else { continue }
                 pass.setBindGroup(instanceResources[i].bindGroup, index: 0, dynamicOffsets: [0])
                 pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
                 pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
@@ -1601,8 +1610,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         if let dyn = dynamicInstanceResources {
             for i in drawOrder {
                 let instance = scene.instances[i]
-                guard meshes.indices.contains(instance.meshIndex) else { continue }
-                let mesh = meshes[instance.meshIndex]
+                guard let mesh = resolvedMesh(for: instance) else { continue }
                 let drawOffset = UInt64(i) * dyn.stride
                 guard drawOffset <= UInt64(UInt32.max) else { continue }
                 pass.setBindGroup(dyn.bindGroup, index: 0, dynamicOffsets: [UInt32(drawOffset)])
@@ -1615,8 +1623,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             var localBindGroups: [GPUBindGroup] = []
             for i in drawOrder where i < instanceResources.count {
                 let instance = scene.instances[i]
-                guard meshes.indices.contains(instance.meshIndex) else { continue }
-                let mesh = meshes[instance.meshIndex]
+                guard let mesh = resolvedMesh(for: instance) else { continue }
                 pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
                 pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
                 if mesh.submeshes.count > 1 {
@@ -1674,8 +1681,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         if let dyn = dynamicInstanceResources {
             for i in drawOrder {
                 let instance = scene.instances[i]
-                guard meshes.indices.contains(instance.meshIndex) else { continue }
-                let mesh = meshes[instance.meshIndex]
+                guard let mesh = resolvedMesh(for: instance) else { continue }
                 let drawOffset = UInt64(i) * dyn.stride
                 guard drawOffset <= UInt64(UInt32.max) else { continue }
                 pass.setBindGroup(dyn.bindGroup, index: 0, dynamicOffsets: [UInt32(drawOffset)])
@@ -1688,8 +1694,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             var localBindGroups: [GPUBindGroup] = []
             for i in drawOrder where i < instanceResources.count {
                 let instance = scene.instances[i]
-                guard meshes.indices.contains(instance.meshIndex) else { continue }
-                let mesh = meshes[instance.meshIndex]
+                guard let mesh = resolvedMesh(for: instance) else { continue }
                 pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
                 pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
                 if mesh.submeshes.count > 1 {
@@ -1808,6 +1813,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         let localInstanceResources = instanceResources
         let localDynamicResources = dynamicInstanceResources
         let localMeshes = meshes
+        let localDeformableMeshes = deformableMeshResources
         let localSceneInstances = scene.instances
         let localPipeline = pipeline
         let localDescriptor = descriptor
@@ -1825,8 +1831,16 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 for i in finalRanges[rangeIndex] {
                     let drawIndex = drawOrder[i]
                     let instance = localSceneInstances[drawIndex]
-                    guard localMeshes.indices.contains(instance.meshIndex) else { continue }
-                    let mesh = localMeshes[instance.meshIndex]
+                    let mesh: GPUMesh?
+                    if let entity = instance.entity,
+                       let deformable = localDeformableMeshes[entity] {
+                        mesh = deformable.mesh
+                    } else if localMeshes.indices.contains(instance.meshIndex) {
+                        mesh = localMeshes[instance.meshIndex]
+                    } else {
+                        mesh = nil
+                    }
+                    guard let mesh else { continue }
                     if let dyn = localDynamicResources {
                         let drawOffset = UInt64(drawIndex) * dyn.stride
                         guard drawOffset <= UInt64(UInt32.max) else { continue }

@@ -136,6 +136,129 @@ public struct RenderInstance: Sendable {
     }
 }
 
+/// Per-frame surface geometry streamed by a deformable simulation.
+///
+/// Positions are expressed in world space so the renderer must draw the matching
+/// instance with an identity transform. `revision` is the content revision used
+/// by render backends to avoid uploading an unchanged sleeping surface; callers
+/// that construct a `RenderScene` directly must increment it whenever positions
+/// or normals change. `topologyRevision` changes only when indices or vertex
+/// layout change, allowing the index buffer to remain resident across frames.
+public struct RenderDeformableMesh: Sendable, Equatable {
+    public var entity: EntityID
+    public var revision: UInt64
+    public var topologyRevision: UInt64
+    public var positions: [SIMD3<Float>]
+    public var normals: [SIMD3<Float>]
+    public var textureCoordinates: [SIMD2<Float>]
+    public var triangleIndices: [UInt32]
+
+    public init(
+        entity: EntityID,
+        revision: UInt64,
+        topologyRevision: UInt64? = nil,
+        positions: [SIMD3<Float>],
+        triangleIndices: [UInt32],
+        textureCoordinates: [SIMD2<Float>] = [],
+        normals: [SIMD3<Float>]? = nil
+    ) {
+        self.entity = entity
+        self.revision = revision
+        self.positions = positions
+        self.triangleIndices = triangleIndices
+        self.topologyRevision = topologyRevision
+            ?? Self.stableTopologyRevision(triangleIndices)
+        self.textureCoordinates = textureCoordinates.count == positions.count
+            ? textureCoordinates
+            : Array(repeating: .zero, count: positions.count)
+        if let normals, normals.count == positions.count {
+            self.normals = normals
+        } else {
+            self.normals = Self.smoothNormals(
+                positions: positions,
+                triangleIndices: triangleIndices
+            )
+        }
+    }
+
+    public var vertexCount: Int { positions.count }
+    public var triangleCount: Int { triangleIndices.count / 3 }
+
+    public var isValid: Bool {
+        guard !positions.isEmpty,
+              normals.count == positions.count,
+              textureCoordinates.count == positions.count,
+              !triangleIndices.isEmpty,
+              triangleIndices.count.isMultiple(of: 3),
+              triangleIndices.allSatisfy({ Int($0) < positions.count })
+        else { return false }
+        return positions.allSatisfy(Self.isFinite)
+            && normals.allSatisfy(Self.isFinite)
+            && textureCoordinates.allSatisfy(Self.isFinite)
+    }
+
+    public var worldBounds: (min: SIMD3<Float>, max: SIMD3<Float>) {
+        guard var minimum = positions.first else { return (.zero, .zero) }
+        var maximum = minimum
+        for position in positions.dropFirst() {
+            minimum = simd_min(minimum, position)
+            maximum = simd_max(maximum, position)
+        }
+        return (minimum, maximum)
+    }
+
+    public static func smoothNormals(
+        positions: [SIMD3<Float>],
+        triangleIndices: [UInt32]
+    ) -> [SIMD3<Float>] {
+        guard !positions.isEmpty else { return [] }
+        var result = Array(repeating: SIMD3<Float>.zero, count: positions.count)
+        var index = 0
+        while index + 2 < triangleIndices.count {
+            let i0 = Int(triangleIndices[index])
+            let i1 = Int(triangleIndices[index + 1])
+            let i2 = Int(triangleIndices[index + 2])
+            index += 3
+            guard positions.indices.contains(i0),
+                  positions.indices.contains(i1),
+                  positions.indices.contains(i2)
+            else { continue }
+            let normal = simd_cross(positions[i1] - positions[i0],
+                                    positions[i2] - positions[i0])
+            guard simd_length_squared(normal) > 1.0e-12 else { continue }
+            result[i0] += normal
+            result[i1] += normal
+            result[i2] += normal
+        }
+        for vertexIndex in result.indices {
+            let lengthSquared = simd_length_squared(result[vertexIndex])
+            result[vertexIndex] = lengthSquared > 1.0e-12
+                ? simd_normalize(result[vertexIndex])
+                : SIMD3<Float>(0, 1, 0)
+        }
+        return result
+    }
+
+    public static func stableTopologyRevision(_ indices: [UInt32]) -> UInt64 {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for value in indices {
+            hash ^= UInt64(value)
+            hash &*= 0x100000001b3
+        }
+        hash ^= UInt64(indices.count)
+        hash &*= 0x100000001b3
+        return hash
+    }
+
+    private static func isFinite(_ value: SIMD3<Float>) -> Bool {
+        value.x.isFinite && value.y.isFinite && value.z.isFinite
+    }
+
+    private static func isFinite(_ value: SIMD2<Float>) -> Bool {
+        value.x.isFinite && value.y.isFinite
+    }
+}
+
 public enum RenderParticleShape: UInt32, Sendable, Equatable {
     case softBillboard = 0
     case ribbonSegment = 1
@@ -810,6 +933,8 @@ public struct RenderScene: Sendable {
     public var instances: [RenderInstance]
     public var lights: [RenderLight]
     public var environment: RenderEnvironment
+    /// World-space deformable surfaces keyed to `RenderInstance.entity`.
+    public var deformableMeshes: [RenderDeformableMesh]
     /// World-space billboard particles, pre-sorted back-to-front for the camera.
     public var particles: [RenderParticle]
     /// GPU-simulation input batches extracted from authored particle emitters.
@@ -821,6 +946,7 @@ public struct RenderScene: Sendable {
                 instances: [RenderInstance] = [],
                 lights: [RenderLight] = [],
                 environment: RenderEnvironment = .fallback,
+                deformableMeshes: [RenderDeformableMesh] = [],
                 particles: [RenderParticle] = [],
                 particleSimulationBatches: [RenderParticleSimulationBatch] = [],
                 particleSummary: ParticleRenderSummary? = nil) {
@@ -828,6 +954,9 @@ public struct RenderScene: Sendable {
         self.instances = instances
         self.lights = lights
         self.environment = environment
+        self.deformableMeshes = deformableMeshes.sorted {
+            $0.entity.rawValue < $1.entity.rawValue
+        }
         self.particles = particles
         self.particleSimulationBatches = particleSimulationBatches
         self.particleSummary = particleSummary

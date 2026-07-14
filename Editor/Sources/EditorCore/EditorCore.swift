@@ -17,6 +17,47 @@ import GuavaUIRuntime
 import Foundation
 import SIMDCompat
 
+private enum MCPAsyncBridgeError: Error, CustomStringConvertible {
+    case timedOut
+    case missingResult
+
+    var description: String {
+        switch self {
+        case .timedOut: return "capability service timed out"
+        case .missingResult: return "capability service returned no result"
+        }
+    }
+}
+
+private final class MCPAsyncResultBox<Value: Sendable>: @unchecked Sendable {
+    var result: Result<Value, Error>?
+}
+
+/// The editor bridge is intentionally synchronous on its local TCP boundary.
+/// Capability authority lives in an actor, so only the small actor operation is
+/// awaited here; scene reads and transaction preparation remain on the editor
+/// queue after this function returns.
+private func waitForMCPCapabilityResult<Value: Sendable>(
+    timeout: TimeInterval = 5,
+    _ operation: @escaping @Sendable () async throws -> Value
+) throws -> Value {
+    let semaphore = DispatchSemaphore(value: 0)
+    let box = MCPAsyncResultBox<Value>()
+    Task {
+        do {
+            box.result = .success(try await operation())
+        } catch {
+            box.result = .failure(error)
+        }
+        semaphore.signal()
+    }
+    guard semaphore.wait(timeout: .now() + timeout) == .success else {
+        throw MCPAsyncBridgeError.timedOut
+    }
+    guard let result = box.result else { throw MCPAsyncBridgeError.missingResult }
+    return try result.get()
+}
+
 /// 编辑器应用域：把 `EngineHost`、`EditorStore` 与 `InputState` 汇总成一个对象。
 ///
 /// 与 GuavaUIApp 配合使用：
@@ -54,6 +95,7 @@ public final class EditorApplication: @unchecked Sendable {
     private var pendingSessionProposal: Proposal?
     private var pendingAssistantMessageID: String?
     private let mcpBridge = MCPBridge()
+    private let mcpCapabilitySessions = CapabilityExposureSessionStore()
     private let editLog: EditLog
     private let contextMemoryStore: ContextMemoryStore?
     private var physicsPlaySnapshot: SceneRuntime?
@@ -1047,7 +1089,8 @@ public final class EditorApplication: @unchecked Sendable {
                     from: proposal.plan,
                     scene: self.scene.scene,
                     baseSceneRevision: proposal.baseSceneRevision,
-                    approvalPolicy: proposal.approvalPolicy
+                    approvalPolicy: proposal.approvalPolicy,
+                    exposureSnapshot: proposal.capabilityExposureSnapshot
                 )
                 self.logConsole("AI inference: \(latencyMs)ms", detail: proposal.plan.summary)
                 self.pendingSessionProposal = proposal
@@ -1353,8 +1396,8 @@ public final class EditorApplication: @unchecked Sendable {
                            initialWorldView: initialWorldView)
         case .openai:
             guard let key = AIKeychain.load(provider: .openai) else { return nil }
-            return Session(config: .openAI(apiKey: key, model: settings.model,
-                                           autoApprove: settings.autoApprove),
+            return Session(config: .openAIResponses(apiKey: key, model: settings.model,
+                                                    autoApprove: settings.autoApprove),
                            initialWorldView: initialWorldView)
         case .deepseek:
             guard let key = AIKeychain.load(provider: .deepseek) else { return nil }
@@ -1524,10 +1567,6 @@ public final class EditorApplication: @unchecked Sendable {
         switch action {
         case "get_scene":
             return mcpGetScene()
-        case "execute_plan":
-            return mcpExecutePlan(params: params)
-        case "analyze_image":
-            return mcpAnalyzeImage(params: params)
         case "get_context_memory":
             return mcpGetContextMemory(params: params)
         case "get_ai_entity":
@@ -1535,67 +1574,244 @@ public final class EditorApplication: @unchecked Sendable {
         case "get_selection":
             let ref = store.state.selectedEntityID.map { "scene:\($0)" }
             return ["ok": true, "selectedRef": ref as Any]
-        case "select_entity":
-            return mcpSelectEntity(params: params)
-        case "set_playback_state":
-            return mcpSetPlaybackState(params: params)
         case "find_entities":
             return mcpFindEntities(params: params)
-        case "undo":
-            return mcpUndo()
-        case "redo":
-            return mcpRedo()
+        case "open_capability_session":
+            return mcpOpenCapabilitySession(params: params)
+        case "search_capabilities":
+            return mcpSearchCapabilities(params: params)
+        case "invoke_capability":
+            return mcpInvokeCapability(params: params)
+        case "submit_capability_plan":
+            return mcpSubmitCapabilityPlan(params: params)
+        case "close_capability_session":
+            return mcpCloseCapabilitySession(params: params)
         default:
             return ["ok": false, "error": "unknown action '\(action)'"]
         }
     }
 
-    private func mcpUndo() -> [String: Any] {
-        var context = makeExecutionContext()
-        let applied = intentCoordinator.undo(executionContext: &context)
-        if applied, let updatedScene = context.sceneRuntime {
-            scene.scene = updatedScene
-            scene.notifyRevisionChanged()
-            store.dispatch(.setAIStatusMessage("Undone"))
+    private func mcpOpenCapabilitySession(params: [String: Any]) -> [String: Any] {
+        guard let sessionID = params["session_id"] as? String else {
+            return ["ok": false, "error": "missing session_id"]
         }
-        return ["ok": true, "applied": applied]
-    }
-
-    private func mcpRedo() -> [String: Any] {
-        var context = makeExecutionContext()
-        let applied = intentCoordinator.redo(executionContext: &context)
-        if applied, let updatedScene = context.sceneRuntime {
-            scene.scene = updatedScene
-            scene.notifyRevisionChanged()
-            store.dispatch(.setAIStatusMessage("Redone"))
-        }
-        return ["ok": true, "applied": applied]
-    }
-
-    private func mcpSetPlaybackState(params: [String: Any]) -> [String: Any] {
-        guard let stateStr = params["state"] as? String else {
-            return ["ok": false, "error": "missing 'state' field (playing|paused|stopped)"]
-        }
-        guard let next = PlaybackState(rawValue: stateStr) else {
-            return ["ok": false, "error": "unknown state '\(stateStr)' — expected 'playing', 'paused', or 'stopped'"]
-        }
-        applyPlaybackState(next)
-        return ["ok": true, "state": next.rawValue]
-    }
-
-    private func mcpSelectEntity(params: [String: Any]) -> [String: Any] {
-        if let refStr = params["entity_id"] as? String, !refStr.isEmpty {
-            guard refStr.hasPrefix("scene:"),
-                  let raw = UInt64(refStr.dropFirst("scene:".count)),
-                  let eid = entityID(from: raw),
-                  scene.scene.contains(eid) else {
-                return ["ok": false, "error": "invalid entity ref '\(params["entity_id"] as? String ?? "")'"]
+        let revision = scene.revision
+        do {
+            let activation = try waitForMCPCapabilityResult { [mcpCapabilitySessions] in
+                try await mcpCapabilitySessions.bootstrap(sessionID: sessionID,
+                                                          sceneRevision: revision)
             }
-            store.dispatch(.setSelectedEntity(raw))
-            return ["ok": true, "selectedRef": refStr]
-        } else {
-            store.dispatch(.setSelectedEntity(nil))
-            return ["ok": true, "selectedRef": NSNull()]
+            return mcpCapabilityActivationResponse(activation)
+        } catch {
+            return ["ok": false, "error": String(describing: error)]
+        }
+    }
+
+    private func mcpSearchCapabilities(params: [String: Any]) -> [String: Any] {
+        guard let sessionID = params["session_id"] as? String else {
+            return ["ok": false, "error": "missing session_id"]
+        }
+        do {
+            let input = try mcpValidatedFrameworkInput(
+                params,
+                capabilityID: "system.search_capabilities"
+            )
+            let query = input["query"] as? String ?? ""
+            let domain = input["domain"] as? String
+            let access = (input["access"] as? String).flatMap(CapabilityAccess.init(rawValue:))
+            let revision = scene.revision
+            let activation = try waitForMCPCapabilityResult { [mcpCapabilitySessions] in
+                try await mcpCapabilitySessions.search(sessionID: sessionID,
+                                                       query: query,
+                                                       domain: domain,
+                                                       access: access,
+                                                       sceneRevision: revision)
+            }
+            return mcpCapabilityActivationResponse(activation)
+        } catch {
+            return ["ok": false, "error": String(describing: error)]
+        }
+    }
+
+    private func mcpCapabilityActivationResponse(
+        _ activation: CapabilitySearchActivation
+    ) -> [String: Any] {
+        func encode(_ contracts: [CapabilityContract]) -> [[String: Any]] {
+            contracts.map { contract in
+                [
+                    "id": contract.id,
+                    "version": contract.version,
+                    "tool_name": contract.toolName,
+                    "title": contract.title,
+                    "description": contract.description,
+                    "domain": contract.domain,
+                    "access": contract.access.rawValue,
+                    "schema_hash": contract.schemaHash,
+                    "input_schema": contract.inputSchema.jsonObject(),
+                ]
+            }
+        }
+        return [
+            "ok": true,
+            "snapshot_id": activation.snapshotID.uuidString,
+            "active_tool_count": activation.activeToolCount,
+            "capabilities": encode(activation.contracts),
+            "active_capabilities": encode(activation.activeContracts),
+        ]
+    }
+
+    private func mcpInvokeCapability(params: [String: Any]) -> [String: Any] {
+        guard let sessionID = params["session_id"] as? String else {
+            return ["ok": false, "error": "missing session_id"]
+        }
+        guard let toolName = params["tool_name"] as? String else {
+            return ["ok": false, "error": "missing tool_name"]
+        }
+        let arguments = params["arguments"] as? [String: Any] ?? [:]
+        guard JSONSerialization.isValidJSONObject(arguments),
+              let input = try? JSONSerialization.data(withJSONObject: arguments, options: [.sortedKeys]) else {
+            return ["ok": false, "error": "arguments must be a JSON object"]
+        }
+        let revision = scene.revision
+        do {
+            let contract = try waitForMCPCapabilityResult { [mcpCapabilitySessions] in
+                try await mcpCapabilitySessions.contract(sessionID: sessionID,
+                                                         toolName: toolName,
+                                                         sceneRevision: revision)
+            }
+            if contract.access == .read {
+                try JSONSchemaValidator.validate(data: input, against: contract.inputSchema)
+                switch contract.id {
+                case "scene.get_entities":
+                    return mcpGetScene()
+                case "scene.get_selection":
+                    let ref = store.state.selectedEntityID.map { "scene:\($0)" }
+                    return ["ok": true, "selectedRef": ref as Any]
+                case "scene.find_entities":
+                    return mcpFindEntities(params: arguments)
+                default:
+                    return [
+                        "ok": false,
+                        "error": CapabilityExposureSessionError
+                            .readCapabilityRequiresHostAdapter(contract.id).description,
+                    ]
+                }
+            }
+
+            let draft = try waitForMCPCapabilityResult { [mcpCapabilitySessions] in
+                try await mcpCapabilitySessions.createDraft(sessionID: sessionID,
+                                                            toolName: toolName,
+                                                            input: input,
+                                                            sceneRevision: revision)
+            }
+            return [
+                "ok": true,
+                "status": "draft_created",
+                "draft_id": draft.id.uuidString,
+                "capability_id": draft.capabilityID,
+                "capability_version": draft.capabilityVersion,
+                "schema_hash": draft.schemaHash,
+                "scene_revision": draft.sceneRevision,
+            ]
+        } catch {
+            return ["ok": false, "error": String(describing: error)]
+        }
+    }
+
+    private func mcpSubmitCapabilityPlan(params: [String: Any]) -> [String: Any] {
+        guard let sessionID = params["session_id"] as? String else {
+            return ["ok": false, "error": "missing session_id"]
+        }
+        do {
+            let input = try mcpValidatedFrameworkInput(params,
+                                                       capabilityID: "system.submit_plan")
+            let summary = input["summary"] as? String ?? "AI capability plan"
+            let reasoning = input["reasoning"] as? String
+            guard let rawIDs = input["draft_ids"] as? [String],
+                  rawIDs.count <= CapabilityDraftLimits.maximumDraftsPerPlan else {
+                return [
+                    "ok": false,
+                    "error": "draft_ids may contain at most \(CapabilityDraftLimits.maximumDraftsPerPlan) ids",
+                ]
+            }
+            let draftIDs = rawIDs.compactMap(UUID.init(uuidString:))
+            guard draftIDs.count == rawIDs.count, Set(draftIDs).count == draftIDs.count else {
+                return ["ok": false, "error": "draft_ids contains an invalid or duplicate id"]
+            }
+            let revision = scene.revision
+            let validated = try waitForMCPCapabilityResult { [mcpCapabilitySessions] in
+                try await mcpCapabilitySessions.validatedDrafts(sessionID: sessionID,
+                                                                ids: draftIDs,
+                                                                sceneRevision: revision)
+            }
+            let plan = try SceneCapabilityDraftLowering.plan(summary: summary,
+                                                             reasoning: reasoning,
+                                                             drafts: validated.drafts)
+            if validated.drafts.isEmpty {
+                return [
+                    "ok": true,
+                    "status": "no_changes",
+                    "summary": plan.summary,
+                    "snapshot_id": validated.snapshot.id.uuidString,
+                ]
+            }
+            // The executor prepares each operation against a shadow copy and
+            // binds each record to the exact authority snapshot used above.
+            let transaction = try SceneEditPlanExecutor().buildTransaction(
+                from: plan,
+                scene: scene.scene,
+                baseSceneRevision: revision,
+                approvalPolicy: .requiresApproval,
+                exposureSnapshot: validated.snapshot
+            )
+            let result = try runPlanTransaction(
+                transaction,
+                capabilityContext: makeCapabilityInvocationContext(defaultSource: .system)
+            )
+            try waitForMCPCapabilityResult { [mcpCapabilitySessions] in
+                try await mcpCapabilitySessions.consume(sessionID: sessionID, ids: draftIDs)
+            }
+            return [
+                "ok": true,
+                "summary": plan.summary,
+                "transaction_id": result.transactionID,
+                "disposition": result.disposition.rawValue,
+                "snapshot_id": validated.snapshot.id.uuidString,
+            ]
+        } catch {
+            return ["ok": false, "error": String(describing: error)]
+        }
+    }
+
+    private func mcpValidatedFrameworkInput(
+        _ params: [String: Any],
+        capabilityID: String
+    ) throws -> [String: Any] {
+        guard let contract = CapabilityRegistry.aiDefault.descriptor(for: capabilityID)?.contract else {
+            throw CapabilityDraftError.unknownTool(capabilityID)
+        }
+        var input = params
+        input.removeValue(forKey: "action")
+        input.removeValue(forKey: "session_id")
+        guard JSONSerialization.isValidJSONObject(input) else {
+            throw CapabilityDraftError.invalidInput("input must be a JSON object")
+        }
+        let data = try JSONSerialization.data(withJSONObject: input, options: [.sortedKeys])
+        try JSONSchemaValidator.validate(data: data, against: contract.inputSchema)
+        return input
+    }
+
+    private func mcpCloseCapabilitySession(params: [String: Any]) -> [String: Any] {
+        guard let sessionID = params["session_id"] as? String else {
+            return ["ok": false, "error": "missing session_id"]
+        }
+        do {
+            try waitForMCPCapabilityResult { [mcpCapabilitySessions] in
+                try await mcpCapabilitySessions.removeSession(sessionID)
+            }
+            return ["ok": true]
+        } catch {
+            return ["ok": false, "error": String(describing: error)]
         }
     }
 
@@ -1617,7 +1833,13 @@ public final class EditorApplication: @unchecked Sendable {
     private func mcpFindEntities(params: [String: Any]) -> [String: Any] {
         let nameQuery = (params["name"] as? String)?.lowercased()
         let kindFilter = params["kind"] as? String
+        let componentFilter = (params["component"] as? String)?.lowercased()
         let limit = max(1, min((params["limit"] as? Int) ?? 20, 200))
+        let nearValues = (params["near_position"] as? [Any])?.compactMap {
+            ($0 as? NSNumber)?.doubleValue
+        }
+        let nearPosition: [Double]? = nearValues?.count == 3 ? nearValues : nil
+        let nearRadius = (params["near_radius"] as? NSNumber)?.doubleValue
 
         let snapshot = SceneSemanticEncoder().encode(
             scene.scene,
@@ -1625,83 +1847,44 @@ public final class EditorApplication: @unchecked Sendable {
             workspaceMode: store.state.workspaceMode.rawValue,
             localeIdentifier: nil
         )
-        var results: [[String: String]] = []
+        var matches: [(entity: SceneSemanticSnapshot.Entity, distance: Double?)] = []
         for entity in snapshot.entities {
             if let nq = nameQuery, !entity.name.lowercased().contains(nq) { continue }
             if let kf = kindFilter, entity.kind != kf { continue }
-            results.append(["id": entity.id, "name": entity.name, "kind": entity.kind])
-            if results.count >= limit { break }
+            if let componentFilter,
+               !entity.components.contains(where: { $0.lowercased() == componentFilter }) {
+                continue
+            }
+            var distance: Double?
+            if let center = nearPosition, let radius = nearRadius {
+                guard let position = entity.worldPosition ?? entity.position,
+                      position.count == 3 else { continue }
+                let dx = Double(position[0]) - center[0]
+                let dy = Double(position[1]) - center[1]
+                let dz = Double(position[2]) - center[2]
+                let value = (dx * dx + dy * dy + dz * dz).squareRoot()
+                guard value <= radius else { continue }
+                distance = value
+            }
+            matches.append((entity, distance))
+        }
+        if nearPosition != nil {
+            matches.sort { ($0.distance ?? .infinity) < ($1.distance ?? .infinity) }
+        }
+        let results: [[String: Any]] = matches.prefix(limit).map { match in
+            var result: [String: Any] = [
+                "id": match.entity.id,
+                "name": match.entity.name,
+                "kind": match.entity.kind,
+                "components": match.entity.components,
+            ]
+            if let position = match.entity.worldPosition ?? match.entity.position {
+                result["position"] = position
+            }
+            if let distance = match.distance { result["distance"] = distance }
+            return result
         }
         return ["ok": true, "count": results.count, "entities": results]
-    }
-
-    private func mcpAnalyzeImage(params: [String: Any]) -> [String: Any] {
-        guard let imagePath = params["image_path"] as? String, !imagePath.isEmpty else {
-            return ["ok": false, "error": "missing 'image_path' field"]
-        }
-        let maxResults = max(1, min((params["max_results"] as? Int) ?? 5, 20))
-        let taskStr = (params["task"] as? String) ?? "classification"
-        let task: PerceptionTask
-        switch taskStr {
-        case "object_detection": task = .objectDetection
-        case "image_embedding":  task = .imageEmbedding
-        default:                 task = .classification
-        }
-        let targetRef = (params["entity_id"] as? String) ?? store.state.selectedEntityID.map { "scene:\($0)" }
-        guard let targetRef, !targetRef.isEmpty else {
-            return ["ok": false, "error": "missing target entity; pass entity_id or select an entity"]
-        }
-        guard let targetRawID = rawEntityID(fromSceneRef: targetRef),
-              let targetEntity = entityID(from: targetRawID),
-              scene.scene.contains(targetEntity)
-        else {
-            return ["ok": false, "error": "invalid target entity '\(targetRef)'"]
-        }
-
-        let ps = perceptionService
-        let currentSession = session
-        let semaphore = DispatchSemaphore(value: 0)
-        final class MCPState: @unchecked Sendable {
-            var result: [String: Any] = [:]
-        }
-        let state = MCPState()
-        Task {
-            do {
-                let imageURL = URL(fileURLWithPath: imagePath)
-                let events: [WorldEvent]
-                if let sess = currentSession {
-                    // tagEntity updates WorldView and records sceneAnnotation in contextMemory
-                    await sess.setPerceptionService(ps)
-                    events = try await sess.tagEntity(ref: targetRef,
-                                                      imageURL: imageURL,
-                                                      task: task,
-                                                      maxResults: maxResults)
-                    // Also push events into AIWorldContext
-                    await self.aiWorldContext.observe(events: events)
-                } else {
-                    events = try await ps.tag(entityRef: targetRef,
-                                              imageURL: imageURL,
-                                              task: task,
-                                              maxResults: maxResults)
-                    let applicationResult = self.applyWorldEventsSynchronously(events)
-                    _ = applicationResult
-                }
-                self.store.dispatch(.setAIStatusMessage("Perception updated \(targetRef)"))
-                state.result = [
-                    "ok": true,
-                    "targetRef": targetRef,
-                    "events": events.count,
-                    "sessionUsed": currentSession != nil,
-                ]
-            } catch {
-                state.result = ["ok": false, "error": error.localizedDescription]
-            }
-            semaphore.signal()
-        }
-        guard semaphore.wait(timeout: .now() + 10) == .success else {
-            return ["ok": false, "error": "perception timed out"]
-        }
-        return state.result
     }
 
     private func mcpGetContextMemory(params: [String: Any]) -> [String: Any] {
@@ -1749,31 +1932,6 @@ public final class EditorApplication: @unchecked Sendable {
         }
     }
 
-    private func applyWorldEventsSynchronously(_ events: [WorldEvent]) -> (localApplied: Bool, sessionApplied: Bool) {
-        guard !events.isEmpty else { return (false, false) }
-        let semaphore = DispatchSemaphore(value: 0)
-        let worldContext = self.aiWorldContext
-        let session = session
-        final class ApplyState: @unchecked Sendable {
-            var localApplied = false
-            var sessionApplied = false
-        }
-        let state = ApplyState()
-        Task {
-            await worldContext.observe(events: events)
-            state.localApplied = true
-            if let session {
-                await session.observe(events: events)
-                state.sessionApplied = true
-            }
-            semaphore.signal()
-        }
-        guard semaphore.wait(timeout: .now() + 5) == .success else {
-            return (false, false)
-        }
-        return (state.localApplied, state.sessionApplied)
-    }
-
     private func readAIWorldEntityRecord(ref: String) -> WorldEntityRecord? {
         let semaphore = DispatchSemaphore(value: 0)
         let worldContext = self.aiWorldContext
@@ -1789,40 +1947,9 @@ public final class EditorApplication: @unchecked Sendable {
         return state.record
     }
 
-    private func rawEntityID(fromSceneRef ref: String) -> UInt64? {
-        guard ref.hasPrefix("scene:") else { return nil }
-        return UInt64(ref.dropFirst("scene:".count))
-    }
-
     private func jsonObject<T: Encodable>(_ value: T) -> Any? {
         guard let data = try? JSONEncoder().encode(value) else { return nil }
         return try? JSONSerialization.jsonObject(with: data)
-    }
-
-    private func mcpExecutePlan(params: [String: Any]) -> [String: Any] {
-        guard let planDict = params["plan"] as? [String: Any],
-              let planData = try? JSONSerialization.data(withJSONObject: planDict),
-              let plan = try? JSONDecoder().decode(SceneEditPlan.self, from: planData)
-        else { return ["ok": false, "error": "invalid plan"] }
-        do {
-            let transaction = try SceneEditPlanExecutor().buildTransaction(
-                from: plan,
-                scene: scene.scene,
-                baseSceneRevision: nil,
-                approvalPolicy: .automatic
-            )
-            let result = try runPlanTransaction(
-                transaction,
-                capabilityContext: makeCapabilityInvocationContext(defaultSource: .system)
-            )
-            return [
-                "ok": true,
-                "summary": plan.summary,
-                "disposition": result.disposition.rawValue,
-            ]
-        } catch {
-            return ["ok": false, "error": error.localizedDescription]
-        }
     }
 
     /// Accumulates raw delta time and dispatches `EditorFrameStats` when the

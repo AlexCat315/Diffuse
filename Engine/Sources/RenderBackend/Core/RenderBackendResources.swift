@@ -14,6 +14,24 @@ struct GPUMesh {
 
 extension GPUMesh: @unchecked Sendable {}
 
+struct GPUDeformableMeshResource {
+    var mesh: GPUMesh
+    var revision: UInt64
+    var topologyRevision: UInt64
+    var vertexCount: Int
+    var triangleCount: Int
+}
+
+extension GPUDeformableMeshResource: @unchecked Sendable {}
+
+struct DeformableMeshUploadReport: Sendable, Equatable {
+    var meshCount: Int = 0
+    var vertexCount: Int = 0
+    var triangleCount: Int = 0
+    var uploadedBytes: UInt64 = 0
+    var rejectedMeshCount: Int = 0
+}
+
 /// Per-instance GPU resources (uniform buffer + bind group). One slot per draw call.
 struct InstanceResources {
     let uniformBuffer: GPUBuffer

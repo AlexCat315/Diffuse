@@ -19,6 +19,7 @@ Guava Engine is an AI-native 3D game and film engine written in Swift. These pag
 2. [Installation and quick start](getting-started.md)
 3. [Editor workflow](editor-workflow.md)
 4. [Architecture](architecture.md) and [module map](module-map.md)
+5. [Physics v2](physics-v2.md): fixed-step stages, the wheeled-vehicle API, and current boundaries.
 
 ## Project status
 

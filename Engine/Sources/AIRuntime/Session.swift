@@ -3,6 +3,7 @@ import Foundation
 import FoundationNetworking
 #endif
 import ContextMemory
+import CapabilityRuntime
 import IntentRuntime
 import ObservationBus
 import PerceptionRuntime
@@ -38,6 +39,8 @@ public enum SessionError: Error, CustomStringConvertible, LocalizedError, Sendab
     case malformedResponse(detail: String)
     case noPlanInResponse
     case planDecodingFailed(detail: String)
+    case inferenceAlreadyRunning
+    case inferenceCancelled
 
     public var description: String {
         switch self {
@@ -51,6 +54,10 @@ public enum SessionError: Error, CustomStringConvertible, LocalizedError, Sendab
             return "Session: model did not return a plan"
         case let .planDecodingFailed(detail):
             return "Session: plan decoding failed — \(detail)"
+        case .inferenceAlreadyRunning:
+            return "Session: another AI run is already active"
+        case .inferenceCancelled:
+            return "Session: AI run was cancelled"
         }
     }
 
@@ -78,6 +85,11 @@ public actor Session {
     /// BCP-47 locale of the most recent naturalLanguage signal (e.g. "zh-Hans", "ja", "fr").
     /// Used to instruct the model to match the user's language in summaries and entity names.
     private var currentLocale: String? = nil
+    private let capabilityRegistry: CapabilityRegistry
+    private let capabilityDraftStore: CapabilityDraftStore
+    private var capabilityExposureGeneration: UInt64 = 0
+    private var lastSubmittedExposureSnapshot: CapabilityExposureSnapshot?
+    private var activeInferenceID: UUID?
 
     private static let anthropicAPIVersion = "2023-06-01"
     private static let maxEntityPromptCount = 100
@@ -86,6 +98,8 @@ public actor Session {
         switch config.apiFormat {
         case .anthropic:
             return config.baseURL.appendingPathComponent("v1/messages")
+        case .openAIResponses:
+            return config.baseURL.appendingPathComponent("v1/responses")
         case .openAICompatible:
             return config.baseURL.appendingPathComponent("v1/chat/completions")
         }
@@ -96,7 +110,8 @@ public actor Session {
                 workflowContext: WorkflowContext? = nil,
                 urlSession: URLSession = .shared,
                 maxHistoryTurns: Int = 40,
-                initialWorldView: WorldView = WorldView()) {
+                initialWorldView: WorldView = WorldView(),
+                capabilityRegistry: CapabilityRegistry = .aiDefault) {
         self.id = id
         self.config = config
         self.workflowContext = workflowContext
@@ -104,6 +119,8 @@ public actor Session {
         self.worldView = initialWorldView
         self.conversationHistory = []
         self.maxHistoryTurns = maxHistoryTurns
+        self.capabilityRegistry = capabilityRegistry
+        self.capabilityDraftStore = CapabilityDraftStore(registry: capabilityRegistry)
     }
 
     public func setWorkflowContext(_ context: WorkflowContext?) {
@@ -220,6 +237,12 @@ public actor Session {
     /// `onProgress` is called with partial summary text as it streams in — use it to animate the UI.
     public func process(_ signal: Signal,
                         onProgress: (@Sendable (String) -> Void)? = nil) async throws -> Proposal {
+        guard activeInferenceID == nil else { throw SessionError.inferenceAlreadyRunning }
+        let runID = UUID()
+        activeInferenceID = runID
+        defer {
+            if activeInferenceID == runID { activeInferenceID = nil }
+        }
         switch signal {
         case let .naturalLanguage(text, locale):
             if !locale.isEmpty { currentLocale = locale }
@@ -237,7 +260,8 @@ public actor Session {
                 reasoning: plan.reasoning,
                 confidence: planConfidence(for: plan),
                 approvalPolicy: config.autoApprove ? .automatic : .requiresApproval,
-                toolUseID: toolUseID
+                toolUseID: toolUseID,
+                capabilityExposureSnapshot: lastSubmittedExposureSnapshot
             )
 
         case let .userCorrection(proposalID, acceptedStepIDs, rejectedStepIDs):
@@ -253,6 +277,14 @@ public actor Session {
         default:
             throw SessionError.unsupportedSignal(signal.kind)
         }
+    }
+
+    /// Invalidates the active run. In-flight network I/O may finish at the URL
+    /// layer, but its result can no longer create or submit drafts.
+    public func cancelActiveRun() async {
+        activeInferenceID = nil
+        lastSubmittedExposureSnapshot = nil
+        await capabilityDraftStore.removeAll()
     }
 
     /// Handles a userCorrection signal: records the partial outcome as a tool_result,
@@ -329,7 +361,8 @@ public actor Session {
             reasoning: plan.reasoning,
             confidence: planConfidence(for: plan),
             approvalPolicy: config.autoApprove ? .automatic : .requiresApproval,
-            toolUseID: newToolUseID
+            toolUseID: newToolUseID,
+            capabilityExposureSnapshot: lastSubmittedExposureSnapshot
         )
     }
 
@@ -370,7 +403,8 @@ public actor Session {
             reasoning: plan.reasoning,
             confidence: planConfidence(for: plan),
             approvalPolicy: config.autoApprove ? .automatic : .requiresApproval,
-            toolUseID: toolUseID
+            toolUseID: toolUseID,
+            capabilityExposureSnapshot: lastSubmittedExposureSnapshot
         )
     }
 
@@ -506,57 +540,113 @@ public actor Session {
     // MARK: - Inference
 
     private func infer(onProgress: (@Sendable (String) -> Void)? = nil) async throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
+        guard let runID = activeInferenceID else { throw SessionError.inferenceCancelled }
+        try ensureActive(runID)
+        lastSubmittedExposureSnapshot = nil
+        await capabilityDraftStore.removeAll()
         if let mem = contextMemory {
             cachedMemoryView = await mem.symbolicView(budget: 20)
         }
 #if canImport(ObjectiveC)
         if let onProgress {
-            return try await inferStreamingLoop(onProgress: onProgress)
+            return try await inferStreamingLoop(runID: runID, onProgress: onProgress)
         }
 #endif
-        return try await inferNonStreamingLoop()
+        return try await inferNonStreamingLoop(runID: runID)
     }
 
-    private func inferNonStreamingLoop() async throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
+    private func inferNonStreamingLoop(runID: UUID) async throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
         var extraMessages: [[String: Any]] = []
         var findCallsRemaining = 3
+        var toolCallsRemaining = 24
+        var parameterRepairsRemaining = 2
+        var snapshot = initialCapabilitySnapshot()
         while true {
-            let body = requestBody(extraMessages: extraMessages)
+            try ensureActive(runID)
+            guard toolCallsRemaining > 0 else { throw SessionError.noPlanInResponse }
+            toolCallsRemaining -= 1
+            let body = requestBody(extraMessages: extraMessages, capabilitySnapshot: snapshot)
             let data = try await post(body)
+            try ensureActive(runID)
             let call = try parseRawToolCall(from: data)
             if call.name == "execute_edit_plan" {
                 return try decodePlan(from: call)
-            } else if call.name == "find_entities", findCallsRemaining > 0 {
+            } else if call.name == "find_entities" {
+                guard findCallsRemaining > 0 else { throw SessionError.noPlanInResponse }
                 findCallsRemaining -= 1
                 let resultJSON = findEntitiesResult(input: call.input)
                 extraMessages += toolCallExchangeMessages(call: call, resultJSON: resultJSON)
             } else {
-                throw SessionError.noPlanInResponse
+                do {
+                    switch try await handleCapabilityToolCall(call, snapshot: snapshot) {
+                    case let .exchange(resultJSON, nextSnapshot):
+                        snapshot = nextSnapshot
+                        extraMessages += toolCallExchangeMessages(call: call, resultJSON: resultJSON)
+                    case let .completed(plan, inputJSON, submittedSnapshot):
+                        lastSubmittedExposureSnapshot = submittedSnapshot
+                        return (plan, call.id, inputJSON)
+                    }
+                } catch {
+                    guard parameterRepairsRemaining > 0,
+                          let resultJSON = repairableToolErrorJSON(error) else { throw error }
+                    parameterRepairsRemaining -= 1
+                    extraMessages += toolCallExchangeMessages(call: call, resultJSON: resultJSON)
+                }
             }
         }
     }
 
 #if canImport(ObjectiveC)
-    private func inferStreamingLoop(onProgress: @escaping @Sendable (String) -> Void) async throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
+    private func inferStreamingLoop(runID: UUID,
+                                    onProgress: @escaping @Sendable (String) -> Void) async throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
         var extraMessages: [[String: Any]] = []
         var findCallsRemaining = 3
+        var toolCallsRemaining = 24
+        var parameterRepairsRemaining = 2
+        var snapshot = initialCapabilitySnapshot()
         while true {
-            let call = try await streamOneTurn(extraMessages: extraMessages, onProgress: onProgress)
+            try ensureActive(runID)
+            guard toolCallsRemaining > 0 else { throw SessionError.noPlanInResponse }
+            toolCallsRemaining -= 1
+            let call = try await streamOneTurn(extraMessages: extraMessages,
+                                               capabilitySnapshot: snapshot,
+                                               onProgress: onProgress)
+            try ensureActive(runID)
             if call.name == "execute_edit_plan" {
                 return try decodePlan(from: call)
-            } else if call.name == "find_entities", findCallsRemaining > 0 {
+            } else if call.name == "find_entities" {
+                guard findCallsRemaining > 0 else { throw SessionError.noPlanInResponse }
                 findCallsRemaining -= 1
                 let resultJSON = findEntitiesResult(input: call.input)
                 extraMessages += toolCallExchangeMessages(call: call, resultJSON: resultJSON)
             } else {
-                throw SessionError.noPlanInResponse
+                do {
+                    switch try await handleCapabilityToolCall(call, snapshot: snapshot) {
+                    case let .exchange(resultJSON, nextSnapshot):
+                        snapshot = nextSnapshot
+                        extraMessages += toolCallExchangeMessages(call: call, resultJSON: resultJSON)
+                    case let .completed(plan, inputJSON, submittedSnapshot):
+                        lastSubmittedExposureSnapshot = submittedSnapshot
+                        return (plan, call.id, inputJSON)
+                    }
+                } catch {
+                    guard parameterRepairsRemaining > 0,
+                          let resultJSON = repairableToolErrorJSON(error) else { throw error }
+                    parameterRepairsRemaining -= 1
+                    extraMessages += toolCallExchangeMessages(call: call, resultJSON: resultJSON)
+                }
             }
         }
     }
 
     private func streamOneTurn(extraMessages: [[String: Any]],
+                               capabilitySnapshot: CapabilityExposureSnapshot,
                                onProgress: @escaping @Sendable (String) -> Void) async throws -> RawToolCall {
-        let request = try makeInferenceRequest(body: requestBody(extraMessages: extraMessages), stream: true)
+        let request = try makeInferenceRequest(
+            body: requestBody(extraMessages: extraMessages,
+                              capabilitySnapshot: capabilitySnapshot),
+            stream: true
+        )
 
         // Retry only the connect + status-check phase; once a 2xx stream is open we consume it.
         let stream = try await withRetry { _ -> URLSession.AsyncBytes in
@@ -602,7 +692,7 @@ public actor Session {
                           delta["type"] as? String == "input_json_delta",
                           let fragment = delta["partial_json"] as? String {
                     inputJSONAccumulator += fragment
-                    if toolName == "execute_edit_plan",
+                    if (toolName == "execute_edit_plan" || toolName == CapabilityToolset.submitToolName),
                        let partial = extractPartialSummary(from: inputJSONAccumulator),
                        partial != lastReportedSummary {
                         lastReportedSummary = partial
@@ -624,7 +714,7 @@ public actor Session {
                         }
                         if let fragment = function["arguments"] as? String {
                             inputJSONAccumulator += fragment
-                            if toolName == "execute_edit_plan",
+                            if (toolName == "execute_edit_plan" || toolName == CapabilityToolset.submitToolName),
                                let partial = extractPartialSummary(from: inputJSONAccumulator),
                                partial != lastReportedSummary {
                                 lastReportedSummary = partial
@@ -632,6 +722,34 @@ public actor Session {
                             }
                         }
                     }
+                }
+            case .openAIResponses:
+                let type = event["type"] as? String ?? ""
+                if type == "response.output_item.added",
+                   let item = event["item"] as? [String: Any],
+                   item["type"] as? String == "function_call" {
+                    toolUseID = (item["call_id"] as? String) ?? (item["id"] as? String) ?? toolUseID
+                    toolName = (item["name"] as? String) ?? toolName
+                    if inputJSONAccumulator.isEmpty,
+                       let arguments = item["arguments"] as? String {
+                        inputJSONAccumulator = arguments
+                    }
+                } else if type == "response.function_call_arguments.delta",
+                          let fragment = event["delta"] as? String {
+                    inputJSONAccumulator += fragment
+                } else if type == "response.output_item.done",
+                          inputJSONAccumulator.isEmpty,
+                          let item = event["item"] as? [String: Any],
+                          item["type"] as? String == "function_call" {
+                    toolUseID = (item["call_id"] as? String) ?? (item["id"] as? String) ?? toolUseID
+                    toolName = (item["name"] as? String) ?? toolName
+                    inputJSONAccumulator = (item["arguments"] as? String) ?? inputJSONAccumulator
+                }
+                if (toolName == "execute_edit_plan" || toolName == CapabilityToolset.submitToolName),
+                   let partial = extractPartialSummary(from: inputJSONAccumulator),
+                   partial != lastReportedSummary {
+                    lastReportedSummary = partial
+                    onProgress(partial)
                 }
             }
         }
@@ -645,6 +763,12 @@ public actor Session {
         return RawToolCall(name: toolName, id: toolUseID, inputJSON: inputJSONAccumulator, input: inputObject)
     }
 #endif
+
+    private func ensureActive(_ runID: UUID) throws {
+        guard !Task.isCancelled, activeInferenceID == runID else {
+            throw SessionError.inferenceCancelled
+        }
+    }
 
     private func extractPartialSummary(from json: String) -> String? {
         guard let keyRange = json.range(of: "\"summary\":\"") else { return nil }
@@ -660,15 +784,18 @@ public actor Session {
         return result.isEmpty ? nil : result
     }
 
-    private func requestBody(extraMessages: [[String: Any]] = []) -> [String: Any] {
+    private func requestBody(extraMessages: [[String: Any]] = [],
+                             capabilitySnapshot: CapabilityExposureSnapshot? = nil) -> [String: Any] {
         let allMessages = buildMessages() + extraMessages
+        let snapshot = capabilitySnapshot ?? initialCapabilitySnapshot()
         switch config.apiFormat {
         case .anthropic:
             return [
                 "model": config.model,
                 "max_tokens": config.maxTokens,
                 "system": systemPrompt(),
-                "tools": [EditPlanTool.definition(), FindEntitiesTool.definition()],
+                "tools": CapabilityToolset.anthropicTools(snapshot: snapshot,
+                                                           registry: capabilityRegistry),
                 "tool_choice": ["type": "any"],
                 "messages": allMessages,
             ]
@@ -678,9 +805,20 @@ public actor Session {
             return [
                 "model": config.model,
                 "max_tokens": config.maxTokens,
-                "tools": [EditPlanTool.openAIDefinition(), FindEntitiesTool.openAIDefinition()],
+                "tools": CapabilityToolset.openAITools(snapshot: snapshot,
+                                                        registry: capabilityRegistry),
                 "tool_choice": "required",
                 "messages": messages,
+            ]
+        case .openAIResponses:
+            return [
+                "model": config.model,
+                "max_output_tokens": config.maxTokens,
+                "instructions": systemPrompt(),
+                "tools": CapabilityToolset.openAIResponsesTools(snapshot: snapshot,
+                                                                  registry: capabilityRegistry),
+                "tool_choice": "required",
+                "input": allMessages,
             ]
         }
     }
@@ -708,6 +846,13 @@ public actor Session {
                                         "type": "function",
                                         "function": ["name": name, "arguments": inputJSON]]],
                     ])
+                case .openAIResponses:
+                    messages.append([
+                        "type": "function_call",
+                        "call_id": toolUseID,
+                        "name": name,
+                        "arguments": inputJSON,
+                    ])
                 }
 
             case let .toolResult(toolUseID, content):
@@ -718,6 +863,12 @@ public actor Session {
                     ]])
                 case .openAICompatible:
                     messages.append(["role": "tool", "tool_call_id": toolUseID, "content": content])
+                case .openAIResponses:
+                    messages.append([
+                        "type": "function_call_output",
+                        "call_id": toolUseID,
+                        "output": content,
+                    ])
                 }
             }
         }
@@ -729,8 +880,10 @@ public actor Session {
 
         parts.append("""
         You are the AI scene-editing core of Guava, a native real-time game and cinematic engine.
-        Translate the user's natural-language request into a structured scene edit plan \
-        by calling the `execute_edit_plan` tool. Always call the tool — never respond with plain text.
+        Discover needed abilities with `search_capabilities`, call the returned exact capability \
+        tools to create write drafts, then finish with `submit_plan` using the ordered draft IDs. \
+        Capability tool calls never apply writes directly. Always finish with `submit_plan` — never \
+        respond with plain text.
         """)
 
         var entitySection = "Scene entities (JSON):\n\(entityIndexJSON())"
@@ -840,19 +993,18 @@ public actor Session {
         `materialEmissive` fields show the current PBR values when non-default. \
         Prefer set_material over set_mesh_color for precise or multi-channel appearance control; \
         use set_mesh_color only for a simple RGB tint when no PBR properties are needed.
-        - If the user asks a general question (capabilities, greetings, clarifications) rather \
-        than requesting a scene change, call the tool with an empty steps array and put your \
-        conversational reply in the summary field.
+        - If the user asks a general question rather than requesting a scene change, call \
+        submit_plan with an empty draft_ids array and put the reply in summary.
         - For set_audio_source: `audio_pitch` (1.0=normal, 2.0=one octave up, 0.5=one octave down) \
         and `audio_spatial_blend` (0=fully 2D, 1=fully 3D positional) are shown in `audioPitch` \
         and `audioSpatialBlend` only when non-default (pitch≠1.0 or blend>0). Omitting any \
         field preserves the current value.
-        - Use find_entities (name substring, kind, component, or spatial proximity) to locate \
+        - Use the scene.find_entities read capability (name substring, kind, component, or spatial proximity) to locate \
         entities whose IDs are not visible in the scene list. The `component` parameter accepts \
         tags like "light", "camera", "rigidbody", "collider", "audio_source", "animation", "script", \
         "constraint". Use `near_position` + `near_radius` (metres) to find entities near a given \
         world-space point (e.g. to select all lights near the player spawn). \
-        After find_entities returns its result, call execute_edit_plan with the discovered IDs.
+        After it returns, call exact write capability tools with the discovered IDs, then submit_plan.
         """)
 
         return parts.joined(separator: "\n\n")
@@ -901,7 +1053,7 @@ public actor Session {
         guard total > Self.maxEntityPromptCount else { return nil }
         return "Note: scene has \(total) entities; only \(Self.maxEntityPromptCount) are shown above " +
                "(selected entities and their neighbours are prioritised). " +
-               "Use the find_entities tool to search for entities by name or kind before calling execute_edit_plan."
+               "Use the scene.find_entities capability tool to search for entities by name or kind."
     }
 
     nonisolated func compactDict(for e: WorldEntityRecord) -> [String: Any] {
@@ -1063,7 +1215,7 @@ public actor Session {
         case .anthropic:
             request.setValue(config.apiKey, forHTTPHeaderField: "x-api-key")
             request.setValue(Self.anthropicAPIVersion, forHTTPHeaderField: "anthropic-version")
-        case .openAICompatible:
+        case .openAIResponses, .openAICompatible:
             request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
         }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -1128,6 +1280,173 @@ public actor Session {
 
     // MARK: - Agentic loop helpers
 
+    private enum CapabilityToolHandling {
+        case exchange(resultJSON: String, snapshot: CapabilityExposureSnapshot)
+        case completed(plan: SceneEditPlan,
+                       inputJSON: String,
+                       snapshot: CapabilityExposureSnapshot)
+    }
+
+    private func initialCapabilitySnapshot() -> CapabilityExposureSnapshot {
+        capabilityExposureGeneration &+= 1
+        let coreReadIDs: Set<String> = [
+            "scene.get_entities",
+            "scene.get_selection",
+            "scene.find_entities",
+        ]
+        return capabilityRegistry.exposureSnapshot(
+            policy: CapabilityExposurePolicy(activeReleasePhase: .stable,
+                                             allowedDomains: ["scene"],
+                                             maximumCapabilities: 16),
+            sceneRevision: worldView.sceneRevision ?? 0,
+            generation: capabilityExposureGeneration,
+            preferredCapabilityIDs: Array(coreReadIDs).sorted(),
+            includedCapabilityIDs: coreReadIDs
+        )
+    }
+
+    private func handleCapabilityToolCall(_ call: RawToolCall,
+                                          snapshot: CapabilityExposureSnapshot) async throws
+        -> CapabilityToolHandling {
+        let revision = worldView.sceneRevision ?? 0
+
+        let contract: CapabilityContract
+        switch call.name {
+        case CapabilityToolset.searchToolName:
+            guard let value = capabilityRegistry.descriptor(for: "system.search_capabilities")?.contract else {
+                throw CapabilityDraftError.unknownTool(call.name)
+            }
+            contract = value
+        case CapabilityToolset.submitToolName:
+            guard let value = capabilityRegistry.descriptor(for: "system.submit_plan")?.contract else {
+                throw CapabilityDraftError.unknownTool(call.name)
+            }
+            contract = value
+        default:
+            guard let value = snapshot.contract(forToolName: call.name) else {
+                throw CapabilityDraftError.unknownTool(call.name)
+            }
+            contract = value
+        }
+        do {
+            try JSONSchemaValidator.validate(data: Data(call.inputJSON.utf8),
+                                             against: contract.inputSchema)
+        } catch {
+            throw CapabilityDraftError.invalidInput(String(describing: error))
+        }
+
+        if call.name == CapabilityToolset.searchToolName {
+            let query = call.input["query"] as? String ?? ""
+            let domain = call.input["domain"] as? String
+            let requestedAccess = (call.input["access"] as? String).flatMap(CapabilityAccess.init(rawValue:))
+            let policy = CapabilityExposurePolicy(activeReleasePhase: .stable,
+                                                  allowedDomains: domain.map { [$0] },
+                                                  maximumCapabilities: 64)
+            let candidates = capabilityRegistry.searchContracts(query: query, policy: policy, limit: 64)
+                .filter { !$0.id.hasPrefix("system.") }
+                .filter { requestedAccess == nil || $0.access == requestedAccess }
+            let coreReadIDs: Set<String> = [
+                "scene.get_entities", "scene.get_selection", "scene.find_entities",
+            ]
+            let existingIDs = snapshot.contracts.map(\.id)
+            let existingSet = Set(existingIDs)
+            let available = max(0, 16 - existingIDs.count)
+            let additions = candidates.filter { !existingSet.contains($0.id) }.prefix(available)
+            let preferredIDs = existingIDs + additions.map(\.id)
+            let included = coreReadIDs.union(preferredIDs)
+            capabilityExposureGeneration &+= 1
+            var nextSnapshot = capabilityRegistry.exposureSnapshot(
+                policy: CapabilityExposurePolicy(activeReleasePhase: .stable,
+                                                 allowedDomains: ["scene"],
+                                                 maximumCapabilities: 16),
+                sceneRevision: revision,
+                generation: capabilityExposureGeneration,
+                preferredCapabilityIDs: preferredIDs,
+                includedCapabilityIDs: included
+            )
+            // Searching expands the current authority set. Keeping the snapshot
+            // identity means Drafts created before a later search remain valid.
+            nextSnapshot.id = snapshot.id
+            nextSnapshot.createdAt = snapshot.createdAt
+            let activated = candidates.filter { nextSnapshot.contract(id: $0.id) != nil }
+            return .exchange(resultJSON: CapabilityToolset.searchResult(contracts: activated),
+                             snapshot: nextSnapshot)
+        }
+
+        if call.name == CapabilityToolset.submitToolName {
+            let summary = call.input["summary"] as? String ?? ""
+            let reasoning = call.input["reasoning"] as? String
+            let rawIDs = call.input["draft_ids"] as? [Any] ?? []
+            let ids = rawIDs.compactMap { ($0 as? String).flatMap(UUID.init(uuidString:)) }
+            guard ids.count == rawIDs.count else {
+                throw SessionError.planDecodingFailed(detail: "submit_plan contains an invalid draft id")
+            }
+            let drafts = try await capabilityDraftStore.validatedDrafts(
+                ids: ids,
+                snapshot: snapshot,
+                currentSceneRevision: revision
+            )
+            let plan = try SceneCapabilityDraftLowering.plan(summary: summary,
+                                                             reasoning: reasoning,
+                                                             drafts: drafts)
+            let planData = try JSONEncoder().encode(plan)
+            guard let inputJSON = String(data: planData, encoding: .utf8) else {
+                throw SessionError.planDecodingFailed(detail: "could not encode submitted plan")
+            }
+            await capabilityDraftStore.consume(ids: ids)
+            return .completed(plan: plan, inputJSON: inputJSON, snapshot: snapshot)
+        }
+
+        if contract.access == .read {
+            let result: String
+            switch contract.id {
+            case "scene.find_entities":
+                result = findEntitiesResult(input: call.input)
+            case "scene.get_entities":
+                result = entityIndexJSON()
+            case "scene.get_selection":
+                let object: [String: Any] = ["selected": worldView.selectedEntityRefs]
+                let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+                result = String(data: data, encoding: .utf8) ?? "{}"
+            default:
+                throw SessionError.malformedResponse(
+                    detail: "no read adapter is registered for \(contract.id)"
+                )
+            }
+            return .exchange(resultJSON: result, snapshot: snapshot)
+        }
+
+        let draft = try await capabilityDraftStore.createDraft(
+            toolName: call.name,
+            input: Data(call.inputJSON.utf8),
+            snapshot: snapshot,
+            currentSceneRevision: revision
+        )
+        let response: [String: Any] = [
+            "draft_id": draft.id.uuidString,
+            "capability_id": draft.capabilityID,
+            "status": "validated_not_applied",
+        ]
+        let responseData = try JSONSerialization.data(withJSONObject: response, options: [.sortedKeys])
+        return .exchange(resultJSON: String(data: responseData, encoding: .utf8) ?? "{}",
+                         snapshot: snapshot)
+    }
+
+    private func repairableToolErrorJSON(_ error: Error) -> String? {
+        guard let draftError = error as? CapabilityDraftError,
+              case let .invalidInput(reason) = draftError else { return nil }
+        let object: [String: Any] = [
+            "error": "invalid_parameters",
+            "detail": reason,
+            "retryable": true,
+            "repairs_remaining_are_host_limited": true,
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]) else {
+            return nil
+        }
+        return String(data: data, encoding: .utf8)
+    }
+
     /// Intermediate result of one API round-trip: tool name, ID, and raw input.
     private struct RawToolCall {
         var name: String
@@ -1165,6 +1484,17 @@ public actor Session {
                   let name = function["name"] as? String,
                   let argsString = function["arguments"] as? String
             else { throw SessionError.noPlanInResponse }
+            let input = (try? JSONSerialization.jsonObject(with: Data(argsString.utf8))) as? [String: Any] ?? [:]
+            return RawToolCall(name: name, id: id, inputJSON: argsString, input: input)
+
+        case .openAIResponses:
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let output = json["output"] as? [[String: Any]],
+                  let call = output.first(where: { $0["type"] as? String == "function_call" }),
+                  let name = call["name"] as? String,
+                  let argsString = call["arguments"] as? String
+            else { throw SessionError.noPlanInResponse }
+            let id = (call["call_id"] as? String) ?? (call["id"] as? String) ?? UUID().uuidString
             let input = (try? JSONSerialization.jsonObject(with: Data(argsString.utf8))) as? [String: Any] ?? [:]
             return RawToolCall(name: name, id: id, inputJSON: argsString, input: input)
         }
@@ -1348,6 +1678,16 @@ public actor Session {
                 "role": "tool", "tool_call_id": call.id, "content": resultJSON,
             ]
             return [assistantMsg, resultMsg]
+        case .openAIResponses:
+            return [
+                ["type": "function_call",
+                 "call_id": call.id,
+                 "name": call.name,
+                 "arguments": call.inputJSON],
+                ["type": "function_call_output",
+                 "call_id": call.id,
+                 "output": resultJSON],
+            ]
         }
     }
 

@@ -1,4 +1,5 @@
 import Foundation
+import CapabilityRuntime
 import SceneRuntime
 import ScriptRuntime
 import IntentRuntime
@@ -13,6 +14,8 @@ public enum SceneEditPlanExecutorError: Error, CustomStringConvertible, Sendable
     case unknownLightType(String)
     case unknownMotionType(String)
     case unknownColliderShape(String)
+    case capabilityUnavailable(String)
+    case invalidCapabilityInput(capabilityID: String, reason: String)
 
     public var description: String {
         switch self {
@@ -31,7 +34,11 @@ public enum SceneEditPlanExecutorError: Error, CustomStringConvertible, Sendable
         case let .unknownMotionType(s):
             return "unknown motion type '\(s)' — expected 'static', 'dynamic', or 'kinematic'"
         case let .unknownColliderShape(s):
-            return "unknown collider shape '\(s)' — expected 'box', 'sphere', 'capsule', 'mesh', or 'convex'"
+            return "unknown collider shape '\(s)' — expected 'box', 'sphere', 'capsule', 'cylinder', 'heightField', 'mesh', or 'convex'"
+        case let .capabilityUnavailable(id):
+            return "capability '\(id)' is not registered for AI exposure"
+        case let .invalidCapabilityInput(id, reason):
+            return "invalid input for capability '\(id)': \(reason)"
         }
     }
 }
@@ -39,8 +46,8 @@ public enum SceneEditPlanExecutorError: Error, CustomStringConvertible, Sendable
 /// Converts a `SceneEditPlan` (decoded from Claude) into an executable `TransactionIR`.
 ///
 /// Each `SceneEditStep` produces one or more `SceneMutation`s. The resulting
-/// `TransactionIR` has `intent: nil` and `provenance: .proposal`, signalling to the
-/// coordinator that it came from an AI planner and bypasses the capability registry.
+/// `TransactionIR` has `intent: nil`, explicit capability invocation records, and
+/// `provenance: .proposal`. The coordinator validates those records directly.
 public struct SceneEditPlanExecutor: Sendable {
     public init() {}
 
@@ -57,26 +64,202 @@ public struct SceneEditPlanExecutor: Sendable {
         from plan: SceneEditPlan,
         scene: SceneRuntime,
         baseSceneRevision: UInt64? = nil,
-        approvalPolicy: TransactionApprovalPolicy = .automatic
+        approvalPolicy: TransactionApprovalPolicy = .automatic,
+        exposureSnapshot: CapabilityExposureSnapshot? = nil,
+        registry: CapabilityRegistry = .aiDefault
     ) throws -> TransactionIR {
         var mutations: [SceneMutation] = []
+        var invocations: [CapabilityInvocationRecord] = []
+        var assertions: [TransactionVerificationAssertion] = []
+        let snapshotID = exposureSnapshot?.id ?? UUID()
         // Shadow copy — each step reads the post-previous-step state so multi-step
         // plans that touch the same component (e.g. set_collider_trigger then
         // set_collider_sphere_radius) don't silently overwrite each other's changes.
         var localScene = scene
         for step in plan.steps {
-            let stepMutations = try buildMutations(step, scene: localScene)
+            let descriptor = registry.descriptor(for: step.op.capabilityID)
+            guard let descriptor, descriptor.isAIExposed else {
+                throw SceneEditPlanExecutorError.capabilityUnavailable(step.op.capabilityID)
+            }
+            let contract: CapabilityContract
+            if let exposureSnapshot {
+                guard let exposed = exposureSnapshot.contract(id: step.op.capabilityID),
+                      exposed.version == descriptor.version,
+                      exposed.schemaHash == descriptor.contract.schemaHash else {
+                    throw SceneEditPlanExecutorError.capabilityUnavailable(step.op.capabilityID)
+                }
+                contract = exposed
+            } else {
+                contract = descriptor.contract
+            }
+            // SceneEditPlan is the compatibility transport while callers move
+            // to direct capability Drafts. Preserve its established diagnostic
+            // errors, but discard the legacy mutations: authority and actual
+            // operations still come from strict validation + typed prepare.
+            if let compatibilityError = legacyValidationError(for: step, scene: localScene) {
+                throw compatibilityError
+            }
+            let input = try canonicalCapabilityInput(for: step)
+            do {
+                try JSONSchemaValidator.validate(data: input.data, against: contract.inputSchema)
+            } catch {
+                throw SceneEditPlanExecutorError.invalidCapabilityInput(
+                    capabilityID: contract.id,
+                    reason: String(describing: error)
+                )
+            }
+            let stepMutations: [SceneMutation]
+            let stepAssertions: [TransactionVerificationAssertion]
+            if let registration = BuiltInTypedCapabilityCatalog.registration(for: contract.id) {
+                guard registration.contract.schemaHash == contract.schemaHash else {
+                    throw SceneEditPlanExecutorError.capabilityUnavailable(contract.id)
+                }
+                do {
+                    let prepared = try registration.prepare(
+                        validatedInput: input.data,
+                        context: preparationContext(for: localScene)
+                    )
+                    stepMutations = try prepared.operations.map { operation in
+                        guard case let .scene(mutation) = operation else {
+                            throw SceneEditPlanExecutorError.invalidCapabilityInput(
+                                capabilityID: contract.id,
+                                reason: "a scene capability prepared a non-scene operation"
+                            )
+                        }
+                        return mutation
+                    }
+                    stepAssertions = prepared.assertions
+                } catch let error as SceneEditPlanExecutorError {
+                    throw error
+                } catch {
+                    throw SceneEditPlanExecutorError.invalidCapabilityInput(
+                        capabilityID: contract.id,
+                        reason: String(describing: error)
+                    )
+                }
+            } else {
+                stepMutations = try buildMutations(step, scene: localScene)
+                stepAssertions = verificationAssertions(for: stepMutations)
+            }
             mutations.append(contentsOf: stepMutations)
+            assertions.append(contentsOf: stepAssertions)
+            invocations.append(CapabilityInvocationRecord(
+                capabilityID: contract.id,
+                capabilityVersion: contract.version,
+                schemaHash: contract.schemaHash,
+                sourcePluginID: contract.source.pluginID,
+                inputDigest: contract.inputDigest(input.data),
+                argumentNames: input.argumentNames,
+                targetReferences: step.entityRef.map { [$0] } ?? [],
+                access: contract.access,
+                exposureSnapshotID: snapshotID
+            ))
             applyToLocalScene(&localScene, mutations: stepMutations)
+        }
+        let expectedCreatedCount = mutations.reduce(into: 0) { count, mutation in
+            switch mutation {
+            case .spawnImportedMeshEntity, .spawnEmptyEntity, .spawnLightEntity, .spawnCameraEntity,
+                 .duplicateEntity, .duplicateEntityWithOffset:
+                count += 1
+            default:
+                break
+            }
+        }
+        if expectedCreatedCount > 0 {
+            assertions.append(.createdEntityCount(expectedCreatedCount))
         }
         return TransactionIR(
             intent: nil,
             summary: plan.summary,
             operations: mutations.map(TransactionOperation.scene),
+            capabilityInvocations: invocations,
+            verificationAssertions: assertions + (baseSceneRevision.map {
+                [.sceneRevisionAdvanced(from: $0)]
+            } ?? []),
             baseRevisions: TransactionBaseRevisions(sceneRevision: baseSceneRevision),
             approvalPolicy: approvalPolicy,
             provenance: .proposal
         )
+    }
+
+    private func preparationContext(for scene: SceneRuntime) -> CapabilityPreparationContext {
+        CapabilityPreparationContext(
+            sceneRevision: scene.snapshot.revision,
+            entities: scene.entities().map { entity in
+                let transform = scene.localTransform(for: entity).flatMap { local in
+                    let matrix = local.matrix
+                    return CapabilityPreparationTransform(columnMajorMatrix: [
+                        matrix.columns.0.x, matrix.columns.0.y,
+                        matrix.columns.0.z, matrix.columns.0.w,
+                        matrix.columns.1.x, matrix.columns.1.y,
+                        matrix.columns.1.z, matrix.columns.1.w,
+                        matrix.columns.2.x, matrix.columns.2.y,
+                        matrix.columns.2.z, matrix.columns.2.w,
+                        matrix.columns.3.x, matrix.columns.3.y,
+                        matrix.columns.3.z, matrix.columns.3.w,
+                    ])
+                }
+                var componentTypes: [String] = []
+                if transform != nil { componentTypes.append("LocalTransform") }
+                if scene.hasComponent(LightComponent.self, for: entity) {
+                    componentTypes.append("LightComponent")
+                }
+                return CapabilityPreparationEntity(
+                    reference: "scene:\(entity.rawValue)",
+                    componentTypes: componentTypes,
+                    localTransform: transform
+                )
+            }
+        )
+    }
+
+    private func verificationAssertions(
+        for mutations: [SceneMutation]
+    ) -> [TransactionVerificationAssertion] {
+        var assertions: [TransactionVerificationAssertion] = []
+        for mutation in mutations {
+            switch mutation {
+            case .spawnImportedMeshEntity, .spawnEmptyEntity, .spawnLightEntity, .spawnCameraEntity,
+                 .duplicateEntity, .duplicateEntityWithOffset:
+                break
+            case let .deleteEntity(entityID):
+                assertions.append(.deletedEntity(entityID))
+                assertions.append(.entityIsAbsent(entityID))
+            default:
+                if let entityID = mutation.entityID {
+                    assertions.append(.entityExists(entityID))
+                }
+            }
+        }
+        return assertions
+    }
+
+    private func legacyValidationError(
+        for step: SceneEditStep,
+        scene: SceneRuntime
+    ) -> SceneEditPlanExecutorError? {
+        do {
+            _ = try buildMutations(step, scene: scene)
+            return nil
+        } catch let error as SceneEditPlanExecutorError {
+            return error
+        } catch {
+            return nil
+        }
+    }
+
+    private func canonicalCapabilityInput(for step: SceneEditStep) throws
+        -> (data: Data, argumentNames: [String]) {
+        let encoded = try JSONEncoder().encode(step)
+        guard var object = try JSONSerialization.jsonObject(with: encoded) as? [String: Any] else {
+            throw SceneEditPlanExecutorError.invalidCapabilityInput(
+                capabilityID: step.op.capabilityID,
+                reason: "input is not a JSON object"
+            )
+        }
+        object.removeValue(forKey: "op")
+        let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+        return (data, object.keys.sorted())
     }
 
     /// Applies the component-level side-effects of `mutations` to `scene` so that subsequent
@@ -85,6 +268,11 @@ public struct SceneEditPlanExecutor: Sendable {
     private func applyToLocalScene(_ scene: inout SceneRuntime, mutations: [SceneMutation]) {
         for m in mutations {
             switch m {
+            case let .deleteEntity(rawID):
+                _ = scene.destroyEntity(entityID(fromRaw: rawID))
+            case let .setSceneName(rawID, value):
+                _ = scene.setComponent(SceneNameComponent(value: value),
+                                       for: entityID(fromRaw: rawID))
             case let .setCollider(rawID, collider):
                 _ = scene.setComponent(collider, for: entityID(fromRaw: rawID))
             case let .setRigidBody(rawID, body):
@@ -166,7 +354,7 @@ public struct SceneEditPlanExecutor: Sendable {
             if let pos = simd3(step.position) {
                 transform.matrix.columns.3 = SIMD4<Float>(pos, 1)
             }
-            if let euler = step.eulerDegrees {
+            if let euler = step.eulerDegrees, euler.count >= 3 {
                 let rot = rotationMatrix(eulerXYZDegrees: SIMD3(euler[0], euler[1], euler[2]))
                 // Preserve scale, replace rotation
                 let currentScale = extractScale(transform.matrix)

@@ -49,6 +49,7 @@ public enum TransactionExecutorError: Error, CustomStringConvertible {
     case invalidEntity(UInt64)
     case missingComponent(entityID: UInt64, type: String)
     case assetLoadFailed(path: String, message: String)
+    case verificationFailed(String)
 
     public var description: String {
         switch self {
@@ -72,6 +73,8 @@ public enum TransactionExecutorError: Error, CustomStringConvertible {
             return "missing component \(type) on entity \(entityID)"
         case let .assetLoadFailed(path, message):
             return "asset load failed at \(path): \(message)"
+        case let .verificationFailed(message):
+            return "transaction verification failed: \(message)"
         }
     }
 }
@@ -130,11 +133,17 @@ public struct TransactionExecutor {
                                         deletedEntityIDs: result.deletedEntityIDs,
                                         sceneRevision: result.sceneRevision,
                                         sequenceRevisionID: result.sequenceRevisionID,
-                                        assetEntryCount: result.assetEntryCount)
+                                        assetEntryCount: result.assetEntryCount,
+                                        mutationSummaries: result.edit.mutationSummaries)
     }
 
     public func apply(_ transaction: TransactionIR,
                       to context: inout TransactionExecutionContext) throws -> TransactionApplyResult {
+        // SceneRuntime and SequenceDocument are value snapshots. Keeping the
+        // originals here makes post-apply assertion failure atomic for the
+        // domains AI is allowed to mutate.
+        let originalScene = context.sceneRuntime
+        let originalSequence = context.sequenceDocument
         do {
             try validate(transaction, against: context)
 
@@ -240,6 +249,9 @@ public struct TransactionExecutor {
                                                 assetEntryCount: assetEntryCount,
                                                 edit: edit,
                                                 worldEvents: derivedWorldEvents)
+            try verify(transaction.verificationAssertions,
+                       result: result,
+                       context: context)
             try publishSuccessEvents(for: transaction,
                                      result: result,
                                      sceneOps: sceneOps,
@@ -247,8 +259,51 @@ public struct TransactionExecutor {
                                      context: context)
             return result
         } catch {
+            context.sceneRuntime = originalScene
+            context.sequenceDocument = originalSequence
             try? publishFailureEvent(for: transaction, error: error, context: context)
             throw error
+        }
+    }
+
+    private func verify(_ assertions: [TransactionVerificationAssertion],
+                        result: TransactionApplyResult,
+                        context: TransactionExecutionContext) throws {
+        for assertion in assertions {
+            switch assertion {
+            case let .entityExists(rawID):
+                guard let scene = context.sceneRuntime,
+                      scene.contains(entityID(fromRaw: rawID)) else {
+                    throw TransactionExecutorError.verificationFailed(
+                        "expected entity \(rawID) to exist"
+                    )
+                }
+            case let .entityIsAbsent(rawID):
+                if let scene = context.sceneRuntime,
+                   scene.contains(entityID(fromRaw: rawID)) {
+                    throw TransactionExecutorError.verificationFailed(
+                        "expected entity \(rawID) to be absent"
+                    )
+                }
+            case let .createdEntityCount(expected):
+                guard result.createdEntityIDs.count == expected else {
+                    throw TransactionExecutorError.verificationFailed(
+                        "expected \(expected) created entities, got \(result.createdEntityIDs.count)"
+                    )
+                }
+            case let .deletedEntity(rawID):
+                guard result.deletedEntityIDs.contains(rawID) else {
+                    throw TransactionExecutorError.verificationFailed(
+                        "expected entity \(rawID) in the deletion result"
+                    )
+                }
+            case let .sceneRevisionAdvanced(previous):
+                guard let actual = result.sceneRevision, actual > previous else {
+                    throw TransactionExecutorError.verificationFailed(
+                        "expected scene revision after \(previous), got \(result.sceneRevision.map(String.init) ?? "nil")"
+                    )
+                }
+            }
         }
     }
 
@@ -808,12 +863,16 @@ public struct TransactionExecutor {
 
     private func requireEntity(_ rawID: UInt64,
                                in scene: SceneRuntime) throws -> EntityID {
-        let entity = EntityID(index: UInt32(rawID & 0xFFFF_FFFF),
-                              generation: UInt32(rawID >> 32))
+        let entity = entityID(fromRaw: rawID)
         guard scene.contains(entity) else {
             throw TransactionExecutorError.invalidEntity(rawID)
         }
         return entity
+    }
+
+    private func entityID(fromRaw rawID: UInt64) -> EntityID {
+        EntityID(index: UInt32(rawID & 0xFFFF_FFFF),
+                 generation: UInt32(rawID >> 32))
     }
 
     private func requireOptionalEntity(_ rawID: UInt64?,

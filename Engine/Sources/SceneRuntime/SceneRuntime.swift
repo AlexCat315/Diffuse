@@ -74,6 +74,14 @@ public struct SceneRuntime {
         world.resource(CharacterStateFrameResource.self) ?? .empty
     }
 
+    public var vehicleStateFrame: VehicleStateFrameResource {
+        world.resource(VehicleStateFrameResource.self) ?? .empty
+    }
+
+    public var softBodyStateFrame: SoftBodyStateFrameResource {
+        world.resource(SoftBodyStateFrameResource.self) ?? .empty
+    }
+
     public var ragdollStateFrame: RagdollStateFrameResource {
         world.resource(RagdollStateFrameResource.self) ?? .empty
     }
@@ -121,6 +129,9 @@ public struct SceneRuntime {
         }
         for command in frame.characterCommands.sorted(by: { $0.entity.rawValue < $1.entity.rawValue }) {
             submitCharacterCommand(command.command, for: command.entity)
+        }
+        for command in frame.vehicleCommands.sorted(by: { $0.entity.rawValue < $1.entity.rawValue }) {
+            submitVehicleCommand(command.command, for: command.entity)
         }
         let report = tick(deltaTime: frame.deltaTimeSeconds)
         world.setDerivedResource(PhysicsCommandReplayControlResource())
@@ -738,6 +749,12 @@ public struct SceneRuntime {
 
     public mutating func submitCharacterCommand(_ command: CharacterCommand, for entity: EntityID) {
         var frame = world.resource(CharacterCommandFrameResource.self) ?? .empty
+        frame.commands[entity] = command
+        world.setResource(frame)
+    }
+
+    public mutating func submitVehicleCommand(_ command: VehicleCommand, for entity: EntityID) {
+        var frame = world.resource(VehicleCommandFrameResource.self) ?? .empty
         frame.commands[entity] = command
         world.setResource(frame)
     }

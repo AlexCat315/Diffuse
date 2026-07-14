@@ -234,6 +234,20 @@ struct InspectorPanel: View {
         }
     }
 
+    private struct InspectorVehicleControllerKindValue: View {
+        let binding: Binding<VehicleControllerKind>
+
+        var body: some View {
+            EnumField(value: binding, width: 150) { kind in
+                switch kind {
+                case .wheeled: return L("Wheeled")
+                case .tracked: return L("Tracked")
+                case .motorcycle: return L("Motorcycle")
+                }
+            }
+        }
+    }
+
     private struct InspectorColliderShapeKindValue: View {
         let binding: Binding<ColliderShapeKind>
 
@@ -321,6 +335,8 @@ struct InspectorPanel: View {
             return AnyView(InspectorLightTypeValue(binding: binding))
         case let .physicsSimulationMode(binding):
             return AnyView(InspectorPhysicsSimulationModeValue(binding: binding))
+        case let .vehicleControllerKind(binding):
+            return AnyView(InspectorVehicleControllerKindValue(binding: binding))
         case let .rigidBodyMotion(binding):
             return AnyView(InspectorRigidBodyMotionValue(binding: binding))
         case let .colliderShapeKind(binding):

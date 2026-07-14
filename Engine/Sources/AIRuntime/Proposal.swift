@@ -1,5 +1,6 @@
 import Foundation
 import IntentRuntime
+import CapabilityRuntime
 
 /// AI's structured change intent produced by Session.
 ///
@@ -16,6 +17,7 @@ public struct Proposal: Sendable, Identifiable {
     public var approvalPolicy: TransactionApprovalPolicy
     public var createdAt: Date
     public var toolUseID: String
+    public var capabilityExposureSnapshot: CapabilityExposureSnapshot?
 
     public init(id: String = UUID().uuidString,
                 sessionID: String,
@@ -26,7 +28,8 @@ public struct Proposal: Sendable, Identifiable {
                 confidence: Double = 0.85,
                 approvalPolicy: TransactionApprovalPolicy = .requiresApproval,
                 createdAt: Date = Date(),
-                toolUseID: String = "") {
+                toolUseID: String = "",
+                capabilityExposureSnapshot: CapabilityExposureSnapshot? = nil) {
         self.id = id
         self.sessionID = sessionID
         self.semanticIntent = semanticIntent
@@ -37,5 +40,6 @@ public struct Proposal: Sendable, Identifiable {
         self.approvalPolicy = approvalPolicy
         self.createdAt = createdAt
         self.toolUseID = toolUseID
+        self.capabilityExposureSnapshot = capabilityExposureSnapshot
     }
 }
