@@ -301,8 +301,8 @@ public struct DestructionStateFrameResource: Sendable, Equatable {
     public static let empty = DestructionStateFrameResource()
 }
 
-/// Runtime ownership marker. It is intentionally excluded from scene and prefab
-/// serialization; only the source `Destructible` component is authored.
+/// Runtime ownership marker. Authored Scene and Prefab documents omit fragment
+/// entities, while GameSave snapshots preserve this ownership with remapped IDs.
 public struct DestructibleFragment: RuntimeComponent, Sendable, Equatable {
     public var sourceEntity: EntityID
     public var fragmentID: UInt32
@@ -329,6 +329,10 @@ struct DestructionRuntimeSourceState: Sendable, Equatable {
     var hasFractured = false
     var accumulatedDamage: Float = 0
     var brokenConnectionIDs: Set<UInt32> = []
+    var hasAuthoredSourceSnapshot = false
+    var authoredRigidBody: RigidBody?
+    var authoredCollider: Collider?
+    var authoredRenderMesh: RenderMeshComponent?
 }
 
 struct DestructionRuntimeStateResource: Sendable, Equatable {

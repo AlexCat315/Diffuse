@@ -10,8 +10,9 @@ public enum GameSaveError: Error, Equatable {
 /// serializes to a single JSON document, so games get save/load without having to make every
 /// runtime resource serializable — they encode whatever `Codable` state they care about.
 ///
-/// The embedded scene is captured with `SceneSerializer`, so it reflects the *current* runtime
-/// transforms and components, not just the authored layout.
+/// The embedded scene reflects the *current* runtime transforms and components. Unlike an
+/// authored Scene or Prefab, it also preserves active destruction fragments and their
+/// remaining recycle budgets.
 public struct GameSave: Sendable, Equatable {
     public static let currentVersion = 2
 
@@ -31,14 +32,14 @@ public struct GameSave: Sendable, Equatable {
 
     /// Captures the live scene only.
     public static func capture(scene: SceneRuntime, metadata: [String: String] = [:]) throws -> GameSave {
-        GameSave(scene: try SceneSerializer.serialize(scene), metadata: metadata)
+        GameSave(scene: try SceneSerializer.serializeGameState(scene), metadata: metadata)
     }
 
     /// Captures the live scene plus an encodable game-state payload.
     public static func capture<State: Encodable>(scene: SceneRuntime,
                                                  state: State,
                                                  metadata: [String: String] = [:]) throws -> GameSave {
-        GameSave(scene: try SceneSerializer.serialize(scene),
+        GameSave(scene: try SceneSerializer.serializeGameState(scene),
                  state: try JSONEncoder().encode(state),
                  metadata: metadata)
     }
@@ -80,7 +81,7 @@ public struct GameSave: Sendable, Equatable {
 
     /// Restores the saved scene into `scene` (entities are appended).
     public func restoreScene(into scene: inout SceneRuntime) throws {
-        try SceneSerializer.deserialize(self.scene, into: &scene)
+        try SceneSerializer.deserializeGameState(self.scene, into: &scene)
     }
 
     /// Decodes the game-state payload, or nil if the save carried no state.

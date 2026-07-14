@@ -70,18 +70,44 @@ private func decodeJSONValue<T: Decodable>(_ value: Any?, as type: T.Type) -> T?
 public enum SceneSerializer {
     private static let currentVersion = 2
 
+    enum SerializationPurpose {
+        case authored
+        case gameSave
+    }
+
     /// Document version stamped into captured prefabs. Shares the scene format.
     static let prefabVersion = currentVersion
 
     // MARK: Save
 
     public static func serialize(_ scene: SceneRuntime) throws -> Data {
-        let entities = scene.entities()
+        try serialize(scene, purpose: .authored)
+    }
+
+    static func serializeGameState(_ scene: SceneRuntime) throws -> Data {
+        try serialize(scene, purpose: .gameSave)
+    }
+
+    private static func serialize(
+        _ scene: SceneRuntime,
+        purpose: SerializationPurpose
+    ) throws -> Data {
+        let entities = scene.entities().filter { entity in
+            purpose == .gameSave
+                || scene.component(DestructibleFragment.self, for: entity) == nil
+        }
         var entityIndexMap: [EntityID: Int] = [:]
         for (i, entity) in entities.enumerated() {
             entityIndexMap[entity] = i
         }
-        let entityList = entities.map { encodeEntity($0, in: scene, entityIndexMap: entityIndexMap) }
+        let entityList = entities.map {
+            encodeEntity(
+                $0,
+                in: scene,
+                entityIndexMap: entityIndexMap,
+                purpose: purpose
+            )
+        }
         let json: [String: Any] = ["version": currentVersion, "entities": entityList]
         return try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
     }
@@ -90,7 +116,12 @@ public enum SceneSerializer {
     /// constraint endpoints) are stored as positions within `entityIndexMap` rather than
     /// `EntityID`s, so the document is relocatable. References to entities outside the map
     /// (e.g. a constraint endpoint outside a captured prefab subtree) are dropped.
-    static func encodeEntity(_ entity: EntityID, in scene: SceneRuntime, entityIndexMap: [EntityID: Int]) -> [String: Any] {
+    static func encodeEntity(
+        _ entity: EntityID,
+        in scene: SceneRuntime,
+        entityIndexMap: [EntityID: Int],
+        purpose: SerializationPurpose = .authored
+    ) -> [String: Any] {
         var obj: [String: Any] = [:]
 
         // Name / kind
@@ -124,8 +155,25 @@ public enum SceneSerializer {
 
         // Components
         var comps: [String: Any] = [:]
-        if let c = scene.component(RigidBody.self, for: entity) { comps["rigidbody"] = serializeRigidBody(c) }
-        if let c = scene.component(Collider.self, for: entity) { comps["collider"] = serializeCollider(c) }
+        let destructionRuntime = scene.resource(DestructionRuntimeStateResource.self)
+        let destructionSource = destructionRuntime?.sources[entity]
+        if purpose == .authored,
+           let destructionSource,
+           destructionSource.hasAuthoredSourceSnapshot {
+            if let c = destructionSource.authoredRigidBody {
+                comps["rigidbody"] = serializeRigidBody(c)
+            }
+            if let c = destructionSource.authoredCollider {
+                comps["collider"] = serializeCollider(c)
+            }
+        } else {
+            if let c = scene.component(RigidBody.self, for: entity) {
+                comps["rigidbody"] = serializeRigidBody(c)
+            }
+            if let c = scene.component(Collider.self, for: entity) {
+                comps["collider"] = serializeCollider(c)
+            }
+        }
         if let c = scene.component(CharacterController.self, for: entity) { comps["characterController"] = serializeCharacterController(c) }
         if let c = scene.component(Vehicle.self, for: entity) { comps["vehicle"] = serializeVehicle(c) }
         if let c = scene.component(SoftBody.self, for: entity) { comps["softBody"] = serializeSoftBody(c) }
@@ -139,7 +187,15 @@ public enum SceneSerializer {
         if let c = scene.component(Ragdoll.self, for: entity) {
             comps["ragdoll"] = serializeRagdoll(c, entityIndexMap: entityIndexMap)
         }
-        if let c = scene.component(RenderMeshComponent.self, for: entity) { comps["renderMesh"] = serializeRenderMesh(c) }
+        if purpose == .authored,
+           let destructionSource,
+           destructionSource.hasAuthoredSourceSnapshot {
+            if let c = destructionSource.authoredRenderMesh {
+                comps["renderMesh"] = serializeRenderMesh(c)
+            }
+        } else if let c = scene.component(RenderMeshComponent.self, for: entity) {
+            comps["renderMesh"] = serializeRenderMesh(c)
+        }
         if let c = scene.component(RenderMaterialComponent.self, for: entity) { comps["renderMaterial"] = serializeRenderMaterial(c) }
         if let c = scene.component(AssetReferenceComponent.self, for: entity) { comps["assetReference"] = serializeAssetReference(c) }
         if let c = scene.component(ParticleEmitter.self, for: entity) { comps["particleEmitter"] = serializeParticleEmitter(c) }
@@ -149,6 +205,22 @@ public enum SceneSerializer {
         if let c = scene.component(AnimationPlayer.self, for: entity) { comps["animationPlayer"] = serializeAnimationPlayer(c) }
         if let c = scene.component(AnimationGraphPlayer.self, for: entity) { comps["animationGraphPlayer"] = serializeAnimationGraphPlayer(c) }
         if let c = scene.component(AudioListener.self, for: entity) { comps["audioListener"] = serializeAudioListener(c) }
+        if purpose == .gameSave {
+            if let destructionSource {
+                comps["destructionRuntimeSource"] = serializeDestructionRuntimeSource(
+                    destructionSource
+                )
+            }
+            if let fragment = scene.component(DestructibleFragment.self, for: entity),
+               let sourceIndex = entityIndexMap[fragment.sourceEntity] {
+                comps["destructibleFragment"] = serializeDestructibleFragment(
+                    fragment,
+                    sourceIndex: sourceIndex,
+                    entity: entity,
+                    runtime: destructionRuntime
+                )
+            }
+        }
         if !comps.isEmpty { obj["components"] = comps }
 
         return obj
@@ -157,6 +229,18 @@ public enum SceneSerializer {
     // MARK: Load
 
     public static func deserialize(_ data: Data, into scene: inout SceneRuntime) throws {
+        try deserialize(data, into: &scene, restoreGameState: false)
+    }
+
+    static func deserializeGameState(_ data: Data, into scene: inout SceneRuntime) throws {
+        try deserialize(data, into: &scene, restoreGameState: true)
+    }
+
+    private static func deserialize(
+        _ data: Data,
+        into scene: inout SceneRuntime,
+        restoreGameState: Bool
+    ) throws {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let entities = jsonToArray(json["entities"])
         else { throw SceneSerializerError.invalidFormat }
@@ -164,7 +248,7 @@ public enum SceneSerializer {
         guard version == currentVersion else {
             throw SceneSerializerError.unsupportedVersion(version)
         }
-        _ = loadEntities(entities, into: &scene)
+        _ = loadEntities(entities, into: &scene, restoreGameState: restoreGameState)
     }
 
     /// Creates one entity from a JSON dictionary and applies its transform and components.
@@ -215,7 +299,11 @@ public enum SceneSerializer {
     /// Creates every entity in `entities`, wires deferred parent links, and returns the
     /// created entities aligned to the input order (the index used by `parent` fields).
     @discardableResult
-    static func loadEntities(_ entities: [Any], into scene: inout SceneRuntime) -> [EntityID] {
+    static func loadEntities(
+        _ entities: [Any],
+        into scene: inout SceneRuntime,
+        restoreGameState: Bool = false
+    ) -> [EntityID] {
         var entityMap: [Int: EntityID] = [:]
         var pendingParents: [(child: EntityID, parentIdx: Int)] = []
 
@@ -261,7 +349,168 @@ public enum SceneSerializer {
             )
         }
 
+        if restoreGameState {
+            restoreDestructionRuntimeState(
+                from: entities,
+                entityMap: entityMap,
+                into: &scene
+            )
+        }
+
         return entities.indices.compactMap { entityMap[$0] }
+    }
+
+    // MARK: - GameSave destruction state
+
+    private static func serializeDestructionRuntimeSource(
+        _ source: DestructionRuntimeSourceState
+    ) -> [String: Any] {
+        var encoded: [String: Any] = [
+            "hasFractured": source.hasFractured,
+            "accumulatedDamage": source.accumulatedDamage,
+            "brokenConnectionIDs": source.brokenConnectionIDs.sorted().map(Int.init),
+        ]
+        if source.hasAuthoredSourceSnapshot {
+            var snapshot: [String: Any] = [
+                "hasRigidBody": source.authoredRigidBody != nil,
+                "hasCollider": source.authoredCollider != nil,
+                "hasRenderMesh": source.authoredRenderMesh != nil,
+            ]
+            if let rigidBody = source.authoredRigidBody {
+                snapshot["rigidbody"] = serializeRigidBody(rigidBody)
+            }
+            if let collider = source.authoredCollider {
+                snapshot["collider"] = serializeCollider(collider)
+            }
+            if let renderMesh = source.authoredRenderMesh {
+                snapshot["renderMesh"] = serializeRenderMesh(renderMesh)
+            }
+            encoded["authoredSourceSnapshot"] = snapshot
+        }
+        return encoded
+    }
+
+    private static func serializeDestructibleFragment(
+        _ fragment: DestructibleFragment,
+        sourceIndex: Int,
+        entity: EntityID,
+        runtime: DestructionRuntimeStateResource?
+    ) -> [String: Any] {
+        let elapsedSeconds = runtime?.elapsedSeconds ?? fragment.spawnedAtSeconds
+        let ageSeconds = max(0, elapsedSeconds - fragment.spawnedAtSeconds)
+        let remainingLifetime: Float
+        if fragment.maximumLifetimeSeconds > 0 {
+            remainingLifetime = max(
+                0.000_001,
+                fragment.maximumLifetimeSeconds - Float(ageSeconds)
+            )
+        } else {
+            remainingLifetime = 0
+        }
+
+        var remainingSleepingDelay = fragment.sleepingRecycleDelaySeconds
+        let sleepingSince = runtime?.sleepingSinceByFragment[entity]
+        if let sleepingSince, remainingSleepingDelay > 0 {
+            remainingSleepingDelay = max(
+                0.000_001,
+                remainingSleepingDelay - Float(max(0, elapsedSeconds - sleepingSince))
+            )
+        }
+        return [
+            "sourceEntity": sourceIndex,
+            "fragmentID": Int(fragment.fragmentID),
+            "remainingLifetimeSeconds": remainingLifetime,
+            "remainingSleepingRecycleDelaySeconds": remainingSleepingDelay,
+            "wasSleeping": sleepingSince != nil,
+        ]
+    }
+
+    private static func restoreDestructionRuntimeState(
+        from entities: [Any],
+        entityMap: [Int: EntityID],
+        into scene: inout SceneRuntime
+    ) {
+        var runtime = scene.resource(DestructionRuntimeStateResource.self)
+            ?? DestructionRuntimeStateResource()
+        var restoredRuntimeState = false
+
+        for (index, raw) in entities.enumerated() {
+            guard let entity = entityMap[index],
+                  let obj = jsonToDict(raw),
+                  let components = jsonToDict(obj["components"]),
+                  let encoded = jsonToDict(components["destructionRuntimeSource"])
+            else { continue }
+
+            var source = DestructionRuntimeSourceState(
+                hasFractured: jsonToBool(encoded["hasFractured"]) ?? false,
+                accumulatedDamage: jsonToFloat(encoded["accumulatedDamage"]) ?? 0,
+                brokenConnectionIDs: Set(
+                    (jsonToArray(encoded["brokenConnectionIDs"]) ?? []).compactMap {
+                        jsonToInt($0).flatMap { UInt32(exactly: $0) }
+                    }
+                )
+            )
+            if let snapshot = jsonToDict(encoded["authoredSourceSnapshot"]) {
+                source.hasAuthoredSourceSnapshot = true
+                if jsonToBool(snapshot["hasRigidBody"]) == true,
+                   let rigidBody = jsonToDict(snapshot["rigidbody"]) {
+                    source.authoredRigidBody = deserializeRigidBody(rigidBody)
+                }
+                if jsonToBool(snapshot["hasCollider"]) == true,
+                   let collider = jsonToDict(snapshot["collider"]) {
+                    source.authoredCollider = deserializeCollider(collider)
+                }
+                if jsonToBool(snapshot["hasRenderMesh"]) == true,
+                   let renderMesh = jsonToDict(snapshot["renderMesh"]) {
+                    source.authoredRenderMesh = deserializeRenderMesh(renderMesh)
+                }
+            }
+            runtime.sources[entity] = source
+            restoredRuntimeState = true
+        }
+
+        for (index, raw) in entities.enumerated() {
+            guard let entity = entityMap[index],
+                  let obj = jsonToDict(raw),
+                  let components = jsonToDict(obj["components"]),
+                  let encoded = jsonToDict(components["destructibleFragment"]),
+                  let sourceIndex = jsonToInt(encoded["sourceEntity"]),
+                  let sourceEntity = entityMap[sourceIndex],
+                  let fragmentIDValue = jsonToInt(encoded["fragmentID"]),
+                  let fragmentID = UInt32(exactly: fragmentIDValue)
+            else { continue }
+
+            let wasSleeping = jsonToBool(encoded["wasSleeping"]) ?? false
+            _ = scene.setComponent(
+                DestructibleFragment(
+                    sourceEntity: sourceEntity,
+                    fragmentID: fragmentID,
+                    spawnedAtSeconds: runtime.elapsedSeconds,
+                    maximumLifetimeSeconds: jsonToFloat(
+                        encoded["remainingLifetimeSeconds"]
+                    ) ?? 0,
+                    sleepingRecycleDelaySeconds: jsonToFloat(
+                        encoded["remainingSleepingRecycleDelaySeconds"]
+                    ) ?? 0
+                ),
+                for: entity
+            )
+            if wasSleeping {
+                _ = scene.updateComponent(RigidBody.self, for: entity) {
+                    $0.isSleeping = true
+                }
+                runtime.sleepingSinceByFragment[entity] = runtime.elapsedSeconds
+            }
+            var source = runtime.sources[sourceEntity]
+                ?? DestructionRuntimeSourceState()
+            source.hasFractured = true
+            runtime.sources[sourceEntity] = source
+            restoredRuntimeState = true
+        }
+
+        if restoredRuntimeState {
+            scene.setResource(runtime)
+        }
     }
 
     // MARK: - Component serializers
@@ -271,10 +520,17 @@ public enum SceneSerializer {
             "motionType": c.motionType.rawValue,
             "mass": c.mass,
             "massMode": c.massMode.rawValue,
+            "linearVelocity": vec3ToJSON(c.linearVelocity),
+            "angularVelocity": vec3ToJSON(c.angularVelocity),
+            "accumulatedForce": vec3ToJSON(c.accumulatedForce),
+            "accumulatedTorque": vec3ToJSON(c.accumulatedTorque),
+            "accumulatedLinearImpulse": vec3ToJSON(c.accumulatedLinearImpulse),
+            "accumulatedAngularImpulse": vec3ToJSON(c.accumulatedAngularImpulse),
             "linearDamping": c.linearDamping,
             "angularDamping": c.angularDamping,
             "gravityScale": c.gravityScale,
             "allowSleep": c.allowSleep,
+            "isSleeping": c.isSleeping,
             "continuousCollisionDetection": c.continuousCollisionDetection,
             "axisLocks": c.axisLocks.rawValue,
             "maxLinearVelocity": c.maxLinearVelocity,
@@ -301,10 +557,19 @@ public enum SceneSerializer {
             motionType: RigidBodyMotionType(rawValue: jsonToString(d["motionType"]) ?? "dynamic") ?? .dynamic,
             mass: jsonToFloat(d["mass"]) ?? 1,
             massMode: RigidBodyMassMode(rawValue: jsonToString(d["massMode"]) ?? "mass") ?? .mass,
+            linearVelocity: jsonToFloatArray(d["linearVelocity"]).flatMap(jsonToVec3) ?? .zero,
+            angularVelocity: jsonToFloatArray(d["angularVelocity"]).flatMap(jsonToVec3) ?? .zero,
+            accumulatedForce: jsonToFloatArray(d["accumulatedForce"]).flatMap(jsonToVec3) ?? .zero,
+            accumulatedTorque: jsonToFloatArray(d["accumulatedTorque"]).flatMap(jsonToVec3) ?? .zero,
+            accumulatedLinearImpulse: jsonToFloatArray(d["accumulatedLinearImpulse"])
+                .flatMap(jsonToVec3) ?? .zero,
+            accumulatedAngularImpulse: jsonToFloatArray(d["accumulatedAngularImpulse"])
+                .flatMap(jsonToVec3) ?? .zero,
             gravityScale: jsonToFloat(d["gravityScale"]) ?? 1,
             linearDamping: jsonToFloat(d["linearDamping"]) ?? 0.04,
             angularDamping: jsonToFloat(d["angularDamping"]) ?? 0.04,
             allowSleep: jsonToBool(d["allowSleep"]) ?? true,
+            isSleeping: jsonToBool(d["isSleeping"]) ?? false,
             continuousCollisionDetection: jsonToBool(d["continuousCollisionDetection"]) ?? false,
             centerOfMassOverride: jsonToFloatArray(d["centerOfMassOverride"]).flatMap(jsonToVec3),
             inertiaDiagonalOverride: jsonToFloatArray(d["inertiaDiagonalOverride"]).flatMap(jsonToVec3),

@@ -42,6 +42,7 @@ public enum DestructibleAssetBakeError: Error, Sendable, Equatable {
     case nonClosedGeometry(fragmentID: UInt32)
     case duplicateConnectionID(UInt32)
     case invalidConnection(connectionID: UInt32)
+    case invalidConnectionTolerance
 }
 
 public struct DestructibleAssetBakeResult: Sendable, Equatable {
@@ -83,7 +84,9 @@ public struct DestructibleAssetBaker: Sendable {
         assetResourceID: String,
         revision: UInt64 = 0,
         fragments: [PrefracturedFragmentInput],
-        connections: [DestructibleConnectionAsset] = []
+        connections: [DestructibleConnectionAsset] = [],
+        automaticallyGenerateConnections: Bool = true,
+        connectionTolerance: Float = 0.001
     ) throws -> DestructibleAssetBakeResult {
         guard !assetResourceID.isEmpty else {
             throw DestructibleAssetBakeError.emptyAssetResourceID
@@ -136,15 +139,32 @@ public struct DestructibleAssetBaker: Sendable {
             ))
         }
 
+        let finalConnections: [DestructibleConnectionAsset]
+        if connections.isEmpty, automaticallyGenerateConnections {
+            guard connectionTolerance.isFinite, connectionTolerance >= 0 else {
+                throw DestructibleAssetBakeError.invalidConnectionTolerance
+            }
+            finalConnections = generateConnections(
+                fragments: fragments,
+                tolerance: connectionTolerance
+            )
+        } else {
+            finalConnections = connections
+        }
+
         let fragmentIDs = Set(bakedFragments.map(\.fragmentID))
         var seenConnectionIDs: Set<UInt32> = []
-        for connection in connections {
+        for connection in finalConnections {
             guard seenConnectionIDs.insert(connection.connectionID).inserted else {
                 throw DestructibleAssetBakeError.duplicateConnectionID(connection.connectionID)
             }
             guard connection.fragmentA != connection.fragmentB,
                   fragmentIDs.contains(connection.fragmentA),
-                  fragmentIDs.contains(connection.fragmentB) else {
+                  fragmentIDs.contains(connection.fragmentB),
+                  connection.damageThreshold.isFinite,
+                  connection.damageThreshold >= 0,
+                  connection.impulseThreshold.isFinite,
+                  connection.impulseThreshold >= 0 else {
                 throw DestructibleAssetBakeError.invalidConnection(
                     connectionID: connection.connectionID
                 )
@@ -156,7 +176,7 @@ public struct DestructibleAssetBaker: Sendable {
             asset: DestructibleAsset(
                 revision: revision,
                 fragments: bakedFragments,
-                connections: connections
+                connections: finalConnections
             ),
             geometryByResourceID: geometries
         )
@@ -170,9 +190,19 @@ public struct DestructibleAssetBaker: Sendable {
     }
 
     private func isValidGeometry(_ input: PrefracturedFragmentInput) -> Bool {
+        let transformColumns = [
+            input.localTransform.matrix.columns.0,
+            input.localTransform.matrix.columns.1,
+            input.localTransform.matrix.columns.2,
+            input.localTransform.matrix.columns.3,
+        ]
         guard input.positions.count >= 4,
               !input.triangleIndices.isEmpty,
               input.triangleIndices.count.isMultiple(of: 3),
+              transformColumns.allSatisfy({ column in
+                  column.x.isFinite && column.y.isFinite
+                      && column.z.isFinite && column.w.isFinite
+              }),
               input.positions.allSatisfy({
                   $0.x.isFinite && $0.y.isFinite && $0.z.isFinite
               }) else { return false }
@@ -230,5 +260,174 @@ public struct DestructibleAssetBaker: Sendable {
             signedSixVolume += Double(simd_dot(a, simd_cross(b, c)))
         }
         return Float(abs(signedSixVolume) / 6)
+    }
+
+    /// Builds a stable import-time graph from fragments whose transformed surfaces are
+    /// within `tolerance`. Explicit `connections` passed to `bake` take precedence.
+    private func generateConnections(
+        fragments: [PrefracturedFragmentInput],
+        tolerance: Float
+    ) -> [DestructibleConnectionAsset] {
+        struct Surface {
+            var fragmentID: UInt32
+            var positions: [SIMD3<Float>]
+            var triangleIndices: [UInt32]
+            var minimum: SIMD3<Float>
+            var maximum: SIMD3<Float>
+        }
+
+        let surfaces = fragments
+            .sorted { $0.fragmentID < $1.fragmentID }
+            .map { fragment -> Surface in
+                let matrix = fragment.localTransform.matrix
+                let positions = fragment.positions.map { position in
+                    let transformed = matrix * SIMD4<Float>(position.x, position.y, position.z, 1)
+                    return SIMD3<Float>(transformed.x, transformed.y, transformed.z)
+                }
+                var minimum = SIMD3<Float>(repeating: Float.greatestFiniteMagnitude)
+                var maximum = SIMD3<Float>(repeating: -Float.greatestFiniteMagnitude)
+                for position in positions {
+                    minimum = SIMD3<Float>(
+                        min(minimum.x, position.x),
+                        min(minimum.y, position.y),
+                        min(minimum.z, position.z)
+                    )
+                    maximum = SIMD3<Float>(
+                        max(maximum.x, position.x),
+                        max(maximum.y, position.y),
+                        max(maximum.z, position.z)
+                    )
+                }
+                return Surface(
+                    fragmentID: fragment.fragmentID,
+                    positions: positions,
+                    triangleIndices: fragment.triangleIndices,
+                    minimum: minimum,
+                    maximum: maximum
+                )
+            }
+
+        var result: [DestructibleConnectionAsset] = []
+        for firstIndex in surfaces.indices {
+            guard firstIndex + 1 < surfaces.count else { continue }
+            for secondIndex in (firstIndex + 1)..<surfaces.count {
+                let first = surfaces[firstIndex]
+                let second = surfaces[secondIndex]
+                guard aabbSquaredDistance(
+                    minimumA: first.minimum,
+                    maximumA: first.maximum,
+                    minimumB: second.minimum,
+                    maximumB: second.maximum
+                ) <= tolerance * tolerance,
+                surfacesAreAdjacent(
+                    positionsA: first.positions,
+                    trianglesA: first.triangleIndices,
+                    positionsB: second.positions,
+                    trianglesB: second.triangleIndices,
+                    toleranceSquared: tolerance * tolerance
+                ) else { continue }
+
+                result.append(DestructibleConnectionAsset(
+                    connectionID: UInt32(result.count),
+                    fragmentA: first.fragmentID,
+                    fragmentB: second.fragmentID
+                ))
+            }
+        }
+        return result
+    }
+
+    private func aabbSquaredDistance(
+        minimumA: SIMD3<Float>,
+        maximumA: SIMD3<Float>,
+        minimumB: SIMD3<Float>,
+        maximumB: SIMD3<Float>
+    ) -> Float {
+        let separation = SIMD3<Float>(
+            max(0, max(minimumA.x - maximumB.x, minimumB.x - maximumA.x)),
+            max(0, max(minimumA.y - maximumB.y, minimumB.y - maximumA.y)),
+            max(0, max(minimumA.z - maximumB.z, minimumB.z - maximumA.z))
+        )
+        return simd_length_squared(separation)
+    }
+
+    private func surfacesAreAdjacent(
+        positionsA: [SIMD3<Float>],
+        trianglesA: [UInt32],
+        positionsB: [SIMD3<Float>],
+        trianglesB: [UInt32],
+        toleranceSquared: Float
+    ) -> Bool {
+        points(positionsA, areWithin: toleranceSquared, of: positionsB, trianglesB)
+            || points(positionsB, areWithin: toleranceSquared, of: positionsA, trianglesA)
+    }
+
+    private func points(
+        _ points: [SIMD3<Float>],
+        areWithin toleranceSquared: Float,
+        of positions: [SIMD3<Float>],
+        _ triangleIndices: [UInt32]
+    ) -> Bool {
+        for point in points {
+            for triangle in stride(from: 0, to: triangleIndices.count, by: 3) {
+                let a = positions[Int(triangleIndices[triangle])]
+                let b = positions[Int(triangleIndices[triangle + 1])]
+                let c = positions[Int(triangleIndices[triangle + 2])]
+                if pointTriangleSquaredDistance(point, a, b, c) <= toleranceSquared {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    /// Closest-point regions from Real-Time Collision Detection, kept local to the
+    /// importer so runtime physics does not participate in asset graph generation.
+    private func pointTriangleSquaredDistance(
+        _ point: SIMD3<Float>,
+        _ a: SIMD3<Float>,
+        _ b: SIMD3<Float>,
+        _ c: SIMD3<Float>
+    ) -> Float {
+        let ab = b - a
+        let ac = c - a
+        let ap = point - a
+        let d1 = simd_dot(ab, ap)
+        let d2 = simd_dot(ac, ap)
+        if d1 <= 0, d2 <= 0 { return simd_length_squared(ap) }
+
+        let bp = point - b
+        let d3 = simd_dot(ab, bp)
+        let d4 = simd_dot(ac, bp)
+        if d3 >= 0, d4 <= d3 { return simd_length_squared(bp) }
+
+        let vc = d1 * d4 - d3 * d2
+        if vc <= 0, d1 >= 0, d3 <= 0 {
+            let v = d1 / (d1 - d3)
+            return simd_length_squared(point - (a + v * ab))
+        }
+
+        let cp = point - c
+        let d5 = simd_dot(ab, cp)
+        let d6 = simd_dot(ac, cp)
+        if d6 >= 0, d5 <= d6 { return simd_length_squared(cp) }
+
+        let vb = d5 * d2 - d1 * d6
+        if vb <= 0, d2 >= 0, d6 <= 0 {
+            let w = d2 / (d2 - d6)
+            return simd_length_squared(point - (a + w * ac))
+        }
+
+        let va = d3 * d6 - d5 * d4
+        if va <= 0, d4 - d3 >= 0, d5 - d6 >= 0 {
+            let edge = c - b
+            let w = (d4 - d3) / ((d4 - d3) + (d5 - d6))
+            return simd_length_squared(point - (b + w * edge))
+        }
+
+        let denominator = 1 / (va + vb + vc)
+        let v = vb * denominator
+        let w = vc * denominator
+        return simd_length_squared(point - (a + ab * v + ac * w))
     }
 }
