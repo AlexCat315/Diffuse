@@ -158,6 +158,22 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         public var softBodyMeshBendType: String? = nil
         public var softBodyMeshVolumeCompliance: Float? = nil
         public var softBodyMeshGeometryRevision: UInt64? = nil
+
+        // Pre-fractured destruction extras — authored policy plus runtime activation state.
+        public var destructibleAssetResourceID: String? = nil
+        public var destructibleIsEnabled: Bool? = nil
+        public var destructibleDamageThreshold: Float? = nil
+        public var destructibleImpulseThreshold: Float? = nil
+        public var destructibleFragmentBudget: Int? = nil
+        public var destructibleMaximumFragmentLifetimeSeconds: Float? = nil
+        public var destructibleSleepingRecycleDelaySeconds: Float? = nil
+        public var destructibleSeparationImpulse: Float? = nil
+        public var destructibleAssetRevision: UInt64? = nil
+        public var destructibleAssetFragmentCount: Int? = nil
+        public var destructibleAssetConnectionCount: Int? = nil
+        public var destructibleHasFractured: Bool? = nil
+        public var destructibleActiveFragmentCount: Int? = nil
+        public var destructibleBrokenConnectionCount: Int? = nil
     }
 
     /// Compact snapshot of a single ScriptBinding for AI context.

@@ -1,7 +1,7 @@
 ---
 path: /en/docs/physics-v2
 title: Physics v2
-description: Guava's Jolt frame stages, vehicles, cloth and surface-soft-body state resources, and current boundaries.
+description: Guava's Jolt frame stages, vehicles, soft bodies, pre-fractured destruction, and current boundaries.
 locale: en
 translationKey: docs.physics-v2
 category: Core Concepts
@@ -11,13 +11,13 @@ kind: doc
 
 # Physics v2
 
-Guava Physics v2 uses Jolt as its only production physics backend. Compound colliders, unified queries and events, native characters, typed joints, ragdolls, incremental synchronization, deterministic command replay, the three M5 vehicle controllers, and M6 regular cloth plus arbitrary triangle-surface soft bodies are implemented.
+Guava Physics v2 uses Jolt as its only production physics backend. Compound colliders, unified queries and events, native characters, typed joints, ragdolls, incremental synchronization, deterministic command replay, the three M5 vehicle controllers, M6 regular cloth plus arbitrary triangle-surface soft bodies, and M7 pre-fractured destruction are implemented.
 
 ## Frame stages
 
 Each frame runs in this order:
 
-1. Input and script `onPrePhysics` submit character, vehicle, and rigid-body commands.
+1. Input and script `onPrePhysics` submit character, vehicle, rigid-body, and destruction commands.
 2. Incremental ECS changes synchronize into Jolt.
 3. Fixed physics steps run.
 4. Changed active bodies write back to ECS; characters, vehicles, and soft-body vertices write dedicated frame resources.
@@ -123,15 +123,28 @@ Jolt 5.5 does not expose an intra-soft-body collision solver switch, so Guava's 
 
 Selecting a soft-body entity in the Editor overlays its constraint topology in the viewport: cyan lines are surface edges, purple lines participate in tetrahedral volume constraints, and yellow anchors are fixed vertices. The overlay follows the latest simulated vertices during play and uses the authored rest pose while stopped. Edges are stably ordered by vertex index and bounded to 4,096 lines per entity.
 
+## Pre-fractured destruction
+
+The first M7 release uses offline pre-fractured assets. `DestructibleAssetBaker` accepts closed convex fragment meshes, density, local transforms, and a connection graph. It sorts by fragment ID, generates stable `asset#convex:<fragmentID>` geometry resource IDs, and computes mass from closed-mesh volume times density. Duplicate IDs, invalid connections, non-finite vertices, out-of-range indices, and zero-volume geometry fail explicitly; no fallback box is generated. A bake result installs the geometry and destructible asset resources together.
+
+An authored entity references the asset through `Destructible` and configures accumulated-damage and contact-impulse thresholds, a per-source fragment budget, maximum lifetime, sleeping recycle delay, and separation impulse. Scripts submit `DestructionCommand` from `onPrePhysics`; direct commands fracture before body synchronization, so new fragments participate in the current fixed step. The unified Jolt contact listener estimates a nonzero solver impulse from pre-solve velocities and contact settings. Contact-triggered fracture is generated after that fixed step and synchronizes into Jolt on the next one.
+
+Connection edges can override damage or impulse thresholds; zero inherits the source threshold. Runtime processing uses stable EntityID, command-index, fragment-ID, and connection-ID order. Reaching a source threshold, forcing fracture, or disconnecting the graph from its root activates the complete pre-fractured asset. This release does not activate individual connected islands or perform arbitrary runtime Boolean cutting.
+
+Global `DestructionSettingsResource` limits active fragments and per-frame events. Fragment budgets truncate by lowest fragment ID and report the dropped count. Fragments recycle by lifetime, continuous sleeping duration, or source removal. `DestructionEventFrameResource` reports fracture, failure, recycle, and overflow; `DestructionStateFrameResource` exposes accumulated damage, broken connections, and active fragments. Runtime `DestructibleFragment` components are omitted from Scene and Prefab data, while the source `Destructible` policy round-trips through Scene v2 and Editor Manifest v5.
+
+The Editor Inspector edits the full policy and displays asset fragment/connection counts plus current active/broken state. AI scene semantics expose the asset ID, thresholds, budget, and runtime summary. The `destruction-fragments` benchmark deterministically activates a requested count of simple convex pieces and gates activation latency, fixed-step percentiles, memory growth, active count, and dropped substeps separately.
+
 ## Stability and serialization
 
 - Vehicle creation, removal, commands, and state use stable `EntityID` ordering.
 - Engine, gear, clutch, and per-wheel state participate in physics checkpoint hashes.
+- Accumulated destruction damage, broken connections, and active-fragment ownership participate in checkpoint hashes; destruction commands are recorded and replayed.
 - Vehicle configuration round-trips through Scene v2 and Editor Manifest v5.
 - C ABI v6 validates rigid-body, character, vehicle, and soft-body structure sizes and explicitly reports invalid grid, arbitrary-surface, or tetrahedral topology.
-- AI scene semantics include vehicle, soft-body, cloth, and surface-mesh resource configuration plus available latest-state summaries.
-- The `cloth-64` and `soft-body-instances` benchmarks independently report step and vertex-stream p50/p95/p99, memory, and dropped substeps for one self-colliding 64×64 cloth and eight 32×32 instances, with separate budget gates.
+- AI scene semantics include vehicle, soft-body, cloth, surface-mesh, and pre-fractured-asset configuration plus available latest-state summaries.
+- The `cloth-64`, `soft-body-instances`, and `destruction-fragments` benchmarks independently gate one self-colliding 64×64 cloth, eight 32×32 instances, and bulk pre-fractured activation.
 
 ## Current boundary
 
-M5 and M6 are complete. M6 includes native Jolt regular-grid cloth, arbitrary triangle-surface soft bodies, and pre-tetrahedralized volumetric assets; fixed points; internal edge, volume, pressure, damping, and self-collision constraints; revision-cached imported geometry and UVs; incremental synchronization; Scene v2 and Manifest v5 round-tripping; a dedicated deformed-vertex stream; real GPU mesh uploads; integration across every mesh render path and shadow bounds; static/dynamic-body/character collision acceptance; Editor parameter/fixed-point editing, live constraint visualization, and upload profiling; and self-colliding 64×64 plus multi-instance performance gates. Ordinary surface meshes are still not tetrahedralized at runtime; volume assets must provide `tetrahedronIndices` during import.
+M5, M6, and M7 are complete. M7's production boundary is offline pre-fracture: import supplies closed convex fragments and a connection graph; runtime owns damage/impulse thresholds, deterministic activation, budgets, recycling, events, command replay, Editor support, and AI semantics. A broken graph currently activates the complete asset; connected islands are not released incrementally, and arbitrary runtime Boolean cutting is out of scope.

@@ -70,6 +70,14 @@ public struct SceneRuntime {
         world.resource(PhysicsEventFrameResource.self) ?? schedule.currentPhysicsEventFrame
     }
 
+    public var destructionEventFrame: DestructionEventFrameResource {
+        world.resource(DestructionEventFrameResource.self) ?? .empty
+    }
+
+    public var destructionStateFrame: DestructionStateFrameResource {
+        world.resource(DestructionStateFrameResource.self) ?? .empty
+    }
+
     public var characterStateFrame: CharacterStateFrameResource {
         world.resource(CharacterStateFrameResource.self) ?? .empty
     }
@@ -132,6 +140,9 @@ public struct SceneRuntime {
         }
         for command in frame.vehicleCommands.sorted(by: { $0.entity.rawValue < $1.entity.rawValue }) {
             submitVehicleCommand(command.command, for: command.entity)
+        }
+        for command in frame.destructionCommands {
+            submitDestructionCommand(command)
         }
         let report = tick(deltaTime: frame.deltaTimeSeconds)
         world.setDerivedResource(PhysicsCommandReplayControlResource())
@@ -756,6 +767,12 @@ public struct SceneRuntime {
     public mutating func submitVehicleCommand(_ command: VehicleCommand, for entity: EntityID) {
         var frame = world.resource(VehicleCommandFrameResource.self) ?? .empty
         frame.commands[entity] = command
+        world.setResource(frame)
+    }
+
+    public mutating func submitDestructionCommand(_ command: DestructionCommand) {
+        var frame = world.resource(DestructionCommandFrameResource.self) ?? .empty
+        frame.commands.append(command)
         world.setResource(frame)
     }
 
