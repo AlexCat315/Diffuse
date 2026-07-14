@@ -1,5 +1,6 @@
 import Foundation
 import CapabilityRuntime
+import IntentRuntime
 
 /// Tool definition for the `find_entities` tool.
 /// Lets the AI search by name substring or kind when the scene exceeds the entity prompt limit.
@@ -26,7 +27,7 @@ public enum FindEntitiesTool {
     }
 
     private static func schema() -> [String: Any] {
-        CapabilityRegistry.default.descriptor(for: "scene.find_entities")?.inputSchema.jsonObject()
+        CapabilityRegistry.aiDefault.descriptor(for: "scene.find_entities")?.inputSchema.jsonObject()
             ?? JSONSchema.object(properties: [:]).jsonObject()
     }
 }

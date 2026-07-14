@@ -70,6 +70,8 @@ public struct SceneSemanticEncoder: Sendable {
             if scene.hasComponent(Constraint.self, for: entity)          { components.append("constraint") }
             if scene.hasComponent(Ragdoll.self, for: entity)             { components.append("ragdoll") }
             if scene.hasComponent(Vehicle.self, for: entity)             { components.append("vehicle") }
+            if scene.hasComponent(SoftBody.self, for: entity)            { components.append("softbody") }
+            if scene.hasComponent(Cloth.self, for: entity)               { components.append("cloth") }
 
             var lightType: String?
             var lightIntensity: Float?
@@ -214,6 +216,9 @@ public struct SceneSemanticEncoder: Sendable {
             let ragdollState = scene.ragdollStateFrame.states[entity]
             let vehicle = scene.component(Vehicle.self, for: entity)
             let vehicleState = scene.vehicleStateFrame.states[entity]
+            let softBody = scene.component(SoftBody.self, for: entity)
+            let cloth = scene.component(Cloth.self, for: entity)
+            let softBodyState = scene.softBodyStateFrame.states[entity]
 
             records.append(SceneSemanticSnapshot.Entity(
                 id: ref,
@@ -277,6 +282,7 @@ public struct SceneSemanticEncoder: Sendable {
                 ragdollSimulatedBoneCount: ragdollState?.bones.filter(\.isSimulated).count,
                 ragdollIsEnabled: ragdoll?.isEnabled,
                 vehicleIsEnabled: vehicle?.isEnabled,
+                vehicleControllerKind: vehicle.map { String(describing: $0.controller.kind) },
                 vehicleWheelCount: vehicle?.wheels.count,
                 vehicleDifferentialCount: vehicle?.differentials.count,
                 vehicleTransmissionMode: vehicle.map {
@@ -286,7 +292,18 @@ public struct SceneSemanticEncoder: Sendable {
                 vehicleForwardSpeed: vehicleState?.forwardSpeed,
                 vehicleEngineRPM: vehicleState?.engineRPM,
                 vehicleCurrentGear: vehicleState?.currentGear,
-                vehicleWheelContactCount: vehicleState?.wheels.filter(\.hasContact).count
+                vehicleWheelContactCount: vehicleState?.wheels.filter(\.hasContact).count,
+                softBodyIsEnabled: softBody?.isEnabled,
+                softBodyPressure: softBody?.pressure,
+                softBodyLinearDamping: softBody?.linearDamping,
+                softBodyVertexRadius: softBody?.vertexRadius,
+                softBodyIsSleeping: softBodyState?.isSleeping,
+                softBodyDeformedVertexCount: softBodyState?.positions.count,
+                clothGridSizeX: cloth?.gridSizeX,
+                clothGridSizeZ: cloth?.gridSizeZ,
+                clothSpacing: cloth?.spacing,
+                clothFixedVertexCount: cloth?.fixedVertexIndices.count,
+                clothBendType: cloth.map { String(describing: $0.bendType) }
             ))
         }
 

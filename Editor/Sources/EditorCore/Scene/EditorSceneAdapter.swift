@@ -70,6 +70,8 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
     public let collider: EditorSceneManifestCollider?
     public let characterController: EditorSceneManifestCharacterController?
     public let vehicle: EditorSceneManifestVehicle?
+    public let softBody: EditorSceneManifestSoftBody?
+    public let cloth: EditorSceneManifestCloth?
     public let ragdoll: EditorSceneManifestRagdoll?
     public let constraint: EditorSceneManifestConstraint?
     public let script: EditorSceneManifestScript?
@@ -95,6 +97,8 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
                 collider: EditorSceneManifestCollider? = nil,
                 characterController: EditorSceneManifestCharacterController? = nil,
                 vehicle: EditorSceneManifestVehicle? = nil,
+                softBody: EditorSceneManifestSoftBody? = nil,
+                cloth: EditorSceneManifestCloth? = nil,
                 ragdoll: EditorSceneManifestRagdoll? = nil,
                 constraint: EditorSceneManifestConstraint? = nil,
                 script: EditorSceneManifestScript? = nil,
@@ -116,6 +120,8 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.collider = collider
         self.characterController = characterController
         self.vehicle = vehicle
+        self.softBody = softBody
+        self.cloth = cloth
         self.ragdoll = ragdoll
         self.constraint = constraint
         self.script = script
@@ -128,7 +134,8 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case id, name, kind, localTransform, asset, renderMesh, renderMaterial
-        case camera, light, rigidBody, collider, characterController, vehicle, ragdoll, constraint, script, audioSource
+        case camera, light, rigidBody, collider, characterController, vehicle, softBody, cloth
+        case ragdoll, constraint, script, audioSource
         case animationPlayer, animationGraphPlayer, particleEmitter, children
     }
 
@@ -147,6 +154,8 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.collider = try c.decodeIfPresent(EditorSceneManifestCollider.self, forKey: .collider)
         self.characterController = try c.decodeIfPresent(EditorSceneManifestCharacterController.self, forKey: .characterController)
         self.vehicle = try c.decodeIfPresent(EditorSceneManifestVehicle.self, forKey: .vehicle)
+        self.softBody = try c.decodeIfPresent(EditorSceneManifestSoftBody.self, forKey: .softBody)
+        self.cloth = try c.decodeIfPresent(EditorSceneManifestCloth.self, forKey: .cloth)
         self.ragdoll = try c.decodeIfPresent(EditorSceneManifestRagdoll.self, forKey: .ragdoll)
         self.constraint = try c.decodeIfPresent(EditorSceneManifestConstraint.self, forKey: .constraint)
         self.script = try c.decodeIfPresent(EditorSceneManifestScript.self, forKey: .script)
@@ -174,6 +183,8 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         try c.encodeIfPresent(collider, forKey: .collider)
         try c.encodeIfPresent(characterController, forKey: .characterController)
         try c.encodeIfPresent(vehicle, forKey: .vehicle)
+        try c.encodeIfPresent(softBody, forKey: .softBody)
+        try c.encodeIfPresent(cloth, forKey: .cloth)
         try c.encodeIfPresent(ragdoll, forKey: .ragdoll)
         try c.encodeIfPresent(constraint, forKey: .constraint)
         try c.encodeIfPresent(script, forKey: .script)
@@ -1167,7 +1178,97 @@ public struct EditorSceneManifestVehicleTransmission: Codable, Sendable, Equatab
     }
 }
 
+public struct EditorSceneManifestVehicleTrack: Codable, Sendable, Equatable {
+    public let drivenWheel: Int
+    public let wheels: [Int]
+    public let inertia: Float
+    public let angularDamping: Float
+    public let maxBrakeTorque: Float
+    public let differentialRatio: Float
+
+    public init(_ value: VehicleTrackConfiguration) {
+        drivenWheel = value.drivenWheel
+        wheels = value.wheels
+        inertia = value.inertia
+        angularDamping = value.angularDamping
+        maxBrakeTorque = value.maxBrakeTorque
+        differentialRatio = value.differentialRatio
+    }
+
+    var component: VehicleTrackConfiguration {
+        VehicleTrackConfiguration(
+            drivenWheel: drivenWheel,
+            wheels: wheels,
+            inertia: inertia,
+            angularDamping: angularDamping,
+            maxBrakeTorque: maxBrakeTorque,
+            differentialRatio: differentialRatio
+        )
+    }
+}
+
+public struct EditorSceneManifestTrackedVehicle: Codable, Sendable, Equatable {
+    public let leftTrack: EditorSceneManifestVehicleTrack
+    public let rightTrack: EditorSceneManifestVehicleTrack
+    public let longitudinalFriction: Float
+    public let lateralFriction: Float
+
+    public init(_ value: TrackedVehicleConfiguration) {
+        leftTrack = EditorSceneManifestVehicleTrack(value.leftTrack)
+        rightTrack = EditorSceneManifestVehicleTrack(value.rightTrack)
+        longitudinalFriction = value.longitudinalFriction
+        lateralFriction = value.lateralFriction
+    }
+
+    var component: TrackedVehicleConfiguration {
+        TrackedVehicleConfiguration(
+            leftTrack: leftTrack.component,
+            rightTrack: rightTrack.component,
+            longitudinalFriction: longitudinalFriction,
+            lateralFriction: lateralFriction
+        )
+    }
+}
+
+public struct EditorSceneManifestMotorcycleVehicle: Codable, Sendable, Equatable {
+    public let maxLeanAngle: Float
+    public let leanSpringConstant: Float
+    public let leanSpringDamping: Float
+    public let leanSpringIntegrationCoefficient: Float
+    public let leanSpringIntegrationCoefficientDecay: Float
+    public let leanSmoothingFactor: Float
+    public let isLeanControllerEnabled: Bool
+    public let isLeanSteeringLimitEnabled: Bool
+
+    public init(_ value: MotorcycleVehicleConfiguration) {
+        maxLeanAngle = value.maxLeanAngle
+        leanSpringConstant = value.leanSpringConstant
+        leanSpringDamping = value.leanSpringDamping
+        leanSpringIntegrationCoefficient = value.leanSpringIntegrationCoefficient
+        leanSpringIntegrationCoefficientDecay = value.leanSpringIntegrationCoefficientDecay
+        leanSmoothingFactor = value.leanSmoothingFactor
+        isLeanControllerEnabled = value.isLeanControllerEnabled
+        isLeanSteeringLimitEnabled = value.isLeanSteeringLimitEnabled
+    }
+
+    var component: MotorcycleVehicleConfiguration {
+        MotorcycleVehicleConfiguration(
+            maxLeanAngle: maxLeanAngle,
+            leanSpringConstant: leanSpringConstant,
+            leanSpringDamping: leanSpringDamping,
+            leanSpringIntegrationCoefficient: leanSpringIntegrationCoefficient,
+            leanSpringIntegrationCoefficientDecay: leanSpringIntegrationCoefficientDecay,
+            leanSmoothingFactor: leanSmoothingFactor,
+            isLeanControllerEnabled: isLeanControllerEnabled,
+            isLeanSteeringLimitEnabled: isLeanSteeringLimitEnabled
+        )
+    }
+}
+
 public struct EditorSceneManifestVehicle: Codable, Sendable, Equatable {
+    public let controllerKind: String?
+    public let tracked: EditorSceneManifestTrackedVehicle?
+    public let motorcycle: EditorSceneManifestMotorcycleVehicle?
     public let wheels: [EditorSceneManifestVehicleWheel]
     public let differentials: [EditorSceneManifestVehicleDifferential]
     public let antiRollBars: [EditorSceneManifestVehicleAntiRollBar]
@@ -1179,6 +1280,17 @@ public struct EditorSceneManifestVehicle: Codable, Sendable, Equatable {
     public let isEnabled: Bool
 
     public init(_ vehicle: Vehicle) {
+        controllerKind = String(describing: vehicle.controller.kind)
+        if case let .tracked(configuration) = vehicle.controller {
+            tracked = EditorSceneManifestTrackedVehicle(configuration)
+        } else {
+            tracked = nil
+        }
+        if case let .motorcycle(configuration) = vehicle.controller {
+            motorcycle = EditorSceneManifestMotorcycleVehicle(configuration)
+        } else {
+            motorcycle = nil
+        }
         wheels = vehicle.wheels.map(EditorSceneManifestVehicleWheel.init)
         differentials = vehicle.differentials.map(EditorSceneManifestVehicleDifferential.init)
         antiRollBars = vehicle.antiRollBars.map(EditorSceneManifestVehicleAntiRollBar.init)
@@ -1191,7 +1303,17 @@ public struct EditorSceneManifestVehicle: Codable, Sendable, Equatable {
     }
 
     var component: Vehicle {
-        Vehicle(
+        let controller: VehicleControllerConfiguration
+        switch controllerKind {
+        case "tracked":
+            controller = tracked.map { .tracked($0.component) } ?? Vehicle.tracked().controller
+        case "motorcycle":
+            controller = .motorcycle(motorcycle?.component ?? MotorcycleVehicleConfiguration())
+        default:
+            controller = .wheeled
+        }
+        return Vehicle(
+            controller: controller,
             wheels: wheels.map(\.component),
             differentials: differentials.map(\.component),
             antiRollBars: antiRollBars.map(\.component),
@@ -1201,6 +1323,99 @@ public struct EditorSceneManifestVehicle: Codable, Sendable, Equatable {
             forward: forward.simdValue,
             maxPitchRollAngle: maxPitchRollAngle,
             isEnabled: isEnabled
+        )
+    }
+}
+
+public struct EditorSceneManifestSoftBody: Codable, Sendable, Equatable {
+    public let vertexMass: Float
+    public let pressure: Float
+    public let linearDamping: Float
+    public let friction: Float
+    public let restitution: Float
+    public let gravityScale: Float
+    public let vertexRadius: Float
+    public let solverIterations: Int
+    public let maxLinearVelocity: Float
+    public let layerID: UInt16
+    public let layerMask: UInt16
+    public let allowSleep: Bool
+    public let facesDoubleSided: Bool
+    public let selfCollision: Bool
+    public let isEnabled: Bool
+
+    public init(_ body: SoftBody) {
+        vertexMass = body.vertexMass
+        pressure = body.pressure
+        linearDamping = body.linearDamping
+        friction = body.friction
+        restitution = body.restitution
+        gravityScale = body.gravityScale
+        vertexRadius = body.vertexRadius
+        solverIterations = body.solverIterations
+        maxLinearVelocity = body.maxLinearVelocity
+        layerID = body.layerID
+        layerMask = body.layerMask
+        allowSleep = body.allowSleep
+        facesDoubleSided = body.facesDoubleSided
+        selfCollision = body.selfCollision
+        isEnabled = body.isEnabled
+    }
+
+    var component: SoftBody {
+        SoftBody(
+            vertexMass: vertexMass,
+            pressure: pressure,
+            linearDamping: linearDamping,
+            friction: friction,
+            restitution: restitution,
+            gravityScale: gravityScale,
+            vertexRadius: vertexRadius,
+            solverIterations: solverIterations,
+            maxLinearVelocity: maxLinearVelocity,
+            layerID: layerID,
+            layerMask: layerMask,
+            allowSleep: allowSleep,
+            facesDoubleSided: facesDoubleSided,
+            selfCollision: selfCollision,
+            isEnabled: isEnabled
+        )
+    }
+}
+
+public struct EditorSceneManifestCloth: Codable, Sendable, Equatable {
+    public let gridSizeX: Int
+    public let gridSizeZ: Int
+    public let spacing: Float
+    public let fixedVertexIndices: [Int]
+    public let compliance: Float
+    public let shearCompliance: Float
+    public let bendCompliance: Float
+    public let bendType: String
+
+    public init(_ cloth: Cloth) {
+        gridSizeX = cloth.gridSizeX
+        gridSizeZ = cloth.gridSizeZ
+        spacing = cloth.spacing
+        fixedVertexIndices = cloth.fixedVertexIndices
+        compliance = cloth.compliance
+        shearCompliance = cloth.shearCompliance
+        bendCompliance = cloth.bendCompliance
+        bendType = String(describing: cloth.bendType)
+    }
+
+    var component: Cloth {
+        Cloth(
+            gridSizeX: gridSizeX,
+            gridSizeZ: gridSizeZ,
+            spacing: spacing,
+            fixedVertexIndices: fixedVertexIndices,
+            compliance: compliance,
+            shearCompliance: shearCompliance,
+            bendCompliance: bendCompliance,
+            bendType: ClothBendType.allCases.first {
+                String(describing: $0) == bendType
+            } ?? .distance
         )
     }
 }
@@ -2104,6 +2319,7 @@ public enum EditorInspectorFieldValue {
     case json(Binding<String>, minHeight: Float)
     case lightType(Binding<LightType>)
     case physicsSimulationMode(Binding<PhysicsSimulationMode>)
+    case vehicleControllerKind(Binding<VehicleControllerKind>)
     case rigidBodyMotion(Binding<RigidBodyMotionType>)
     case colliderShapeKind(Binding<ColliderShapeKind>)
     case particleEmissionShape(Binding<ParticleEmissionShape>)
@@ -2278,6 +2494,12 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             if let vehicle = node.vehicle {
                 _ = restoredScene.setComponent(vehicle.component, for: entity)
             }
+            if let softBody = node.softBody {
+                _ = restoredScene.setComponent(softBody.component, for: entity)
+            }
+            if let cloth = node.cloth {
+                _ = restoredScene.setComponent(cloth.component, for: entity)
+            }
             if let script = node.script {
                 _ = restoredScene.setComponent(script.component, for: entity)
             }
@@ -2393,6 +2615,12 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         if let vehicleSection = vehicleSection(for: entity) {
             sections.append(vehicleSection)
         }
+        if let softBodySection = softBodySection(for: entity) {
+            sections.append(softBodySection)
+        }
+        if let clothSection = clothSection(for: entity) {
+            sections.append(clothSection)
+        }
         if let ragdollSection = ragdollSection(for: entity) {
             sections.append(ragdollSection)
         }
@@ -2462,6 +2690,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             .map(EditorSceneManifestCharacterController.init)
         let vehicle = scene.component(Vehicle.self, for: entity)
             .map(EditorSceneManifestVehicle.init)
+        let softBody = scene.component(SoftBody.self, for: entity)
+            .map(EditorSceneManifestSoftBody.init)
+        let cloth = scene.component(Cloth.self, for: entity)
+            .map(EditorSceneManifestCloth.init)
         let ragdoll = scene.component(Ragdoll.self, for: entity)
             .map(EditorSceneManifestRagdoll.init)
         let constraint = scene.component(Constraint.self, for: entity)
@@ -2496,6 +2728,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             collider: collider,
             characterController: characterController,
             vehicle: vehicle,
+            softBody: softBody,
+            cloth: cloth,
             ragdoll: ragdoll,
             constraint: constraint,
             script: script,
@@ -2758,72 +2992,175 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         guard let vehicle = scene.component(Vehicle.self, for: entity) else { return nil }
         let state = scene.vehicleStateFrame.states[entity]
         let contactCount = state?.wheels.filter(\.hasContact).count ?? 0
+        var fields: [EditorInspectorField] = [
+            EditorInspectorField(
+                id: "vehicle-enabled", label: L("Enabled"),
+                value: .bool(vehicleEnabledBinding(for: entity))
+            ),
+            EditorInspectorField(
+                id: "vehicle-controller", label: L("Controller"),
+                value: .vehicleControllerKind(vehicleControllerKindBinding(for: entity))
+            ),
+            EditorInspectorField(
+                id: "vehicle-wheels", label: L("Wheels"),
+                value: .readOnly(String(vehicle.wheels.count))
+            ),
+            EditorInspectorField(
+                id: "vehicle-differentials", label: L("Differentials"),
+                value: .readOnly(String(vehicle.differentials.count))
+            ),
+            EditorInspectorField(
+                id: "vehicle-transmission", label: L("Transmission"),
+                value: .readOnly(vehicle.transmission.mode == .automatic ? L("Automatic") : L("Manual"))
+            ),
+            EditorInspectorField(
+                id: "vehicle-max-torque", label: L("Max Torque"),
+                value: .constrainedNumber(
+                    vehicleEngineFloatBinding(for: entity, \.maxTorque, min: 0),
+                    min: 0, max: nil, step: 10, showsStepper: true
+                )
+            ),
+            EditorInspectorField(
+                id: "vehicle-clutch-strength", label: L("Clutch Strength"),
+                value: .constrainedNumber(
+                    vehicleTransmissionFloatBinding(for: entity, \.clutchStrength, min: 0),
+                    min: 0, max: nil, step: 0.5, showsStepper: true
+                )
+            ),
+        ]
+        switch vehicle.controller {
+        case .wheeled:
+            break
+        case .tracked:
+            fields.append(EditorInspectorField(
+                id: "vehicle-track-longitudinal-friction",
+                label: L("Track Forward Friction"),
+                value: .constrainedNumber(
+                    vehicleTrackedFloatBinding(for: entity, \.longitudinalFriction, min: 0),
+                    min: 0, max: nil, step: 0.1, showsStepper: true
+                )
+            ))
+            fields.append(EditorInspectorField(
+                id: "vehicle-track-lateral-friction",
+                label: L("Track Side Friction"),
+                value: .constrainedNumber(
+                    vehicleTrackedFloatBinding(for: entity, \.lateralFriction, min: 0),
+                    min: 0, max: nil, step: 0.1, showsStepper: true
+                )
+            ))
+        case .motorcycle:
+            fields.append(EditorInspectorField(
+                id: "vehicle-motorcycle-max-lean",
+                label: L("Max Lean Angle"),
+                value: .constrainedNumber(
+                    vehicleMotorcycleFloatBinding(for: entity, \.maxLeanAngle, min: 0, max: .pi / 2),
+                    min: 0, max: .pi / 2, step: 0.05, showsStepper: true
+                )
+            ))
+            fields.append(EditorInspectorField(
+                id: "vehicle-motorcycle-lean-spring",
+                label: L("Lean Spring"),
+                value: .constrainedNumber(
+                    vehicleMotorcycleFloatBinding(for: entity, \.leanSpringConstant, min: 0),
+                    min: 0, max: nil, step: 100, showsStepper: true
+                )
+            ))
+            fields.append(EditorInspectorField(
+                id: "vehicle-motorcycle-lean-enabled",
+                label: L("Lean Controller"),
+                value: .bool(vehicleMotorcycleLeanEnabledBinding(for: entity))
+            ))
+        }
+        fields.append(contentsOf: [
+            EditorInspectorField(
+                id: "vehicle-speed", label: L("Forward Speed"),
+                value: .readOnly(format(state?.forwardSpeed ?? 0))
+            ),
+            EditorInspectorField(
+                id: "vehicle-engine-rpm", label: L("Engine RPM"),
+                value: .readOnly(format(state?.engineRPM ?? 0))
+            ),
+            EditorInspectorField(
+                id: "vehicle-current-gear", label: L("Current Gear"),
+                value: .readOnly(String(state?.currentGear ?? 0))
+            ),
+            EditorInspectorField(
+                id: "vehicle-wheel-contacts", label: L("Wheel Contacts"),
+                value: .readOnly("\(contactCount) / \(vehicle.wheels.count)")
+            ),
+        ])
+        return EditorInspectorSection(id: "vehicle", title: L("Vehicle"), fields: fields)
+    }
+
+    private func softBodySection(for entity: EntityID) -> EditorInspectorSection? {
+        guard scene.hasComponent(SoftBody.self, for: entity) else { return nil }
+        let state = scene.softBodyStateFrame.states[entity]
         return EditorInspectorSection(
-            id: "vehicle",
-            title: L("Vehicle"),
+            id: "soft-body",
+            title: L("Soft Body"),
             fields: [
-                EditorInspectorField(
-                    id: "vehicle-enabled",
-                    label: L("Enabled"),
-                    value: .bool(vehicleEnabledBinding(for: entity))
-                ),
-                EditorInspectorField(
-                    id: "vehicle-wheels",
-                    label: L("Wheels"),
-                    value: .readOnly(String(vehicle.wheels.count))
-                ),
-                EditorInspectorField(
-                    id: "vehicle-differentials",
-                    label: L("Differentials"),
-                    value: .readOnly(String(vehicle.differentials.count))
-                ),
-                EditorInspectorField(
-                    id: "vehicle-transmission",
-                    label: L("Transmission"),
-                    value: .readOnly(vehicle.transmission.mode == .automatic ? L("Automatic") : L("Manual"))
-                ),
-                EditorInspectorField(
-                    id: "vehicle-max-torque",
-                    label: L("Max Torque"),
-                    value: .constrainedNumber(
-                        vehicleEngineFloatBinding(for: entity, \.maxTorque, min: 0),
-                        min: 0,
-                        max: nil,
-                        step: 10,
-                        showsStepper: true
-                    )
-                ),
-                EditorInspectorField(
-                    id: "vehicle-clutch-strength",
-                    label: L("Clutch Strength"),
-                    value: .constrainedNumber(
-                        vehicleTransmissionFloatBinding(for: entity, \.clutchStrength, min: 0),
-                        min: 0,
-                        max: nil,
-                        step: 0.5,
-                        showsStepper: true
-                    )
-                ),
-                EditorInspectorField(
-                    id: "vehicle-speed",
-                    label: L("Forward Speed"),
-                    value: .readOnly(format(state?.forwardSpeed ?? 0))
-                ),
-                EditorInspectorField(
-                    id: "vehicle-engine-rpm",
-                    label: L("Engine RPM"),
-                    value: .readOnly(format(state?.engineRPM ?? 0))
-                ),
-                EditorInspectorField(
-                    id: "vehicle-current-gear",
-                    label: L("Current Gear"),
-                    value: .readOnly(String(state?.currentGear ?? 0))
-                ),
-                EditorInspectorField(
-                    id: "vehicle-wheel-contacts",
-                    label: L("Wheel Contacts"),
-                    value: .readOnly("\(contactCount) / \(vehicle.wheels.count)")
-                ),
+                EditorInspectorField(id: "soft-body-enabled", label: L("Enabled"),
+                                     value: .bool(softBodyBoolBinding(for: entity, \.isEnabled))),
+                EditorInspectorField(id: "soft-body-vertex-mass", label: L("Vertex Mass"),
+                                     value: .constrainedNumber(softBodyFloatBinding(for: entity, \.vertexMass, min: 0.0001), min: 0.0001, max: nil, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "soft-body-pressure", label: L("Pressure"),
+                                     value: .constrainedNumber(softBodyFloatBinding(for: entity, \.pressure, min: 0), min: 0, max: nil, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "soft-body-damping", label: L("Linear Damping"),
+                                     value: .constrainedNumber(softBodyFloatBinding(for: entity, \.linearDamping, min: 0), min: 0, max: nil, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "soft-body-friction", label: L("Friction"),
+                                     value: .constrainedNumber(softBodyFloatBinding(for: entity, \.friction, min: 0), min: 0, max: nil, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "soft-body-restitution", label: L("Restitution"),
+                                     value: .constrainedNumber(softBodyFloatBinding(for: entity, \.restitution, min: 0, max: 1), min: 0, max: 1, step: 0.05, showsStepper: true)),
+                EditorInspectorField(id: "soft-body-gravity", label: L("Gravity Scale"),
+                                     value: .constrainedNumber(softBodyFloatBinding(for: entity, \.gravityScale), min: nil, max: nil, step: 0.1, showsStepper: true)),
+                EditorInspectorField(id: "soft-body-vertex-radius", label: L("Vertex Radius"),
+                                     value: .constrainedNumber(softBodyFloatBinding(for: entity, \.vertexRadius, min: 0), min: 0, max: nil, step: 0.005, showsStepper: true)),
+                EditorInspectorField(id: "soft-body-iterations", label: L("Solver Iterations"),
+                                     value: .constrainedNumber(softBodyIterationsBinding(for: entity), min: 1, max: 128, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "soft-body-max-velocity", label: L("Max Velocity"),
+                                     value: .constrainedNumber(softBodyFloatBinding(for: entity, \.maxLinearVelocity, min: 0), min: 0, max: nil, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "soft-body-layer", label: L("Layer"),
+                                     value: .constrainedNumber(softBodyLayerBinding(for: entity, \.layerID, max: 15), min: 0, max: 15, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "soft-body-layer-mask", label: L("Layer Mask"),
+                                     value: .constrainedNumber(softBodyLayerBinding(for: entity, \.layerMask, max: 65_535), min: 0, max: 65_535, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "soft-body-allow-sleep", label: L("Allow Sleep"),
+                                     value: .bool(softBodyBoolBinding(for: entity, \.allowSleep))),
+                EditorInspectorField(id: "soft-body-double-sided", label: L("Double Sided"),
+                                     value: .bool(softBodyBoolBinding(for: entity, \.facesDoubleSided))),
+                EditorInspectorField(id: "soft-body-self-collision", label: L("Self Collision (Unsupported)"),
+                                     value: .bool(softBodyBoolBinding(for: entity, \.selfCollision))),
+                EditorInspectorField(id: "soft-body-streamed-vertices", label: L("Streamed Vertices"),
+                                     value: .readOnly(String(state?.positions.count ?? 0))),
+                EditorInspectorField(id: "soft-body-sleeping", label: L("Sleeping"),
+                                     value: .readOnly((state?.isSleeping ?? false) ? L("Yes") : L("No"))),
+            ]
+        )
+    }
+
+    private func clothSection(for entity: EntityID) -> EditorInspectorSection? {
+        guard let cloth = scene.component(Cloth.self, for: entity) else { return nil }
+        return EditorInspectorSection(
+            id: "cloth",
+            title: L("Cloth"),
+            fields: [
+                EditorInspectorField(id: "cloth-grid-x", label: L("Grid X"),
+                                     value: .constrainedNumber(clothGridBinding(for: entity, axis: .x), min: 2, max: 512, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "cloth-grid-z", label: L("Grid Z"),
+                                     value: .constrainedNumber(clothGridBinding(for: entity, axis: .z), min: 2, max: 512, step: 1, showsStepper: true)),
+                EditorInspectorField(id: "cloth-spacing", label: L("Spacing"),
+                                     value: .constrainedNumber(clothFloatBinding(for: entity, \.spacing, min: 0.001), min: 0.001, max: nil, step: 0.01, showsStepper: true)),
+                EditorInspectorField(id: "cloth-fixed-vertices", label: L("Fixed Vertex Indices"),
+                                     value: .json(clothFixedVerticesBinding(for: entity), minHeight: 58)),
+                EditorInspectorField(id: "cloth-compliance", label: L("Stretch Compliance"),
+                                     value: .constrainedNumber(clothFloatBinding(for: entity, \.compliance, min: 0), min: 0, max: nil, step: 0.00001, showsStepper: true)),
+                EditorInspectorField(id: "cloth-shear-compliance", label: L("Shear Compliance"),
+                                     value: .constrainedNumber(clothFloatBinding(for: entity, \.shearCompliance, min: 0), min: 0, max: nil, step: 0.00001, showsStepper: true)),
+                EditorInspectorField(id: "cloth-bend-compliance", label: L("Bend Compliance"),
+                                     value: .constrainedNumber(clothFloatBinding(for: entity, \.bendCompliance, min: 0), min: 0, max: nil, step: 0.00001, showsStepper: true)),
+                EditorInspectorField(id: "cloth-bend-type", label: L("Bend Type"),
+                                     value: .text(clothBendTypeBinding(for: entity))),
+                EditorInspectorField(id: "cloth-vertex-count", label: L("Vertices"),
+                                     value: .readOnly(String(cloth.vertexCount))),
             ]
         )
     }
@@ -5120,6 +5457,200 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
+    private func softBodyFloatBinding(
+        for entity: EntityID,
+        _ keyPath: WritableKeyPath<SoftBody, Float>,
+        min minimum: Float? = nil,
+        max maximum: Float? = nil
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in scene.component(SoftBody.self, for: entity)?[keyPath: keyPath] ?? 0 },
+            set: { [self] next in
+                var value = next
+                if let minimum { value = Swift.max(minimum, value) }
+                if let maximum { value = Swift.min(maximum, value) }
+                guard scene.updateComponent(SoftBody.self, for: entity, {
+                    $0[keyPath: keyPath] = value
+                }) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func softBodyBoolBinding(
+        for entity: EntityID,
+        _ keyPath: WritableKeyPath<SoftBody, Bool>
+    ) -> Binding<Bool> {
+        Binding(
+            get: { [self] in scene.component(SoftBody.self, for: entity)?[keyPath: keyPath] ?? false },
+            set: { [self] value in
+                guard scene.updateComponent(SoftBody.self, for: entity, {
+                    $0[keyPath: keyPath] = value
+                }) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func softBodyIterationsBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                Float(scene.component(SoftBody.self, for: entity)?.solverIterations ?? 1)
+            },
+            set: { [self] value in
+                let iterations = max(1, min(Int(value.rounded()), 128))
+                guard scene.updateComponent(SoftBody.self, for: entity, {
+                    $0.solverIterations = iterations
+                }) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func softBodyLayerBinding(
+        for entity: EntityID,
+        _ keyPath: WritableKeyPath<SoftBody, UInt16>,
+        max maximum: UInt16
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                Float(scene.component(SoftBody.self, for: entity)?[keyPath: keyPath] ?? 0)
+            },
+            set: { [self] value in
+                let rounded = max(0, min(Int(value.rounded()), Int(maximum)))
+                guard scene.updateComponent(SoftBody.self, for: entity, {
+                    $0[keyPath: keyPath] = UInt16(rounded)
+                }) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private enum ClothGridAxis: Equatable { case x, z }
+
+    private func clothGridBinding(
+        for entity: EntityID,
+        axis: ClothGridAxis
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                guard let cloth = scene.component(Cloth.self, for: entity) else { return 2 }
+                return Float(axis == .x ? cloth.gridSizeX : cloth.gridSizeZ)
+            },
+            set: { [self] value in
+                guard let cloth = scene.component(Cloth.self, for: entity) else { return }
+                let size = max(2, min(Int(value.rounded()), 512))
+                let next = Cloth(
+                    gridSizeX: axis == .x ? size : cloth.gridSizeX,
+                    gridSizeZ: axis == .z ? size : cloth.gridSizeZ,
+                    spacing: cloth.spacing,
+                    fixedVertexIndices: cloth.fixedVertexIndices,
+                    compliance: cloth.compliance,
+                    shearCompliance: cloth.shearCompliance,
+                    bendCompliance: cloth.bendCompliance,
+                    bendType: cloth.bendType
+                )
+                guard scene.setComponent(next, for: entity) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func clothFloatBinding(
+        for entity: EntityID,
+        _ keyPath: WritableKeyPath<Cloth, Float>,
+        min minimum: Float? = nil
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in scene.component(Cloth.self, for: entity)?[keyPath: keyPath] ?? 0 },
+            set: { [self] next in
+                let value = minimum.map { Swift.max($0, next) } ?? next
+                guard scene.updateComponent(Cloth.self, for: entity, {
+                    $0[keyPath: keyPath] = value
+                }) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func clothFixedVerticesBinding(for entity: EntityID) -> Binding<String> {
+        Binding(
+            get: { [self] in
+                guard let indices = scene.component(Cloth.self, for: entity)?.fixedVertexIndices,
+                      let data = try? JSONEncoder().encode(indices)
+                else { return "[]" }
+                return String(decoding: data, as: UTF8.self)
+            },
+            set: { [self] text in
+                guard let data = text.data(using: .utf8),
+                      let indices = try? JSONDecoder().decode([Int].self, from: data),
+                      let cloth = scene.component(Cloth.self, for: entity)
+                else { return }
+                let next = Cloth(
+                    gridSizeX: cloth.gridSizeX,
+                    gridSizeZ: cloth.gridSizeZ,
+                    spacing: cloth.spacing,
+                    fixedVertexIndices: indices,
+                    compliance: cloth.compliance,
+                    shearCompliance: cloth.shearCompliance,
+                    bendCompliance: cloth.bendCompliance,
+                    bendType: cloth.bendType
+                )
+                guard scene.setComponent(next, for: entity) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func clothBendTypeBinding(for entity: EntityID) -> Binding<String> {
+        Binding(
+            get: { [self] in
+                String(describing: scene.component(Cloth.self, for: entity)?.bendType ?? .distance)
+            },
+            set: { [self] text in
+                guard let bendType = ClothBendType.allCases.first(where: {
+                    String(describing: $0).caseInsensitiveCompare(text) == .orderedSame
+                }), scene.updateComponent(Cloth.self, for: entity, {
+                    $0.bendType = bendType
+                }) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func vehicleControllerKindBinding(for entity: EntityID) -> Binding<VehicleControllerKind> {
+        Binding(
+            get: { [self] in
+                scene.component(Vehicle.self, for: entity)?.controller.kind ?? .wheeled
+            },
+            set: { [self] kind in
+                guard let current = scene.component(Vehicle.self, for: entity),
+                      current.controller.kind != kind else { return }
+                var next: Vehicle
+                switch kind {
+                case .wheeled:
+                    next = Vehicle(engine: current.engine, transmission: current.transmission)
+                case .tracked:
+                    next = Vehicle.tracked(
+                        engine: current.engine,
+                        transmission: current.transmission
+                    )
+                case .motorcycle:
+                    next = Vehicle.motorcycle(
+                        engine: current.engine,
+                        transmission: current.transmission
+                    )
+                }
+                next.up = current.up
+                next.forward = current.forward
+                next.maxPitchRollAngle = current.maxPitchRollAngle
+                next.isEnabled = current.isEnabled
+                guard scene.setComponent(next, for: entity) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
     private func vehicleEnabledBinding(for entity: EntityID) -> Binding<Bool> {
         Binding(
             get: { [self] in scene.component(Vehicle.self, for: entity)?.isEnabled ?? false },
@@ -5163,6 +5694,75 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 let value = minimum.map { Swift.max($0, next) } ?? next
                 guard scene.updateComponent(Vehicle.self, for: entity, {
                     $0.transmission[keyPath: keyPath] = value
+                }) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func vehicleTrackedFloatBinding(
+        for entity: EntityID,
+        _ keyPath: WritableKeyPath<TrackedVehicleConfiguration, Float>,
+        min minimum: Float? = nil
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                guard case let .tracked(configuration)? =
+                    scene.component(Vehicle.self, for: entity)?.controller
+                else { return 0 }
+                return configuration[keyPath: keyPath]
+            },
+            set: { [self] next in
+                let value = minimum.map { Swift.max($0, next) } ?? next
+                guard scene.updateComponent(Vehicle.self, for: entity, { vehicle in
+                    guard case var .tracked(configuration) = vehicle.controller else { return }
+                    configuration[keyPath: keyPath] = value
+                    vehicle.controller = .tracked(configuration)
+                }) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func vehicleMotorcycleFloatBinding(
+        for entity: EntityID,
+        _ keyPath: WritableKeyPath<MotorcycleVehicleConfiguration, Float>,
+        min minimum: Float? = nil,
+        max maximum: Float? = nil
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                guard case let .motorcycle(configuration)? =
+                    scene.component(Vehicle.self, for: entity)?.controller
+                else { return 0 }
+                return configuration[keyPath: keyPath]
+            },
+            set: { [self] next in
+                var value = minimum.map { Swift.max($0, next) } ?? next
+                value = maximum.map { Swift.min($0, value) } ?? value
+                guard scene.updateComponent(Vehicle.self, for: entity, { vehicle in
+                    guard case var .motorcycle(configuration) = vehicle.controller else { return }
+                    configuration[keyPath: keyPath] = value
+                    vehicle.controller = .motorcycle(configuration)
+                }) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func vehicleMotorcycleLeanEnabledBinding(for entity: EntityID) -> Binding<Bool> {
+        Binding(
+            get: { [self] in
+                guard case let .motorcycle(configuration)? =
+                    scene.component(Vehicle.self, for: entity)?.controller
+                else { return false }
+                return configuration.isLeanControllerEnabled
+            },
+            set: { [self] value in
+                guard scene.updateComponent(Vehicle.self, for: entity, { vehicle in
+                    guard case var .motorcycle(configuration) = vehicle.controller else { return }
+                    configuration.isLeanControllerEnabled = value
+                    vehicle.controller = .motorcycle(configuration)
                 }) else { return }
                 notifyRevisionChanged()
             }

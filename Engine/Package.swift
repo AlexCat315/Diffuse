@@ -388,7 +388,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "GuavaPluginHost",
-            dependencies: ["CapabilityRuntime", "PluginRuntime"]
+            dependencies: ["CapabilityRuntime", "IntentRuntime", "PluginRuntime"]
         ),
         .testTarget(
             name: "EngineCoreTests",

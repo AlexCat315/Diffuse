@@ -1,5 +1,6 @@
 import CapabilityRuntime
 import Foundation
+import IntentRuntime
 
 /// Provider adapters for the dynamic capability exposure protocol. All schemas
 /// originate from CapabilityRegistry contracts.
@@ -8,7 +9,7 @@ public enum CapabilityToolset {
     public static let submitToolName = "submit_plan"
 
     public static func anthropicTools(snapshot: CapabilityExposureSnapshot,
-                                      registry: CapabilityRegistry = .default) -> [[String: Any]] {
+                                      registry: CapabilityRegistry = .aiDefault) -> [[String: Any]] {
         frameworkContracts(registry: registry).map { name, contract in
             ["name": name,
              "description": contract.description,
@@ -19,7 +20,7 @@ public enum CapabilityToolset {
     }
 
     public static func openAITools(snapshot: CapabilityExposureSnapshot,
-                                   registry: CapabilityRegistry = .default) -> [[String: Any]] {
+                                   registry: CapabilityRegistry = .aiDefault) -> [[String: Any]] {
         frameworkContracts(registry: registry).map { name, contract in
             ["type": "function",
              "function": [
@@ -33,7 +34,7 @@ public enum CapabilityToolset {
     }
 
     public static func openAIResponsesTools(snapshot: CapabilityExposureSnapshot,
-                                            registry: CapabilityRegistry = .default) -> [[String: Any]] {
+                                            registry: CapabilityRegistry = .aiDefault) -> [[String: Any]] {
         frameworkContracts(registry: registry).map { name, contract in
             contract.openAIResponsesToolDefinition(name: name)
         } + snapshot.contracts

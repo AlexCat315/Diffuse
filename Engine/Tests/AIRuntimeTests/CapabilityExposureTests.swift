@@ -6,6 +6,7 @@ import FoundationNetworking
 #endif
 import IntentRuntime
 import SceneRuntime
+import SIMDCompat
 import Testing
 
 @Suite("AI capability exposure")
@@ -62,7 +63,7 @@ struct CapabilityExposureTests {
     func allSceneOperationsHaveContracts() throws {
         for operation in SceneEditOp.allCases {
             let descriptor = try #require(
-                CapabilityRegistry.default.descriptor(for: operation.capabilityID),
+                CapabilityRegistry.aiDefault.descriptor(for: operation.capabilityID),
                 "missing capability for \(operation.rawValue)"
             )
             #expect(descriptor.isAIExposed)
@@ -70,7 +71,7 @@ struct CapabilityExposureTests {
             #expect(!descriptor.access.isWrite || descriptor.contract.inputSchema.isStrictCapabilityInput)
             #expect(!descriptor.contract.schemaHash.isEmpty)
         }
-        try CapabilityRegistry.default.validateIntegrity()
+        try CapabilityRegistry.aiDefault.validateIntegrity()
     }
 
     @Test("schema hash changes when contract constraints change")
@@ -102,7 +103,7 @@ struct CapabilityExposureTests {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
         let revision = scene.snapshot.revision
-        let snapshot = CapabilityRegistry.default.exposureSnapshot(
+        let snapshot = CapabilityRegistry.aiDefault.exposureSnapshot(
             sceneRevision: revision,
             includedCapabilityIDs: ["scene.set_transform"]
         )
@@ -158,7 +159,7 @@ struct CapabilityExposureTests {
 
     @Test("forged tool names cannot create drafts")
     func forgedToolNameFailsClosed() async throws {
-        let snapshot = CapabilityRegistry.default.exposureSnapshot(
+        let snapshot = CapabilityRegistry.aiDefault.exposureSnapshot(
             sceneRevision: 0,
             includedCapabilityIDs: ["scene.set_name"]
         )
@@ -174,11 +175,304 @@ struct CapabilityExposureTests {
         }
     }
 
+    @Test("session capability searches expand one snapshot without invalidating earlier drafts")
+    func exposureSessionExpansionPreservesDraftAuthority() async throws {
+        let sessionID = UUID().uuidString
+        let sessions = CapabilityExposureSessionStore()
+        let first = try await sessions.search(sessionID: sessionID,
+                                              query: "rename entity",
+                                              sceneRevision: 9)
+        let rename = try #require(first.contracts.first { $0.id == "scene.set_name" })
+        let draft = try await sessions.createDraft(
+            sessionID: sessionID,
+            toolName: rename.toolName,
+            input: Data(#"{"entity_id":"scene:1","name":"Renamed"}"#.utf8),
+            sceneRevision: 9
+        )
+
+        let second = try await sessions.search(sessionID: sessionID,
+                                               query: "transform",
+                                               sceneRevision: 9)
+        #expect(second.snapshotID == first.snapshotID)
+        #expect(second.contracts.contains { $0.id == "scene.set_transform" })
+        let submitted = try await sessions.validatedDrafts(sessionID: sessionID,
+                                                           ids: [draft.id],
+                                                           sceneRevision: 9)
+        #expect(submitted.drafts == [draft])
+        #expect(submitted.snapshot.id == first.snapshotID)
+
+        _ = try await sessions.search(sessionID: sessionID,
+                                      query: "rename",
+                                      sceneRevision: 10)
+        await #expect(throws: CapabilityDraftError.self) {
+            try await sessions.validatedDrafts(sessionID: sessionID,
+                                               ids: [draft.id],
+                                               sceneRevision: 10)
+        }
+    }
+
+    @Test("transport sessions begin with only core reads and never exceed the active tool cap")
+    func exposureSessionBootstrapIsBounded() async throws {
+        let sessionID = UUID().uuidString
+        let sessions = CapabilityExposureSessionStore()
+        let initial = try await sessions.bootstrap(sessionID: sessionID, sceneRevision: 4)
+        #expect(Set(initial.contracts.map(\.id)) == [
+            "scene.get_entities", "scene.get_selection", "scene.find_entities",
+        ])
+        #expect(initial.contracts.allSatisfy { $0.access == .read })
+
+        let expanded = try await sessions.search(sessionID: sessionID,
+                                                 query: "scene",
+                                                 sceneRevision: 4)
+        #expect(expanded.snapshotID == initial.snapshotID)
+        #expect(expanded.activeContracts.count <= CapabilityExposureSessionStore.maximumActiveCapabilities)
+        #expect(expanded.activeToolCount == expanded.activeContracts.count)
+        #expect(Set(initial.contracts.map(\.id)).isSubset(of: Set(expanded.activeContracts.map(\.id))))
+
+        await #expect(throws: CapabilityDraftError.unknownTool("cap_scene_set_name_v1_forged")) {
+            try await sessions.contract(sessionID: sessionID,
+                                        toolName: "cap_scene_set_name_v1_forged",
+                                        sceneRevision: 4)
+        }
+    }
+
+    @Test("migrated primitives expose and execute their generated typed contract")
+    func typedBuiltInPrimitiveIsAuthoritative() throws {
+        for registration in BuiltInTypedCapabilityCatalog.registrations {
+            let exposed = try #require(
+                CapabilityRegistry.aiDefault.descriptor(for: registration.contract.id)?.contract
+            )
+            #expect(exposed == registration.contract)
+            #expect(exposed.inputSchema.additionalProperties == false)
+        }
+        #expect(SetNameCapability.contract.inputSchema.properties["name"]?.minimumLength == 1)
+        #expect(SetNameCapability.contract.inputSchema.properties["name"]?.maximumLength == 256)
+        #expect(throws: JSONSchemaViolation.self) {
+            try JSONSchemaValidator.validate(
+                data: Data(#"{"entity_id":"scene:1","name":""}"#.utf8),
+                against: SetNameCapability.contract.inputSchema
+            )
+        }
+
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let snapshot = CapabilityRegistry.aiDefault.exposureSnapshot(
+            sceneRevision: scene.snapshot.revision,
+            includedCapabilityIDs: ["scene.set_name"]
+        )
+        let plan = try JSONDecoder().decode(
+            SceneEditPlan.self,
+            from: Data(#"{"summary":"Rename","steps":[{"op":"set_name","entity_id":"scene:\#(entity.rawValue)","name":"Typed"}]}"#.utf8)
+        )
+        let transaction = try SceneEditPlanExecutor().buildTransaction(
+            from: plan,
+            scene: scene,
+            exposureSnapshot: snapshot
+        )
+        #expect(transaction.operations == [
+            .scene(.setSceneName(entityID: entity.rawValue, value: "Typed")),
+        ])
+        #expect(transaction.capabilityInvocations.first?.schemaHash
+                == SetNameCapability.contract.schemaHash)
+    }
+
+    @Test("typed transform preparation preserves omitted fields across the shadow scene")
+    func typedTransformUsesValueOnlyShadowState() throws {
+        let contract = SetTransformCapability.contract
+        #expect(contract.inputSchema.additionalProperties == false)
+        #expect(contract.inputSchema.required == ["entity_id"])
+        let scaleSchema = try #require(contract.inputSchema.properties["scale"])
+        let scaleArray = try #require(scaleSchema.oneOf.first { $0.type == .array })
+        #expect(scaleArray.items.first?.minimum == 0.001)
+        #expect(scaleArray.items.first?.maximum == 1_000)
+
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setLocalTransform(
+            LocalTransform(translation: SIMD3<Float>(1, 2, 3)),
+            for: entity
+        )
+        let snapshot = CapabilityRegistry.aiDefault.exposureSnapshot(
+            sceneRevision: scene.snapshot.revision,
+            includedCapabilityIDs: ["scene.set_transform"]
+        )
+        let json = #"{"summary":"Transform","steps":[{"op":"set_transform","entity_id":"scene:\#(entity.rawValue)","position":[10,20,30]},{"op":"set_transform","entity_id":"scene:\#(entity.rawValue)","scale":[2,3,4]}]}"#
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(
+            from: plan,
+            scene: scene,
+            exposureSnapshot: snapshot
+        )
+        #expect(transaction.operations.count == 2)
+        guard transaction.operations.count == 2,
+              case let .scene(.setLocalTransform(_, secondTransform)) = transaction.operations[1] else {
+            Issue.record("expected a second typed setLocalTransform operation")
+            return
+        }
+        #expect(secondTransform.translation == SIMD3<Float>(10, 20, 30))
+        #expect(length(SIMD3(
+            secondTransform.matrix.columns.0.x,
+            secondTransform.matrix.columns.0.y,
+            secondTransform.matrix.columns.0.z
+        )) == 2)
+        #expect(length(SIMD3(
+            secondTransform.matrix.columns.1.x,
+            secondTransform.matrix.columns.1.y,
+            secondTransform.matrix.columns.1.z
+        )) == 3)
+        #expect(length(SIMD3(
+            secondTransform.matrix.columns.2.x,
+            secondTransform.matrix.columns.2.y,
+            secondTransform.matrix.columns.2.z
+        )) == 4)
+        #expect(transaction.capabilityInvocations.allSatisfy {
+            $0.schemaHash == SetTransformCapability.contract.schemaHash
+        })
+
+        #expect(throws: JSONSchemaViolation.self) {
+            try JSONSchemaValidator.validate(
+                data: Data(#"{"entity_id":"scene:1","scale":[0,1,1]}"#.utf8),
+                against: contract.inputSchema
+            )
+        }
+        let emptyTransformJSON = #"{"summary":"No-op","steps":[{"op":"set_transform","entity_id":"scene:\#(entity.rawValue)"}]}"#
+        let emptyTransformPlan = try JSONDecoder().decode(
+            SceneEditPlan.self,
+            from: Data(emptyTransformJSON.utf8)
+        )
+        #expect(throws: SceneEditPlanExecutorError.self) {
+            try SceneEditPlanExecutor().buildTransaction(
+                from: emptyTransformPlan,
+                scene: scene,
+                exposureSnapshot: snapshot
+            )
+        }
+    }
+
+    @Test("typed light capabilities validate components and generate host operations")
+    func typedLightCapabilitiesPrepareHostOperations() throws {
+        let typeSchema = try #require(
+            SetLightTypeCapability.contract.inputSchema.properties["light_type"]
+        )
+        #expect(typeSchema.allowedValues == [
+            .string("directional"), .string("point"), .string("spot"),
+        ])
+        let colorSchema = try #require(
+            SetLightColorCapability.contract.inputSchema.properties["color"]
+        )
+        #expect(colorSchema.items.first?.minimum == 0)
+        #expect(colorSchema.items.first?.maximum == 1)
+
+        var scene = SceneRuntime()
+        let light = scene.createEntity()
+        _ = scene.setComponent(LightComponent(type: .point), for: light)
+        let capabilityIDs = [
+            "scene.set_light_type",
+            "scene.set_light_intensity",
+            "scene.set_light_color",
+            "scene.set_light_range",
+            "scene.set_light_spot_angles",
+            "scene.set_light_cast_shadows",
+        ]
+        let snapshot = CapabilityRegistry.aiDefault.exposureSnapshot(
+            sceneRevision: scene.snapshot.revision,
+            includedCapabilityIDs: Set(capabilityIDs)
+        )
+        let ref = "scene:\(light.rawValue)"
+        let planData = try JSONSerialization.data(withJSONObject: [
+            "summary": "Configure light",
+            "steps": [
+                ["op": "set_light_type", "entity_id": ref, "light_type": "spot"],
+                ["op": "set_light_intensity", "entity_id": ref, "intensity": 250],
+                ["op": "set_light_color", "entity_id": ref, "color": [0.2, 0.4, 0.6]],
+                ["op": "set_light_range", "entity_id": ref, "range": 15],
+                ["op": "set_light_spot_angles", "entity_id": ref,
+                 "spot_inner_angle": 15, "spot_outer_angle": 25],
+                ["op": "set_light_cast_shadows", "entity_id": ref,
+                 "light_cast_shadows": true],
+            ],
+        ])
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: planData)
+        let transaction = try SceneEditPlanExecutor().buildTransaction(
+            from: plan,
+            scene: scene,
+            exposureSnapshot: snapshot
+        )
+        #expect(transaction.operations == [
+            .scene(.setLightType(entityID: light.rawValue, type: .spot)),
+            .scene(.setLightIntensity(entityID: light.rawValue, intensity: 250)),
+            .scene(.setLightColor(entityID: light.rawValue, color: SIMD3<Float>(0.2, 0.4, 0.6))),
+            .scene(.setLightRange(entityID: light.rawValue, range: 15)),
+            .scene(.setLightSpotInnerAngle(entityID: light.rawValue, angleDegrees: 15)),
+            .scene(.setLightSpotOuterAngle(entityID: light.rawValue, angleDegrees: 25)),
+            .scene(.setLightCastShadows(entityID: light.rawValue, value: true)),
+        ])
+        #expect(transaction.capabilityInvocations.map(\.capabilityID) == capabilityIDs)
+
+        let nonLight = scene.createEntity()
+        let invalidData = try JSONSerialization.data(withJSONObject: [
+            "summary": "Invalid target",
+            "steps": [[
+                "op": "set_light_intensity",
+                "entity_id": "scene:\(nonLight.rawValue)",
+                "intensity": 1,
+            ]],
+        ])
+        let invalidPlan = try JSONDecoder().decode(SceneEditPlan.self, from: invalidData)
+        #expect(throws: SceneEditPlanExecutorError.self) {
+            try SceneEditPlanExecutor().buildTransaction(
+                from: invalidPlan,
+                scene: scene,
+                exposureSnapshot: snapshot
+            )
+        }
+
+        let invalidAnglesData = try JSONSerialization.data(withJSONObject: [
+            "summary": "Invalid angles",
+            "steps": [[
+                "op": "set_light_spot_angles",
+                "entity_id": ref,
+                "spot_inner_angle": 60,
+                "spot_outer_angle": 30,
+            ]],
+        ])
+        let invalidAnglesPlan = try JSONDecoder().decode(
+            SceneEditPlan.self,
+            from: invalidAnglesData
+        )
+        #expect(throws: SceneEditPlanExecutorError.self) {
+            try SceneEditPlanExecutor().buildTransaction(
+                from: invalidAnglesPlan,
+                scene: scene,
+                exposureSnapshot: snapshot
+            )
+        }
+    }
+
+    @Test("shadow preparation rejects a later typed call to an entity deleted earlier")
+    func typedPreparationUsesSequentialShadowScene() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let snapshot = CapabilityRegistry.aiDefault.exposureSnapshot(
+            sceneRevision: scene.snapshot.revision,
+            includedCapabilityIDs: ["scene.delete_entity", "scene.set_name"]
+        )
+        let json = #"{"summary":"Invalid sequence","steps":[{"op":"delete_entity","entity_id":"scene:\#(entity.rawValue)"},{"op":"set_name","entity_id":"scene:\#(entity.rawValue)","name":"Too late"}]}"#
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        #expect(throws: SceneEditPlanExecutorError.self) {
+            try SceneEditPlanExecutor().buildTransaction(
+                from: plan,
+                scene: scene,
+                exposureSnapshot: snapshot
+            )
+        }
+    }
+
     @Test("AI transactions carry exact invocation records and verification assertions")
     func transactionCarriesExplicitAuthority() throws {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
-        let snapshot = CapabilityRegistry.default.exposureSnapshot(
+        let snapshot = CapabilityRegistry.aiDefault.exposureSnapshot(
             sceneRevision: scene.snapshot.revision,
             includedCapabilityIDs: ["scene.set_name"]
         )

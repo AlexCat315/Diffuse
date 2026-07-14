@@ -1706,11 +1706,56 @@ final class AIRuntimeTests: XCTestCase {
         let record = snapshot.entities.first { $0.id == "scene:\(entity.rawValue)" }
         XCTAssertEqual(record?.components.contains("vehicle"), true)
         XCTAssertEqual(record?.vehicleIsEnabled, false)
+        XCTAssertEqual(record?.vehicleControllerKind, "wheeled")
         XCTAssertEqual(record?.vehicleWheelCount, 4)
         XCTAssertEqual(record?.vehicleDifferentialCount, 1)
         XCTAssertEqual(record?.vehicleTransmissionMode, "manual")
         XCTAssertEqual(record?.vehicleMaxTorque ?? 0, 725, accuracy: 0.001)
         XCTAssertNil(record?.vehicleForwardSpeed)
+    }
+
+    func testSceneSemanticEncoderSurfacesSoftBodyAndClothConfiguration() {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(
+            SoftBody(
+                pressure: 1.5,
+                linearDamping: 0.25,
+                vertexRadius: 0.03,
+                isEnabled: false
+            ),
+            for: entity
+        )
+        _ = scene.setComponent(
+            Cloth(
+                gridSizeX: 6,
+                gridSizeZ: 8,
+                spacing: 0.12,
+                fixedVertexIndices: [0, 2, 4],
+                bendType: .dihedral
+            ),
+            for: entity
+        )
+
+        let snapshot = SceneSemanticEncoder().encode(
+            scene,
+            selectedEntityID: nil,
+            workspaceMode: nil,
+            localeIdentifier: nil
+        )
+        let record = snapshot.entities.first { $0.id == "scene:\(entity.rawValue)" }
+        XCTAssertEqual(record?.components.contains("softbody"), true)
+        XCTAssertEqual(record?.components.contains("cloth"), true)
+        XCTAssertEqual(record?.softBodyIsEnabled, false)
+        XCTAssertEqual(record?.softBodyPressure ?? 0, 1.5, accuracy: 0.001)
+        XCTAssertEqual(record?.softBodyLinearDamping ?? 0, 0.25, accuracy: 0.001)
+        XCTAssertEqual(record?.softBodyVertexRadius ?? 0, 0.03, accuracy: 0.001)
+        XCTAssertEqual(record?.clothGridSizeX, 6)
+        XCTAssertEqual(record?.clothGridSizeZ, 8)
+        XCTAssertEqual(record?.clothSpacing ?? 0, 0.12, accuracy: 0.001)
+        XCTAssertEqual(record?.clothFixedVertexCount, 3)
+        XCTAssertEqual(record?.clothBendType, "dihedral")
+        XCTAssertNil(record?.softBodyDeformedVertexCount)
     }
 
     func testSetAudioSourceExecutorProducesMutation() throws {
