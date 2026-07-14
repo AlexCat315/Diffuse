@@ -2354,8 +2354,61 @@ public struct RuntimeWorldSchedule {
         return PhysicsDebugFrameResource(
             bodies: bodies,
             constraints: constraints,
-            contacts: contacts
+            contacts: contacts,
+            destructionConnections: buildPhysicsDebugDestructionConnections(in: world)
         )
+    }
+
+    private func buildPhysicsDebugDestructionConnections(
+        in world: RuntimeWorld
+    ) -> [PhysicsDebugDestructionConnection] {
+        guard let assets = world.resource(DestructibleAssetResource.self) else { return [] }
+        let runtime = world.resource(DestructionRuntimeStateResource.self)
+        var result: [PhysicsDebugDestructionConnection] = []
+        for source in world.entities(with: Destructible.self)
+            .sorted(by: { $0.rawValue < $1.rawValue }) {
+            guard let destructible = world.component(Destructible.self, for: source),
+                  let asset = assets.asset(for: destructible.assetResourceID)
+            else { continue }
+            let sourceTransform = world.worldTransform(for: source)?.matrix
+                ?? world.localTransform(for: source)?.matrix
+                ?? matrix_identity_float4x4
+            var positionsByFragmentID: [UInt32: SIMD3<Float>] = [:]
+            for fragment in asset.fragments.sorted(by: { $0.fragmentID < $1.fragmentID }) {
+                guard positionsByFragmentID[fragment.fragmentID] == nil else { continue }
+                let transform = sourceTransform * fragment.localTransform.matrix
+                positionsByFragmentID[fragment.fragmentID] = SIMD3<Float>(
+                    transform.columns.3.x,
+                    transform.columns.3.y,
+                    transform.columns.3.z
+                )
+            }
+            let sourceState = runtime?.sources[source]
+            for connection in asset.connections.sorted(by: { lhs, rhs in
+                if lhs.connectionID != rhs.connectionID {
+                    return lhs.connectionID < rhs.connectionID
+                }
+                if lhs.fragmentA != rhs.fragmentA { return lhs.fragmentA < rhs.fragmentA }
+                return lhs.fragmentB < rhs.fragmentB
+            }) {
+                guard let pointA = positionsByFragmentID[connection.fragmentA],
+                      let pointB = positionsByFragmentID[connection.fragmentB]
+                else { continue }
+                result.append(PhysicsDebugDestructionConnection(
+                    sourceEntity: source,
+                    connectionID: connection.connectionID,
+                    fragmentA: connection.fragmentA,
+                    fragmentB: connection.fragmentB,
+                    worldPointA: pointA,
+                    worldPointB: pointB,
+                    isBroken: sourceState?.brokenConnectionIDs.contains(
+                        connection.connectionID
+                    ) ?? false,
+                    isSourceFractured: sourceState?.hasFractured ?? false
+                ))
+            }
+        }
+        return result
     }
 
     private func mergeDispatchReports(_ reports: [JobDispatchReport]) -> JobDispatchReport {

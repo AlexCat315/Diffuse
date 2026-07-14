@@ -2452,7 +2452,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     public var onRevisionChanged: ((UInt64) -> Void)?
 
     public init() {
-        resetToPreviewScene(notify: false)
+        scene.bootstrapEditorPreviewScene()
+        let defaults = scene.resource(SceneBootstrapDefaultsResource.self)
+        initialSelectionID = defaults?.defaultSelection?.rawValue
+        initialExpandedIDs = Set(defaults?.defaultExpanded.map(\ .rawValue) ?? [])
     }
 
     public func resetToPreviewScene() {

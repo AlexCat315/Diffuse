@@ -1335,8 +1335,7 @@ struct EditorInspectorSectionsTests {
 
         if case let .readOnly(gpuStatus) =
             field(adapter, id, section: "particle-emitter", field: "particle-gpu-status") {
-            #expect(gpuStatus.contains("Unsupported"))
-            #expect(gpuStatus.contains("distance emission"))
+            #expect(gpuStatus == "Supported (1x128)")
         } else { Issue.record("missing GPU status field") }
 
         if case let .constrainedNumber(restitution, _, _, _, _) =

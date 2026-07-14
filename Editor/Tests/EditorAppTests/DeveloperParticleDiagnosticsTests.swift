@@ -190,13 +190,12 @@ struct DeveloperParticleDiagnosticsTests {
 
     @Test("authoring diagnostics report GPU-required blockers")
     func authoringDiagnosticsReportGPURequiredBlockers() {
-        let emitter = ParticleEmitter(distanceEmissionRate: 12,
-                                      maxParticles: 256,
+        let emitter = ParticleEmitter(maxParticles: 0,
                                       simulationBackend: .gpuRequired)
         let issue = ParticleModuleIssue(moduleID: "gpuSimulation",
                                         severity: .error,
                                         code: "gpuRequiredButUnsupported",
-                                        message: "GPU simulation is required but unsupported: distance emission.")
+                                        message: "GPU simulation is required but unsupported: no particle capacity.")
 
         let summary = makeDeveloperParticleAuthoringDiagnosticSummary(
             gpuPlan: emitter.gpuSimulationPlan,
@@ -208,13 +207,12 @@ struct DeveloperParticleDiagnosticsTests {
         #expect(summary.primarySignal == "1 module error")
         #expect(summary.recommendation.contains("blocked GPU-required"))
         #expect(summary.details.contains { $0.contains("gpuSimulation [error]") })
-        #expect(summary.details.contains { $0.contains("Unsupported distance emission") })
+        #expect(summary.details.contains { $0.contains("Unsupported no capacity") })
     }
 
     @Test("authoring diagnostics explain GPU fallback reasons")
     func authoringDiagnosticsExplainGPUFallbackReasons() {
-        let emitter = ParticleEmitter(distanceEmissionRate: 8,
-                                      maxParticles: 128,
+        let emitter = ParticleEmitter(maxParticles: 0,
                                       simulationBackend: .gpuIfSupported)
 
         let summary = makeDeveloperParticleAuthoringDiagnosticSummary(
@@ -224,7 +222,7 @@ struct DeveloperParticleDiagnosticsTests {
 
         #expect(summary.severity == .warning)
         #expect(summary.status == "GPU fallback to CPU")
-        #expect(summary.primarySignal == "Unsupported: distance emission")
+        #expect(summary.primarySignal == "Unsupported: no capacity")
         #expect(summary.recommendation.contains("Remove unsupported features"))
         #expect(summary.details.contains("GPU plan Fallback"))
     }
