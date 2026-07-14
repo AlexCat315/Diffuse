@@ -1,290 +1,71 @@
+import CapabilityRuntime
 import Foundation
+import IntentRuntime
 
-/// Tool definition for the `execute_edit_plan` tool, used in Messages API requests.
-/// Schema is derived from `SceneEditOp` — the canonical set of atomic scene mutations.
+/// Compatibility multi-step tool. Its schema is assembled exclusively from the
+/// same capability contracts used by validation, MCP, and permission planning.
 public enum EditPlanTool {
-    /// Anthropic Messages API format.
-    public static func definition() -> [String: Any] {
+    public static func definition(registry: CapabilityRegistry = .aiDefault) -> [String: Any] {
         [
             "name": "execute_edit_plan",
-            "description": "Execute a multi-step scene edit plan. Each step atomically mutates one aspect of the scene.",
-            "input_schema": schema(),
+            "description": "Propose an ordered scene edit plan. This call never bypasses capability validation or confirmation.",
+            "input_schema": schema(registry: registry),
         ]
     }
 
-    /// OpenAI / DeepSeek chat-completions format.
-    public static func openAIDefinition() -> [String: Any] {
+    public static func openAIDefinition(registry: CapabilityRegistry = .aiDefault) -> [String: Any] {
         [
             "type": "function",
             "function": [
                 "name": "execute_edit_plan",
-                "description": "Execute a multi-step scene edit plan. Each step atomically mutates one aspect of the scene.",
-                "parameters": schema(),
+                "description": "Propose an ordered scene edit plan. This call never bypasses capability validation or confirmation.",
+                "parameters": schema(registry: registry),
             ] as [String: Any],
         ]
     }
 
-    // MARK: - Schema
-
-    private static func schema() -> [String: Any] {
-        let ops = SceneEditOp.allCases.map(\.rawValue)
-        return [
-            "type": "object",
-            "required": ["summary", "steps"],
-            "properties": [
-                "summary": [
-                    "type": "string",
-                    "description": "One-line description of what the overall plan achieves.",
-                ] as [String: Any],
-                "reasoning": [
-                    "type": "string",
-                    "description": "Brief explanation of why these steps satisfy the request. Used for debugging.",
-                ] as [String: Any],
-                "steps": [
-                    "type": "array",
-                    "description": "Ordered list of atomic mutation steps to execute.",
-                    "items": stepSchema(ops: ops),
-                ] as [String: Any],
-            ] as [String: Any],
-        ]
+    public static func schema(registry: CapabilityRegistry = .aiDefault) -> [String: Any] {
+        jsonSchema(registry: registry).jsonObject()
     }
 
-    private static func stepSchema(ops: [String]) -> [String: Any] {
-        [
-            "type": "object",
-            "required": ["op"],
-            "properties": [
-                "op": [
-                    "type": "string", "enum": ops,
-                    "description": "The mutation operation to perform.",
-                ] as [String: Any],
-                "entity_id": [
-                    "type": "string",
-                    "description": "Target entity in 'scene:<number>' format. Required for all ops except spawn_entity.",
-                ] as [String: Any],
-                "parent_id": [
-                    "type": "string",
-                    "description": "New parent entity in 'scene:<number>' format for reparent_entity. Omit to move the entity to the scene root.",
-                ] as [String: Any],
-                "label": [
-                    "type": "string",
-                    "description": "Entity display name for spawn_entity.",
-                ] as [String: Any],
-                "spawn_position": [
-                    "type": "array", "items": ["type": "number"] as [String: Any],
-                    "description": "[x, y, z] world position for spawn_entity. Default [0, 0, 0].",
-                ] as [String: Any],
-                "spawn_kind": [
-                    "type": "string",
-                    "enum": ["mesh", "empty", "light", "camera"],
-                    "description": "Entity type for spawn_entity: 'mesh' (default Static Mesh), 'empty' (group/parent node), 'light' (combine with light_type; intensity, color, range, cast_shadows are applied at creation), 'camera' (camera_fov_y applied at creation). Default 'mesh'.",
-                ] as [String: Any],
-                "spawn_parent_id": [
-                    "type": "string",
-                    "description": "Parent entity in 'scene:<number>' format for spawn_entity. When provided, the new entity is created as a child of this entity. Omit for a root-level entity.",
-                ] as [String: Any],
-                "duplicate_offset": [
-                    "type": "array", "items": ["type": "number"] as [String: Any],
-                    "description": "[dx, dy, dz] local-space offset applied to the copy in duplicate_entity. When omitted the copy is placed at the same position as the source.",
-                ] as [String: Any],
-                "position": [
-                    "type": "array", "items": ["type": "number"] as [String: Any],
-                    "description": "[x, y, z] world position in metres for set_transform.",
-                ] as [String: Any],
-                "euler_degrees": [
-                    "type": "array", "items": ["type": "number"] as [String: Any],
-                    "description": "[x, y, z] XYZ intrinsic Euler rotation in degrees for set_transform.",
-                ] as [String: Any],
-                "scale": [
-                    "type": "array", "items": ["type": "number"] as [String: Any],
-                    "description": "[x, y, z] scale factors for set_transform.",
-                ] as [String: Any],
-                "name": [
-                    "type": "string",
-                    "description": "New entity name for set_name.",
-                ] as [String: Any],
-                "light_type": [
-                    "type": "string", "enum": ["directional", "point", "spot"],
-                    "description": "Light type for set_light_type.",
-                ] as [String: Any],
-                "intensity": [
-                    "type": "number",
-                    "description": "Light intensity for set_light_intensity.",
-                ] as [String: Any],
-                "color": [
-                    "type": "array", "items": ["type": "number"] as [String: Any],
-                    "description": "[r, g, b] linear 0–1 colour. Used by set_light_color and set_mesh_color. Common values: red=[1,0,0], green=[0,1,0], blue=[0,0,1], white=[1,1,1], black=[0,0,0], yellow=[1,1,0], orange=[1,0.4,0], purple=[0.5,0,0.5].",
-                ] as [String: Any],
-                "range": [
-                    "type": "number",
-                    "description": "Light range in metres for set_light_range.",
-                ] as [String: Any],
-                "spot_inner_angle": [
-                    "type": "number",
-                    "description": "Spot cone inner angle in degrees for set_light_spot_angles.",
-                ] as [String: Any],
-                "spot_outer_angle": [
-                    "type": "number",
-                    "description": "Spot cone outer angle in degrees for set_light_spot_angles.",
-                ] as [String: Any],
-                "light_cast_shadows": [
-                    "type": "boolean",
-                    "description": "Whether the light casts shadows for set_light_cast_shadows.",
-                ] as [String: Any],
-                "camera_target": [
-                    "type": "array", "items": ["type": "number"] as [String: Any],
-                    "description": "[x, y, z] look-at point for set_camera_pose.",
-                ] as [String: Any],
-                "camera_up": [
-                    "type": "array", "items": ["type": "number"] as [String: Any],
-                    "description": "[x, y, z] up vector for set_camera_pose. Default [0, 1, 0].",
-                ] as [String: Any],
-                "camera_fov_y": [
-                    "type": "number",
-                    "description": "Vertical field-of-view in degrees (1–179) for set_camera_fov. Typical: 30=telephoto, 50=normal, 75=wide.",
-                ] as [String: Any],
-                "camera_aspect_ratio": [
-                    "type": "number",
-                    "description": "Authored camera width/height aspect ratio for set_camera_aspect_ratio. Typical: 1.777 for 16:9.",
-                ] as [String: Any],
-                "camera_is_active": [
-                    "type": "boolean",
-                    "description": "Whether this camera is the active render camera for set_camera_active.",
-                ] as [String: Any],
-                "motion_type": [
-                    "type": "string", "enum": ["static", "dynamic", "kinematic"],
-                    "description": "Rigid body motion type for set_rigidbody_motion.",
-                ] as [String: Any],
-                "mass": [
-                    "type": "number",
-                    "description": "Rigid body mass in kg for set_rigidbody_mass.",
-                ] as [String: Any],
-                "gravity_scale": [
-                    "type": "number",
-                    "description": "Gravity multiplier for set_rigidbody_gravity.",
-                ] as [String: Any],
-                "is_trigger": [
-                    "type": "boolean",
-                    "description": "Collider trigger flag for set_collider_trigger.",
-                ] as [String: Any],
-                "is_enabled": [
-                    "type": "boolean",
-                    "description": "Enabled flag. For set_constraint_enabled: toggles physics constraint. For set_script_enabled: enables/disables a script binding at script_index.",
-                ] as [String: Any],
-                "allow_sleep": [
-                    "type": "boolean",
-                    "description": "Whether the rigidbody can sleep when at rest. For set_rigidbody_allow_sleep.",
-                ] as [String: Any],
-                "collider_shape": [
-                    "type": "string", "enum": ["box", "sphere", "capsule", "mesh", "convex"],
-                    "description": "Collider shape kind for set_collider_shape.",
-                ] as [String: Any],
-                "half_extents": [
-                    "type": "array", "items": ["type": "number"] as [String: Any],
-                    "description": "[x, y, z] box half-sizes in metres for set_collider_box_extents.",
-                ] as [String: Any],
-                "radius": [
-                    "type": "number",
-                    "description": "Sphere or capsule radius in metres for set_collider_sphere_radius or set_collider_capsule.",
-                ] as [String: Any],
-                "half_height": [
-                    "type": "number",
-                    "description": "Capsule half-height in metres for set_collider_capsule.",
-                ] as [String: Any],
-                "friction": [
-                    "type": "number",
-                    "description": "Collider surface friction (0–1) for set_collider_material.",
-                ] as [String: Any],
-                "restitution": [
-                    "type": "number",
-                    "description": "Collider bounciness (0–1) for set_collider_material.",
-                ] as [String: Any],
-                "density": [
-                    "type": "number",
-                    "description": "Collider material density for set_collider_material.",
-                ] as [String: Any],
-                "collider_layer_id": [
-                    "type": "integer",
-                    "description": "Physics layer index (0–15) this collider occupies. For set_collider_layer.",
-                ] as [String: Any],
-                "collider_layer_mask": [
-                    "type": "integer",
-                    "description": "Bitmask of physics layers this collider interacts with. For set_collider_layer.",
-                ] as [String: Any],
-                "audio_clip": [
-                    "type": "string",
-                    "description": "Audio clip asset name (no extension) for set_audio_source.",
-                ] as [String: Any],
-                "audio_volume": [
-                    "type": "number",
-                    "description": "Playback volume 0–1 for set_audio_source.",
-                ] as [String: Any],
-                "audio_pitch": [
-                    "type": "number",
-                    "description": "Pitch multiplier (1=normal) for set_audio_source.",
-                ] as [String: Any],
-                "audio_loop": [
-                    "type": "boolean",
-                    "description": "Whether the clip loops for set_audio_source.",
-                ] as [String: Any],
-                "audio_play_on_awake": [
-                    "type": "boolean",
-                    "description": "Auto-play when the simulation starts for set_audio_source.",
-                ] as [String: Any],
-                "audio_spatial_blend": [
-                    "type": "number",
-                    "description": "0=2D, 1=3D positional audio for set_audio_source.",
-                ] as [String: Any],
-                "script_index": [
-                    "type": "integer",
-                    "description": "Which script binding to modify (0-based). Defaults to 0 when omitted. For set_script_property and set_script_enabled.",
-                ] as [String: Any],
-                "script_property_name": [
-                    "type": "string",
-                    "description": "The parameter key to set in the script's parametersJSON. For set_script_property.",
-                ] as [String: Any],
-                "script_property_value": [
-                    "description": "The new value for the script parameter (string, number, boolean, or array). For set_script_property.",
-                ] as [String: Any],
-                "is_visible": [
-                    "type": "boolean",
-                    "description": "Whether the mesh is visible. For set_mesh_visibility.",
-                ] as [String: Any],
-                "material_base_color": [
-                    "type": "array",
-                    "items": ["type": "number"] as [String: Any],
-                    "description": "[r,g,b,a] linear 0-1 base colour for set_material. Omit to leave unchanged.",
-                ] as [String: Any],
-                "material_metallic": [
-                    "type": "number",
-                    "description": "Metallic factor 0–1 for set_material. 0=dielectric, 1=metal. Omit to leave unchanged.",
-                ] as [String: Any],
-                "material_roughness": [
-                    "type": "number",
-                    "description": "Roughness factor 0–1 for set_material. 0=mirror-smooth, 1=fully rough. Omit to leave unchanged.",
-                ] as [String: Any],
-                "material_emissive": [
-                    "type": "array",
-                    "items": ["type": "number"] as [String: Any],
-                    "description": "[r,g,b] linear 0-1 emission colour for set_material. Omit for no emission.",
-                ] as [String: Any],
-                "animation_clip": [
-                    "type": "string",
-                    "description": "Animation clip name for set_animation_player. Empty string or omit to use the default clip.",
-                ] as [String: Any],
-                "animation_speed": [
-                    "type": "number",
-                    "description": "Playback speed multiplier (1=normal) for set_animation_player.",
-                ] as [String: Any],
-                "animation_loop": [
-                    "type": "boolean",
-                    "description": "Whether the animation loops for set_animation_player.",
-                ] as [String: Any],
-                "animation_is_playing": [
-                    "type": "boolean",
-                    "description": "Whether animation playback is active for set_animation_player.",
-                ] as [String: Any],
-            ] as [String: Any],
-        ]
+    /// The typed form is used by registries and transports that need to retain
+    /// the contract metadata instead of immediately serializing it.
+    public static func jsonSchema(registry: CapabilityRegistry = .aiDefault) -> JSONSchema {
+        let stepSchemas = registry.integrityErrors.isEmpty
+            ? SceneEditOp.allCases.compactMap { operation -> JSONSchema? in
+            guard let descriptor = registry.descriptor(for: operation.capabilityID),
+                  descriptor.isAIExposed,
+                  !descriptor.access.isWrite || descriptor.inputSchema.isStrictCapabilityInput
+            else { return nil }
+            var properties = descriptor.inputSchema.properties
+            properties["op"] = .string(
+                description: "Compatibility operation name.",
+                allowedValues: [operation.rawValue]
+            )
+            return .object(properties: properties,
+                           required: Array(Set(descriptor.inputSchema.required + ["op"])),
+                           additionalProperties: false)
+        } : []
+        // An invalid/empty registry must not degrade to an untyped `items: {}`
+        // schema. `maxItems: 0` preserves read-only/no-op plans and rejects all
+        // mutation steps until registry integrity is restored.
+        let stepItemSchema = stepSchemas.isEmpty ? JSONSchema.null() : .choice(stepSchemas)
+        let maximumSteps = stepSchemas.isEmpty ? 0 : 100
+
+        return .object(
+            properties: [
+                "summary": .string(description: "One-line description of the complete plan."),
+                "reasoning": .string(description: "Brief explanation for diagnostics."),
+                "scene_revision": .integer(
+                    description: "Scene revision returned by get_scene_entities; stale plans are rejected.",
+                    minimum: 0
+                ),
+                "steps": .array(of: stepItemSchema,
+                                description: "Ordered capability invocations.",
+                                maximumItems: maximumSteps),
+            ],
+            required: ["summary", "scene_revision", "steps"],
+            additionalProperties: false
+        )
     }
 }

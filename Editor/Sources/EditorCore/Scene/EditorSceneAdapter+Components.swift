@@ -8,6 +8,9 @@ public enum EditorComponentKind: String, CaseIterable, Sendable {
     case rigidBody
     case collider
     case characterController
+    case vehicle
+    case softBody
+    case cloth
     case ragdoll
     case renderMesh
     case renderMaterial
@@ -24,6 +27,9 @@ public enum EditorComponentKind: String, CaseIterable, Sendable {
         case .rigidBody:       return "Rigid Body"
         case .collider:        return "Collider"
         case .characterController: return "Character Controller"
+        case .vehicle:         return "Vehicle"
+        case .softBody:        return "Soft Body"
+        case .cloth:           return "Cloth"
         case .ragdoll:         return "Ragdoll"
         case .renderMesh:      return "Render Mesh"
         case .renderMaterial:  return "Render Material"
@@ -46,6 +52,9 @@ extension EditorSceneAdapter {
         case .rigidBody:       return scene.hasComponent(RigidBody.self, for: entity)
         case .collider:        return scene.hasComponent(Collider.self, for: entity)
         case .characterController: return scene.hasComponent(CharacterController.self, for: entity)
+        case .vehicle:         return scene.hasComponent(Vehicle.self, for: entity)
+        case .softBody:        return scene.hasComponent(SoftBody.self, for: entity)
+        case .cloth:           return scene.hasComponent(Cloth.self, for: entity)
         case .ragdoll:         return scene.hasComponent(Ragdoll.self, for: entity)
         case .renderMesh:      return scene.hasComponent(RenderMeshComponent.self, for: entity)
         case .renderMaterial:  return scene.hasComponent(RenderMaterialComponent.self, for: entity)
@@ -78,6 +87,9 @@ extension EditorSceneAdapter {
         case .rigidBody:       _ = scene.setComponent(RigidBody(), for: entity)
         case .collider:        _ = scene.setComponent(Collider(shape: .box(halfExtents: SIMD3<Float>(repeating: 0.5), center: .zero)), for: entity)
         case .characterController: _ = scene.setComponent(CharacterController(), for: entity)
+        case .vehicle:         _ = scene.setComponent(Vehicle(), for: entity)
+        case .softBody:        _ = scene.setComponent(SoftBody(), for: entity)
+        case .cloth:           _ = scene.setComponent(Cloth.fixedTopEdge(), for: entity)
         case .ragdoll:         _ = scene.setComponent(Ragdoll(), for: entity)
         case .renderMesh:      _ = scene.setComponent(RenderMeshComponent(meshIndex: 0), for: entity)
         case .renderMaterial:  _ = scene.setComponent(RenderMaterialComponent(), for: entity)
@@ -102,6 +114,9 @@ extension EditorSceneAdapter {
         case .rigidBody:       _ = scene.removeComponent(RigidBody.self, from: entity)
         case .collider:        _ = scene.removeComponent(Collider.self, from: entity)
         case .characterController: _ = scene.removeComponent(CharacterController.self, from: entity)
+        case .vehicle:         _ = scene.removeComponent(Vehicle.self, from: entity)
+        case .softBody:        _ = scene.removeComponent(SoftBody.self, from: entity)
+        case .cloth:           _ = scene.removeComponent(Cloth.self, from: entity)
         case .ragdoll:         _ = scene.removeComponent(Ragdoll.self, from: entity)
         case .renderMesh:      _ = scene.removeComponent(RenderMeshComponent.self, from: entity)
         case .renderMaterial:  _ = scene.removeComponent(RenderMaterialComponent.self, from: entity)

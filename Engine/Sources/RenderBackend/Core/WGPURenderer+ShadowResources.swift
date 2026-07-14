@@ -435,7 +435,23 @@ extension WGPURenderer {
 
         var points: [SIMD3<Float>] = []
         points.reserveCapacity(scene.instances.count * 8)
+        let deformableMeshes = scene.deformableMeshes.reduce(
+            into: [EntityID: RenderDeformableMesh]()
+        ) { result, mesh in
+            if mesh.isValid {
+                result[mesh.entity] = mesh
+            }
+        }
         for instance in scene.instances {
+            if let entity = instance.entity,
+               let deformable = deformableMeshes[entity] {
+                let bounds = deformable.worldBounds
+                points.append(contentsOf: boundsCorners(
+                    min: bounds.min,
+                    max: bounds.max
+                ))
+                continue
+            }
             let localBounds = MeshBoundsRegistry.shared.bounds(for: instance.meshIndex)
                 ?? (SIMD3<Float>(repeating: -0.5), SIMD3<Float>(repeating: 0.5))
             for corner in boundsCorners(min: localBounds.min, max: localBounds.max) {

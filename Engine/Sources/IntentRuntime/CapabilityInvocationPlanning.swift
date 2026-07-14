@@ -111,13 +111,16 @@ public struct CapabilityInvocationPlanner: Sendable {
     private let registry: CapabilityRegistry
     private let validator: CapabilityValidator
     private let scorer: AmbiguityScorer
+    private let allowExternalSideEffects: Bool
 
-    public init(registry: CapabilityRegistry = .default,
+    public init(registry: CapabilityRegistry = .aiDefault,
                 gate: ReleasePhaseGate = ReleasePhaseGate(),
-                scorer: AmbiguityScorer = AmbiguityScorer()) {
+                scorer: AmbiguityScorer = AmbiguityScorer(),
+                allowExternalSideEffects: Bool = false) {
         self.registry = registry
         self.validator = CapabilityValidator(registry: registry, gate: gate)
         self.scorer = scorer
+        self.allowExternalSideEffects = allowExternalSideEffects
     }
 
     public func plan(transaction: TransactionIR,
@@ -132,11 +135,18 @@ public struct CapabilityInvocationPlanner: Sendable {
         var warnings: [String] = []
         var approvalPolicy = transaction.approvalPolicy
 
-        for intent in intents {
+        for (index, intent) in intents.enumerated() {
             guard let descriptor = registry.descriptor(for: intent.verb) else {
                 failures.append(CapabilityValidationFailure(verb: intent.verb,
                                                             reason: "unknown capability verb"))
                 continue
+            }
+            if !transaction.capabilityInvocations.isEmpty {
+                let record = transaction.capabilityInvocations[index]
+                if let reason = invocationRecordDenialReason(record, descriptor: descriptor) {
+                    failures.append(CapabilityValidationFailure(verb: intent.verb, reason: reason))
+                    continue
+                }
             }
             let targetParseResult = parseTargetEntityIDs(intent.targetObjectIDs)
             if let invalidTarget = targetParseResult.invalidTarget {
@@ -171,7 +181,10 @@ public struct CapabilityInvocationPlanner: Sendable {
             )
             warnings.append(contentsOf: score.signals.map { "[\(intent.verb)] \($0.note)" })
 
-            if descriptor.requiresConfirmation || descriptor.isDestructive || score.level >= .low {
+            let isModelOrPluginWrite = descriptor.access.isWrite
+                && (!transaction.capabilityInvocations.isEmpty || intent.source == .ai)
+            if isModelOrPluginWrite || descriptor.requiresConfirmation
+                || descriptor.isDestructive || score.level >= .low {
                 approvalPolicy = approvalPolicy.escalated(to: .requiresApproval)
                 if let question = scorer.makeQuestion(for: intent, score: score) {
                     questions.append(question)
@@ -194,6 +207,23 @@ public struct CapabilityInvocationPlanner: Sendable {
 
     private func capabilityIntents(for transaction: TransactionIR,
                                    context: CapabilityInvocationContext) -> [IntentIR] {
+        if !transaction.capabilityInvocations.isEmpty {
+            return transaction.capabilityInvocations.enumerated().map { index, record in
+                IntentIR(
+                    id: "\(transaction.id):invocation:\(index)",
+                    verb: record.capabilityID,
+                    summary: transaction.summary,
+                    targetObjectIDs: record.targetReferences,
+                    arguments: Dictionary(uniqueKeysWithValues: record.argumentNames.map {
+                        ($0, IntentArgumentValue.string("<validated>"))
+                    }),
+                    confidence: context.defaultConfidence,
+                    evidence: context.defaultEvidence,
+                    source: context.defaultSource,
+                    createdAt: transaction.createdAt
+                )
+            }
+        }
         if let intent = transaction.intent {
             return [intent]
         }
@@ -203,6 +233,25 @@ public struct CapabilityInvocationPlanner: Sendable {
                              index: offset,
                              context: context)
         }
+    }
+
+    private func invocationRecordDenialReason(_ record: CapabilityInvocationRecord,
+                                              descriptor: CapabilityDescriptor) -> String? {
+        let contract = descriptor.contract
+        guard descriptor.isAIExposed else { return "capability is not approved for AI exposure" }
+        if contract.access.isWrite && !contract.inputSchema.isStrictCapabilityInput {
+            return "write capability schema contains an open or unsupported type"
+        }
+        guard record.capabilityVersion == contract.version else {
+            return "capability version mismatch (expected \(contract.version), got \(record.capabilityVersion))"
+        }
+        guard record.schemaHash == contract.schemaHash else { return "capability schema hash mismatch" }
+        guard record.access == contract.access else { return "capability access level mismatch" }
+        guard record.sourcePluginID == contract.source.pluginID else { return "capability source mismatch" }
+        if contract.access == .externalSideEffect && !allowExternalSideEffects {
+            return "external side-effect capabilities are disabled"
+        }
+        return nil
     }
 
     private func capabilityIntent(for operation: TransactionOperation,

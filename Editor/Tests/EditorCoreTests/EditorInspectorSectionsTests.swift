@@ -169,6 +169,120 @@ struct EditorInspectorSectionsTests {
         #expect(body.continuousCollisionDetection)
     }
 
+    @Test("vehicle inspector exposes authored controls and writes them back")
+    func vehicleBindings() throws {
+        let adapter = EditorSceneAdapter()
+        let id = makeEntity(in: adapter)
+        let entity = try #require(EntityID(rawValue: id))
+        #expect(!hasSection(adapter, id, "vehicle"))
+        #expect(adapter.addComponent(.vehicle, to: id))
+        #expect(hasSection(adapter, id, "vehicle"))
+
+        guard case let .bool(enabled) =
+                field(adapter, id, section: "vehicle", field: "vehicle-enabled"),
+              case let .constrainedNumber(maxTorque, _, _, _, _) =
+                field(adapter, id, section: "vehicle", field: "vehicle-max-torque"),
+              case let .constrainedNumber(clutchStrength, _, _, _, _) =
+                field(adapter, id, section: "vehicle", field: "vehicle-clutch-strength"),
+              case let .vehicleControllerKind(controllerKind) =
+                field(adapter, id, section: "vehicle", field: "vehicle-controller") else {
+            Issue.record("expected vehicle authored controls"); return
+        }
+        enabled.wrappedValue = false
+        maxTorque.wrappedValue = 780
+        clutchStrength.wrappedValue = 18
+
+        let vehicle = try #require(adapter.scene.component(Vehicle.self, for: entity))
+        #expect(!vehicle.isEnabled)
+        #expect(vehicle.engine.maxTorque == 780)
+        #expect(vehicle.transmission.clutchStrength == 18)
+
+        controllerKind.wrappedValue = .tracked
+        guard case let .constrainedNumber(trackForwardFriction, _, _, _, _) =
+                field(adapter, id, section: "vehicle", field: "vehicle-track-longitudinal-friction"),
+              case let .constrainedNumber(trackSideFriction, _, _, _, _) =
+                field(adapter, id, section: "vehicle", field: "vehicle-track-lateral-friction") else {
+            Issue.record("expected tracked vehicle controls"); return
+        }
+        trackForwardFriction.wrappedValue = 5
+        trackSideFriction.wrappedValue = 2.5
+        guard case let .tracked(tracked)? =
+                adapter.scene.component(Vehicle.self, for: entity)?.controller else {
+            Issue.record("expected tracked vehicle component"); return
+        }
+        #expect(tracked.longitudinalFriction == 5)
+        #expect(tracked.lateralFriction == 2.5)
+
+        guard case let .vehicleControllerKind(updatedControllerKind) =
+                field(adapter, id, section: "vehicle", field: "vehicle-controller") else {
+            Issue.record("expected updated controller selector"); return
+        }
+        updatedControllerKind.wrappedValue = .motorcycle
+        guard case let .constrainedNumber(maxLean, _, _, _, _) =
+                field(adapter, id, section: "vehicle", field: "vehicle-motorcycle-max-lean"),
+              case let .bool(leanEnabled) =
+                field(adapter, id, section: "vehicle", field: "vehicle-motorcycle-lean-enabled") else {
+            Issue.record("expected motorcycle vehicle controls"); return
+        }
+        maxLean.wrappedValue = 0.6
+        leanEnabled.wrappedValue = false
+        guard case let .motorcycle(motorcycle)? =
+                adapter.scene.component(Vehicle.self, for: entity)?.controller else {
+            Issue.record("expected motorcycle vehicle component"); return
+        }
+        #expect(motorcycle.maxLeanAngle == 0.6)
+        #expect(!motorcycle.isLeanControllerEnabled)
+
+        #expect(adapter.removeComponent(.vehicle, from: id))
+        #expect(!hasSection(adapter, id, "vehicle"))
+    }
+
+    @Test("soft-body and cloth inspector edits simulation, topology, and fixed points")
+    func softBodyAndClothBindings() throws {
+        let adapter = EditorSceneAdapter()
+        let id = makeEntity(in: adapter)
+        let entity = try #require(EntityID(rawValue: id))
+        #expect(adapter.addComponent(.softBody, to: id))
+        #expect(adapter.addComponent(.cloth, to: id))
+        #expect(hasSection(adapter, id, "soft-body"))
+        #expect(hasSection(adapter, id, "cloth"))
+
+        guard case let .bool(enabled) =
+                field(adapter, id, section: "soft-body", field: "soft-body-enabled"),
+              case let .constrainedNumber(pressure, _, _, _, _) =
+                field(adapter, id, section: "soft-body", field: "soft-body-pressure"),
+              case let .constrainedNumber(iterations, _, _, _, _) =
+                field(adapter, id, section: "soft-body", field: "soft-body-iterations"),
+              case let .constrainedNumber(gridX, _, _, _, _) =
+                field(adapter, id, section: "cloth", field: "cloth-grid-x"),
+              case let .json(fixedVertices, _) =
+                field(adapter, id, section: "cloth", field: "cloth-fixed-vertices"),
+              case let .text(bendType) =
+                field(adapter, id, section: "cloth", field: "cloth-bend-type") else {
+            Issue.record("expected soft-body and cloth authored controls"); return
+        }
+        enabled.wrappedValue = false
+        pressure.wrappedValue = 2.5
+        iterations.wrappedValue = 11
+        gridX.wrappedValue = 6
+        fixedVertices.wrappedValue = "[0,2,5,999]"
+        bendType.wrappedValue = "dihedral"
+
+        let softBody = try #require(adapter.scene.component(SoftBody.self, for: entity))
+        let cloth = try #require(adapter.scene.component(Cloth.self, for: entity))
+        #expect(!softBody.isEnabled)
+        #expect(softBody.pressure == 2.5)
+        #expect(softBody.solverIterations == 11)
+        #expect(cloth.gridSizeX == 6)
+        #expect(cloth.fixedVertexIndices == [0, 2, 5])
+        #expect(cloth.bendType == .dihedral)
+
+        #expect(adapter.removeComponent(.cloth, from: id))
+        #expect(adapter.removeComponent(.softBody, from: id))
+        #expect(!hasSection(adapter, id, "cloth"))
+        #expect(!hasSection(adapter, id, "soft-body"))
+    }
+
     @Test("collider inspector edits Jolt shape center and collision mask")
     func colliderJoltSettingsBindings() throws {
         let adapter = EditorSceneAdapter()

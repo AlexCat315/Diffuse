@@ -76,6 +76,20 @@ struct CapabilityRuntimeTests {
         #expect(CapabilityRegistry.default.descriptor(for: "scene.unknown_verb") == nil)
     }
 
+    @Test("registry fails exposure closed when duplicate ids are present")
+    func duplicateRegistryFailsClosed() {
+        let duplicate = CapabilityDescriptor(verb: "scene.duplicate",
+                                             releasePhase: .stable,
+                                             access: .read,
+                                             isAIExposed: true)
+        let registry = CapabilityRegistry(capabilities: [duplicate, duplicate])
+        #expect(!registry.integrityErrors.isEmpty)
+        #expect(registry.exposureSnapshot().contracts.isEmpty)
+        #expect(throws: CapabilityRegistryIntegrityError.self) {
+            try registry.validateIntegrity()
+        }
+    }
+
     @Test("merging overrides verbs from self with other")
     func registryMerging() {
         let base = CapabilityRegistry(capabilities: [
