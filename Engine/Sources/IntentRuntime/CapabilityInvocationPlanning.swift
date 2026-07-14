@@ -113,7 +113,7 @@ public struct CapabilityInvocationPlanner: Sendable {
     private let scorer: AmbiguityScorer
     private let allowExternalSideEffects: Bool
 
-    public init(registry: CapabilityRegistry = .default,
+    public init(registry: CapabilityRegistry = .aiDefault,
                 gate: ReleasePhaseGate = ReleasePhaseGate(),
                 scorer: AmbiguityScorer = AmbiguityScorer(),
                 allowExternalSideEffects: Bool = false) {

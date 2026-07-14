@@ -11,7 +11,7 @@ extern "C" {
 
 typedef struct GuavaJoltContextImpl* GuavaJoltContext;
 
-#define GUAVA_JOLT_ABI_VERSION 2u
+#define GUAVA_JOLT_ABI_VERSION 4u
 
 typedef enum GuavaJoltErrorCode {
     GUAVA_JOLT_ERROR_NONE = 0,
@@ -46,6 +46,9 @@ typedef struct GuavaJoltABILayout {
     uint32_t shape_instance_size;
     uint32_t joint_break_event_size;
     uint32_t context_config_size;
+    uint32_t soft_body_desc_size;
+    uint32_t soft_body_state_size;
+    uint32_t soft_body_sync_stats_size;
 } GuavaJoltABILayout;
 
 typedef struct GuavaJoltShapeInstance {
@@ -341,11 +344,22 @@ typedef struct GuavaJoltVehicleAntiRollBarDesc {
     float stiffness;
 } GuavaJoltVehicleAntiRollBarDesc;
 
+typedef struct GuavaJoltVehicleTrackDesc {
+    int32_t driven_wheel;
+    uint32_t wheel_count;
+    const int32_t* wheels;
+    float inertia;
+    float angular_damping;
+    float max_brake_torque;
+    float differential_ratio;
+} GuavaJoltVehicleTrackDesc;
+
 typedef struct GuavaJoltVehicleDesc {
     uint64_t entity_id;
     uint8_t is_enabled;
     uint8_t transmission_mode; /* 0 automatic, 1 manual */
-    uint16_t reserved0;
+    uint8_t controller_type; /* 0 wheeled, 1 tracked, 2 motorcycle */
+    uint8_t reserved0;
     float up_x, up_y, up_z;
     float forward_x, forward_y, forward_z;
     float max_pitch_roll_angle;
@@ -360,6 +374,17 @@ typedef struct GuavaJoltVehicleDesc {
     float transmission_shift_up_rpm;
     float transmission_shift_down_rpm;
     float transmission_clutch_strength;
+    float tracked_longitudinal_friction;
+    float tracked_lateral_friction;
+    float motorcycle_max_lean_angle;
+    float motorcycle_lean_spring_constant;
+    float motorcycle_lean_spring_damping;
+    float motorcycle_lean_spring_integration_coefficient;
+    float motorcycle_lean_spring_integration_coefficient_decay;
+    float motorcycle_lean_smoothing_factor;
+    uint8_t motorcycle_enable_lean_controller;
+    uint8_t motorcycle_enable_lean_steering_limit;
+    uint16_t reserved_controller;
     const GuavaJoltVehicleWheelDesc* wheels;
     uint32_t wheel_count;
     uint32_t reserved1;
@@ -369,6 +394,9 @@ typedef struct GuavaJoltVehicleDesc {
     const GuavaJoltVehicleAntiRollBarDesc* anti_roll_bars;
     uint32_t anti_roll_bar_count;
     uint32_t reserved3;
+    const GuavaJoltVehicleTrackDesc* tracks;
+    uint32_t track_count;
+    uint32_t reserved_track;
     const float* gear_ratios;
     uint32_t gear_ratio_count;
     uint32_t reserved4;
@@ -429,6 +457,7 @@ typedef struct GuavaJoltVehicleABILayout {
     uint32_t wheel_desc_size;
     uint32_t differential_desc_size;
     uint32_t anti_roll_bar_desc_size;
+    uint32_t track_desc_size;
     uint32_t command_size;
     uint32_t state_size;
     uint32_t wheel_state_size;
@@ -623,6 +652,49 @@ typedef struct GuavaJoltJointBreakEvent {
     float torque;
 } GuavaJoltJointBreakEvent;
 
+typedef struct GuavaJoltSoftBodyDesc {
+    uint64_t entity_id;
+    float position_x, position_y, position_z;
+    float rotation_x, rotation_y, rotation_z, rotation_w;
+    uint32_t grid_size_x;
+    uint32_t grid_size_z;
+    float spacing;
+    const uint32_t* fixed_vertices;
+    uint32_t fixed_vertex_count;
+    uint8_t bend_type; /* 0 none, 1 distance, 2 dihedral */
+    uint8_t allow_sleep;
+    uint8_t faces_double_sided;
+    uint8_t self_collision;
+    float vertex_mass;
+    float compliance;
+    float shear_compliance;
+    float bend_compliance;
+    float pressure;
+    float linear_damping;
+    float friction;
+    float restitution;
+    float gravity_factor;
+    float vertex_radius;
+    float max_linear_velocity;
+    uint32_t solver_iterations;
+    uint16_t layer_id;
+    uint16_t layer_mask;
+} GuavaJoltSoftBodyDesc;
+
+typedef struct GuavaJoltSoftBodyState {
+    uint64_t entity_id;
+    uint32_t vertex_offset;
+    uint32_t vertex_count;
+    uint8_t is_sleeping;
+    uint8_t reserved0;
+    uint16_t reserved1;
+} GuavaJoltSoftBodyState;
+
+typedef struct GuavaJoltSoftBodySyncStats {
+    uint32_t synchronized_soft_bodies;
+    uint32_t removed_soft_bodies;
+} GuavaJoltSoftBodySyncStats;
+
 uint32_t guava_jolt_bridge_abi_version(void);
 bool guava_jolt_bridge_get_abi_layout(GuavaJoltABILayout* out_layout);
 GuavaJoltContext guava_jolt_context_create(void);
@@ -733,6 +805,21 @@ uint32_t guava_jolt_context_copy_contact_events(GuavaJoltContext context,
 uint32_t guava_jolt_context_drain_joint_break_events(GuavaJoltContext context,
                                                      GuavaJoltJointBreakEvent* out_events,
                                                      size_t event_capacity);
+bool guava_jolt_context_sync_soft_bodies(
+    GuavaJoltContext context,
+    const GuavaJoltSoftBodyDesc* upserts,
+    size_t upsert_count,
+    const uint64_t* removals,
+    size_t removal_count,
+    bool full_snapshot,
+    GuavaJoltSoftBodySyncStats* out_stats);
+uint32_t guava_jolt_context_copy_soft_body_states(
+    GuavaJoltContext context,
+    GuavaJoltSoftBodyState* out_states,
+    size_t state_capacity,
+    float* out_positions_xyz,
+    size_t vertex_capacity,
+    uint32_t* out_vertex_count);
 
 #ifdef __cplusplus
 }

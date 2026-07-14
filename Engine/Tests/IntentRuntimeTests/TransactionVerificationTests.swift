@@ -168,7 +168,7 @@ struct TransactionVerificationTests {
     func destructiveAIUsesTwoRounds() throws {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
-        let descriptor = try #require(CapabilityRegistry.default.descriptor(for: "scene.delete_entity"))
+        let descriptor = try #require(CapabilityRegistry.aiDefault.descriptor(for: "scene.delete_entity"))
         let snapshotID = UUID()
         let transaction = TransactionIR(
             summary: "Delete entity",
@@ -231,7 +231,7 @@ struct TransactionVerificationTests {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
         _ = scene.setComponent(SceneNameComponent(value: "Original"), for: entity)
-        let descriptor = try #require(CapabilityRegistry.default.descriptor(for: "scene.set_name"))
+        let descriptor = try #require(CapabilityRegistry.aiDefault.descriptor(for: "scene.set_name"))
         let transaction = TransactionIR(
             summary: "Rename entity",
             operations: [.scene(.setSceneName(entityID: entity.rawValue, value: "Changed"))],
@@ -286,7 +286,7 @@ struct TransactionVerificationTests {
 
     @Test("explicit AI authority cannot bypass the capability planner")
     func missingCapabilityContextFailsClosed() throws {
-        let descriptor = try #require(CapabilityRegistry.default.descriptor(for: "scene.set_name"))
+        let descriptor = try #require(CapabilityRegistry.aiDefault.descriptor(for: "scene.set_name"))
         let transaction = TransactionIR(
             summary: "Forged direct invocation",
             operations: [],

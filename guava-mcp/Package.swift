@@ -13,6 +13,7 @@ let package = Package(
             name: "GuavaMCP",
             dependencies: [
                 .product(name: "AIRuntime", package: "engine"),
+                .product(name: "IntentRuntime", package: "engine"),
             ],
             path: "Sources/GuavaMCP"
         ),

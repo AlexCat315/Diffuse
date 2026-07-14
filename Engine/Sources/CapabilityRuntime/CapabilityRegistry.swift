@@ -161,6 +161,30 @@ public struct CapabilityRegistry: Sendable {
         return CapabilityRegistry(capabilities: merged.values.sorted { $0.verb < $1.verb })
     }
 
+    /// Replaces only generated contract fields while retaining host-owned
+    /// aliases and runtime preconditions from the existing descriptor.
+    /// Unknown ids are ignored, so adding a contract cannot silently create an
+    /// executable capability without an explicit base registration.
+    public func replacingContracts(_ contracts: [CapabilityContract]) -> CapabilityRegistry {
+        var merged = byVerb
+        for contract in contracts {
+            guard var descriptor = merged[contract.id],
+                  descriptor.version == contract.version else { continue }
+            descriptor.title = contract.title
+            descriptor.capabilityDescription = contract.description
+            descriptor.domain = contract.domain
+            descriptor.access = contract.access
+            descriptor.releasePhase = contract.releasePhase
+            descriptor.inputSchema = contract.inputSchema
+            descriptor.source = contract.source
+            descriptor.requiresConfirmation = contract.access.isWrite
+            descriptor.isDestructive = contract.access == .destructiveWrite
+            descriptor.isAIExposed = true
+            merged[contract.id] = descriptor
+        }
+        return CapabilityRegistry(capabilities: merged.values.sorted { $0.verb < $1.verb })
+    }
+
     // MARK: - Built-in registry
 
     /// Built-in registry covering all verbs in the AI edit plan pipeline and the UI intent path.

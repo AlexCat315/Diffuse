@@ -78,6 +78,10 @@ public struct SceneRuntime {
         world.resource(VehicleStateFrameResource.self) ?? .empty
     }
 
+    public var softBodyStateFrame: SoftBodyStateFrameResource {
+        world.resource(SoftBodyStateFrameResource.self) ?? .empty
+    }
+
     public var ragdollStateFrame: RagdollStateFrameResource {
         world.resource(RagdollStateFrameResource.self) ?? .empty
     }

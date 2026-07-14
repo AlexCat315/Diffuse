@@ -1,5 +1,6 @@
 import CapabilityRuntime
 import Foundation
+import IntentRuntime
 
 public struct CapabilityInvocationDraft: Codable, Sendable, Equatable, Identifiable {
     public var id: UUID
@@ -80,7 +81,7 @@ public actor CapabilityDraftStore {
     private let ttl: TimeInterval
     private var drafts: [UUID: CapabilityInvocationDraft] = [:]
 
-    public init(registry: CapabilityRegistry = .default,
+    public init(registry: CapabilityRegistry = .aiDefault,
                 ttl: TimeInterval = CapabilityDraftStore.defaultTTL) {
         self.registry = registry
         self.ttl = max(1, ttl)
