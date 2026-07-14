@@ -46,10 +46,14 @@
 #include <Jolt/Physics/SoftBody/SoftBodyCreationSettings.h>
 #include <Jolt/Physics/SoftBody/SoftBodyMotionProperties.h>
 #include <Jolt/Physics/SoftBody/SoftBodySharedSettings.h>
+#include <Jolt/Geometry/ClosestPoint.h>
 
 #include <atomic>
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstdint>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <unordered_map>
@@ -111,6 +115,36 @@ struct BodyMetadata {
     bool is_trigger = false;
     uint16_t layer_id = 0;
     uint16_t layer_mask = UINT16_MAX;
+};
+
+struct SoftBodySelfCollisionFace {
+    std::array<uint32_t, 3> vertices {};
+};
+
+struct NativeSoftBodySelfCollision {
+    float vertex_radius = 0.0f;
+    float cell_size = 0.0f;
+    std::vector<SoftBodySelfCollisionFace> faces;
+    std::unordered_set<uint64_t> topology_edges;
+};
+
+struct SoftBodySelfCollisionCell {
+    int32_t x = 0;
+    int32_t y = 0;
+    int32_t z = 0;
+
+    bool operator==(const SoftBodySelfCollisionCell& other) const {
+        return x == other.x && y == other.y && z == other.z;
+    }
+};
+
+struct SoftBodySelfCollisionCellHash {
+    size_t operator()(const SoftBodySelfCollisionCell& cell) const noexcept {
+        size_t value = std::hash<int32_t>{}(cell.x);
+        value ^= std::hash<int32_t>{}(cell.y) + 0x9e3779b9u + (value << 6) + (value >> 2);
+        value ^= std::hash<int32_t>{}(cell.z) + 0x9e3779b9u + (value << 6) + (value >> 2);
+        return value;
+    }
 };
 
 struct BodySignature {
@@ -1034,6 +1068,7 @@ struct GuavaJoltContextImpl {
 
     std::unordered_map<uint64_t, JPH::BodyID> body_ids;            // entity → Jolt body
     std::unordered_map<uint64_t, JPH::BodyID> soft_body_ids;       // entity → Jolt soft body
+    std::unordered_map<uint64_t, NativeSoftBodySelfCollision> soft_body_self_collisions;
     std::unordered_map<uint64_t, JPH::Ref<JPH::Constraint>> constraints; // entity → constraint
     std::unordered_map<uint64_t, GuavaJoltConstraintDesc> constraint_descriptors;
     std::unordered_map<uint64_t, std::pair<uint64_t, uint64_t>> constraint_bodies;
@@ -1093,6 +1128,7 @@ struct GuavaJoltContextImpl {
             bi.RemoveBody(kv.second);
             bi.DestroyBody(kv.second);
         }
+        soft_body_self_collisions.clear();
     }
 
     void clear_all() {
@@ -1122,6 +1158,7 @@ struct GuavaJoltContextImpl {
             bi.DestroyBody(kv.second);
         }
         soft_body_ids.clear();
+        soft_body_self_collisions.clear();
         body_metadata.clear();
         body_signatures.clear();
         mesh_vertices.clear();
@@ -1161,7 +1198,285 @@ struct GuavaJoltContextImpl {
         bi.RemoveBody(existing->second);
         bi.DestroyBody(existing->second);
         soft_body_ids.erase(existing);
+        soft_body_self_collisions.erase(entity);
         body_metadata.erase(entity);
+        return true;
+    }
+
+    static int32_t self_collision_cell_coordinate(float value, float cell_size) {
+        const double coordinate = std::floor(
+            static_cast<double>(value) / static_cast<double>(cell_size));
+        const double minimum = static_cast<double>(std::numeric_limits<int32_t>::min());
+        const double maximum = static_cast<double>(std::numeric_limits<int32_t>::max());
+        return static_cast<int32_t>(std::max(minimum, std::min(maximum, coordinate)));
+    }
+
+    static uint64_t self_collision_edge_key(uint32_t a, uint32_t b) {
+        const uint32_t low = std::min(a, b);
+        const uint32_t high = std::max(a, b);
+        return (static_cast<uint64_t>(low) << 32) | high;
+    }
+
+    static bool self_collision_face_is_adjacent(
+        uint32_t vertex_index,
+        const SoftBodySelfCollisionFace& face,
+        const std::unordered_set<uint64_t>& topology_edges) {
+        for (uint32_t face_vertex : face.vertices) {
+            if (face_vertex == vertex_index
+                || topology_edges.find(self_collision_edge_key(vertex_index, face_vertex))
+                    != topology_edges.end()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Jolt 5.5 has no intra-soft-body collision switch. Its public vertex API
+    // permits external velocity / inverse-mass control but warns against direct
+    // position edits, so resolve deterministic vertex-face contacts as velocity
+    // constraints after the native step and let Jolt integrate them next frame.
+    bool apply_soft_body_self_collisions(float delta_seconds) {
+        if (soft_body_self_collisions.empty()) return true;
+        if (!std::isfinite(delta_seconds) || delta_seconds <= 0.0f) {
+            last_error = GUAVA_JOLT_ERROR_INVALID_ARGUMENT;
+            return false;
+        }
+
+        std::vector<uint64_t> entities;
+        entities.reserve(soft_body_self_collisions.size());
+        for (const auto& entry : soft_body_self_collisions) entities.push_back(entry.first);
+        std::sort(entities.begin(), entities.end());
+
+        JPH::BodyInterface& body_interface = physics_system.GetBodyInterface();
+        for (uint64_t entity : entities) {
+            const auto body_it = soft_body_ids.find(entity);
+            const auto collision_it = soft_body_self_collisions.find(entity);
+            if (body_it == soft_body_ids.end() || collision_it == soft_body_self_collisions.end()) {
+                last_error = GUAVA_JOLT_ERROR_UPDATE_FAILED;
+                return false;
+            }
+            const NativeSoftBodySelfCollision& collision = collision_it->second;
+            bool activate = false;
+            {
+                JPH::BodyLockWrite lock(
+                    physics_system.GetBodyLockInterface(), body_it->second);
+                if (!lock.Succeeded() || !lock.GetBody().IsSoftBody()) {
+                    last_error = GUAVA_JOLT_ERROR_UPDATE_FAILED;
+                    return false;
+                }
+                JPH::Body& body = lock.GetBody();
+                auto* properties = static_cast<JPH::SoftBodyMotionProperties*>(
+                    body.GetMotionProperties());
+                JPH::Array<JPH::SoftBodyVertex>& vertices = properties->GetVertices();
+                if (vertices.empty() || collision.faces.empty()) continue;
+
+                for (const JPH::SoftBodyVertex& vertex : vertices) {
+                    if (!std::isfinite(vertex.mPosition.GetX())
+                        || !std::isfinite(vertex.mPosition.GetY())
+                        || !std::isfinite(vertex.mPosition.GetZ())) {
+                        last_error = GUAVA_JOLT_ERROR_UPDATE_FAILED;
+                        return false;
+                    }
+                }
+
+                using BucketMap = std::unordered_map<
+                    SoftBodySelfCollisionCell,
+                    std::vector<uint32_t>,
+                    SoftBodySelfCollisionCellHash>;
+                BucketMap buckets;
+                buckets.reserve(std::min<size_t>(collision.faces.size() * 4, 262144));
+                std::vector<uint32_t> oversized_faces;
+                constexpr uint64_t kMaximumCellsPerFace = 4096;
+                constexpr uint64_t kMaximumBucketEntries = 2'000'000;
+                uint64_t bucket_entry_count = 0;
+                const float radius = collision.vertex_radius;
+
+                for (uint32_t face_index = 0;
+                     face_index < collision.faces.size();
+                     ++face_index) {
+                    const SoftBodySelfCollisionFace& face = collision.faces[face_index];
+                    if (face.vertices[0] >= vertices.size()
+                        || face.vertices[1] >= vertices.size()
+                        || face.vertices[2] >= vertices.size()) {
+                        last_error = GUAVA_JOLT_ERROR_UPDATE_FAILED;
+                        return false;
+                    }
+                    const JPH::Vec3 a = vertices[face.vertices[0]].mPosition;
+                    const JPH::Vec3 b = vertices[face.vertices[1]].mPosition;
+                    const JPH::Vec3 c = vertices[face.vertices[2]].mPosition;
+                    const JPH::Vec3 minimum = JPH::Vec3::sMin(a, JPH::Vec3::sMin(b, c))
+                        - JPH::Vec3::sReplicate(radius);
+                    const JPH::Vec3 maximum = JPH::Vec3::sMax(a, JPH::Vec3::sMax(b, c))
+                        + JPH::Vec3::sReplicate(radius);
+                    const SoftBodySelfCollisionCell minimum_cell {
+                        self_collision_cell_coordinate(minimum.GetX(), collision.cell_size),
+                        self_collision_cell_coordinate(minimum.GetY(), collision.cell_size),
+                        self_collision_cell_coordinate(minimum.GetZ(), collision.cell_size)
+                    };
+                    const SoftBodySelfCollisionCell maximum_cell {
+                        self_collision_cell_coordinate(maximum.GetX(), collision.cell_size),
+                        self_collision_cell_coordinate(maximum.GetY(), collision.cell_size),
+                        self_collision_cell_coordinate(maximum.GetZ(), collision.cell_size)
+                    };
+                    const uint64_t span_x = static_cast<uint64_t>(
+                        static_cast<int64_t>(maximum_cell.x)
+                            - static_cast<int64_t>(minimum_cell.x) + 1);
+                    const uint64_t span_y = static_cast<uint64_t>(
+                        static_cast<int64_t>(maximum_cell.y)
+                            - static_cast<int64_t>(minimum_cell.y) + 1);
+                    const uint64_t span_z = static_cast<uint64_t>(
+                        static_cast<int64_t>(maximum_cell.z)
+                            - static_cast<int64_t>(minimum_cell.z) + 1);
+                    if (span_x > 64 || span_y > 64 || span_z > 64
+                        || span_x * span_y * span_z > kMaximumCellsPerFace
+                        || bucket_entry_count + span_x * span_y * span_z
+                            > kMaximumBucketEntries) {
+                        oversized_faces.push_back(face_index);
+                        continue;
+                    }
+                    for (int64_t x = minimum_cell.x; x <= maximum_cell.x; ++x) {
+                        for (int64_t y = minimum_cell.y; y <= maximum_cell.y; ++y) {
+                            for (int64_t z = minimum_cell.z; z <= maximum_cell.z; ++z) {
+                                buckets[SoftBodySelfCollisionCell{
+                                    static_cast<int32_t>(x),
+                                    static_cast<int32_t>(y),
+                                    static_cast<int32_t>(z)
+                                }].push_back(face_index);
+                                ++bucket_entry_count;
+                            }
+                        }
+                    }
+                }
+
+                std::vector<uint32_t> candidates;
+                const float radius_squared = radius * radius;
+                const float inverse_delta = 1.0f / delta_seconds;
+                const float max_linear_velocity = properties->GetMaxLinearVelocity();
+                for (uint32_t vertex_index = 0;
+                     vertex_index < vertices.size();
+                     ++vertex_index) {
+                    JPH::SoftBodyVertex& vertex = vertices[vertex_index];
+                    candidates.assign(oversized_faces.begin(), oversized_faces.end());
+                    const SoftBodySelfCollisionCell cell {
+                        self_collision_cell_coordinate(
+                            vertex.mPosition.GetX(), collision.cell_size),
+                        self_collision_cell_coordinate(
+                            vertex.mPosition.GetY(), collision.cell_size),
+                        self_collision_cell_coordinate(
+                            vertex.mPosition.GetZ(), collision.cell_size)
+                    };
+                    const auto bucket = buckets.find(cell);
+                    if (bucket != buckets.end()) {
+                        candidates.insert(
+                            candidates.end(), bucket->second.begin(), bucket->second.end());
+                    }
+                    std::sort(candidates.begin(), candidates.end());
+                    candidates.erase(
+                        std::unique(candidates.begin(), candidates.end()), candidates.end());
+
+                    for (uint32_t face_index : candidates) {
+                        const SoftBodySelfCollisionFace& face = collision.faces[face_index];
+                        if (self_collision_face_is_adjacent(
+                                vertex_index, face, collision.topology_edges)) {
+                            continue;
+                        }
+                        JPH::SoftBodyVertex& face_a = vertices[face.vertices[0]];
+                        JPH::SoftBodyVertex& face_b = vertices[face.vertices[1]];
+                        JPH::SoftBodyVertex& face_c = vertices[face.vertices[2]];
+                        const JPH::Vec3 relative_a = face_a.mPosition - vertex.mPosition;
+                        const JPH::Vec3 relative_b = face_b.mPosition - vertex.mPosition;
+                        const JPH::Vec3 relative_c = face_c.mPosition - vertex.mPosition;
+                        JPH::uint32 closest_set = 0;
+                        const JPH::Vec3 closest_offset =
+                            JPH::ClosestPoint::GetClosestPointOnTriangle(
+                                relative_a, relative_b, relative_c, closest_set);
+                        const float distance_squared = closest_offset.LengthSq();
+                        if (!std::isfinite(distance_squared)
+                            || distance_squared >= radius_squared) {
+                            continue;
+                        }
+
+                        const JPH::Vec3 closest = vertex.mPosition + closest_offset;
+                        float weight_a = 0.0f;
+                        float weight_b = 0.0f;
+                        float weight_c = 0.0f;
+                        JPH::ClosestPoint::GetBaryCentricCoordinates(
+                            face_a.mPosition - closest,
+                            face_b.mPosition - closest,
+                            face_c.mPosition - closest,
+                            weight_a, weight_b, weight_c);
+                        weight_a = JPH::Clamp(weight_a, 0.0f, 1.0f);
+                        weight_b = JPH::Clamp(weight_b, 0.0f, 1.0f);
+                        weight_c = JPH::Clamp(weight_c, 0.0f, 1.0f);
+                        const float weight_sum = weight_a + weight_b + weight_c;
+                        if (weight_sum <= 1.0e-8f) continue;
+                        weight_a /= weight_sum;
+                        weight_b /= weight_sum;
+                        weight_c /= weight_sum;
+
+                        const float distance = std::sqrt(std::max(distance_squared, 0.0f));
+                        JPH::Vec3 normal;
+                        if (distance > 1.0e-6f) {
+                            normal = -closest_offset / distance;
+                        } else {
+                            normal = (face_b.mPosition - face_a.mPosition)
+                                .Cross(face_c.mPosition - face_a.mPosition)
+                                .NormalizedOr(JPH::Vec3::sAxisY());
+                            const JPH::Vec3 previous_closest =
+                                weight_a * face_a.mPreviousPosition
+                                + weight_b * face_b.mPreviousPosition
+                                + weight_c * face_c.mPreviousPosition;
+                            if ((vertex.mPreviousPosition - previous_closest).Dot(normal) < 0.0f) {
+                                normal = -normal;
+                            }
+                        }
+
+                        const float effective_inverse_mass = vertex.mInvMass
+                            + weight_a * weight_a * face_a.mInvMass
+                            + weight_b * weight_b * face_b.mInvMass
+                            + weight_c * weight_c * face_c.mInvMass;
+                        if (effective_inverse_mass <= 1.0e-8f) continue;
+                        const JPH::Vec3 triangle_velocity =
+                            weight_a * face_a.mVelocity
+                            + weight_b * face_b.mVelocity
+                            + weight_c * face_c.mVelocity;
+                        const float relative_normal_velocity =
+                            (vertex.mVelocity - triangle_velocity).Dot(normal);
+                        const float separation_velocity = std::min(
+                            max_linear_velocity,
+                            std::max(0.0f, radius - distance) * inverse_delta);
+                        const float required_velocity =
+                            separation_velocity - relative_normal_velocity;
+                        if (required_velocity > 0.0f) {
+                            const float impulse = required_velocity / effective_inverse_mass;
+                            vertex.mVelocity += vertex.mInvMass * impulse * normal;
+                            face_a.mVelocity -= face_a.mInvMass * weight_a * impulse * normal;
+                            face_b.mVelocity -= face_b.mInvMass * weight_b * impulse * normal;
+                            face_c.mVelocity -= face_c.mInvMass * weight_c * impulse * normal;
+                        }
+                        vertex.mHasContact = true;
+                        activate = true;
+                    }
+                }
+
+                if (activate) {
+                    JPH::Vec3 average_velocity = JPH::Vec3::sZero();
+                    for (JPH::SoftBodyVertex& vertex : vertices) {
+                        const float speed_squared = vertex.mVelocity.LengthSq();
+                        if (max_linear_velocity <= 0.0f) {
+                            vertex.mVelocity = JPH::Vec3::sZero();
+                        } else if (speed_squared > max_linear_velocity * max_linear_velocity) {
+                            vertex.mVelocity *= max_linear_velocity / std::sqrt(speed_squared);
+                        }
+                        average_velocity += vertex.mVelocity;
+                    }
+                    average_velocity /= static_cast<float>(vertices.size());
+                    properties->SetLinearVelocityClamped(
+                        body.GetCenterOfMassTransform().Multiply3x3(average_velocity));
+                }
+            }
+            if (activate) body_interface.ActivateBody(body_it->second);
+        }
         return true;
     }
 
@@ -1213,9 +1528,7 @@ struct GuavaJoltContextImpl {
             || desc.self_collision > 1
             || desc.layer_id >= 16
             || (desc.fixed_vertex_count > 0 && !desc.fixed_vertices)
-            || desc.self_collision != 0) {
-            // Jolt's current SoftBody solver does not expose self-collision.
-            // Reject it explicitly instead of silently accepting a weaker body.
+            || (desc.self_collision != 0 && desc.vertex_radius <= 0.0f)) {
             last_error = GUAVA_JOLT_ERROR_INVALID_ARGUMENT;
             return false;
         }
@@ -1408,6 +1721,38 @@ struct GuavaJoltContextImpl {
         }
         shared->Optimize();
 
+        NativeSoftBodySelfCollision native_self_collision;
+        if (desc.self_collision != 0) {
+            native_self_collision.vertex_radius = desc.vertex_radius;
+            native_self_collision.faces.reserve(shared->mFaces.size());
+            double total_edge_length = 0.0;
+            uint64_t edge_sample_count = 0;
+            for (const JPH::SoftBodySharedSettings::Face& face : shared->mFaces) {
+                native_self_collision.faces.push_back(SoftBodySelfCollisionFace{{
+                    face.mVertex[0], face.mVertex[1], face.mVertex[2]
+                }});
+                for (uint32_t edge = 0; edge < 3; ++edge) {
+                    const JPH::Vec3 a(shared->mVertices[face.mVertex[edge]].mPosition);
+                    const JPH::Vec3 b(shared->mVertices[face.mVertex[(edge + 1) % 3]].mPosition);
+                    total_edge_length += static_cast<double>((b - a).Length());
+                    ++edge_sample_count;
+                }
+            }
+            const float average_edge_length = edge_sample_count > 0
+                ? static_cast<float>(total_edge_length / static_cast<double>(edge_sample_count))
+                : desc.vertex_radius * 2.0f;
+            native_self_collision.cell_size = std::max(
+                desc.vertex_radius * 2.0f,
+                std::max(average_edge_length, 1.0e-4f));
+            native_self_collision.topology_edges.reserve(shared->mEdgeConstraints.size());
+            for (const JPH::SoftBodySharedSettings::Edge& edge : shared->mEdgeConstraints) {
+                const uint32_t low = std::min(edge.mVertex[0], edge.mVertex[1]);
+                const uint32_t high = std::max(edge.mVertex[0], edge.mVertex[1]);
+                native_self_collision.topology_edges.insert(
+                    (static_cast<uint64_t>(low) << 32) | high);
+            }
+        }
+
         JPH::SoftBodyCreationSettings settings(
             shared,
             JPH::RVec3(desc.position_x, desc.position_y, desc.position_z),
@@ -1433,6 +1778,9 @@ struct GuavaJoltContextImpl {
             return false;
         }
         soft_body_ids[desc.entity_id] = body_id;
+        if (desc.self_collision != 0) {
+            soft_body_self_collisions[desc.entity_id] = std::move(native_self_collision);
+        }
         body_metadata[desc.entity_id] = BodyMetadata{
             false,
             desc.layer_id,
@@ -2625,6 +2973,7 @@ struct GuavaJoltContextImpl {
         const int collision_steps = static_cast<int>(std::max<uint32_t>(1u, config->collision_steps));
         physics_system.Update(config->delta_seconds, collision_steps,
                               temp_allocator.get(), job_system.get());
+        if (!apply_soft_body_self_collisions(config->delta_seconds)) return false;
 
         // Jolt exposes accumulated constraint impulses. Convert them to force /
         // torque for this fixed step and remove joints that exceeded authored
