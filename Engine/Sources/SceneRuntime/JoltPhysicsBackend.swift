@@ -2,7 +2,7 @@
 import SIMDCompat
 
 public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
-    private static let expectedABIVersion: UInt32 = 4
+    private static let expectedABIVersion: UInt32 = 6
     private static let colliderHasBoxFlag: UInt32 = 1 << 0
     private static let colliderHasSphereFlag: UInt32 = 1 << 1
     private static let colliderHasMeshFlag: UInt32 = 1 << 2
@@ -761,35 +761,80 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         fullSnapshot: Bool,
         nativeContext: GuavaJoltContext
     ) -> (success: Bool, stats: GuavaJoltSoftBodySyncStats) {
-        var descriptors = upserts.map(makeSoftBodyDesc)
+        let descriptors = upserts.map(makeSoftBodyDesc)
         let fixedVerticesByBody = upserts.map {
-            $0.cloth.fixedVertexIndices.map(UInt32.init(clamping:))
+            $0.topology.fixedVertexIndices.map(UInt32.init(clamping:))
+        }
+        let surfacePositionsByBody: [[Float]] = upserts.map { descriptor in
+            guard case let .surfaceMesh(_, geometry) = descriptor.topology,
+                  let geometry else { return [] }
+            return geometry.positions.flatMap { [$0.x, $0.y, $0.z] }
+        }
+        let surfaceIndicesByBody: [[UInt32]] = upserts.map { descriptor in
+            guard case let .surfaceMesh(_, geometry) = descriptor.topology else { return [] }
+            return geometry?.triangleIndices ?? []
+        }
+        let tetrahedronIndicesByBody: [[UInt32]] = upserts.map { descriptor in
+            guard case let .surfaceMesh(_, geometry) = descriptor.topology else { return [] }
+            return geometry?.tetrahedronIndices ?? []
         }
         let flatFixedVertices = fixedVerticesByBody.flatMap { $0 }
+        let flatSurfacePositions = surfacePositionsByBody.flatMap { $0 }
+        let flatSurfaceIndices = surfaceIndicesByBody.flatMap { $0 }
+        let flatTetrahedronIndices = tetrahedronIndicesByBody.flatMap { $0 }
         var stats = GuavaJoltSoftBodySyncStats()
-        let success = flatFixedVertices.withUnsafeBufferPointer { fixedBuffer in
-            descriptors.withUnsafeMutableBufferPointer { descriptorBuffer in
-                var fixedOffset = 0
-                for index in descriptorBuffer.indices {
-                    let count = fixedVerticesByBody[index].count
-                    descriptorBuffer[index].fixed_vertices = count > 0
-                        ? fixedBuffer.baseAddress?.advanced(by: fixedOffset)
-                        : nil
-                    fixedOffset += count
-                }
-                return removals.withUnsafeBufferPointer { removalBuffer in
-                    guava_jolt_context_sync_soft_bodies(
-                        nativeContext,
-                        descriptorBuffer.baseAddress,
-                        descriptorBuffer.count,
-                        removalBuffer.baseAddress,
-                        removalBuffer.count,
-                        fullSnapshot,
-                        &stats
-                    )
-                }
-            }
+        let fixedStorage = allocateNativeBuffer(copying: flatFixedVertices)
+        let positionStorage = allocateNativeBuffer(copying: flatSurfacePositions)
+        let indexStorage = allocateNativeBuffer(copying: flatSurfaceIndices)
+        let tetrahedronStorage = allocateNativeBuffer(copying: flatTetrahedronIndices)
+        let descriptorStorage = allocateNativeBuffer(copying: descriptors)
+        let removalStorage = allocateNativeBuffer(copying: removals)
+        defer {
+            deallocateNativeBuffer(fixedStorage, count: flatFixedVertices.count)
+            deallocateNativeBuffer(positionStorage, count: flatSurfacePositions.count)
+            deallocateNativeBuffer(indexStorage, count: flatSurfaceIndices.count)
+            deallocateNativeBuffer(tetrahedronStorage, count: flatTetrahedronIndices.count)
+            deallocateNativeBuffer(descriptorStorage, count: descriptors.count)
+            deallocateNativeBuffer(removalStorage, count: removals.count)
         }
+        var fixedOffset = 0
+        var positionOffset = 0
+        var indexOffset = 0
+        var tetrahedronOffset = 0
+        for index in descriptors.indices {
+            let fixedCount = fixedVerticesByBody[index].count
+            descriptorStorage[index].fixed_vertices = fixedCount > 0
+                ? UnsafePointer(fixedStorage.advanced(by: fixedOffset))
+                : nil
+            fixedOffset += fixedCount
+
+            let positionCount = surfacePositionsByBody[index].count
+            descriptorStorage[index].surface_positions_xyz = positionCount > 0
+                ? UnsafePointer(positionStorage.advanced(by: positionOffset))
+                : nil
+            positionOffset += positionCount
+
+            let indexCount = surfaceIndicesByBody[index].count
+            descriptorStorage[index].surface_triangle_indices = indexCount > 0
+                ? UnsafePointer(indexStorage.advanced(by: indexOffset))
+                : nil
+            indexOffset += indexCount
+
+            let tetrahedronCount = tetrahedronIndicesByBody[index].count
+            descriptorStorage[index].tetrahedron_indices = tetrahedronCount > 0
+                ? UnsafePointer(tetrahedronStorage.advanced(by: tetrahedronOffset))
+                : nil
+            tetrahedronOffset += tetrahedronCount
+        }
+        let success = guava_jolt_context_sync_soft_bodies(
+            nativeContext,
+            descriptors.isEmpty ? nil : descriptorStorage,
+            descriptors.count,
+            removals.isEmpty ? nil : removalStorage,
+            removals.count,
+            fullSnapshot,
+            &stats
+        )
         return (success, stats)
     }
 
@@ -797,8 +842,8 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         _ descriptor: PhysicsSoftBodyDescriptor
     ) -> GuavaJoltSoftBodyDesc {
         let rotation = rotationQuaternion(from: descriptor.worldTransform.matrix)
+        let scale = matrixScale(of: descriptor.worldTransform.matrix)
         let body = descriptor.softBody
-        let cloth = descriptor.cloth
         var result = GuavaJoltSoftBodyDesc()
         result.entity_id = descriptor.entity.rawValue
         result.position_x = descriptor.worldTransform.translation.x
@@ -808,18 +853,47 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         result.rotation_y = rotation.vector.y
         result.rotation_z = rotation.vector.z
         result.rotation_w = rotation.vector.w
-        result.grid_size_x = UInt32(clamping: cloth.gridSizeX)
-        result.grid_size_z = UInt32(clamping: cloth.gridSizeZ)
-        result.spacing = cloth.spacing
-        result.fixed_vertex_count = UInt32(clamping: cloth.fixedVertexIndices.count)
-        result.bend_type = cloth.bendType.rawValue
+        result.scale_x = scale.x
+        result.scale_y = scale.y
+        result.scale_z = scale.z
+        switch descriptor.topology {
+        case let .cloth(cloth):
+            result.topology_kind = 0
+            result.grid_size_x = UInt32(clamping: cloth.gridSizeX)
+            result.grid_size_z = UInt32(clamping: cloth.gridSizeZ)
+            result.spacing = cloth.spacing
+            result.bend_type = cloth.bendType.rawValue
+        case let .surfaceMesh(mesh, geometry):
+            result.topology_kind = 1
+            result.surface_vertex_count = UInt32(clamping: geometry?.positions.count ?? 0)
+            result.surface_triangle_index_count = UInt32(
+                clamping: geometry?.triangleIndices.count ?? 0
+            )
+            result.tetrahedron_index_count = UInt32(
+                clamping: geometry?.tetrahedronIndices.count ?? 0
+            )
+            result.bend_type = mesh.bendType.rawValue
+        case .invalid:
+            result.topology_kind = UInt8.max
+        }
+        result.fixed_vertex_count = UInt32(clamping: descriptor.topology.fixedVertexIndices.count)
         result.allow_sleep = body.allowSleep ? 1 : 0
         result.faces_double_sided = body.facesDoubleSided ? 1 : 0
         result.self_collision = body.selfCollision ? 1 : 0
         result.vertex_mass = body.vertexMass
-        result.compliance = cloth.compliance
-        result.shear_compliance = cloth.shearCompliance
-        result.bend_compliance = cloth.bendCompliance
+        switch descriptor.topology {
+        case let .cloth(cloth):
+            result.compliance = cloth.compliance
+            result.shear_compliance = cloth.shearCompliance
+            result.bend_compliance = cloth.bendCompliance
+        case let .surfaceMesh(mesh, _):
+            result.compliance = mesh.compliance
+            result.shear_compliance = mesh.shearCompliance
+            result.bend_compliance = mesh.bendCompliance
+            result.volume_compliance = mesh.volumeCompliance
+        case .invalid:
+            break
+        }
         result.pressure = body.pressure
         result.linear_damping = body.linearDamping
         result.friction = body.friction
@@ -838,7 +912,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
         descriptors: [PhysicsSoftBodyDescriptor]
     ) -> [SoftBodyMeshState]? {
         let orderedDescriptors = descriptors.sorted { $0.entity.rawValue < $1.entity.rawValue }
-        let vertexCapacity = orderedDescriptors.reduce(0) { $0 + $1.cloth.vertexCount }
+        let vertexCapacity = orderedDescriptors.reduce(0) { $0 + $1.topology.vertexCount }
         var nativeStates = [GuavaJoltSoftBodyState](
             repeating: GuavaJoltSoftBodyState(),
             count: orderedDescriptors.count
@@ -862,16 +936,16 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
               Int(copiedVertexCount) <= vertexCapacity else {
             return nil
         }
-        let clothByEntity = Dictionary(uniqueKeysWithValues: orderedDescriptors.map {
-            ($0.entity.rawValue, $0.cloth)
+        let topologyByEntity = Dictionary(uniqueKeysWithValues: orderedDescriptors.map {
+            ($0.entity.rawValue, $0.topology)
         })
         let states: [SoftBodyMeshState] = nativeStates
             .prefix(Int(copiedStateCount))
             .compactMap { state -> SoftBodyMeshState? in
-            guard let cloth = clothByEntity[state.entity_id] else { return nil }
+            guard let topology = topologyByEntity[state.entity_id] else { return nil }
             let offset = Int(state.vertex_offset)
             let count = Int(state.vertex_count)
-            guard offset >= 0, count == cloth.vertexCount,
+            guard offset >= 0, count == topology.vertexCount,
                   offset + count <= Int(copiedVertexCount) else { return nil }
             let deformedPositions = (offset..<(offset + count)).map { index in
                 SIMD3<Float>(
@@ -883,7 +957,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             return SoftBodyMeshState(
                 entity: EntityID(rawValue: state.entity_id),
                 positions: deformedPositions,
-                triangleIndices: cloth.triangleIndices,
+                triangleIndices: topology.triangleIndices,
                 isSleeping: state.is_sleeping != 0
             )
             }

@@ -1166,11 +1166,51 @@ struct GuavaJoltContextImpl {
     }
 
     bool create_soft_body(const GuavaJoltSoftBodyDesc& desc) {
-        if (desc.grid_size_x < 2 || desc.grid_size_z < 2
-            || desc.grid_size_x > 512 || desc.grid_size_z > 512
-            || !std::isfinite(desc.spacing) || desc.spacing <= 0.0f
+        const bool is_grid = desc.topology_kind == 0;
+        const bool is_surface = desc.topology_kind == 1;
+        if ((!is_grid && !is_surface)
+            || (is_grid && (desc.grid_size_x < 2 || desc.grid_size_z < 2
+                || desc.grid_size_x > 512 || desc.grid_size_z > 512
+                || !std::isfinite(desc.spacing) || desc.spacing <= 0.0f))
+            || (is_surface && (desc.surface_vertex_count < 3
+                || desc.surface_vertex_count > 262144
+                || !desc.surface_positions_xyz
+                || desc.surface_triangle_index_count < 3
+                || desc.surface_triangle_index_count > 1572864
+                || desc.surface_triangle_index_count % 3 != 0
+                || !desc.surface_triangle_indices))
+            || (!is_surface && desc.tetrahedron_index_count != 0)
+            || desc.tetrahedron_index_count > 1048576
+            || desc.tetrahedron_index_count % 4 != 0
+            || (desc.tetrahedron_index_count > 0 && !desc.tetrahedron_indices)
             || !std::isfinite(desc.vertex_mass) || desc.vertex_mass <= 0.0f
+            || !std::isfinite(desc.position_x)
+            || !std::isfinite(desc.position_y)
+            || !std::isfinite(desc.position_z)
+            || !std::isfinite(desc.rotation_x)
+            || !std::isfinite(desc.rotation_y)
+            || !std::isfinite(desc.rotation_z)
+            || !std::isfinite(desc.rotation_w)
+            || !std::isfinite(desc.scale_x) || desc.scale_x <= 1.0e-6f
+            || !std::isfinite(desc.scale_y) || desc.scale_y <= 1.0e-6f
+            || !std::isfinite(desc.scale_z) || desc.scale_z <= 1.0e-6f
+            || !std::isfinite(desc.compliance) || desc.compliance < 0.0f
+            || !std::isfinite(desc.shear_compliance) || desc.shear_compliance < 0.0f
+            || !std::isfinite(desc.bend_compliance) || desc.bend_compliance < 0.0f
+            || !std::isfinite(desc.volume_compliance) || desc.volume_compliance < 0.0f
+            || !std::isfinite(desc.pressure) || desc.pressure < 0.0f
+            || !std::isfinite(desc.linear_damping) || desc.linear_damping < 0.0f
+            || !std::isfinite(desc.friction) || desc.friction < 0.0f
+            || !std::isfinite(desc.restitution)
+            || desc.restitution < 0.0f || desc.restitution > 1.0f
+            || !std::isfinite(desc.gravity_factor)
+            || !std::isfinite(desc.vertex_radius) || desc.vertex_radius < 0.0f
+            || !std::isfinite(desc.max_linear_velocity)
+            || desc.max_linear_velocity < 0.0f
             || desc.bend_type > 2
+            || desc.allow_sleep > 1
+            || desc.faces_double_sided > 1
+            || desc.self_collision > 1
             || desc.layer_id >= 16
             || (desc.fixed_vertex_count > 0 && !desc.fixed_vertices)
             || desc.self_collision != 0) {
@@ -1179,8 +1219,9 @@ struct GuavaJoltContextImpl {
             last_error = GUAVA_JOLT_ERROR_INVALID_ARGUMENT;
             return false;
         }
-        const uint64_t vertex_count64 = static_cast<uint64_t>(desc.grid_size_x)
-            * static_cast<uint64_t>(desc.grid_size_z);
+        const uint64_t vertex_count64 = is_grid
+            ? static_cast<uint64_t>(desc.grid_size_x) * static_cast<uint64_t>(desc.grid_size_z)
+            : static_cast<uint64_t>(desc.surface_vertex_count);
         if (vertex_count64 > UINT32_MAX) {
             last_error = GUAVA_JOLT_ERROR_INVALID_ARGUMENT;
             return false;
@@ -1198,36 +1239,96 @@ struct GuavaJoltContextImpl {
 
         JPH::Ref<JPH::SoftBodySharedSettings> shared = new JPH::SoftBodySharedSettings;
         shared->mVertices.reserve(vertex_count);
-        const float offset_x = -0.5f * desc.spacing * static_cast<float>(desc.grid_size_x - 1);
-        const float offset_z = -0.5f * desc.spacing * static_cast<float>(desc.grid_size_z - 1);
         const float inverse_mass = 1.0f / desc.vertex_mass;
-        for (uint32_t z = 0; z < desc.grid_size_z; ++z) {
-            for (uint32_t x = 0; x < desc.grid_size_x; ++x) {
-                const uint32_t index = x + z * desc.grid_size_x;
+        if (is_grid) {
+            const float offset_x = -0.5f * desc.spacing * static_cast<float>(desc.grid_size_x - 1);
+            const float offset_z = -0.5f * desc.spacing * static_cast<float>(desc.grid_size_z - 1);
+            for (uint32_t z = 0; z < desc.grid_size_z; ++z) {
+                for (uint32_t x = 0; x < desc.grid_size_x; ++x) {
+                    const uint32_t index = x + z * desc.grid_size_x;
+                    const float position_x =
+                        (offset_x + static_cast<float>(x) * desc.spacing) * desc.scale_x;
+                    const float position_z =
+                        (offset_z + static_cast<float>(z) * desc.spacing) * desc.scale_z;
+                    if (!std::isfinite(position_x) || !std::isfinite(position_z)) {
+                        last_error = GUAVA_JOLT_ERROR_INVALID_ARGUMENT;
+                        return false;
+                    }
+                    JPH::SoftBodySharedSettings::Vertex vertex;
+                    JPH::Vec3(position_x, 0.0f, position_z).StoreFloat3(&vertex.mPosition);
+                    vertex.mInvMass = fixed_vertices.find(index) != fixed_vertices.end()
+                        ? 0.0f : inverse_mass;
+                    shared->mVertices.push_back(vertex);
+                }
+            }
+        } else {
+            for (uint32_t index = 0; index < vertex_count; ++index) {
+                const float x = desc.surface_positions_xyz[index * 3];
+                const float y = desc.surface_positions_xyz[index * 3 + 1];
+                const float z = desc.surface_positions_xyz[index * 3 + 2];
+                const float scaled_x = x * desc.scale_x;
+                const float scaled_y = y * desc.scale_y;
+                const float scaled_z = z * desc.scale_z;
+                if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)
+                    || !std::isfinite(scaled_x) || !std::isfinite(scaled_y)
+                    || !std::isfinite(scaled_z)) {
+                    last_error = GUAVA_JOLT_ERROR_INVALID_ARGUMENT;
+                    return false;
+                }
                 JPH::SoftBodySharedSettings::Vertex vertex;
-                JPH::Vec3(
-                    offset_x + static_cast<float>(x) * desc.spacing,
-                    0.0f,
-                    offset_z + static_cast<float>(z) * desc.spacing
-                ).StoreFloat3(&vertex.mPosition);
+                JPH::Vec3(scaled_x, scaled_y, scaled_z).StoreFloat3(&vertex.mPosition);
                 vertex.mInvMass = fixed_vertices.find(index) != fixed_vertices.end()
                     ? 0.0f : inverse_mass;
                 shared->mVertices.push_back(vertex);
             }
         }
-        auto vertex_index = [&desc](uint32_t x, uint32_t z) {
-            return x + z * desc.grid_size_x;
-        };
-        for (uint32_t z = 0; z + 1 < desc.grid_size_z; ++z) {
-            for (uint32_t x = 0; x + 1 < desc.grid_size_x; ++x) {
-                shared->AddFace(JPH::SoftBodySharedSettings::Face(
-                    vertex_index(x, z),
-                    vertex_index(x, z + 1),
-                    vertex_index(x + 1, z + 1)));
-                shared->AddFace(JPH::SoftBodySharedSettings::Face(
-                    vertex_index(x, z),
-                    vertex_index(x + 1, z + 1),
-                    vertex_index(x + 1, z)));
+        if (is_grid) {
+            auto vertex_index = [&desc](uint32_t x, uint32_t z) {
+                return x + z * desc.grid_size_x;
+            };
+            for (uint32_t z = 0; z + 1 < desc.grid_size_z; ++z) {
+                for (uint32_t x = 0; x + 1 < desc.grid_size_x; ++x) {
+                    shared->AddFace(JPH::SoftBodySharedSettings::Face(
+                        vertex_index(x, z),
+                        vertex_index(x, z + 1),
+                        vertex_index(x + 1, z + 1)));
+                    shared->AddFace(JPH::SoftBodySharedSettings::Face(
+                        vertex_index(x, z),
+                        vertex_index(x + 1, z + 1),
+                        vertex_index(x + 1, z)));
+                }
+            }
+        } else {
+            for (uint32_t index = 0; index < desc.surface_triangle_index_count; index += 3) {
+                const uint32_t i0 = desc.surface_triangle_indices[index];
+                const uint32_t i1 = desc.surface_triangle_indices[index + 1];
+                const uint32_t i2 = desc.surface_triangle_indices[index + 2];
+                if (i0 >= vertex_count || i1 >= vertex_count || i2 >= vertex_count
+                    || i0 == i1 || i1 == i2 || i0 == i2) {
+                    last_error = GUAVA_JOLT_ERROR_INVALID_ARGUMENT;
+                    return false;
+                }
+                const auto component = [&desc](uint32_t vertex, uint32_t axis) {
+                    const float scale = axis == 0 ? desc.scale_x
+                        : axis == 1 ? desc.scale_y : desc.scale_z;
+                    return desc.surface_positions_xyz[vertex * 3 + axis] * scale;
+                };
+                const float ax = component(i1, 0) - component(i0, 0);
+                const float ay = component(i1, 1) - component(i0, 1);
+                const float az = component(i1, 2) - component(i0, 2);
+                const float bx = component(i2, 0) - component(i0, 0);
+                const float by = component(i2, 1) - component(i0, 1);
+                const float bz = component(i2, 2) - component(i0, 2);
+                const float cross_x = ay * bz - az * by;
+                const float cross_y = az * bx - ax * bz;
+                const float cross_z = ax * by - ay * bx;
+                const float area_squared = cross_x * cross_x
+                    + cross_y * cross_y + cross_z * cross_z;
+                if (!std::isfinite(area_squared) || area_squared <= 1.0e-16f) {
+                    last_error = GUAVA_JOLT_ERROR_INVALID_ARGUMENT;
+                    return false;
+                }
+                shared->AddFace(JPH::SoftBodySharedSettings::Face(i0, i1, i2));
             }
         }
         const JPH::SoftBodySharedSettings::VertexAttributes attributes(
@@ -1241,6 +1342,70 @@ struct GuavaJoltContextImpl {
                     ? JPH::SoftBodySharedSettings::EBendType::Distance
                     : JPH::SoftBodySharedSettings::EBendType::None;
         shared->CreateConstraints(&attributes, 1, bend_type);
+        if (desc.tetrahedron_index_count > 0) {
+            std::unordered_set<uint64_t> edges;
+            edges.reserve(shared->mEdgeConstraints.size()
+                + static_cast<size_t>(desc.tetrahedron_index_count) * 3 / 2);
+            const auto edge_key = [](uint32_t a, uint32_t b) {
+                const uint32_t low = std::min(a, b);
+                const uint32_t high = std::max(a, b);
+                return (static_cast<uint64_t>(low) << 32) | high;
+            };
+            for (const JPH::SoftBodySharedSettings::Edge& edge : shared->mEdgeConstraints) {
+                edges.insert(edge_key(edge.mVertex[0], edge.mVertex[1]));
+            }
+            const auto component = [&desc](uint32_t vertex, uint32_t axis) {
+                const float scale = axis == 0 ? desc.scale_x
+                    : axis == 1 ? desc.scale_y : desc.scale_z;
+                return desc.surface_positions_xyz[vertex * 3 + axis] * scale;
+            };
+            const auto add_edge = [&shared, &edges, &edge_key, &desc](uint32_t a, uint32_t b) {
+                if (edges.insert(edge_key(a, b)).second) {
+                    shared->mEdgeConstraints.push_back(
+                        JPH::SoftBodySharedSettings::Edge(a, b, desc.compliance));
+                }
+            };
+            for (uint32_t index = 0; index < desc.tetrahedron_index_count; index += 4) {
+                const uint32_t i0 = desc.tetrahedron_indices[index];
+                const uint32_t i1 = desc.tetrahedron_indices[index + 1];
+                const uint32_t i2 = desc.tetrahedron_indices[index + 2];
+                const uint32_t i3 = desc.tetrahedron_indices[index + 3];
+                if (i0 >= vertex_count || i1 >= vertex_count
+                    || i2 >= vertex_count || i3 >= vertex_count
+                    || i0 == i1 || i0 == i2 || i0 == i3
+                    || i1 == i2 || i1 == i3 || i2 == i3) {
+                    last_error = GUAVA_JOLT_ERROR_INVALID_ARGUMENT;
+                    return false;
+                }
+                const float ax = component(i0, 0) - component(i3, 0);
+                const float ay = component(i0, 1) - component(i3, 1);
+                const float az = component(i0, 2) - component(i3, 2);
+                const float bx = component(i1, 0) - component(i3, 0);
+                const float by = component(i1, 1) - component(i3, 1);
+                const float bz = component(i1, 2) - component(i3, 2);
+                const float cx = component(i2, 0) - component(i3, 0);
+                const float cy = component(i2, 1) - component(i3, 1);
+                const float cz = component(i2, 2) - component(i3, 2);
+                const float six_volume = ax * (by * cz - bz * cy)
+                    - ay * (bx * cz - bz * cx)
+                    + az * (bx * cy - by * cx);
+                if (!std::isfinite(six_volume) || std::abs(six_volume) <= 1.0e-12f) {
+                    last_error = GUAVA_JOLT_ERROR_INVALID_ARGUMENT;
+                    return false;
+                }
+                add_edge(i0, i1);
+                add_edge(i0, i2);
+                add_edge(i0, i3);
+                add_edge(i1, i2);
+                add_edge(i1, i3);
+                add_edge(i2, i3);
+                shared->mVolumeConstraints.push_back(
+                    JPH::SoftBodySharedSettings::Volume(
+                        i0, i1, i2, i3, desc.volume_compliance));
+            }
+            shared->CalculateEdgeLengths();
+            shared->CalculateVolumeConstraintVolumes();
+        }
         shared->Optimize();
 
         JPH::SoftBodyCreationSettings settings(
