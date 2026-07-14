@@ -357,6 +357,51 @@ struct EditorInspectorSectionsTests {
         #expect(adapter.addableComponentKinds(on: id).contains(.cloth))
     }
 
+    @Test("destructible inspector edits pre-fracture thresholds and recycling policy")
+    func destructibleBindings() throws {
+        let adapter = EditorSceneAdapter()
+        let id = makeEntity(in: adapter)
+        let entity = try #require(EntityID(rawValue: id))
+        #expect(adapter.addComponent(.destructible, to: id))
+        #expect(hasSection(adapter, id, "destructible"))
+
+        guard case let .bool(enabled) =
+                field(adapter, id, section: "destructible", field: "destructible-enabled"),
+              case let .text(asset) =
+                field(adapter, id, section: "destructible", field: "destructible-asset"),
+              case let .constrainedNumber(damage, _, _, _, _) =
+                field(adapter, id, section: "destructible", field: "destructible-damage-threshold"),
+              case let .constrainedNumber(impulse, _, _, _, _) =
+                field(adapter, id, section: "destructible", field: "destructible-impulse-threshold"),
+              case let .constrainedNumber(budget, _, _, _, _) =
+                field(adapter, id, section: "destructible", field: "destructible-fragment-budget"),
+              case let .constrainedNumber(lifetime, _, _, _, _) =
+                field(adapter, id, section: "destructible", field: "destructible-lifetime"),
+              case let .constrainedNumber(recycleDelay, _, _, _, _) =
+                field(adapter, id, section: "destructible", field: "destructible-sleep-recycle") else {
+            Issue.record("expected destructible authored controls"); return
+        }
+        enabled.wrappedValue = false
+        asset.wrappedValue = "tower.prefractured"
+        damage.wrappedValue = 80
+        impulse.wrappedValue = 14
+        budget.wrappedValue = 96
+        lifetime.wrappedValue = 25
+        recycleDelay.wrappedValue = 4
+
+        let destructible = try #require(adapter.scene.component(Destructible.self, for: entity))
+        #expect(!destructible.isEnabled)
+        #expect(destructible.assetResourceID == "tower.prefractured")
+        #expect(destructible.damageThreshold == 80)
+        #expect(destructible.impulseThreshold == 14)
+        #expect(destructible.fragmentBudget == 96)
+        #expect(destructible.maximumFragmentLifetimeSeconds == 25)
+        #expect(destructible.sleepingRecycleDelaySeconds == 4)
+
+        #expect(adapter.removeComponent(.destructible, from: id))
+        #expect(!hasSection(adapter, id, "destructible"))
+    }
+
     @Test("collider inspector edits Jolt shape center and collision mask")
     func colliderJoltSettingsBindings() throws {
         let adapter = EditorSceneAdapter()

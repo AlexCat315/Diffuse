@@ -14,6 +14,7 @@ private struct Configuration {
         case denseContact = "dense-contact"
         case cloth64 = "cloth-64"
         case softBodyInstances = "soft-body-instances"
+        case destructionFragments = "destruction-fragments"
     }
 
     var scenario: Scenario
@@ -25,6 +26,8 @@ private struct Configuration {
     var clothGridSize: Int
     var maxSoftBodyStepNanoseconds: UInt64
     var maxVertexStreamNanoseconds: UInt64
+    var maxDestructionActivationNanoseconds: UInt64
+    var maxDestructionStepNanoseconds: UInt64
 
     init(environment: [String: String] = ProcessInfo.processInfo.environment) {
         scenario = Scenario(rawValue: environment["GUAVA_PHYSICS_SCENARIO"] ?? "") ?? .activeGrid
@@ -34,6 +37,7 @@ private struct Configuration {
         case .denseContact: defaultBodyCount = 2_000
         case .cloth64: defaultBodyCount = 1
         case .softBodyInstances: defaultBodyCount = 8
+        case .destructionFragments: defaultBodyCount = 4_096
         }
         bodyCount = Int(environment["GUAVA_PHYSICS_BODIES"] ?? "") ?? defaultBodyCount
         warmupFrames = Int(environment["GUAVA_PHYSICS_WARMUP_FRAMES"] ?? "") ?? 120
@@ -49,6 +53,14 @@ private struct Configuration {
             ?? 2.0
         maxSoftBodyStepNanoseconds = UInt64(max(0, stepBudgetMS) * 1_000_000)
         maxVertexStreamNanoseconds = UInt64(max(0, streamBudgetMS) * 1_000_000)
+        let destructionBudgetMS = Double(
+            environment["GUAVA_PHYSICS_DESTRUCTION_ACTIVATION_BUDGET_MS"] ?? ""
+        ) ?? 2_500
+        maxDestructionActivationNanoseconds = UInt64(max(0, destructionBudgetMS) * 1_000_000)
+        let destructionStepBudgetMS = Double(
+            environment["GUAVA_PHYSICS_DESTRUCTION_STEP_BUDGET_MS"] ?? ""
+        ) ?? 16.67
+        maxDestructionStepNanoseconds = UInt64(max(0, destructionStepBudgetMS) * 1_000_000)
     }
 }
 
@@ -151,6 +163,81 @@ private func makeBenchmarkScene(configuration: Configuration) -> SceneRuntime {
             )
             _ = runtime.setComponent(RenderMeshComponent(meshIndex: 0), for: entity)
         }
+    case .destructionFragments:
+        let fragmentsPerAsset = 16
+        let geometry = MeshColliderGeometry(
+            positions: [
+                SIMD3<Float>(-0.15, -0.15, -0.15),
+                SIMD3<Float>(0.15, -0.15, -0.15),
+                SIMD3<Float>(0, 0.15, -0.15),
+                SIMD3<Float>(0, 0, 0.15),
+            ],
+            triangleIndices: [0, 2, 1, 0, 1, 3, 1, 2, 3, 2, 0, 3]
+        )
+        var geometryByResourceID: [String: MeshColliderGeometry] = [:]
+        var fragmentAssets: [DestructibleFragmentAsset] = []
+        var connections: [DestructibleConnectionAsset] = []
+        for fragmentID in 0..<fragmentsPerAsset {
+            let geometryID = "benchmark.destructible.convex.\(fragmentID)"
+            geometryByResourceID[geometryID] = geometry
+            let x = Float(fragmentID % 4) * 0.32 - 0.48
+            let y = Float((fragmentID / 4) % 2) * 0.32 - 0.16
+            let z = Float(fragmentID / 8) * 0.32 - 0.16
+            fragmentAssets.append(DestructibleFragmentAsset(
+                fragmentID: UInt32(fragmentID),
+                colliderResourceID: geometryID,
+                localTransform: LocalTransform(translation: SIMD3<Float>(x, y, z)),
+                mass: 0.25
+            ))
+            if fragmentID > 0 {
+                connections.append(DestructibleConnectionAsset(
+                    connectionID: UInt32(fragmentID - 1),
+                    fragmentA: UInt32(fragmentID - 1),
+                    fragmentB: UInt32(fragmentID)
+                ))
+            }
+        }
+        runtime.setResource(MeshColliderGeometryResource(
+            geometryByResourceID: geometryByResourceID
+        ))
+        runtime.setResource(DestructibleAssetResource(assetsByResourceID: [
+            "benchmark.destructible": DestructibleAsset(
+                fragments: fragmentAssets,
+                connections: connections
+            ),
+        ]))
+        runtime.setResource(DestructionSettingsResource(
+            maximumActiveFragmentCount: configuration.bodyCount,
+            maximumEventCountPerFrame: max(1_024, configuration.bodyCount)
+        ))
+        let sourceCount = Int(ceil(Double(configuration.bodyCount) / Double(fragmentsPerAsset)))
+        let columns = max(1, Int(ceil(sqrt(Double(sourceCount)))))
+        for sourceIndex in 0..<sourceCount {
+            let entity = runtime.createEntity()
+            _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(
+                Float(sourceIndex % columns) * 2,
+                5 + Float(sourceIndex % 3) * 2,
+                Float(sourceIndex / columns) * 2
+            )), for: entity)
+            _ = runtime.setComponent(
+                Collider(shape: .box(
+                    halfExtents: SIMD3<Float>(0.7, 0.4, 0.4),
+                    center: .zero
+                )),
+                for: entity
+            )
+            _ = runtime.setComponent(RigidBody(motionType: .static), for: entity)
+            let remaining = configuration.bodyCount - sourceIndex * fragmentsPerAsset
+            _ = runtime.setComponent(Destructible(
+                assetResourceID: "benchmark.destructible",
+                damageThreshold: 1,
+                impulseThreshold: 1,
+                fragmentBudget: min(fragmentsPerAsset, remaining),
+                maximumFragmentLifetimeSeconds: 0,
+                sleepingRecycleDelaySeconds: 0,
+                separationImpulse: 0.25
+            ), for: entity)
+        }
     }
     return runtime
 }
@@ -201,6 +288,16 @@ var runtime = makeBenchmarkScene(configuration: configuration)
 for frame in 0..<configuration.warmupFrames {
     _ = runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame))
 }
+if configuration.scenario == .destructionFragments {
+    for entity in runtime.entities(with: Destructible.self).sorted(by: {
+        $0.rawValue < $1.rawValue
+    }) {
+        runtime.submitDestructionCommand(DestructionCommand(
+            entity: entity,
+            forceFracture: true
+        ))
+    }
+}
 
 var stepSamples: [UInt64] = []
 var syncSamples: [UInt64] = []
@@ -212,6 +309,9 @@ var residentSamples: [UInt64] = []
 var vertexStreamSamples: [UInt64] = []
 var streamedVertexPeak = 0
 var vertexChecksum: Float = 0
+var activeFragmentPeak = 0
+var destructionEventTotal = 0
+var destructionActivationNanoseconds: UInt64 = 0
 stepSamples.reserveCapacity(configuration.sampleFrames)
 syncSamples.reserveCapacity(configuration.sampleFrames)
 residentSamples.reserveCapacity(configuration.sampleFrames)
@@ -219,7 +319,11 @@ vertexStreamSamples.reserveCapacity(configuration.sampleFrames)
 
 for offset in 0..<configuration.sampleFrames {
     let frame = configuration.warmupFrames + offset
+    let frameStarted = DispatchTime.now().uptimeNanoseconds
     let report = runtime.tick(deltaTime: 1.0 / 60.0, frameIndex: UInt64(frame))
+    if configuration.scenario == .destructionFragments && offset == 0 {
+        destructionActivationNanoseconds = DispatchTime.now().uptimeNanoseconds - frameStarted
+    }
     stepSamples.append(report.physicsStepNanoseconds)
     syncSamples.append(report.physicsSynchronizationNanoseconds)
     contactTotal += report.physicsContactCount
@@ -228,6 +332,8 @@ for offset in 0..<configuration.sampleFrames {
         activeSoftBodyPeak, runtime.physicsFrameState.activeSoftBodyCount
     )
     droppedSteps += report.physicsDroppedStepCount
+    activeFragmentPeak = max(activeFragmentPeak, runtime.destructionStateFrame.activeFragmentCount)
+    destructionEventTotal += runtime.destructionEventFrame.events.count
     residentSamples.append(residentBytes())
     let streamStarted = DispatchTime.now().uptimeNanoseconds
     let deformableMeshes = runtime.renderScene.deformableMeshes
@@ -258,6 +364,7 @@ print("sync_ms p50=\(milliseconds(percentile(sortedSync, 0.50))) p95=\(milliseco
 print("vertex_stream_ms p50=\(milliseconds(percentile(sortedVertexStream, 0.50))) p95=\(milliseconds(percentile(sortedVertexStream, 0.95))) p99=\(milliseconds(percentile(sortedVertexStream, 0.99))) vertices_peak=\(streamedVertexPeak) checksum=\(vertexChecksum)")
 print("contacts_total=\(contactTotal) active_body_peak=\(activeBodyPeak) active_soft_body_peak=\(activeSoftBodyPeak) dropped_steps=\(droppedSteps) peak_rss_bytes=\(peakResidentBytes())")
 print("rss_initial_bytes=\(initialResident) rss_final_bytes=\(finalResident) rss_growth_bytes=\(residentGrowth)")
+print("destruction_activation_ms=\(milliseconds(destructionActivationNanoseconds)) active_fragment_peak=\(activeFragmentPeak) destruction_events_total=\(destructionEventTotal)")
 
 if configuration.scenario == .activeGrid,
    configuration.bodyCount >= 10_000,
@@ -286,6 +393,14 @@ if configuration.scenario == .softBodyInstances,
         || percentile(sortedVertexStream, 0.95) > configuration.maxVertexStreamNanoseconds
         || droppedSteps > 0 {
     fputs("Physics benchmark gate failed: medium soft-body instances exceeded the step/vertex-stream budget or dropped fixed steps.\n", stderr)
+    exit(1)
+}
+if configuration.scenario == .destructionFragments,
+   activeFragmentPeak != configuration.bodyCount
+        || destructionActivationNanoseconds > configuration.maxDestructionActivationNanoseconds
+        || percentile(sortedSteps, 0.95) > configuration.maxDestructionStepNanoseconds
+        || droppedSteps > 0 {
+    fputs("Physics benchmark gate failed: destructible activation missed its fragment count/burst/step budget or dropped fixed steps.\n", stderr)
     exit(1)
 }
 if initialResident > 0,
