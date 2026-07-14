@@ -42,6 +42,7 @@ public enum DestructibleAssetBakeError: Error, Sendable, Equatable {
     case nonClosedGeometry(fragmentID: UInt32)
     case duplicateConnectionID(UInt32)
     case invalidConnection(connectionID: UInt32)
+    case disconnectedConnectionGraph(fragmentIDs: [UInt32])
     case invalidConnectionTolerance
 }
 
@@ -63,15 +64,26 @@ public struct DestructibleAssetBakeResult: Sendable, Equatable {
     /// Installs or replaces this bake atomically at the resource level. Existing
     /// unrelated geometry and destructible assets are preserved.
     public func install(into runtime: inout SceneRuntime) {
+        var assets = runtime.resource(DestructibleAssetResource.self)
+            ?? DestructibleAssetResource()
         var geometries = runtime.resource(MeshColliderGeometryResource.self)
             ?? MeshColliderGeometryResource()
+        let replacementGeometryIDs = Set(geometryByResourceID.keys)
+        if let previous = assets.assetsByResourceID[assetResourceID] {
+            let ownedPrefix = "\(assetResourceID)#convex:"
+            for fragment in previous.fragments
+            where fragment.colliderResourceID.hasPrefix(ownedPrefix)
+                && !replacementGeometryIDs.contains(fragment.colliderResourceID) {
+                geometries.geometryByResourceID.removeValue(
+                    forKey: fragment.colliderResourceID
+                )
+            }
+        }
         for (resourceID, geometry) in geometryByResourceID {
             geometries.geometryByResourceID[resourceID] = geometry
         }
         runtime.setResource(geometries)
 
-        var assets = runtime.resource(DestructibleAssetResource.self)
-            ?? DestructibleAssetResource()
         assets.assetsByResourceID[assetResourceID] = asset
         runtime.setResource(assets)
     }
@@ -167,6 +179,17 @@ public struct DestructibleAssetBaker: Sendable {
                   connection.impulseThreshold >= 0 else {
                 throw DestructibleAssetBakeError.invalidConnection(
                     connectionID: connection.connectionID
+                )
+            }
+        }
+        if !finalConnections.isEmpty {
+            let disconnected = disconnectedFragmentIDs(
+                fragmentIDs: bakedFragments.map(\.fragmentID),
+                connections: finalConnections
+            )
+            guard disconnected.isEmpty else {
+                throw DestructibleAssetBakeError.disconnectedConnectionGraph(
+                    fragmentIDs: disconnected
                 )
             }
         }
@@ -349,6 +372,30 @@ public struct DestructibleAssetBaker: Sendable {
             max(0, max(minimumA.z - maximumB.z, minimumB.z - maximumA.z))
         )
         return simd_length_squared(separation)
+    }
+
+    private func disconnectedFragmentIDs(
+        fragmentIDs: [UInt32],
+        connections: [DestructibleConnectionAsset]
+    ) -> [UInt32] {
+        guard let root = fragmentIDs.min() else { return [] }
+        var adjacency: [UInt32: [UInt32]] = [:]
+        for connection in connections.sorted(by: { $0.connectionID < $1.connectionID }) {
+            adjacency[connection.fragmentA, default: []].append(connection.fragmentB)
+            adjacency[connection.fragmentB, default: []].append(connection.fragmentA)
+        }
+        var visited: Set<UInt32> = [root]
+        var queue = [root]
+        var index = 0
+        while index < queue.count {
+            let current = queue[index]
+            index += 1
+            for neighbor in (adjacency[current] ?? []).sorted()
+            where visited.insert(neighbor).inserted {
+                queue.append(neighbor)
+            }
+        }
+        return fragmentIDs.sorted().filter { !visited.contains($0) }
     }
 
     private func surfacesAreAdjacent(

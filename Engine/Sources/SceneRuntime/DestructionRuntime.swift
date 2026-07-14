@@ -109,7 +109,7 @@ private func applyDestruction(
           destructible.isEnabled
     else { return false }
     var sourceState = runtime.sources[command.entity] ?? DestructionRuntimeSourceState()
-    guard !sourceState.hasFractured else { return false }
+    guard !sourceState.isFullyFractured else { return false }
 
     guard isValidDestructionCommand(command) else {
         appendFailure(
@@ -230,12 +230,44 @@ private func applyDestruction(
         return false
     }
 
+    let sourceBody = world.component(RigidBody.self, for: command.entity)
+    let sourceCollider = world.component(Collider.self, for: command.entity)
+    let sourceRenderMesh = world.component(RenderMeshComponent.self, for: command.entity)
+    let sourceMaterial = world.component(RenderMaterialComponent.self, for: command.entity)
+    if connectionDisconnected,
+       !command.forceFracture,
+       !damageExceeded,
+       !impulseExceeded,
+       let changedHierarchy = releaseDetachedIslandsIfSupported(
+           sourceEntity: command.entity,
+           command: command,
+           destructible: destructible,
+           asset: asset,
+           sourceTransform: sourceTransform,
+           sourceBody: sourceBody,
+           sourceCollider: sourceCollider,
+           sourceRenderMesh: sourceRenderMesh,
+           sourceMaterial: sourceMaterial,
+           impulseMagnitude: impulseMagnitude,
+           commandBrokenConnectionIDs: newlyBrokenConnectionIDs,
+           sourceState: &sourceState,
+           in: &world,
+           runtime: &runtime,
+           frame: &frame
+       ) {
+        return changedHierarchy
+    }
+
     let settings = world.resource(DestructionSettingsResource.self)
         ?? DestructionSettingsResource()
     let activeCount = world.entities(with: DestructibleFragment.self).count
     let globalAvailable = max(0, settings.maximumActiveFragmentCount - activeCount)
-    let orderedFragments = asset.fragments.sorted { $0.fragmentID < $1.fragmentID }
-    let allowedCount = min(globalAvailable, destructible.fragmentBudget, orderedFragments.count)
+    let activeSourceCount = activeFragmentCount(for: command.entity, in: world)
+    let sourceAvailable = max(0, destructible.fragmentBudget - activeSourceCount)
+    let orderedFragments = asset.fragments
+        .filter { !sourceState.releasedFragmentIDs.contains($0.fragmentID) }
+        .sorted { $0.fragmentID < $1.fragmentID }
+    let allowedCount = min(globalAvailable, sourceAvailable, orderedFragments.count)
     guard allowedCount > 0 else {
         appendFailure(
             DestructionFailureEvent(
@@ -250,19 +282,236 @@ private func applyDestruction(
     }
 
     let fragments = Array(orderedFragments.prefix(allowedCount))
+    let spawned = spawnDestructionFragments(
+        fragments,
+        sourceEntity: command.entity,
+        sourceTransform: sourceTransform,
+        sourceBody: sourceBody,
+        sourceCollider: sourceCollider,
+        sourceMaterial: sourceMaterial,
+        destructible: destructible,
+        command: command,
+        impulseMagnitude: impulseMagnitude,
+        elapsedSeconds: runtime.elapsedSeconds,
+        in: &world
+    )
+
+    if !sourceState.hasAuthoredSourceSnapshot {
+        sourceState.hasAuthoredSourceSnapshot = true
+        sourceState.authoredRigidBody = sourceBody
+        sourceState.authoredCollider = sourceCollider
+        sourceState.authoredRenderMesh = sourceRenderMesh
+    }
+    _ = world.removeComponent(Collider.self, from: command.entity)
+    _ = world.removeComponent(RigidBody.self, from: command.entity)
+    _ = world.updateComponent(RenderMeshComponent.self, for: command.entity) {
+        $0.isVisible = false
+    }
+    destroyRetainedFragmentProxies(for: command.entity, in: &world)
+    let allConnectionIDs = asset.connections.map(\.connectionID).sorted()
+    sourceState.releasedFragmentIDs.formUnion(orderedFragments.map(\.fragmentID))
+    sourceState.hasFractured = true
+    sourceState.isFullyFractured = true
+    sourceState.brokenConnectionIDs = Set(allConnectionIDs)
+    runtime.sources[command.entity] = sourceState
+
+    let cause: DestructionCause
+    if command.forceFracture {
+        cause = .forced
+    } else if connectionDisconnected && !damageExceeded && !impulseExceeded {
+        cause = .connectionBreak
+    } else if contactDriven || impulseExceeded {
+        cause = .contactImpulse
+    } else {
+        cause = .damage
+    }
+    appendEvent(
+        DestructionEvent(
+            sourceEntity: command.entity,
+            cause: cause,
+            fragmentEntities: spawned.entities,
+            fragmentIDs: spawned.fragmentIDs,
+            brokenConnectionIDs: allConnectionIDs,
+            appliedDamage: sourceState.accumulatedDamage,
+            appliedImpulse: impulseMagnitude,
+            droppedFragmentCount: orderedFragments.count - fragments.count
+        ),
+        in: world,
+        frame: &frame
+    )
+    return true
+}
+
+private struct SpawnedDestructionFragments {
+    var entities: [EntityID]
+    var fragmentIDs: [UInt32]
+}
+
+/// Returns `nil` when this asset cannot represent a partial fracture without rendering
+/// the authored whole mesh over the retained pieces. Callers then use the compatible
+/// all-at-once fracture path.
+private func releaseDetachedIslandsIfSupported(
+    sourceEntity: EntityID,
+    command: DestructionCommand,
+    destructible: Destructible,
+    asset: DestructibleAsset,
+    sourceTransform: simd_float4x4,
+    sourceBody: RigidBody?,
+    sourceCollider: Collider?,
+    sourceRenderMesh: RenderMeshComponent?,
+    sourceMaterial: RenderMaterialComponent?,
+    impulseMagnitude: Float,
+    commandBrokenConnectionIDs: [UInt32],
+    sourceState: inout DestructionRuntimeSourceState,
+    in world: inout RuntimeWorld,
+    runtime: inout DestructionRuntimeStateResource,
+    frame: inout DestructionEventFrameResource
+) -> Bool? {
+    guard asset.fragments.allSatisfy({
+        $0.renderMesh != nil && supportsCompoundColliderTransform($0.localTransform)
+    }) else { return nil }
+
+    let rootIsland = connectedRootFragmentIDs(
+        in: asset,
+        brokenConnections: sourceState.brokenConnectionIDs
+    )
+    let detachedIDs = Set(asset.fragments.map(\.fragmentID))
+        .subtracting(rootIsland)
+        .subtracting(sourceState.releasedFragmentIDs)
+    guard !detachedIDs.isEmpty else { return false }
+
+    let settings = world.resource(DestructionSettingsResource.self)
+        ?? DestructionSettingsResource()
+    let activeCount = world.entities(with: DestructibleFragment.self).count
+    let globalAvailable = max(0, settings.maximumActiveFragmentCount - activeCount)
+    let activeSourceCount = activeFragmentCount(for: sourceEntity, in: world)
+    let sourceAvailable = max(0, destructible.fragmentBudget - activeSourceCount)
+    let detachedFragments = asset.fragments
+        .filter { detachedIDs.contains($0.fragmentID) }
+        .sorted { $0.fragmentID < $1.fragmentID }
+    let allowedCount = min(globalAvailable, sourceAvailable, detachedFragments.count)
+    guard allowedCount > 0 else {
+        appendFailure(
+            DestructionFailureEvent(
+                sourceEntity: sourceEntity,
+                reason: .fragmentBudgetExhausted,
+                message: "No fragment capacity is available for the detached island"
+            ),
+            in: world,
+            frame: &frame
+        )
+        return false
+    }
+
+    if !sourceState.hasAuthoredSourceSnapshot {
+        sourceState.hasAuthoredSourceSnapshot = true
+        sourceState.authoredRigidBody = sourceBody
+        sourceState.authoredCollider = sourceCollider
+        sourceState.authoredRenderMesh = sourceRenderMesh
+    }
+
+    let fragmentsToSpawn = Array(detachedFragments.prefix(allowedCount))
+    let spawned = spawnDestructionFragments(
+        fragmentsToSpawn,
+        sourceEntity: sourceEntity,
+        sourceTransform: sourceTransform,
+        sourceBody: sourceBody,
+        sourceCollider: sourceCollider,
+        sourceMaterial: sourceMaterial,
+        destructible: destructible,
+        command: command,
+        impulseMagnitude: impulseMagnitude,
+        elapsedSeconds: runtime.elapsedSeconds,
+        in: &world
+    )
+
+    let implicitBrokenConnectionIDs = asset.connections
+        .filter {
+            (detachedIDs.contains($0.fragmentA) || detachedIDs.contains($0.fragmentB))
+                && !sourceState.brokenConnectionIDs.contains($0.connectionID)
+        }
+        .map(\.connectionID)
+    sourceState.brokenConnectionIDs.formUnion(implicitBrokenConnectionIDs)
+    sourceState.releasedFragmentIDs.formUnion(detachedIDs)
+    sourceState.hasFractured = true
+    sourceState.isFullyFractured = false
+
+    let retainedFragments = asset.fragments
+        .filter { !sourceState.releasedFragmentIDs.contains($0.fragmentID) }
+        .sorted { $0.fragmentID < $1.fragmentID }
+    let colliderTemplate = sourceCollider
+        ?? sourceState.authoredCollider
+        ?? Collider(shape: .box(halfExtents: SIMD3<Float>(repeating: 0.5), center: .zero))
+    _ = world.setComponent(
+        Collider(
+            shapes: retainedFragments.map(colliderShapeInstance),
+            isTrigger: colliderTemplate.isTrigger,
+            layerID: colliderTemplate.layerID,
+            layerMask: colliderTemplate.layerMask,
+            material: colliderTemplate.material
+        ),
+        for: sourceEntity
+    )
+    if var retainedBody = sourceBody, retainedBody.motionType == .dynamic {
+        retainedBody.massMode = .mass
+        retainedBody.mass = retainedFragments.reduce(0) { $0 + $1.mass }
+        retainedBody.centerOfMassOverride = nil
+        retainedBody.inertiaDiagonalOverride = nil
+        retainedBody.isSleeping = false
+        _ = world.setComponent(retainedBody, for: sourceEntity)
+    }
+    _ = world.updateComponent(RenderMeshComponent.self, for: sourceEntity) {
+        $0.isVisible = false
+    }
+    reconcileRetainedFragmentProxies(
+        retainedFragments,
+        sourceEntity: sourceEntity,
+        fallbackMaterial: sourceMaterial,
+        in: &world
+    )
+    runtime.sources[sourceEntity] = sourceState
+
+    appendEvent(
+        DestructionEvent(
+            sourceEntity: sourceEntity,
+            cause: .connectionBreak,
+            fragmentEntities: spawned.entities,
+            fragmentIDs: spawned.fragmentIDs,
+            brokenConnectionIDs: Array(
+                Set(commandBrokenConnectionIDs).union(implicitBrokenConnectionIDs)
+            ).sorted(),
+            appliedDamage: sourceState.accumulatedDamage,
+            appliedImpulse: impulseMagnitude,
+            droppedFragmentCount: detachedFragments.count - fragmentsToSpawn.count
+        ),
+        in: world,
+        frame: &frame
+    )
+    return true
+}
+
+private func spawnDestructionFragments(
+    _ fragments: [DestructibleFragmentAsset],
+    sourceEntity: EntityID,
+    sourceTransform: simd_float4x4,
+    sourceBody: RigidBody?,
+    sourceCollider: Collider?,
+    sourceMaterial: RenderMaterialComponent?,
+    destructible: Destructible,
+    command: DestructionCommand,
+    impulseMagnitude: Float,
+    elapsedSeconds: Double,
+    in world: inout RuntimeWorld
+) -> SpawnedDestructionFragments {
     let sourcePosition = SIMD3<Float>(
         sourceTransform.columns.3.x,
         sourceTransform.columns.3.y,
         sourceTransform.columns.3.z
     )
-    let sourceBody = world.component(RigidBody.self, for: command.entity)
-    let sourceCollider = world.component(Collider.self, for: command.entity)
-    let sourceRenderMesh = world.component(RenderMeshComponent.self, for: command.entity)
-    let sourceMaterial = world.component(RenderMaterialComponent.self, for: command.entity)
     let totalMass = fragments.reduce(Float(0)) { $0 + $1.mass }
-    var fragmentEntities: [EntityID] = []
+    var entities: [EntityID] = []
     var fragmentIDs: [UInt32] = []
-    fragmentEntities.reserveCapacity(fragments.count)
+    entities.reserveCapacity(fragments.count)
     fragmentIDs.reserveCapacity(fragments.count)
 
     for fragment in fragments {
@@ -275,9 +524,9 @@ private func applyDestruction(
         )
         _ = world.setComponent(
             DestructibleFragment(
-                sourceEntity: command.entity,
+                sourceEntity: sourceEntity,
                 fragmentID: fragment.fragmentID,
-                spawnedAtSeconds: runtime.elapsedSeconds,
+                spawnedAtSeconds: elapsedSeconds,
                 maximumLifetimeSeconds: destructible.maximumFragmentLifetimeSeconds,
                 sleepingRecycleDelaySeconds: destructible.sleepingRecycleDelaySeconds
             ),
@@ -335,51 +584,112 @@ private func applyDestruction(
                 )
             }
         }
-        fragmentEntities.append(entity)
+        entities.append(entity)
         fragmentIDs.append(fragment.fragmentID)
     }
+    return SpawnedDestructionFragments(entities: entities, fragmentIDs: fragmentIDs)
+}
 
-    if !sourceState.hasAuthoredSourceSnapshot {
-        sourceState.hasAuthoredSourceSnapshot = true
-        sourceState.authoredRigidBody = sourceBody
-        sourceState.authoredCollider = sourceCollider
-        sourceState.authoredRenderMesh = sourceRenderMesh
-    }
-    _ = world.removeComponent(Collider.self, from: command.entity)
-    _ = world.removeComponent(RigidBody.self, from: command.entity)
-    _ = world.updateComponent(RenderMeshComponent.self, for: command.entity) {
-        $0.isVisible = false
-    }
-    let allConnectionIDs = asset.connections.map(\.connectionID).sorted()
-    sourceState.hasFractured = true
-    sourceState.brokenConnectionIDs = Set(allConnectionIDs)
-    runtime.sources[command.entity] = sourceState
-
-    let cause: DestructionCause
-    if command.forceFracture {
-        cause = .forced
-    } else if connectionDisconnected && !damageExceeded && !impulseExceeded {
-        cause = .connectionBreak
-    } else if contactDriven || impulseExceeded {
-        cause = .contactImpulse
-    } else {
-        cause = .damage
-    }
-    appendEvent(
-        DestructionEvent(
-            sourceEntity: command.entity,
-            cause: cause,
-            fragmentEntities: fragmentEntities,
-            fragmentIDs: fragmentIDs,
-            brokenConnectionIDs: allConnectionIDs,
-            appliedDamage: sourceState.accumulatedDamage,
-            appliedImpulse: impulseMagnitude,
-            droppedFragmentCount: orderedFragments.count - fragments.count
-        ),
-        in: world,
-        frame: &frame
+private func colliderShapeInstance(
+    for fragment: DestructibleFragmentAsset
+) -> ColliderShapeInstance {
+    let matrix = fragment.localTransform.matrix
+    let c0 = SIMD3<Float>(matrix.columns.0.x, matrix.columns.0.y, matrix.columns.0.z)
+    let c1 = SIMD3<Float>(matrix.columns.1.x, matrix.columns.1.y, matrix.columns.1.z)
+    let c2 = SIMD3<Float>(matrix.columns.2.x, matrix.columns.2.y, matrix.columns.2.z)
+    return ColliderShapeInstance(
+        shape: .convex(resourceID: fragment.colliderResourceID, center: .zero),
+        localPosition: fragment.localTransform.translation,
+        localRotation: fragment.localTransform.rotation.vector,
+        localScale: SIMD3<Float>(simd_length(c0), simd_length(c1), simd_length(c2))
     )
-    return true
+}
+
+private func supportsCompoundColliderTransform(_ transform: LocalTransform) -> Bool {
+    let matrix = transform.matrix
+    let c0 = SIMD3<Float>(matrix.columns.0.x, matrix.columns.0.y, matrix.columns.0.z)
+    let c1 = SIMD3<Float>(matrix.columns.1.x, matrix.columns.1.y, matrix.columns.1.z)
+    let c2 = SIMD3<Float>(matrix.columns.2.x, matrix.columns.2.y, matrix.columns.2.z)
+    let lengths = SIMD3<Float>(simd_length(c0), simd_length(c1), simd_length(c2))
+    guard lengths.x > 1.0e-6, lengths.y > 1.0e-6, lengths.z > 1.0e-6 else {
+        return false
+    }
+    let n0 = c0 / lengths.x
+    let n1 = c1 / lengths.y
+    let n2 = c2 / lengths.z
+    return simd_dot(simd_cross(n0, n1), n2) > 1.0e-5
+        && abs(simd_dot(n0, n1)) < 1.0e-4
+        && abs(simd_dot(n0, n2)) < 1.0e-4
+        && abs(simd_dot(n1, n2)) < 1.0e-4
+}
+
+private func reconcileRetainedFragmentProxies(
+    _ fragments: [DestructibleFragmentAsset],
+    sourceEntity: EntityID,
+    fallbackMaterial: RenderMaterialComponent?,
+    in world: inout RuntimeWorld
+) {
+    var existingByFragmentID: [UInt32: EntityID] = [:]
+    for entity in world.entities(with: DestructibleRetainedFragment.self)
+        .sorted(by: { $0.rawValue < $1.rawValue }) {
+        guard let proxy = world.component(DestructibleRetainedFragment.self, for: entity),
+              proxy.sourceEntity == sourceEntity else { continue }
+        if existingByFragmentID[proxy.fragmentID] == nil {
+            existingByFragmentID[proxy.fragmentID] = entity
+        } else {
+            _ = world.destroyEntity(entity)
+        }
+    }
+    let retainedIDs = Set(fragments.map(\.fragmentID))
+    let retiredFragmentIDs = existingByFragmentID.keys
+        .filter { !retainedIDs.contains($0) }
+        .sorted()
+    for fragmentID in retiredFragmentIDs {
+        if let entity = existingByFragmentID.removeValue(forKey: fragmentID) {
+            _ = world.destroyEntity(entity)
+        }
+    }
+    for fragment in fragments {
+        let entity = existingByFragmentID[fragment.fragmentID] ?? world.createEntity()
+        _ = world.setLocalTransform(fragment.localTransform, for: entity)
+        _ = world.setParent(sourceEntity, for: entity)
+        _ = world.setComponent(
+            SceneNameComponent(value: "Retained Fragment \(fragment.fragmentID)"),
+            for: entity
+        )
+        _ = world.setComponent(
+            DestructibleRetainedFragment(
+                sourceEntity: sourceEntity,
+                fragmentID: fragment.fragmentID
+            ),
+            for: entity
+        )
+        if let renderMesh = fragment.renderMesh {
+            _ = world.setComponent(renderMesh, for: entity)
+        }
+        if let renderMaterial = fragment.renderMaterial ?? fallbackMaterial {
+            _ = world.setComponent(renderMaterial, for: entity)
+        }
+    }
+}
+
+private func destroyRetainedFragmentProxies(
+    for sourceEntity: EntityID,
+    in world: inout RuntimeWorld
+) {
+    for entity in world.entities(with: DestructibleRetainedFragment.self) {
+        guard world.component(DestructibleRetainedFragment.self, for: entity)?.sourceEntity
+                == sourceEntity else { continue }
+        _ = world.destroyEntity(entity)
+    }
+}
+
+private func activeFragmentCount(for sourceEntity: EntityID, in world: RuntimeWorld) -> Int {
+    world.entities(with: DestructibleFragment.self).reduce(into: 0) { count, entity in
+        if world.component(DestructibleFragment.self, for: entity)?.sourceEntity == sourceEntity {
+            count += 1
+        }
+    }
 }
 
 private func recycleDestructionFragments(
@@ -387,6 +697,12 @@ private func recycleDestructionFragments(
     runtime: inout DestructionRuntimeStateResource,
     frame: inout DestructionEventFrameResource
 ) {
+    for entity in world.entities(with: DestructibleRetainedFragment.self)
+        .sorted(by: { $0.rawValue < $1.rawValue }) {
+        guard let proxy = world.component(DestructibleRetainedFragment.self, for: entity),
+              !world.contains(proxy.sourceEntity) else { continue }
+        _ = world.destroyEntity(entity)
+    }
     let fragments = world.entities(with: DestructibleFragment.self)
         .sorted { $0.rawValue < $1.rawValue }
     for entity in fragments {
@@ -447,11 +763,35 @@ private func publishDestructionState(
         let fragments = (fragmentsBySource[source] ?? []).sorted {
             ($0.1, $0.0.rawValue) < ($1.1, $1.0.rawValue)
         }
+        let retainedFragmentIDs: [UInt32]
+        if sourceState.isFullyFractured {
+            retainedFragmentIDs = []
+        } else if let destructible = world.component(Destructible.self, for: source),
+                  let asset = world.resource(DestructibleAssetResource.self)?
+                    .asset(for: destructible.assetResourceID) {
+            retainedFragmentIDs = asset.fragments
+                .map(\.fragmentID)
+                .filter { !sourceState.releasedFragmentIDs.contains($0) }
+                .sorted()
+        } else {
+            retainedFragmentIDs = world.entities(with: DestructibleRetainedFragment.self)
+                .compactMap { entity -> UInt32? in
+                    guard let proxy = world.component(
+                        DestructibleRetainedFragment.self,
+                        for: entity
+                    ), proxy.sourceEntity == source else { return nil }
+                    return proxy.fragmentID
+                }
+                .sorted()
+        }
         states[source] = DestructionSourceState(
             sourceEntity: source,
             hasFractured: sourceState.hasFractured,
+            isFullyFractured: sourceState.isFullyFractured,
             accumulatedDamage: sourceState.accumulatedDamage,
             brokenConnectionIDs: sourceState.brokenConnectionIDs.sorted(),
+            releasedFragmentIDs: sourceState.releasedFragmentIDs.sorted(),
+            retainedFragmentIDs: retainedFragmentIDs,
             activeFragmentEntities: fragments.map(\.0),
             activeFragmentIDs: fragments.map(\.1)
         )
@@ -483,6 +823,10 @@ private func validateDestructibleAsset(
               connection.impulseThreshold >= 0 else {
             return "Connection \(connection.connectionID) is invalid"
         }
+    }
+    if !asset.connections.isEmpty,
+       graphIsDisconnected(asset, brokenConnections: []) {
+        return "Destructible asset connection graph is initially disconnected"
     }
     let geometries = world.resource(MeshColliderGeometryResource.self)
     for fragment in asset.fragments.sorted(by: { $0.fragmentID < $1.fragmentID }) {
@@ -535,7 +879,17 @@ private func graphIsDisconnected(
     _ asset: DestructibleAsset,
     brokenConnections: Set<UInt32>
 ) -> Bool {
-    guard let root = asset.fragments.map(\.fragmentID).min() else { return false }
+    connectedRootFragmentIDs(
+        in: asset,
+        brokenConnections: brokenConnections
+    ).count != asset.fragments.count
+}
+
+private func connectedRootFragmentIDs(
+    in asset: DestructibleAsset,
+    brokenConnections: Set<UInt32>
+) -> Set<UInt32> {
+    guard let root = asset.fragments.map(\.fragmentID).min() else { return [] }
     var adjacency: [UInt32: [UInt32]] = [:]
     for connection in asset.connections.sorted(by: { $0.connectionID < $1.connectionID })
     where !brokenConnections.contains(connection.connectionID) {
@@ -552,7 +906,7 @@ private func graphIsDisconnected(
             queue.append(neighbor)
         }
     }
-    return visited.count != asset.fragments.count
+    return visited
 }
 
 private func isValidDestructibleConfiguration(_ destructible: Destructible) -> Bool {

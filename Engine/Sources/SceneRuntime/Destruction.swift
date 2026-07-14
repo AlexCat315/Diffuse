@@ -267,24 +267,38 @@ public struct DestructionEventFrameResource: Sendable, Equatable {
 
 public struct DestructionSourceState: Sendable, Equatable {
     public var sourceEntity: EntityID
+    /// True after at least one fragment has detached from the authored source.
     public var hasFractured: Bool
+    /// True after the source no longer owns a retained compound island.
+    public var isFullyFractured: Bool
     public var accumulatedDamage: Float
     public var brokenConnectionIDs: [UInt32]
+    /// Fragments no longer represented by the source collider. This includes fragments
+    /// discarded by a budget, so they cannot be recreated by a later command.
+    public var releasedFragmentIDs: [UInt32]
+    /// Stable fragment IDs still represented by the source compound collider.
+    public var retainedFragmentIDs: [UInt32]
     public var activeFragmentEntities: [EntityID]
     public var activeFragmentIDs: [UInt32]
 
     public init(
         sourceEntity: EntityID,
         hasFractured: Bool = false,
+        isFullyFractured: Bool = false,
         accumulatedDamage: Float = 0,
         brokenConnectionIDs: [UInt32] = [],
+        releasedFragmentIDs: [UInt32] = [],
+        retainedFragmentIDs: [UInt32] = [],
         activeFragmentEntities: [EntityID] = [],
         activeFragmentIDs: [UInt32] = []
     ) {
         self.sourceEntity = sourceEntity
         self.hasFractured = hasFractured
+        self.isFullyFractured = isFullyFractured
         self.accumulatedDamage = accumulatedDamage
         self.brokenConnectionIDs = brokenConnectionIDs
+        self.releasedFragmentIDs = releasedFragmentIDs
+        self.retainedFragmentIDs = retainedFragmentIDs
         self.activeFragmentEntities = activeFragmentEntities
         self.activeFragmentIDs = activeFragmentIDs
     }
@@ -328,10 +342,25 @@ public struct DestructibleFragment: RuntimeComponent, Sendable, Equatable {
     }
 }
 
+/// Runtime-owned render proxy for a fragment that is still part of the source compound
+/// island. Authored Scene and Prefab documents omit these derived children; GameSave
+/// snapshots preserve and remap them so a partially fractured source resumes visually.
+public struct DestructibleRetainedFragment: RuntimeComponent, Sendable, Equatable {
+    public var sourceEntity: EntityID
+    public var fragmentID: UInt32
+
+    public init(sourceEntity: EntityID, fragmentID: UInt32) {
+        self.sourceEntity = sourceEntity
+        self.fragmentID = fragmentID
+    }
+}
+
 struct DestructionRuntimeSourceState: Sendable, Equatable {
     var hasFractured = false
+    var isFullyFractured = false
     var accumulatedDamage: Float = 0
     var brokenConnectionIDs: Set<UInt32> = []
+    var releasedFragmentIDs: Set<UInt32> = []
     var hasAuthoredSourceSnapshot = false
     var authoredRigidBody: RigidBody?
     var authoredCollider: Collider?
