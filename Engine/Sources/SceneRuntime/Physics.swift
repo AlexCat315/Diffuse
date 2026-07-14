@@ -1805,6 +1805,7 @@ public struct PhysicsCommandFrame: Sendable, Equatable {
     public var bodyCommands: [PhysicsRecordedBodyCommand]
     public var characterCommands: [PhysicsRecordedCharacterCommand]
     public var vehicleCommands: [PhysicsRecordedVehicleCommand]
+    public var destructionCommands: [DestructionCommand]
     public var expectedSimulatedStep: Int
     public var expectedStateHash: UInt64
 
@@ -1814,6 +1815,7 @@ public struct PhysicsCommandFrame: Sendable, Equatable {
         bodyCommands: [PhysicsRecordedBodyCommand] = [],
         characterCommands: [PhysicsRecordedCharacterCommand] = [],
         vehicleCommands: [PhysicsRecordedVehicleCommand] = [],
+        destructionCommands: [DestructionCommand] = [],
         expectedSimulatedStep: Int,
         expectedStateHash: UInt64
     ) {
@@ -1822,6 +1824,9 @@ public struct PhysicsCommandFrame: Sendable, Equatable {
         self.bodyCommands = bodyCommands.sorted { $0.entity.rawValue < $1.entity.rawValue }
         self.characterCommands = characterCommands.sorted { $0.entity.rawValue < $1.entity.rawValue }
         self.vehicleCommands = vehicleCommands.sorted { $0.entity.rawValue < $1.entity.rawValue }
+        self.destructionCommands = destructionCommands.enumerated().sorted {
+            ($0.element.entity.rawValue, $0.offset) < ($1.element.entity.rawValue, $1.offset)
+        }.map(\.element)
         self.expectedSimulatedStep = expectedSimulatedStep
         self.expectedStateHash = expectedStateHash
     }

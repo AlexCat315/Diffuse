@@ -73,6 +73,7 @@ public struct SceneSemanticEncoder: Sendable {
             if scene.hasComponent(SoftBody.self, for: entity)            { components.append("softbody") }
             if scene.hasComponent(Cloth.self, for: entity)               { components.append("cloth") }
             if scene.hasComponent(SoftBodyMesh.self, for: entity)        { components.append("softbody_mesh") }
+            if scene.hasComponent(Destructible.self, for: entity)       { components.append("destructible") }
 
             var lightType: String?
             var lightIntensity: Float?
@@ -224,6 +225,11 @@ public struct SceneSemanticEncoder: Sendable {
                 scene.resource(MeshColliderGeometryResource.self)?.geometry(for: $0.resourceID)
             }
             let softBodyState = scene.softBodyStateFrame.states[entity]
+            let destructible = scene.component(Destructible.self, for: entity)
+            let destructibleAsset = destructible.flatMap {
+                scene.resource(DestructibleAssetResource.self)?.asset(for: $0.assetResourceID)
+            }
+            let destructionState = scene.destructionStateFrame.sources[entity]
 
             records.append(SceneSemanticSnapshot.Entity(
                 id: ref,
@@ -322,7 +328,23 @@ public struct SceneSemanticEncoder: Sendable {
                 softBodyMeshFixedVertexCount: softBodyMesh?.fixedVertexIndices.count,
                 softBodyMeshBendType: softBodyMesh.map { String(describing: $0.bendType) },
                 softBodyMeshVolumeCompliance: softBodyMesh?.volumeCompliance,
-                softBodyMeshGeometryRevision: softBodyMeshGeometry?.revision
+                softBodyMeshGeometryRevision: softBodyMeshGeometry?.revision,
+                destructibleAssetResourceID: destructible?.assetResourceID,
+                destructibleIsEnabled: destructible?.isEnabled,
+                destructibleDamageThreshold: destructible?.damageThreshold,
+                destructibleImpulseThreshold: destructible?.impulseThreshold,
+                destructibleFragmentBudget: destructible?.fragmentBudget,
+                destructibleMaximumFragmentLifetimeSeconds: destructible?
+                    .maximumFragmentLifetimeSeconds,
+                destructibleSleepingRecycleDelaySeconds: destructible?
+                    .sleepingRecycleDelaySeconds,
+                destructibleSeparationImpulse: destructible?.separationImpulse,
+                destructibleAssetRevision: destructibleAsset?.revision,
+                destructibleAssetFragmentCount: destructibleAsset?.fragments.count,
+                destructibleAssetConnectionCount: destructibleAsset?.connections.count,
+                destructibleHasFractured: destructionState?.hasFractured,
+                destructibleActiveFragmentCount: destructionState?.activeFragmentEntities.count,
+                destructibleBrokenConnectionCount: destructionState?.brokenConnectionIDs.count
             ))
         }
 
@@ -348,6 +370,7 @@ public struct SceneSemanticEncoder: Sendable {
             case .spot:        return "Spot Light"
             }
         }
+        if scene.hasComponent(Destructible.self, for: entity) { return "Destructible" }
         if scene.hasComponent(RenderMeshComponent.self, for: entity) { return "Static Mesh" }
         if !scene.children(of: entity).isEmpty                       { return "Group" }
         return "Entity"

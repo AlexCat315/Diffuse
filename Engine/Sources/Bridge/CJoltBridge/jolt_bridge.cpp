@@ -26,6 +26,7 @@
 #include <Jolt/Physics/Collision/ShapeCast.h>
 #include <Jolt/Physics/Collision/CollideShape.h>
 #include <Jolt/Physics/Collision/ContactListener.h>
+#include <Jolt/Physics/Collision/EstimateCollisionResponse.h>
 #include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyInterface.h>
@@ -500,15 +501,15 @@ public:
     void OnContactAdded(const JPH::Body& body1,
                         const JPH::Body& body2,
                         const JPH::ContactManifold& manifold,
-                        JPH::ContactSettings&) override {
-        record_contact(kContactBegan, body1, body2, manifold);
+                        JPH::ContactSettings& settings) override {
+        record_contact(kContactBegan, body1, body2, manifold, settings);
     }
 
     void OnContactPersisted(const JPH::Body& body1,
                             const JPH::Body& body2,
                             const JPH::ContactManifold& manifold,
-                            JPH::ContactSettings&) override {
-        record_contact(kContactPersisted, body1, body2, manifold);
+                            JPH::ContactSettings& settings) override {
+        record_contact(kContactPersisted, body1, body2, manifold, settings);
     }
 
     void OnContactRemoved(const JPH::SubShapeIDPair& sub_shape_pair) override {
@@ -611,7 +612,8 @@ private:
     void record_contact(uint8_t kind,
                         const JPH::Body& body1,
                         const JPH::Body& body2,
-                        const JPH::ContactManifold& manifold) {
+                        const JPH::ContactManifold& manifold,
+                        const JPH::ContactSettings& settings) {
         const uint64_t entity1 = body1.GetUserData();
         const uint64_t entity2 = body2.GetUserData();
         if (!should_record_contact(entity1, entity2)) return;
@@ -622,6 +624,27 @@ private:
             body2.GetID(),
             manifold.mSubShapeID2
         );
+        float contact_impulse = 0.0f;
+        auto metadata1 = mMetadata.find(entity1);
+        auto metadata2 = mMetadata.find(entity2);
+        if (metadata1 != mMetadata.end() && metadata2 != mMetadata.end()
+            && !metadata1->second.is_trigger && !metadata2->second.is_trigger
+            && !manifold.mRelativeContactPointsOn1.empty()) {
+            JPH::CollisionEstimationResult estimation;
+            JPH::EstimateCollisionResponse(
+                body1,
+                body2,
+                manifold,
+                estimation,
+                settings.mCombinedFriction,
+                settings.mCombinedRestitution,
+                1.0f,
+                4);
+            for (const auto& impulse : estimation.mImpulses) {
+                contact_impulse += std::max(0.0f, impulse.mContactImpulse);
+            }
+        }
+
         PendingContactEvent event{
             entity1,
             entity2,
@@ -633,7 +656,7 @@ private:
             manifold.mPenetrationDepth,
             body2.GetPointVelocity(contact_position(manifold))
                 - body1.GetPointVelocity(contact_position(manifold)),
-            0.0f
+            contact_impulse
         };
 
         std::lock_guard<std::mutex> lock(mMutex);

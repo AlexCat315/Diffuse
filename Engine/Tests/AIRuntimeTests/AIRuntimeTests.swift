@@ -1804,6 +1804,58 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(record?.softBodyMeshGeometryRevision, 9)
     }
 
+    func testSceneSemanticEncoderSurfacesDestructibleAssetAndPolicy() {
+        var scene = SceneRuntime()
+        scene.setResource(DestructibleAssetResource(assetsByResourceID: [
+            "tower.prefractured": DestructibleAsset(
+                revision: 3,
+                fragments: [
+                    DestructibleFragmentAsset(fragmentID: 0, colliderResourceID: "fragment.0"),
+                    DestructibleFragmentAsset(fragmentID: 1, colliderResourceID: "fragment.1"),
+                ],
+                connections: [
+                    DestructibleConnectionAsset(connectionID: 7, fragmentA: 0, fragmentB: 1),
+                ]
+            ),
+        ]))
+        let entity = scene.createEntity()
+        _ = scene.setComponent(
+            Destructible(
+                assetResourceID: "tower.prefractured",
+                damageThreshold: 80,
+                impulseThreshold: 12,
+                fragmentBudget: 64,
+                maximumFragmentLifetimeSeconds: 18,
+                sleepingRecycleDelaySeconds: 2.5,
+                separationImpulse: 0.3,
+                isEnabled: false
+            ),
+            for: entity
+        )
+
+        let snapshot = SceneSemanticEncoder().encode(
+            scene,
+            selectedEntityID: nil,
+            workspaceMode: nil,
+            localeIdentifier: nil
+        )
+        let record = snapshot.entities.first { $0.id == "scene:\(entity.rawValue)" }
+        XCTAssertEqual(record?.components.contains("destructible"), true)
+        XCTAssertEqual(record?.kind, "Destructible")
+        XCTAssertEqual(record?.destructibleAssetResourceID, "tower.prefractured")
+        XCTAssertEqual(record?.destructibleIsEnabled, false)
+        XCTAssertEqual(record?.destructibleDamageThreshold ?? 0, 80, accuracy: 0.001)
+        XCTAssertEqual(record?.destructibleImpulseThreshold ?? 0, 12, accuracy: 0.001)
+        XCTAssertEqual(record?.destructibleFragmentBudget, 64)
+        XCTAssertEqual(record?.destructibleMaximumFragmentLifetimeSeconds ?? 0, 18, accuracy: 0.001)
+        XCTAssertEqual(record?.destructibleSleepingRecycleDelaySeconds ?? 0, 2.5, accuracy: 0.001)
+        XCTAssertEqual(record?.destructibleSeparationImpulse ?? 0, 0.3, accuracy: 0.001)
+        XCTAssertEqual(record?.destructibleAssetRevision, 3)
+        XCTAssertEqual(record?.destructibleAssetFragmentCount, 2)
+        XCTAssertEqual(record?.destructibleAssetConnectionCount, 1)
+        XCTAssertNil(record?.destructibleHasFractured)
+    }
+
     func testSetAudioSourceExecutorProducesMutation() throws {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
