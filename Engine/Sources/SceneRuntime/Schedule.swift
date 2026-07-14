@@ -332,6 +332,8 @@ public struct RuntimeWorldSchedule {
         var recordedBodyCommands: [PhysicsRecordedBodyCommand] = []
         var recordedCharacterCommands: [PhysicsRecordedCharacterCommand] = []
         var recordedVehicleCommands: [PhysicsRecordedVehicleCommand] = []
+        var recordedDestructionCommands: [DestructionCommand] = []
+        var destructionEventFrame = DestructionEventFrameResource.empty
 
         for phase in RuntimeSystemPhase.allCases {
             switch phase {
@@ -369,6 +371,11 @@ public struct RuntimeWorldSchedule {
                         }
                     }
                 }
+                advanceDestructionPrePhysics(
+                    in: &world,
+                    deltaTimeSeconds: deltaTimeSeconds,
+                    frame: &destructionEventFrame
+                )
                 applyRagdollAnimationToBodies(in: &world)
                 if world.hierarchyNeedsPropagation() {
                     let report = world.propagateTransforms(using: jobSystem)
@@ -437,6 +444,7 @@ public struct RuntimeWorldSchedule {
                     recordedVehicleCommands = (world.resource(VehicleCommandFrameResource.self)?.commands ?? [:])
                         .map { PhysicsRecordedVehicleCommand(entity: $0.key, command: $0.value) }
                         .sorted { $0.entity.rawValue < $1.entity.rawValue }
+                    recordedDestructionCommands = world.resource(DestructionCommandFrameResource.self)?.commands ?? []
                 }
                 recordJobReport(bodyCollection.report, for: .fixedPhysicsPrepare)
                 recordJobReport(constraintCollection.report, for: .fixedPhysicsPrepare)
@@ -624,6 +632,7 @@ public struct RuntimeWorldSchedule {
                             bodyCommands: physicsStepCount > 0 ? recordedBodyCommands : [],
                             characterCommands: physicsStepCount > 0 ? recordedCharacterCommands : [],
                             vehicleCommands: physicsStepCount > 0 ? recordedVehicleCommands : [],
+                            destructionCommands: recordedDestructionCommands,
                             expectedSimulatedStep: stateHashFrame.simulatedStep,
                             expectedStateHash: stateHashFrame.hash
                         ))
@@ -764,6 +773,11 @@ public struct RuntimeWorldSchedule {
                 world.setDerivedResource(triggerFrame)
                 world.setDerivedResource(physicsContactFrame)
                 world.setDerivedResource(physicsEventFrame)
+                applyDestructionContacts(
+                    contactEvents,
+                    in: &world,
+                    frame: &destructionEventFrame
+                )
             case .renderExtract:
                 let renderExtraction = extractRenderScene(in: world)
                 world.setDerivedResource(renderExtraction.resource)
@@ -775,6 +789,7 @@ public struct RuntimeWorldSchedule {
         world.advanceRevision()
         world.setDerivedResource(CharacterCommandFrameResource.empty)
         world.setDerivedResource(VehicleCommandFrameResource.empty)
+        world.setDerivedResource(DestructionCommandFrameResource.empty)
 
         return RuntimeScheduleReport(
             phases: RuntimeSystemPhase.allCases,
@@ -2292,6 +2307,24 @@ public struct RuntimeWorldSchedule {
                 combineFloat(position.z, into: &hash)
             }
             combine(softBody.isSleeping ? 1 : 0, into: &hash)
+        }
+        let destructionSources = (world.resource(DestructionStateFrameResource.self) ?? .empty).sources
+            .values.sorted { $0.sourceEntity.rawValue < $1.sourceEntity.rawValue }
+        for source in destructionSources {
+            combine(source.sourceEntity.rawValue, into: &hash)
+            combine(source.hasFractured ? 1 : 0, into: &hash)
+            combineFloat(source.accumulatedDamage, into: &hash)
+            combine(UInt64(source.brokenConnectionIDs.count), into: &hash)
+            for connectionID in source.brokenConnectionIDs {
+                combine(UInt64(connectionID), into: &hash)
+            }
+            combine(UInt64(source.activeFragmentEntities.count), into: &hash)
+            for index in source.activeFragmentEntities.indices {
+                combine(source.activeFragmentEntities[index].rawValue, into: &hash)
+                if index < source.activeFragmentIDs.count {
+                    combine(UInt64(source.activeFragmentIDs[index]), into: &hash)
+                }
+            }
         }
         return hash
     }

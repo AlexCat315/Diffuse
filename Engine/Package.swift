@@ -228,6 +228,7 @@ let package = Package(
             name: "AssetPipeline",
             dependencies: [
                 "SIMDCompat",
+                "SceneRuntime",
                 "CImageDecodeBridge",
                 .product(name: "Logging", package: "swift-log"),
             ]
@@ -439,6 +440,7 @@ let package = Package(
             dependencies: [
                 "SIMDCompat",
                 "AssetPipeline",
+                "SceneRuntime",
                 // AssetPipeline imports the CImageDecodeBridge Clang module; test
                 // targets that import AssetPipeline must see it too (the macOS
                 // toolchain requires the Clang module transitively).

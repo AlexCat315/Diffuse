@@ -73,6 +73,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
     public let softBody: EditorSceneManifestSoftBody?
     public let cloth: EditorSceneManifestCloth?
     public let softBodyMesh: EditorSceneManifestSoftBodyMesh?
+    public let destructible: EditorSceneManifestDestructible?
     public let ragdoll: EditorSceneManifestRagdoll?
     public let constraint: EditorSceneManifestConstraint?
     public let script: EditorSceneManifestScript?
@@ -101,6 +102,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
                 softBody: EditorSceneManifestSoftBody? = nil,
                 cloth: EditorSceneManifestCloth? = nil,
                 softBodyMesh: EditorSceneManifestSoftBodyMesh? = nil,
+                destructible: EditorSceneManifestDestructible? = nil,
                 ragdoll: EditorSceneManifestRagdoll? = nil,
                 constraint: EditorSceneManifestConstraint? = nil,
                 script: EditorSceneManifestScript? = nil,
@@ -125,6 +127,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.softBody = softBody
         self.cloth = cloth
         self.softBodyMesh = softBodyMesh
+        self.destructible = destructible
         self.ragdoll = ragdoll
         self.constraint = constraint
         self.script = script
@@ -137,7 +140,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case id, name, kind, localTransform, asset, renderMesh, renderMaterial
-        case camera, light, rigidBody, collider, characterController, vehicle, softBody, cloth, softBodyMesh
+        case camera, light, rigidBody, collider, characterController, vehicle, softBody, cloth, softBodyMesh, destructible
         case ragdoll, constraint, script, audioSource
         case animationPlayer, animationGraphPlayer, particleEmitter, children
     }
@@ -160,6 +163,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.softBody = try c.decodeIfPresent(EditorSceneManifestSoftBody.self, forKey: .softBody)
         self.cloth = try c.decodeIfPresent(EditorSceneManifestCloth.self, forKey: .cloth)
         self.softBodyMesh = try c.decodeIfPresent(EditorSceneManifestSoftBodyMesh.self, forKey: .softBodyMesh)
+        self.destructible = try c.decodeIfPresent(EditorSceneManifestDestructible.self, forKey: .destructible)
         self.ragdoll = try c.decodeIfPresent(EditorSceneManifestRagdoll.self, forKey: .ragdoll)
         self.constraint = try c.decodeIfPresent(EditorSceneManifestConstraint.self, forKey: .constraint)
         self.script = try c.decodeIfPresent(EditorSceneManifestScript.self, forKey: .script)
@@ -190,6 +194,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         try c.encodeIfPresent(softBody, forKey: .softBody)
         try c.encodeIfPresent(cloth, forKey: .cloth)
         try c.encodeIfPresent(softBodyMesh, forKey: .softBodyMesh)
+        try c.encodeIfPresent(destructible, forKey: .destructible)
         try c.encodeIfPresent(ragdoll, forKey: .ragdoll)
         try c.encodeIfPresent(constraint, forKey: .constraint)
         try c.encodeIfPresent(script, forKey: .script)
@@ -1459,6 +1464,41 @@ public struct EditorSceneManifestSoftBodyMesh: Codable, Sendable, Equatable {
     }
 }
 
+public struct EditorSceneManifestDestructible: Codable, Sendable, Equatable {
+    public let assetResourceID: String
+    public let damageThreshold: Float
+    public let impulseThreshold: Float
+    public let fragmentBudget: Int
+    public let maximumFragmentLifetimeSeconds: Float
+    public let sleepingRecycleDelaySeconds: Float
+    public let separationImpulse: Float
+    public let isEnabled: Bool
+
+    public init(_ destructible: Destructible) {
+        assetResourceID = destructible.assetResourceID
+        damageThreshold = destructible.damageThreshold
+        impulseThreshold = destructible.impulseThreshold
+        fragmentBudget = destructible.fragmentBudget
+        maximumFragmentLifetimeSeconds = destructible.maximumFragmentLifetimeSeconds
+        sleepingRecycleDelaySeconds = destructible.sleepingRecycleDelaySeconds
+        separationImpulse = destructible.separationImpulse
+        isEnabled = destructible.isEnabled
+    }
+
+    var component: Destructible {
+        Destructible(
+            assetResourceID: assetResourceID,
+            damageThreshold: damageThreshold,
+            impulseThreshold: impulseThreshold,
+            fragmentBudget: fragmentBudget,
+            maximumFragmentLifetimeSeconds: maximumFragmentLifetimeSeconds,
+            sleepingRecycleDelaySeconds: sleepingRecycleDelaySeconds,
+            separationImpulse: separationImpulse,
+            isEnabled: isEnabled
+        )
+    }
+}
+
 public struct EditorSceneManifestRagdollBone: Codable, Sendable, Equatable {
     public let boneName: String
     public let paletteIndex: Int
@@ -2542,6 +2582,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             if let softBodyMesh = node.softBodyMesh {
                 _ = restoredScene.setComponent(softBodyMesh.component, for: entity)
             }
+            if let destructible = node.destructible {
+                _ = restoredScene.setComponent(destructible.component, for: entity)
+            }
             if let script = node.script {
                 _ = restoredScene.setComponent(script.component, for: entity)
             }
@@ -2651,6 +2694,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         if let colliderSection = colliderSection(for: entity) {
             sections.append(colliderSection)
         }
+        if let destructibleSection = destructibleSection(for: entity) {
+            sections.append(destructibleSection)
+        }
         if let characterControllerSection = characterControllerSection(for: entity) {
             sections.append(characterControllerSection)
         }
@@ -2741,6 +2787,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             .map(EditorSceneManifestCloth.init)
         let softBodyMesh = scene.component(SoftBodyMesh.self, for: entity)
             .map(EditorSceneManifestSoftBodyMesh.init)
+        let destructible = scene.component(Destructible.self, for: entity)
+            .map(EditorSceneManifestDestructible.init)
         let ragdoll = scene.component(Ragdoll.self, for: entity)
             .map(EditorSceneManifestRagdoll.init)
         let constraint = scene.component(Constraint.self, for: entity)
@@ -2778,6 +2826,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             softBody: softBody,
             cloth: cloth,
             softBodyMesh: softBodyMesh,
+            destructible: destructible,
             ragdoll: ragdoll,
             constraint: constraint,
             script: script,
@@ -3157,6 +3206,87 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         return EditorInspectorSection(id: "vehicle", title: L("Vehicle"), fields: fields)
     }
 
+    private func destructibleSection(for entity: EntityID) -> EditorInspectorSection? {
+        guard scene.hasComponent(Destructible.self, for: entity) else { return nil }
+        let authored = scene.component(Destructible.self, for: entity)
+        let asset = authored.flatMap {
+            scene.resource(DestructibleAssetResource.self)?.asset(for: $0.assetResourceID)
+        }
+        let state = scene.destructionStateFrame.sources[entity]
+        return EditorInspectorSection(
+            id: "destructible",
+            title: L("Destructible"),
+            fields: [
+                EditorInspectorField(
+                    id: "destructible-enabled", label: L("Enabled"),
+                    value: .bool(destructibleBoolBinding(for: entity, \.isEnabled))
+                ),
+                EditorInspectorField(
+                    id: "destructible-asset", label: L("Pre-fractured Asset"),
+                    value: .text(destructibleAssetBinding(for: entity))
+                ),
+                EditorInspectorField(
+                    id: "destructible-damage-threshold", label: L("Damage Threshold"),
+                    value: .constrainedNumber(
+                        destructibleFloatBinding(for: entity, \.damageThreshold),
+                        min: 0, max: nil, step: 1, showsStepper: true
+                    )
+                ),
+                EditorInspectorField(
+                    id: "destructible-impulse-threshold", label: L("Impulse Threshold"),
+                    value: .constrainedNumber(
+                        destructibleFloatBinding(for: entity, \.impulseThreshold),
+                        min: 0, max: nil, step: 1, showsStepper: true
+                    )
+                ),
+                EditorInspectorField(
+                    id: "destructible-fragment-budget", label: L("Fragment Budget"),
+                    value: .constrainedNumber(
+                        destructibleBudgetBinding(for: entity),
+                        min: 0, max: nil, step: 1, showsStepper: true
+                    )
+                ),
+                EditorInspectorField(
+                    id: "destructible-lifetime", label: L("Maximum Lifetime"),
+                    value: .constrainedNumber(
+                        destructibleFloatBinding(for: entity, \.maximumFragmentLifetimeSeconds),
+                        min: 0, max: nil, step: 1, showsStepper: true
+                    )
+                ),
+                EditorInspectorField(
+                    id: "destructible-sleep-recycle", label: L("Sleeping Recycle Delay"),
+                    value: .constrainedNumber(
+                        destructibleFloatBinding(for: entity, \.sleepingRecycleDelaySeconds),
+                        min: 0, max: nil, step: 0.5, showsStepper: true
+                    )
+                ),
+                EditorInspectorField(
+                    id: "destructible-separation-impulse", label: L("Separation Impulse"),
+                    value: .constrainedNumber(
+                        destructibleFloatBinding(for: entity, \.separationImpulse),
+                        min: 0, max: nil, step: 0.05, showsStepper: true
+                    )
+                ),
+                EditorInspectorField(
+                    id: "destructible-asset-fragments", label: L("Asset Fragments"),
+                    value: .readOnly(String(asset?.fragments.count ?? 0))
+                ),
+                EditorInspectorField(
+                    id: "destructible-asset-connections", label: L("Asset Connections"),
+                    value: .readOnly(String(asset?.connections.count ?? 0))
+                ),
+                EditorInspectorField(
+                    id: "destructible-active-fragments", label: L("Active Fragments"),
+                    value: .readOnly(String(state?.activeFragmentEntities.count ?? 0))
+                ),
+                EditorInspectorField(
+                    id: "destructible-broken-connections", label: L("Broken Connections"),
+                    value: .readOnly(String(state?.brokenConnectionIDs.count ?? 0))
+                ),
+            ]
+        )
+    }
+
     private func softBodySection(for entity: EntityID) -> EditorInspectorSection? {
         guard scene.hasComponent(SoftBody.self, for: entity) else { return nil }
         let state = scene.softBodyStateFrame.states[entity]
@@ -3192,7 +3322,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .bool(softBodyBoolBinding(for: entity, \.allowSleep))),
                 EditorInspectorField(id: "soft-body-double-sided", label: L("Double Sided"),
                                      value: .bool(softBodyBoolBinding(for: entity, \.facesDoubleSided))),
-                EditorInspectorField(id: "soft-body-self-collision", label: L("Self Collision (Unsupported)"),
+                EditorInspectorField(id: "soft-body-self-collision", label: L("Self Collision"),
                                      value: .bool(softBodyBoolBinding(for: entity, \.selfCollision))),
                 EditorInspectorField(id: "soft-body-streamed-vertices", label: L("Streamed Vertices"),
                                      value: .readOnly(String(state?.positions.count ?? 0))),
@@ -5556,6 +5686,73 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
+    private func destructibleAssetBinding(for entity: EntityID) -> Binding<String> {
+        Binding(
+            get: { [self] in
+                scene.component(Destructible.self, for: entity)?.assetResourceID ?? ""
+            },
+            set: { [self] value in
+                guard scene.updateComponent(Destructible.self, for: entity, {
+                    $0.assetResourceID = value
+                }) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func destructibleFloatBinding(
+        for entity: EntityID,
+        _ keyPath: WritableKeyPath<Destructible, Float>
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(Destructible.self, for: entity)?[keyPath: keyPath] ?? 0
+            },
+            set: { [self] value in
+                guard value.isFinite else { return }
+                guard scene.updateComponent(Destructible.self, for: entity, {
+                    $0[keyPath: keyPath] = max(0, value)
+                }) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func destructibleBoolBinding(
+        for entity: EntityID,
+        _ keyPath: WritableKeyPath<Destructible, Bool>
+    ) -> Binding<Bool> {
+        Binding(
+            get: { [self] in
+                scene.component(Destructible.self, for: entity)?[keyPath: keyPath] ?? false
+            },
+            set: { [self] value in
+                guard scene.updateComponent(Destructible.self, for: entity, {
+                    $0[keyPath: keyPath] = value
+                }) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func destructibleBudgetBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                Float(scene.component(Destructible.self, for: entity)?.fragmentBudget ?? 0)
+            },
+            set: { [self] value in
+                guard value.isFinite else { return }
+                let rounded = value.rounded()
+                let budget = Int(exactly: rounded).map { max(0, $0) }
+                    ?? (rounded > 0 ? Int.max : 0)
+                guard scene.updateComponent(Destructible.self, for: entity, {
+                    $0.fragmentBudget = budget
+                }) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
     private func softBodyFloatBinding(
         for entity: EntityID,
         _ keyPath: WritableKeyPath<SoftBody, Float>,
@@ -6660,6 +6857,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         }
         if scene.hasComponent(Vehicle.self, for: entity) {
             return "Vehicle"
+        }
+        if scene.hasComponent(Destructible.self, for: entity) {
+            return "Destructible"
         }
         if scene.hasComponent(RigidBody.self, for: entity) || scene.hasComponent(Collider.self, for: entity) {
             return "Physics Entity"

@@ -131,6 +131,7 @@ public enum SceneSerializer {
         if let c = scene.component(SoftBody.self, for: entity) { comps["softBody"] = serializeSoftBody(c) }
         if let c = scene.component(Cloth.self, for: entity) { comps["cloth"] = serializeCloth(c) }
         if let c = scene.component(SoftBodyMesh.self, for: entity) { comps["softBodyMesh"] = serializeSoftBodyMesh(c) }
+        if let c = scene.component(Destructible.self, for: entity) { comps["destructible"] = serializeDestructible(c) }
         if let c = scene.component(Constraint.self, for: entity),
            let a = entityIndexMap[c.entityA], let b = entityIndexMap[c.entityB] {
             comps["constraint"] = serializeConstraint(c, entityA: a, entityB: b)
@@ -197,6 +198,7 @@ public enum SceneSerializer {
         if let c = jsonToDict(comps["softBody"]) { _ = scene.setComponent(deserializeSoftBody(c), for: entity) }
         if let c = jsonToDict(comps["cloth"]) { _ = scene.setComponent(deserializeCloth(c), for: entity) }
         if let c = jsonToDict(comps["softBodyMesh"]) { _ = scene.setComponent(deserializeSoftBodyMesh(c), for: entity) }
+        if let c = jsonToDict(comps["destructible"]) { _ = scene.setComponent(deserializeDestructible(c), for: entity) }
         if let c = jsonToDict(comps["renderMesh"]) { _ = scene.setComponent(deserializeRenderMesh(c), for: entity) }
         if let c = jsonToDict(comps["renderMaterial"]) { _ = scene.setComponent(deserializeRenderMaterial(c), for: entity) }
         if let c = jsonToDict(comps["assetReference"]) { _ = scene.setComponent(deserializeAssetReference(c), for: entity) }
@@ -839,6 +841,32 @@ public enum SceneSerializer {
             bendType: ClothBendType(
                 rawValue: UInt8(clamping: jsonToInt(d["bendType"]) ?? 2)
             ) ?? .dihedral
+        )
+    }
+
+    private static func serializeDestructible(_ destructible: Destructible) -> [String: Any] {
+        [
+            "assetResourceID": destructible.assetResourceID,
+            "damageThreshold": destructible.damageThreshold,
+            "impulseThreshold": destructible.impulseThreshold,
+            "fragmentBudget": destructible.fragmentBudget,
+            "maximumFragmentLifetimeSeconds": destructible.maximumFragmentLifetimeSeconds,
+            "sleepingRecycleDelaySeconds": destructible.sleepingRecycleDelaySeconds,
+            "separationImpulse": destructible.separationImpulse,
+            "isEnabled": destructible.isEnabled,
+        ]
+    }
+
+    private static func deserializeDestructible(_ d: [String: Any]) -> Destructible {
+        Destructible(
+            assetResourceID: jsonToString(d["assetResourceID"]) ?? "",
+            damageThreshold: jsonToFloat(d["damageThreshold"]) ?? 100,
+            impulseThreshold: jsonToFloat(d["impulseThreshold"]) ?? 10,
+            fragmentBudget: jsonToInt(d["fragmentBudget"]) ?? 256,
+            maximumFragmentLifetimeSeconds: jsonToFloat(d["maximumFragmentLifetimeSeconds"]) ?? 30,
+            sleepingRecycleDelaySeconds: jsonToFloat(d["sleepingRecycleDelaySeconds"]) ?? 5,
+            separationImpulse: jsonToFloat(d["separationImpulse"]) ?? 0.05,
+            isEnabled: jsonToBool(d["isEnabled"]) ?? true
         )
     }
 

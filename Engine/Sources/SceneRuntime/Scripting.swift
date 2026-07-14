@@ -197,6 +197,12 @@ public struct RuntimeScriptPhaseContext {
         worldPointer.pointee.setResource(frame)
     }
 
+    public func submitDestructionCommand(_ command: DestructionCommand) {
+        var frame = worldPointer.pointee.resource(DestructionCommandFrameResource.self) ?? .empty
+        frame.commands.append(command)
+        worldPointer.pointee.setResource(frame)
+    }
+
     public func resource<Resource: Sendable>(_ type: Resource.Type) -> Resource? {
         worldPointer.pointee.resource(type)
     }
