@@ -1958,19 +1958,53 @@ public struct PhysicsDebugConstraint: Sendable, Equatable {
     }
 }
 
+public struct PhysicsDebugDestructionConnection: Sendable, Equatable {
+    public var sourceEntity: EntityID
+    public var connectionID: UInt32
+    public var fragmentA: UInt32
+    public var fragmentB: UInt32
+    public var worldPointA: SIMD3<Float>
+    public var worldPointB: SIMD3<Float>
+    public var isBroken: Bool
+    public var isSourceFractured: Bool
+
+    public init(
+        sourceEntity: EntityID,
+        connectionID: UInt32,
+        fragmentA: UInt32,
+        fragmentB: UInt32,
+        worldPointA: SIMD3<Float>,
+        worldPointB: SIMD3<Float>,
+        isBroken: Bool,
+        isSourceFractured: Bool
+    ) {
+        self.sourceEntity = sourceEntity
+        self.connectionID = connectionID
+        self.fragmentA = fragmentA
+        self.fragmentB = fragmentB
+        self.worldPointA = worldPointA
+        self.worldPointB = worldPointB
+        self.isBroken = isBroken
+        self.isSourceFractured = isSourceFractured
+    }
+}
+
 public struct PhysicsDebugFrameResource: Sendable, Equatable {
     public var bodies: [PhysicsDebugBody]
     public var constraints: [PhysicsDebugConstraint]
     public var contacts: [PhysicsContactEvent]
+    public var destructionConnections: [PhysicsDebugDestructionConnection]
 
     public init(
         bodies: [PhysicsDebugBody] = [],
         constraints: [PhysicsDebugConstraint] = [],
-        contacts: [PhysicsContactEvent] = []
+        contacts: [PhysicsContactEvent] = [],
+        destructionConnections: [PhysicsDebugDestructionConnection] = []
     ) {
         self.bodies = bodies
         self.constraints = constraints
         self.contacts = contacts
+        self.destructionConnections = destructionConnections
     }
 
     public static let empty = PhysicsDebugFrameResource()
