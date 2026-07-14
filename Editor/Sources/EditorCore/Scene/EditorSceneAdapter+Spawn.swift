@@ -107,8 +107,12 @@ extension EditorSceneAdapter {
             return nil
         }
         let positions = (0..<mesh.vertexCount).compactMap { mesh.position(at: $0) }
+        let textureCoordinates = (0..<mesh.vertexCount).compactMap {
+            mesh.textureCoordinate(at: $0)
+        }
         return MeshColliderGeometry(positions: positions,
                                     triangleIndices: mesh.indices,
+                                    textureCoordinates: textureCoordinates,
                                     localBounds: SpatialAABB(min: mesh.localBounds.min,
                                                              max: mesh.localBounds.max))
     }

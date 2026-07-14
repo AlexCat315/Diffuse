@@ -93,20 +93,33 @@ public struct MeshColliderGeometry: Sendable, Equatable {
     public var revision: UInt64
     public var positions: [SIMD3<Float>]
     public var triangleIndices: [UInt32]
+    /// Four indices per tetrahedron. Empty for a surface-only mesh.
+    public var tetrahedronIndices: [UInt32]
+    public var textureCoordinates: [SIMD2<Float>]
     public var localBounds: SpatialAABB
 
     public init(positions: [SIMD3<Float>],
                 triangleIndices: [UInt32],
+                tetrahedronIndices: [UInt32] = [],
+                textureCoordinates: [SIMD2<Float>] = [],
                 localBounds: SpatialAABB? = nil,
                 revision: UInt64 = 0) {
         self.revision = revision
         self.positions = positions
         self.triangleIndices = triangleIndices
+        self.tetrahedronIndices = tetrahedronIndices
+        self.textureCoordinates = textureCoordinates.count == positions.count
+            ? textureCoordinates
+            : []
         self.localBounds = localBounds ?? Self.computeBounds(positions)
     }
 
     public var triangleCount: Int {
         triangleIndices.count / 3
+    }
+
+    public var tetrahedronCount: Int {
+        tetrahedronIndices.count / 4
     }
 
     private static func computeBounds(_ positions: [SIMD3<Float>]) -> SpatialAABB {

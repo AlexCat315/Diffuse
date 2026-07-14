@@ -72,6 +72,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
     public let vehicle: EditorSceneManifestVehicle?
     public let softBody: EditorSceneManifestSoftBody?
     public let cloth: EditorSceneManifestCloth?
+    public let softBodyMesh: EditorSceneManifestSoftBodyMesh?
     public let ragdoll: EditorSceneManifestRagdoll?
     public let constraint: EditorSceneManifestConstraint?
     public let script: EditorSceneManifestScript?
@@ -99,6 +100,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
                 vehicle: EditorSceneManifestVehicle? = nil,
                 softBody: EditorSceneManifestSoftBody? = nil,
                 cloth: EditorSceneManifestCloth? = nil,
+                softBodyMesh: EditorSceneManifestSoftBodyMesh? = nil,
                 ragdoll: EditorSceneManifestRagdoll? = nil,
                 constraint: EditorSceneManifestConstraint? = nil,
                 script: EditorSceneManifestScript? = nil,
@@ -122,6 +124,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.vehicle = vehicle
         self.softBody = softBody
         self.cloth = cloth
+        self.softBodyMesh = softBodyMesh
         self.ragdoll = ragdoll
         self.constraint = constraint
         self.script = script
@@ -134,7 +137,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case id, name, kind, localTransform, asset, renderMesh, renderMaterial
-        case camera, light, rigidBody, collider, characterController, vehicle, softBody, cloth
+        case camera, light, rigidBody, collider, characterController, vehicle, softBody, cloth, softBodyMesh
         case ragdoll, constraint, script, audioSource
         case animationPlayer, animationGraphPlayer, particleEmitter, children
     }
@@ -156,6 +159,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.vehicle = try c.decodeIfPresent(EditorSceneManifestVehicle.self, forKey: .vehicle)
         self.softBody = try c.decodeIfPresent(EditorSceneManifestSoftBody.self, forKey: .softBody)
         self.cloth = try c.decodeIfPresent(EditorSceneManifestCloth.self, forKey: .cloth)
+        self.softBodyMesh = try c.decodeIfPresent(EditorSceneManifestSoftBodyMesh.self, forKey: .softBodyMesh)
         self.ragdoll = try c.decodeIfPresent(EditorSceneManifestRagdoll.self, forKey: .ragdoll)
         self.constraint = try c.decodeIfPresent(EditorSceneManifestConstraint.self, forKey: .constraint)
         self.script = try c.decodeIfPresent(EditorSceneManifestScript.self, forKey: .script)
@@ -185,6 +189,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         try c.encodeIfPresent(vehicle, forKey: .vehicle)
         try c.encodeIfPresent(softBody, forKey: .softBody)
         try c.encodeIfPresent(cloth, forKey: .cloth)
+        try c.encodeIfPresent(softBodyMesh, forKey: .softBodyMesh)
         try c.encodeIfPresent(ragdoll, forKey: .ragdoll)
         try c.encodeIfPresent(constraint, forKey: .constraint)
         try c.encodeIfPresent(script, forKey: .script)
@@ -1420,6 +1425,40 @@ public struct EditorSceneManifestCloth: Codable, Sendable, Equatable {
     }
 }
 
+public struct EditorSceneManifestSoftBodyMesh: Codable, Sendable, Equatable {
+    public let resourceID: String?
+    public let fixedVertexIndices: [Int]
+    public let compliance: Float
+    public let shearCompliance: Float
+    public let bendCompliance: Float
+    public let volumeCompliance: Float?
+    public let bendType: String
+
+    public init(_ mesh: SoftBodyMesh) {
+        resourceID = mesh.resourceID
+        fixedVertexIndices = mesh.fixedVertexIndices
+        compliance = mesh.compliance
+        shearCompliance = mesh.shearCompliance
+        bendCompliance = mesh.bendCompliance
+        volumeCompliance = mesh.volumeCompliance
+        bendType = String(describing: mesh.bendType)
+    }
+
+    var component: SoftBodyMesh {
+        SoftBodyMesh(
+            resourceID: resourceID,
+            fixedVertexIndices: fixedVertexIndices,
+            compliance: compliance,
+            shearCompliance: shearCompliance,
+            bendCompliance: bendCompliance,
+            volumeCompliance: volumeCompliance ?? 1.0e-6,
+            bendType: ClothBendType.allCases.first {
+                String(describing: $0) == bendType
+            } ?? .dihedral
+        )
+    }
+}
+
 public struct EditorSceneManifestRagdollBone: Codable, Sendable, Equatable {
     public let boneName: String
     public let paletteIndex: Int
@@ -2500,6 +2539,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             if let cloth = node.cloth {
                 _ = restoredScene.setComponent(cloth.component, for: entity)
             }
+            if let softBodyMesh = node.softBodyMesh {
+                _ = restoredScene.setComponent(softBodyMesh.component, for: entity)
+            }
             if let script = node.script {
                 _ = restoredScene.setComponent(script.component, for: entity)
             }
@@ -2621,6 +2663,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         if let clothSection = clothSection(for: entity) {
             sections.append(clothSection)
         }
+        if let softBodyMeshSection = softBodyMeshSection(for: entity) {
+            sections.append(softBodyMeshSection)
+        }
         if let ragdollSection = ragdollSection(for: entity) {
             sections.append(ragdollSection)
         }
@@ -2694,6 +2739,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             .map(EditorSceneManifestSoftBody.init)
         let cloth = scene.component(Cloth.self, for: entity)
             .map(EditorSceneManifestCloth.init)
+        let softBodyMesh = scene.component(SoftBodyMesh.self, for: entity)
+            .map(EditorSceneManifestSoftBodyMesh.init)
         let ragdoll = scene.component(Ragdoll.self, for: entity)
             .map(EditorSceneManifestRagdoll.init)
         let constraint = scene.component(Constraint.self, for: entity)
@@ -2730,6 +2777,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             vehicle: vehicle,
             softBody: softBody,
             cloth: cloth,
+            softBodyMesh: softBodyMesh,
             ragdoll: ragdoll,
             constraint: constraint,
             script: script,
@@ -2749,24 +2797,41 @@ public final class EditorSceneAdapter: @unchecked Sendable {
 
         for entity in runtime.entities() {
             guard let asset = runtime.component(AssetReferenceComponent.self, for: entity),
-                  let collider = runtime.component(Collider.self, for: entity),
-                  case let .mesh(resourceID, _) = collider.shape,
                   let mesh = AssetRegistry.shared.meshAsset(for: asset.meshIndex) else {
                 continue
             }
-
-            let resolvedResourceID = resourceID ?? meshColliderResourceID(for: asset.meshIndex)
+            var resourceIDs = Set<String>()
+            if let collider = runtime.component(Collider.self, for: entity),
+               case let .mesh(resourceID, _) = collider.shape {
+                resourceIDs.insert(resourceID ?? meshColliderResourceID(for: asset.meshIndex))
+            }
+            if let softBodyMesh = runtime.component(SoftBodyMesh.self, for: entity) {
+                let resourceID = softBodyMesh.resourceID
+                    ?? meshColliderResourceID(for: asset.meshIndex)
+                resourceIDs.insert(resourceID)
+                if softBodyMesh.resourceID == nil {
+                    var resolved = softBodyMesh
+                    resolved.resourceID = resourceID
+                    _ = runtime.setComponent(resolved, for: entity)
+                }
+            }
+            guard !resourceIDs.isEmpty else { continue }
             let bounds = SpatialAABB(min: mesh.localBounds.min, max: mesh.localBounds.max)
-            boundsResource.boundsByResourceID[resolvedResourceID] = bounds
-            changedBounds = true
-
-            if mesh.triangleCount > 0 {
-                geometryResource.geometryByResourceID[resolvedResourceID] = MeshColliderGeometry(
-                    positions: (0..<mesh.vertexCount).compactMap { mesh.position(at: $0) },
-                    triangleIndices: mesh.indices,
-                    localBounds: bounds
-                )
-                changedGeometry = true
+            let geometry = MeshColliderGeometry(
+                positions: (0..<mesh.vertexCount).compactMap { mesh.position(at: $0) },
+                triangleIndices: mesh.indices,
+                textureCoordinates: (0..<mesh.vertexCount).compactMap {
+                    mesh.textureCoordinate(at: $0)
+                },
+                localBounds: bounds
+            )
+            for resourceID in resourceIDs {
+                boundsResource.boundsByResourceID[resourceID] = bounds
+                changedBounds = true
+                if mesh.triangleCount > 0 {
+                    geometryResource.geometryByResourceID[resourceID] = geometry
+                    changedGeometry = true
+                }
             }
         }
 
@@ -3161,6 +3226,40 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                      value: .text(clothBendTypeBinding(for: entity))),
                 EditorInspectorField(id: "cloth-vertex-count", label: L("Vertices"),
                                      value: .readOnly(String(cloth.vertexCount))),
+            ]
+        )
+    }
+
+    private func softBodyMeshSection(for entity: EntityID) -> EditorInspectorSection? {
+        guard let mesh = scene.component(SoftBodyMesh.self, for: entity) else { return nil }
+        let geometry = scene.resource(MeshColliderGeometryResource.self)?
+            .geometry(for: mesh.resourceID)
+        return EditorInspectorSection(
+            id: "soft-body-mesh",
+            title: L("Soft Body Mesh"),
+            fields: [
+                EditorInspectorField(id: "soft-body-mesh-resource", label: L("Geometry Resource"),
+                                     value: .text(softBodyMeshResourceBinding(for: entity))),
+                EditorInspectorField(id: "soft-body-mesh-fixed", label: L("Fixed Vertex Indices"),
+                                     value: .json(softBodyMeshFixedVerticesBinding(for: entity), minHeight: 58)),
+                EditorInspectorField(id: "soft-body-mesh-compliance", label: L("Stretch Compliance"),
+                                     value: .constrainedNumber(softBodyMeshFloatBinding(for: entity, \.compliance), min: 0, max: nil, step: 0.00001, showsStepper: true)),
+                EditorInspectorField(id: "soft-body-mesh-shear", label: L("Shear Compliance"),
+                                     value: .constrainedNumber(softBodyMeshFloatBinding(for: entity, \.shearCompliance), min: 0, max: nil, step: 0.00001, showsStepper: true)),
+                EditorInspectorField(id: "soft-body-mesh-bend", label: L("Bend Compliance"),
+                                     value: .constrainedNumber(softBodyMeshFloatBinding(for: entity, \.bendCompliance), min: 0, max: nil, step: 0.00001, showsStepper: true)),
+                EditorInspectorField(id: "soft-body-mesh-volume", label: L("Volume Compliance"),
+                                     value: .constrainedNumber(softBodyMeshFloatBinding(for: entity, \.volumeCompliance), min: 0, max: nil, step: 0.00001, showsStepper: true)),
+                EditorInspectorField(id: "soft-body-mesh-bend-type", label: L("Bend Type"),
+                                     value: .text(softBodyMeshBendTypeBinding(for: entity))),
+                EditorInspectorField(id: "soft-body-mesh-vertices", label: L("Vertices"),
+                                     value: .readOnly(String(geometry?.positions.count ?? 0))),
+                EditorInspectorField(id: "soft-body-mesh-triangles", label: L("Triangles"),
+                                     value: .readOnly(String(geometry?.triangleCount ?? 0))),
+                EditorInspectorField(id: "soft-body-mesh-tetrahedra", label: L("Tetrahedra"),
+                                     value: .readOnly(String(geometry?.tetrahedronCount ?? 0))),
+                EditorInspectorField(id: "soft-body-mesh-revision", label: L("Geometry Revision"),
+                                     value: .readOnly(geometry.map { String($0.revision) } ?? L("Missing"))),
             ]
         )
     }
@@ -5611,6 +5710,89 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 guard let bendType = ClothBendType.allCases.first(where: {
                     String(describing: $0).caseInsensitiveCompare(text) == .orderedSame
                 }), scene.updateComponent(Cloth.self, for: entity, {
+                    $0.bendType = bendType
+                }) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func softBodyMeshResourceBinding(for entity: EntityID) -> Binding<String> {
+        Binding(
+            get: { [self] in
+                scene.component(SoftBodyMesh.self, for: entity)?.resourceID ?? ""
+            },
+            set: { [self] resourceID in
+                guard let mesh = scene.component(SoftBodyMesh.self, for: entity) else { return }
+                let next = SoftBodyMesh(
+                    resourceID: resourceID,
+                    fixedVertexIndices: mesh.fixedVertexIndices,
+                    compliance: mesh.compliance,
+                    shearCompliance: mesh.shearCompliance,
+                    bendCompliance: mesh.bendCompliance,
+                    volumeCompliance: mesh.volumeCompliance,
+                    bendType: mesh.bendType
+                )
+                guard scene.setComponent(next, for: entity) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func softBodyMeshFloatBinding(
+        for entity: EntityID,
+        _ keyPath: WritableKeyPath<SoftBodyMesh, Float>
+    ) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(SoftBodyMesh.self, for: entity)?[keyPath: keyPath] ?? 0
+            },
+            set: { [self] value in
+                guard scene.updateComponent(SoftBodyMesh.self, for: entity, {
+                    $0[keyPath: keyPath] = max(0, value)
+                }) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func softBodyMeshFixedVerticesBinding(for entity: EntityID) -> Binding<String> {
+        Binding(
+            get: { [self] in
+                guard let indices = scene.component(SoftBodyMesh.self, for: entity)?.fixedVertexIndices,
+                      let data = try? JSONEncoder().encode(indices)
+                else { return "[]" }
+                return String(decoding: data, as: UTF8.self)
+            },
+            set: { [self] text in
+                guard let data = text.data(using: .utf8),
+                      let indices = try? JSONDecoder().decode([Int].self, from: data),
+                      let mesh = scene.component(SoftBodyMesh.self, for: entity)
+                else { return }
+                let next = SoftBodyMesh(
+                    resourceID: mesh.resourceID,
+                    fixedVertexIndices: indices,
+                    compliance: mesh.compliance,
+                    shearCompliance: mesh.shearCompliance,
+                    bendCompliance: mesh.bendCompliance,
+                    volumeCompliance: mesh.volumeCompliance,
+                    bendType: mesh.bendType
+                )
+                guard scene.setComponent(next, for: entity) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
+    private func softBodyMeshBendTypeBinding(for entity: EntityID) -> Binding<String> {
+        Binding(
+            get: { [self] in
+                String(describing: scene.component(SoftBodyMesh.self, for: entity)?.bendType ?? .dihedral)
+            },
+            set: { [self] text in
+                guard let bendType = ClothBendType.allCases.first(where: {
+                    String(describing: $0).caseInsensitiveCompare(text) == .orderedSame
+                }), scene.updateComponent(SoftBodyMesh.self, for: entity, {
                     $0.bendType = bendType
                 }) else { return }
                 notifyRevisionChanged()
