@@ -236,6 +236,11 @@ public struct EditorPhysicsDebugOverlayOptions: OptionSet, Codable, Sendable, Eq
     public static let all: Self = [.shapes, .bounds, .contacts, .joints, .characters]
 }
 
+public enum EditorPhysicsDebugOverlayScope: String, Codable, Sendable, Equatable {
+    case selected
+    case scene
+}
+
 public struct EditorState: Codable, Sendable {
     public static let maxFrameStatsHistorySamples = 240
     public static let maxParticleDiagnosticsHistorySamples = 240
@@ -281,6 +286,7 @@ public struct EditorState: Codable, Sendable {
     /// when no packet input changed (Unreal's per-viewport "Realtime").
     public var viewportRealtimeEnabled: Bool
     public var physicsDebugOverlayOptions: EditorPhysicsDebugOverlayOptions
+    public var physicsDebugOverlayScope: EditorPhysicsDebugOverlayScope
     public var translateSnapEnabled: Bool
     public var rotateSnapEnabled: Bool
     public var scaleSnapEnabled: Bool
@@ -292,6 +298,9 @@ public struct EditorState: Codable, Sendable {
     public var pendingConfirmationRequest: ConfirmationRequestBatch?
     public var aiSettings: EditorAISettings
     public var capabilitySettings: EditorCapabilitySettings
+    /// Ephemeral UI state. It is deliberately omitted from Codable storage so
+    /// a project file can never restore a pending approval or enabled binding.
+    public var pluginManagement: EditorPluginManagementState
     public var aiStatusMessage: String?
     public var aiWarnings: [String]
     public var chatMessages: [AIChatMessage]
@@ -331,6 +340,7 @@ public struct EditorState: Codable, Sendable {
         viewportInteractionDownscaleEnabled: Bool = false,
         viewportRealtimeEnabled: Bool = false,
         physicsDebugOverlayOptions: EditorPhysicsDebugOverlayOptions = .all,
+        physicsDebugOverlayScope: EditorPhysicsDebugOverlayScope = .selected,
         translateSnapEnabled: Bool = false,
         rotateSnapEnabled: Bool = false,
         scaleSnapEnabled: Bool = false,
@@ -344,6 +354,7 @@ public struct EditorState: Codable, Sendable {
         pendingConfirmationRequest: ConfirmationRequestBatch? = nil,
         aiSettings: EditorAISettings = .default,
         capabilitySettings: EditorCapabilitySettings = .default,
+        pluginManagement: EditorPluginManagementState = .idle,
         aiStatusMessage: String? = nil,
         aiWarnings: [String] = [],
         chatMessages: [AIChatMessage] = [],
@@ -378,6 +389,7 @@ public struct EditorState: Codable, Sendable {
         self.viewportInteractionDownscaleEnabled = viewportInteractionDownscaleEnabled
         self.viewportRealtimeEnabled = viewportRealtimeEnabled
         self.physicsDebugOverlayOptions = physicsDebugOverlayOptions.intersection(.all)
+        self.physicsDebugOverlayScope = physicsDebugOverlayScope
         self.translateSnapEnabled = translateSnapEnabled
         self.rotateSnapEnabled = rotateSnapEnabled
         self.scaleSnapEnabled = scaleSnapEnabled
@@ -391,6 +403,7 @@ public struct EditorState: Codable, Sendable {
         self.pendingConfirmationRequest = pendingConfirmationRequest
         self.aiSettings = aiSettings
         self.capabilitySettings = capabilitySettings
+        self.pluginManagement = pluginManagement
         self.aiStatusMessage = aiStatusMessage
         self.aiWarnings = aiWarnings
         self.chatMessages = chatMessages
@@ -449,6 +462,7 @@ public struct EditorState: Codable, Sendable {
         case viewportInteractionDownscaleEnabled
         case viewportRealtimeEnabled
         case physicsDebugOverlayOptions
+        case physicsDebugOverlayScope
         case translateSnapEnabled
         case rotateSnapEnabled
         case scaleSnapEnabled
@@ -519,6 +533,10 @@ public struct EditorState: Codable, Sendable {
                 EditorPhysicsDebugOverlayOptions.self,
                 forKey: .physicsDebugOverlayOptions
             ) ?? .all,
+            physicsDebugOverlayScope: try c.decodeIfPresent(
+                EditorPhysicsDebugOverlayScope.self,
+                forKey: .physicsDebugOverlayScope
+            ) ?? .selected,
             translateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .translateSnapEnabled) ?? false,
             rotateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .rotateSnapEnabled) ?? false,
             scaleSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .scaleSnapEnabled) ?? false,
@@ -568,6 +586,7 @@ public struct EditorState: Codable, Sendable {
         try c.encode(viewportInteractionDownscaleEnabled, forKey: .viewportInteractionDownscaleEnabled)
         try c.encode(viewportRealtimeEnabled, forKey: .viewportRealtimeEnabled)
         try c.encode(physicsDebugOverlayOptions, forKey: .physicsDebugOverlayOptions)
+        try c.encode(physicsDebugOverlayScope, forKey: .physicsDebugOverlayScope)
         try c.encode(translateSnapEnabled, forKey: .translateSnapEnabled)
         try c.encode(rotateSnapEnabled, forKey: .rotateSnapEnabled)
         try c.encode(scaleSnapEnabled, forKey: .scaleSnapEnabled)

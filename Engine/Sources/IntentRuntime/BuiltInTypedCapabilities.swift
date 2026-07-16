@@ -79,7 +79,7 @@ func capabilityVector(_ value: Vec4, field: String) throws -> SIMD4<Float> {
     )
 }
 
-private func preparedLocalTransform(
+func preparedLocalTransform(
     _ reference: SceneEntityRef,
     context: CapabilityPreparationContext
 ) throws -> (entityID: UInt64, transform: LocalTransform) {
@@ -143,8 +143,8 @@ private func composedTransformMatrix(
     return matrix
 }
 
-/// First migrated host primitives. Each type is the sole declaration of its
-/// decoder, JSON Schema, provider/MCP contract, and pure preparation behavior.
+/// Typed host primitives. Each type is the sole declaration of its decoder,
+/// JSON Schema, provider/MCP contract, and pure preparation behavior.
 public struct SetNameCapability: GuavaCapability {
     public struct Input: DeclaredCapabilityInput {
         @EntityReference
@@ -329,7 +329,7 @@ public enum CapabilityLightType: String, CapabilitySchemaValue, CaseIterable {
 
     public static var capabilityPlaceholder: CapabilityLightType { .point }
 
-    fileprivate var runtimeValue: LightType {
+    var runtimeValue: LightType {
         switch self {
         case .directional: return .directional
         case .point: return .point
@@ -570,10 +570,13 @@ public enum BuiltInTypedCapabilityCatalog {
     public static let registrations: [AnyCapabilityRegistration] = {
         do {
             return [
+                try AnyCapabilityRegistration(SpawnEntityCapability.self),
                 try AnyCapabilityRegistration(SetNameCapability.self),
                 try AnyCapabilityRegistration(DeleteEntityCapability.self),
                 try AnyCapabilityRegistration(DuplicateEntityCapability.self),
+                try AnyCapabilityRegistration(ReparentEntityCapability.self),
                 try AnyCapabilityRegistration(SetTransformCapability.self),
+                try AnyCapabilityRegistration(SnapToGroundCapability.self),
                 try AnyCapabilityRegistration(SetLightTypeCapability.self),
                 try AnyCapabilityRegistration(SetLightIntensityCapability.self),
                 try AnyCapabilityRegistration(SetLightColorCapability.self),
@@ -584,7 +587,9 @@ public enum BuiltInTypedCapabilityCatalog {
                 try AnyCapabilityRegistration(SetCameraFOVCapability.self),
                 try AnyCapabilityRegistration(SetCameraAspectRatioCapability.self),
                 try AnyCapabilityRegistration(SetCameraActiveCapability.self),
+                try AnyCapabilityRegistration(SetMeshColorCapability.self),
                 try AnyCapabilityRegistration(SetMaterialCapability.self),
+                try AnyCapabilityRegistration(SetMeshVisibilityCapability.self),
                 try AnyCapabilityRegistration(SetRigidBodyMotionTypeCapability.self),
                 try AnyCapabilityRegistration(SetRigidBodyMassCapability.self),
                 try AnyCapabilityRegistration(SetRigidBodyGravityScaleCapability.self),
@@ -596,6 +601,11 @@ public enum BuiltInTypedCapabilityCatalog {
                 try AnyCapabilityRegistration(SetColliderMaterialCapability.self),
                 try AnyCapabilityRegistration(SetColliderTriggerCapability.self),
                 try AnyCapabilityRegistration(SetColliderLayerCapability.self),
+                try AnyCapabilityRegistration(SetConstraintEnabledCapability.self),
+                try AnyCapabilityRegistration(SetAudioSourceCapability.self),
+                try AnyCapabilityRegistration(SetScriptPropertyCapability.self),
+                try AnyCapabilityRegistration(SetScriptBindingsCapability.self),
+                try AnyCapabilityRegistration(SetAnimationPlayerCapability.self),
             ]
         } catch {
             preconditionFailure("invalid built-in capability declaration: \(error)")
@@ -616,8 +626,7 @@ public enum BuiltInTypedCapabilityCatalog {
 }
 
 public extension CapabilityRegistry {
-    /// Registry used by model-facing paths. Migrated entries are derived from
-    /// their typed declarations; non-migrated entries retain compatibility
-    /// contracts until their capability types are moved into this catalog.
+    /// Registry used by model-facing paths. Every scene write contract is
+    /// derived from its typed declaration in `BuiltInTypedCapabilityCatalog`.
     static let aiDefault = BuiltInTypedCapabilityCatalog.registry
 }

@@ -37,6 +37,23 @@ public struct CapabilitySource: Codable, Sendable, Equatable {
     }
 }
 
+/// Exact plugin authority captured when a model-facing allow-list is created.
+/// A schema hash alone cannot detect a component binary replacement or a
+/// PluginHost restart, so plugin tools and Drafts also carry this binding.
+public struct PluginCapabilityAuthority: Codable, Sendable, Equatable {
+    public var pluginID: String
+    public var authorizationDigest: String
+    public var hostGeneration: UInt64
+
+    public init(pluginID: String,
+                authorizationDigest: String,
+                hostGeneration: UInt64) {
+        self.pluginID = pluginID
+        self.authorizationDigest = authorizationDigest
+        self.hostGeneration = hostGeneration
+    }
+}
+
 /// Provider-neutral, serialisable contract for one AI-visible capability.
 /// Provider and MCP tool definitions must be derived from this value.
 public struct CapabilityContract: Codable, Sendable, Equatable {
@@ -207,17 +224,23 @@ public struct CapabilityExposureSnapshot: Codable, Sendable, Equatable {
     public var sceneRevision: UInt64?
     public var contracts: [CapabilityContract]
     public var createdAt: Date
+    /// Optional for backward-compatible decoding of snapshots produced before
+    /// plugin authority binding was introduced. Plugin contracts are never
+    /// exposed without a matching entry.
+    public var pluginAuthorities: [String: PluginCapabilityAuthority]?
 
     public init(id: UUID = UUID(),
                 generation: UInt64,
                 sceneRevision: UInt64?,
                 contracts: [CapabilityContract],
-                createdAt: Date = Date()) {
+                createdAt: Date = Date(),
+                pluginAuthorities: [String: PluginCapabilityAuthority] = [:]) {
         self.id = id
         self.generation = generation
         self.sceneRevision = sceneRevision
         self.contracts = contracts.sorted { $0.id < $1.id }
         self.createdAt = createdAt
+        self.pluginAuthorities = pluginAuthorities.isEmpty ? nil : pluginAuthorities
     }
 
     public func contract(forToolName name: String) -> CapabilityContract? {
@@ -226,5 +249,9 @@ public struct CapabilityExposureSnapshot: Codable, Sendable, Equatable {
 
     public func contract(id: String) -> CapabilityContract? {
         contracts.first { $0.id == id }
+    }
+
+    public func authority(forPluginID pluginID: String) -> PluginCapabilityAuthority? {
+        pluginAuthorities?[pluginID]
     }
 }

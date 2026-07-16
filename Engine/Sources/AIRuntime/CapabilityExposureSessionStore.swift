@@ -50,15 +50,57 @@ public actor CapabilityExposureSessionStore {
         var lastAccessedAt: Date
     }
 
-    private let registry: CapabilityRegistry
+    private var registry: CapabilityRegistry
     private let ttl: TimeInterval
+    private var exposurePolicy: CapabilityExposurePolicy
+    private var pluginAuthorities: [String: PluginCapabilityAuthority]
     private var generation: UInt64 = 0
     private var sessions: [UUID: Entry] = [:]
 
     public init(registry: CapabilityRegistry = .aiDefault,
-                ttl: TimeInterval = CapabilityDraftStore.defaultTTL) {
+                ttl: TimeInterval = CapabilityDraftStore.defaultTTL,
+                exposurePolicy: CapabilityExposurePolicy = CapabilityExposurePolicy(
+                    allowedDomains: ["scene"]
+                ),
+                pluginAuthorities: [String: PluginCapabilityAuthority] = [:]) {
         self.registry = registry
         self.ttl = max(1, ttl)
+        self.exposurePolicy = exposurePolicy
+        self.pluginAuthorities = pluginAuthorities
+    }
+
+    /// Atomically replaces the Registry and its matching exposure authority.
+    /// All existing sessions and Drafts are destroyed first, so tools from a
+    /// disabled or upgraded plugin cannot survive a dynamic catalog change.
+    public func replaceRegistry(
+        _ registry: CapabilityRegistry,
+        exposurePolicy: CapabilityExposurePolicy,
+        pluginAuthorities: [String: PluginCapabilityAuthority]
+    ) async {
+        for entry in sessions.values {
+            await entry.drafts.removeAll()
+        }
+        sessions.removeAll()
+        self.registry = registry
+        self.exposurePolicy = exposurePolicy
+        self.pluginAuthorities = pluginAuthorities
+        generation &+= 1
+    }
+
+    /// Plugin enablement, authorisation, upgrades, and PluginHost restarts all
+    /// replace the authority set. Existing tool names and Drafts are discarded
+    /// because they were minted under a different executable boundary.
+    public func replacePluginAuthorities(
+        _ authorities: [String: PluginCapabilityAuthority],
+        enabledPluginIDs: Set<String>
+    ) async {
+        for entry in sessions.values {
+            await entry.drafts.removeAll()
+        }
+        sessions.removeAll()
+        pluginAuthorities = authorities
+        exposurePolicy.enabledPluginIDs = enabledPluginIDs
+        generation &+= 1
     }
 
     /// Opens (or resumes) a session with only the small host-approved read set.
@@ -93,15 +135,17 @@ public actor CapabilityExposureSessionStore {
 
         let searchPolicy = CapabilityExposurePolicy(
             activeReleasePhase: .stable,
-            allowedDomains: domain.map { [$0] } ?? ["scene"],
+            allowedDomains: domain.map { [$0] } ?? exposurePolicy.allowedDomains,
+            enabledPluginIDs: exposurePolicy.enabledPluginIDs,
+            allowExternalSideEffects: exposurePolicy.allowExternalSideEffects,
             maximumCapabilities: max(Self.maximumActiveCapabilities,
                                      registry.allVerbs().count)
         )
         let candidates = registry.searchContracts(query: query,
                                                   policy: searchPolicy,
+                                                  pluginAuthorities: pluginAuthorities,
                                                   limit: registry.allVerbs().count)
             .filter { !$0.id.hasPrefix("system.") }
-            .filter { $0.domain == "scene" }
             .filter { access == nil || $0.access == access }
 
         let existingIDs = entry.snapshot.contracts.map(\.id)
@@ -114,12 +158,15 @@ public actor CapabilityExposureSessionStore {
         generation &+= 1
         var expanded = registry.exposureSnapshot(
             policy: CapabilityExposurePolicy(activeReleasePhase: .stable,
-                                             allowedDomains: ["scene"],
+                                             allowedDomains: exposurePolicy.allowedDomains,
+                                             enabledPluginIDs: exposurePolicy.enabledPluginIDs,
+                                             allowExternalSideEffects: exposurePolicy.allowExternalSideEffects,
                                              maximumCapabilities: Self.maximumActiveCapabilities),
             sceneRevision: sceneRevision,
             generation: generation,
             preferredCapabilityIDs: preferredIDs,
-            includedCapabilityIDs: includedIDs
+            includedCapabilityIDs: includedIDs,
+            pluginAuthorities: pluginAuthorities
         )
         // Expanding an allow-list must not invalidate Drafts already created in
         // the same session. Revision changes create a fresh Entry above.
@@ -147,6 +194,14 @@ public actor CapabilityExposureSessionStore {
             throw CapabilityDraftError.unknownTool(toolName)
         }
         return contract
+    }
+
+    public func snapshot(sessionID rawSessionID: String,
+                         sceneRevision: UInt64,
+                         now: Date = Date()) throws -> CapabilityExposureSnapshot {
+        try activeEntry(sessionID: rawSessionID,
+                        sceneRevision: sceneRevision,
+                        now: now).snapshot
     }
 
     public func createDraft(sessionID rawSessionID: String,
@@ -219,6 +274,7 @@ public actor CapabilityExposureSessionStore {
         purgeExpired(now: now)
         guard let entry = sessions[sessionID],
               entry.snapshot.sceneRevision == sceneRevision,
+              snapshotAuthoritiesAreCurrent(entry.snapshot),
               now.timeIntervalSince(entry.snapshot.createdAt) >= 0,
               now.timeIntervalSince(entry.snapshot.createdAt) <= ttl else {
             sessions.removeValue(forKey: sessionID)
@@ -246,13 +302,18 @@ public actor CapabilityExposureSessionStore {
             "scene.get_entities", "scene.get_selection", "scene.find_entities",
         ]
         let snapshot = registry.exposureSnapshot(
-            policy: CapabilityExposurePolicy(activeReleasePhase: .stable,
-                                             allowedDomains: ["scene"],
-                                             maximumCapabilities: Self.maximumActiveCapabilities),
+            policy: CapabilityExposurePolicy(
+                activeReleasePhase: exposurePolicy.activeReleasePhase,
+                allowedDomains: exposurePolicy.allowedDomains,
+                enabledPluginIDs: exposurePolicy.enabledPluginIDs,
+                allowExternalSideEffects: exposurePolicy.allowExternalSideEffects,
+                maximumCapabilities: Self.maximumActiveCapabilities
+            ),
             sceneRevision: sceneRevision,
             generation: generation,
             preferredCapabilityIDs: Array(coreReadIDs).sorted(),
-            includedCapabilityIDs: coreReadIDs
+            includedCapabilityIDs: coreReadIDs,
+            pluginAuthorities: pluginAuthorities
         )
         return Entry(snapshot: snapshot,
                      drafts: CapabilityDraftStore(registry: registry, ttl: ttl),
@@ -271,5 +332,18 @@ public actor CapabilityExposureSessionStore {
             throw CapabilityExposureSessionError.invalidSessionID
         }
         return id
+    }
+
+    private func snapshotAuthoritiesAreCurrent(
+        _ snapshot: CapabilityExposureSnapshot
+    ) -> Bool {
+        let pluginIDs = Set(snapshot.contracts.compactMap(\.source.pluginID))
+        for pluginID in pluginIDs {
+            guard snapshot.authority(forPluginID: pluginID) == pluginAuthorities[pluginID],
+                  exposurePolicy.enabledPluginIDs.contains(pluginID) else {
+                return false
+            }
+        }
+        return true
     }
 }

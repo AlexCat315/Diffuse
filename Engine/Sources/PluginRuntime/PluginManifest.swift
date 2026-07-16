@@ -5,6 +5,13 @@ public enum PluginImportPermission: String, Codable, Sendable, CaseIterable, Has
     case sceneQuery = "guava:scene/query"
     case selectionQuery = "guava:selection/query"
     case assetMetadataQuery = "guava:asset/metadata-query"
+
+    /// Every Guava import is intentionally one narrow synchronous function.
+    /// The request must be `{\"operation\":\"snapshot\"}` and the result is
+    /// the revision-bound JSON value supplied by the Editor for this call.
+    public var witInterface: String {
+        "interface query { query: func(request: string) -> string; }"
+    }
 }
 
 public struct PluginResourceLimits: Codable, Sendable, Equatable {
@@ -76,6 +83,7 @@ public enum PluginManifestValidationError: Error, Sendable, Equatable, CustomStr
     case unknownHostCapability(String)
     case pluginCapabilityCannotBeComposed(String)
     case accessUnderstatement(capabilityID: String)
+    case unsafeHostPrimitive(String)
 
     public var description: String {
         switch self {
@@ -87,6 +95,8 @@ public enum PluginManifestValidationError: Error, Sendable, Equatable, CustomStr
         case let .unknownHostCapability(id): return "unknown composed host capability '\(id)'"
         case let .pluginCapabilityCannotBeComposed(id): return "plugin capability '\(id)' cannot be used as a host primitive"
         case let .accessUnderstatement(id): return "plugin access understates composed capability '\(id)'"
+        case let .unsafeHostPrimitive(id):
+            return "host capability '\(id)' is not an AI-exposed strict write primitive"
         }
     }
 }
@@ -147,6 +157,11 @@ public enum PluginManifestValidator {
             }
             if riskRank(descriptor.access) > riskRank(manifest.access) {
                 throw PluginManifestValidationError.accessUnderstatement(capabilityID: capabilityID)
+            }
+            guard descriptor.isAIExposed,
+                  descriptor.access.isWrite,
+                  descriptor.inputSchema.isStrictCapabilityInput else {
+                throw PluginManifestValidationError.unsafeHostPrimitive(capabilityID)
             }
         }
     }

@@ -41,6 +41,7 @@ public final class EditorStore: @unchecked Sendable {
         case viewportInteractionDownscaleEnabled
         case viewportRealtimeEnabled
         case physicsDebugOverlayOptions
+        case physicsDebugOverlayScope
         case translateSnapEnabled
         case rotateSnapEnabled
         case scaleSnapEnabled
@@ -55,6 +56,7 @@ public final class EditorStore: @unchecked Sendable {
         case pendingConfirmationRequest
         case aiSettings
         case capabilitySettings
+        case pluginManagement
         case aiStatusMessage
         case aiWarnings
         case chatMessages
@@ -176,6 +178,10 @@ public final class EditorStore: @unchecked Sendable {
             mark(.physicsDebugOverlayOptions,
                  old.physicsDebugOverlayOptions,
                  new.physicsDebugOverlayOptions)
+        case .setPhysicsDebugOverlayScope:
+            mark(.physicsDebugOverlayScope,
+                 old.physicsDebugOverlayScope,
+                 new.physicsDebugOverlayScope)
         case .setTranslateSnapEnabled:
             mark(.translateSnapEnabled, old.translateSnapEnabled, new.translateSnapEnabled)
         case .setRotateSnapEnabled:
@@ -213,6 +219,8 @@ public final class EditorStore: @unchecked Sendable {
             mark(.aiSettings, old.aiSettings, new.aiSettings)
         case .setCapabilitySettings:
             mark(.capabilitySettings, old.capabilitySettings, new.capabilitySettings)
+        case .setPluginManagementState:
+            mark(.pluginManagement, old.pluginManagement, new.pluginManagement)
         case .setAIStatusMessage:
             mark(.aiStatusMessage, old.aiStatusMessage, new.aiStatusMessage)
         case .setAIWarnings:
@@ -282,6 +290,9 @@ extension EditorStore {
     public var shouldRender: Bool { read(.shouldRender, storage.shouldRender) }
     public var aiSettings: EditorAISettings { read(.aiSettings, storage.aiSettings) }
     public var capabilitySettings: EditorCapabilitySettings { read(.capabilitySettings, storage.capabilitySettings) }
+    public var pluginManagement: EditorPluginManagementState {
+        read(.pluginManagement, storage.pluginManagement)
+    }
     public var aiStatusMessage: String? { read(.aiStatusMessage, storage.aiStatusMessage) }
     public var aiWarnings: [String] { read(.aiWarnings, storage.aiWarnings) }
     public var consoleEntries: [EditorConsoleEntry] { read(.consoleEntries, storage.consoleEntries) }
@@ -302,6 +313,9 @@ extension EditorStore {
     }
     public var physicsDebugOverlayOptions: EditorPhysicsDebugOverlayOptions {
         read(.physicsDebugOverlayOptions, storage.physicsDebugOverlayOptions)
+    }
+    public var physicsDebugOverlayScope: EditorPhysicsDebugOverlayScope {
+        read(.physicsDebugOverlayScope, storage.physicsDebugOverlayScope)
     }
     public var translateSnapEnabled: Bool { read(.translateSnapEnabled, storage.translateSnapEnabled) }
     public var rotateSnapEnabled: Bool { read(.rotateSnapEnabled, storage.rotateSnapEnabled) }

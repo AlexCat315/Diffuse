@@ -18,6 +18,10 @@ public struct Proposal: Sendable, Identifiable {
     public var createdAt: Date
     public var toolUseID: String
     public var capabilityExposureSnapshot: CapabilityExposureSnapshot?
+    /// Validated write calls submitted through `submit_plan`. Plugin calls
+    /// remain typed Drafts until EditorCore supplies a live SceneRuntime and
+    /// expands them through PluginCapabilityExecutor.
+    public var capabilityDrafts: [CapabilityInvocationDraft]
 
     public init(id: String = UUID().uuidString,
                 sessionID: String,
@@ -29,7 +33,8 @@ public struct Proposal: Sendable, Identifiable {
                 approvalPolicy: TransactionApprovalPolicy = .requiresApproval,
                 createdAt: Date = Date(),
                 toolUseID: String = "",
-                capabilityExposureSnapshot: CapabilityExposureSnapshot? = nil) {
+                capabilityExposureSnapshot: CapabilityExposureSnapshot? = nil,
+                capabilityDrafts: [CapabilityInvocationDraft] = []) {
         self.id = id
         self.sessionID = sessionID
         self.semanticIntent = semanticIntent
@@ -41,5 +46,6 @@ public struct Proposal: Sendable, Identifiable {
         self.createdAt = createdAt
         self.toolUseID = toolUseID
         self.capabilityExposureSnapshot = capabilityExposureSnapshot
+        self.capabilityDrafts = capabilityDrafts
     }
 }
