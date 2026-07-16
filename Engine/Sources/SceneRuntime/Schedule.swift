@@ -2345,9 +2345,11 @@ public struct RuntimeWorldSchedule {
     ) -> PhysicsDebugFrameResource {
         let bodies = spatialIndex.entries.map { entry in
             let body = world.component(RigidBody.self, for: entry.entity)
+            let collider = world.component(Collider.self, for: entry.entity)
             return PhysicsDebugBody(
                 entity: entry.entity,
                 shape: entry.shape,
+                shapes: collider?.shapes,
                 worldTransform: entry.worldTransform,
                 bounds: entry.bounds,
                 motionType: body?.motionType ?? .static,
@@ -2364,6 +2366,9 @@ public struct RuntimeWorldSchedule {
             bodies: bodies,
             constraints: constraints,
             contacts: contacts,
+            characters: characterStateFrame.states.values.sorted {
+                $0.entity.rawValue < $1.entity.rawValue
+            },
             destructionConnections: buildPhysicsDebugDestructionConnections(in: world)
         )
     }
