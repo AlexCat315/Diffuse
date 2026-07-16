@@ -32,6 +32,16 @@ swift run --package-path guava-mcp GuavaMCP
 | `analyze_image` | Analyze a reference image |
 | `get_context_memory` | Read context memory |
 
+## How AI capabilities are exposed
+
+Editor AI uses a dynamic capability protocol for scene writes. The model initially receives only `search_capabilities`, `submit_plan`, and a small set of currently allowed read capabilities. After a search, the host injects at most 16 exact tools from the shared `CapabilityRegistry`. A generated name includes the capability version and a short schema-hash suffix, such as `cap_scene_set_transform_v1_a91c`; its mapping to the real capability ID exists only in the current `ExposureSnapshot`.
+
+Every built-in scene write derives its input decoder, strict JSON Schema, Provider/MCP tool, access metadata, and stable schema hash from a typed `GuavaCapability` declaration. `SceneEditOp` remains only as a legacy wire and diagnostic representation and can no longer fall back to producing AI mutations. If a write contract exists in the Registry without a typed registration carrying the same hash, submission fails closed with `capabilityUnavailable`.
+
+Calling a write tool creates a Draft bound to the Snapshot, scene revision, capability version, and schema hash; it does not modify the scene. `submit_plan` prepares Drafts in order against a Shadow Scene and requires every write capability to produce controlled operations, a non-empty preview, and deterministic verification assertions. Only the complete Diff accepted by the user reaches the transaction executor, and destructive writes require a second confirmation. Read capabilities execute immediately after strict input validation.
+
+A Draft expires after five minutes or when the scene revision, plugin authorization, PluginHost generation, schema, or session changes. Authority and bindings are checked again at tool invocation, submission, prepare, immediately before confirmed execution, and during post-execution verification, so a model cannot bypass the Registry with a forged ID, tool name, or stale Snapshot.
+
 Entity references use the `scene:<number>` form. Read the current scene before constructing edits against real IDs.
 
 ## Local plugin capability contracts

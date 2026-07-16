@@ -7,6 +7,7 @@ import FoundationNetworking
 import IntentRuntime
 import PluginRuntime
 import SceneRuntime
+import ScriptRuntime
 import SIMDCompat
 import Testing
 
@@ -71,6 +72,13 @@ struct CapabilityExposureTests {
             #expect(descriptor.contract.inputSchema.additionalProperties == false)
             #expect(!descriptor.access.isWrite || descriptor.contract.inputSchema.isStrictCapabilityInput)
             #expect(!descriptor.contract.schemaHash.isEmpty)
+            if descriptor.access.isWrite {
+                let registration = try #require(
+                    BuiltInTypedCapabilityCatalog.registration(for: operation.capabilityID),
+                    "AI write capability \(operation.capabilityID) has no typed preparation"
+                )
+                #expect(registration.contract == descriptor.contract)
+            }
         }
         try CapabilityRegistry.aiDefault.validateIntegrity()
     }
@@ -275,6 +283,118 @@ struct CapabilityExposureTests {
         ])
         #expect(transaction.capabilityInvocations.first?.schemaHash
                 == SetNameCapability.contract.schemaHash)
+    }
+
+    @Test("scene utility writes use typed preparation and preserve shadow state")
+    func typedSceneUtilitiesAreAuthoritative() throws {
+        var scene = SceneRuntime()
+        let parent = scene.createEntity()
+        let entity = scene.createEntity()
+        _ = scene.setLocalTransform(
+            LocalTransform(translation: SIMD3<Float>(1, 5, 3)),
+            for: entity
+        )
+        _ = scene.setComponent(RenderMeshComponent(meshIndex: 0), for: entity)
+        _ = scene.setComponent(
+            AudioSource(clipName: "ambience", volume: 0.25, pitch: 0.8,
+                        loop: true, playOnAwake: false, spatialBlend: 0.4),
+            for: entity
+        )
+        _ = scene.setComponent(
+            AnimationPlayer(clipName: "Idle", speed: 0.5,
+                            loop: true, isPlaying: true),
+            for: entity
+        )
+        _ = scene.setComponent(
+            ScriptComponent(bindings: [
+                ScriptBinding(ScriptHandle(rawValue: 7),
+                              parametersJSON: #"{"existing":1}"#),
+            ]),
+            for: entity
+        )
+        let included = [
+            "scene.spawn_entity",
+            "scene.snap_to_ground",
+            "scene.set_mesh_color",
+            "scene.set_mesh_visibility",
+            "scene.set_audio_source",
+            "scene.set_animation_player",
+            "scene.set_script_property",
+            "scene.set_script_bindings",
+        ]
+        let snapshot = CapabilityRegistry.aiDefault.exposureSnapshot(
+            sceneRevision: scene.snapshot.revision,
+            includedCapabilityIDs: Set(included)
+        )
+        let json = #"""
+        {
+          "summary":"Typed utilities",
+          "steps":[
+            {"op":"spawn_entity","label":"Key Light","spawn_kind":"light","spawn_parent_id":"scene:\#(parent.rawValue)","light_type":"spot","intensity":12,"color":[1,0.5,0.25]},
+            {"op":"snap_to_ground","entity_id":"scene:\#(entity.rawValue)"},
+            {"op":"set_mesh_color","entity_id":"scene:\#(entity.rawValue)","color":[0.2,0.3,0.4]},
+            {"op":"set_mesh_visibility","entity_id":"scene:\#(entity.rawValue)","is_visible":false},
+            {"op":"set_audio_source","entity_id":"scene:\#(entity.rawValue)","audio_pitch":2},
+            {"op":"set_animation_player","entity_id":"scene:\#(entity.rawValue)","animation_is_playing":false},
+            {"op":"set_script_property","entity_id":"scene:\#(entity.rawValue)","script_index":0,"script_property_name":"mode","script_property_value":[1,true,"safe"]},
+            {"op":"set_script_enabled","entity_id":"scene:\#(entity.rawValue)","script_index":0,"is_enabled":false}
+          ]
+        }
+        """#
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
+        let transaction = try SceneEditPlanExecutor().buildTransaction(
+            from: plan,
+            scene: scene,
+            exposureSnapshot: snapshot
+        )
+
+        #expect(transaction.operations.count == 8)
+        #expect(transaction.capabilityInvocations.map { $0.capabilityID } == included)
+        guard transaction.operations.count == 8,
+              case let .scene(.spawnLightEntity(label, lightType, _, intensity, color, _, _, parentID))
+                = transaction.operations[0],
+              case let .scene(.setLocalTransform(_, grounded)) = transaction.operations[1],
+              case let .scene(.setAudioSource(_, audio)) = transaction.operations[4],
+              case let .scene(.setAnimationPlayer(_, clip, speed, loop, playing))
+                = transaction.operations[5],
+              case let .scene(.setScriptBindings(_, finalBindings)) = transaction.operations[7]
+        else {
+            Issue.record("expected typed utility operations")
+            return
+        }
+        #expect(label == "Key Light")
+        #expect(lightType == .spot)
+        #expect(intensity == 12)
+        #expect(color == SIMD3<Float>(1, 0.5, 0.25))
+        #expect(parentID == parent.rawValue)
+        #expect(grounded.translation == SIMD3<Float>(1, 0, 3))
+        #expect(audio.clipName == "ambience")
+        #expect(audio.volume == 0.25)
+        #expect(audio.pitch == 2)
+        #expect(clip == "Idle")
+        #expect(speed == 0.5)
+        #expect(loop)
+        #expect(!playing)
+        #expect(finalBindings.count == 1)
+        #expect(!finalBindings[0].isEnabled)
+        let parameters = try #require(
+            JSONSerialization.jsonObject(
+                with: Data(finalBindings[0].parametersJSON.utf8)
+            ) as? [String: Any]
+        )
+        #expect(parameters["existing"] as? Int == 1)
+        #expect((parameters["mode"] as? [Any])?.count == 3)
+        let scriptIndexSchema = try #require(
+            SetScriptPropertyCapability.contract.inputSchema.properties["script_index"]
+        )
+        #expect(scriptIndexSchema.oneOf.first { $0.type == .integer }?.maximum == 255)
+
+        #expect(throws: JSONSchemaViolation.self) {
+            try JSONSchemaValidator.validate(
+                data: Data(#"{"entity_id":"scene:1","script_property_name":"unsafe","script_property_value":{"arbitrary":true}}"#.utf8),
+                against: SetScriptPropertyCapability.contract.inputSchema
+            )
+        }
     }
 
     @Test("typed transform preparation preserves omitted fields across the shadow scene")

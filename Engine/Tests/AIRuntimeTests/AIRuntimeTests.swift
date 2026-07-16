@@ -1001,6 +1001,11 @@ final class AIRuntimeTests: XCTestCase {
     func testSetConstraintEnabledExecutorProducesMutation() throws {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
+        let target = scene.createEntity()
+        _ = scene.setComponent(
+            Constraint(entityA: entity, entityB: target),
+            for: entity
+        )
         let ref = "scene:\(entity.rawValue)"
 
         let json = """
@@ -1033,6 +1038,7 @@ final class AIRuntimeTests: XCTestCase {
     func testSetMeshVisibilityExecutorProducesMutation() throws {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
+        _ = scene.setComponent(RenderMeshComponent(meshIndex: 0), for: entity)
         let ref = "scene:\(entity.rawValue)"
 
         let json = """

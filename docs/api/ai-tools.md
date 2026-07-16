@@ -33,6 +33,16 @@ swift run --package-path guava-mcp GuavaMCP
 | `analyze_image` | 分析参考图像 |
 | `get_context_memory` | 读取上下文记忆 |
 
+## AI 能力如何暴露
+
+编辑器 AI 的场景写入采用动态能力协议。模型初始只获得 `search_capabilities`、`submit_plan` 和当前允许的少量读取能力；搜索后，宿主从同一个 `CapabilityRegistry` 按需注入最多 16 个精确工具。工具名包含能力版本和 Schema Hash 的短摘要，例如 `cap_scene_set_transform_v1_a91c`，工具名到真实能力 ID 的映射只在当前 `ExposureSnapshot` 中有效。
+
+所有内建场景写能力都由类型化 `GuavaCapability` 声明生成输入 Decoder、严格 JSON Schema、Provider/MCP 工具、权限元数据和稳定 Schema Hash。`SceneEditOp` 只保留为旧请求的线协议和诊断表示，不能再回退生成 AI mutation；若 Registry 中存在写能力但缺少同 Hash 的类型化注册，提交会以 `capabilityUnavailable` 安全失败。
+
+写能力工具调用只创建绑定 Snapshot、场景 revision、能力版本和 Schema Hash 的 Draft，不修改场景。`submit_plan` 按 Draft 顺序在 Shadow Scene 中执行无副作用的 `prepare`，并要求每个写能力同时产生受控操作、非空预览和确定性验证断言。整体 Diff 经用户确认后才交给事务执行器；破坏性能力还需要第二次确认。读取能力则在严格参数校验后立即执行。
+
+Draft 在场景 revision、插件授权或 PluginHost generation 变化、Schema 变化、会话撤销或超过五分钟后失效。工具调用、提交、prepare、确认后执行前以及执行后断言都会重新检查权限和绑定，因此模型不能通过伪造能力 ID、工具名或旧 Snapshot 绕过 Registry。
+
 ## 安全边界
 
 工具使用 `scene:<number>` 形式的实体引用。变更前应先读取当前场景，基于真实 ID 构造计划；涉及多步修改时优先使用 `execute_edit_plan`，让编辑器统一验证并执行。
