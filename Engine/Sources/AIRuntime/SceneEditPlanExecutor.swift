@@ -204,10 +204,42 @@ public struct SceneEditPlanExecutor: Sendable {
                 if scene.hasComponent(LightComponent.self, for: entity) {
                     componentTypes.append("LightComponent")
                 }
+                if scene.hasComponent(CameraComponent.self, for: entity) {
+                    componentTypes.append("CameraComponent")
+                }
+                if scene.hasComponent(RenderMeshComponent.self, for: entity) {
+                    componentTypes.append("RenderMeshComponent")
+                }
+                let rigidBody = scene.component(RigidBody.self, for: entity)
+                if rigidBody != nil {
+                    componentTypes.append("RigidBody")
+                }
+                let collider = scene.component(Collider.self, for: entity)
+                if collider != nil {
+                    componentTypes.append("Collider")
+                }
+                let renderMaterial = scene.component(RenderMaterialComponent.self, for: entity)
+                    .flatMap { material in
+                        CapabilityPreparationMaterial(
+                            baseColor: [
+                                material.baseColorFactor.x, material.baseColorFactor.y,
+                                material.baseColorFactor.z, material.baseColorFactor.w,
+                            ],
+                            metallic: material.metallicFactor,
+                            roughness: material.roughnessFactor,
+                            emissive: [
+                                material.emissiveFactor.x, material.emissiveFactor.y,
+                                material.emissiveFactor.z,
+                            ]
+                        )
+                    }
                 return CapabilityPreparationEntity(
                     reference: "scene:\(entity.rawValue)",
                     componentTypes: componentTypes,
-                    localTransform: transform
+                    localTransform: transform,
+                    renderMaterial: renderMaterial,
+                    rigidBody: rigidBody,
+                    collider: collider
                 )
             }
         )
@@ -279,6 +311,38 @@ public struct SceneEditPlanExecutor: Sendable {
                 _ = scene.setComponent(body, for: entityID(fromRaw: rawID))
             case let .setLocalTransform(rawID, transform):
                 _ = scene.setLocalTransform(transform, for: entityID(fromRaw: rawID))
+            case let .setRenderMaterialComponent(rawID, baseColor, metallic, roughness, emissive):
+                _ = scene.setComponent(
+                    RenderMaterialComponent(
+                        baseColorFactor: baseColor,
+                        metallicFactor: metallic,
+                        roughnessFactor: roughness,
+                        emissiveFactor: emissive
+                    ),
+                    for: entityID(fromRaw: rawID)
+                )
+            case let .setCameraPose(rawID, transform, target, up):
+                let entity = entityID(fromRaw: rawID)
+                _ = scene.setLocalTransform(transform, for: entity)
+                _ = scene.updateComponent(CameraComponent.self, for: entity) { camera in
+                    camera.target = target
+                    if let up { camera.up = up }
+                }
+            case let .setCameraFOV(rawID, degrees):
+                _ = scene.updateComponent(CameraComponent.self,
+                                          for: entityID(fromRaw: rawID)) {
+                    $0.fovYRadians = degrees * .pi / 180
+                }
+            case let .setCameraAspectRatio(rawID, aspectRatio):
+                _ = scene.updateComponent(CameraComponent.self,
+                                          for: entityID(fromRaw: rawID)) {
+                    $0.aspectRatio = max(0.001, aspectRatio)
+                }
+            case let .setCameraActive(rawID, active):
+                _ = scene.updateComponent(CameraComponent.self,
+                                          for: entityID(fromRaw: rawID)) {
+                    $0.isActive = active
+                }
             case let .setScriptBindings(rawID, bindings):
                 let comp = ScriptComponent(bindings: bindings)
                 _ = scene.setComponent(comp, for: entityID(fromRaw: rawID))

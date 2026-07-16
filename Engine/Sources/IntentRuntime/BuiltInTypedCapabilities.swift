@@ -35,7 +35,7 @@ public enum BuiltInCapabilityPreparationError: Error, Sendable, Equatable, Custo
     }
 }
 
-private func preparedEntityID(
+func preparedEntityID(
     _ reference: SceneEntityRef,
     requiring component: SceneComponentRequirement? = nil,
     context: CapabilityPreparationContext
@@ -54,7 +54,7 @@ private func preparedEntityID(
     return rawID
 }
 
-private func capabilityFloat(_ value: Double, field: String) throws -> Float {
+func capabilityFloat(_ value: Double, field: String) throws -> Float {
     let converted = Float(value)
     guard converted.isFinite else {
         throw BuiltInCapabilityPreparationError.valueOutOfFloatRange(field)
@@ -62,11 +62,20 @@ private func capabilityFloat(_ value: Double, field: String) throws -> Float {
     return converted
 }
 
-private func capabilityVector(_ value: Vec3, field: String) throws -> SIMD3<Float> {
+func capabilityVector(_ value: Vec3, field: String) throws -> SIMD3<Float> {
     try SIMD3(
         capabilityFloat(value.x, field: field),
         capabilityFloat(value.y, field: field),
         capabilityFloat(value.z, field: field)
+    )
+}
+
+func capabilityVector(_ value: Vec4, field: String) throws -> SIMD4<Float> {
+    try SIMD4(
+        capabilityFloat(value.x, field: field),
+        capabilityFloat(value.y, field: field),
+        capabilityFloat(value.z, field: field),
+        capabilityFloat(value.w, field: field)
     )
 }
 
@@ -571,6 +580,22 @@ public enum BuiltInTypedCapabilityCatalog {
                 try AnyCapabilityRegistration(SetLightRangeCapability.self),
                 try AnyCapabilityRegistration(SetLightSpotAnglesCapability.self),
                 try AnyCapabilityRegistration(SetLightCastShadowsCapability.self),
+                try AnyCapabilityRegistration(SetCameraPoseCapability.self),
+                try AnyCapabilityRegistration(SetCameraFOVCapability.self),
+                try AnyCapabilityRegistration(SetCameraAspectRatioCapability.self),
+                try AnyCapabilityRegistration(SetCameraActiveCapability.self),
+                try AnyCapabilityRegistration(SetMaterialCapability.self),
+                try AnyCapabilityRegistration(SetRigidBodyMotionTypeCapability.self),
+                try AnyCapabilityRegistration(SetRigidBodyMassCapability.self),
+                try AnyCapabilityRegistration(SetRigidBodyGravityScaleCapability.self),
+                try AnyCapabilityRegistration(SetRigidBodyAllowSleepCapability.self),
+                try AnyCapabilityRegistration(SetColliderShapeCapability.self),
+                try AnyCapabilityRegistration(SetColliderBoxExtentsCapability.self),
+                try AnyCapabilityRegistration(SetColliderSphereRadiusCapability.self),
+                try AnyCapabilityRegistration(SetColliderCapsuleCapability.self),
+                try AnyCapabilityRegistration(SetColliderMaterialCapability.self),
+                try AnyCapabilityRegistration(SetColliderTriggerCapability.self),
+                try AnyCapabilityRegistration(SetColliderLayerCapability.self),
             ]
         } catch {
             preconditionFailure("invalid built-in capability declaration: \(error)")
