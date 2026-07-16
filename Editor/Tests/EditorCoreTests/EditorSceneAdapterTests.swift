@@ -599,6 +599,82 @@ struct EditorSceneAdapterTests {
         ).isEmpty)
     }
 
+    @Test("physics debug overlay draws compound shapes, bounds, joint axes and limits")
+    func physicsDebugOverlay() {
+        let adapter = EditorSceneAdapter()
+        adapter.scene = SceneRuntime()
+        let bodyA = adapter.scene.createEntity()
+        let bodyB = adapter.scene.createEntity()
+        let jointEntity = adapter.scene.createEntity()
+        _ = adapter.scene.setLocalTransform(
+            LocalTransform(translation: SIMD3<Float>(1, 0, 0)),
+            for: bodyA
+        )
+        _ = adapter.scene.setLocalTransform(
+            LocalTransform(translation: SIMD3<Float>(4, 0, 0)),
+            for: bodyB
+        )
+        _ = adapter.scene.setComponent(Collider(shapes: [
+            ColliderShapeInstance(
+                shape: .box(halfExtents: SIMD3<Float>(0.5, 0.5, 0.5), center: .zero),
+                localPosition: SIMD3<Float>(2, 0, 0)
+            ),
+            ColliderShapeInstance(
+                shape: .sphere(radius: 0.25, center: .zero),
+                localPosition: SIMD3<Float>(-1, 0, 0)
+            ),
+        ]), for: bodyA)
+        _ = adapter.scene.setComponent(RigidBody(motionType: .static), for: bodyA)
+        _ = adapter.scene.setComponent(
+            Collider(shape: .box(halfExtents: SIMD3<Float>(repeating: 0.5), center: .zero)),
+            for: bodyB
+        )
+        _ = adapter.scene.setComponent(RigidBody(motionType: .static), for: bodyB)
+        _ = adapter.scene.setComponent(PhysicsJoint(
+            configuration: .hinge(HingeJointConfiguration(
+                axisA: SIMD3<Float>(0, 1, 0),
+                axisB: SIMD3<Float>(0, 1, 0),
+                minimumAngle: -0.5,
+                maximumAngle: 0.75
+            )),
+            entityA: bodyA,
+            entityB: bodyB,
+            pivotA: SIMD3<Float>(0.5, 0, 0),
+            pivotB: SIMD3<Float>(-0.5, 0, 0)
+        ), for: jointEntity)
+
+        _ = adapter.scene.tick(deltaTime: 0)
+        let overlay = adapter.viewportPhysicsDebugOverlay(entityID: bodyA.rawValue)
+        let colliderLines = overlay.lines.filter { $0.kind == .collider }
+        #expect(overlay.lines.filter { $0.kind == .bounds }.count == 12)
+        #expect(colliderLines.count > 12)
+        #expect(colliderLines.contains { max($0.positionA.x, $0.positionB.x) >= 3.5 })
+        #expect(overlay.lines.contains { $0.kind == .joint })
+        #expect(overlay.lines.filter { $0.kind == .jointAxis }.count == 2)
+        #expect(overlay.lines.contains { $0.kind == .jointLimit })
+        #expect(overlay.contacts.isEmpty)
+
+        _ = adapter.scene.updateComponent(PhysicsJoint.self, for: jointEntity) { joint in
+            joint.configuration = .sixDOF(SixDOFJointConfiguration(
+                linearMinimum: SIMD3<Float>(-1, -2, -3),
+                linearMaximum: SIMD3<Float>(1, 2, 3),
+                angularMinimum: SIMD3<Float>(repeating: -0.25),
+                angularMaximum: SIMD3<Float>(repeating: 0.5)
+            ))
+        }
+        _ = adapter.scene.tick(deltaTime: 0)
+        let sixDOFOverlay = adapter.viewportPhysicsDebugOverlay(entityID: bodyA.rawValue)
+        #expect(sixDOFOverlay.lines.filter { $0.kind == .jointLimit }.count >= 84)
+
+        let bounded = adapter.viewportPhysicsDebugOverlay(
+            entityID: bodyA.rawValue,
+            maxLines: 10,
+            maxContacts: 0
+        )
+        #expect(bounded.lines.count == 10)
+        #expect(bounded.contacts.isEmpty)
+    }
+
     @Test("Scene manifest remaps ragdoll bodies and exposes its inspector")
     func sceneManifestRoundTripsRagdoll() throws {
         let source = EditorSceneAdapter()

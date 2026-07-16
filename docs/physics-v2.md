@@ -25,6 +25,12 @@ Guava Physics v2 使用 Jolt 作为唯一生产物理后端。当前已完成复
 
 因此，在 `onPrePhysics` 提交的油门、转向、跳跃、力和冲量会被当前物理帧消费。
 
+## Editor 物理创作与调试
+
+Collider Inspector 同时提供首个形状的快捷参数和完整 Compound 子形状 JSON；每个 `ColliderShapeInstance` 可独立设置形状、局部位置、四元数旋转和缩放，修改后直接写回 `Collider.shapes`。Capsule、Cylinder 与 HeightField 使用各自独立字段，HeightField 不再错误显示 Capsule 的半高。
+
+`PhysicsJoint` Inspector 按 Point、Fixed、Distance、Hinge、Slider、Cone/SwingTwist 与 SixDOF 类型显示配置，分别编辑锚点、轴、线性/角度限位、电机、弹簧、阻尼和断裂阈值。Viewport 直接消费统一 `PhysicsDebugFrameResource`，为当前选择绘制 Compound 子形状、AABB、接触点与法线、休眠/Trigger 状态、关节锚点/轴/限位，以及角色地面法线；结果按运行时稳定顺序输出并设置显示容量上限。
+
 ## 载具
 
 `Vehicle` 必须与同一实体上的动态 `RigidBody` 和 `Collider` 配合使用。默认构造器生成四轮布局：前轮转向，后轮驱动并支持手刹。

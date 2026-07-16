@@ -501,6 +501,7 @@ struct ViewportPanel: View {
             drawSelectionHighlight(list: list, frame: frame, selectedIDs: selectedIDs)
         }
         if let selectedID {
+            drawPhysicsDebugOverlay(list: list, frame: frame, entityID: selectedID)
             drawSoftBodyConstraintOverlay(list: list, frame: frame, entityID: selectedID)
             drawDestructionConnectionOverlay(list: list, frame: frame, entityID: selectedID)
         }
@@ -812,6 +813,68 @@ struct ViewportPanel: View {
             let anchor = (line.positionA + line.positionB) * 0.5
             guard let point = projectToViewport(anchor, frame: frame) else { continue }
             let radius: Float = line.isBroken ? 3.5 : 2.5
+            list.addRect(
+                UIRect(
+                    x: point.x - radius,
+                    y: point.y - radius,
+                    width: radius * 2,
+                    height: radius * 2
+                ),
+                color: color
+            )
+        }
+    }
+
+    private func drawPhysicsDebugOverlay(
+        list: DrawList,
+        frame: ViewportScreenFrame,
+        entityID: UInt64
+    ) {
+        let overlay = scene.viewportPhysicsDebugOverlay(entityID: entityID)
+        for line in overlay.lines {
+            let color: Color = switch line.kind {
+            case .collider:
+                overlay.selectedBodyIsTrigger
+                    ? Color(r: 0.82, g: 0.34, b: 1.0, a: 0.92)
+                    : Color(r: 0.20, g: 0.88, b: 1.0, a: 0.90)
+            case .bounds:
+                overlay.selectedBodyIsSleeping
+                    ? Color(r: 0.38, g: 0.48, b: 0.66, a: 0.68)
+                    : Color(r: 0.24, g: 0.62, b: 1.0, a: 0.72)
+            case .joint: Color(r: 1.0, g: 0.84, b: 0.22, a: 0.96)
+            case .jointAxis: Color(r: 0.96, g: 0.30, b: 0.92, a: 0.94)
+            case .jointLimit: Color(r: 1.0, g: 0.48, b: 0.16, a: 0.94)
+            case .characterGround:
+                overlay.characterGroundState == .onGround
+                    ? Color(r: 0.22, g: 1.0, b: 0.42, a: 0.96)
+                    : Color(r: 1.0, g: 0.34, b: 0.18, a: 0.96)
+            }
+            drawWorldLine(
+                list: list,
+                frame: frame,
+                a: line.positionA,
+                b: line.positionB,
+                color: color,
+                thickness: line.kind == .bounds ? 1 : 2
+            )
+        }
+
+        for contact in overlay.contacts {
+            let color: Color = switch contact.kind {
+            case .began: Color(r: 1.0, g: 0.20, b: 0.12, a: 0.98)
+            case .stayed: Color(r: 1.0, g: 0.72, b: 0.12, a: 0.92)
+            case .ended: Color(r: 0.62, g: 0.66, b: 0.72, a: 0.72)
+            }
+            drawWorldLine(
+                list: list,
+                frame: frame,
+                a: contact.position,
+                b: contact.normalEnd,
+                color: color,
+                thickness: contact.impulse > 0 ? 2.5 : 1.5
+            )
+            guard let point = projectToViewport(contact.position, frame: frame) else { continue }
+            let radius: Float = contact.penetrationDepth > 0 ? 3.5 : 2.5
             list.addRect(
                 UIRect(
                     x: point.x - radius,
