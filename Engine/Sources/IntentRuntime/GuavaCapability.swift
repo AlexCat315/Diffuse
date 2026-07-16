@@ -1,6 +1,7 @@
 import CapabilityRuntime
 import Foundation
 import SceneRuntime
+import ScriptRuntime
 
 /// Input types opt into one strict schema. Provider tools, host validation, and
 /// decoding all consume this same declaration.
@@ -74,19 +75,28 @@ public struct CapabilityPreparationEntity: Sendable, Equatable {
     public var renderMaterial: CapabilityPreparationMaterial?
     public var rigidBody: RigidBody?
     public var collider: Collider?
+    public var audioSource: AudioSource?
+    public var animationPlayer: AnimationPlayer?
+    public var scriptBindings: [ScriptBinding]
 
     public init(reference: String,
                 componentTypes: [String] = [],
                 localTransform: CapabilityPreparationTransform? = nil,
                 renderMaterial: CapabilityPreparationMaterial? = nil,
                 rigidBody: RigidBody? = nil,
-                collider: Collider? = nil) {
+                collider: Collider? = nil,
+                audioSource: AudioSource? = nil,
+                animationPlayer: AnimationPlayer? = nil,
+                scriptBindings: [ScriptBinding] = []) {
         self.reference = reference
         self.componentTypes = componentTypes.sorted()
         self.localTransform = localTransform
         self.renderMaterial = renderMaterial
         self.rigidBody = rigidBody
         self.collider = collider
+        self.audioSource = audioSource
+        self.animationPlayer = animationPlayer
+        self.scriptBindings = scriptBindings
     }
 }
 
@@ -167,6 +177,7 @@ public enum CapabilityRegistrationError: Error, Sendable, Equatable, CustomStrin
     case writeSchemaContainsUnsupportedType(String)
     case invalidInput(capabilityID: String, reason: String)
     case writePreparationHasNoOperations(String)
+    case writePreparationHasNoPreview(String)
     case writePreparationHasNoAssertions(String)
 
     public var description: String {
@@ -176,6 +187,7 @@ public enum CapabilityRegistrationError: Error, Sendable, Equatable, CustomStrin
             return "write capability '\(id)' contains an open or unsupported schema type"
         case let .invalidInput(id, reason): return "invalid input for '\(id)': \(reason)"
         case let .writePreparationHasNoOperations(id): return "write capability '\(id)' prepared no operations"
+        case let .writePreparationHasNoPreview(id): return "write capability '\(id)' prepared no preview"
         case let .writePreparationHasNoAssertions(id): return "write capability '\(id)' prepared no verification assertions"
         }
     }
@@ -203,6 +215,10 @@ public struct AnyCapabilityRegistration: Sendable {
                 let prepared = try C.prepare(input: input, context: context)
                 if contract.access.isWrite && prepared.operations.isEmpty {
                     throw CapabilityRegistrationError.writePreparationHasNoOperations(contract.id)
+                }
+                if contract.access.isWrite
+                    && prepared.preview.summary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    throw CapabilityRegistrationError.writePreparationHasNoPreview(contract.id)
                 }
                 if contract.access.isWrite && prepared.assertions.isEmpty {
                     throw CapabilityRegistrationError.writePreparationHasNoAssertions(contract.id)
