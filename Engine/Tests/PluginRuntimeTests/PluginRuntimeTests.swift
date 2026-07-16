@@ -58,8 +58,16 @@ struct PluginRuntimeTests {
         """
         let contract = try WITContractParser.parse(Data(wit.utf8), grantedImports: [])
         #expect(contract.worldName == "plugin")
-        #expect(contract.exports.map(\.name) == ["capabilities"])
+        #expect(contract.exports.map(\.name) == ["example:safe/capabilities"])
+        #expect(contract.capabilitiesInterfaceName == "example:safe/capabilities")
         #expect(contract.capabilityInputs.map(\.name) == ["inspect"])
+        let versioned = try WITContractParser.parse(
+            Data(wit.replacingOccurrences(of: "example:safe",
+                                          with: "example:safe@1.2.3").utf8),
+            grantedImports: []
+        )
+        #expect(versioned.capabilitiesInterfaceName ==
+            "example:safe/capabilities@1.2.3")
 
         let loose = """
         package example:unsafe;
@@ -128,6 +136,38 @@ struct PluginRuntimeTests {
                                                    with: "query: u64")
         #expect(throws: WITContractError.unsupportedType("u64")) {
             try WITContractParser.parse(Data(unsupported.utf8), grantedImports: [])
+        }
+    }
+
+    @Test("typed input encoding is deterministic and rejects shape drift")
+    func typedInputEncodingIsStrict() throws {
+        let type = WITValueType.record([
+            WITRecordField(name: "enabled", type: .bool),
+            WITRecordField(name: "count", type: .u16),
+            WITRecordField(name: "label", type: .option(.string)),
+            WITRecordField(name: "mode", type: .enumeration(["fast", "safe"])),
+        ])
+        let encoded = try PluginTypedInputEncoder.encode(
+            Data(#"{"count":513,"enabled":true,"label":"ok","mode":"safe"}"#.utf8),
+            as: type
+        )
+        #expect(Array(encoded.prefix(8)) == [0x47, 0x54, 0x56, 0x31,
+                                             0x01, 0x01, 0x02, 0x01])
+        #expect(Array(encoded.suffix(4)) == [0x01, 0x00, 0x00, 0x00])
+
+        #expect(throws: PluginTypedInputError.missingField(path: "$.count")) {
+            try PluginTypedInputEncoder.encode(
+                Data(#"{"enabled":true,"mode":"fast"}"#.utf8),
+                as: type
+            )
+        }
+        #expect(throws: PluginTypedInputError.typeMismatch(
+            path: "$", expected: "a strict WIT record"
+        )) {
+            try PluginTypedInputEncoder.encode(
+                Data(#"{"count":1,"enabled":true,"forged":1,"mode":"fast"}"#.utf8),
+                as: type
+            )
         }
     }
 
@@ -266,6 +306,44 @@ struct PluginRuntimeTests {
         }
     }
 
+    @Test("plugin writes require non-empty strict AI-exposed host primitives")
+    func compositionRequiresSafeWritePrimitive() throws {
+        let primitive = CapabilityDescriptor(
+            verb: "scene.safe_rename",
+            domain: "scene",
+            version: 1,
+            access: .reversibleWrite,
+            inputSchema: .object(properties: ["name": .string()], required: ["name"]),
+            source: .builtin,
+            isAIExposed: true
+        )
+        let registry = CapabilityRegistry(capabilities: [primitive])
+        let manifest = GuavaPluginManifest(
+            id: "safe.layout",
+            version: 1,
+            name: "Layout",
+            description: "Safe composition",
+            access: .reversibleWrite,
+            composableHostCapabilities: [primitive.verb]
+        )
+        #expect(throws: PluginCompositionError.emptyWriteComposition) {
+            try PluginCompositionValidator.validate([], manifest: manifest, registry: registry)
+        }
+        let call = HostCapabilityCall(capabilityID: primitive.verb,
+                                      version: primitive.version,
+                                      arguments: Data(#"{"name":"Safe"}"#.utf8))
+        #expect(try PluginCompositionValidator.validate([call],
+                                                        manifest: manifest,
+                                                        registry: registry) == [call])
+
+        var unsafe = primitive
+        unsafe.isAIExposed = false
+        let unsafeRegistry = CapabilityRegistry(capabilities: [unsafe])
+        #expect(throws: PluginManifestValidationError.unsafeHostPrimitive(primitive.verb)) {
+            try PluginManifestValidator.validate(manifest, registry: unsafeRegistry)
+        }
+    }
+
     @Test("package loader requires a component binary and fixed files")
     func packageLoaderValidatesComponentModelHeader() throws {
         let root = FileManager.default.temporaryDirectory
@@ -324,7 +402,15 @@ struct PluginRuntimeTests {
         )
 
         #expect(runtime.runtimeVersion == "45.0.0")
-        #expect(String(decoding: prepared, as: UTF8.self) == "[]")
+        #expect(String(decoding: prepared, as: UTF8.self) == "true")
+        let disabled = try runtime.prepare(
+            package,
+            capabilityID: "safe.reader.inspect",
+            input: Data(#"{"enabled":false}"#.utf8),
+            querySnapshot: nil,
+            limits: .secureDefault
+        )
+        #expect(String(decoding: disabled, as: UTF8.self) == "false")
     }
 
     @Test("isolated GuavaPluginHost loads and invokes a real Component over RPC")
@@ -402,7 +488,20 @@ struct PluginRuntimeTests {
             authorization: authorization
         ))
         #expect(prepared.ok)
-        #expect(prepared.payload == Data("[]".utf8))
+        #expect(prepared.payload == Data("true".utf8))
+
+        let inspectedAgain = try client.inspectPlugin(at: package.rootURL)
+        #expect(inspectedAgain == inspection)
+        let typedBinding = try client.loadPlugin(at: package.rootURL,
+                                                 authorization: authorization)
+        #expect(typedBinding.authority.hostGeneration == client.generation)
+        let typedPrepared = try client.prepareCapability(
+            binding: typedBinding,
+            capabilityID: "safe.reader.inspect",
+            input: Data(#"{"enabled":true}"#.utf8),
+            querySnapshot: nil
+        )
+        #expect(typedPrepared == .read(Data("true".utf8)))
 
         let unloaded = try client.call(PluginHostRequest(method: .unload,
                                                          pluginPath: path))
@@ -541,6 +640,21 @@ struct PluginRuntimeTests {
         let package = try makePluginPackage(
             componentWAT: Self.constantResultComponentWAT,
             imports: [.sceneQuery]
+        )
+        defer { try? FileManager.default.removeItem(at: package.rootURL) }
+        let runtime = try EmbeddedWasmtimeComponentRuntime()
+
+        #expect(throws: EmbeddedWasmtimeError.self) {
+            try runtime.validateComponent(package, limits: .secureDefault)
+        }
+    }
+
+    @Test("Component typed inputs must exactly match capabilities.wit")
+    func embeddedRuntimeRejectsTypedInputDrift() throws {
+        let package = try makePluginPackage(
+            componentWAT: Self.constantResultComponentWAT,
+            imports: [],
+            inputFields: "enabled: u32,"
         )
         defer { try? FileManager.default.removeItem(at: package.rootURL) }
         let runtime = try EmbeddedWasmtimeComponentRuntime()
@@ -695,7 +809,8 @@ struct PluginRuntimeTests {
       (core module $guest
         (memory (export "memory") 1)
         (global $next (mut i32) (i32.const 4096))
-        (data (i32.const 128) "[]")
+        (data (i32.const 128) "true")
+        (data (i32.const 144) "false")
         (func $realloc (export "realloc")
           (param $old i32) (param $old-size i32)
           (param $align i32) (param $new-size i32) (result i32)
@@ -713,12 +828,22 @@ struct PluginRuntimeTests {
             global.set $next
             local.get $result
           end)
-        (func (export "inspect") (param i32) (result i32)
+        (func (export "inspect") (param $enabled i32) (result i32)
           i32.const 0
-          i32.const 128
+          local.get $enabled
+          if (result i32)
+            i32.const 128
+          else
+            i32.const 144
+          end
           i32.store
           i32.const 4
-          i32.const 2
+          local.get $enabled
+          if (result i32)
+            i32.const 4
+          else
+            i32.const 5
+          end
           i32.store
           i32.const 0))
       (core instance $guest (instantiate $guest))
@@ -730,19 +855,23 @@ struct PluginRuntimeTests {
           (memory $guest "memory")
           (realloc (func $guest "realloc"))))
       (component $capabilities-component
-        (type $import-input (record (field "enabled" bool)))
+        (type $local-input (record (field "enabled" bool)))
+        (import "import-type-inspect-input"
+          (type $import-input (eq $local-input)))
         (type $import-func (func
           (param "input" $import-input) (result string)))
         (import "import-func-inspect" (func $implementation
           (type $import-func)))
         (type $export-input (record (field "enabled" bool)))
+        (export $public-input "inspect-input" (type $export-input))
         (type $export-func (func
-          (param "input" $export-input) (result string)))
+          (param "input" $public-input) (result string)))
         (export "inspect" (func $implementation)
           (func (type $export-func))))
       (instance $capabilities
         (instantiate $capabilities-component
-          (with "import-func-inspect" (func $inspect))))
+          (with "import-func-inspect" (func $inspect))
+          (with "import-type-inspect-input" (type $inspect-input))))
       (export (interface "safe:reader/capabilities")
         (instance $capabilities))
     )
@@ -751,9 +880,6 @@ struct PluginRuntimeTests {
     private static let sceneQueryComponentWAT = #"""
     (component
       (type $inspect-input (record (field "enabled" bool)))
-      (type $capabilities-type (instance
-        (export "inspect" (func
-          (param "input" $inspect-input) (result string)))))
       (type $query-interface (instance
         (export "query" (func (param "request" string) (result string)))
       ))
@@ -804,23 +930,38 @@ struct PluginRuntimeTests {
         (with "libc" (instance $libc))
         (with "host" (instance (export "query" (func $query-lower))))
       ))
-      (func $inspect (param "input" $inspect-input) (result string)
+      (type $inspect-func (func
+        (param "input" $inspect-input) (result string)))
+      (func $inspect (type $inspect-func)
         (canon lift (core func $guest "inspect")
           (memory $libc "memory")
           (realloc (func $libc "realloc"))))
+      (component $capabilities-component
+        (type $local-input (record (field "enabled" bool)))
+        (import "import-type-inspect-input"
+          (type $import-input (eq $local-input)))
+        (type $import-func (func
+          (param "input" $import-input) (result string)))
+        (import "import-func-inspect" (func $implementation
+          (type $import-func)))
+        (type $export-input (record (field "enabled" bool)))
+        (export $public-input "inspect-input" (type $export-input))
+        (type $export-func (func
+          (param "input" $public-input) (result string)))
+        (export "inspect" (func $implementation)
+          (func (type $export-func))))
       (instance $capabilities
-        (export "inspect" (func $inspect)))
-      (export "capabilities" (instance $capabilities)
-        (instance (type $capabilities-type)))
+        (instantiate $capabilities-component
+          (with "import-func-inspect" (func $inspect))
+          (with "import-type-inspect-input" (type $inspect-input))))
+      (export (interface "safe:reader/capabilities")
+        (instance $capabilities))
     )
     """#
 
     private static let infinitePrepareComponentWAT = #"""
     (component
       (type $loop-input (record (field "enabled" bool)))
-      (type $capabilities-type (instance
-        (export "loop" (func
-          (param "input" $loop-input) (result string)))))
       (core module $guest
         (memory (export "memory") 1)
         (global $next (mut i32) (i32.const 4096))
@@ -833,14 +974,32 @@ struct PluginRuntimeTests {
           unreachable)
       )
       (core instance $guest (instantiate $guest))
-      (func $loop (param "input" $loop-input) (result string)
+      (type $loop-func (func
+        (param "input" $loop-input) (result string)))
+      (func $loop (type $loop-func)
         (canon lift (core func $guest "loop")
           (memory $guest "memory")
           (realloc (func $guest "realloc"))))
+      (component $capabilities-component
+        (type $local-input (record (field "enabled" bool)))
+        (import "import-type-loop-input"
+          (type $import-input (eq $local-input)))
+        (type $import-func (func
+          (param "input" $import-input) (result string)))
+        (import "import-func-loop" (func $implementation
+          (type $import-func)))
+        (type $export-input (record (field "enabled" bool)))
+        (export $public-input "loop-input" (type $export-input))
+        (type $export-func (func
+          (param "input" $public-input) (result string)))
+        (export "loop" (func $implementation)
+          (func (type $export-func))))
       (instance $capabilities
-        (export "loop" (func $loop)))
-      (export "capabilities" (instance $capabilities)
-        (instance (type $capabilities-type)))
+        (instantiate $capabilities-component
+          (with "import-func-loop" (func $loop))
+          (with "import-type-loop-input" (type $loop-input))))
+      (export (interface "safe:reader/capabilities")
+        (instance $capabilities))
     )
     """#
 #endif

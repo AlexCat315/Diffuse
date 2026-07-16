@@ -11,6 +11,7 @@ public enum PluginHostClientError: Error, Sendable, Equatable, CustomStringConve
     case timedOut
     case hostRestarted(generation: UInt64)
     case mismatchedResponse
+    case requestRejected(String)
 
     public var description: String {
         switch self {
@@ -19,6 +20,7 @@ public enum PluginHostClientError: Error, Sendable, Equatable, CustomStringConve
         case .timedOut: return "GuavaPluginHost did not respond before the request deadline"
         case let .hostRestarted(generation): return "GuavaPluginHost restarted; invalidate plugin plans at generation \(generation)"
         case .mismatchedResponse: return "GuavaPluginHost returned a mismatched response id"
+        case let .requestRejected(reason): return "GuavaPluginHost rejected the request: \(reason)"
         }
     }
 }
@@ -28,7 +30,7 @@ public enum PluginHostClientError: Error, Sendable, Equatable, CustomStringConve
 /// plugin draft can be invalidated by the caller.
 public final class PluginHostProcessClient: @unchecked Sendable {
     public let executableURL: URL
-    public private(set) var generation: UInt64 = 0
+    public var generation: UInt64 { lock.withLock { _generation } }
     public var onInvalidation: (@Sendable (UInt64) -> Void)?
 
     private let lock = NSLock()
@@ -36,6 +38,7 @@ public final class PluginHostProcessClient: @unchecked Sendable {
     private var input: FileHandle?
     private var output: FileHandle?
     private var didRestart = false
+    private var _generation: UInt64 = 0
 
     public init(executableURL: URL,
                 onInvalidation: (@Sendable (UInt64) -> Void)? = nil) {
@@ -47,34 +50,44 @@ public final class PluginHostProcessClient: @unchecked Sendable {
 
     public func call(_ request: PluginHostRequest,
                      timeoutMilliseconds: UInt64 = 7_000) throws -> PluginHostResponse {
-        try lock.withLock {
-            do {
-                if process?.isRunning != true { try launch() }
-                guard let input, let output else { throw PluginHostClientError.communicationFailed }
-                let deadline = makeDeadline(timeoutMilliseconds: timeoutMilliseconds)
-                try writeExactly(PluginHostFrameCodec.encode(request),
-                                 to: input,
-                                 deadline: deadline)
-                let header = try readExactly(4, from: output, deadline: deadline)
-                let length = header.reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
-                guard length <= PluginHostFrameCodec.maximumFrameBytes else {
-                    throw PluginHostClientError.communicationFailed
+        var invalidation: ((@Sendable (UInt64) -> Void), UInt64)?
+        do {
+            return try lock.withLock {
+                do {
+                    if process?.isRunning != true { try launch() }
+                    guard let input, let output else { throw PluginHostClientError.communicationFailed }
+                    let deadline = makeDeadline(timeoutMilliseconds: timeoutMilliseconds)
+                    try writeExactly(PluginHostFrameCodec.encode(request),
+                                     to: input,
+                                     deadline: deadline)
+                    let header = try readExactly(4, from: output, deadline: deadline)
+                    let length = header.reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
+                    guard length <= PluginHostFrameCodec.maximumFrameBytes else {
+                        throw PluginHostClientError.communicationFailed
+                    }
+                    let payload = try readExactly(Int(length), from: output, deadline: deadline)
+                    var frame = header
+                    frame.append(payload)
+                    let response = try PluginHostFrameCodec.decode(PluginHostResponse.self, from: frame)
+                    guard response.id == request.id else { throw PluginHostClientError.mismatchedResponse }
+                    return response
+                } catch {
+                    guard !didRestart else { throw error }
+                    stopLocked()
+                    didRestart = true
+                    _generation &+= 1
+                    try? launch()
+                    if let onInvalidation {
+                        invalidation = (onInvalidation, _generation)
+                    }
+                    throw PluginHostClientError.hostRestarted(generation: _generation)
                 }
-                let payload = try readExactly(Int(length), from: output, deadline: deadline)
-                var frame = header
-                frame.append(payload)
-                let response = try PluginHostFrameCodec.decode(PluginHostResponse.self, from: frame)
-                guard response.id == request.id else { throw PluginHostClientError.mismatchedResponse }
-                return response
-            } catch {
-                guard !didRestart else { throw error }
-                stopLocked()
-                didRestart = true
-                generation &+= 1
-                try? launch()
-                onInvalidation?(generation)
-                throw PluginHostClientError.hostRestarted(generation: generation)
             }
+        } catch {
+            if let (callback, generation) = invalidation {
+                callback(generation)
+            }
+            throw error
         }
     }
 
@@ -194,6 +207,69 @@ public final class PluginHostProcessClient: @unchecked Sendable {
                 throw PluginHostClientError.communicationFailed
             }
         }
+    }
+}
+
+extension PluginHostProcessClient: PluginCapabilityInvoking {
+    public func inspectPlugin(at pluginURL: URL) throws -> PluginInspection {
+        let response = try call(PluginHostRequest(method: .validatePackage,
+                                                  pluginPath: pluginURL.path))
+        let payload = try acceptedPayload(response)
+        return try JSONDecoder().decode(PluginInspection.self, from: payload)
+    }
+
+    /// Loads only an already-authorised inspection and returns a binding to the
+    /// exact host generation that accepted it.
+    public func loadPlugin(at pluginURL: URL,
+                           authorization: PluginAuthorizationRecord) throws
+        -> PluginExecutionBinding {
+        let response = try call(PluginHostRequest(method: .load,
+                                                  pluginPath: pluginURL.path,
+                                                  authorization: authorization))
+        let payload = try acceptedPayload(response)
+        let inspection = try JSONDecoder().decode(PluginInspection.self, from: payload)
+        return try PluginExecutionBinding(pluginPath: pluginURL.path,
+                                          inspection: inspection,
+                                          authorization: authorization,
+                                          hostGeneration: generation)
+    }
+
+    public func unloadPlugin(at pluginURL: URL) throws {
+        let response = try call(PluginHostRequest(method: .unload,
+                                                  pluginPath: pluginURL.path))
+        _ = try acceptedPayload(response)
+    }
+
+    public func prepareCapability(
+        binding: PluginExecutionBinding,
+        capabilityID: String,
+        input: Data,
+        querySnapshot: PluginQuerySnapshot?
+    ) throws -> PluginPreparedCapabilityResult {
+        try binding.validate(hostGeneration: generation)
+        let response = try call(PluginHostRequest(method: .prepare,
+                                                  pluginPath: binding.pluginPath,
+                                                  capabilityID: capabilityID,
+                                                  input: input,
+                                                  querySnapshot: querySnapshot,
+                                                  authorization: binding.authorization))
+        let payload = try acceptedPayload(response)
+        try binding.validate(hostGeneration: generation)
+        if binding.inspection.manifest.access == .read {
+            return .read(payload)
+        }
+        return .hostCalls(try JSONDecoder().decode([HostCapabilityCall].self,
+                                                   from: payload))
+    }
+
+    private func acceptedPayload(_ response: PluginHostResponse) throws -> Data {
+        guard response.ok else {
+            throw PluginHostClientError.requestRejected(response.error ?? "unknown error")
+        }
+        guard let payload = response.payload else {
+            throw PluginHostClientError.communicationFailed
+        }
+        return payload
     }
 }
 

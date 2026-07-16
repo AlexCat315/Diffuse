@@ -83,6 +83,7 @@ public enum PluginManifestValidationError: Error, Sendable, Equatable, CustomStr
     case unknownHostCapability(String)
     case pluginCapabilityCannotBeComposed(String)
     case accessUnderstatement(capabilityID: String)
+    case unsafeHostPrimitive(String)
 
     public var description: String {
         switch self {
@@ -94,6 +95,8 @@ public enum PluginManifestValidationError: Error, Sendable, Equatable, CustomStr
         case let .unknownHostCapability(id): return "unknown composed host capability '\(id)'"
         case let .pluginCapabilityCannotBeComposed(id): return "plugin capability '\(id)' cannot be used as a host primitive"
         case let .accessUnderstatement(id): return "plugin access understates composed capability '\(id)'"
+        case let .unsafeHostPrimitive(id):
+            return "host capability '\(id)' is not an AI-exposed strict write primitive"
         }
     }
 }
@@ -154,6 +157,11 @@ public enum PluginManifestValidator {
             }
             if riskRank(descriptor.access) > riskRank(manifest.access) {
                 throw PluginManifestValidationError.accessUnderstatement(capabilityID: capabilityID)
+            }
+            guard descriptor.isAIExposed,
+                  descriptor.access.isWrite,
+                  descriptor.inputSchema.isStrictCapabilityInput else {
+                throw PluginManifestValidationError.unsafeHostPrimitive(capabilityID)
             }
         }
     }

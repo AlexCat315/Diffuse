@@ -5,6 +5,7 @@ import Foundation
 import FoundationNetworking
 #endif
 import IntentRuntime
+import PluginRuntime
 import SceneRuntime
 import SIMDCompat
 import Testing
@@ -735,6 +736,302 @@ struct CapabilityExposureTests {
             TransactionVerificationAssertion.entityExists(entity.rawValue)
         ))
     }
+
+    @Test("plugin writes expand into host primitives with exact authority records")
+    func pluginWriteUsesUnifiedDraftAndTransactionPipeline() async throws {
+        let setup = try makePluginBinding(
+            pluginID: "safe.layout",
+            capabilityName: "rename-selected",
+            access: .reversibleWrite,
+            composableHostCapabilities: ["scene.set_name"],
+            hostGeneration: 7
+        )
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let revision = scene.snapshot.revision
+        let hostArguments = Data(
+            #"{"entity_id":"scene:\#(entity.rawValue)","name":"Plugin Rename"}"#.utf8
+        )
+        let invoker = StubPluginInvoker(
+            generation: 7,
+            result: .hostCalls([
+                HostCapabilityCall(capabilityID: "scene.set_name",
+                                   version: 1,
+                                   arguments: hostArguments),
+            ])
+        )
+        let executor = try PluginCapabilityExecutor(bindings: [setup.binding],
+                                                    invoker: invoker)
+        let sessions = CapabilityExposureSessionStore(
+            registry: executor.registry,
+            exposurePolicy: executor.exposurePolicy,
+            pluginAuthorities: executor.pluginAuthorities
+        )
+        let sessionID = UUID().uuidString
+        let activation = try await sessions.search(sessionID: sessionID,
+                                                   query: "rename",
+                                                   domain: "plugin",
+                                                   sceneRevision: revision)
+        let contract = try #require(activation.contracts.first {
+            $0.id == setup.contract.id
+        })
+        let draft = try await sessions.createDraft(
+            sessionID: sessionID,
+            toolName: contract.toolName,
+            input: Data(#"{"entity_id":"scene:\#(entity.rawValue)"}"#.utf8),
+            sceneRevision: revision
+        )
+        #expect(draft.pluginAuthority == setup.binding.authority)
+        let validated = try await sessions.validatedDrafts(sessionID: sessionID,
+                                                           ids: [draft.id],
+                                                           sceneRevision: revision)
+
+        let transaction = try executor.buildTransaction(
+            summary: "Plugin rename",
+            drafts: validated.drafts,
+            snapshot: validated.snapshot,
+            scene: scene,
+            currentSceneRevision: revision
+        )
+        #expect(transaction.operations == [
+            .scene(.setSceneName(entityID: entity.rawValue, value: "Plugin Rename")),
+        ])
+        #expect(transaction.capabilityInvocations.map(\.capabilityID) == [
+            setup.contract.id, "scene.set_name",
+        ])
+        #expect(transaction.capabilityInvocations[0].sourcePluginID == "safe.layout")
+        #expect(transaction.capabilityInvocations[0].pluginAuthority == setup.binding.authority)
+        #expect(transaction.capabilityInvocations[1].sourcePluginID == nil)
+        #expect(transaction.verificationAssertions.contains(.entityExists(entity.rawValue)))
+
+        let planner = executor.makeInvocationPlanner()
+        let planned = try planner.plan(transaction: transaction,
+                                       context: CapabilityInvocationContext(sceneRuntime: scene))
+        #expect(planned.approvalPolicy == .requiresApproval)
+
+        invoker.setGeneration(8)
+        #expect(throws: CapabilityInvocationPlannerError.self) {
+            try planner.plan(transaction: transaction,
+                             context: CapabilityInvocationContext(sceneRuntime: scene))
+        }
+        #expect(throws: PluginCapabilityExecutorError.authorityChanged("safe.layout")) {
+            try executor.buildTransaction(summary: "Stale",
+                                          drafts: validated.drafts,
+                                          snapshot: validated.snapshot,
+                                          scene: scene,
+                                          currentSceneRevision: revision)
+        }
+
+        await sessions.replacePluginAuthorities(
+            ["safe.layout": PluginCapabilityAuthority(
+                pluginID: "safe.layout",
+                authorizationDigest: setup.binding.authorization.authorityDigest,
+                hostGeneration: 8
+            )],
+            enabledPluginIDs: ["safe.layout"]
+        )
+        await #expect(throws: CapabilityExposureSessionError.sessionNotFound) {
+            try await sessions.validatedDrafts(sessionID: sessionID,
+                                               ids: [draft.id],
+                                               sceneRevision: revision)
+        }
+    }
+
+    @Test("plugin reads execute immediately and never become Drafts")
+    func pluginReadIsImmediateBoundedContext() throws {
+        let setup = try makePluginBinding(pluginID: "safe.reader",
+                                          capabilityName: "inspect",
+                                          access: .read,
+                                          hostGeneration: 3)
+        let invoker = StubPluginInvoker(
+            generation: 3,
+            result: .read(Data(#"{"finding":"ok"}"#.utf8))
+        )
+        let executor = try PluginCapabilityExecutor(bindings: [setup.binding],
+                                                    invoker: invoker)
+        let revision: UInt64 = 41
+        let snapshot = executor.registry.exposureSnapshot(
+            policy: executor.exposurePolicy,
+            sceneRevision: revision,
+            includedCapabilityIDs: [setup.contract.id],
+            pluginAuthorities: executor.pluginAuthorities
+        )
+        let output = try executor.executeRead(
+            toolName: setup.contract.toolName,
+            input: Data(#"{"entity_id":"scene:1"}"#.utf8),
+            snapshot: snapshot,
+            currentSceneRevision: revision
+        )
+        #expect(output == Data(#"{"finding":"ok"}"#.utf8))
+
+        let invalidInvoker = StubPluginInvoker(generation: 3,
+                                               result: .read(Data("not-json".utf8)))
+        let invalidExecutor = try PluginCapabilityExecutor(bindings: [setup.binding],
+                                                           invoker: invalidInvoker)
+        #expect(throws: PluginCapabilityExecutorError.invalidReadResult(setup.contract.id)) {
+            try invalidExecutor.executeRead(toolName: setup.contract.toolName,
+                                            input: Data(#"{"entity_id":"scene:1"}"#.utf8),
+                                            snapshot: snapshot,
+                                            currentSceneRevision: revision)
+        }
+    }
+
+    @Test("dynamic Registry replacement destroys old sessions before exposing plugins")
+    func dynamicRegistryReplacementInvalidatesDrafts() async throws {
+        let sessions = CapabilityExposureSessionStore()
+        let sessionID = UUID().uuidString
+        let activation = try await sessions.search(sessionID: sessionID,
+                                                   query: "rename",
+                                                   sceneRevision: 12)
+        let rename = try #require(activation.contracts.first { $0.id == "scene.set_name" })
+        let oldDraft = try await sessions.createDraft(
+            sessionID: sessionID,
+            toolName: rename.toolName,
+            input: Data(#"{"entity_id":"scene:1","name":"Old"}"#.utf8),
+            sceneRevision: 12
+        )
+
+        let setup = try makePluginBinding(pluginID: "safe.dynamic",
+                                          capabilityName: "arrange",
+                                          access: .reversibleWrite,
+                                          composableHostCapabilities: ["scene.set_name"],
+                                          hostGeneration: 4)
+        let invoker = StubPluginInvoker(
+            generation: 4,
+            result: .hostCalls([
+                HostCapabilityCall(capabilityID: "scene.set_name",
+                                   version: 1,
+                                   arguments: Data(#"{"entity_id":"scene:1","name":"New"}"#.utf8)),
+            ])
+        )
+        let executor = try PluginCapabilityExecutor(bindings: [setup.binding],
+                                                    invoker: invoker)
+        await sessions.replaceRegistry(executor.registry,
+                                       exposurePolicy: executor.exposurePolicy,
+                                       pluginAuthorities: executor.pluginAuthorities)
+        await #expect(throws: CapabilityExposureSessionError.sessionNotFound) {
+            try await sessions.validatedDrafts(sessionID: sessionID,
+                                               ids: [oldDraft.id],
+                                               sceneRevision: 12)
+        }
+
+        let pluginActivation = try await sessions.search(sessionID: sessionID,
+                                                         query: "arrange",
+                                                         domain: "plugin",
+                                                         sceneRevision: 12)
+        #expect(pluginActivation.contracts.map(\.id) == [setup.contract.id])
+        let snapshot = try await sessions.snapshot(sessionID: sessionID,
+                                                   sceneRevision: 12)
+        #expect(snapshot.authority(forPluginID: "safe.dynamic") == setup.binding.authority)
+    }
+
+    @Test("Session keeps plugin writes as authority-bound Drafts for Editor transaction preparation")
+    func sessionReturnsPluginDraftProposal() async throws {
+        PluginSessionURLProtocol.reset()
+        let setup = try makePluginBinding(pluginID: "safe.session",
+                                          capabilityName: "arrange",
+                                          access: .reversibleWrite,
+                                          composableHostCapabilities: ["scene.set_name"],
+                                          hostGeneration: 5)
+        let invoker = StubPluginInvoker(
+            generation: 5,
+            result: .hostCalls([
+                HostCapabilityCall(capabilityID: "scene.set_name",
+                                   version: 1,
+                                   arguments: Data(#"{"entity_id":"scene:1","name":"Arranged"}"#.utf8)),
+            ])
+        )
+        let executor = try PluginCapabilityExecutor(bindings: [setup.binding],
+                                                    invoker: invoker)
+        PluginSessionURLProtocol.pluginToolName = setup.contract.toolName
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [PluginSessionURLProtocol.self]
+        let session = Session(
+            config: .openAIResponses(apiKey: "test"),
+            urlSession: URLSession(configuration: configuration),
+            pluginCapabilityExecutor: executor
+        )
+
+        let proposal = try await session.process(
+            .naturalLanguage(text: "Arrange with the plugin", locale: "en")
+        )
+        #expect(proposal.plan.summary == "Arrange selection")
+        #expect(proposal.plan.steps.isEmpty)
+        #expect(proposal.capabilityDrafts.count == 1)
+        #expect(proposal.capabilityDrafts.first?.capabilityID == setup.contract.id)
+        #expect(proposal.capabilityDrafts.first?.pluginAuthority == setup.binding.authority)
+        #expect(proposal.capabilityExposureSnapshot?.authority(forPluginID: "safe.session")
+                == setup.binding.authority)
+        #expect(PluginSessionURLProtocol.requestCount == 3)
+    }
+}
+
+private func makePluginBinding(
+    pluginID: String,
+    capabilityName: String,
+    access: CapabilityAccess,
+    composableHostCapabilities: [String] = [],
+    hostGeneration: UInt64
+) throws -> (binding: PluginExecutionBinding, contract: CapabilityContract) {
+    let manifest = GuavaPluginManifest(
+        id: pluginID,
+        version: 1,
+        name: "Test plugin",
+        description: "Bounded test plugin",
+        access: access,
+        composableHostCapabilities: composableHostCapabilities
+    )
+    let contract = CapabilityContract(
+        id: "\(pluginID).\(capabilityName)",
+        title: "Test Capability",
+        description: "Test WIT-derived capability",
+        domain: "plugin",
+        access: access,
+        releasePhase: .stable,
+        inputSchema: .object(
+            properties: ["entity_id": .string()],
+            required: ["entity_id"]
+        ),
+        source: .plugin(pluginID)
+    )
+    let inspection = PluginInspection(manifest: manifest,
+                                      componentHash: "component-hash",
+                                      witHash: "wit-hash",
+                                      contracts: [contract])
+    let authorization = try PluginAuthorizationRecord(
+        inspection: inspection,
+        authorisedAt: Date(timeIntervalSince1970: 1)
+    )
+    return (try PluginExecutionBinding(pluginPath: "/tmp/\(pluginID).guavaplugin",
+                                       inspection: inspection,
+                                       authorization: authorization,
+                                       hostGeneration: hostGeneration),
+            contract)
+}
+
+private final class StubPluginInvoker: PluginCapabilityInvoking, @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedGeneration: UInt64
+    private let result: PluginPreparedCapabilityResult
+
+    var generation: UInt64 { lock.withLock { storedGeneration } }
+
+    init(generation: UInt64, result: PluginPreparedCapabilityResult) {
+        storedGeneration = generation
+        self.result = result
+    }
+
+    func setGeneration(_ generation: UInt64) {
+        lock.withLock { storedGeneration = generation }
+    }
+
+    func prepareCapability(binding: PluginExecutionBinding,
+                           capabilityID: String,
+                           input: Data,
+                           querySnapshot: PluginQuerySnapshot?) throws
+        -> PluginPreparedCapabilityResult {
+        result
+    }
 }
 
 private final class ResponsesURLProtocol: URLProtocol, @unchecked Sendable {
@@ -806,6 +1103,77 @@ private final class RepairURLProtocol: URLProtocol, @unchecked Sendable {
                     "call_id": "invalid_\(callNumber)",
                     "name": toolName,
                     "arguments": #"{"entity_id":"forged","name":"Bad"}"#,
+                ]]]
+            }
+            let data = try JSONSerialization.data(withJSONObject: responseObject)
+            let response = HTTPURLResponse(url: request.url!, statusCode: 200,
+                                           httpVersion: nil, headerFields: nil)!
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: data)
+            client?.urlProtocolDidFinishLoading(self)
+        } catch {
+            client?.urlProtocol(self, didFailWithError: error)
+        }
+    }
+
+    override func stopLoading() {}
+}
+
+private final class PluginSessionURLProtocol: URLProtocol, @unchecked Sendable {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var count = 0
+    nonisolated(unsafe) static var pluginToolName = ""
+    static var requestCount: Int { lock.withLock { count } }
+
+    static func reset() {
+        lock.withLock { count = 0 }
+        pluginToolName = ""
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        do {
+            let callNumber = Self.lock.withLock { () -> Int in
+                Self.count += 1
+                return Self.count
+            }
+            let bodyData = try #require(ResponsesURLProtocol.bodyData(from: request))
+            let body = try #require(JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
+            let responseObject: [String: Any]
+            switch callNumber {
+            case 1:
+                responseObject = ["output": [[
+                    "type": "function_call",
+                    "call_id": "plugin_search",
+                    "name": CapabilityToolset.searchToolName,
+                    "arguments": #"{"query":"arrange","domain":"plugin"}"#,
+                ]]]
+            case 2:
+                let tools = try #require(body["tools"] as? [[String: Any]])
+                #expect(tools.contains { $0["name"] as? String == Self.pluginToolName })
+                responseObject = ["output": [[
+                    "type": "function_call",
+                    "call_id": "plugin_draft",
+                    "name": Self.pluginToolName,
+                    "arguments": #"{"entity_id":"scene:1"}"#,
+                ]]]
+            default:
+                let inputs = try #require(body["input"] as? [[String: Any]])
+                let draftID = try #require(inputs.reversed().compactMap { item -> String? in
+                    guard item["type"] as? String == "function_call_output",
+                          let output = item["output"] as? String,
+                          let data = output.data(using: .utf8),
+                          let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                    else { return nil }
+                    return object["draft_id"] as? String
+                }.first)
+                responseObject = ["output": [[
+                    "type": "function_call",
+                    "call_id": "plugin_submit",
+                    "name": CapabilityToolset.submitToolName,
+                    "arguments": #"{"summary":"Arrange selection","draft_ids":["\#(draftID)"]}"#,
                 ]]]
             }
             let data = try JSONSerialization.data(withJSONObject: responseObject)
