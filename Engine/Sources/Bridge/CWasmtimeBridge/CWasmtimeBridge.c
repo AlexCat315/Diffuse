@@ -519,6 +519,7 @@ static bool validate_capability_function(
 
 static guava_wasmtime_status_t validate_contract(
     guava_wasmtime_runtime_t *runtime, const wasmtime_component_t *component,
+    const char *capabilities_interface_name,
     const char *const *expected_imports, size_t expected_import_count,
     const char *const *expected_capabilities,
     const char *const *expected_type_signatures,
@@ -563,7 +564,8 @@ static guava_wasmtime_status_t validate_contract(
   }
   wasmtime_component_item_t capabilities = {0};
   bool has_capabilities = wasmtime_component_type_export_get(
-      type, runtime->engine, "capabilities", strlen("capabilities"),
+      type, runtime->engine, capabilities_interface_name,
+      strlen(capabilities_interface_name),
       &capabilities);
   if (!has_capabilities ||
       capabilities.kind != WASMTIME_COMPONENT_ITEM_COMPONENT_INSTANCE) {
@@ -576,9 +578,58 @@ static guava_wasmtime_status_t validate_contract(
   }
   const wasmtime_component_instance_type_t *instance =
       capabilities.of.component_instance;
-  if (wasmtime_component_instance_type_export_count(instance,
-                                                     runtime->engine) !=
-      expected_capability_count) {
+  size_t instance_export_count = wasmtime_component_instance_type_export_count(
+      instance, runtime->engine);
+  if (instance_export_count < expected_capability_count * 2 ||
+      instance_export_count > 256) {
+    wasmtime_component_item_delete(&capabilities);
+    wasmtime_component_type_delete(type);
+    return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+                     "Component capability count does not match capabilities.wit");
+  }
+  size_t reflected_function_count = 0;
+  for (size_t export_index = 0; export_index < instance_export_count;
+       export_index++) {
+    const char *export_name = NULL;
+    size_t export_name_size = 0;
+    wasmtime_component_item_t item = {0};
+    if (!wasmtime_component_instance_type_export_nth(
+            instance, runtime->engine, export_index, &export_name,
+            &export_name_size, &item)) {
+      wasmtime_component_item_delete(&capabilities);
+      wasmtime_component_type_delete(type);
+      return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+                       "could not reflect capabilities interface export");
+    }
+    if (item.kind == WASMTIME_COMPONENT_ITEM_COMPONENT_FUNC) {
+      reflected_function_count++;
+      bool declared = false;
+      for (size_t expected_index = 0;
+           expected_index < expected_capability_count; expected_index++) {
+        const char *expected_name = expected_capabilities[expected_index];
+        if (expected_name != NULL &&
+            bytes_equal(export_name, export_name_size, expected_name)) {
+          declared = true;
+          break;
+        }
+      }
+      if (!declared) {
+        wasmtime_component_item_delete(&item);
+        wasmtime_component_item_delete(&capabilities);
+        wasmtime_component_type_delete(type);
+        return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+                         "Component exposes a capability absent from capabilities.wit");
+      }
+    } else if (item.kind != WASMTIME_COMPONENT_ITEM_TYPE) {
+      wasmtime_component_item_delete(&item);
+      wasmtime_component_item_delete(&capabilities);
+      wasmtime_component_type_delete(type);
+      return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+                       "capabilities interface contains a forbidden export");
+    }
+    wasmtime_component_item_delete(&item);
+  }
+  if (reflected_function_count != expected_capability_count) {
     wasmtime_component_item_delete(&capabilities);
     wasmtime_component_type_delete(type);
     return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
@@ -594,6 +645,27 @@ static guava_wasmtime_status_t validate_contract(
                        "expected capability metadata is null");
     }
     wasmtime_component_item_t function = {0};
+    char input_type_name[80];
+    int input_type_name_size = snprintf(input_type_name,
+                                        sizeof(input_type_name), "%s-input",
+                                        name);
+    wasmtime_component_item_t exported_input_type = {0};
+    bool has_exported_input_type = input_type_name_size > 0 &&
+        (size_t)input_type_name_size < sizeof(input_type_name) &&
+        wasmtime_component_instance_type_export_get(
+            instance, runtime->engine, input_type_name,
+            (size_t)input_type_name_size, &exported_input_type);
+    if (!has_exported_input_type ||
+        exported_input_type.kind != WASMTIME_COMPONENT_ITEM_TYPE) {
+      if (has_exported_input_type) {
+        wasmtime_component_item_delete(&exported_input_type);
+      }
+      wasmtime_component_item_delete(&capabilities);
+      wasmtime_component_type_delete(type);
+      return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+                       "component is missing exported input type for %s", name);
+    }
+    wasmtime_component_item_delete(&exported_input_type);
     bool has_function = wasmtime_component_instance_type_export_get(
         instance, runtime->engine, name, strlen(name), &function);
     if (!has_function ||
@@ -1120,6 +1192,7 @@ static bool decode_typed_value(guava_typed_cursor_t *cursor,
 
 guava_wasmtime_status_t guava_wasmtime_validate_component(
     guava_wasmtime_runtime_t *runtime, const char *component_path,
+    const char *capabilities_interface_name,
     const char *const *expected_imports, size_t expected_import_count,
     const char *const *expected_capabilities,
     const char *const *expected_type_signatures,
@@ -1130,9 +1203,11 @@ guava_wasmtime_status_t guava_wasmtime_validate_component(
     error->size = 0;
   }
   if (runtime == NULL || component_path == NULL ||
+      capabilities_interface_name == NULL ||
       (expected_import_count > 0 && expected_imports == NULL) ||
       (expected_capability_count > 0 &&
        (expected_capabilities == NULL || expected_type_signatures == NULL)) ||
+      expected_import_count > 16 || expected_capability_count > 64 ||
       !valid_limits(limits)) {
     return set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
                      "invalid Component validation arguments");
@@ -1143,7 +1218,8 @@ guava_wasmtime_status_t guava_wasmtime_validate_component(
   if (status != GUAVA_WASMTIME_OK) {
     return status;
   }
-  status = validate_contract(runtime, component, expected_imports,
+  status = validate_contract(runtime, component, capabilities_interface_name,
+                             expected_imports,
                              expected_import_count, expected_capabilities,
                              expected_type_signatures,
                              expected_capability_count, error);
@@ -1163,7 +1239,8 @@ guava_wasmtime_status_t guava_wasmtime_validate_component(
 
 guava_wasmtime_status_t guava_wasmtime_invoke_capability(
     guava_wasmtime_runtime_t *runtime, const char *component_path,
-    const char *capability_name, const uint8_t *typed_input,
+    const char *capabilities_interface_name, const char *capability_name,
+    const uint8_t *typed_input,
     size_t typed_input_size,
     const char *const *expected_imports, size_t expected_import_count,
     const char *const *expected_capabilities,
@@ -1180,13 +1257,15 @@ guava_wasmtime_status_t guava_wasmtime_invoke_capability(
     error->data = NULL;
     error->size = 0;
   }
-  if (runtime == NULL || component_path == NULL || capability_name == NULL ||
+  if (runtime == NULL || component_path == NULL ||
+      capabilities_interface_name == NULL || capability_name == NULL ||
       output == NULL || !valid_limits(limits) ||
       typed_input == NULL || typed_input_size < 4 ||
       typed_input_size > limits->maximum_output_bytes ||
       (expected_import_count > 0 && expected_imports == NULL) ||
       (expected_capability_count > 0 &&
-       (expected_capabilities == NULL || expected_type_signatures == NULL))) {
+       (expected_capabilities == NULL || expected_type_signatures == NULL)) ||
+      expected_import_count > 16 || expected_capability_count > 64) {
     return set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
                      "invalid Component invocation arguments");
   }
@@ -1213,7 +1292,8 @@ guava_wasmtime_status_t guava_wasmtime_invoke_capability(
   if (status != GUAVA_WASMTIME_OK) {
     return status;
   }
-  status = validate_contract(runtime, component, expected_imports,
+  status = validate_contract(runtime, component, capabilities_interface_name,
+                             expected_imports,
                              expected_import_count, expected_capabilities,
                              expected_type_signatures,
                              expected_capability_count, error);
@@ -1232,8 +1312,9 @@ guava_wasmtime_status_t guava_wasmtime_invoke_capability(
   }
   wasmtime_context_t *context = wasmtime_store_context(store);
   wasmtime_component_export_index_t *capabilities_index =
-      wasmtime_component_get_export_index(component, NULL, "capabilities",
-                                          strlen("capabilities"));
+      wasmtime_component_get_export_index(
+          component, NULL, capabilities_interface_name,
+          strlen(capabilities_interface_name));
   wasmtime_component_export_index_t *function_index = capabilities_index == NULL
       ? NULL
       : wasmtime_component_get_export_index(

@@ -266,18 +266,24 @@ private final class BoundedPipeReader: @unchecked Sendable {
         }
         guard shouldStart else { return }
         DispatchQueue.global(qos: .utility).async { [self] in
-            while true {
-                let chunk = handle.readData(ofLength: 16 * 1_024)
-                if chunk.isEmpty { break }
-                lock.withLock {
-                    let remaining = max(0, limit + 1 - retained.count)
-                    if remaining > 0 { retained.append(chunk.prefix(remaining)) }
-                    if retained.count > limit || chunk.count > remaining {
-                        didExceedLimit = true
+            defer { finished.signal() }
+            do {
+                while true {
+                    guard let chunk = try handle.read(upToCount: 16 * 1_024),
+                          !chunk.isEmpty else { break }
+                    lock.withLock {
+                        let remaining = max(0, limit + 1 - retained.count)
+                        if remaining > 0 { retained.append(chunk.prefix(remaining)) }
+                        if retained.count > limit || chunk.count > remaining {
+                            didExceedLimit = true
+                        }
                     }
                 }
+            } catch {
+                // Timeout and interruption deliberately close the read handle.
+                // A throwing EOF/error is the expected terminal state; output
+                // retained before the close remains available to the caller.
             }
-            finished.signal()
         }
     }
 

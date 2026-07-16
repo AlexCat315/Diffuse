@@ -58,17 +58,21 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
                         withImportNames(signatures) { typeSignatures, signatureCount in
                             precondition(capabilityCount == signatureCount)
                             return package.componentURL.path.withCString { path in
-                                guava_wasmtime_validate_component(
-                                    runtime,
-                                    path,
-                                    imports,
-                                    importCount,
-                                    capabilityNames,
-                                    typeSignatures,
-                                    capabilityCount,
-                                    &enforcedLimits,
-                                    &error
-                                )
+                                package.witContract.capabilitiesInterfaceName.withCString {
+                                    interfaceName in
+                                    guava_wasmtime_validate_component(
+                                        runtime,
+                                        path,
+                                        interfaceName,
+                                        imports,
+                                        importCount,
+                                        capabilityNames,
+                                        typeSignatures,
+                                        capabilityCount,
+                                        &enforcedLimits,
+                                        &error
+                                    )
+                                }
                             }
                         }
                     }
@@ -149,23 +153,27 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
                         return typedInput.withUnsafeBytes { bytes in
                             package.componentURL.path.withCString { path in
                                 capabilityName.withCString { name in
-                                    guava_wasmtime_invoke_capability(
-                                        runtime,
-                                        path,
-                                        name,
-                                        bytes.bindMemory(to: UInt8.self).baseAddress,
-                                        bytes.count,
-                                        imports,
-                                        importCount,
-                                        capabilityNames,
-                                        typeSignatures,
-                                        capabilityCount,
-                                        embeddedQueryCallback,
-                                        Unmanaged.passUnretained(environment).toOpaque(),
-                                        &enforcedLimits,
-                                        &output,
-                                        &error
-                                    )
+                                    package.witContract.capabilitiesInterfaceName.withCString {
+                                        interfaceName in
+                                        guava_wasmtime_invoke_capability(
+                                            runtime,
+                                            path,
+                                            interfaceName,
+                                            name,
+                                            bytes.bindMemory(to: UInt8.self).baseAddress,
+                                            bytes.count,
+                                            imports,
+                                            importCount,
+                                            capabilityNames,
+                                            typeSignatures,
+                                            capabilityCount,
+                                            embeddedQueryCallback,
+                                            Unmanaged.passUnretained(environment).toOpaque(),
+                                            &enforcedLimits,
+                                            &output,
+                                            &error
+                                        )
+                                    }
                                 }
                             }
                         }

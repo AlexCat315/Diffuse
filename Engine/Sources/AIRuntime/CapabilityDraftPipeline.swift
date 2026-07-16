@@ -8,6 +8,7 @@ public struct CapabilityInvocationDraft: Codable, Sendable, Equatable, Identifia
     public var capabilityVersion: Int
     public var schemaHash: String
     public var sourcePluginID: String?
+    public var pluginAuthority: PluginCapabilityAuthority?
     public var validatedInput: Data
     public var snapshotID: UUID
     public var sceneRevision: UInt64
@@ -18,6 +19,7 @@ public struct CapabilityInvocationDraft: Codable, Sendable, Equatable, Identifia
                 capabilityVersion: Int,
                 schemaHash: String,
                 sourcePluginID: String? = nil,
+                pluginAuthority: PluginCapabilityAuthority? = nil,
                 validatedInput: Data,
                 snapshotID: UUID,
                 sceneRevision: UInt64,
@@ -27,6 +29,7 @@ public struct CapabilityInvocationDraft: Codable, Sendable, Equatable, Identifia
         self.capabilityVersion = capabilityVersion
         self.schemaHash = schemaHash
         self.sourcePluginID = sourcePluginID
+        self.pluginAuthority = pluginAuthority
         self.validatedInput = validatedInput
         self.snapshotID = snapshotID
         self.sceneRevision = sceneRevision
@@ -127,6 +130,10 @@ public actor CapabilityDraftStore {
                                               capabilityVersion: exposed.version,
                                               schemaHash: exposed.schemaHash,
                                               sourcePluginID: exposed.source.pluginID,
+                                              pluginAuthority: try pluginAuthority(
+                                                for: exposed,
+                                                snapshot: snapshot
+                                              ),
                                               validatedInput: canonical,
                                               snapshotID: snapshot.id,
                                               sceneRevision: currentSceneRevision,
@@ -166,8 +173,11 @@ public actor CapabilityDraftStore {
                   exposed.schemaHash == draft.schemaHash,
                   exposed.access == current.access,
                   exposed.source.pluginID == draft.sourcePluginID,
+                  exposed.source == current.source,
                   current.version == draft.capabilityVersion,
-                  current.schemaHash == draft.schemaHash else {
+                  current.schemaHash == draft.schemaHash,
+                  try pluginAuthority(for: exposed, snapshot: snapshot)
+                    == draft.pluginAuthority else {
                 throw CapabilityDraftError.contractChanged(draft.capabilityID)
             }
             do {
@@ -203,6 +213,18 @@ public actor CapabilityDraftStore {
             throw CapabilityDraftError.invalidInput("input must be a JSON object")
         }
         return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+    }
+
+    private func pluginAuthority(
+        for contract: CapabilityContract,
+        snapshot: CapabilityExposureSnapshot
+    ) throws -> PluginCapabilityAuthority? {
+        guard let pluginID = contract.source.pluginID else { return nil }
+        guard let authority = snapshot.authority(forPluginID: pluginID),
+              authority.pluginID == pluginID else {
+            throw CapabilityDraftError.contractChanged(contract.id)
+        }
+        return authority
     }
 }
 

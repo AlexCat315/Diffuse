@@ -148,6 +148,9 @@ public struct SceneEditPlanExecutor: Sendable {
                 capabilityVersion: contract.version,
                 schemaHash: contract.schemaHash,
                 sourcePluginID: contract.source.pluginID,
+                pluginAuthority: contract.source.pluginID.flatMap {
+                    exposureSnapshot?.authority(forPluginID: $0)
+                },
                 inputDigest: contract.inputDigest(input.data),
                 argumentNames: input.argumentNames,
                 targetReferences: step.entityRef.map { [$0] } ?? [],
