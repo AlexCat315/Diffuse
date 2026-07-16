@@ -1,4 +1,5 @@
 import CWasmtimeBridge
+import CapabilityRuntime
 import Foundation
 import PluginRuntime
 
@@ -48,34 +49,32 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
             try withDeadline(milliseconds: limits.discoveryTimeoutMilliseconds) { deadline in
                 var error = guava_wasmtime_buffer_t(data: nil, size: 0)
                 var enforcedLimits = bridgeLimitsValue(limits)
-                let status = withImportNames(package.witContract.imports) { names, count in
-                    package.componentURL.path.withCString { path in
-                        guava_wasmtime_validate_component(
-                            runtime,
-                            path,
-                            names,
-                            count,
-                            &enforcedLimits,
-                            &error
-                        )
+                let capabilities = package.witContract.capabilityInputs.map(\.name)
+                let signatures = package.witContract.capabilityInputs.map {
+                    $0.inputType.canonicalSignature
+                }
+                let status = withImportNames(package.witContract.imports) { imports, importCount in
+                    withImportNames(capabilities) { capabilityNames, capabilityCount in
+                        withImportNames(signatures) { typeSignatures, signatureCount in
+                            precondition(capabilityCount == signatureCount)
+                            return package.componentURL.path.withCString { path in
+                                guava_wasmtime_validate_component(
+                                    runtime,
+                                    path,
+                                    imports,
+                                    importCount,
+                                    capabilityNames,
+                                    typeSignatures,
+                                    capabilityCount,
+                                    &enforcedLimits,
+                                    &error
+                                )
+                            }
+                        }
                     }
                 }
                 try check(status: status, error: &error, deadline: deadline)
             }
-        }
-    }
-
-    public func discover(_ package: ValidatedPluginPackage,
-                         limits: PluginResourceLimits) throws -> Data {
-        try invocationLock.withLock {
-            try invoke(
-                package: package,
-                exportName: "discover",
-                arguments: [],
-                querySnapshot: nil,
-                timeoutMilliseconds: limits.discoveryTimeoutMilliseconds,
-                limits: limits
-            )
         }
     }
 
@@ -90,6 +89,18 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
                 message: "Component input exceeds 1 MiB"
             )
         }
+        guard let capability = package.witContract.capabilityInputs.first(where: {
+            package.manifest.id + "." + $0.name == capabilityID
+        }) else {
+            throw PluginCapabilityValidationError.unknownCapability(capabilityID)
+        }
+        try JSONSchemaValidator.validate(data: input,
+                                         against: capability.inputSchema)
+        let typedInput = try PluginTypedInputEncoder.encode(
+            input,
+            as: capability.inputType,
+            maximumBytes: limits.maximumOutputBytes
+        )
         let grantedImports = Set(package.manifest.imports)
         if !grantedImports.isEmpty {
             guard let querySnapshot else {
@@ -100,8 +111,8 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
         return try invocationLock.withLock {
             try invoke(
                 package: package,
-                exportName: "prepare",
-                arguments: [Data(capabilityID.utf8), input],
+                capabilityName: capability.name,
+                typedInput: typedInput,
                 querySnapshot: querySnapshot,
                 timeoutMilliseconds: limits.preparationTimeoutMilliseconds,
                 limits: limits
@@ -114,8 +125,8 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
     }
 
     private func invoke(package: ValidatedPluginPackage,
-                        exportName: String,
-                        arguments: [Data],
+                        capabilityName: String,
+                        typedInput: Data,
                         querySnapshot: PluginQuerySnapshot?,
                         timeoutMilliseconds: UInt64,
                         limits: PluginResourceLimits) throws -> Data {
@@ -127,25 +138,36 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
             var output = guava_wasmtime_buffer_t(data: nil, size: 0)
             var error = guava_wasmtime_buffer_t(data: nil, size: 0)
             var enforcedLimits = bridgeLimitsValue(limits)
-            let status = withImportNames(package.witContract.imports) { names, importCount in
-                withArgumentData(arguments) { argumentPointers, argumentSizes, argumentCount in
-                    package.componentURL.path.withCString { path in
-                        exportName.withCString { exportedFunction in
-                            guava_wasmtime_invoke_component(
-                                runtime,
-                                path,
-                                exportedFunction,
-                                argumentPointers,
-                                argumentSizes,
-                                argumentCount,
-                                names,
-                                importCount,
-                                embeddedQueryCallback,
-                                Unmanaged.passUnretained(environment).toOpaque(),
-                                &enforcedLimits,
-                                &output,
-                                &error
-                            )
+            let capabilities = package.witContract.capabilityInputs.map(\.name)
+            let signatures = package.witContract.capabilityInputs.map {
+                $0.inputType.canonicalSignature
+            }
+            let status = withImportNames(package.witContract.imports) { imports, importCount in
+                withImportNames(capabilities) { capabilityNames, capabilityCount in
+                    withImportNames(signatures) { typeSignatures, signatureCount in
+                        precondition(capabilityCount == signatureCount)
+                        return typedInput.withUnsafeBytes { bytes in
+                            package.componentURL.path.withCString { path in
+                                capabilityName.withCString { name in
+                                    guava_wasmtime_invoke_capability(
+                                        runtime,
+                                        path,
+                                        name,
+                                        bytes.bindMemory(to: UInt8.self).baseAddress,
+                                        bytes.count,
+                                        imports,
+                                        importCount,
+                                        capabilityNames,
+                                        typeSignatures,
+                                        capabilityCount,
+                                        embeddedQueryCallback,
+                                        Unmanaged.passUnretained(environment).toOpaque(),
+                                        &enforcedLimits,
+                                        &output,
+                                        &error
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -227,25 +249,6 @@ public final class EmbeddedWasmtimeComponentRuntime: WASIComponentRuntime, @unch
         let pointers: [UnsafePointer<CChar>?] = allocations.map { UnsafePointer($0) }
         return try pointers.withUnsafeBufferPointer { buffer in
             try body(buffer.baseAddress, buffer.count)
-        }
-    }
-
-    private func withArgumentData<T>(
-        _ arguments: [Data],
-        body: (UnsafePointer<UnsafePointer<UInt8>?>?, UnsafePointer<Int>?, Int) throws -> T
-    ) rethrows -> T {
-        let retained = arguments.map { $0 as NSData }
-        let pointers: [UnsafePointer<UInt8>?] = retained.map { value in
-            guard value.length > 0 else { return nil }
-            return value.bytes.assumingMemoryBound(to: UInt8.self)
-        }
-        let sizes = retained.map(\.length)
-        return try pointers.withUnsafeBufferPointer { pointerBuffer in
-            try sizes.withUnsafeBufferPointer { sizeBuffer in
-                try body(pointerBuffer.baseAddress,
-                         sizeBuffer.baseAddress,
-                         pointerBuffer.count)
-            }
         }
     }
 

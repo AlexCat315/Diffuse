@@ -322,34 +322,207 @@ static bool validate_query_import(const wasmtime_component_item_t *item,
   return valid;
 }
 
-static bool validate_export(const wasmtime_component_type_t *component_type,
-                            guava_wasmtime_runtime_t *runtime,
-                            const char *name,
-                            const char *const *parameter_names,
-                            size_t parameter_count,
-                            guava_wasmtime_buffer_t *error) {
-  wasmtime_component_item_t item;
-  if (!wasmtime_component_type_export_get(component_type, runtime->engine,
-                                          name, strlen(name), &item)) {
-    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
-                    "component is missing export %s", name);
+typedef struct guava_signature_builder {
+  char *data;
+  size_t size;
+  size_t capacity;
+} guava_signature_builder_t;
+
+static void signature_builder_delete(guava_signature_builder_t *builder) {
+  if (builder == NULL) {
+    return;
+  }
+  free(builder->data);
+  builder->data = NULL;
+  builder->size = 0;
+  builder->capacity = 0;
+}
+
+static bool signature_append(guava_signature_builder_t *builder,
+                             const char *bytes, size_t size) {
+  if (builder == NULL || (bytes == NULL && size > 0) ||
+      size > 64ULL * 1024ULL || builder->size > 64ULL * 1024ULL - size) {
     return false;
   }
-  bool valid = item.kind == WASMTIME_COMPONENT_ITEM_COMPONENT_FUNC;
-  if (valid) {
-    valid = validate_string_function(item.of.component_func, parameter_names,
-                                     parameter_count, error, name);
-  } else {
-    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
-                    "export %s must be a component function", name);
+  size_t required = builder->size + size + 1;
+  if (required > builder->capacity) {
+    size_t capacity = builder->capacity == 0 ? 128 : builder->capacity;
+    while (capacity < required) {
+      if (capacity > 64ULL * 1024ULL / 2) {
+        capacity = 64ULL * 1024ULL + 1;
+        break;
+      }
+      capacity *= 2;
+    }
+    if (capacity > 64ULL * 1024ULL + 1) {
+      return false;
+    }
+    char *resized = (char *)realloc(builder->data, capacity);
+    if (resized == NULL) {
+      return false;
+    }
+    builder->data = resized;
+    builder->capacity = capacity;
   }
-  wasmtime_component_item_delete(&item);
+  if (size > 0) {
+    memcpy(builder->data + builder->size, bytes, size);
+  }
+  builder->size += size;
+  builder->data[builder->size] = '\0';
+  return true;
+}
+
+static bool signature_literal(guava_signature_builder_t *builder,
+                              const char *literal) {
+  return signature_append(builder, literal, strlen(literal));
+}
+
+static bool append_type_signature(const wasmtime_component_valtype_t *type,
+                                  guava_signature_builder_t *builder,
+                                  size_t depth) {
+  if (type == NULL || builder == NULL || depth > 12) {
+    return false;
+  }
+  switch (type->kind) {
+  case WASMTIME_COMPONENT_VALTYPE_BOOL:
+    return signature_literal(builder, "bool");
+  case WASMTIME_COMPONENT_VALTYPE_STRING:
+    return signature_literal(builder, "string");
+  case WASMTIME_COMPONENT_VALTYPE_CHAR:
+    return signature_literal(builder, "char");
+  case WASMTIME_COMPONENT_VALTYPE_U8:
+    return signature_literal(builder, "u8");
+  case WASMTIME_COMPONENT_VALTYPE_U16:
+    return signature_literal(builder, "u16");
+  case WASMTIME_COMPONENT_VALTYPE_U32:
+    return signature_literal(builder, "u32");
+  case WASMTIME_COMPONENT_VALTYPE_S8:
+    return signature_literal(builder, "s8");
+  case WASMTIME_COMPONENT_VALTYPE_S16:
+    return signature_literal(builder, "s16");
+  case WASMTIME_COMPONENT_VALTYPE_S32:
+    return signature_literal(builder, "s32");
+  case WASMTIME_COMPONENT_VALTYPE_F32:
+    return signature_literal(builder, "f32");
+  case WASMTIME_COMPONENT_VALTYPE_F64:
+    return signature_literal(builder, "f64");
+  case WASMTIME_COMPONENT_VALTYPE_LIST: {
+    wasmtime_component_valtype_t child = {0};
+    wasmtime_component_list_type_element(type->of.list, &child);
+    bool valid = signature_literal(builder, "list<") &&
+                 append_type_signature(&child, builder, depth + 1) &&
+                 signature_literal(builder, ">");
+    wasmtime_component_valtype_delete(&child);
+    return valid;
+  }
+  case WASMTIME_COMPONENT_VALTYPE_OPTION: {
+    wasmtime_component_valtype_t child = {0};
+    wasmtime_component_option_type_ty(type->of.option, &child);
+    bool valid = signature_literal(builder, "option<") &&
+                 append_type_signature(&child, builder, depth + 1) &&
+                 signature_literal(builder, ">");
+    wasmtime_component_valtype_delete(&child);
+    return valid;
+  }
+  case WASMTIME_COMPONENT_VALTYPE_RECORD: {
+    size_t count = wasmtime_component_record_type_field_count(type->of.record);
+    if (count > 64 || !signature_literal(builder, "record{")) {
+      return false;
+    }
+    for (size_t index = 0; index < count; index++) {
+      const char *name = NULL;
+      size_t name_size = 0;
+      wasmtime_component_valtype_t child = {0};
+      if (!wasmtime_component_record_type_field_nth(
+              type->of.record, index, &name, &name_size, &child)) {
+        return false;
+      }
+      bool valid = (index == 0 || signature_literal(builder, ",")) &&
+                   signature_append(builder, name, name_size) &&
+                   signature_literal(builder, ":") &&
+                   append_type_signature(&child, builder, depth + 1);
+      wasmtime_component_valtype_delete(&child);
+      if (!valid) {
+        return false;
+      }
+    }
+    return signature_literal(builder, "}");
+  }
+  case WASMTIME_COMPONENT_VALTYPE_ENUM: {
+    size_t count = wasmtime_component_enum_type_names_count(type->of.enum_);
+    if (count == 0 || count > 128 || !signature_literal(builder, "enum{")) {
+      return false;
+    }
+    for (size_t index = 0; index < count; index++) {
+      const char *name = NULL;
+      size_t name_size = 0;
+      if (!wasmtime_component_enum_type_names_nth(type->of.enum_, index, &name,
+                                                   &name_size) ||
+          (index > 0 && !signature_literal(builder, ",")) ||
+          !signature_append(builder, name, name_size)) {
+        return false;
+      }
+    }
+    return signature_literal(builder, "}");
+  }
+  default:
+    return false;
+  }
+}
+
+static bool validate_capability_function(
+    const wasmtime_component_func_type_t *function, const char *name,
+    const char *expected_signature, guava_wasmtime_buffer_t *error) {
+  if (wasmtime_component_func_type_async(function) ||
+      wasmtime_component_func_type_param_count(function) != 1) {
+    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+                    "capability %s must be synchronous with one input", name);
+    return false;
+  }
+  const char *parameter_name = NULL;
+  size_t parameter_name_size = 0;
+  wasmtime_component_valtype_t input_type = {0};
+  if (!wasmtime_component_func_type_param_nth(
+          function, 0, &parameter_name, &parameter_name_size, &input_type) ||
+      !bytes_equal(parameter_name, parameter_name_size, "input")) {
+    wasmtime_component_valtype_delete(&input_type);
+    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+                    "capability %s parameter must be named input", name);
+    return false;
+  }
+  guava_signature_builder_t signature = {0};
+  bool valid = append_type_signature(&input_type, &signature, 0) &&
+               expected_signature != NULL && signature.data != NULL &&
+               strcmp(signature.data, expected_signature) == 0;
+  wasmtime_component_valtype_delete(&input_type);
+  signature_builder_delete(&signature);
+  if (!valid) {
+    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+                    "capability %s input type does not match capabilities.wit",
+                    name);
+    return false;
+  }
+  wasmtime_component_valtype_t result = {0};
+  if (!wasmtime_component_func_type_result(function, &result)) {
+    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+                    "capability %s must return string", name);
+    return false;
+  }
+  valid = result.kind == WASMTIME_COMPONENT_VALTYPE_STRING;
+  wasmtime_component_valtype_delete(&result);
+  if (!valid) {
+    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+                    "capability %s must return string", name);
+  }
   return valid;
 }
 
 static guava_wasmtime_status_t validate_contract(
     guava_wasmtime_runtime_t *runtime, const wasmtime_component_t *component,
     const char *const *expected_imports, size_t expected_import_count,
+    const char *const *expected_capabilities,
+    const char *const *expected_type_signatures,
+    size_t expected_capability_count,
     guava_wasmtime_buffer_t *error) {
   wasmtime_component_type_t *type = wasmtime_component_type(component);
   if (type == NULL) {
@@ -383,21 +556,64 @@ static guava_wasmtime_status_t validate_contract(
       return GUAVA_WASMTIME_CONTRACT_MISMATCH;
     }
   }
-  if (wasmtime_component_type_export_count(type, runtime->engine) != 2) {
+  if (wasmtime_component_type_export_count(type, runtime->engine) != 1) {
     wasmtime_component_type_delete(type);
     return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
-                     "component must export exactly discover and prepare");
+                     "component must export exactly the capabilities interface");
   }
-  if (!validate_export(type, runtime, "discover", NULL, 0, error)) {
+  wasmtime_component_item_t capabilities = {0};
+  bool has_capabilities = wasmtime_component_type_export_get(
+      type, runtime->engine, "capabilities", strlen("capabilities"),
+      &capabilities);
+  if (!has_capabilities ||
+      capabilities.kind != WASMTIME_COMPONENT_ITEM_COMPONENT_INSTANCE) {
+    if (has_capabilities) {
+      wasmtime_component_item_delete(&capabilities);
+    }
     wasmtime_component_type_delete(type);
-    return GUAVA_WASMTIME_CONTRACT_MISMATCH;
+    return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+                     "component is missing capabilities interface export");
   }
-  const char *prepare_parameters[] = {"capability-id", "input"};
-  if (!validate_export(type, runtime, "prepare", prepare_parameters, 2,
-                       error)) {
+  const wasmtime_component_instance_type_t *instance =
+      capabilities.of.component_instance;
+  if (wasmtime_component_instance_type_export_count(instance,
+                                                     runtime->engine) !=
+      expected_capability_count) {
+    wasmtime_component_item_delete(&capabilities);
     wasmtime_component_type_delete(type);
-    return GUAVA_WASMTIME_CONTRACT_MISMATCH;
+    return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+                     "Component capability count does not match capabilities.wit");
   }
+  for (size_t index = 0; index < expected_capability_count; index++) {
+    const char *name = expected_capabilities[index];
+    const char *signature = expected_type_signatures[index];
+    if (name == NULL || signature == NULL) {
+      wasmtime_component_item_delete(&capabilities);
+      wasmtime_component_type_delete(type);
+      return set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
+                       "expected capability metadata is null");
+    }
+    wasmtime_component_item_t function = {0};
+    bool has_function = wasmtime_component_instance_type_export_get(
+        instance, runtime->engine, name, strlen(name), &function);
+    if (!has_function ||
+        function.kind != WASMTIME_COMPONENT_ITEM_COMPONENT_FUNC ||
+        !validate_capability_function(function.of.component_func, name,
+                                      signature, error)) {
+      if (has_function) {
+        wasmtime_component_item_delete(&function);
+      }
+      if (error == NULL || error->size == 0) {
+        (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+                        "component is missing typed capability %s", name);
+      }
+      wasmtime_component_item_delete(&capabilities);
+      wasmtime_component_type_delete(type);
+      return GUAVA_WASMTIME_CONTRACT_MISMATCH;
+    }
+    wasmtime_component_item_delete(&function);
+  }
+  wasmtime_component_item_delete(&capabilities);
   wasmtime_component_type_delete(type);
   return GUAVA_WASMTIME_OK;
 }
@@ -630,9 +846,284 @@ static bool valid_limits(const guava_wasmtime_limits_t *limits) {
          limits->maximum_table_elements <= 100000;
 }
 
+typedef struct guava_typed_cursor {
+  const uint8_t *data;
+  size_t size;
+  size_t offset;
+} guava_typed_cursor_t;
+
+static bool cursor_read(guava_typed_cursor_t *cursor, void *output,
+                        size_t size) {
+  if (cursor == NULL || output == NULL || size > cursor->size ||
+      cursor->offset > cursor->size - size) {
+    return false;
+  }
+  memcpy(output, cursor->data + cursor->offset, size);
+  cursor->offset += size;
+  return true;
+}
+
+static bool cursor_u8(guava_typed_cursor_t *cursor, uint8_t *output) {
+  return cursor_read(cursor, output, 1);
+}
+
+static bool cursor_u16(guava_typed_cursor_t *cursor, uint16_t *output) {
+  uint8_t bytes[2];
+  if (!cursor_read(cursor, bytes, sizeof(bytes))) {
+    return false;
+  }
+  *output = (uint16_t)bytes[0] | ((uint16_t)bytes[1] << 8);
+  return true;
+}
+
+static bool cursor_u32(guava_typed_cursor_t *cursor, uint32_t *output) {
+  uint8_t bytes[4];
+  if (!cursor_read(cursor, bytes, sizeof(bytes))) {
+    return false;
+  }
+  *output = (uint32_t)bytes[0] | ((uint32_t)bytes[1] << 8) |
+            ((uint32_t)bytes[2] << 16) | ((uint32_t)bytes[3] << 24);
+  return true;
+}
+
+static bool cursor_u64(guava_typed_cursor_t *cursor, uint64_t *output) {
+  uint8_t bytes[8];
+  if (!cursor_read(cursor, bytes, sizeof(bytes))) {
+    return false;
+  }
+  uint64_t value = 0;
+  for (size_t index = 0; index < sizeof(bytes); index++) {
+    value |= (uint64_t)bytes[index] << (index * 8);
+  }
+  *output = value;
+  return true;
+}
+
+static bool valid_unicode_scalar(uint32_t value) {
+  return value <= 0x10ffff && !(value >= 0xd800 && value <= 0xdfff);
+}
+
+static bool decode_typed_value(guava_typed_cursor_t *cursor,
+                               const wasmtime_component_valtype_t *type,
+                               wasmtime_component_val_t *output,
+                               size_t depth,
+                               guava_wasmtime_buffer_t *error) {
+  if (cursor == NULL || type == NULL || output == NULL || depth > 12) {
+    (void)set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
+                    "typed capability input exceeds its nesting limit");
+    return false;
+  }
+  memset(output, 0, sizeof(*output));
+  switch (type->kind) {
+  case WASMTIME_COMPONENT_VALTYPE_BOOL: {
+    uint8_t value = 0;
+    if (!cursor_u8(cursor, &value) || value > 1) {
+      break;
+    }
+    output->kind = WASMTIME_COMPONENT_BOOL;
+    output->of.boolean = value != 0;
+    return true;
+  }
+  case WASMTIME_COMPONENT_VALTYPE_U8: {
+    uint8_t value = 0;
+    if (!cursor_u8(cursor, &value)) {
+      break;
+    }
+    output->kind = WASMTIME_COMPONENT_U8;
+    output->of.u8 = value;
+    return true;
+  }
+  case WASMTIME_COMPONENT_VALTYPE_S8: {
+    uint8_t value = 0;
+    if (!cursor_u8(cursor, &value)) {
+      break;
+    }
+    output->kind = WASMTIME_COMPONENT_S8;
+    output->of.s8 = (int8_t)value;
+    return true;
+  }
+  case WASMTIME_COMPONENT_VALTYPE_U16:
+  case WASMTIME_COMPONENT_VALTYPE_S16: {
+    uint16_t value = 0;
+    if (!cursor_u16(cursor, &value)) {
+      break;
+    }
+    if (type->kind == WASMTIME_COMPONENT_VALTYPE_U16) {
+      output->kind = WASMTIME_COMPONENT_U16;
+      output->of.u16 = value;
+    } else {
+      output->kind = WASMTIME_COMPONENT_S16;
+      output->of.s16 = (int16_t)value;
+    }
+    return true;
+  }
+  case WASMTIME_COMPONENT_VALTYPE_U32:
+  case WASMTIME_COMPONENT_VALTYPE_S32:
+  case WASMTIME_COMPONENT_VALTYPE_CHAR:
+  case WASMTIME_COMPONENT_VALTYPE_F32: {
+    uint32_t value = 0;
+    if (!cursor_u32(cursor, &value)) {
+      break;
+    }
+    if (type->kind == WASMTIME_COMPONENT_VALTYPE_U32) {
+      output->kind = WASMTIME_COMPONENT_U32;
+      output->of.u32 = value;
+    } else if (type->kind == WASMTIME_COMPONENT_VALTYPE_S32) {
+      output->kind = WASMTIME_COMPONENT_S32;
+      output->of.s32 = (int32_t)value;
+    } else if (type->kind == WASMTIME_COMPONENT_VALTYPE_CHAR) {
+      if (!valid_unicode_scalar(value)) {
+        break;
+      }
+      output->kind = WASMTIME_COMPONENT_CHAR;
+      output->of.character = value;
+    } else {
+      output->kind = WASMTIME_COMPONENT_F32;
+      memcpy(&output->of.f32, &value, sizeof(value));
+    }
+    return true;
+  }
+  case WASMTIME_COMPONENT_VALTYPE_F64: {
+    uint64_t value = 0;
+    if (!cursor_u64(cursor, &value)) {
+      break;
+    }
+    output->kind = WASMTIME_COMPONENT_F64;
+    memcpy(&output->of.f64, &value, sizeof(value));
+    return true;
+  }
+  case WASMTIME_COMPONENT_VALTYPE_STRING: {
+    uint32_t size = 0;
+    if (!cursor_u32(cursor, &size) || size > cursor->size ||
+        cursor->offset > cursor->size - size) {
+      break;
+    }
+    output->kind = WASMTIME_COMPONENT_STRING;
+    wasm_name_new(&output->of.string, size,
+                  (const char *)(cursor->data + cursor->offset));
+    cursor->offset += size;
+    return true;
+  }
+  case WASMTIME_COMPONENT_VALTYPE_ENUM: {
+    uint32_t index = 0;
+    size_t count = wasmtime_component_enum_type_names_count(type->of.enum_);
+    const char *name = NULL;
+    size_t name_size = 0;
+    if (!cursor_u32(cursor, &index) || index >= count || count > 128 ||
+        !wasmtime_component_enum_type_names_nth(type->of.enum_, index, &name,
+                                                &name_size)) {
+      break;
+    }
+    output->kind = WASMTIME_COMPONENT_ENUM;
+    wasm_name_new(&output->of.enumeration, name_size, name);
+    return true;
+  }
+  case WASMTIME_COMPONENT_VALTYPE_OPTION: {
+    uint8_t present = 0;
+    if (!cursor_u8(cursor, &present) || present > 1) {
+      break;
+    }
+    output->kind = WASMTIME_COMPONENT_OPTION;
+    output->of.option = NULL;
+    if (present == 0) {
+      return true;
+    }
+    wasmtime_component_valtype_t child = {0};
+    wasmtime_component_option_type_ty(type->of.option, &child);
+    wasmtime_component_val_t value = {0};
+    bool valid = decode_typed_value(cursor, &child, &value, depth + 1, error);
+    wasmtime_component_valtype_delete(&child);
+    if (!valid) {
+      wasmtime_component_val_delete(&value);
+      return false;
+    }
+    output->of.option = wasmtime_component_val_new(&value);
+    if (output->of.option == NULL) {
+      wasmtime_component_val_delete(&value);
+      (void)set_error(error, GUAVA_WASMTIME_OUT_OF_MEMORY,
+                      "could not allocate typed option value");
+      return false;
+    }
+    return true;
+  }
+  case WASMTIME_COMPONENT_VALTYPE_LIST: {
+    uint32_t count = 0;
+    if (!cursor_u32(cursor, &count) || count > 4096) {
+      break;
+    }
+    output->kind = WASMTIME_COMPONENT_LIST;
+    wasmtime_component_vallist_new_uninit(&output->of.list, count);
+    if (count > 0 && output->of.list.data == NULL) {
+      (void)set_error(error, GUAVA_WASMTIME_OUT_OF_MEMORY,
+                      "could not allocate typed list");
+      return false;
+    }
+    if (count > 0) {
+      memset(output->of.list.data, 0,
+             count * sizeof(*output->of.list.data));
+    }
+    wasmtime_component_valtype_t child = {0};
+    wasmtime_component_list_type_element(type->of.list, &child);
+    for (size_t index = 0; index < count; index++) {
+      if (!decode_typed_value(cursor, &child, &output->of.list.data[index],
+                              depth + 1, error)) {
+        wasmtime_component_valtype_delete(&child);
+        return false;
+      }
+    }
+    wasmtime_component_valtype_delete(&child);
+    return true;
+  }
+  case WASMTIME_COMPONENT_VALTYPE_RECORD: {
+    size_t count = wasmtime_component_record_type_field_count(type->of.record);
+    if (count > 64) {
+      break;
+    }
+    output->kind = WASMTIME_COMPONENT_RECORD;
+    wasmtime_component_valrecord_new_uninit(&output->of.record, count);
+    if (count > 0 && output->of.record.data == NULL) {
+      (void)set_error(error, GUAVA_WASMTIME_OUT_OF_MEMORY,
+                      "could not allocate typed record");
+      return false;
+    }
+    if (count > 0) {
+      memset(output->of.record.data, 0,
+             count * sizeof(*output->of.record.data));
+    }
+    for (size_t index = 0; index < count; index++) {
+      const char *name = NULL;
+      size_t name_size = 0;
+      wasmtime_component_valtype_t child = {0};
+      if (!wasmtime_component_record_type_field_nth(
+              type->of.record, index, &name, &name_size, &child)) {
+        return false;
+      }
+      wasm_name_new(&output->of.record.data[index].name, name_size, name);
+      bool valid = decode_typed_value(
+          cursor, &child, &output->of.record.data[index].val, depth + 1, error);
+      wasmtime_component_valtype_delete(&child);
+      if (!valid) {
+        return false;
+      }
+    }
+    return true;
+  }
+  default:
+    (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+                    "Component capability uses an unsupported typed value");
+    return false;
+  }
+  (void)set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
+                  "typed capability input is truncated or malformed");
+  return false;
+}
+
 guava_wasmtime_status_t guava_wasmtime_validate_component(
     guava_wasmtime_runtime_t *runtime, const char *component_path,
     const char *const *expected_imports, size_t expected_import_count,
+    const char *const *expected_capabilities,
+    const char *const *expected_type_signatures,
+    size_t expected_capability_count,
     const guava_wasmtime_limits_t *limits, guava_wasmtime_buffer_t *error) {
   if (error != NULL) {
     error->data = NULL;
@@ -640,6 +1131,8 @@ guava_wasmtime_status_t guava_wasmtime_validate_component(
   }
   if (runtime == NULL || component_path == NULL ||
       (expected_import_count > 0 && expected_imports == NULL) ||
+      (expected_capability_count > 0 &&
+       (expected_capabilities == NULL || expected_type_signatures == NULL)) ||
       !valid_limits(limits)) {
     return set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
                      "invalid Component validation arguments");
@@ -651,7 +1144,9 @@ guava_wasmtime_status_t guava_wasmtime_validate_component(
     return status;
   }
   status = validate_contract(runtime, component, expected_imports,
-                             expected_import_count, error);
+                             expected_import_count, expected_capabilities,
+                             expected_type_signatures,
+                             expected_capability_count, error);
   if (status == GUAVA_WASMTIME_OK) {
     wasmtime_store_t *store = NULL;
     wasmtime_component_instance_t instance = {0};
@@ -666,11 +1161,14 @@ guava_wasmtime_status_t guava_wasmtime_validate_component(
   return status;
 }
 
-guava_wasmtime_status_t guava_wasmtime_invoke_component(
+guava_wasmtime_status_t guava_wasmtime_invoke_capability(
     guava_wasmtime_runtime_t *runtime, const char *component_path,
-    const char *export_name, const uint8_t *const *arguments,
-    const size_t *argument_sizes, size_t argument_count,
+    const char *capability_name, const uint8_t *typed_input,
+    size_t typed_input_size,
     const char *const *expected_imports, size_t expected_import_count,
+    const char *const *expected_capabilities,
+    const char *const *expected_type_signatures,
+    size_t expected_capability_count,
     guava_wasmtime_query_callback_t query_callback, void *query_environment,
     const guava_wasmtime_limits_t *limits, guava_wasmtime_buffer_t *output,
     guava_wasmtime_buffer_t *error) {
@@ -682,32 +1180,32 @@ guava_wasmtime_status_t guava_wasmtime_invoke_component(
     error->data = NULL;
     error->size = 0;
   }
-  if (runtime == NULL || component_path == NULL || export_name == NULL ||
+  if (runtime == NULL || component_path == NULL || capability_name == NULL ||
       output == NULL || !valid_limits(limits) ||
-      (argument_count > 0 && (arguments == NULL || argument_sizes == NULL)) ||
-      (expected_import_count > 0 && expected_imports == NULL)) {
+      typed_input == NULL || typed_input_size < 4 ||
+      typed_input_size > limits->maximum_output_bytes ||
+      (expected_import_count > 0 && expected_imports == NULL) ||
+      (expected_capability_count > 0 &&
+       (expected_capabilities == NULL || expected_type_signatures == NULL))) {
     return set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
                      "invalid Component invocation arguments");
   }
-  if ((!bytes_equal(export_name, strlen(export_name), "discover") ||
-       argument_count != 0) &&
-      (!bytes_equal(export_name, strlen(export_name), "prepare") ||
-       argument_count != 2)) {
-    return set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
-                     "only discover() and prepare(string, string) may run");
+  bool declared = false;
+  for (size_t index = 0; index < expected_capability_count; index++) {
+    if (expected_capabilities[index] != NULL &&
+        strcmp(expected_capabilities[index], capability_name) == 0) {
+      declared = true;
+      break;
+    }
   }
-  size_t total_input = 0;
-  for (size_t index = 0; index < argument_count; index++) {
-    if (arguments[index] == NULL && argument_sizes[index] > 0) {
-      return set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
-                       "component argument is null");
-    }
-    if (argument_sizes[index] > limits->maximum_output_bytes ||
-        total_input > limits->maximum_output_bytes - argument_sizes[index]) {
-      return set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
-                       "component input exceeds 1 MiB");
-    }
-    total_input += argument_sizes[index];
+  if (!declared) {
+    return set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
+                     "capability is absent from capabilities.wit");
+  }
+  const uint8_t magic[] = {0x47, 0x54, 0x56, 0x31};
+  if (memcmp(typed_input, magic, sizeof(magic)) != 0) {
+    return set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
+                     "typed capability input has an unsupported version");
   }
   wasmtime_component_t *component = NULL;
   guava_wasmtime_status_t status =
@@ -716,7 +1214,9 @@ guava_wasmtime_status_t guava_wasmtime_invoke_component(
     return status;
   }
   status = validate_contract(runtime, component, expected_imports,
-                             expected_import_count, error);
+                             expected_import_count, expected_capabilities,
+                             expected_type_signatures,
+                             expected_capability_count, error);
   if (status != GUAVA_WASMTIME_OK) {
     wasmtime_component_delete(component);
     return status;
@@ -731,44 +1231,73 @@ guava_wasmtime_status_t guava_wasmtime_invoke_component(
     return status;
   }
   wasmtime_context_t *context = wasmtime_store_context(store);
-  wasmtime_component_export_index_t *export_index =
-      wasmtime_component_get_export_index(component, NULL, export_name,
-                                          strlen(export_name));
+  wasmtime_component_export_index_t *capabilities_index =
+      wasmtime_component_get_export_index(component, NULL, "capabilities",
+                                          strlen("capabilities"));
+  wasmtime_component_export_index_t *function_index = capabilities_index == NULL
+      ? NULL
+      : wasmtime_component_get_export_index(
+            component, capabilities_index, capability_name,
+            strlen(capability_name));
   wasmtime_component_func_t function;
-  if (export_index == NULL ||
-      !wasmtime_component_instance_get_func(&instance, context, export_index,
+  if (function_index == NULL ||
+      !wasmtime_component_instance_get_func(&instance, context, function_index,
                                             &function)) {
-    if (export_index != NULL) {
-      wasmtime_component_export_index_delete(export_index);
+    if (function_index != NULL) {
+      wasmtime_component_export_index_delete(function_index);
+    }
+    if (capabilities_index != NULL) {
+      wasmtime_component_export_index_delete(capabilities_index);
     }
     wasmtime_store_delete(store);
     wasmtime_component_delete(component);
     return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
-                     "validated Component export could not be resolved");
+                     "validated typed capability could not be resolved");
   }
-  wasmtime_component_export_index_delete(export_index);
-  wasmtime_component_val_t *component_arguments = argument_count == 0
-      ? NULL
-      : (wasmtime_component_val_t *)calloc(argument_count,
-                                           sizeof(*component_arguments));
-  if (component_arguments == NULL && argument_count > 0) {
+  wasmtime_component_export_index_delete(function_index);
+  wasmtime_component_export_index_delete(capabilities_index);
+
+  wasmtime_component_func_type_t *function_type =
+      wasmtime_component_func_type(&function, context);
+  const char *parameter_name = NULL;
+  size_t parameter_name_size = 0;
+  wasmtime_component_valtype_t input_type = {0};
+  if (function_type == NULL ||
+      !wasmtime_component_func_type_param_nth(
+          function_type, 0, &parameter_name, &parameter_name_size,
+          &input_type)) {
+    if (function_type != NULL) {
+      wasmtime_component_func_type_delete(function_type);
+    }
     wasmtime_store_delete(store);
     wasmtime_component_delete(component);
-    return set_error(error, GUAVA_WASMTIME_OUT_OF_MEMORY,
-                     "could not allocate Component arguments");
+    return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
+                     "could not reflect typed capability input");
   }
-  for (size_t index = 0; index < argument_count; index++) {
-    component_arguments[index].kind = WASMTIME_COMPONENT_STRING;
-    wasm_name_new(&component_arguments[index].of.string, argument_sizes[index],
-                  (const char *)arguments[index]);
+  wasmtime_component_func_type_delete(function_type);
+  guava_typed_cursor_t cursor = {
+      .data = typed_input,
+      .size = typed_input_size,
+      .offset = sizeof(magic),
+  };
+  wasmtime_component_val_t component_argument = {0};
+  bool decoded = decode_typed_value(&cursor, &input_type,
+                                    &component_argument, 0, error);
+  wasmtime_component_valtype_delete(&input_type);
+  if (!decoded || cursor.offset != cursor.size) {
+    wasmtime_component_val_delete(&component_argument);
+    wasmtime_store_delete(store);
+    wasmtime_component_delete(component);
+    if (error == NULL || error->size == 0) {
+      return set_error(error, GUAVA_WASMTIME_INVALID_ARGUMENT,
+                       "typed capability input has trailing or invalid bytes");
+    }
+    return GUAVA_WASMTIME_INVALID_ARGUMENT;
   }
   wasmtime_component_val_t result = {0};
   wasmtime_error_t *wasmtime_error = wasmtime_component_func_call(
-      &function, context, component_arguments, argument_count, &result, 1);
-  for (size_t index = 0; index < argument_count; index++) {
-    wasmtime_component_val_delete(&component_arguments[index]);
-  }
-  free(component_arguments);
+      &function, context, &component_argument, 1, &result, 1);
+  wasmtime_component_val_delete(&component_argument);
   if (wasmtime_error != NULL) {
     status = take_wasmtime_error(wasmtime_error,
                                  GUAVA_WASMTIME_INVOCATION_ERROR, error);
