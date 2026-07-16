@@ -41,6 +41,7 @@ public enum EditorAction: Sendable {
     case setPendingConfirmationRequest(ConfirmationRequestBatch?)
     case setAISettings(EditorAISettings)
     case setCapabilitySettings(EditorCapabilitySettings)
+    case setPluginManagementState(EditorPluginManagementState)
     case setAIStatusMessage(String?)
     case setAIWarnings([String])
     case appendChatMessage(AIChatMessage)
@@ -179,6 +180,8 @@ public enum EditorReducer {
             state.aiSettings = settings
         case let .setCapabilitySettings(settings):
             state.capabilitySettings = settings
+        case let .setPluginManagementState(pluginManagement):
+            state.pluginManagement = pluginManagement
         case let .setAIStatusMessage(message):
             state.aiStatusMessage = message
         case let .setAIWarnings(warnings):
