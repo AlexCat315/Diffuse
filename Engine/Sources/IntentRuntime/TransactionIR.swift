@@ -224,6 +224,7 @@ public struct CapabilityInvocationRecord: Codable, Sendable, Equatable {
     public var capabilityVersion: Int
     public var schemaHash: String
     public var sourcePluginID: String?
+    public var pluginAuthority: PluginCapabilityAuthority?
     public var inputDigest: String
     public var argumentNames: [String]
     public var targetReferences: [String]
@@ -234,6 +235,7 @@ public struct CapabilityInvocationRecord: Codable, Sendable, Equatable {
                 capabilityVersion: Int,
                 schemaHash: String,
                 sourcePluginID: String? = nil,
+                pluginAuthority: PluginCapabilityAuthority? = nil,
                 inputDigest: String,
                 argumentNames: [String] = [],
                 targetReferences: [String] = [],
@@ -243,6 +245,7 @@ public struct CapabilityInvocationRecord: Codable, Sendable, Equatable {
         self.capabilityVersion = capabilityVersion
         self.schemaHash = schemaHash
         self.sourcePluginID = sourcePluginID
+        self.pluginAuthority = pluginAuthority
         self.inputDigest = inputDigest
         self.argumentNames = argumentNames.sorted()
         self.targetReferences = targetReferences

@@ -8,6 +8,7 @@ import EngineKernel
 import IntentRuntime
 import ObservationBus
 import PerceptionRuntime
+import PluginRuntime
 import SemanticPipeline
 import RenderBackend
 import RHIWGPU
@@ -25,6 +26,32 @@ private enum MCPAsyncBridgeError: Error, CustomStringConvertible {
         switch self {
         case .timedOut: return "capability service timed out"
         case .missingResult: return "capability service returned no result"
+        }
+    }
+}
+
+public enum EditorPluginCapabilityError: Error, Sendable, Equatable, LocalizedError {
+    case pluginHostUnavailable
+    case pluginAlreadyEnabled(String)
+    case pluginNotEnabled(String)
+    case noPendingPluginApproval
+    case missingExposureSnapshot
+    case sceneRevisionChanged(expected: UInt64, actual: UInt64)
+
+    public var errorDescription: String? {
+        switch self {
+        case .pluginHostUnavailable:
+            return "The trusted GuavaPluginHost executable is unavailable. Rebuild or reinstall the Editor."
+        case let .pluginAlreadyEnabled(id):
+            return "Plugin '\(id)' is already enabled. Disable it before loading another version."
+        case let .pluginNotEnabled(id):
+            return "Plugin '\(id)' is not enabled."
+        case .noPendingPluginApproval:
+            return "No inspected plugin is waiting for approval."
+        case .missingExposureSnapshot:
+            return "The plugin plan is missing its capability exposure snapshot."
+        case let .sceneRevisionChanged(expected, actual):
+            return "The scene changed while preparing plugin data (expected \(expected), actual \(actual))."
         }
     }
 }
@@ -68,6 +95,11 @@ private func waitForMCPCapabilityResult<Value: Sendable>(
 /// 自身不持有窗口 / wgpu surface — UI 渲染由 GuavaUIApp 接管，引擎仅负责
 /// 仿真与（未来的）离屏渲染。
 public final class EditorApplication: @unchecked Sendable {
+    private struct PendingPluginApproval {
+        var packageURL: URL
+        var inspection: PluginInspection
+    }
+
     public let engine: EngineHost
     public let projectDirectory: String
     public let store: EditorStore
@@ -96,6 +128,12 @@ public final class EditorApplication: @unchecked Sendable {
     private var pendingAssistantMessageID: String?
     private let mcpBridge = MCPBridge()
     private let mcpCapabilitySessions = CapabilityExposureSessionStore()
+    private var pluginHostClient: PluginHostProcessClient?
+    private var pluginBindings: [String: PluginExecutionBinding] = [:]
+    private var pluginCapabilityExecutor: PluginCapabilityExecutor?
+    private let pluginAuthorizationStore: EditorPluginAuthorizationStore
+    private let trustedPluginHostExecutableURL: URL?
+    private var pendingPluginApproval: PendingPluginApproval?
     private let editLog: EditLog
     private let contextMemoryStore: ContextMemoryStore?
     private var physicsPlaySnapshot: SceneRuntime?
@@ -117,7 +155,8 @@ public final class EditorApplication: @unchecked Sendable {
                 backend: WGPUBackend? = nil,
                 events: PlatformEventBridge = PlatformEventBridge(),
                 initialAISettings: EditorAISettings = .default,
-                initialCapabilitySettings: EditorCapabilitySettings = .default) throws {
+                initialCapabilitySettings: EditorCapabilitySettings = .default,
+                trustedPluginHostExecutableURL: URL? = nil) throws {
         let resolvedBackendConfig = backendConfig ?? .init()
         let resolvedBackend = backend ?? WGPUBackend(config: resolvedBackendConfig)
         _ = try EditorAssetCatalog.loadProject(at: projectDirectory)
@@ -153,6 +192,9 @@ public final class EditorApplication: @unchecked Sendable {
             .appendingPathComponent(".guava", isDirectory: true)
             .appendingPathComponent("context_memory.json")
         let contextMemoryStore = try? ContextMemoryStore(storageURL: contextMemoryURL)
+        let pluginAuthorizationStore = EditorPluginAuthorizationStore(
+            projectDirectory: projectDirectory
+        )
         self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: resolvedBackend)
         self.projectDirectory = projectDirectory
         self.store = store
@@ -164,6 +206,10 @@ public final class EditorApplication: @unchecked Sendable {
         self.events = events
         self.editLog = EditLog(projectDirectory: projectDirectory)
         self.contextMemoryStore = contextMemoryStore
+        self.pluginAuthorizationStore = pluginAuthorizationStore
+        self.trustedPluginHostExecutableURL = EditorPluginHostLocator.resolve(
+            injectedURL: trustedPluginHostExecutableURL
+        )
         self.session = initialSession
         self.perceptionService = ps
         #if canImport(Vision)
@@ -299,6 +345,11 @@ public final class EditorApplication: @unchecked Sendable {
 
     public func shutdown() {
         logConsole("Editor runtime shutdown")
+        pluginHostClient?.stop()
+        pluginHostClient = nil
+        pluginBindings.removeAll()
+        pluginCapabilityExecutor = nil
+        pendingPluginApproval = nil
         if let eventToken {
             events.unsubscribe(eventToken)
             self.eventToken = nil
@@ -1071,7 +1122,7 @@ public final class EditorApplication: @unchecked Sendable {
                 )
                 let latencyMs = Int(Date().timeIntervalSince(t0) * 1000)
 
-                guard !proposal.plan.isEmpty else {
+                guard !proposal.plan.isEmpty || !proposal.capabilityDrafts.isEmpty else {
                     self.store.dispatch(.setAIStatusMessage("No scene changes."))
                     if let aid = self.pendingAssistantMessageID {
                         let reply = proposal.plan.summary.isEmpty ? "No scene changes needed." : proposal.plan.summary
@@ -1085,13 +1136,43 @@ public final class EditorApplication: @unchecked Sendable {
                     return
                 }
 
-                let transaction = try SceneEditPlanExecutor().buildTransaction(
-                    from: proposal.plan,
-                    scene: self.scene.scene,
-                    baseSceneRevision: proposal.baseSceneRevision,
-                    approvalPolicy: proposal.approvalPolicy,
-                    exposureSnapshot: proposal.capabilityExposureSnapshot
-                )
+                let containsPluginDraft = proposal.capabilityDrafts.contains {
+                    $0.sourcePluginID != nil
+                }
+                let transaction: TransactionIR
+                if containsPluginDraft {
+                    guard let executor = self.pluginCapabilityExecutor else {
+                        throw EditorPluginCapabilityError.pluginNotEnabled(
+                            proposal.capabilityDrafts.compactMap(\.sourcePluginID).first ?? "unknown"
+                        )
+                    }
+                    guard let snapshot = proposal.capabilityExposureSnapshot else {
+                        throw EditorPluginCapabilityError.missingExposureSnapshot
+                    }
+                    let revision = self.scene.revision
+                    let querySnapshots = try self.makePluginQuerySnapshots(
+                        for: proposal.capabilityDrafts,
+                        sceneRevision: revision
+                    )
+                    transaction = try executor.buildTransaction(
+                        summary: proposal.plan.summary,
+                        reasoning: proposal.plan.reasoning,
+                        drafts: proposal.capabilityDrafts,
+                        snapshot: snapshot,
+                        scene: self.scene.scene,
+                        currentSceneRevision: revision,
+                        querySnapshots: querySnapshots,
+                        approvalPolicy: proposal.approvalPolicy
+                    )
+                } else {
+                    transaction = try SceneEditPlanExecutor().buildTransaction(
+                        from: proposal.plan,
+                        scene: self.scene.scene,
+                        baseSceneRevision: proposal.baseSceneRevision,
+                        approvalPolicy: proposal.approvalPolicy,
+                        exposureSnapshot: proposal.capabilityExposureSnapshot
+                    )
+                }
                 self.logConsole("AI inference: \(latencyMs)ms", detail: proposal.plan.summary)
                 self.pendingSessionProposal = proposal
                 self.submitPlanTransaction(
@@ -1329,7 +1410,11 @@ public final class EditorApplication: @unchecked Sendable {
         store.dispatch(.setAISettings(settings))
         store.dispatch(.clearChatHistory)
         pendingAssistantMessageID = nil
-        let newSession = Self.makeSession(for: settings)
+        let newSession = Self.makeSession(
+            for: settings,
+            pluginCapabilityExecutor: pluginCapabilityExecutor,
+            pluginQuerySnapshotProvider: makePluginQuerySnapshotProvider()
+        )
         if let newSession {
             let worldContext = self.aiWorldContext
             let ctx = Self.workflowContext(for: store.state.workspaceMode)
@@ -1347,7 +1432,350 @@ public final class EditorApplication: @unchecked Sendable {
 
     public func applyCapabilitySettings(_ settings: EditorCapabilitySettings) {
         store.dispatch(.setCapabilitySettings(settings))
-        intentCoordinator.configureCapabilityPlanner(Self.makeCapabilityInvocationPlanner(for: settings))
+        intentCoordinator.configureCapabilityPlanner(
+            Self.makeCapabilityInvocationPlanner(for: settings,
+                                                 pluginCapabilityExecutor: pluginCapabilityExecutor)
+        )
+    }
+
+    // MARK: - Isolated AI plugins
+
+    /// Inspects WIT, manifest metadata, and Component exports without enabling
+    /// or exposing the plugin. The returned value is what the UI must show
+    /// before constructing an explicit authorization record.
+    @MainActor
+    public func inspectPlugin(at pluginURL: URL) throws -> PluginInspection {
+        try resolvedPluginHostClient().inspectPlugin(at: pluginURL)
+    }
+
+    /// Call only after the user has approved the inspection shown by the UI.
+    /// Any code, WIT, permission, or schema change makes this record invalid.
+    public func makePluginAuthorization(
+        afterUserApprovalOf inspection: PluginInspection,
+        at date: Date = Date()
+    ) throws -> PluginAuthorizationRecord {
+        try PluginAuthorizationRecord(inspection: inspection, authorisedAt: date)
+    }
+
+    /// A stored record is reusable only when every current inspection field is
+    /// identical. Merely finding a record never loads or exposes the plugin.
+    public func storedPluginAuthorization(
+        for inspection: PluginInspection
+    ) -> PluginAuthorizationRecord? {
+        pluginAuthorizationStore.authorization(for: inspection)
+    }
+
+    /// Loads an already-authorized package into the isolated host, rebuilds the
+    /// one Registry used by Editor AI and MCP, and invalidates every old Draft.
+    @MainActor
+    @discardableResult
+    public func enablePlugin(
+        at pluginURL: URL,
+        authorization: PluginAuthorizationRecord
+    ) async throws -> PluginInspection {
+        guard pluginBindings[authorization.pluginID] == nil else {
+            throw EditorPluginCapabilityError.pluginAlreadyEnabled(authorization.pluginID)
+        }
+        let client = try resolvedPluginHostClient()
+        let binding = try await Task.detached(priority: .userInitiated) {
+            try client.loadPlugin(at: pluginURL, authorization: authorization)
+        }.value
+        var nextBindings = pluginBindings
+        nextBindings[binding.pluginID] = binding
+        let executor: PluginCapabilityExecutor
+        do {
+            executor = try PluginCapabilityExecutor(
+                bindings: nextBindings.values.sorted { $0.pluginID < $1.pluginID },
+                invoker: client
+            )
+            try pluginAuthorizationStore.record(authorization)
+        } catch {
+            _ = try? await Task.detached(priority: .userInitiated) {
+                try client.unloadPlugin(at: pluginURL)
+            }.value
+            throw error
+        }
+        pluginBindings = nextBindings
+        await activatePluginExecutor(executor)
+        return binding.inspection
+    }
+
+    @MainActor
+    public func disablePlugin(id pluginID: String) async throws {
+        guard let binding = pluginBindings[pluginID] else {
+            throw EditorPluginCapabilityError.pluginNotEnabled(pluginID)
+        }
+        var unloadError: Error?
+        do {
+            let client = pluginHostClient
+            let pluginURL = URL(fileURLWithPath: binding.pluginPath,
+                                isDirectory: true)
+            try await Task.detached(priority: .userInitiated) {
+                try client?.unloadPlugin(at: pluginURL)
+            }.value
+        } catch {
+            unloadError = error
+        }
+        pluginBindings.removeValue(forKey: pluginID)
+        let executor: PluginCapabilityExecutor?
+        do {
+            if pluginBindings.isEmpty {
+                executor = nil
+            } else if let client = pluginHostClient {
+                executor = try PluginCapabilityExecutor(
+                    bindings: pluginBindings.values.sorted { $0.pluginID < $1.pluginID },
+                    invoker: client
+                )
+            } else {
+                executor = nil
+            }
+        } catch {
+            // Rebuilding the remaining registry is part of the trust boundary. If it
+            // cannot be proven consistent, discard every in-memory plugin binding.
+            pluginBindings.removeAll()
+            await activatePluginExecutor(nil)
+            throw error
+        }
+        await activatePluginExecutor(executor)
+        if let unloadError { throw unloadError }
+    }
+
+    @MainActor
+    public func revokePluginAuthorization(id pluginID: String) async throws {
+        var disableError: Error?
+        if pluginBindings[pluginID] != nil {
+            do {
+                try await disablePlugin(id: pluginID)
+            } catch {
+                disableError = error
+            }
+        }
+        try pluginAuthorizationStore.remove(pluginID: pluginID)
+        if let disableError { throw disableError }
+    }
+
+    public func enabledPluginInspections() -> [PluginInspection] {
+        pluginBindings.values.map(\.inspection).sorted {
+            $0.manifest.id < $1.manifest.id
+        }
+    }
+
+    public var isPluginHostAvailable: Bool {
+        trustedPluginHostExecutableURL != nil
+    }
+
+    /// Starts the explicit Settings-panel flow. Inspection does not load the
+    /// component and the package URL is retained only in private process
+    /// memory, never in observable/project state.
+    @MainActor
+    public func inspectPluginForManagement(at pluginURL: URL) async {
+        pendingPluginApproval = nil
+        publishPluginManagement(phase: .inspecting,
+                                candidate: nil,
+                                message: nil)
+        do {
+            let client = try resolvedPluginHostClient()
+            let inspection = try await Task.detached(priority: .userInitiated) {
+                try client.inspectPlugin(at: pluginURL)
+            }.value
+            let reusable = storedPluginAuthorization(for: inspection) != nil
+            pendingPluginApproval = PendingPluginApproval(
+                packageURL: pluginURL.standardizedFileURL,
+                inspection: inspection
+            )
+            publishPluginManagement(
+                phase: .awaitingAuthorization,
+                candidate: EditorPluginInspectionSummary(
+                    inspection: inspection,
+                    hasReusableAuthorization: reusable
+                ),
+                message: reusable
+                    ? "This exact plugin build was previously authorized. Review it before enabling."
+                    : "Review the code hashes, imports, access level, and capabilities before authorizing."
+            )
+        } catch {
+            publishPluginManagement(phase: .failed,
+                                    candidate: nil,
+                                    message: Self.pluginManagementErrorMessage(error))
+        }
+    }
+
+    /// Called only by an explicit user action after the inspection summary is
+    /// visible. The host re-inspects the package during load, so a file change
+    /// between review and approval fails closed.
+    @MainActor
+    public func authorizeAndEnableInspectedPlugin() async {
+        guard let pending = pendingPluginApproval else {
+            publishPluginManagement(
+                phase: .failed,
+                candidate: nil,
+                message: EditorPluginCapabilityError.noPendingPluginApproval.localizedDescription
+            )
+            return
+        }
+        let candidate = EditorPluginInspectionSummary(
+            inspection: pending.inspection,
+            hasReusableAuthorization: storedPluginAuthorization(for: pending.inspection) != nil
+        )
+        publishPluginManagement(phase: .enabling,
+                                candidate: candidate,
+                                message: nil)
+        do {
+            let authorization = try storedPluginAuthorization(for: pending.inspection)
+                ?? makePluginAuthorization(afterUserApprovalOf: pending.inspection)
+            let enabledInspection = try await enablePlugin(
+                at: pending.packageURL,
+                authorization: authorization
+            )
+            pendingPluginApproval = nil
+            publishPluginManagement(
+                phase: .idle,
+                candidate: nil,
+                message: "Enabled plugin '\(enabledInspection.manifest.name)'."
+            )
+        } catch {
+            publishPluginManagement(phase: .failed,
+                                    candidate: candidate,
+                                    message: Self.pluginManagementErrorMessage(error))
+        }
+    }
+
+    @MainActor
+    public func cancelPluginApproval() {
+        pendingPluginApproval = nil
+        publishPluginManagement(phase: .idle,
+                                candidate: nil,
+                                message: nil)
+    }
+
+    @MainActor
+    public func disablePluginFromManagement(id pluginID: String) async {
+        do {
+            try await disablePlugin(id: pluginID)
+            publishPluginManagement(phase: .idle,
+                                    candidate: store.state.pluginManagement.candidate,
+                                    message: "Disabled plugin '\(pluginID)'.")
+        } catch {
+            publishPluginManagement(phase: .failed,
+                                    candidate: store.state.pluginManagement.candidate,
+                                    message: Self.pluginManagementErrorMessage(error))
+        }
+    }
+
+    @MainActor
+    public func revokePluginFromManagement(id pluginID: String) async {
+        do {
+            try await revokePluginAuthorization(id: pluginID)
+            if pendingPluginApproval?.inspection.manifest.id == pluginID {
+                pendingPluginApproval = nil
+            }
+            publishPluginManagement(phase: .idle,
+                                    candidate: nil,
+                                    message: "Revoked authorization for plugin '\(pluginID)'.")
+        } catch {
+            publishPluginManagement(phase: .failed,
+                                    candidate: store.state.pluginManagement.candidate,
+                                    message: Self.pluginManagementErrorMessage(error))
+        }
+    }
+
+    @MainActor
+    private func publishPluginManagement(
+        phase: EditorPluginManagementPhase,
+        candidate: EditorPluginInspectionSummary?,
+        message: String?
+    ) {
+        let enabled = pluginBindings.values.map {
+            EditorPluginInspectionSummary(inspection: $0.inspection,
+                                          hasReusableAuthorization: true)
+        }
+        store.dispatch(.setPluginManagementState(
+            EditorPluginManagementState(phase: phase,
+                                        candidate: candidate,
+                                        enabled: enabled,
+                                        message: message)
+        ))
+        displayInvalidationHandler?()
+    }
+
+    private static func pluginManagementErrorMessage(_ error: Error) -> String {
+        if let localized = error as? LocalizedError,
+           let description = localized.errorDescription {
+            return description
+        }
+        return String(describing: error)
+    }
+
+    @MainActor
+    private func resolvedPluginHostClient() throws -> PluginHostProcessClient {
+        if let existing = pluginHostClient { return existing }
+        guard let resolvedURL = trustedPluginHostExecutableURL else {
+            throw EditorPluginCapabilityError.pluginHostUnavailable
+        }
+        let client = PluginHostProcessClient(executableURL: resolvedURL)
+        client.onInvalidation = { [weak self] _ in
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                Task { @MainActor in
+                    await self.invalidatePluginsAfterHostRestart()
+                }
+            }
+        }
+        pluginHostClient = client
+        return client
+    }
+
+    @MainActor
+    private func invalidatePluginsAfterHostRestart() async {
+        pluginBindings.removeAll()
+        pendingPluginApproval = nil
+        await activatePluginExecutor(nil)
+        store.dispatch(.setPluginManagementState(
+            EditorPluginManagementState(
+                phase: .failed,
+                message: "PluginHost restarted. Enabled plugins and pending approvals were invalidated."
+            )
+        ))
+        store.dispatch(.setAIStatusMessage(
+            "PluginHost restarted. Plugin capabilities and pending plans were invalidated."
+        ))
+    }
+
+    @MainActor
+    private func activatePluginExecutor(_ executor: PluginCapabilityExecutor?) async {
+        pluginCapabilityExecutor = executor
+        let settings = store.state.capabilitySettings
+        intentCoordinator.configureCapabilityPlanner(
+            Self.makeCapabilityInvocationPlanner(for: settings,
+                                                 pluginCapabilityExecutor: executor)
+        )
+        await mcpCapabilitySessions.replaceRegistry(
+            executor?.registry ?? .aiDefault,
+            exposurePolicy: executor?.exposurePolicy
+                ?? CapabilityExposurePolicy(activeReleasePhase: .stable,
+                                            allowedDomains: ["scene"],
+                                            maximumCapabilities: 16),
+            pluginAuthorities: executor?.pluginAuthorities ?? [:]
+        )
+
+        let oldSession = session
+        await oldSession?.cancelActiveRun()
+        let world = await aiWorldContext.snapshot()
+        let nextSession = Self.makeSession(
+            for: store.state.aiSettings,
+            initialWorldView: world,
+            pluginCapabilityExecutor: executor,
+            pluginQuerySnapshotProvider: makePluginQuerySnapshotProvider()
+        )
+        session = nextSession
+        if let nextSession {
+            await nextSession.setWorkflowContext(Self.workflowContext(for: store.state.workspaceMode))
+            await nextSession.setObservationBus(observationBus)
+            await nextSession.setContextMemory(contextMemoryStore)
+        }
+        pendingSessionProposal = nil
+        pendingAssistantMessageID = nil
+        store.dispatch(.clearChatHistory)
     }
 
     /// Removes the stored API key for the current provider and disables AI.
@@ -1385,7 +1813,9 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     static func makeSession(for settings: EditorAISettings,
-                            initialWorldView: WorldView = WorldView()) -> Session? {
+                            initialWorldView: WorldView = WorldView(),
+                            pluginCapabilityExecutor: PluginCapabilityExecutor? = nil,
+                            pluginQuerySnapshotProvider: PluginQuerySnapshotProvider? = nil) -> Session? {
         switch settings.provider {
         case .none:
             return nil
@@ -1393,22 +1823,121 @@ public final class EditorApplication: @unchecked Sendable {
             guard let key = AIKeychain.load(provider: .anthropic) else { return nil }
             return Session(config: .anthropic(apiKey: key, model: settings.model,
                                               autoApprove: settings.autoApprove),
-                           initialWorldView: initialWorldView)
+                           initialWorldView: initialWorldView,
+                           pluginCapabilityExecutor: pluginCapabilityExecutor,
+                           pluginQuerySnapshotProvider: pluginQuerySnapshotProvider)
         case .openai:
             guard let key = AIKeychain.load(provider: .openai) else { return nil }
             return Session(config: .openAIResponses(apiKey: key, model: settings.model,
                                                     autoApprove: settings.autoApprove),
-                           initialWorldView: initialWorldView)
+                           initialWorldView: initialWorldView,
+                           pluginCapabilityExecutor: pluginCapabilityExecutor,
+                           pluginQuerySnapshotProvider: pluginQuerySnapshotProvider)
         case .deepseek:
             guard let key = AIKeychain.load(provider: .deepseek) else { return nil }
             return Session(config: .deepSeek(apiKey: key, model: settings.model,
                                              autoApprove: settings.autoApprove),
-                           initialWorldView: initialWorldView)
+                           initialWorldView: initialWorldView,
+                           pluginCapabilityExecutor: pluginCapabilityExecutor,
+                           pluginQuerySnapshotProvider: pluginQuerySnapshotProvider)
         }
     }
 
-    static func makeCapabilityInvocationPlanner(for settings: EditorCapabilitySettings) -> CapabilityInvocationPlanner {
-        CapabilityInvocationPlanner(gate: ReleasePhaseGate(activePhase: settings.releasePhase.runtimePhase))
+    private func makePluginQuerySnapshotProvider() -> PluginQuerySnapshotProvider? {
+        guard pluginCapabilityExecutor != nil else { return nil }
+        return { [weak self] pluginID, revision in
+            guard let self else {
+                throw EditorPluginCapabilityError.pluginNotEnabled(pluginID)
+            }
+            return try await MainActor.run {
+                try self.makePluginQuerySnapshot(pluginID: pluginID,
+                                                 sceneRevision: revision)
+            }
+        }
+    }
+
+    private func makePluginQuerySnapshot(
+        pluginID: String,
+        sceneRevision: UInt64
+    ) throws -> PluginQuerySnapshot? {
+        guard let executor = pluginCapabilityExecutor else {
+            throw EditorPluginCapabilityError.pluginNotEnabled(pluginID)
+        }
+        let imports = try executor.requiredImports(forPluginID: pluginID)
+        guard !imports.isEmpty else { return nil }
+        guard scene.revision == sceneRevision else {
+            throw EditorPluginCapabilityError.sceneRevisionChanged(
+                expected: sceneRevision,
+                actual: scene.revision
+            )
+        }
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        var scenePayload: Data?
+        var selectionPayload: Data?
+        var assetPayload: Data?
+
+        if imports.contains(.sceneQuery) {
+            let snapshot = SceneSemanticEncoder().encode(
+                scene.scene,
+                selectedEntityID: store.state.selectedEntityID,
+                workspaceMode: store.state.workspaceMode.rawValue,
+                localeIdentifier: nil
+            )
+            scenePayload = try encoder.encode(snapshot)
+        }
+        if imports.contains(.selectionQuery) {
+            let selected = store.state.selectedEntityID.map { ["scene:\($0)"] } ?? []
+            selectionPayload = try JSONSerialization.data(
+                withJSONObject: ["selected": selected],
+                options: [.sortedKeys]
+            )
+        }
+        if imports.contains(.assetMetadataQuery) {
+            let assets: [[String: Any]] = EditorAssetCatalog.entries().map { asset in
+                [
+                    "id": asset.id,
+                    "name": asset.name,
+                    "relative_path": asset.relativePath,
+                    "kind": String(describing: asset.kind),
+                    "mesh_index": asset.meshIndex,
+                ]
+            }
+            assetPayload = try JSONSerialization.data(
+                withJSONObject: ["assets": assets],
+                options: [.sortedKeys]
+            )
+        }
+        let snapshot = PluginQuerySnapshot(sceneRevision: sceneRevision,
+                                           scene: scenePayload,
+                                           selection: selectionPayload,
+                                           assetMetadata: assetPayload)
+        try snapshot.validate(for: imports)
+        return snapshot
+    }
+
+    private func makePluginQuerySnapshots(
+        for drafts: [CapabilityInvocationDraft],
+        sceneRevision: UInt64
+    ) throws -> [String: PluginQuerySnapshot] {
+        var result: [String: PluginQuerySnapshot] = [:]
+        for pluginID in Set(drafts.compactMap(\.sourcePluginID)).sorted() {
+            if let snapshot = try makePluginQuerySnapshot(pluginID: pluginID,
+                                                          sceneRevision: sceneRevision) {
+                result[pluginID] = snapshot
+            }
+        }
+        return result
+    }
+
+    static func makeCapabilityInvocationPlanner(
+        for settings: EditorCapabilitySettings,
+        pluginCapabilityExecutor: PluginCapabilityExecutor? = nil
+    ) -> CapabilityInvocationPlanner {
+        let gate = ReleasePhaseGate(activePhase: settings.releasePhase.runtimePhase)
+        return pluginCapabilityExecutor?.makeInvocationPlanner(gate: gate)
+            ?? CapabilityInvocationPlanner(gate: gate)
     }
 
     private func submitResolvedIntent(_ intent: IntentIR) {
@@ -1681,6 +2210,30 @@ public final class EditorApplication: @unchecked Sendable {
             }
             if contract.access == .read {
                 try JSONSchemaValidator.validate(data: input, against: contract.inputSchema)
+                if let pluginID = contract.source.pluginID {
+                    guard let executor = pluginCapabilityExecutor else {
+                        throw EditorPluginCapabilityError.pluginNotEnabled(pluginID)
+                    }
+                    let querySnapshot = try makePluginQuerySnapshot(
+                        pluginID: pluginID,
+                        sceneRevision: revision
+                    )
+                    let payload = try executor.executeRead(
+                        toolName: toolName,
+                        input: input,
+                        snapshot: try waitForMCPCapabilityResult { [mcpCapabilitySessions] in
+                            try await mcpCapabilitySessions.snapshot(
+                                sessionID: sessionID,
+                                sceneRevision: revision
+                            )
+                        },
+                        currentSceneRevision: revision,
+                        querySnapshot: querySnapshot
+                    )
+                    let result = try JSONSerialization.jsonObject(with: payload,
+                                                                  options: [.fragmentsAllowed])
+                    return ["ok": true, "result": result]
+                }
                 switch contract.id {
                 case "scene.get_entities":
                     return mcpGetScene()
@@ -1744,9 +2297,10 @@ public final class EditorApplication: @unchecked Sendable {
                                                                 ids: draftIDs,
                                                                 sceneRevision: revision)
             }
+            let builtInDrafts = validated.drafts.filter { $0.sourcePluginID == nil }
             let plan = try SceneCapabilityDraftLowering.plan(summary: summary,
                                                              reasoning: reasoning,
-                                                             drafts: validated.drafts)
+                                                             drafts: builtInDrafts)
             if validated.drafts.isEmpty {
                 return [
                     "ok": true,
@@ -1757,13 +2311,36 @@ public final class EditorApplication: @unchecked Sendable {
             }
             // The executor prepares each operation against a shadow copy and
             // binds each record to the exact authority snapshot used above.
-            let transaction = try SceneEditPlanExecutor().buildTransaction(
-                from: plan,
-                scene: scene.scene,
-                baseSceneRevision: revision,
-                approvalPolicy: .requiresApproval,
-                exposureSnapshot: validated.snapshot
-            )
+            let containsPluginDraft = validated.drafts.contains { $0.sourcePluginID != nil }
+            let transaction: TransactionIR
+            if containsPluginDraft {
+                guard let executor = pluginCapabilityExecutor else {
+                    throw EditorPluginCapabilityError.pluginNotEnabled(
+                        validated.drafts.compactMap(\.sourcePluginID).first ?? "unknown"
+                    )
+                }
+                transaction = try executor.buildTransaction(
+                    summary: summary,
+                    reasoning: reasoning,
+                    drafts: validated.drafts,
+                    snapshot: validated.snapshot,
+                    scene: scene.scene,
+                    currentSceneRevision: revision,
+                    querySnapshots: try makePluginQuerySnapshots(
+                        for: validated.drafts,
+                        sceneRevision: revision
+                    ),
+                    approvalPolicy: .requiresApproval
+                )
+            } else {
+                transaction = try SceneEditPlanExecutor().buildTransaction(
+                    from: plan,
+                    scene: scene.scene,
+                    baseSceneRevision: revision,
+                    approvalPolicy: .requiresApproval,
+                    exposureSnapshot: validated.snapshot
+                )
+            }
             let result = try runPlanTransaction(
                 transaction,
                 capabilityContext: makeCapabilityInvocationContext(defaultSource: .system)

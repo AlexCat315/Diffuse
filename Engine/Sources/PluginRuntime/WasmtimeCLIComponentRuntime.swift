@@ -14,6 +14,7 @@ public enum WasmtimeCLIError: Error, Sendable, Equatable, CustomStringConvertibl
     case inputTooLarge
     case outputTooLarge
     case invalidWAVEOutput
+    case typedComponentABIRequiresEmbeddedRuntime
 
     public var description: String {
         switch self {
@@ -26,6 +27,8 @@ public enum WasmtimeCLIError: Error, Sendable, Equatable, CustomStringConvertibl
         case .inputTooLarge: return "Wasmtime component input exceeds 1 MiB"
         case .outputTooLarge: return "Wasmtime component output exceeds 1 MiB"
         case .invalidWAVEOutput: return "Wasmtime component did not return a WAVE string"
+        case .typedComponentABIRequiresEmbeddedRuntime:
+            return "typed Guava Component capabilities require the embedded Wasmtime runtime"
         }
     }
 }
@@ -55,33 +58,15 @@ public final class WasmtimeCLIComponentRuntime: WASIComponentRuntime, @unchecked
 
     public func validateComponent(_ package: ValidatedPluginPackage,
                                   limits: PluginResourceLimits) throws {
-        _ = try invoke(package: package,
-                       expression: "discover()",
-                       timeoutMilliseconds: limits.discoveryTimeoutMilliseconds,
-                       limits: limits)
-    }
-
-    public func discover(_ package: ValidatedPluginPackage,
-                         limits: PluginResourceLimits) throws -> Data {
-        try invoke(package: package,
-                   expression: "discover()",
-                   timeoutMilliseconds: limits.discoveryTimeoutMilliseconds,
-                   limits: limits)
+        throw WasmtimeCLIError.typedComponentABIRequiresEmbeddedRuntime
     }
 
     public func prepare(_ package: ValidatedPluginPackage,
                         capabilityID: String,
                         input: Data,
+                        querySnapshot: PluginQuerySnapshot?,
                         limits: PluginResourceLimits) throws -> Data {
-        guard input.count <= limits.maximumOutputBytes,
-              let inputString = String(data: input, encoding: .utf8) else {
-            throw WasmtimeCLIError.inputTooLarge
-        }
-        let expression = "prepare(\(waveString(capabilityID)), \(waveString(inputString)))"
-        return try invoke(package: package,
-                          expression: expression,
-                          timeoutMilliseconds: limits.preparationTimeoutMilliseconds,
-                          limits: limits)
+        throw WasmtimeCLIError.typedComponentABIRequiresEmbeddedRuntime
     }
 
     public func interrupt(pluginID: String) {
@@ -281,18 +266,24 @@ private final class BoundedPipeReader: @unchecked Sendable {
         }
         guard shouldStart else { return }
         DispatchQueue.global(qos: .utility).async { [self] in
-            while true {
-                let chunk = handle.readData(ofLength: 16 * 1_024)
-                if chunk.isEmpty { break }
-                lock.withLock {
-                    let remaining = max(0, limit + 1 - retained.count)
-                    if remaining > 0 { retained.append(chunk.prefix(remaining)) }
-                    if retained.count > limit || chunk.count > remaining {
-                        didExceedLimit = true
+            defer { finished.signal() }
+            do {
+                while true {
+                    guard let chunk = try handle.read(upToCount: 16 * 1_024),
+                          !chunk.isEmpty else { break }
+                    lock.withLock {
+                        let remaining = max(0, limit + 1 - retained.count)
+                        if remaining > 0 { retained.append(chunk.prefix(remaining)) }
+                        if retained.count > limit || chunk.count > remaining {
+                            didExceedLimit = true
+                        }
                     }
                 }
+            } catch {
+                // Timeout and interruption deliberately close the read handle.
+                // A throwing EOF/error is the expected terminal state; output
+                // retained before the close remains available to the caller.
             }
-            finished.signal()
         }
     }
 

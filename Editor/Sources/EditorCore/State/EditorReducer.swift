@@ -25,6 +25,7 @@ public enum EditorAction: Sendable {
     case setViewportInteractionDownscale(Bool)
     case setViewportRealtime(Bool)
     case setPhysicsDebugOverlayOptions(EditorPhysicsDebugOverlayOptions)
+    case setPhysicsDebugOverlayScope(EditorPhysicsDebugOverlayScope)
     case setTranslateSnapEnabled(Bool)
     case setRotateSnapEnabled(Bool)
     case setScaleSnapEnabled(Bool)
@@ -40,6 +41,7 @@ public enum EditorAction: Sendable {
     case setPendingConfirmationRequest(ConfirmationRequestBatch?)
     case setAISettings(EditorAISettings)
     case setCapabilitySettings(EditorCapabilitySettings)
+    case setPluginManagementState(EditorPluginManagementState)
     case setAIStatusMessage(String?)
     case setAIWarnings([String])
     case appendChatMessage(AIChatMessage)
@@ -136,6 +138,9 @@ public enum EditorReducer {
         case let .setPhysicsDebugOverlayOptions(options):
             state.physicsDebugOverlayOptions = options.intersection(.all)
 
+        case let .setPhysicsDebugOverlayScope(scope):
+            state.physicsDebugOverlayScope = scope
+
         case let .setTranslateSnapEnabled(enabled):
             state.translateSnapEnabled = enabled
 
@@ -175,6 +180,8 @@ public enum EditorReducer {
             state.aiSettings = settings
         case let .setCapabilitySettings(settings):
             state.capabilitySettings = settings
+        case let .setPluginManagementState(pluginManagement):
+            state.pluginManagement = pluginManagement
         case let .setAIStatusMessage(message):
             state.aiStatusMessage = message
         case let .setAIWarnings(warnings):

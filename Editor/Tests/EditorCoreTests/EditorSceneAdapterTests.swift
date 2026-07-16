@@ -654,6 +654,19 @@ struct EditorSceneAdapterTests {
         #expect(overlay.lines.contains { $0.kind == .jointLimit })
         #expect(overlay.contacts.isEmpty)
 
+        let sceneShapes = adapter.viewportPhysicsDebugOverlay(options: [.shapes])
+        #expect(sceneShapes.lines.allSatisfy { $0.kind == .collider })
+        #expect(sceneShapes.lines.contains { $0.entityID == bodyA.rawValue })
+        #expect(sceneShapes.lines.contains { $0.entityID == bodyB.rawValue })
+        #expect(sceneShapes.lines.first?.entityID == bodyA.rawValue)
+
+        let sceneJoints = adapter.viewportPhysicsDebugOverlay(options: [.joints])
+        #expect(!sceneJoints.lines.isEmpty)
+        #expect(sceneJoints.lines.allSatisfy {
+            $0.kind == .joint || $0.kind == .jointAxis || $0.kind == .jointLimit
+        })
+        #expect(sceneJoints.lines.allSatisfy { $0.entityID == jointEntity.rawValue })
+
         _ = adapter.scene.updateComponent(PhysicsJoint.self, for: jointEntity) { joint in
             joint.configuration = .sixDOF(SixDOFJointConfiguration(
                 linearMinimum: SIMD3<Float>(-1, -2, -3),

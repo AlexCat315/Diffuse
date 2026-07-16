@@ -70,6 +70,9 @@ public struct EditorPhysicsContactMarker: Sendable, Equatable {
 public struct EditorPhysicsDebugOverlay: Sendable, Equatable {
     public var lines: [EditorPhysicsDebugLine]
     public var contacts: [EditorPhysicsContactMarker]
+    public var sleepingBodyEntityIDs: Set<UInt64>
+    public var triggerBodyEntityIDs: Set<UInt64>
+    public var groundedCharacterEntityIDs: Set<UInt64>
     public var selectedBodyIsSleeping: Bool
     public var selectedBodyIsTrigger: Bool
     public var characterGroundState: CharacterGroundState?
@@ -77,6 +80,9 @@ public struct EditorPhysicsDebugOverlay: Sendable, Equatable {
     public static let empty = EditorPhysicsDebugOverlay(
         lines: [],
         contacts: [],
+        sleepingBodyEntityIDs: [],
+        triggerBodyEntityIDs: [],
+        groundedCharacterEntityIDs: [],
         selectedBodyIsSleeping: false,
         selectedBodyIsTrigger: false,
         characterGroundState: nil
@@ -401,80 +407,120 @@ extension EditorSceneAdapter {
             }
     }
 
-    /// Builds the selected entity's physics overlay from the unified runtime debug frame.
-    /// The result is stable and bounded so the UI layer only needs to project and color lines.
+    /// Builds either a selected-entity or scene-wide physics overlay from the unified runtime
+    /// debug frame. Disabled categories never consume the stable line/contact budgets.
     public func viewportPhysicsDebugOverlay(
-        entityID rawID: UInt64,
+        entityID rawID: UInt64? = nil,
+        options: EditorPhysicsDebugOverlayOptions = .all,
         maxLines: Int = 8_192,
         maxContacts: Int = 512
     ) -> EditorPhysicsDebugOverlay {
-        let entity = EntityID(rawValue: rawID)
+        let selectedEntity = rawID.map(EntityID.init(rawValue:))
         let frame = scene.physicsDebugFrame
+        let lineLimit = max(0, maxLines)
         var lines: [EditorPhysicsDebugLine] = []
-        lines.reserveCapacity(min(max(0, maxLines), 512))
+        lines.reserveCapacity(min(lineLimit, 512))
+        var sleepingBodyEntityIDs: Set<UInt64> = []
+        var triggerBodyEntityIDs: Set<UInt64> = []
+        var groundedCharacterEntityIDs: Set<UInt64> = []
 
-        let selectedBody = frame.bodies.first { $0.entity == entity }
-        if let selectedBody {
-            appendAABBLines(
-                selectedBody.bounds,
-                entityID: rawID,
-                kind: .bounds,
-                to: &lines,
-                limit: maxLines
-            )
-            for instance in selectedBody.shapes where lines.count < maxLines {
-                appendColliderShapeLines(
-                    instance,
-                    bodyTransform: selectedBody.worldTransform.matrix,
-                    entityID: rawID,
+        let selectedBody = selectedEntity.flatMap { selected in
+            frame.bodies.first { $0.entity == selected }
+        }
+        for body in frame.bodies {
+            if let selectedEntity, body.entity != selectedEntity { continue }
+            let bodyID = body.entity.rawValue
+            if body.isSleeping { sleepingBodyEntityIDs.insert(bodyID) }
+            if body.isTrigger { triggerBodyEntityIDs.insert(bodyID) }
+            if options.contains(.bounds), lines.count < lineLimit {
+                appendAABBLines(
+                    body.bounds,
+                    entityID: bodyID,
+                    kind: .bounds,
                     to: &lines,
-                    limit: maxLines
+                    limit: lineLimit
                 )
             }
-        }
-
-        for joint in frame.constraints where lines.count < maxLines {
-            guard joint.entity == entity || joint.entityA == entity || joint.entityB == entity else {
-                continue
+            if options.contains(.shapes) {
+                for instance in body.shapes where lines.count < lineLimit {
+                    appendColliderShapeLines(
+                        instance,
+                        bodyTransform: body.worldTransform.matrix,
+                        entityID: bodyID,
+                        to: &lines,
+                        limit: lineLimit
+                    )
+                }
             }
-            appendJointLines(joint, to: &lines, limit: maxLines)
         }
 
-        let character = frame.characters.first { $0.entity == entity }
-        if let character, lines.count < maxLines, simd_length_squared(character.groundNormal) > 1e-8 {
-            let normal = simd_normalize(character.groundNormal)
-            lines.append(EditorPhysicsDebugLine(
-                entityID: rawID,
-                positionA: character.position,
-                positionB: character.position + normal * 0.8,
-                kind: .characterGround
-            ))
-        }
-
-        let contacts = frame.contacts.lazy
-            .filter { $0.entityA == entity || $0.entityB == entity }
-            .prefix(max(0, maxContacts))
-            .map { contact in
-                let normal = simd_length_squared(contact.normal) > 1e-8
-                    ? simd_normalize(contact.normal)
-                    : SIMD3<Float>(0, 1, 0)
-                return EditorPhysicsContactMarker(
-                    entityA: contact.entityA.rawValue,
-                    entityB: contact.entityB.rawValue,
-                    position: contact.position,
-                    normalEnd: contact.position + normal * max(0.25, contact.penetrationDepth),
-                    kind: contact.kind,
-                    penetrationDepth: contact.penetrationDepth,
-                    impulse: contact.impulse
-                )
+        if options.contains(.joints) {
+            for joint in frame.constraints where lines.count < lineLimit {
+                if let selectedEntity,
+                   joint.entity != selectedEntity,
+                   joint.entityA != selectedEntity,
+                   joint.entityB != selectedEntity {
+                    continue
+                }
+                appendJointLines(joint, to: &lines, limit: lineLimit)
             }
+        }
+
+        let selectedCharacter = selectedEntity.flatMap { selected in
+            frame.characters.first { $0.entity == selected }
+        }
+        if options.contains(.characters) {
+            for character in frame.characters where lines.count < lineLimit {
+                if let selectedEntity, character.entity != selectedEntity { continue }
+                guard simd_length_squared(character.groundNormal) > 1e-8 else { continue }
+                if character.groundState == .onGround {
+                    groundedCharacterEntityIDs.insert(character.entity.rawValue)
+                }
+                let normal = simd_normalize(character.groundNormal)
+                lines.append(EditorPhysicsDebugLine(
+                    entityID: character.entity.rawValue,
+                    positionA: character.position,
+                    positionB: character.position + normal * 0.8,
+                    kind: .characterGround
+                ))
+            }
+        }
+
+        let contacts: [EditorPhysicsContactMarker]
+        if options.contains(.contacts) {
+            contacts = frame.contacts.lazy
+                .filter { contact in
+                    guard let selectedEntity else { return true }
+                    return contact.entityA == selectedEntity || contact.entityB == selectedEntity
+                }
+                .prefix(max(0, maxContacts))
+                .map { contact in
+                    let normal = simd_length_squared(contact.normal) > 1e-8
+                        ? simd_normalize(contact.normal)
+                        : SIMD3<Float>(0, 1, 0)
+                    return EditorPhysicsContactMarker(
+                        entityA: contact.entityA.rawValue,
+                        entityB: contact.entityB.rawValue,
+                        position: contact.position,
+                        normalEnd: contact.position + normal * max(0.25, contact.penetrationDepth),
+                        kind: contact.kind,
+                        penetrationDepth: contact.penetrationDepth,
+                        impulse: contact.impulse
+                    )
+                }
+        } else {
+            contacts = []
+        }
 
         return EditorPhysicsDebugOverlay(
             lines: lines,
-            contacts: Array(contacts),
+            contacts: contacts,
+            sleepingBodyEntityIDs: sleepingBodyEntityIDs,
+            triggerBodyEntityIDs: triggerBodyEntityIDs,
+            groundedCharacterEntityIDs: groundedCharacterEntityIDs,
             selectedBodyIsSleeping: selectedBody?.isSleeping ?? false,
             selectedBodyIsTrigger: selectedBody?.isTrigger ?? false,
-            characterGroundState: character?.groundState
+            characterGroundState: selectedCharacter?.groundState
         )
     }
 
