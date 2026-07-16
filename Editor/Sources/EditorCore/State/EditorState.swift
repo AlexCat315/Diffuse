@@ -221,6 +221,21 @@ public struct EditorAssetDragPayload: Codable, Sendable, Equatable, Hashable {
     }
 }
 
+public struct EditorPhysicsDebugOverlayOptions: OptionSet, Codable, Sendable, Equatable {
+    public let rawValue: UInt8
+
+    public init(rawValue: UInt8) {
+        self.rawValue = rawValue
+    }
+
+    public static let shapes = Self(rawValue: 1 << 0)
+    public static let bounds = Self(rawValue: 1 << 1)
+    public static let contacts = Self(rawValue: 1 << 2)
+    public static let joints = Self(rawValue: 1 << 3)
+    public static let characters = Self(rawValue: 1 << 4)
+    public static let all: Self = [.shapes, .bounds, .contacts, .joints, .characters]
+}
+
 public struct EditorState: Codable, Sendable {
     public static let maxFrameStatsHistorySamples = 240
     public static let maxParticleDiagnosticsHistorySamples = 240
@@ -265,6 +280,7 @@ public struct EditorState: Codable, Sendable {
     /// Escape hatch for on-demand viewport rendering: render every tick even
     /// when no packet input changed (Unreal's per-viewport "Realtime").
     public var viewportRealtimeEnabled: Bool
+    public var physicsDebugOverlayOptions: EditorPhysicsDebugOverlayOptions
     public var translateSnapEnabled: Bool
     public var rotateSnapEnabled: Bool
     public var scaleSnapEnabled: Bool
@@ -314,6 +330,7 @@ public struct EditorState: Codable, Sendable {
         viewportRenderScalePercent: Int = 100,
         viewportInteractionDownscaleEnabled: Bool = false,
         viewportRealtimeEnabled: Bool = false,
+        physicsDebugOverlayOptions: EditorPhysicsDebugOverlayOptions = .all,
         translateSnapEnabled: Bool = false,
         rotateSnapEnabled: Bool = false,
         scaleSnapEnabled: Bool = false,
@@ -360,6 +377,7 @@ public struct EditorState: Codable, Sendable {
         self.viewportRenderScalePercent = Self.sanitizedRenderScalePercent(viewportRenderScalePercent)
         self.viewportInteractionDownscaleEnabled = viewportInteractionDownscaleEnabled
         self.viewportRealtimeEnabled = viewportRealtimeEnabled
+        self.physicsDebugOverlayOptions = physicsDebugOverlayOptions.intersection(.all)
         self.translateSnapEnabled = translateSnapEnabled
         self.rotateSnapEnabled = rotateSnapEnabled
         self.scaleSnapEnabled = scaleSnapEnabled
@@ -430,6 +448,7 @@ public struct EditorState: Codable, Sendable {
         case viewportRenderScalePercent
         case viewportInteractionDownscaleEnabled
         case viewportRealtimeEnabled
+        case physicsDebugOverlayOptions
         case translateSnapEnabled
         case rotateSnapEnabled
         case scaleSnapEnabled
@@ -496,6 +515,10 @@ public struct EditorState: Codable, Sendable {
             viewportRenderScalePercent: try c.decodeIfPresent(Int.self, forKey: .viewportRenderScalePercent) ?? 100,
             viewportInteractionDownscaleEnabled: try c.decodeIfPresent(Bool.self, forKey: .viewportInteractionDownscaleEnabled) ?? false,
             viewportRealtimeEnabled: try c.decodeIfPresent(Bool.self, forKey: .viewportRealtimeEnabled) ?? false,
+            physicsDebugOverlayOptions: try c.decodeIfPresent(
+                EditorPhysicsDebugOverlayOptions.self,
+                forKey: .physicsDebugOverlayOptions
+            ) ?? .all,
             translateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .translateSnapEnabled) ?? false,
             rotateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .rotateSnapEnabled) ?? false,
             scaleSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .scaleSnapEnabled) ?? false,
@@ -544,6 +567,7 @@ public struct EditorState: Codable, Sendable {
         try c.encode(viewportRenderScalePercent, forKey: .viewportRenderScalePercent)
         try c.encode(viewportInteractionDownscaleEnabled, forKey: .viewportInteractionDownscaleEnabled)
         try c.encode(viewportRealtimeEnabled, forKey: .viewportRealtimeEnabled)
+        try c.encode(physicsDebugOverlayOptions, forKey: .physicsDebugOverlayOptions)
         try c.encode(translateSnapEnabled, forKey: .translateSnapEnabled)
         try c.encode(rotateSnapEnabled, forKey: .rotateSnapEnabled)
         try c.encode(scaleSnapEnabled, forKey: .scaleSnapEnabled)

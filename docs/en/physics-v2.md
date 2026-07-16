@@ -27,9 +27,9 @@ Commands submitted from `onPrePhysics` are therefore consumed by the current phy
 
 ## Editor physics authoring and debugging
 
-The Collider Inspector exposes both quick parameters for the first shape and the complete Compound child-shape JSON. Every `ColliderShapeInstance` independently authors its shape, local position, quaternion rotation, and scale, then writes directly to `Collider.shapes`. Capsule, Cylinder, and HeightField now have separate fields; HeightField no longer displays Capsule half-height.
+The Collider Inspector exposes both quick parameters for the first shape and structured Compound child-shape cards. It can add, remove, and deterministically reorder children while independently authoring each `ColliderShapeInstance` shape, local position, quaternion rotation, and scale, then writing directly to `Collider.shapes`. Complete JSON remains available as an advanced editing path. Capsule, Cylinder, and HeightField have separate fields; HeightField no longer displays Capsule half-height.
 
-The `PhysicsJoint` Inspector switches its controls across Point, Fixed, Distance, Hinge, Slider, Cone/SwingTwist, and SixDOF configurations, including anchors, axes, linear or angular limits, motors, springs, damping, and break thresholds. The Viewport consumes the unified `PhysicsDebugFrameResource` and draws the selected entity's Compound children, AABB, contact points and normals, sleeping/trigger state, joint anchors/axes/limits, and character ground normal. Runtime-stable ordering and explicit display limits bound the overlay.
+The `PhysicsJoint` Inspector selects two distinct endpoints from entities with Colliders and switches its controls across Point, Fixed, Distance, Hinge, Slider, Cone/SwingTwist, and SixDOF configurations, including anchors, axes, linear or angular limits, motors, springs, damping, and break thresholds. The Viewport consumes the unified `PhysicsDebugFrameResource` and draws the selected entity's Compound children, AABB, contact points and normals, sleeping/trigger state, joint anchors/axes/limits, and character ground normal. Toolbar controls independently toggle shape, bounds, contact, joint, and character-ground categories; the selection persists in Editor state, and an in-viewport legend reflects enabled categories. Runtime-stable ordering and explicit display limits bound the overlay.
 
 ## Vehicles
 

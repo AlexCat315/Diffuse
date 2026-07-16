@@ -24,6 +24,7 @@ public enum EditorAction: Sendable {
     case setViewportRenderScalePercent(Int)
     case setViewportInteractionDownscale(Bool)
     case setViewportRealtime(Bool)
+    case setPhysicsDebugOverlayOptions(EditorPhysicsDebugOverlayOptions)
     case setTranslateSnapEnabled(Bool)
     case setRotateSnapEnabled(Bool)
     case setScaleSnapEnabled(Bool)
@@ -131,6 +132,9 @@ public enum EditorReducer {
 
         case let .setViewportRealtime(enabled):
             state.viewportRealtimeEnabled = enabled
+
+        case let .setPhysicsDebugOverlayOptions(options):
+            state.physicsDebugOverlayOptions = options.intersection(.all)
 
         case let .setTranslateSnapEnabled(enabled):
             state.translateSnapEnabled = enabled
