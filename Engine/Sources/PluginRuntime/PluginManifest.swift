@@ -5,6 +5,13 @@ public enum PluginImportPermission: String, Codable, Sendable, CaseIterable, Has
     case sceneQuery = "guava:scene/query"
     case selectionQuery = "guava:selection/query"
     case assetMetadataQuery = "guava:asset/metadata-query"
+
+    /// Every Guava import is intentionally one narrow synchronous function.
+    /// The request must be `{\"operation\":\"snapshot\"}` and the result is
+    /// the revision-bound JSON value supplied by the Editor for this call.
+    public var witInterface: String {
+        "interface query { query: func(request: string) -> string; }"
+    }
 }
 
 public struct PluginResourceLimits: Codable, Sendable, Equatable {

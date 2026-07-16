@@ -70,9 +70,10 @@ struct EditorStoreTests {
 
         #expect(state.capabilitySettings == .default)
         #expect(state.physicsDebugOverlayOptions == .all)
+        #expect(state.physicsDebugOverlayScope == .selected)
     }
 
-    @Test("physics debug overlay options persist and notify subscribers")
+    @Test("physics debug overlay options and scope persist and notify subscribers")
     func physicsDebugOptionsPersistAndNotify() throws {
         let store = EditorStore()
         var notifications = 0
@@ -80,12 +81,15 @@ struct EditorStoreTests {
         let options: EditorPhysicsDebugOverlayOptions = [.shapes, .joints]
 
         store.dispatch(.setPhysicsDebugOverlayOptions(options))
+        store.dispatch(.setPhysicsDebugOverlayScope(.scene))
 
         #expect(store.physicsDebugOverlayOptions == options)
-        #expect(notifications == 1)
+        #expect(store.physicsDebugOverlayScope == .scene)
+        #expect(notifications == 2)
         let data = try JSONEncoder().encode(store.state)
         let restored = try JSONDecoder().decode(EditorState.self, from: data)
         #expect(restored.physicsDebugOverlayOptions == options)
+        #expect(restored.physicsDebugOverlayScope == .scene)
     }
 
     @Test("Capability settings notify subscribers")

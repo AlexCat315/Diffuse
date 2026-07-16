@@ -73,6 +73,7 @@ swift build --package-path guava-mcp # MCP 服务（运行: swift run GuavaMCP�
 | OpenEXR | CMake 源码编译 | submodule `Engine/third-party/openexr` |
 | JoltPhysics | CMake 源码编译 → `.artifactbundle` | submodule `Engine/third-party/jolt` |
 | wgpu-native | 配置时从 gfx-rs 公开 release 下载 | 无 submodule（Rust 项目，CMake 无法源码编译） |
+| Wasmtime | 固定版本官方 C API 动态库 → `.xcframework` | Bytecode Alliance release（SHA-256 校验，macOS） |
 
 构建模式：每个 SPM 包的 native 依赖都在自己的 `<package>/third-party/` 下，CMake 编译产物落到 `<package>/vendor/`（gitignored），SPM 通过 `.binaryTarget(path:)` 消费。
 
