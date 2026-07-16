@@ -463,6 +463,8 @@ struct EditorInspectorSectionsTests {
         #expect(field(adapter, id, section: "collider", field: "shape-capsule-half-height") != nil)
         guard case let .readOnly(shapeCount) =
                 field(adapter, id, section: "collider", field: "shape-instance-count"),
+              case let .colliderShapeInstances(shapeInstances) =
+                field(adapter, id, section: "collider", field: "shape-instances"),
               case let .json(shapesJSON, _) =
                 field(adapter, id, section: "collider", field: "shape-instances-json") else {
             Issue.record("expected compound collider shape editor")
@@ -471,6 +473,10 @@ struct EditorInspectorSectionsTests {
         #expect(shapeCount == "2")
         #expect(shapesJSON.wrappedValue.contains("localPosition"))
         #expect(shapesJSON.wrappedValue.contains("capsule"))
+        let reversedShapes = Array(authoredShapes.reversed())
+        shapeInstances.wrappedValue = reversedShapes
+        #expect(adapter.scene.component(Collider.self, for: entity)?.shapes == reversedShapes)
+        shapeInstances.wrappedValue = authoredShapes
 
         let replacementShapes = [
             ColliderShapeInstance(
@@ -512,7 +518,14 @@ struct EditorInspectorSectionsTests {
         let adapter = EditorSceneAdapter()
         let bodyA = adapter.scene.createEntity()
         let bodyB = adapter.scene.createEntity()
+        let bodyC = adapter.scene.createEntity()
         let jointEntity = adapter.scene.createEntity()
+        for body in [bodyA, bodyB, bodyC] {
+            _ = adapter.scene.setComponent(
+                Collider(shape: .box(halfExtents: SIMD3<Float>(repeating: 0.5), center: .zero)),
+                for: body
+            )
+        }
         let joint = PhysicsJoint(
             configuration: .hinge(HingeJointConfiguration(
                 minimumAngle: -0.5,
@@ -525,6 +538,23 @@ struct EditorInspectorSectionsTests {
         )
         _ = adapter.scene.setComponent(joint, for: jointEntity)
         let id = jointEntity.rawValue
+
+        guard case let .entityReference(endpointA, optionsA) =
+                field(adapter, id, section: "constraint", field: "joint-entity-a"),
+              case let .entityReference(_, optionsB) =
+                field(adapter, id, section: "constraint", field: "joint-entity-b") else {
+            Issue.record("expected editable joint endpoint fields")
+            return
+        }
+        let optionIDs = optionsA.map(\.id)
+        #expect(optionIDs == optionIDs.sorted())
+        #expect(Set([bodyA.rawValue, bodyB.rawValue, bodyC.rawValue]).isSubset(of: Set(optionIDs)))
+        #expect(!optionIDs.contains(jointEntity.rawValue))
+        #expect(optionsB == optionsA)
+        endpointA.wrappedValue = bodyB.rawValue
+        #expect(adapter.scene.component(PhysicsJoint.self, for: jointEntity)?.entityA == bodyA)
+        endpointA.wrappedValue = bodyC.rawValue
+        #expect(adapter.scene.component(PhysicsJoint.self, for: jointEntity)?.entityA == bodyC)
 
         guard case let .physicsJointKind(kind) =
                 field(adapter, id, section: "constraint", field: "joint-type"),

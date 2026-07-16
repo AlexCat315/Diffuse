@@ -468,6 +468,243 @@ struct CapabilityExposureTests {
         }
     }
 
+    @Test("typed camera capabilities enforce component and geometric constraints")
+    func typedCameraCapabilitiesPrepareHostOperations() throws {
+        let fovSchema = try #require(
+            SetCameraFOVCapability.contract.inputSchema.properties["camera_fov_y"]
+        )
+        #expect(fovSchema.minimum == 1)
+        #expect(fovSchema.maximum == 179)
+
+        var scene = SceneRuntime()
+        let camera = scene.createEntity()
+        _ = scene.setComponent(CameraComponent(), for: camera)
+        let ids: Set<String> = [
+            "scene.set_camera_pose",
+            "scene.set_camera_fov",
+            "scene.set_camera_aspect_ratio",
+            "scene.set_camera_active",
+        ]
+        let snapshot = CapabilityRegistry.aiDefault.exposureSnapshot(
+            sceneRevision: scene.snapshot.revision,
+            includedCapabilityIDs: ids
+        )
+        let ref = "scene:\(camera.rawValue)"
+        let data = try JSONSerialization.data(withJSONObject: [
+            "summary": "Configure camera",
+            "steps": [
+                ["op": "set_camera_pose", "entity_id": ref,
+                 "position": [4, 3, 2], "camera_target": [0, 0, 0],
+                 "camera_up": [0, 1, 0]],
+                ["op": "set_camera_fov", "entity_id": ref, "camera_fov_y": 70],
+                ["op": "set_camera_aspect_ratio", "entity_id": ref,
+                 "camera_aspect_ratio": 1.777],
+                ["op": "set_camera_active", "entity_id": ref,
+                 "camera_is_active": false],
+            ],
+        ])
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: data)
+        let transaction = try SceneEditPlanExecutor().buildTransaction(
+            from: plan,
+            scene: scene,
+            exposureSnapshot: snapshot
+        )
+        #expect(transaction.operations.count == 4)
+        #expect(transaction.capabilityInvocations.map(\.schemaHash) == [
+            SetCameraPoseCapability.contract.schemaHash,
+            SetCameraFOVCapability.contract.schemaHash,
+            SetCameraAspectRatioCapability.contract.schemaHash,
+            SetCameraActiveCapability.contract.schemaHash,
+        ])
+        guard case let .scene(.setCameraPose(_, transform, target, up)) = transaction.operations[0]
+        else {
+            Issue.record("expected typed setCameraPose operation")
+            return
+        }
+        #expect(transform.translation == SIMD3<Float>(4, 3, 2))
+        #expect(target == .zero)
+        #expect(up == SIMD3<Float>(0, 1, 0))
+
+        let coincidentData = try JSONSerialization.data(withJSONObject: [
+            "summary": "Invalid camera",
+            "steps": [["op": "set_camera_pose", "entity_id": ref,
+                       "position": [1, 1, 1], "camera_target": [1, 1, 1]]],
+        ])
+        let coincident = try JSONDecoder().decode(SceneEditPlan.self, from: coincidentData)
+        #expect(throws: SceneEditPlanExecutorError.self) {
+            try SceneEditPlanExecutor().buildTransaction(
+                from: coincident,
+                scene: scene,
+                exposureSnapshot: snapshot
+            )
+        }
+
+        let nonCamera = scene.createEntity()
+        let wrongTargetData = try JSONSerialization.data(withJSONObject: [
+            "summary": "Wrong target",
+            "steps": [["op": "set_camera_fov",
+                       "entity_id": "scene:\(nonCamera.rawValue)",
+                       "camera_fov_y": 60]],
+        ])
+        let wrongTarget = try JSONDecoder().decode(SceneEditPlan.self, from: wrongTargetData)
+        #expect(throws: SceneEditPlanExecutorError.self) {
+            try SceneEditPlanExecutor().buildTransaction(
+                from: wrongTarget,
+                scene: scene,
+                exposureSnapshot: snapshot
+            )
+        }
+    }
+
+    @Test("typed material capability preserves omitted fields in sequential preparation")
+    func typedMaterialUsesValueOnlyShadowState() throws {
+        let baseColorSchema = try #require(
+            SetMaterialCapability.contract.inputSchema.properties["material_base_color"]
+        )
+        let baseColorArray = try #require(baseColorSchema.oneOf.first { $0.type == .array })
+        #expect(baseColorArray.items.first?.minimum == 0)
+        #expect(baseColorArray.items.first?.maximum == 1)
+
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(
+            RenderMaterialComponent(
+                baseColorFactor: SIMD4<Float>(0.2, 0.4, 0.6, 1),
+                metallicFactor: 0.3,
+                roughnessFactor: 0.8,
+                emissiveFactor: SIMD3<Float>(0.1, 0.2, 0.3)
+            ),
+            for: entity
+        )
+        let snapshot = CapabilityRegistry.aiDefault.exposureSnapshot(
+            sceneRevision: scene.snapshot.revision,
+            includedCapabilityIDs: ["scene.set_material"]
+        )
+        let ref = "scene:\(entity.rawValue)"
+        let data = try JSONSerialization.data(withJSONObject: [
+            "summary": "Update material",
+            "steps": [
+                ["op": "set_material", "entity_id": ref, "material_roughness": 0.2],
+                ["op": "set_material", "entity_id": ref, "material_metallic": 0.9],
+            ],
+        ])
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: data)
+        let transaction = try SceneEditPlanExecutor().buildTransaction(
+            from: plan,
+            scene: scene,
+            exposureSnapshot: snapshot
+        )
+        guard transaction.operations.count == 2,
+              case let .scene(.setRenderMaterialComponent(_, base, metallic, roughness, emissive))
+                = transaction.operations[1] else {
+            Issue.record("expected a second typed material operation")
+            return
+        }
+        #expect(base == SIMD4<Float>(0.2, 0.4, 0.6, 1))
+        #expect(abs(metallic - 0.9) < 0.001)
+        #expect(abs(roughness - 0.2) < 0.001)
+        #expect(emissive == SIMD3<Float>(0.1, 0.2, 0.3))
+
+        let emptyData = try JSONSerialization.data(withJSONObject: [
+            "summary": "No-op material",
+            "steps": [["op": "set_material", "entity_id": ref]],
+        ])
+        let emptyPlan = try JSONDecoder().decode(SceneEditPlan.self, from: emptyData)
+        #expect(throws: SceneEditPlanExecutorError.self) {
+            try SceneEditPlanExecutor().buildTransaction(
+                from: emptyPlan,
+                scene: scene,
+                exposureSnapshot: snapshot
+            )
+        }
+    }
+
+    @Test("typed physics capabilities are beta-gated and preserve multi-step component state")
+    func typedPhysicsCapabilitiesUseSequentialCopies() throws {
+        let physicsIDs: Set<String> = [
+            "scene.set_rigid_body_motion_type",
+            "scene.set_rigid_body_mass",
+            "scene.set_rigid_body_gravity_scale",
+            "scene.set_rigid_body_allow_sleep",
+            "scene.set_collider_shape",
+            "scene.set_collider_box_extents",
+            "scene.set_collider_sphere_radius",
+            "scene.set_collider_capsule",
+            "scene.set_collider_material",
+            "scene.set_collider_trigger",
+            "scene.set_collider_layer",
+        ]
+        let migratedIDs = Set(BuiltInTypedCapabilityCatalog.registrations.map(\.contract.id))
+        #expect(physicsIDs.isSubset(of: migratedIDs))
+        let stableSnapshot = CapabilityRegistry.aiDefault.exposureSnapshot(
+            includedCapabilityIDs: physicsIDs
+        )
+        #expect(stableSnapshot.contracts.isEmpty)
+
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let snapshot = CapabilityRegistry.aiDefault.exposureSnapshot(
+            policy: CapabilityExposurePolicy(activeReleasePhase: .beta,
+                                             maximumCapabilities: 32),
+            sceneRevision: scene.snapshot.revision,
+            includedCapabilityIDs: physicsIDs
+        )
+        #expect(Set(snapshot.contracts.map(\.id)) == physicsIDs)
+        let ref = "scene:\(entity.rawValue)"
+        let data = try JSONSerialization.data(withJSONObject: [
+            "summary": "Configure physics",
+            "steps": [
+                ["op": "set_rigidbody_motion", "entity_id": ref,
+                 "motion_type": "kinematic"],
+                ["op": "set_rigidbody_mass", "entity_id": ref, "mass": 12],
+                ["op": "set_collider_trigger", "entity_id": ref, "is_trigger": true],
+                ["op": "set_collider_sphere_radius", "entity_id": ref, "radius": 2],
+            ],
+        ])
+        let plan = try JSONDecoder().decode(SceneEditPlan.self, from: data)
+        let transaction = try SceneEditPlanExecutor().buildTransaction(
+            from: plan,
+            scene: scene,
+            exposureSnapshot: snapshot
+        )
+        #expect(transaction.operations.count == 4)
+        guard case let .scene(.setRigidBody(_, body)) = transaction.operations[1] else {
+            Issue.record("expected typed rigid body replacement")
+            return
+        }
+        #expect(body.motionType == .kinematic)
+        #expect(abs(body.mass - 12) < 0.001)
+        guard case let .scene(.setCollider(_, collider)) = transaction.operations[3] else {
+            Issue.record("expected typed collider replacement")
+            return
+        }
+        #expect(collider.isTrigger)
+        if case let .sphere(radius, _) = collider.shape {
+            #expect(abs(radius - 2) < 0.001)
+        } else {
+            Issue.record("expected the sequential collider state to be a sphere")
+        }
+
+        #expect(throws: JSONSchemaViolation.self) {
+            try JSONSchemaValidator.validate(
+                data: Data(#"{"entity_id":"scene:1","mass":0}"#.utf8),
+                against: SetRigidBodyMassCapability.contract.inputSchema
+            )
+        }
+        let noFieldsData = try JSONSerialization.data(withJSONObject: [
+            "summary": "Invalid material",
+            "steps": [["op": "set_collider_material", "entity_id": ref]],
+        ])
+        let noFields = try JSONDecoder().decode(SceneEditPlan.self, from: noFieldsData)
+        #expect(throws: SceneEditPlanExecutorError.self) {
+            try SceneEditPlanExecutor().buildTransaction(
+                from: noFields,
+                scene: scene,
+                exposureSnapshot: snapshot
+            )
+        }
+    }
+
     @Test("AI transactions carry exact invocation records and verification assertions")
     func transactionCarriesExplicitAuthority() throws {
         var scene = SceneRuntime()

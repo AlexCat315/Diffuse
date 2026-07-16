@@ -562,7 +562,7 @@ struct IntentRuntimeTests {
         #expect(result.warnings.contains { $0.contains("AI confidence") })
     }
 
-    @Test("capability planning can be reconfigured for beta capabilities")
+    @Test("beta write capabilities remain gated by confirmation after release enablement")
     func capabilityPlanningCanBeReconfiguredForBetaCapabilities() throws {
         let coordinator = IntentRuntimeCoordinator()
         var scene = SceneRuntime()
@@ -604,9 +604,29 @@ struct IntentRuntimeTests {
         let result = try coordinator.submitPlan(transaction,
                                                 executionContext: &betaContext,
                                                 capabilityContext: capabilityContext)
+        let request = try #require(result.confirmationRequest)
+        let unchanged = try #require(betaContext.sceneRuntime?.component(RigidBody.self, for: entity))
+
+        #expect(result.disposition == .confirmationRequested)
+        #expect(unchanged.mass == 1)
+
+        let resolution = ConfirmationResolution(
+            batchID: request.batchID,
+            correlationID: request.correlationID,
+            answers: [
+                ConfirmationAnswer(
+                    questionID: request.questions[0].id,
+                    outcome: .accepted,
+                    pickedOptionID: "confirm"
+                ),
+            ],
+            partial: false
+        )
+        let applied = try coordinator.resolvePlanConfirmation(resolution,
+                                                              executionContext: &betaContext)
         let updated = try #require(betaContext.sceneRuntime?.component(RigidBody.self, for: entity))
 
-        #expect(result.disposition == .applied)
+        #expect(applied.disposition == .applied)
         #expect(updated.mass == 12)
     }
 

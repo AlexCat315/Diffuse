@@ -30,6 +30,7 @@ struct ViewportPanel: View {
             let renderScalePercent = store.viewportRenderScalePercent
             let interactionDownscaleEnabled = store.viewportInteractionDownscaleEnabled
             let realtimeEnabled = store.viewportRealtimeEnabled
+            let physicsDebugOptions = store.physicsDebugOverlayOptions
             let playbackState = store.playbackState
 
             // 推送 gizmo 控制器所需的快照（摄像机 / 视口矩形 / 实体世界坐标）。
@@ -50,6 +51,7 @@ struct ViewportPanel: View {
                                               frame: frame,
                                               mode: gizmoMode,
                                               shadingMode: shadingMode,
+                                              physicsDebugOptions: physicsDebugOptions,
                                               selectedID: selectedEntityID,
                                               selectedIDs: selectedEntityIDs)
                          }) {
@@ -76,6 +78,7 @@ struct ViewportPanel: View {
                                         renderScalePercent: renderScalePercent,
                                         interactionDownscaleEnabled: interactionDownscaleEnabled,
                                         realtimeEnabled: realtimeEnabled,
+                                        physicsDebugOptions: physicsDebugOptions,
                                         playbackState: playbackState,
                                         onSelectGizmoMode: { mode in
                                             if gizmoMode != mode {
@@ -102,6 +105,9 @@ struct ViewportPanel: View {
                                         onToggleRealtime: {
                                             app.setViewportRealtimeEnabled(!realtimeEnabled)
                                         },
+                                        onSetPhysicsDebugOptions: { options in
+                                            store.dispatch(.setPhysicsDebugOverlayOptions(options))
+                                        },
                                         onPlay: { app.applyPlaybackState(.playing) },
                                         onPause: { app.applyPlaybackState(.paused) },
                                         onStop: { app.applyPlaybackState(.stopped) })
@@ -112,6 +118,11 @@ struct ViewportPanel: View {
                         ViewCubeControl(scene: scene)
                     }
                     .absolutePosition(top: 10, right: 10)
+
+                    if !physicsDebugOptions.isEmpty {
+                        PhysicsDebugLegend(options: physicsDebugOptions)
+                            .absolutePosition(left: 10, bottom: 10)
+                    }
                 }
                 .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
             }
@@ -493,6 +504,7 @@ struct ViewportPanel: View {
                                   frame: ViewportScreenFrame,
                                   mode: EditorGizmoMode,
                                   shadingMode: EditorViewportShadingMode,
+                                  physicsDebugOptions: EditorPhysicsDebugOverlayOptions,
                                   selectedID: UInt64?,
                                   selectedIDs: Set<UInt64>) {
         if shadingMode == .wireframe {
@@ -501,7 +513,12 @@ struct ViewportPanel: View {
             drawSelectionHighlight(list: list, frame: frame, selectedIDs: selectedIDs)
         }
         if let selectedID {
-            drawPhysicsDebugOverlay(list: list, frame: frame, entityID: selectedID)
+            drawPhysicsDebugOverlay(
+                list: list,
+                frame: frame,
+                entityID: selectedID,
+                options: physicsDebugOptions
+            )
             drawSoftBodyConstraintOverlay(list: list, frame: frame, entityID: selectedID)
             drawDestructionConnectionOverlay(list: list, frame: frame, entityID: selectedID)
         }
@@ -828,10 +845,19 @@ struct ViewportPanel: View {
     private func drawPhysicsDebugOverlay(
         list: DrawList,
         frame: ViewportScreenFrame,
-        entityID: UInt64
+        entityID: UInt64,
+        options: EditorPhysicsDebugOverlayOptions
     ) {
+        guard !options.isEmpty else { return }
         let overlay = scene.viewportPhysicsDebugOverlay(entityID: entityID)
         for line in overlay.lines {
+            let isEnabled = switch line.kind {
+            case .collider: options.contains(.shapes)
+            case .bounds: options.contains(.bounds)
+            case .joint, .jointAxis, .jointLimit: options.contains(.joints)
+            case .characterGround: options.contains(.characters)
+            }
+            guard isEnabled else { continue }
             let color: Color = switch line.kind {
             case .collider:
                 overlay.selectedBodyIsTrigger
@@ -859,6 +885,7 @@ struct ViewportPanel: View {
             )
         }
 
+        guard options.contains(.contacts) else { return }
         for contact in overlay.contacts {
             let color: Color = switch contact.kind {
             case .began: Color(r: 1.0, g: 0.20, b: 0.12, a: 0.98)
@@ -1353,6 +1380,7 @@ private struct ViewportInfoBar: View {
     let renderScalePercent: Int
     let interactionDownscaleEnabled: Bool
     let realtimeEnabled: Bool
+    let physicsDebugOptions: EditorPhysicsDebugOverlayOptions
     let playbackState: PlaybackState
     let onSelectGizmoMode: (EditorGizmoMode) -> Void
     let onSelectGizmoSpace: (EditorGizmoSpace) -> Void
@@ -1361,6 +1389,7 @@ private struct ViewportInfoBar: View {
     let onSelectRenderScale: (Int) -> Void
     let onToggleInteractionDownscale: () -> Void
     let onToggleRealtime: () -> Void
+    let onSetPhysicsDebugOptions: (EditorPhysicsDebugOverlayOptions) -> Void
     let onPlay: () -> Void
     let onPause: () -> Void
     let onStop: () -> Void
@@ -1421,6 +1450,11 @@ private struct ViewportInfoBar: View {
                                     onToggleInteractionDownscale: onToggleInteractionDownscale,
                                     onToggleRealtime: onToggleRealtime)
 
+                PhysicsDebugSelector(
+                    options: physicsDebugOptions,
+                    onSetOptions: onSetPhysicsDebugOptions
+                )
+
                 Divider()
                     .frame(width: 1, height: 16)
                     .foregroundColor(Color(r: 0, g: 0, b: 0, a: 0.4))
@@ -1467,6 +1501,115 @@ private struct ToggleChip: View {
             Text(label, lineLimit: 1)
         }
         .buttonStyle(.toggle)
+    }
+}
+
+private struct PhysicsDebugSelector: View {
+    let options: EditorPhysicsDebugOverlayOptions
+    let onSetOptions: (EditorPhysicsDebugOverlayOptions) -> Void
+    @State private var isPresented: Bool = false
+
+    var body: some View {
+        Popover(isPresented: $isPresented, width: 190) {
+            Row(alignment: .center, spacing: 5) {
+                Text(L("Physics Debug"), lineLimit: 1)
+                    .font(.caption)
+                    .foregroundColor(options.isEmpty ? .onSurfaceMuted : .onSurface)
+                Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
+            }
+            .padding(horizontal: 8, vertical: 4)
+            .background(options.isEmpty ? .surfaceSunken : .surfaceVariant)
+            .cornerRadius(3)
+        } content: {
+            Menu(menuEntries, width: 190, maxVisibleRows: 10, onItemActivated: {
+                isPresented = false
+            })
+        }
+    }
+
+    private var menuEntries: [MenuEntry] {
+        var entries: [MenuEntry] = [
+            .item(MenuItem(
+                id: "physics-debug-all",
+                title: L("Show All"),
+                isSelected: options == .all,
+                action: { onSetOptions(.all) }
+            )),
+            .item(MenuItem(
+                id: "physics-debug-none",
+                title: L("Hide All"),
+                isSelected: options.isEmpty,
+                action: { onSetOptions([]) }
+            )),
+            .separator(id: "physics-debug-separator"),
+        ]
+        entries.append(toggleEntry(id: "shapes", title: L("Collider Shapes"), option: .shapes))
+        entries.append(toggleEntry(id: "bounds", title: L("AABB / Sleep"), option: .bounds))
+        entries.append(toggleEntry(id: "contacts", title: L("Contacts / Normals"), option: .contacts))
+        entries.append(toggleEntry(id: "joints", title: L("Joints / Limits"), option: .joints))
+        entries.append(toggleEntry(id: "characters", title: L("Character Ground"), option: .characters))
+        return entries
+    }
+
+    private func toggleEntry(
+        id: String,
+        title: String,
+        option: EditorPhysicsDebugOverlayOptions
+    ) -> MenuEntry {
+        .item(MenuItem(
+            id: "physics-debug-\(id)",
+            title: title,
+            isSelected: options.contains(option),
+            action: {
+                var next = options
+                if next.contains(option) { next.remove(option) }
+                else { next.insert(option) }
+                onSetOptions(next)
+            }
+        ))
+    }
+}
+
+private struct PhysicsDebugLegend: View {
+    let options: EditorPhysicsDebugOverlayOptions
+
+    var body: some View {
+        Box(direction: .column, alignItems: .stretch, spacing: 3) {
+            Text(L("Physics Debug"))
+                .font(.caption)
+                .foregroundColor(.onSurface)
+            if options.contains(.shapes) {
+                entry(L("Collider / Trigger"), Color(r: 0.20, g: 0.88, b: 1.0, a: 1))
+            }
+            if options.contains(.bounds) {
+                entry(L("AABB / Sleeping"), Color(r: 0.24, g: 0.62, b: 1.0, a: 1))
+            }
+            if options.contains(.contacts) {
+                entry(L("Contact / Normal"), Color(r: 1.0, g: 0.72, b: 0.12, a: 1))
+            }
+            if options.contains(.joints) {
+                entry(L("Joint / Limit"), Color(r: 1.0, g: 0.48, b: 0.16, a: 1))
+            }
+            if options.contains(.characters) {
+                entry(L("Character Ground"), Color(r: 0.22, g: 1.0, b: 0.42, a: 1))
+            }
+        }
+        .padding(horizontal: 8, vertical: 6)
+        .background(.surfaceFloating)
+        .cornerRadius(6)
+        .border(.divider, width: 1)
+    }
+
+    private func entry(_ label: String, _ color: Color) -> some View {
+        Row(alignment: .center, spacing: 6) {
+            Box { EmptyView() }
+                .frame(width: 12, height: 3)
+                .background(color)
+                .cornerRadius(1)
+            Text(label, lineLimit: 1)
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+        }
     }
 }
 

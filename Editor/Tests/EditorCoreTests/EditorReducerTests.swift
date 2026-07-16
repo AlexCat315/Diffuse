@@ -89,4 +89,14 @@ struct EditorReducerTests {
 
         #expect(state.capabilitySettings.releasePhase == .beta)
     }
+
+    @Test("physics debug overlay options are bounded to known categories")
+    func physicsDebugOptionsAreSanitized() {
+        var state = EditorState(physicsDebugOverlayOptions: [])
+        let unknown = EditorPhysicsDebugOverlayOptions(rawValue: 0xFF)
+
+        EditorReducer.reduce(state: &state, action: .setPhysicsDebugOverlayOptions(unknown))
+
+        #expect(state.physicsDebugOverlayOptions == .all)
+    }
 }
