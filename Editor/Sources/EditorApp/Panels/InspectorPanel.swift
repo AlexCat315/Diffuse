@@ -266,6 +266,38 @@ struct InspectorPanel: View {
         }
     }
 
+    private struct InspectorPhysicsJointKindValue: View {
+        let binding: Binding<PhysicsJointKind>
+
+        var body: some View {
+            EnumField(value: binding, width: 150) { kind in
+                switch kind {
+                case .pointToPoint: return L("Point")
+                case .fixed: return L("Fixed")
+                case .distance: return L("Distance")
+                case .hinge: return L("Hinge")
+                case .slider: return L("Slider")
+                case .cone: return L("Cone / Swing Twist")
+                case .sixDOF: return L("Six DOF")
+                }
+            }
+        }
+    }
+
+    private struct InspectorPhysicsJointMotorModeValue: View {
+        let binding: Binding<PhysicsJointMotorMode>
+
+        var body: some View {
+            EnumField(value: binding, width: 150) { mode in
+                switch mode {
+                case .disabled: return L("Disabled")
+                case .position: return L("Position")
+                case .velocity: return L("Velocity")
+                }
+            }
+        }
+    }
+
 
 
     private func propertySections(_ sections: [EditorInspectorSection],
@@ -341,6 +373,10 @@ struct InspectorPanel: View {
             return AnyView(InspectorRigidBodyMotionValue(binding: binding))
         case let .colliderShapeKind(binding):
             return AnyView(InspectorColliderShapeKindValue(binding: binding))
+        case let .physicsJointKind(binding):
+            return AnyView(InspectorPhysicsJointKindValue(binding: binding))
+        case let .physicsJointMotorMode(binding):
+            return AnyView(InspectorPhysicsJointMotorModeValue(binding: binding))
         case let .particleEmissionShape(binding):
             return AnyView(InspectorParticleEmissionShapeValue(binding: binding))
         case let .particleCollisionMode(binding):
