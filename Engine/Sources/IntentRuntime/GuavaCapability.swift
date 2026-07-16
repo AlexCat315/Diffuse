@@ -1,5 +1,6 @@
 import CapabilityRuntime
 import Foundation
+import SceneRuntime
 
 /// Input types opt into one strict schema. Provider tools, host validation, and
 /// decoding all consume this same declaration.
@@ -38,23 +39,60 @@ public struct CapabilityPreparationTransform: Codable, Sendable, Equatable {
     }
 }
 
-public struct CapabilityPreparationEntity: Codable, Sendable, Equatable {
+/// Value-only material state used by read-modify-write capability preparation.
+/// Texture handles are deliberately excluded because the AI material primitive
+/// cannot author them and must not receive resource-runtime objects.
+public struct CapabilityPreparationMaterial: Codable, Sendable, Equatable {
+    public var baseColor: [Float]
+    public var metallic: Float
+    public var roughness: Float
+    public var emissive: [Float]
+
+    public init?(baseColor: [Float],
+                 metallic: Float,
+                 roughness: Float,
+                 emissive: [Float]) {
+        guard baseColor.count == 4,
+              emissive.count == 3,
+              baseColor.allSatisfy({ $0.isFinite }),
+              emissive.allSatisfy({ $0.isFinite }),
+              metallic.isFinite,
+              roughness.isFinite else {
+            return nil
+        }
+        self.baseColor = baseColor
+        self.metallic = metallic
+        self.roughness = roughness
+        self.emissive = emissive
+    }
+}
+
+public struct CapabilityPreparationEntity: Sendable, Equatable {
     public var reference: String
     public var componentTypes: [String]
     public var localTransform: CapabilityPreparationTransform?
+    public var renderMaterial: CapabilityPreparationMaterial?
+    public var rigidBody: RigidBody?
+    public var collider: Collider?
 
     public init(reference: String,
                 componentTypes: [String] = [],
-                localTransform: CapabilityPreparationTransform? = nil) {
+                localTransform: CapabilityPreparationTransform? = nil,
+                renderMaterial: CapabilityPreparationMaterial? = nil,
+                rigidBody: RigidBody? = nil,
+                collider: Collider? = nil) {
         self.reference = reference
         self.componentTypes = componentTypes.sorted()
         self.localTransform = localTransform
+        self.renderMaterial = renderMaterial
+        self.rigidBody = rigidBody
+        self.collider = collider
     }
 }
 
 /// A value-only scene view. It intentionally exposes no SceneRuntime,
 /// application singleton, file handle, network client, shell, or pointer.
-public struct CapabilityPreparationContext: Codable, Sendable, Equatable {
+public struct CapabilityPreparationContext: Sendable, Equatable {
     public var sceneRevision: UInt64
     public var entities: [CapabilityPreparationEntity]
 

@@ -298,6 +298,45 @@ struct InspectorPanel: View {
         }
     }
 
+    private struct InspectorEntityReferenceValue: View {
+        let binding: Binding<UInt64>
+        let options: [EditorInspectorEntityOption]
+        @State private var isPresented: Bool = false
+
+        var body: some View {
+            Popover(isPresented: $isPresented, width: 220) {
+                Row(alignment: .center, spacing: 5) {
+                    Text(selectedLabel, lineLimit: 1)
+                        .font(.caption)
+                        .foregroundColor(.onSurface)
+                        .flex()
+                    Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
+                }
+                .padding(horizontal: 8, vertical: 4)
+                .background(.surfaceSunken)
+                .cornerRadius(3)
+            } content: {
+                Menu(options.map { option in
+                    .item(MenuItem(
+                        id: "entity-reference-\(option.id)",
+                        title: "\(option.name) · \(option.id)",
+                        isSelected: option.id == binding.wrappedValue,
+                        action: { binding.wrappedValue = option.id }
+                    ))
+                }, width: 220, maxVisibleRows: 10, onItemActivated: {
+                    isPresented = false
+                })
+            }
+        }
+
+        private var selectedLabel: String {
+            guard let selected = options.first(where: { $0.id == binding.wrappedValue }) else {
+                return "\(L("Missing Entity")) · \(binding.wrappedValue)"
+            }
+            return "\(selected.name) · \(selected.id)"
+        }
+    }
+
 
 
     private func propertySections(_ sections: [EditorInspectorSection],
@@ -373,6 +412,10 @@ struct InspectorPanel: View {
             return AnyView(InspectorRigidBodyMotionValue(binding: binding))
         case let .colliderShapeKind(binding):
             return AnyView(InspectorColliderShapeKindValue(binding: binding))
+        case let .colliderShapeInstances(binding):
+            return AnyView(InspectorColliderShapeInstancesValue(binding: binding))
+        case let .entityReference(binding, options):
+            return AnyView(InspectorEntityReferenceValue(binding: binding, options: options))
         case let .physicsJointKind(binding):
             return AnyView(InspectorPhysicsJointKindValue(binding: binding))
         case let .physicsJointMotorMode(binding):
@@ -507,7 +550,7 @@ private extension EditorAsset {
 private extension EditorInspectorFieldValue {
     var preferredRowLayout: PropertyGridRowLayout {
         switch self {
-        case .particleCurve, .particleSubEmitters:
+        case .colliderShapeInstances, .particleCurve, .particleSubEmitters:
             return .fullWidth
         default:
             return .twoColumn
@@ -520,6 +563,11 @@ private extension EditorInspectorFieldValue {
             return max(defaultHeight, 30)
         case .asset:
             return max(defaultHeight, 34)
+        case let .colliderShapeInstances(binding):
+            return max(
+                defaultHeight,
+                ColliderShapeInstanceEditorLayout.rowHeight(shapeCount: binding.wrappedValue.count)
+            )
         case let .particleCurve(binding):
             if case .keyframes(let keyframes) = binding.wrappedValue {
                 return max(defaultHeight, ParticleCurveEditorLayout.rowHeight(keyframeCount: keyframes.count))
