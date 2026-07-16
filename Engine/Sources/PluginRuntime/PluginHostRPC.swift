@@ -146,6 +146,24 @@ public struct PluginHostResponse: Codable, Sendable, Equatable {
     }
 }
 
+public enum PluginPreparedCapabilityResult: Sendable, Equatable {
+    case read(Data)
+    case hostCalls([HostCapabilityCall])
+}
+
+/// Narrow seam used by AIRuntime. Tests can provide a deterministic invoker;
+/// production uses the isolated `PluginHostProcessClient` implementation.
+public protocol PluginCapabilityInvoking: Sendable {
+    var generation: UInt64 { get }
+
+    func prepareCapability(
+        binding: PluginExecutionBinding,
+        capabilityID: String,
+        input: Data,
+        querySnapshot: PluginQuerySnapshot?
+    ) throws -> PluginPreparedCapabilityResult
+}
+
 public enum PluginHostFrameError: Error, Sendable, Equatable {
     case frameTooLarge
     case incompleteFrame

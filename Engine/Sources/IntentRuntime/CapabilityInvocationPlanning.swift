@@ -112,15 +112,22 @@ public struct CapabilityInvocationPlanner: Sendable {
     private let validator: CapabilityValidator
     private let scorer: AmbiguityScorer
     private let allowExternalSideEffects: Bool
+    private let pluginAuthorities: [String: PluginCapabilityAuthority]
+    private let pluginAuthorityValidator: @Sendable (PluginCapabilityAuthority) -> Bool
 
     public init(registry: CapabilityRegistry = .aiDefault,
                 gate: ReleasePhaseGate = ReleasePhaseGate(),
                 scorer: AmbiguityScorer = AmbiguityScorer(),
-                allowExternalSideEffects: Bool = false) {
+                allowExternalSideEffects: Bool = false,
+                pluginAuthorities: [String: PluginCapabilityAuthority] = [:],
+                pluginAuthorityValidator: @escaping @Sendable
+                    (PluginCapabilityAuthority) -> Bool = { _ in true }) {
         self.registry = registry
         self.validator = CapabilityValidator(registry: registry, gate: gate)
         self.scorer = scorer
         self.allowExternalSideEffects = allowExternalSideEffects
+        self.pluginAuthorities = pluginAuthorities
+        self.pluginAuthorityValidator = pluginAuthorityValidator
     }
 
     public func plan(transaction: TransactionIR,
@@ -248,6 +255,15 @@ public struct CapabilityInvocationPlanner: Sendable {
         guard record.schemaHash == contract.schemaHash else { return "capability schema hash mismatch" }
         guard record.access == contract.access else { return "capability access level mismatch" }
         guard record.sourcePluginID == contract.source.pluginID else { return "capability source mismatch" }
+        if let pluginID = contract.source.pluginID {
+            guard let authority = record.pluginAuthority,
+                  authority == pluginAuthorities[pluginID],
+                  pluginAuthorityValidator(authority) else {
+                return "plugin authorisation or PluginHost generation changed"
+            }
+        } else if record.pluginAuthority != nil {
+            return "built-in capability carried forged plugin authority"
+        }
         if contract.access == .externalSideEffect && !allowExternalSideEffects {
             return "external side-effect capabilities are disabled"
         }

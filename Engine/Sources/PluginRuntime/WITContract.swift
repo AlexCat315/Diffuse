@@ -85,15 +85,18 @@ public struct WITCapabilityInput: Codable, Sendable, Equatable {
 
 public struct WITContract: Codable, Sendable, Equatable {
     public var worldName: String
+    public var capabilitiesInterfaceName: String
     public var imports: [String]
     public var exports: [WITFunctionExport]
     public var capabilityInputs: [WITCapabilityInput]
 
     public init(worldName: String,
+                capabilitiesInterfaceName: String = "capabilities",
                 imports: [String],
                 exports: [WITFunctionExport],
                 capabilityInputs: [WITCapabilityInput] = []) {
         self.worldName = worldName
+        self.capabilitiesInterfaceName = capabilitiesInterfaceName
         self.imports = imports.sorted()
         self.exports = exports.sorted { $0.name < $1.name }
         self.capabilityInputs = capabilityInputs.sorted { $0.name < $1.name }
@@ -165,6 +168,26 @@ public enum WITContractParser {
             throw WITContractError.invalidUTF8
         }
         let clean = strippingComments(source)
+        let packages = captures(
+            pattern: #"\bpackage\s+([A-Za-z][A-Za-z0-9-]*:[A-Za-z][A-Za-z0-9-]*(?:@[A-Za-z0-9.+-]+)?)\s*;"#,
+            in: clean
+        )
+        guard packages.count == 1, let package = packages.first else {
+            throw WITContractError.malformedDeclaration(
+                "exactly one versioned or unversioned package is required"
+            )
+        }
+        guard package.utf8.count <= 128 else {
+            throw WITContractError.malformedDeclaration("package name is too long")
+        }
+        let capabilitiesInterfaceName: String
+        if let versionSeparator = package.firstIndex(of: "@") {
+            capabilitiesInterfaceName = String(package[..<versionSeparator])
+                + "/capabilities"
+                + String(package[versionSeparator...])
+        } else {
+            capabilitiesInterfaceName = package + "/capabilities"
+        }
         let worlds = captures(pattern: #"\bworld\s+([A-Za-z][A-Za-z0-9_-]*)\s*\{"#,
                               in: clean)
         guard let world = worlds.first else { throw WITContractError.missingWorld }
@@ -190,7 +213,8 @@ public enum WITContractParser {
                 "plugin world must export exactly the capabilities interface"
             )
         }
-        let exports = [WITFunctionExport(name: "capabilities", signature: "interface")]
+        let exports = [WITFunctionExport(name: capabilitiesInterfaceName,
+                                         signature: "interface")]
 
         let capabilityBody = try interfaceBody(named: "capabilities", in: source)
         var typeParser = try CapabilityTypeParser(source: capabilityBody)
@@ -201,6 +225,7 @@ public enum WITContractParser {
         )
         let inputs = try schemaBuilder.build()
         return WITContract(worldName: world,
+                           capabilitiesInterfaceName: capabilitiesInterfaceName,
                            imports: imports,
                            exports: exports,
                            capabilityInputs: inputs)
@@ -556,6 +581,11 @@ private struct CapabilitySchemaBuilder {
 
     mutating func build() throws -> [WITCapabilityInput] {
         let capabilityNames = functions.keys.sorted()
+        guard !capabilityNames.isEmpty else {
+            throw WITContractError.malformedDeclaration(
+                "capabilities interface must declare at least one function"
+            )
+        }
         guard capabilityNames.count <= PluginResourceLimits.secureDefault.maximumCapabilities else {
             throw WITContractError.schemaTooLarge
         }

@@ -35,6 +35,7 @@ let package = Package(
                 .product(name: "IntentRuntime", package: "Engine"),
                 .product(name: "ObservationBus", package: "Engine"),
                 .product(name: "PerceptionRuntime", package: "Engine"),
+                .product(name: "PluginRuntime", package: "Engine"),
                 .product(name: "SemanticPipeline", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
                 .product(name: "RHIWGPU", package: "Engine"),
@@ -106,6 +107,8 @@ let package = Package(
             dependencies: [
                 "EditorCore",
                 .product(name: "SIMDCompat", package: "Engine"),
+                .product(name: "CapabilityRuntime", package: "Engine"),
+                .product(name: "PluginRuntime", package: "Engine"),
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
                 .product(name: "GuavaUIRuntime", package: "GuavaUI"),
             ]

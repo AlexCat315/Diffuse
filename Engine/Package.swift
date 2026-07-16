@@ -299,6 +299,7 @@ let package = Package(
                 "ObservationBus",
                 "ContextMemory",
                 "PerceptionRuntime",
+                "PluginRuntime",
             ]
         ),
         .target(
@@ -552,6 +553,7 @@ let package = Package(
                 "ContextMemory",
                 "IntentRuntime",
                 "PerceptionRuntime",
+                "PluginRuntime",
                 "ScriptRuntime",
                 "SIMDCompat",
                 "CImageDecodeBridge",

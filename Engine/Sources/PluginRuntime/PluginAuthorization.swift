@@ -61,6 +61,16 @@ public struct PluginInspection: Codable, Sendable, Equatable {
         witHash = package.witHash
         self.contracts = contracts.sorted { $0.id < $1.id }
     }
+
+    public init(manifest: GuavaPluginManifest,
+                componentHash: String,
+                witHash: String,
+                contracts: [CapabilityContract]) {
+        self.manifest = manifest
+        self.componentHash = componentHash
+        self.witHash = witHash
+        self.contracts = contracts.sorted { $0.id < $1.id }
+    }
 }
 
 public enum PluginAuthorizationError: Error, Sendable, Equatable, CustomStringConvertible {
@@ -127,6 +137,25 @@ public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
         isStillValid(for: PluginInspection(package: package, contracts: contracts))
     }
 
+    /// Stable executable-authority fingerprint. `authorisedAt` is deliberately
+    /// excluded: the authority is the exact code/WIT/permissions/schema tuple,
+    /// not when a UI happened to persist the user's decision.
+    public var authorityDigest: String {
+        let object: [String: Any] = [
+            "plugin_id": pluginID,
+            "plugin_version": pluginVersion,
+            "component_hash": componentHash,
+            "wit_hash": witHash,
+            "imports": imports.map(\.rawValue).sorted(),
+            "access": access.rawValue,
+            "composable_host_capabilities": composableHostCapabilities.sorted(),
+            "capability_schema_hashes": capabilitySchemaHashes,
+        ]
+        let data = (try? JSONSerialization.data(withJSONObject: object,
+                                                options: [.sortedKeys])) ?? Data()
+        return CapabilityDigest.sha256(data)
+    }
+
     private static func schemaHashes(_ contracts: [CapabilityContract]) throws -> [String: String] {
         var result: [String: String] = [:]
         for contract in contracts {
@@ -134,6 +163,107 @@ public struct PluginAuthorizationRecord: Codable, Sendable, Equatable {
                 throw PluginAuthorizationError.duplicateCapability(contract.id)
             }
         }
+        return result
+    }
+}
+
+public enum PluginCapabilityRegistryError: Error, Sendable, Equatable, CustomStringConvertible {
+    case invalidContract(String)
+    case duplicatePlugin(String)
+
+    public var description: String {
+        switch self {
+        case let .invalidContract(id):
+            return "plugin capability contract '\(id)' does not match its authorised manifest"
+        case let .duplicatePlugin(id):
+            return "plugin '\(id)' was enabled more than once"
+        }
+    }
+}
+
+/// Editor-side immutable binding for one package that has been inspected,
+/// authorised, and loaded into a particular PluginHost generation.
+public struct PluginExecutionBinding: Sendable, Equatable {
+    public var pluginPath: String
+    public var inspection: PluginInspection
+    public var authorization: PluginAuthorizationRecord
+    public var hostGeneration: UInt64
+
+    public init(pluginPath: String,
+                inspection: PluginInspection,
+                authorization: PluginAuthorizationRecord,
+                hostGeneration: UInt64) throws {
+        guard !pluginPath.isEmpty,
+              authorization.isStillValid(for: inspection) else {
+            throw PluginAuthorizationError.noLongerValid
+        }
+        self.pluginPath = pluginPath
+        self.inspection = inspection
+        self.authorization = authorization
+        self.hostGeneration = hostGeneration
+    }
+
+    public var pluginID: String { inspection.manifest.id }
+
+    public var authority: PluginCapabilityAuthority {
+        PluginCapabilityAuthority(pluginID: pluginID,
+                                  authorizationDigest: authorization.authorityDigest,
+                                  hostGeneration: hostGeneration)
+    }
+
+    public func validate(hostGeneration currentGeneration: UInt64) throws {
+        guard currentGeneration == hostGeneration,
+              authorization.isStillValid(for: inspection) else {
+            throw PluginAuthorizationError.noLongerValid
+        }
+    }
+}
+
+/// Converts authorised WIT-derived contracts into metadata-only Registry
+/// descriptors. Plugin code never supplies an executable closure or mutation.
+public enum PluginCapabilityRegistryBuilder {
+    public static func build(
+        base: CapabilityRegistry,
+        bindings: [PluginExecutionBinding]
+    ) throws -> CapabilityRegistry {
+        var pluginIDs: Set<String> = []
+        var descriptors: [CapabilityDescriptor] = []
+        for binding in bindings {
+            guard pluginIDs.insert(binding.pluginID).inserted else {
+                throw PluginCapabilityRegistryError.duplicatePlugin(binding.pluginID)
+            }
+            try binding.validate(hostGeneration: binding.hostGeneration)
+            let manifest = binding.inspection.manifest
+            let prefix = manifest.id + "."
+            for contract in binding.inspection.contracts {
+                guard contract.id.hasPrefix(prefix),
+                      contract.id.count > prefix.count,
+                      contract.version == manifest.version,
+                      contract.access == manifest.access,
+                      contract.domain == "plugin",
+                      contract.releasePhase == .stable,
+                      contract.source == .plugin(manifest.id),
+                      !contract.access.isWrite || contract.inputSchema.isStrictCapabilityInput else {
+                    throw PluginCapabilityRegistryError.invalidContract(contract.id)
+                }
+                descriptors.append(CapabilityDescriptor(
+                    verb: contract.id,
+                    releasePhase: contract.releasePhase,
+                    requiresConfirmation: contract.access.isWrite,
+                    isDestructive: contract.access == .destructiveWrite,
+                    domain: contract.domain,
+                    version: contract.version,
+                    title: contract.title,
+                    description: contract.description,
+                    access: contract.access,
+                    inputSchema: contract.inputSchema,
+                    source: contract.source,
+                    isAIExposed: true
+                ))
+            }
+        }
+        let result = base.appending(descriptors)
+        try result.validateIntegrity()
         return result
     }
 }
