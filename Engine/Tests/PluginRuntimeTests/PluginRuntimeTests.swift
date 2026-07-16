@@ -45,6 +45,7 @@ struct PluginRuntimeTests {
     func witAcceptsExactPluginABI() throws {
         let wit = """
         package example:safe;
+        interface capabilities {}
         world plugin {
           export discover: func() -> string;
           export prepare: func(capability-id: string, input: string) -> string;
@@ -70,6 +71,52 @@ struct PluginRuntimeTests {
         let twoWorlds = wit + "\nworld second {}"
         #expect(throws: WITContractError.malformedDeclaration("exactly one world is required")) {
             try WITContractParser.parse(Data(twoWorlds.utf8), grantedImports: [])
+        }
+    }
+
+    @Test("WIT records are the only source of strict capability schemas")
+    func witDerivesCapabilitySchema() throws {
+        let wit = """
+        package example:safe;
+        interface capabilities {
+          /// World-space point used by inspection.
+          record point {
+            x: f32,
+            y: f32,
+            z: f32,
+          }
+          enum detail-level { summary, full }
+          /// Inspect Scene Finds matching entities without changing the scene.
+          record inspect-scene-input {
+            /// Optional query text.
+            query: option<string>,
+            origin: point,
+            detail: detail-level,
+            tags: list<string>,
+          }
+        }
+        world plugin {
+          export discover: func() -> string;
+          export prepare: func(capability-id: string, input: string) -> string;
+        }
+        """
+        let parsed = try WITContractParser.parse(Data(wit.utf8), grantedImports: [])
+        let input = try #require(parsed.capabilityInputs.first)
+        #expect(input.name == "inspect-scene")
+        #expect(input.title == "Inspect Scene")
+        #expect(input.inputSchema.additionalProperties == false)
+        #expect(input.inputSchema.required == ["detail", "origin", "tags"])
+        #expect(input.inputSchema.properties["query"]?.oneOf.count == 2)
+        #expect(input.inputSchema.properties["origin"]?.type == .object)
+        #expect(input.inputSchema.properties["detail"]?.allowedValues == [
+            .string("summary"), .string("full"),
+        ])
+        #expect(input.inputSchema.properties["tags"]?.maximumItems == 4_096)
+
+        let unsupported = wit.replacingOccurrences(of: "query: option<string>",
+                                                   with: "query: u64")
+        #expect(throws: WITContractError.unsupportedType("u64")) {
+            try WITContractParser.parse(Data(unsupported.utf8), grantedImports: [])
         }
     }
 
@@ -272,7 +319,8 @@ struct PluginRuntimeTests {
         )
 
         #expect(runtime.runtimeVersion == "45.0.0")
-        #expect(String(decoding: discovery, as: UTF8.self) == #"{"capabilities":[]}"#)
+        #expect(String(decoding: discovery, as: UTF8.self)
+            == #"{"capability_ids":["safe.reader.inspect"]}"#)
         #expect(String(decoding: prepared, as: UTF8.self) == "[]")
     }
 
@@ -293,7 +341,7 @@ struct PluginRuntimeTests {
             JSONSerialization.jsonObject(with: handshakePayload) as? [String: Any]
         )
         #expect(handshake.ok)
-        #expect(handshakeJSON["protocol_version"] as? Int == 3)
+        #expect(handshakeJSON["protocol_version"] as? Int == 4)
         #expect(handshakeJSON["wasmtime_version"] as? String == "45.0.0")
         #expect(handshakeJSON["runtime_mode"] as? String == "embedded")
         #expect(handshakeJSON["ambient_wasi"] as? Bool == false)
@@ -309,7 +357,10 @@ struct PluginRuntimeTests {
         )
         #expect(inspectionResponse.ok)
         #expect(inspection.componentHash == package.componentHash)
-        #expect(inspection.contracts.isEmpty)
+        #expect(inspection.contracts.map(\.id) == ["safe.reader.inspect"])
+        #expect(inspection.contracts[0].inputSchema.type == .object)
+        #expect(inspection.contracts[0].inputSchema.properties.isEmpty)
+        #expect(inspection.contracts[0].inputSchema.additionalProperties == false)
 
         let unauthorized = try client.call(PluginHostRequest(method: .load,
                                                              pluginPath: path))
@@ -327,7 +378,17 @@ struct PluginRuntimeTests {
             authorization: authorization
         ))
         #expect(discovery.ok)
-        #expect(discovery.payload == Data(#"{"capabilities":[]}"#.utf8))
+        #expect(discovery.payload
+            == Data(#"{"capability_ids":["safe.reader.inspect"]}"#.utf8))
+
+        let invalidInput = try client.call(PluginHostRequest(
+            method: .prepare,
+            pluginPath: path,
+            capabilityID: "safe.reader.inspect",
+            input: Data(#"{"forged":true}"#.utf8),
+            authorization: authorization
+        ))
+        #expect(!invalidInput.ok)
 
         let prepared = try client.call(PluginHostRequest(
             method: .prepare,
@@ -385,22 +446,21 @@ struct PluginRuntimeTests {
             witURL: URL(fileURLWithPath: "/safe.reader.guavaplugin/capabilities.wit"),
             witContract: WITContract(worldName: "plugin",
                                      imports: ["guava:scene/query"],
-                                     exports: []),
+                                     exports: [],
+                                     capabilityInputs: [
+                                         WITCapabilityInput(
+                                            name: "inspect",
+                                            title: "Inspect",
+                                            description: "Returns bounded findings",
+                                            inputSchema: .object(properties: [:])
+                                         ),
+                                     ]),
             componentHash: "component-a",
             witHash: "wit-a"
         )
-        let contract = CapabilityContract(
-            id: "safe.reader.inspect",
-            title: "Inspect scene",
-            description: "Returns bounded findings",
-            domain: "scene",
-            access: .read,
-            releasePhase: .stable,
-            inputSchema: .object(properties: [:]),
-            source: .plugin("safe.reader")
-        )
+        let contract = try #require(PluginWITContractDeriver.contracts(for: package).first)
         let discovery = try JSONEncoder().encode(
-            PluginCapabilityDiscovery(capabilities: [contract])
+            PluginCapabilityDiscovery(capabilityIDs: [contract.id])
         )
         let validated = try PluginDiscoveryValidator.validate(discovery,
                                                               package: package)
@@ -436,40 +496,40 @@ struct PluginRuntimeTests {
         )
         #expect(!authorization.isStillValid(for: changedSchema))
 
-        let duplicateDiscovery = try JSONEncoder().encode(
-            PluginCapabilityDiscovery(capabilities: [contract, contract])
+        let duplicateDiscovery = Data(
+            #"{"capability_ids":["safe.reader.inspect","safe.reader.inspect"]}"#.utf8
         )
         #expect(throws: PluginDiscoveryValidationError.duplicateCapability(contract.id)) {
             try PluginDiscoveryValidator.validate(duplicateDiscovery,
                                                   package: package)
         }
-        var forgedHash = contract
-        forgedHash.schemaHash = "forged"
-        let forgedDiscovery = try JSONEncoder().encode(
-            PluginCapabilityDiscovery(capabilities: [forgedHash])
-        )
-        #expect(throws: PluginDiscoveryValidationError.schemaHashMismatch(contract.id)) {
-            try PluginDiscoveryValidator.validate(forgedDiscovery,
-                                                  package: package)
+        #expect(throws: PluginDiscoveryValidationError.invalidPayload) {
+            try PluginDiscoveryValidator.validate(
+                Data(#"{"capabilities":[{"schema_hash":"forged"}]}"#.utf8),
+                package: package
+            )
         }
-        let unsafePattern = CapabilityContract(
-            id: contract.id,
-            title: contract.title,
-            description: contract.description,
-            domain: contract.domain,
-            access: contract.access,
-            releasePhase: contract.releasePhase,
-            inputSchema: .object(properties: [
-                "query": JSONSchema(type: .string, pattern: "(a+)+$"),
-            ]),
-            source: contract.source
-        )
-        let unsafeDiscovery = try JSONEncoder().encode(
-            PluginCapabilityDiscovery(capabilities: [unsafePattern])
-        )
-        #expect(throws: PluginDiscoveryValidationError.self) {
-            try PluginDiscoveryValidator.validate(unsafeDiscovery,
-                                                  package: package)
+        #expect(throws: PluginDiscoveryValidationError.invalidPayload) {
+            try PluginDiscoveryValidator.validate(
+                Data(#"{"capability_ids":["safe.reader.inspect\nforged"]}"#.utf8),
+                package: package
+            )
+        }
+        #expect(throws: PluginDiscoveryValidationError.missingImplementation(contract.id)) {
+            try PluginDiscoveryValidator.validate(
+                Data(#"{"capability_ids":[]}"#.utf8),
+                package: package
+            )
+        }
+        #expect(throws: PluginDiscoveryValidationError.undeclaredImplementation(
+            "safe.reader.forged"
+        )) {
+            try PluginDiscoveryValidator.validate(
+                Data(
+                    #"{"capability_ids":["safe.reader.inspect","safe.reader.forged"]}"#.utf8
+                ),
+                package: package
+            )
         }
     }
 
@@ -640,6 +700,10 @@ struct PluginRuntimeTests {
             .joined(separator: "\n")
         let wit = """
         package safe:reader;
+        interface capabilities {
+          /// Inspect the current bounded snapshot.
+          record inspect-input {}
+        }
         world plugin {
         \(importLines)
           export discover: func() -> string;
@@ -660,8 +724,8 @@ struct PluginRuntimeTests {
       (core module $guest
         (memory (export "memory") 1)
         (global $next (mut i32) (i32.const 4096))
-        (data (i32.const 64) "{\22capabilities\22:[]}")
-        (data (i32.const 96) "[]")
+        (data (i32.const 64) "{\22capability_ids\22:[\22safe.reader.inspect\22]}")
+        (data (i32.const 128) "[]")
 
         (func $realloc (export "realloc")
           (param $old i32) (param $old-size i32)
@@ -686,14 +750,14 @@ struct PluginRuntimeTests {
           i32.const 64
           i32.store
           i32.const 4
-          i32.const 19
+          i32.const 42
           i32.store
           i32.const 0)
 
         (func (export "prepare")
           (param i32 i32 i32 i32) (result i32)
           i32.const 0
-          i32.const 96
+          i32.const 128
           i32.store
           i32.const 4
           i32.const 2
@@ -751,7 +815,7 @@ struct PluginRuntimeTests {
       (core module $guest
         (import "libc" "memory" (memory 1))
         (import "host" "query" (func $query (param i32 i32 i32)))
-        (data (i32.const 64) "{\22capabilities\22:[]}")
+        (data (i32.const 64) "{\22capability_ids\22:[\22safe.reader.inspect\22]}")
         (data (i32.const 128) "{\22operation\22:\22snapshot\22}")
 
         (func (export "discover") (result i32)
@@ -759,7 +823,7 @@ struct PluginRuntimeTests {
           i32.const 64
           i32.store
           i32.const 4
-          i32.const 19
+          i32.const 42
           i32.store
           i32.const 0)
 
@@ -791,7 +855,7 @@ struct PluginRuntimeTests {
       (core module $guest
         (memory (export "memory") 1)
         (global $next (mut i32) (i32.const 4096))
-        (data (i32.const 64) "{\22capabilities\22:[]}")
+        (data (i32.const 64) "{\22capability_ids\22:[\22safe.reader.inspect\22]}")
         (func (export "realloc")
           (param i32 i32 i32 i32) (result i32)
           global.get $next)
@@ -800,7 +864,7 @@ struct PluginRuntimeTests {
           i32.const 64
           i32.store
           i32.const 4
-          i32.const 19
+          i32.const 42
           i32.store
           i32.const 0)
         (func (export "prepare")

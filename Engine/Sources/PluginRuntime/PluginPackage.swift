@@ -77,6 +77,15 @@ public struct PluginPackageLoader: Sendable {
         let witData = try Data(contentsOf: witURL)
         let wit = try WITContractParser.parse(witData,
                                               grantedImports: Set(manifest.imports))
+        for input in wit.capabilityInputs {
+            let capabilityID = manifest.id + "." + input.name
+            guard let range = capabilityID.range(
+                of: #"^[a-z][a-z0-9.-]{2,127}$"#,
+                options: .regularExpression
+            ), range == capabilityID.startIndex..<capabilityID.endIndex else {
+                throw WITContractError.invalidCapabilityName(capabilityID)
+            }
+        }
         return ValidatedPluginPackage(rootURL: root,
                                       manifest: manifest,
                                       componentURL: componentURL,

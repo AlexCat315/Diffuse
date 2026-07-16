@@ -124,7 +124,7 @@ func response(for request: PluginHostRequest) -> PluginHostResponse {
         switch request.method {
         case .handshake:
             let payload = try JSONSerialization.data(withJSONObject: [
-                "protocol_version": 3,
+                "protocol_version": 4,
                 "wasmtime_version": runtime.runtimeVersion,
                 "runtime_mode": runtimeMode,
                 "maximum_frame_bytes": PluginHostFrameCodec.maximumFrameBytes,
@@ -182,7 +182,9 @@ func response(for request: PluginHostRequest) -> PluginHostResponse {
                 throw PluginAuthorizationError.noLongerValid
             }
             let payload = try JSONEncoder().encode(
-                PluginCapabilityDiscovery(capabilities: loaded.inspection.contracts)
+                PluginCapabilityDiscovery(
+                    capabilityIDs: loaded.inspection.contracts.map(\.id)
+                )
             )
             guard payload.count <= limits.maximumOutputBytes else { throw PluginHostFrameError.frameTooLarge }
             return PluginHostResponse(id: request.id, ok: true, payload: payload)
@@ -202,6 +204,13 @@ func response(for request: PluginHostRequest) -> PluginHostResponse {
                   loaded.authorization.isStillValid(for: loaded.inspection) else {
                 throw PluginAuthorizationError.noLongerValid
             }
+            guard let contract = loaded.inspection.contracts.first(where: {
+                $0.id == capabilityID
+            }) else {
+                throw PluginDiscoveryValidationError.undeclaredImplementation(capabilityID)
+            }
+            try JSONSchemaValidator.validate(data: input,
+                                             against: contract.inputSchema)
             let rawPayload = try runtime.prepare(loaded.executionCopy,
                                                  capabilityID: capabilityID,
                                                  input: input,
