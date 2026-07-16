@@ -69,6 +69,23 @@ struct EditorStoreTests {
         let state = try JSONDecoder().decode(EditorState.self, from: data)
 
         #expect(state.capabilitySettings == .default)
+        #expect(state.physicsDebugOverlayOptions == .all)
+    }
+
+    @Test("physics debug overlay options persist and notify subscribers")
+    func physicsDebugOptionsPersistAndNotify() throws {
+        let store = EditorStore()
+        var notifications = 0
+        _ = store.subscribe { _ in notifications += 1 }
+        let options: EditorPhysicsDebugOverlayOptions = [.shapes, .joints]
+
+        store.dispatch(.setPhysicsDebugOverlayOptions(options))
+
+        #expect(store.physicsDebugOverlayOptions == options)
+        #expect(notifications == 1)
+        let data = try JSONEncoder().encode(store.state)
+        let restored = try JSONDecoder().decode(EditorState.self, from: data)
+        #expect(restored.physicsDebugOverlayOptions == options)
     }
 
     @Test("Capability settings notify subscribers")

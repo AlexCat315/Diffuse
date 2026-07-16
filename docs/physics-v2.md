@@ -27,9 +27,9 @@ Guava Physics v2 使用 Jolt 作为唯一生产物理后端。当前已完成复
 
 ## Editor 物理创作与调试
 
-Collider Inspector 同时提供首个形状的快捷参数和完整 Compound 子形状 JSON；每个 `ColliderShapeInstance` 可独立设置形状、局部位置、四元数旋转和缩放，修改后直接写回 `Collider.shapes`。Capsule、Cylinder 与 HeightField 使用各自独立字段，HeightField 不再错误显示 Capsule 的半高。
+Collider Inspector 同时提供首个形状的快捷参数和结构化 Compound 子形状卡片；可以新增、删除和稳定排序子形状，并为每个 `ColliderShapeInstance` 独立设置形状、局部位置、四元数旋转和缩放，修改后直接写回 `Collider.shapes`。完整 JSON 保留为高级编辑入口。Capsule、Cylinder 与 HeightField 使用各自独立字段，HeightField 不再错误显示 Capsule 的半高。
 
-`PhysicsJoint` Inspector 按 Point、Fixed、Distance、Hinge、Slider、Cone/SwingTwist 与 SixDOF 类型显示配置，分别编辑锚点、轴、线性/角度限位、电机、弹簧、阻尼和断裂阈值。Viewport 直接消费统一 `PhysicsDebugFrameResource`，为当前选择绘制 Compound 子形状、AABB、接触点与法线、休眠/Trigger 状态、关节锚点/轴/限位，以及角色地面法线；结果按运行时稳定顺序输出并设置显示容量上限。
+`PhysicsJoint` Inspector 可从带 Collider 的实体中选择两个不同端点，并按 Point、Fixed、Distance、Hinge、Slider、Cone/SwingTwist 与 SixDOF 类型显示配置，分别编辑锚点、轴、线性/角度限位、电机、弹簧、阻尼和断裂阈值。Viewport 直接消费统一 `PhysicsDebugFrameResource`，为当前选择绘制 Compound 子形状、AABB、接触点与法线、休眠/Trigger 状态、关节锚点/轴/限位，以及角色地面法线；工具栏可以独立开关碰撞形状、边界、接触、关节和角色地面类别，设置随 Editor 状态持久化，视口图例显示当前启用类别。结果按运行时稳定顺序输出并设置显示容量上限。
 
 ## 载具
 
