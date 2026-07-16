@@ -56,6 +56,7 @@ public final class EditorStore: @unchecked Sendable {
         case pendingConfirmationRequest
         case aiSettings
         case capabilitySettings
+        case pluginManagement
         case aiStatusMessage
         case aiWarnings
         case chatMessages
@@ -218,6 +219,8 @@ public final class EditorStore: @unchecked Sendable {
             mark(.aiSettings, old.aiSettings, new.aiSettings)
         case .setCapabilitySettings:
             mark(.capabilitySettings, old.capabilitySettings, new.capabilitySettings)
+        case .setPluginManagementState:
+            mark(.pluginManagement, old.pluginManagement, new.pluginManagement)
         case .setAIStatusMessage:
             mark(.aiStatusMessage, old.aiStatusMessage, new.aiStatusMessage)
         case .setAIWarnings:
@@ -287,6 +290,9 @@ extension EditorStore {
     public var shouldRender: Bool { read(.shouldRender, storage.shouldRender) }
     public var aiSettings: EditorAISettings { read(.aiSettings, storage.aiSettings) }
     public var capabilitySettings: EditorCapabilitySettings { read(.capabilitySettings, storage.capabilitySettings) }
+    public var pluginManagement: EditorPluginManagementState {
+        read(.pluginManagement, storage.pluginManagement)
+    }
     public var aiStatusMessage: String? { read(.aiStatusMessage, storage.aiStatusMessage) }
     public var aiWarnings: [String] { read(.aiWarnings, storage.aiWarnings) }
     public var consoleEntries: [EditorConsoleEntry] { read(.consoleEntries, storage.consoleEntries) }

@@ -298,6 +298,9 @@ public struct EditorState: Codable, Sendable {
     public var pendingConfirmationRequest: ConfirmationRequestBatch?
     public var aiSettings: EditorAISettings
     public var capabilitySettings: EditorCapabilitySettings
+    /// Ephemeral UI state. It is deliberately omitted from Codable storage so
+    /// a project file can never restore a pending approval or enabled binding.
+    public var pluginManagement: EditorPluginManagementState
     public var aiStatusMessage: String?
     public var aiWarnings: [String]
     public var chatMessages: [AIChatMessage]
@@ -351,6 +354,7 @@ public struct EditorState: Codable, Sendable {
         pendingConfirmationRequest: ConfirmationRequestBatch? = nil,
         aiSettings: EditorAISettings = .default,
         capabilitySettings: EditorCapabilitySettings = .default,
+        pluginManagement: EditorPluginManagementState = .idle,
         aiStatusMessage: String? = nil,
         aiWarnings: [String] = [],
         chatMessages: [AIChatMessage] = [],
@@ -399,6 +403,7 @@ public struct EditorState: Codable, Sendable {
         self.pendingConfirmationRequest = pendingConfirmationRequest
         self.aiSettings = aiSettings
         self.capabilitySettings = capabilitySettings
+        self.pluginManagement = pluginManagement
         self.aiStatusMessage = aiStatusMessage
         self.aiWarnings = aiWarnings
         self.chatMessages = chatMessages

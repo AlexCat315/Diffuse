@@ -139,7 +139,7 @@ final class EditorLaunchContext: @unchecked Sendable {
         app.setOpenSettingsWindowHandler { [weak self] in
             guard let self else { return }
             if let id = settingsWindowID, display.isWindowOpen(id) { return }
-            settingsWindowID = display.openWindow(title: L("Settings"), width: 360, height: 420) {
+            settingsWindowID = display.openWindow(title: L("Settings"), width: 520, height: 680) {
                 EditorSettingsWindowRoot(app: app)
             }
         }
