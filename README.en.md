@@ -102,7 +102,7 @@ python bootstrap.py
 swift build --package-path Editor
 ```
 
-`bootstrap.py` compiles the native C/C++ dependencies (Yoga, FreeType, HarfBuzz, SDL3, Jolt, OpenEXR/Imath) for each package into its `vendor/` directory and wraps them as `.artifactbundle`s consumable by SwiftPM. It is cross-platform and initializes the MSVC toolchain on Windows.
+`bootstrap.py` compiles the native C/C++ dependencies (Yoga, FreeType, HarfBuzz, SDL3, Jolt, OpenEXR/Imath) for each package into its `vendor/` directory and wraps them for SwiftPM. On macOS it also verifies and stages the pinned official Wasmtime Component C API dynamic artifact. It is cross-platform and initializes the MSVC toolchain on Windows.
 
 After the first bootstrap, day-to-day development only needs:
 
@@ -147,6 +147,7 @@ swift build --package-path guava-mcp # MCP server (run: swift run GuavaMCP)
 | OpenEXR | CMake source build | submodule under `Engine/third-party/openexr` |
 | JoltPhysics | CMake source build → `.artifactbundle` | submodule under `Engine/third-party/jolt` |
 | wgpu-native | prebuilt binary downloaded from gfx-rs releases at configure time | no submodule |
+| Wasmtime | pinned official C API dynamic library → `.xcframework` | Bytecode Alliance release (SHA-256 verified, macOS) |
 
 The pattern is uniform: each SPM package owns its native deps under `<package>/third-party/`, CMake builds them into `<package>/vendor/` (gitignored), and the package consumes them via `.binaryTarget(path:)`.
 

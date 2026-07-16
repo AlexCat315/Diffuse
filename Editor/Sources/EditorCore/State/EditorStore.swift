@@ -41,6 +41,7 @@ public final class EditorStore: @unchecked Sendable {
         case viewportInteractionDownscaleEnabled
         case viewportRealtimeEnabled
         case physicsDebugOverlayOptions
+        case physicsDebugOverlayScope
         case translateSnapEnabled
         case rotateSnapEnabled
         case scaleSnapEnabled
@@ -176,6 +177,10 @@ public final class EditorStore: @unchecked Sendable {
             mark(.physicsDebugOverlayOptions,
                  old.physicsDebugOverlayOptions,
                  new.physicsDebugOverlayOptions)
+        case .setPhysicsDebugOverlayScope:
+            mark(.physicsDebugOverlayScope,
+                 old.physicsDebugOverlayScope,
+                 new.physicsDebugOverlayScope)
         case .setTranslateSnapEnabled:
             mark(.translateSnapEnabled, old.translateSnapEnabled, new.translateSnapEnabled)
         case .setRotateSnapEnabled:
@@ -302,6 +307,9 @@ extension EditorStore {
     }
     public var physicsDebugOverlayOptions: EditorPhysicsDebugOverlayOptions {
         read(.physicsDebugOverlayOptions, storage.physicsDebugOverlayOptions)
+    }
+    public var physicsDebugOverlayScope: EditorPhysicsDebugOverlayScope {
+        read(.physicsDebugOverlayScope, storage.physicsDebugOverlayScope)
     }
     public var translateSnapEnabled: Bool { read(.translateSnapEnabled, storage.translateSnapEnabled) }
     public var rotateSnapEnabled: Bool { read(.rotateSnapEnabled, storage.rotateSnapEnabled) }
