@@ -441,6 +441,149 @@ struct EditorInspectorSectionsTests {
         #expect(collider.layerMask == 0x00F0)
     }
 
+    @Test("compound collider inspector round-trips child transforms and keeps shape fields aligned")
+    func compoundColliderBindingsAndShapeFieldAlignment() throws {
+        let adapter = EditorSceneAdapter()
+        let id = makeEntity(in: adapter)
+        let entity = try #require(EntityID(rawValue: id))
+        let authoredShapes = [
+            ColliderShapeInstance(
+                shape: .capsule(radius: 0.4, halfHeight: 1.2, center: SIMD3<Float>(0, 0.1, 0)),
+                localPosition: SIMD3<Float>(1, 2, 3),
+                localRotation: SIMD4<Float>(0, 0.707_106_77, 0, 0.707_106_77),
+                localScale: SIMD3<Float>(1, 2, 1)
+            ),
+            ColliderShapeInstance(
+                shape: .sphere(radius: 0.75, center: .zero),
+                localPosition: SIMD3<Float>(-2, 0, 0)
+            ),
+        ]
+        _ = adapter.scene.setComponent(Collider(shapes: authoredShapes), for: entity)
+
+        #expect(field(adapter, id, section: "collider", field: "shape-capsule-half-height") != nil)
+        guard case let .readOnly(shapeCount) =
+                field(adapter, id, section: "collider", field: "shape-instance-count"),
+              case let .json(shapesJSON, _) =
+                field(adapter, id, section: "collider", field: "shape-instances-json") else {
+            Issue.record("expected compound collider shape editor")
+            return
+        }
+        #expect(shapeCount == "2")
+        #expect(shapesJSON.wrappedValue.contains("localPosition"))
+        #expect(shapesJSON.wrappedValue.contains("capsule"))
+
+        let replacementShapes = [
+            ColliderShapeInstance(
+                shape: .cylinder(radius: 0.6, halfHeight: 1.4, center: SIMD3<Float>(0, 0.25, 0)),
+                localPosition: SIMD3<Float>(4, 5, 6),
+                localRotation: SIMD4<Float>(0.1, 0.2, 0.3, 0.9),
+                localScale: SIMD3<Float>(0.5, 1.5, 2)
+            ),
+            ColliderShapeInstance(
+                shape: .box(halfExtents: SIMD3<Float>(1, 2, 3), center: .zero),
+                localPosition: SIMD3<Float>(-1, -2, -3)
+            ),
+        ]
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        shapesJSON.wrappedValue = String(decoding: try encoder.encode(
+            replacementShapes.map(EditorSceneManifestColliderShapeInstance.init)
+        ), as: UTF8.self)
+
+        let updated = try #require(adapter.scene.component(Collider.self, for: entity))
+        #expect(updated.shapes == replacementShapes)
+        #expect(field(adapter, id, section: "collider", field: "shape-cylinder-radius") != nil)
+        #expect(field(adapter, id, section: "collider", field: "shape-cylinder-half-height") != nil)
+        #expect(field(adapter, id, section: "collider", field: "shape-capsule-half-height") == nil)
+
+        guard case let .colliderShapeKind(kind) =
+                field(adapter, id, section: "collider", field: "shape-kind") else {
+            Issue.record("expected collider shape kind field")
+            return
+        }
+        kind.wrappedValue = .heightField
+        #expect(field(adapter, id, section: "collider", field: "shape-heightfield-resource") != nil)
+        #expect(field(adapter, id, section: "collider", field: "shape-capsule-half-height") == nil)
+        #expect(field(adapter, id, section: "collider", field: "shape-cylinder-half-height") == nil)
+    }
+
+    @Test("typed physics joint inspector edits hinge and SixDOF configurations")
+    func typedPhysicsJointBindings() throws {
+        let adapter = EditorSceneAdapter()
+        let bodyA = adapter.scene.createEntity()
+        let bodyB = adapter.scene.createEntity()
+        let jointEntity = adapter.scene.createEntity()
+        let joint = PhysicsJoint(
+            configuration: .hinge(HingeJointConfiguration(
+                minimumAngle: -0.5,
+                maximumAngle: 0.75,
+                motor: PhysicsJointMotor(mode: .velocity, targetVelocity: 2, maxForce: 50),
+                spring: PhysicsJointSpring(frequency: 3, damping: 0.4)
+            )),
+            entityA: bodyA,
+            entityB: bodyB
+        )
+        _ = adapter.scene.setComponent(joint, for: jointEntity)
+        let id = jointEntity.rawValue
+
+        guard case let .physicsJointKind(kind) =
+                field(adapter, id, section: "constraint", field: "joint-type"),
+              case let .vector3(axisX, axisY, axisZ) =
+                field(adapter, id, section: "constraint", field: "joint-axis-a"),
+              case let .constrainedNumber(minimumAngle, _, _, _, _) =
+                field(adapter, id, section: "constraint", field: "joint-minimum-angle"),
+              case let .physicsJointMotorMode(motorMode) =
+                field(adapter, id, section: "constraint", field: "joint-motor-mode"),
+              case let .number(targetVelocity) =
+                field(adapter, id, section: "constraint", field: "joint-motor-target-velocity"),
+              case let .constrainedNumber(springDamping, _, _, _, _) =
+                field(adapter, id, section: "constraint", field: "joint-spring-damping") else {
+            Issue.record("expected typed hinge joint fields")
+            return
+        }
+
+        axisX.wrappedValue = 0
+        axisY.wrappedValue = 0
+        axisZ.wrappedValue = 1
+        minimumAngle.wrappedValue = -0.25
+        motorMode.wrappedValue = .position
+        targetVelocity.wrappedValue = 6
+        springDamping.wrappedValue = 0.8
+
+        guard case let .hinge(editedHinge)? =
+                adapter.scene.component(PhysicsJoint.self, for: jointEntity)?.configuration else {
+            Issue.record("expected edited hinge configuration")
+            return
+        }
+        #expect(editedHinge.axisA == SIMD3<Float>(0, 0, 1))
+        #expect(editedHinge.minimumAngle == -0.25)
+        #expect(editedHinge.motor.mode == .position)
+        #expect(editedHinge.motor.targetVelocity == 6)
+        #expect(editedHinge.spring.damping == 0.8)
+
+        kind.wrappedValue = .sixDOF
+        guard case let .vector3(linearMinX, linearMinY, linearMinZ) =
+                field(adapter, id, section: "constraint", field: "joint-linear-minimum"),
+              case let .physicsJointMotorMode(angularMotorMode) =
+                field(adapter, id, section: "constraint", field: "joint-angular-mode") else {
+            Issue.record("expected SixDOF-specific fields after type change")
+            return
+        }
+        linearMinX.wrappedValue = -1
+        linearMinY.wrappedValue = -2
+        linearMinZ.wrappedValue = -3
+        angularMotorMode.wrappedValue = .velocity
+
+        guard case let .sixDOF(sixDOF)? =
+                adapter.scene.component(PhysicsJoint.self, for: jointEntity)?.configuration else {
+            Issue.record("expected SixDOF configuration")
+            return
+        }
+        #expect(sixDOF.linearMinimum == SIMD3<Float>(-1, -2, -3))
+        #expect(sixDOF.angularMotor.mode == .velocity)
+        #expect(field(adapter, id, section: "constraint", field: "joint-minimum-angle") == nil)
+    }
+
     // MARK: - Audio Listener
 
     @Test("audio listener volume binding writes back")
