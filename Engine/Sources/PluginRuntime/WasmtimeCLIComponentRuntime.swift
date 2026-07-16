@@ -10,6 +10,8 @@ public enum WasmtimeCLIError: Error, Sendable, Equatable, CustomStringConvertibl
     case versionMismatch(expected: String, actual: String)
     case timedOut
     case invocationFailed(String)
+    case unsupportedHostImports([String])
+    case inputTooLarge
     case outputTooLarge
     case invalidWAVEOutput
 
@@ -19,6 +21,9 @@ public enum WasmtimeCLIError: Error, Sendable, Equatable, CustomStringConvertibl
         case let .versionMismatch(expected, actual): return "expected Wasmtime \(expected), got \(actual)"
         case .timedOut: return "Wasmtime component invocation timed out"
         case let .invocationFailed(message): return "Wasmtime component invocation failed: \(message)"
+        case let .unsupportedHostImports(imports):
+            return "Wasmtime CLI cannot link Guava host imports: \(imports.joined(separator: ", "))"
+        case .inputTooLarge: return "Wasmtime component input exceeds 1 MiB"
         case .outputTooLarge: return "Wasmtime component output exceeds 1 MiB"
         case .invalidWAVEOutput: return "Wasmtime component did not return a WAVE string"
         }
@@ -43,7 +48,7 @@ public final class WasmtimeCLIComponentRuntime: WASIComponentRuntime, @unchecked
         }
         self.executableURL = url
         let version = try Self.readVersion(at: url)
-        guard version.contains("wasmtime \(Self.pinnedVersion)") else {
+        guard Self.isPinnedVersionOutput(version) else {
             throw WasmtimeCLIError.versionMismatch(expected: Self.pinnedVersion, actual: version)
         }
     }
@@ -70,7 +75,7 @@ public final class WasmtimeCLIComponentRuntime: WASIComponentRuntime, @unchecked
                         limits: PluginResourceLimits) throws -> Data {
         guard input.count <= limits.maximumOutputBytes,
               let inputString = String(data: input, encoding: .utf8) else {
-            throw WasmtimeCLIError.outputTooLarge
+            throw WasmtimeCLIError.inputTooLarge
         }
         let expression = "prepare(\(waveString(capabilityID)), \(waveString(inputString)))"
         return try invoke(package: package,
@@ -88,6 +93,7 @@ public final class WasmtimeCLIComponentRuntime: WASIComponentRuntime, @unchecked
                         expression: String,
                         timeoutMilliseconds: UInt64,
                         limits: PluginResourceLimits) throws -> Data {
+        try Self.validateSupportedImports(package.witContract.imports)
         let process = Process()
         process.executableURL = executableURL
         process.arguments = Self.invocationArguments(componentPath: package.componentURL.path,
@@ -107,19 +113,35 @@ public final class WasmtimeCLIComponentRuntime: WASIComponentRuntime, @unchecked
         defer { _ = lock.withLock { processesByPluginID.removeValue(forKey: package.manifest.id) } }
 
         try process.run()
+        // Drain both pipes while the child runs. Waiting for termination before
+        // reading lets an untrusted component fill an OS pipe buffer and block
+        // forever. Readers retain at most their configured limit but continue
+        // draining excess bytes until Wasmtime exits or is killed.
+        let outputReader = BoundedPipeReader(
+            handle: stdout.fileHandleForReading,
+            limit: limits.maximumOutputBytes
+        )
+        let diagnosticReader = BoundedPipeReader(
+            handle: stderr.fileHandleForReading,
+            limit: 4_096
+        )
+        outputReader.start()
+        diagnosticReader.start()
         let deadline = DispatchTime.now() + .milliseconds(Int(timeoutMilliseconds) + 250)
         guard finished.wait(timeout: deadline) == .success else {
             forceStop(process)
             _ = finished.wait(timeout: .now() + .milliseconds(250))
+            _ = outputReader.result()
+            _ = diagnosticReader.result()
             throw WasmtimeCLIError.timedOut
         }
-        let output = stdout.fileHandleForReading.readDataToEndOfFile()
-        let diagnostic = stderr.fileHandleForReading.readDataToEndOfFile()
+        let output = outputReader.result()
+        let diagnostic = diagnosticReader.result()
         guard process.terminationStatus == 0 else {
             let message = String(data: diagnostic.prefix(4_096), encoding: .utf8) ?? "exit \(process.terminationStatus)"
             throw WasmtimeCLIError.invocationFailed(message)
         }
-        guard output.count <= limits.maximumOutputBytes else { throw WasmtimeCLIError.outputTooLarge }
+        guard !outputReader.exceededLimit else { throw WasmtimeCLIError.outputTooLarge }
         return try decodeWAVEString(output)
     }
 
@@ -133,6 +155,7 @@ public final class WasmtimeCLIComponentRuntime: WASIComponentRuntime, @unchecked
             "-W", "fuel=\(limits.fuelPerInvocation)",
             "-W", "max-memory-size=\(limits.maximumMemoryBytes)",
             "-W", "timeout=\(timeoutMilliseconds)ms",
+            "-W", "max-instances=64,max-memories=16,max-tables=16,max-table-elements=100000",
             // The CLI normally wires common WASI imports automatically. Turn
             // that linker surface off explicitly so a component cannot hide an
             // ambient import that is absent from capabilities.wit.
@@ -183,6 +206,24 @@ public final class WasmtimeCLIComponentRuntime: WASIComponentRuntime, @unchecked
         }).map(URL.init(fileURLWithPath:))
     }
 
+    /// The CLI runner intentionally supports components without custom host
+    /// imports. Guava query imports require an embedded Component linker; until
+    /// that adapter is present, rejecting them is safer than silently linking
+    /// ambient WASI or pretending the grant is executable.
+    static func validateSupportedImports(_ imports: [String]) throws {
+        guard imports.isEmpty else {
+            throw WasmtimeCLIError.unsupportedHostImports(imports.sorted())
+        }
+    }
+
+    static func isPinnedVersionOutput(_ output: String) -> Bool {
+        let escaped = NSRegularExpression.escapedPattern(for: pinnedVersion)
+        return output.range(
+            of: "^wasmtime[ ]+\(escaped)(?:[[:space:]]|$)",
+            options: .regularExpression
+        ) != nil
+    }
+
     private static func readVersion(at url: URL) throws -> String {
         let process = Process()
         process.executableURL = url
@@ -190,8 +231,76 @@ public final class WasmtimeCLIComponentRuntime: WASIComponentRuntime, @unchecked
         let output = Pipe()
         process.standardOutput = output
         process.standardError = output
+        let finished = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in finished.signal() }
         try process.run()
-        process.waitUntilExit()
-        return String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? "unknown"
+        let reader = BoundedPipeReader(handle: output.fileHandleForReading, limit: 4_096)
+        reader.start()
+        guard finished.wait(timeout: .now() + .seconds(2)) == .success else {
+            process.terminate()
+#if canImport(Darwin) || canImport(Glibc)
+            if process.isRunning { _ = kill(process.processIdentifier, SIGKILL) }
+#else
+            if process.isRunning { process.interrupt() }
+#endif
+            _ = reader.result()
+            throw WasmtimeCLIError.timedOut
+        }
+        let data = reader.result()
+        return String(data: data, encoding: .utf8) ?? "unknown"
+    }
+}
+
+/// Concurrently drains one child-process pipe while retaining bounded output.
+/// `Data` growth is capped at `limit + 1` so callers can distinguish an exact
+/// limit-sized response from an oversized response without buffering attacker
+/// controlled output.
+private final class BoundedPipeReader: @unchecked Sendable {
+    private let handle: FileHandle
+    private let limit: Int
+    private let lock = NSLock()
+    private let finished = DispatchSemaphore(value: 0)
+    private var retained = Data()
+    private var didStart = false
+    private var didExceedLimit = false
+
+    init(handle: FileHandle, limit: Int) {
+        self.handle = handle
+        self.limit = max(0, limit)
+    }
+
+    var exceededLimit: Bool {
+        lock.withLock { didExceedLimit }
+    }
+
+    func start() {
+        let shouldStart = lock.withLock { () -> Bool in
+            guard !didStart else { return false }
+            didStart = true
+            return true
+        }
+        guard shouldStart else { return }
+        DispatchQueue.global(qos: .utility).async { [self] in
+            while true {
+                let chunk = handle.readData(ofLength: 16 * 1_024)
+                if chunk.isEmpty { break }
+                lock.withLock {
+                    let remaining = max(0, limit + 1 - retained.count)
+                    if remaining > 0 { retained.append(chunk.prefix(remaining)) }
+                    if retained.count > limit || chunk.count > remaining {
+                        didExceedLimit = true
+                    }
+                }
+            }
+            finished.signal()
+        }
+    }
+
+    func result() -> Data {
+        if finished.wait(timeout: .now() + .seconds(1)) != .success {
+            try? handle.close()
+            _ = finished.wait(timeout: .now() + .seconds(1))
+        }
+        return lock.withLock { retained }
     }
 }

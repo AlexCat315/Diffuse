@@ -2387,6 +2387,16 @@ public struct EditorInspectorField {
     }
 }
 
+public struct EditorInspectorEntityOption: Sendable, Equatable {
+    public let id: UInt64
+    public let name: String
+
+    public init(id: UInt64, name: String) {
+        self.id = id
+        self.name = name
+    }
+}
+
 public enum EditorInspectorFieldValue {
     case readOnly(String)
     case text(Binding<String>)
@@ -2401,6 +2411,8 @@ public enum EditorInspectorFieldValue {
     case vehicleControllerKind(Binding<VehicleControllerKind>)
     case rigidBodyMotion(Binding<RigidBodyMotionType>)
     case colliderShapeKind(Binding<ColliderShapeKind>)
+    case colliderShapeInstances(Binding<[ColliderShapeInstance]>)
+    case entityReference(Binding<UInt64>, options: [EditorInspectorEntityOption])
     case physicsJointKind(Binding<PhysicsJointKind>)
     case physicsJointMotorMode(Binding<PhysicsJointMotorMode>)
     case particleEmissionShape(Binding<ParticleEmissionShape>)
@@ -3638,9 +3650,14 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             value: .readOnly(String(collider.shapes.count))
         ))
         fields.append(EditorInspectorField(
-            id: "shape-instances-json",
+            id: "shape-instances",
             label: L("Compound Shapes"),
-            value: .json(colliderShapeInstancesBinding(for: entity), minHeight: 150)
+            value: .colliderShapeInstances(colliderShapeInstanceListBinding(for: entity))
+        ))
+        fields.append(EditorInspectorField(
+            id: "shape-instances-json",
+            label: L("Advanced JSON"),
+            value: .json(colliderShapeInstancesBinding(for: entity), minHeight: 120)
         ))
 
         fields.append(
@@ -3704,6 +3721,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         guard let joint = scene.component(PhysicsJoint.self, for: entity) else {
             return nil
         }
+        let endpointOptions = physicsJointEndpointOptions(excluding: entity)
 
         var fields: [EditorInspectorField] = [
             EditorInspectorField(
@@ -3714,12 +3732,18 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             EditorInspectorField(
                 id: "joint-entity-a",
                 label: L("Entity A"),
-                value: .readOnly(displayName(for: joint.entityA))
+                value: .entityReference(
+                    physicsJointEndpointBinding(for: entity, endpoint: .a),
+                    options: endpointOptions
+                )
             ),
             EditorInspectorField(
                 id: "joint-entity-b",
                 label: L("Entity B"),
-                value: .readOnly(displayName(for: joint.entityB))
+                value: .entityReference(
+                    physicsJointEndpointBinding(for: entity, endpoint: .b),
+                    options: endpointOptions
+                )
             ),
             jointVectorField("joint-pivot-a", L("Anchor A"), entity, .pivotA),
             jointVectorField("joint-pivot-b", L("Anchor B"), entity, .pivotB),
@@ -6730,6 +6754,25 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
+    private func colliderShapeInstanceListBinding(
+        for entity: EntityID
+    ) -> Binding<[ColliderShapeInstance]> {
+        Binding(
+            get: { [self] in
+                scene.component(Collider.self, for: entity)?.shapes ?? []
+            },
+            set: { [self] shapes in
+                guard !shapes.isEmpty,
+                      var collider = scene.component(Collider.self, for: entity),
+                      collider.shapes != shapes
+                else { return }
+                collider.shapes = shapes
+                guard scene.setComponent(collider, for: entity) else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
+
     private func colliderFrictionBinding(for entity: EntityID) -> Binding<Float> {
         Binding(
             get: { [self] in
@@ -6838,6 +6881,48 @@ public final class EditorSceneAdapter: @unchecked Sendable {
 
     private enum PhysicsJointMotorSlot: Equatable { case primary, angular }
     private enum PhysicsJointMotorScalarField { case targetPosition, targetVelocity, maximumForce }
+    private enum PhysicsJointEndpoint: Equatable { case a, b }
+
+    private func physicsJointEndpointOptions(
+        excluding jointEntity: EntityID
+    ) -> [EditorInspectorEntityOption] {
+        scene.entities()
+            .filter { entity in
+                entity != jointEntity && scene.component(Collider.self, for: entity) != nil
+            }
+            .sorted { $0.rawValue < $1.rawValue }
+            .map {
+                EditorInspectorEntityOption(id: $0.rawValue, name: displayName(for: $0))
+            }
+    }
+
+    private func physicsJointEndpointBinding(
+        for jointEntity: EntityID,
+        endpoint: PhysicsJointEndpoint
+    ) -> Binding<UInt64> {
+        Binding(
+            get: { [self] in
+                guard let joint = scene.component(PhysicsJoint.self, for: jointEntity) else { return 0 }
+                return endpoint == .a ? joint.entityA.rawValue : joint.entityB.rawValue
+            },
+            set: { [self] rawID in
+                let candidate = EntityID(rawValue: rawID)
+                guard let current = scene.component(PhysicsJoint.self, for: jointEntity) else { return }
+                let existing = endpoint == .a ? current.entityA : current.entityB
+                let other = endpoint == .a ? current.entityB : current.entityA
+                guard scene.contains(candidate),
+                      scene.component(Collider.self, for: candidate) != nil,
+                      candidate != existing,
+                      candidate != other,
+                      scene.updateComponent(PhysicsJoint.self, for: jointEntity, { joint in
+                          if endpoint == .a { joint.entityA = candidate }
+                          else { joint.entityB = candidate }
+                      })
+                else { return }
+                notifyRevisionChanged()
+            }
+        )
+    }
 
     private func jointVectorField(
         _ id: String,
@@ -7527,15 +7612,6 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         return result
     }
 
-}
-
-private extension EntityID {
-    init?(rawValue: UInt64) {
-        self.init(
-            index: UInt32(rawValue & 0xFFFF_FFFF),
-            generation: UInt32(rawValue >> 32)
-        )
-    }
 }
 
 // MARK: - Transform decompose / compose

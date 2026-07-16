@@ -1,6 +1,6 @@
 import CapabilityRuntime
 import Foundation
-import PluginRuntime
+@testable import PluginRuntime
 import Testing
 
 @Suite("PluginRuntime security boundary")
@@ -102,7 +102,80 @@ struct PluginRuntimeTests {
         #expect(wasiOptions?.contains("http=n") == true)
         #expect(wasiOptions?.contains("inherit-env=n") == true)
         #expect(wasiOptions?.contains("inherit-network=n") == true)
+        #expect(arguments.contains("fuel=20000000"))
+        #expect(arguments.contains("max-memory-size=67108864"))
+        #expect(arguments.contains("timeout=2000ms"))
+        #expect(arguments.contains {
+            $0.contains("max-instances=64") && $0.contains("max-memories=16")
+        })
         #expect(arguments.last == "/plugin/component.wasm")
+    }
+
+    @Test("Wasmtime CLI accepts only the exact pinned release")
+    func wasmtimeVersionMatchIsExact() {
+        #expect(WasmtimeCLIComponentRuntime.isPinnedVersionOutput("wasmtime 45.0.0\n"))
+        #expect(WasmtimeCLIComponentRuntime.isPinnedVersionOutput("wasmtime 45.0.0 build-hash"))
+        #expect(!WasmtimeCLIComponentRuntime.isPinnedVersionOutput("wasmtime 145.0.0"))
+        #expect(!WasmtimeCLIComponentRuntime.isPinnedVersionOutput("wasmtime 45.0.0-rc.1"))
+    }
+
+    @Test("CLI runtime rejects custom host imports until an embedded linker is available")
+    func cliRuntimeRejectsUnlinkedGuavaImports() throws {
+        try WasmtimeCLIComponentRuntime.validateSupportedImports([])
+        #expect(throws: WasmtimeCLIError.unsupportedHostImports(["guava:scene/query"])) {
+            try WasmtimeCLIComponentRuntime.validateSupportedImports(["guava:scene/query"])
+        }
+    }
+
+    @Test("oversized component output is drained and rejected without pipe deadlock")
+    func oversizedWasmtimeOutputFailsClosed() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let executable = root.appendingPathComponent("fake-wasmtime")
+        let script = """
+        #!/bin/sh
+        if [ "$1" = "--version" ]; then
+          printf 'wasmtime 45.0.0\\n'
+          exit 0
+        fi
+        printf '"'
+        dd if=/dev/zero bs=1100000 count=1 2>/dev/null | tr '\\000' 'a'
+        printf '"\\n'
+        """
+        try Data(script.utf8).write(to: executable)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700],
+                                              ofItemAtPath: executable.path)
+        let runtime = try WasmtimeCLIComponentRuntime(executableURL: executable)
+        let package = ValidatedPluginPackage(
+            rootURL: root,
+            manifest: GuavaPluginManifest(
+                id: "safe.reader",
+                version: 1,
+                name: "Reader",
+                description: "Test reader",
+                access: .read
+            ),
+            componentURL: root.appendingPathComponent("component.wasm"),
+            witURL: root.appendingPathComponent("capabilities.wit"),
+            witContract: WITContract(
+                worldName: "plugin",
+                imports: [],
+                exports: [
+                    WITFunctionExport(name: "discover", signature: "func() -> string"),
+                    WITFunctionExport(
+                        name: "prepare",
+                        signature: "func(capability-id: string, input: string) -> string"
+                    ),
+                ]
+            ),
+            componentHash: "test",
+            witHash: "test"
+        )
+        #expect(throws: WasmtimeCLIError.outputTooLarge) {
+            try runtime.discover(package, limits: .secureDefault)
+        }
     }
 
     @Test("plugin composition cannot call an ungranted primitive")
