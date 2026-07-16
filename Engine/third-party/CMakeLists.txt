@@ -32,6 +32,11 @@ message(STATUS "Guava third-party target triple: ${GUAVA_TRIPLE} (SPM: ${GUAVA_S
 set(GUAVA_VENDOR_DIR ${CMAKE_SOURCE_DIR}/../vendor)
 
 # ============================================================================
+# Wasmtime Component runtime (fixed official dynamic C API artifact on macOS)
+# ============================================================================
+include(${CMAKE_SOURCE_DIR}/cmake/FetchWasmtime.cmake)
+
+# ============================================================================
 # Static-only, minimal-dependency build profile
 # ============================================================================
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries" FORCE)

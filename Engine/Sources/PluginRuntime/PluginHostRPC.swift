@@ -15,17 +15,120 @@ public struct PluginHostRequest: Codable, Sendable, Equatable {
     public var pluginPath: String?
     public var capabilityID: String?
     public var input: Data?
+    public var querySnapshot: PluginQuerySnapshot?
+    public var authorization: PluginAuthorizationRecord?
 
     public init(id: UUID = UUID(),
                 method: PluginHostMethod,
                 pluginPath: String? = nil,
                 capabilityID: String? = nil,
-                input: Data? = nil) {
+                input: Data? = nil,
+                querySnapshot: PluginQuerySnapshot? = nil,
+                authorization: PluginAuthorizationRecord? = nil) {
         self.id = id
         self.method = method
         self.pluginPath = pluginPath
         self.capabilityID = capabilityID
         self.input = input
+        self.querySnapshot = querySnapshot
+        self.authorization = authorization
+    }
+}
+
+public enum PluginQuerySnapshotError: Error, Sendable, Equatable, CustomStringConvertible {
+    case totalPayloadTooLarge
+    case missingPayload(PluginImportPermission)
+    case invalidJSON(PluginImportPermission)
+    case invalidRequest
+    case importNotGranted(String)
+
+    public var description: String {
+        switch self {
+        case .totalPayloadTooLarge:
+            return "plugin query snapshot exceeds 512 KiB"
+        case let .missingPayload(permission):
+            return "plugin query snapshot is missing \(permission.rawValue)"
+        case let .invalidJSON(permission):
+            return "plugin query snapshot contains invalid JSON for \(permission.rawValue)"
+        case .invalidRequest:
+            return "plugin query request must be exactly {\"operation\":\"snapshot\"}"
+        case let .importNotGranted(name):
+            return "plugin attempted to query an ungranted import: \(name)"
+        }
+    }
+}
+
+/// Immutable, revision-bound query data supplied by the Editor for one plugin
+/// preparation call. The PluginHost never receives SceneRuntime or project
+/// service objects; Component imports can only retrieve one of these bounded
+/// JSON snapshots.
+public struct PluginQuerySnapshot: Codable, Sendable, Equatable {
+    public static let maximumTotalPayloadBytes = 512 * 1_024
+    public static let maximumRequestBytes = 16 * 1_024
+
+    public var id: UUID
+    public var sceneRevision: UInt64
+    public var scene: Data?
+    public var selection: Data?
+    public var assetMetadata: Data?
+
+    public init(id: UUID = UUID(),
+                sceneRevision: UInt64,
+                scene: Data? = nil,
+                selection: Data? = nil,
+                assetMetadata: Data? = nil) {
+        self.id = id
+        self.sceneRevision = sceneRevision
+        self.scene = scene
+        self.selection = selection
+        self.assetMetadata = assetMetadata
+    }
+
+    public func validate(for grantedImports: Set<PluginImportPermission>) throws {
+        let payloads = [scene, selection, assetMetadata].compactMap { $0 }
+        let total = payloads.reduce(0) { partial, payload in
+            let (sum, overflow) = partial.addingReportingOverflow(payload.count)
+            return overflow ? Int.max : sum
+        }
+        guard total <= Self.maximumTotalPayloadBytes else {
+            throw PluginQuerySnapshotError.totalPayloadTooLarge
+        }
+        for permission in grantedImports {
+            guard let payload = payload(for: permission) else {
+                throw PluginQuerySnapshotError.missingPayload(permission)
+            }
+            guard let value = try? JSONSerialization.jsonObject(with: payload),
+                  value is [String: Any] || value is [Any] else {
+                throw PluginQuerySnapshotError.invalidJSON(permission)
+            }
+        }
+    }
+
+    public func response(importName: String,
+                         request: Data,
+                         grantedImports: Set<PluginImportPermission>) throws -> Data {
+        guard request.count <= Self.maximumRequestBytes,
+              let object = try? JSONSerialization.jsonObject(with: request) as? [String: Any],
+              object.count == 1,
+              object["operation"] as? String == "snapshot" else {
+            throw PluginQuerySnapshotError.invalidRequest
+        }
+        guard let permission = PluginImportPermission(rawValue: importName),
+              grantedImports.contains(permission) else {
+            throw PluginQuerySnapshotError.importNotGranted(importName)
+        }
+        guard let payload = payload(for: permission) else {
+            throw PluginQuerySnapshotError.missingPayload(permission)
+        }
+        return payload
+    }
+
+    public func payload(for permission: PluginImportPermission) -> Data? {
+        switch permission {
+        case .sceneQuery: return scene
+        case .selectionQuery: return selection
+        case .assetMetadataQuery: return assetMetadata
+        }
     }
 }
 
@@ -84,6 +187,7 @@ public protocol WASIComponentRuntime: Sendable {
     func prepare(_ package: ValidatedPluginPackage,
                  capabilityID: String,
                  input: Data,
+                 querySnapshot: PluginQuerySnapshot?,
                  limits: PluginResourceLimits) throws -> Data
     func interrupt(pluginID: String)
 }
@@ -108,6 +212,7 @@ public struct FailClosedWASIComponentRuntime: WASIComponentRuntime {
     public func prepare(_ package: ValidatedPluginPackage,
                         capabilityID: String,
                         input: Data,
+                        querySnapshot: PluginQuerySnapshot?,
                         limits: PluginResourceLimits) throws -> Data { throw PluginRuntimeUnavailableError.unavailable }
     public func interrupt(pluginID: String) {}
 }

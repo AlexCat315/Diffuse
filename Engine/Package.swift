@@ -2,6 +2,34 @@
 // GuavaEngine 0.0.1
 import PackageDescription
 
+#if os(macOS)
+let wasmtimeProducts: [Product] = [
+    .library(name: "PluginWasmtimeRuntime", targets: ["PluginWasmtimeRuntime"]),
+]
+let wasmtimeTargets: [Target] = [
+    .binaryTarget(
+        name: "Wasmtime",
+        path: "vendor/Wasmtime.xcframework"
+    ),
+    .target(
+        name: "CWasmtimeBridge",
+        dependencies: ["Wasmtime"],
+        path: "Sources/Bridge/CWasmtimeBridge",
+        publicHeadersPath: "include"
+    ),
+    .target(
+        name: "PluginWasmtimeRuntime",
+        dependencies: ["CWasmtimeBridge", "PluginRuntime"]
+    ),
+]
+#else
+// The official C API dynamic artifact is currently packaged as an Apple
+// XCFramework. Other hosts retain package validation and fail closed instead
+// of falling back to an ambient Wasmtime installation.
+let wasmtimeProducts: [Product] = []
+let wasmtimeTargets: [Target] = []
+#endif
+
 let package = Package(
     name: "GuavaEngine",
     platforms: [.macOS(.v13)],
@@ -389,7 +417,11 @@ let package = Package(
         ),
         .executableTarget(
             name: "GuavaPluginHost",
-            dependencies: ["CapabilityRuntime", "IntentRuntime", "PluginRuntime"]
+            dependencies: [
+                "CapabilityRuntime",
+                "IntentRuntime",
+                "PluginRuntime",
+            ]
         ),
         .testTarget(
             name: "EngineCoreTests",
@@ -475,7 +507,10 @@ let package = Package(
         ),
         .testTarget(
             name: "PluginRuntimeTests",
-            dependencies: ["CapabilityRuntime", "PluginRuntime"]
+            dependencies: [
+                "CapabilityRuntime",
+                "PluginRuntime",
+            ]
         ),
         .testTarget(
             name: "IntentRuntimeTests",
@@ -552,6 +587,15 @@ let package = Package(
     ],
     cxxLanguageStandard: .cxx17
 )
+
+package.products.append(contentsOf: wasmtimeProducts)
+package.targets.append(contentsOf: wasmtimeTargets)
+#if os(macOS)
+for targetName in ["GuavaPluginHost", "PluginRuntimeTests"] {
+    package.targets.first(where: { $0.name == targetName })?
+        .dependencies.append("PluginWasmtimeRuntime")
+}
+#endif
 
 // macOS builds the package's tests as one bundle: SwiftPM's synthesized
 // `GuavaEnginePackageTests` runner links every test target and transitively

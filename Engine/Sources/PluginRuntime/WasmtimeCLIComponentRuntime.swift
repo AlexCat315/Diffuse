@@ -72,6 +72,7 @@ public final class WasmtimeCLIComponentRuntime: WASIComponentRuntime, @unchecked
     public func prepare(_ package: ValidatedPluginPackage,
                         capabilityID: String,
                         input: Data,
+                        querySnapshot: PluginQuerySnapshot?,
                         limits: PluginResourceLimits) throws -> Data {
         guard input.count <= limits.maximumOutputBytes,
               let inputString = String(data: input, encoding: .utf8) else {

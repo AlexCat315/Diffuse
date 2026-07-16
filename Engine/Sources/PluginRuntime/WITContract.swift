@@ -54,6 +54,9 @@ public enum WITContractParser {
             throw WITContractError.malformedDeclaration("exactly one world is required")
         }
         let imports = captures(pattern: #"\bimport\s+([^;\s]+)\s*;"#, in: clean)
+        guard Set(imports).count == imports.count else {
+            throw WITContractError.malformedDeclaration("duplicate imports are not allowed")
+        }
         let allowed = Set(grantedImports.map(\.rawValue))
         for imported in imports {
             if forbiddenImportFragments.contains(where: { imported.hasPrefix($0) }) {
@@ -71,6 +74,11 @@ public enum WITContractParser {
         }
         guard Set(exports.map(\.name)).count == exports.count else {
             throw WITContractError.malformedDeclaration("duplicate export names are not allowed")
+        }
+        guard exports.count == 2 else {
+            throw WITContractError.malformedDeclaration(
+                "plugin world must export exactly discover and prepare"
+            )
         }
         for required in ["discover", "prepare"] where !exports.contains(where: { $0.name == required }) {
             throw WITContractError.missingRequiredExport(required)
