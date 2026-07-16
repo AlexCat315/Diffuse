@@ -30,10 +30,13 @@ struct PluginRuntimeTests {
     func witDeniesAmbientWASI() {
         let wit = """
         package example:safe;
+        interface capabilities {
+          record inspect-input { enabled: bool }
+          inspect: func(input: inspect-input) -> string;
+        }
         world plugin {
           import wasi:filesystem/types;
-          export discover: func() -> list<u8>;
-          export prepare: func(input: list<u8>) -> list<u8>;
+          export capabilities;
         }
         """
         #expect(throws: WITContractError.forbiddenImport("wasi:filesystem/types")) {
@@ -45,25 +48,31 @@ struct PluginRuntimeTests {
     func witAcceptsExactPluginABI() throws {
         let wit = """
         package example:safe;
-        interface capabilities {}
+        interface capabilities {
+          record inspect-input { enabled: bool }
+          inspect: func(input: inspect-input) -> string;
+        }
         world plugin {
-          export discover: func() -> string;
-          export prepare: func(capability-id: string, input: string) -> string;
+          export capabilities;
         }
         """
         let contract = try WITContractParser.parse(Data(wit.utf8), grantedImports: [])
         #expect(contract.worldName == "plugin")
-        #expect(contract.exports.map(\.name) == ["discover", "prepare"])
+        #expect(contract.exports.map(\.name) == ["capabilities"])
+        #expect(contract.capabilityInputs.map(\.name) == ["inspect"])
 
         let loose = """
         package example:unsafe;
+        interface capabilities {
+          record inspect-input { enabled: bool }
+          inspect: func(input: inspect-input) -> string;
+        }
         world plugin {
           export discover: func() -> string;
-          export prepare: func(input: string) -> string;
         }
         """
         #expect(throws: WITContractError.malformedDeclaration(
-            "prepare must be func(capability-id: string, input: string) -> string"
+            "plugin world must export exactly the capabilities interface"
         )) {
             try WITContractParser.parse(Data(loose.utf8), grantedImports: [])
         }
@@ -94,10 +103,10 @@ struct PluginRuntimeTests {
             detail: detail-level,
             tags: list<string>,
           }
+          inspect-scene: func(input: inspect-scene-input) -> string;
         }
         world plugin {
-          export discover: func() -> string;
-          export prepare: func(capability-id: string, input: string) -> string;
+          export capabilities;
         }
         """
         let parsed = try WITContractParser.parse(Data(wit.utf8), grantedImports: [])
@@ -112,6 +121,8 @@ struct PluginRuntimeTests {
             .string("summary"), .string("full"),
         ])
         #expect(input.inputSchema.properties["tags"]?.maximumItems == 4_096)
+        #expect(input.inputType.canonicalSignature ==
+            "record{query:option<string>,origin:record{x:f32,y:f32,z:f32},detail:enum{summary,full},tags:list<string>}")
 
         let unsupported = wit.replacingOccurrences(of: "query: option<string>",
                                                    with: "query: u64")
@@ -177,8 +188,8 @@ struct PluginRuntimeTests {
         }
     }
 
-    @Test("oversized component output is drained and rejected without pipe deadlock")
-    func oversizedWasmtimeOutputFailsClosed() throws {
+    @Test("legacy CLI runtime fails closed for the typed Component ABI")
+    func cliRuntimeCannotBypassTypedABI() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -190,9 +201,7 @@ struct PluginRuntimeTests {
           printf 'wasmtime 45.0.0\\n'
           exit 0
         fi
-        printf '"'
-        dd if=/dev/zero bs=1100000 count=1 2>/dev/null | tr '\\000' 'a'
-        printf '"\\n'
+        exit 99
         """
         try Data(script.utf8).write(to: executable)
         try FileManager.default.setAttributes([.posixPermissions: 0o700],
@@ -212,19 +221,13 @@ struct PluginRuntimeTests {
             witContract: WITContract(
                 worldName: "plugin",
                 imports: [],
-                exports: [
-                    WITFunctionExport(name: "discover", signature: "func() -> string"),
-                    WITFunctionExport(
-                        name: "prepare",
-                        signature: "func(capability-id: string, input: string) -> string"
-                    ),
-                ]
+                exports: [WITFunctionExport(name: "capabilities", signature: "interface")]
             ),
             componentHash: "test",
             witHash: "test"
         )
-        #expect(throws: WasmtimeCLIError.outputTooLarge) {
-            try runtime.discover(package, limits: .secureDefault)
+        #expect(throws: WasmtimeCLIError.typedComponentABIRequiresEmbeddedRuntime) {
+            try runtime.validateComponent(package, limits: .secureDefault)
         }
     }
 
@@ -286,9 +289,12 @@ struct PluginRuntimeTests {
             .write(to: root.appendingPathComponent("component.wasm"))
         let wit = """
         package example:safe;
+        interface capabilities {
+          record inspect-input { enabled: bool }
+          inspect: func(input: inspect-input) -> string;
+        }
         world plugin {
-          export discover: func() -> list<u8>;
-          export prepare: func(input: list<u8>) -> list<u8>;
+          export capabilities;
         }
         """
         try Data(wit.utf8).write(to: root.appendingPathComponent("capabilities.wit"))
@@ -309,18 +315,15 @@ struct PluginRuntimeTests {
         let runtime = try EmbeddedWasmtimeComponentRuntime()
 
         try runtime.validateComponent(package, limits: .secureDefault)
-        let discovery = try runtime.discover(package, limits: .secureDefault)
         let prepared = try runtime.prepare(
             package,
             capabilityID: "safe.reader.inspect",
-            input: Data("{}".utf8),
+            input: Data(#"{"enabled":true}"#.utf8),
             querySnapshot: nil,
             limits: .secureDefault
         )
 
         #expect(runtime.runtimeVersion == "45.0.0")
-        #expect(String(decoding: discovery, as: UTF8.self)
-            == #"{"capability_ids":["safe.reader.inspect"]}"#)
         #expect(String(decoding: prepared, as: UTF8.self) == "[]")
     }
 
@@ -341,7 +344,7 @@ struct PluginRuntimeTests {
             JSONSerialization.jsonObject(with: handshakePayload) as? [String: Any]
         )
         #expect(handshake.ok)
-        #expect(handshakeJSON["protocol_version"] as? Int == 4)
+        #expect(handshakeJSON["protocol_version"] as? Int == 5)
         #expect(handshakeJSON["wasmtime_version"] as? String == "45.0.0")
         #expect(handshakeJSON["runtime_mode"] as? String == "embedded")
         #expect(handshakeJSON["ambient_wasi"] as? Bool == false)
@@ -359,7 +362,8 @@ struct PluginRuntimeTests {
         #expect(inspection.componentHash == package.componentHash)
         #expect(inspection.contracts.map(\.id) == ["safe.reader.inspect"])
         #expect(inspection.contracts[0].inputSchema.type == .object)
-        #expect(inspection.contracts[0].inputSchema.properties.isEmpty)
+        #expect(inspection.contracts[0].inputSchema.properties["enabled"]?.type == .boolean)
+        #expect(inspection.contracts[0].inputSchema.required == ["enabled"])
         #expect(inspection.contracts[0].inputSchema.additionalProperties == false)
 
         let unauthorized = try client.call(PluginHostRequest(method: .load,
@@ -394,7 +398,7 @@ struct PluginRuntimeTests {
             method: .prepare,
             pluginPath: path,
             capabilityID: "safe.reader.inspect",
-            input: Data("{}".utf8),
+            input: Data(#"{"enabled":true}"#.utf8),
             authorization: authorization
         ))
         #expect(prepared.ok)
@@ -430,7 +434,7 @@ struct PluginRuntimeTests {
         }
     }
 
-    @Test("plugin discovery and authorization bind code, WIT, permissions, and schemas")
+    @Test("plugin authorization binds code, WIT, permissions, and schemas")
     func pluginAuthorizationInvalidatesEveryAuthorityChange() throws {
         let package = ValidatedPluginPackage(
             rootURL: URL(fileURLWithPath: "/safe.reader.guavaplugin"),
@@ -452,19 +456,18 @@ struct PluginRuntimeTests {
                                             name: "inspect",
                                             title: "Inspect",
                                             description: "Returns bounded findings",
-                                            inputSchema: .object(properties: [:])
+                                            inputSchema: .object(properties: [:]),
+                                            inputType: .record([])
                                          ),
                                      ]),
             componentHash: "component-a",
             witHash: "wit-a"
         )
         let contract = try #require(PluginWITContractDeriver.contracts(for: package).first)
-        let discovery = try JSONEncoder().encode(
-            PluginCapabilityDiscovery(capabilityIDs: [contract.id])
+        let inspection = PluginInspection(
+            package: package,
+            contracts: PluginWITContractDeriver.contracts(for: package)
         )
-        let validated = try PluginDiscoveryValidator.validate(discovery,
-                                                              package: package)
-        let inspection = PluginInspection(package: package, contracts: validated)
         let authorization = try PluginAuthorizationRecord(
             inspection: inspection,
             authorisedAt: Date(timeIntervalSince1970: 1)
@@ -496,41 +499,6 @@ struct PluginRuntimeTests {
         )
         #expect(!authorization.isStillValid(for: changedSchema))
 
-        let duplicateDiscovery = Data(
-            #"{"capability_ids":["safe.reader.inspect","safe.reader.inspect"]}"#.utf8
-        )
-        #expect(throws: PluginDiscoveryValidationError.duplicateCapability(contract.id)) {
-            try PluginDiscoveryValidator.validate(duplicateDiscovery,
-                                                  package: package)
-        }
-        #expect(throws: PluginDiscoveryValidationError.invalidPayload) {
-            try PluginDiscoveryValidator.validate(
-                Data(#"{"capabilities":[{"schema_hash":"forged"}]}"#.utf8),
-                package: package
-            )
-        }
-        #expect(throws: PluginDiscoveryValidationError.invalidPayload) {
-            try PluginDiscoveryValidator.validate(
-                Data(#"{"capability_ids":["safe.reader.inspect\nforged"]}"#.utf8),
-                package: package
-            )
-        }
-        #expect(throws: PluginDiscoveryValidationError.missingImplementation(contract.id)) {
-            try PluginDiscoveryValidator.validate(
-                Data(#"{"capability_ids":[]}"#.utf8),
-                package: package
-            )
-        }
-        #expect(throws: PluginDiscoveryValidationError.undeclaredImplementation(
-            "safe.reader.forged"
-        )) {
-            try PluginDiscoveryValidator.validate(
-                Data(
-                    #"{"capability_ids":["safe.reader.inspect","safe.reader.forged"]}"#.utf8
-                ),
-                package: package
-            )
-        }
     }
 
 #if canImport(PluginWasmtimeRuntime)
@@ -549,7 +517,7 @@ struct PluginRuntimeTests {
         let prepared = try runtime.prepare(
             package,
             capabilityID: "safe.reader.inspect",
-            input: Data("{}".utf8),
+            input: Data(#"{"enabled":true}"#.utf8),
             querySnapshot: snapshot,
             limits: .secureDefault
         )
@@ -559,7 +527,7 @@ struct PluginRuntimeTests {
             try runtime.prepare(
                 package,
                 capabilityID: "safe.reader.inspect",
-                input: Data("{}".utf8),
+                input: Data(#"{"enabled":true}"#.utf8),
                 querySnapshot: PluginQuerySnapshot(sceneRevision: 17),
                 limits: .secureDefault
             )
@@ -588,7 +556,8 @@ struct PluginRuntimeTests {
     func embeddedRuntimeInterruptsInfiniteLoop() throws {
         let package = try makePluginPackage(
             componentWAT: Self.infinitePrepareComponentWAT,
-            imports: []
+            imports: [],
+            capabilityName: "loop"
         )
         defer { try? FileManager.default.removeItem(at: package.rootURL) }
         let runtime = try EmbeddedWasmtimeComponentRuntime()
@@ -603,7 +572,7 @@ struct PluginRuntimeTests {
             try runtime.prepare(
                 package,
                 capabilityID: "safe.reader.loop",
-                input: Data("{}".utf8),
+                input: Data(#"{"enabled":true}"#.utf8),
                 querySnapshot: nil,
                 limits: limits
             )
@@ -679,7 +648,9 @@ struct PluginRuntimeTests {
     }
 
     private func makePluginPackage(componentWAT: String,
-                                   imports: [PluginImportPermission]) throws -> ValidatedPluginPackage {
+                                   imports: [PluginImportPermission],
+                                   capabilityName: String = "inspect",
+                                   inputFields: String = "enabled: bool,") throws -> ValidatedPluginPackage {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("guavaplugin")
@@ -701,13 +672,13 @@ struct PluginRuntimeTests {
         let wit = """
         package safe:reader;
         interface capabilities {
-          /// Inspect the current bounded snapshot.
-          record inspect-input {}
+          /// Execute one bounded capability.
+          record \(capabilityName)-input {\(inputFields)}
+          \(capabilityName): func(input: \(capabilityName)-input) -> string;
         }
         world plugin {
         \(importLines)
-          export discover: func() -> string;
-          export prepare: func(capability-id: string, input: string) -> string;
+          export capabilities;
         }
         """
         try Data(wit.utf8).write(to: root.appendingPathComponent("capabilities.wit"))
@@ -724,9 +695,7 @@ struct PluginRuntimeTests {
       (core module $guest
         (memory (export "memory") 1)
         (global $next (mut i32) (i32.const 4096))
-        (data (i32.const 64) "{\22capability_ids\22:[\22safe.reader.inspect\22]}")
         (data (i32.const 128) "[]")
-
         (func $realloc (export "realloc")
           (param $old i32) (param $old-size i32)
           (param $align i32) (param $new-size i32) (result i32)
@@ -744,40 +713,47 @@ struct PluginRuntimeTests {
             global.set $next
             local.get $result
           end)
-
-        (func (export "discover") (result i32)
-          i32.const 0
-          i32.const 64
-          i32.store
-          i32.const 4
-          i32.const 42
-          i32.store
-          i32.const 0)
-
-        (func (export "prepare")
-          (param i32 i32 i32 i32) (result i32)
+        (func (export "inspect") (param i32) (result i32)
           i32.const 0
           i32.const 128
           i32.store
           i32.const 4
           i32.const 2
           i32.store
-          i32.const 0)
-      )
+          i32.const 0))
       (core instance $guest (instantiate $guest))
-      (func (export "discover") (result string)
-        (canon lift (core func $guest "discover")
-          (memory $guest "memory")))
-      (func (export "prepare")
-        (param "capability-id" string) (param "input" string) (result string)
-        (canon lift (core func $guest "prepare")
+      (type $inspect-input (record (field "enabled" bool)))
+      (type $inspect-func (func
+        (param "input" $inspect-input) (result string)))
+      (func $inspect (type $inspect-func)
+        (canon lift (core func $guest "inspect")
           (memory $guest "memory")
           (realloc (func $guest "realloc"))))
+      (component $capabilities-component
+        (type $import-input (record (field "enabled" bool)))
+        (type $import-func (func
+          (param "input" $import-input) (result string)))
+        (import "import-func-inspect" (func $implementation
+          (type $import-func)))
+        (type $export-input (record (field "enabled" bool)))
+        (type $export-func (func
+          (param "input" $export-input) (result string)))
+        (export "inspect" (func $implementation)
+          (func (type $export-func))))
+      (instance $capabilities
+        (instantiate $capabilities-component
+          (with "import-func-inspect" (func $inspect))))
+      (export (interface "safe:reader/capabilities")
+        (instance $capabilities))
     )
     """#
 
     private static let sceneQueryComponentWAT = #"""
     (component
+      (type $inspect-input (record (field "enabled" bool)))
+      (type $capabilities-type (instance
+        (export "inspect" (func
+          (param "input" $inspect-input) (result string)))))
       (type $query-interface (instance
         (export "query" (func (param "request" string) (result string)))
       ))
@@ -815,20 +791,9 @@ struct PluginRuntimeTests {
       (core module $guest
         (import "libc" "memory" (memory 1))
         (import "host" "query" (func $query (param i32 i32 i32)))
-        (data (i32.const 64) "{\22capability_ids\22:[\22safe.reader.inspect\22]}")
         (data (i32.const 128) "{\22operation\22:\22snapshot\22}")
 
-        (func (export "discover") (result i32)
-          i32.const 0
-          i32.const 64
-          i32.store
-          i32.const 4
-          i32.const 42
-          i32.store
-          i32.const 0)
-
-        (func (export "prepare")
-          (param i32 i32 i32 i32) (result i32)
+        (func (export "inspect") (param i32) (result i32)
           i32.const 128
           i32.const 24
           i32.const 0
@@ -839,49 +804,43 @@ struct PluginRuntimeTests {
         (with "libc" (instance $libc))
         (with "host" (instance (export "query" (func $query-lower))))
       ))
-      (func (export "discover") (result string)
-        (canon lift (core func $guest "discover")
-          (memory $libc "memory")))
-      (func (export "prepare")
-        (param "capability-id" string) (param "input" string) (result string)
-        (canon lift (core func $guest "prepare")
+      (func $inspect (param "input" $inspect-input) (result string)
+        (canon lift (core func $guest "inspect")
           (memory $libc "memory")
           (realloc (func $libc "realloc"))))
+      (instance $capabilities
+        (export "inspect" (func $inspect)))
+      (export "capabilities" (instance $capabilities)
+        (instance (type $capabilities-type)))
     )
     """#
 
     private static let infinitePrepareComponentWAT = #"""
     (component
+      (type $loop-input (record (field "enabled" bool)))
+      (type $capabilities-type (instance
+        (export "loop" (func
+          (param "input" $loop-input) (result string)))))
       (core module $guest
         (memory (export "memory") 1)
         (global $next (mut i32) (i32.const 4096))
-        (data (i32.const 64) "{\22capability_ids\22:[\22safe.reader.inspect\22]}")
         (func (export "realloc")
           (param i32 i32 i32 i32) (result i32)
           global.get $next)
-        (func (export "discover") (result i32)
-          i32.const 0
-          i32.const 64
-          i32.store
-          i32.const 4
-          i32.const 42
-          i32.store
-          i32.const 0)
-        (func (export "prepare")
-          (param i32 i32 i32 i32) (result i32)
+        (func (export "loop") (param i32) (result i32)
           (loop $forever
             br $forever)
           unreachable)
       )
       (core instance $guest (instantiate $guest))
-      (func (export "discover") (result string)
-        (canon lift (core func $guest "discover")
-          (memory $guest "memory")))
-      (func (export "prepare")
-        (param "capability-id" string) (param "input" string) (result string)
-        (canon lift (core func $guest "prepare")
+      (func $loop (param "input" $loop-input) (result string)
+        (canon lift (core func $guest "loop")
           (memory $guest "memory")
           (realloc (func $guest "realloc"))))
+      (instance $capabilities
+        (export "loop" (func $loop)))
+      (export "capabilities" (instance $capabilities)
+        (instance (type $capabilities-type)))
     )
     """#
 #endif

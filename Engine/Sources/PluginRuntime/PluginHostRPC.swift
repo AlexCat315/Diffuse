@@ -182,10 +182,6 @@ public protocol WASIComponentRuntime: Sendable {
     var runtimeVersion: String { get }
     func validateComponent(_ package: ValidatedPluginPackage,
                            limits: PluginResourceLimits) throws
-    /// Returns only `{\"capability_ids\":[...]}`. Capability metadata and
-    /// schemas are derived independently from the validated WIT package.
-    func discover(_ package: ValidatedPluginPackage,
-                  limits: PluginResourceLimits) throws -> Data
     func prepare(_ package: ValidatedPluginPackage,
                  capabilityID: String,
                  input: Data,
@@ -209,8 +205,6 @@ public struct FailClosedWASIComponentRuntime: WASIComponentRuntime {
     public init() {}
     public func validateComponent(_ package: ValidatedPluginPackage,
                                   limits: PluginResourceLimits) throws { throw PluginRuntimeUnavailableError.unavailable }
-    public func discover(_ package: ValidatedPluginPackage,
-                         limits: PluginResourceLimits) throws -> Data { throw PluginRuntimeUnavailableError.unavailable }
     public func prepare(_ package: ValidatedPluginPackage,
                         capabilityID: String,
                         input: Data,

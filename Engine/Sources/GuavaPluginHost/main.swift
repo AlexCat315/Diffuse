@@ -80,12 +80,7 @@ func inspectExecutionCopy(of package: ValidatedPluginPackage) throws
     let executionCopy = try stagedExecutionCopy(of: package)
     do {
         try runtime.validateComponent(executionCopy, limits: limits)
-        let discovery = try runtime.discover(executionCopy, limits: limits)
-        let contracts = try PluginDiscoveryValidator.validate(
-            discovery,
-            package: executionCopy,
-            limits: limits
-        )
+        let contracts = PluginWITContractDeriver.contracts(for: executionCopy)
         return (executionCopy,
                 PluginInspection(package: package, contracts: contracts))
     } catch {
@@ -124,7 +119,7 @@ func response(for request: PluginHostRequest) -> PluginHostResponse {
         switch request.method {
         case .handshake:
             let payload = try JSONSerialization.data(withJSONObject: [
-                "protocol_version": 4,
+                "protocol_version": 5,
                 "wasmtime_version": runtime.runtimeVersion,
                 "runtime_mode": runtimeMode,
                 "maximum_frame_bytes": PluginHostFrameCodec.maximumFrameBytes,
@@ -207,7 +202,7 @@ func response(for request: PluginHostRequest) -> PluginHostResponse {
             guard let contract = loaded.inspection.contracts.first(where: {
                 $0.id == capabilityID
             }) else {
-                throw PluginDiscoveryValidationError.undeclaredImplementation(capabilityID)
+                throw PluginCapabilityValidationError.unknownCapability(capabilityID)
             }
             try JSONSchemaValidator.validate(data: input,
                                              against: contract.inputSchema)
