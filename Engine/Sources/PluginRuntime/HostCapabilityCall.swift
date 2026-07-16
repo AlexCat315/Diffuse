@@ -24,6 +24,8 @@ public enum PluginCompositionError: Error, Sendable, Equatable, CustomStringConv
     case pluginPrimitiveNotAllowed(String)
     case externalSideEffectNotAllowed(String)
     case invalidArguments(capabilityID: String, reason: String)
+    case emptyWriteComposition
+    case unsafeHostPrimitive(String)
 
     public var description: String {
         switch self {
@@ -34,6 +36,9 @@ public enum PluginCompositionError: Error, Sendable, Equatable, CustomStringConv
         case let .pluginPrimitiveNotAllowed(id): return "plugin capability '\(id)' cannot be used as a primitive"
         case let .externalSideEffectNotAllowed(id): return "external side-effect capability '\(id)' is disabled"
         case let .invalidArguments(id, reason): return "invalid arguments for '\(id)': \(reason)"
+        case .emptyWriteComposition: return "a plugin write capability must return at least one host call"
+        case let .unsafeHostPrimitive(id):
+            return "host capability '\(id)' is not an AI-exposed strict write primitive"
         }
     }
 }
@@ -44,6 +49,9 @@ public enum PluginCompositionValidator {
                                 registry: CapabilityRegistry = .default,
                                 limits: PluginResourceLimits = .secureDefault) throws -> [HostCapabilityCall] {
         try PluginManifestValidator.validate(manifest, registry: registry)
+        if manifest.access.isWrite, calls.isEmpty {
+            throw PluginCompositionError.emptyWriteComposition
+        }
         guard calls.count <= limits.maximumCapabilities else { throw PluginCompositionError.tooManyCalls }
         let encodedSize = (try? JSONEncoder().encode(calls).count) ?? Int.max
         guard encodedSize <= limits.maximumOutputBytes else { throw PluginCompositionError.outputTooLarge }
@@ -58,6 +66,11 @@ public enum PluginCompositionValidator {
             let contract = descriptor.contract
             guard contract.source.kind == .builtin else {
                 throw PluginCompositionError.pluginPrimitiveNotAllowed(call.capabilityID)
+            }
+            guard descriptor.isAIExposed,
+                  contract.access.isWrite,
+                  contract.inputSchema.isStrictCapabilityInput else {
+                throw PluginCompositionError.unsafeHostPrimitive(call.capabilityID)
             }
             guard call.version == contract.version else {
                 throw PluginCompositionError.capabilityChanged(call.capabilityID)

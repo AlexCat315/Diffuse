@@ -97,6 +97,7 @@ jobs:
           swift build --target SequenceRuntime
           swift build --target CardBattleRuntime
           swift build --target AIRuntime
+          swift build --target PluginRuntime
           swift build --target IntentRuntime
           swift build --target ScriptRuntime
           # AudioRuntime pulls CSDL3; on Linux/Windows this compiles the SDL3
@@ -117,6 +118,7 @@ jobs:
           swift test --filter CardBattleRuntimeTests
           swift test --filter IntentRuntimeTests
           swift test --filter AIRuntimeTests
+          swift test --filter PluginRuntimeTests
 
       - name: Run M7 destruction performance gates
         if: runner.os == 'macOS'

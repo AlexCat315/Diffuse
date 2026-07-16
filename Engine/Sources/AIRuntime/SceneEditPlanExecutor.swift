@@ -108,38 +108,37 @@ public struct SceneEditPlanExecutor: Sendable {
                     reason: String(describing: error)
                 )
             }
+            guard let registration = BuiltInTypedCapabilityCatalog.registration(for: contract.id),
+                  registration.contract.schemaHash == contract.schemaHash else {
+                // AI writes never fall back to SceneEditOp mutation lowering.
+                // A catalog omission is an unavailable capability, not an
+                // invitation to infer authority from the legacy wire format.
+                throw SceneEditPlanExecutorError.capabilityUnavailable(contract.id)
+            }
             let stepMutations: [SceneMutation]
             let stepAssertions: [TransactionVerificationAssertion]
-            if let registration = BuiltInTypedCapabilityCatalog.registration(for: contract.id) {
-                guard registration.contract.schemaHash == contract.schemaHash else {
-                    throw SceneEditPlanExecutorError.capabilityUnavailable(contract.id)
-                }
-                do {
-                    let prepared = try registration.prepare(
-                        validatedInput: input.data,
-                        context: preparationContext(for: localScene)
-                    )
-                    stepMutations = try prepared.operations.map { operation in
-                        guard case let .scene(mutation) = operation else {
-                            throw SceneEditPlanExecutorError.invalidCapabilityInput(
-                                capabilityID: contract.id,
-                                reason: "a scene capability prepared a non-scene operation"
-                            )
-                        }
-                        return mutation
+            do {
+                let prepared = try registration.prepare(
+                    validatedInput: input.data,
+                    context: preparationContext(for: localScene)
+                )
+                stepMutations = try prepared.operations.map { operation in
+                    guard case let .scene(mutation) = operation else {
+                        throw SceneEditPlanExecutorError.invalidCapabilityInput(
+                            capabilityID: contract.id,
+                            reason: "a scene capability prepared a non-scene operation"
+                        )
                     }
-                    stepAssertions = prepared.assertions
-                } catch let error as SceneEditPlanExecutorError {
-                    throw error
-                } catch {
-                    throw SceneEditPlanExecutorError.invalidCapabilityInput(
-                        capabilityID: contract.id,
-                        reason: String(describing: error)
-                    )
+                    return mutation
                 }
-            } else {
-                stepMutations = try buildMutations(step, scene: localScene)
-                stepAssertions = verificationAssertions(for: stepMutations)
+                stepAssertions = prepared.assertions
+            } catch let error as SceneEditPlanExecutorError {
+                throw error
+            } catch {
+                throw SceneEditPlanExecutorError.invalidCapabilityInput(
+                    capabilityID: contract.id,
+                    reason: String(describing: error)
+                )
             }
             mutations.append(contentsOf: stepMutations)
             assertions.append(contentsOf: stepAssertions)
@@ -148,6 +147,9 @@ public struct SceneEditPlanExecutor: Sendable {
                 capabilityVersion: contract.version,
                 schemaHash: contract.schemaHash,
                 sourcePluginID: contract.source.pluginID,
+                pluginAuthority: contract.source.pluginID.flatMap {
+                    exposureSnapshot?.authority(forPluginID: $0)
+                },
                 inputDigest: contract.inputDigest(input.data),
                 argumentNames: input.argumentNames,
                 targetReferences: step.entityRef.map { [$0] } ?? [],
@@ -210,6 +212,9 @@ public struct SceneEditPlanExecutor: Sendable {
                 if scene.hasComponent(RenderMeshComponent.self, for: entity) {
                     componentTypes.append("RenderMeshComponent")
                 }
+                if scene.hasComponent(Constraint.self, for: entity) {
+                    componentTypes.append("Constraint")
+                }
                 let rigidBody = scene.component(RigidBody.self, for: entity)
                 if rigidBody != nil {
                     componentTypes.append("RigidBody")
@@ -239,31 +244,13 @@ public struct SceneEditPlanExecutor: Sendable {
                     localTransform: transform,
                     renderMaterial: renderMaterial,
                     rigidBody: rigidBody,
-                    collider: collider
+                    collider: collider,
+                    audioSource: scene.component(AudioSource.self, for: entity),
+                    animationPlayer: scene.component(AnimationPlayer.self, for: entity),
+                    scriptBindings: scene.component(ScriptComponent.self, for: entity)?.bindings ?? []
                 )
             }
         )
-    }
-
-    private func verificationAssertions(
-        for mutations: [SceneMutation]
-    ) -> [TransactionVerificationAssertion] {
-        var assertions: [TransactionVerificationAssertion] = []
-        for mutation in mutations {
-            switch mutation {
-            case .spawnImportedMeshEntity, .spawnEmptyEntity, .spawnLightEntity, .spawnCameraEntity,
-                 .duplicateEntity, .duplicateEntityWithOffset:
-                break
-            case let .deleteEntity(entityID):
-                assertions.append(.deletedEntity(entityID))
-                assertions.append(.entityIsAbsent(entityID))
-            default:
-                if let entityID = mutation.entityID {
-                    assertions.append(.entityExists(entityID))
-                }
-            }
-        }
-        return assertions
     }
 
     private func legacyValidationError(
@@ -346,6 +333,16 @@ public struct SceneEditPlanExecutor: Sendable {
             case let .setScriptBindings(rawID, bindings):
                 let comp = ScriptComponent(bindings: bindings)
                 _ = scene.setComponent(comp, for: entityID(fromRaw: rawID))
+            case let .setAudioSource(rawID, source):
+                _ = scene.setComponent(source, for: entityID(fromRaw: rawID))
+            case let .setAnimationPlayer(rawID, clipName, speed, loop, isPlaying):
+                _ = scene.setComponent(
+                    AnimationPlayer(clipName: clipName,
+                                    speed: speed,
+                                    loop: loop,
+                                    isPlaying: isPlaying),
+                    for: entityID(fromRaw: rawID)
+                )
             default:
                 break
             }

@@ -7,6 +7,7 @@ import CapabilityRuntime
 import IntentRuntime
 import ObservationBus
 import PerceptionRuntime
+import PluginRuntime
 
 private extension WorldPropertyValue {
     /// JSON-serialisable form used only in the system prompt — human-readable, not tagged.
@@ -87,8 +88,11 @@ public actor Session {
     private var currentLocale: String? = nil
     private let capabilityRegistry: CapabilityRegistry
     private let capabilityDraftStore: CapabilityDraftStore
+    private let pluginCapabilityExecutor: PluginCapabilityExecutor?
+    private let pluginQuerySnapshotProvider: PluginQuerySnapshotProvider?
     private var capabilityExposureGeneration: UInt64 = 0
     private var lastSubmittedExposureSnapshot: CapabilityExposureSnapshot?
+    private var lastSubmittedCapabilityDrafts: [CapabilityInvocationDraft] = []
     private var activeInferenceID: UUID?
 
     private static let anthropicAPIVersion = "2023-06-01"
@@ -111,7 +115,10 @@ public actor Session {
                 urlSession: URLSession = .shared,
                 maxHistoryTurns: Int = 40,
                 initialWorldView: WorldView = WorldView(),
-                capabilityRegistry: CapabilityRegistry = .aiDefault) {
+                capabilityRegistry: CapabilityRegistry = .aiDefault,
+                pluginCapabilityExecutor: PluginCapabilityExecutor? = nil,
+                pluginQuerySnapshotProvider: PluginQuerySnapshotProvider? = nil) {
+        let resolvedRegistry = pluginCapabilityExecutor?.registry ?? capabilityRegistry
         self.id = id
         self.config = config
         self.workflowContext = workflowContext
@@ -119,8 +126,10 @@ public actor Session {
         self.worldView = initialWorldView
         self.conversationHistory = []
         self.maxHistoryTurns = maxHistoryTurns
-        self.capabilityRegistry = capabilityRegistry
-        self.capabilityDraftStore = CapabilityDraftStore(registry: capabilityRegistry)
+        self.capabilityRegistry = resolvedRegistry
+        self.capabilityDraftStore = CapabilityDraftStore(registry: resolvedRegistry)
+        self.pluginCapabilityExecutor = pluginCapabilityExecutor
+        self.pluginQuerySnapshotProvider = pluginQuerySnapshotProvider
     }
 
     public func setWorkflowContext(_ context: WorkflowContext?) {
@@ -261,7 +270,8 @@ public actor Session {
                 confidence: planConfidence(for: plan),
                 approvalPolicy: config.autoApprove ? .automatic : .requiresApproval,
                 toolUseID: toolUseID,
-                capabilityExposureSnapshot: lastSubmittedExposureSnapshot
+                capabilityExposureSnapshot: lastSubmittedExposureSnapshot,
+                capabilityDrafts: lastSubmittedCapabilityDrafts
             )
 
         case let .userCorrection(proposalID, acceptedStepIDs, rejectedStepIDs):
@@ -284,6 +294,7 @@ public actor Session {
     public func cancelActiveRun() async {
         activeInferenceID = nil
         lastSubmittedExposureSnapshot = nil
+        lastSubmittedCapabilityDrafts = []
         await capabilityDraftStore.removeAll()
     }
 
@@ -362,7 +373,8 @@ public actor Session {
             confidence: planConfidence(for: plan),
             approvalPolicy: config.autoApprove ? .automatic : .requiresApproval,
             toolUseID: newToolUseID,
-            capabilityExposureSnapshot: lastSubmittedExposureSnapshot
+            capabilityExposureSnapshot: lastSubmittedExposureSnapshot,
+            capabilityDrafts: lastSubmittedCapabilityDrafts
         )
     }
 
@@ -404,7 +416,8 @@ public actor Session {
             confidence: planConfidence(for: plan),
             approvalPolicy: config.autoApprove ? .automatic : .requiresApproval,
             toolUseID: toolUseID,
-            capabilityExposureSnapshot: lastSubmittedExposureSnapshot
+            capabilityExposureSnapshot: lastSubmittedExposureSnapshot,
+            capabilityDrafts: lastSubmittedCapabilityDrafts
         )
     }
 
@@ -543,6 +556,7 @@ public actor Session {
         guard let runID = activeInferenceID else { throw SessionError.inferenceCancelled }
         try ensureActive(runID)
         lastSubmittedExposureSnapshot = nil
+        lastSubmittedCapabilityDrafts = []
         await capabilityDraftStore.removeAll()
         if let mem = contextMemory {
             cachedMemoryView = await mem.symbolicView(budget: 20)
@@ -1294,14 +1308,17 @@ public actor Session {
             "scene.get_selection",
             "scene.find_entities",
         ]
+        let policy = pluginCapabilityExecutor?.exposurePolicy
+            ?? CapabilityExposurePolicy(activeReleasePhase: .stable,
+                                        allowedDomains: ["scene"],
+                                        maximumCapabilities: 16)
         return capabilityRegistry.exposureSnapshot(
-            policy: CapabilityExposurePolicy(activeReleasePhase: .stable,
-                                             allowedDomains: ["scene"],
-                                             maximumCapabilities: 16),
+            policy: policy,
             sceneRevision: worldView.sceneRevision ?? 0,
             generation: capabilityExposureGeneration,
             preferredCapabilityIDs: Array(coreReadIDs).sorted(),
-            includedCapabilityIDs: coreReadIDs
+            includedCapabilityIDs: coreReadIDs,
+            pluginAuthorities: pluginCapabilityExecutor?.pluginAuthorities ?? [:]
         )
     }
 
@@ -1339,10 +1356,22 @@ public actor Session {
             let query = call.input["query"] as? String ?? ""
             let domain = call.input["domain"] as? String
             let requestedAccess = (call.input["access"] as? String).flatMap(CapabilityAccess.init(rawValue:))
-            let policy = CapabilityExposurePolicy(activeReleasePhase: .stable,
-                                                  allowedDomains: domain.map { [$0] },
-                                                  maximumCapabilities: 64)
-            let candidates = capabilityRegistry.searchContracts(query: query, policy: policy, limit: 64)
+            let basePolicy = pluginCapabilityExecutor?.exposurePolicy
+                ?? CapabilityExposurePolicy(activeReleasePhase: .stable,
+                                            allowedDomains: ["scene"],
+                                            maximumCapabilities: 16)
+            let policy = CapabilityExposurePolicy(
+                activeReleasePhase: basePolicy.activeReleasePhase,
+                allowedDomains: domain.map { [$0] } ?? basePolicy.allowedDomains,
+                enabledPluginIDs: basePolicy.enabledPluginIDs,
+                allowExternalSideEffects: basePolicy.allowExternalSideEffects,
+                maximumCapabilities: 64
+            )
+            let authorities = pluginCapabilityExecutor?.pluginAuthorities ?? [:]
+            let candidates = capabilityRegistry.searchContracts(query: query,
+                                                                 policy: policy,
+                                                                 pluginAuthorities: authorities,
+                                                                 limit: 64)
                 .filter { !$0.id.hasPrefix("system.") }
                 .filter { requestedAccess == nil || $0.access == requestedAccess }
             let coreReadIDs: Set<String> = [
@@ -1356,13 +1385,12 @@ public actor Session {
             let included = coreReadIDs.union(preferredIDs)
             capabilityExposureGeneration &+= 1
             var nextSnapshot = capabilityRegistry.exposureSnapshot(
-                policy: CapabilityExposurePolicy(activeReleasePhase: .stable,
-                                                 allowedDomains: ["scene"],
-                                                 maximumCapabilities: 16),
+                policy: basePolicy,
                 sceneRevision: revision,
                 generation: capabilityExposureGeneration,
                 preferredCapabilityIDs: preferredIDs,
-                includedCapabilityIDs: included
+                includedCapabilityIDs: included,
+                pluginAuthorities: authorities
             )
             // Searching expands the current authority set. Keeping the snapshot
             // identity means Drafts created before a later search remain valid.
@@ -1386,9 +1414,18 @@ public actor Session {
                 snapshot: snapshot,
                 currentSceneRevision: revision
             )
-            let plan = try SceneCapabilityDraftLowering.plan(summary: summary,
+            lastSubmittedCapabilityDrafts = drafts
+            let builtInDrafts = drafts.filter { $0.sourcePluginID == nil }
+            let plan: SceneEditPlan
+            if builtInDrafts.isEmpty {
+                plan = SceneEditPlan(summary: summary,
+                                     reasoning: reasoning,
+                                     steps: [])
+            } else {
+                plan = try SceneCapabilityDraftLowering.plan(summary: summary,
                                                              reasoning: reasoning,
-                                                             drafts: drafts)
+                                                             drafts: builtInDrafts)
+            }
             let planData = try JSONEncoder().encode(plan)
             guard let inputJSON = String(data: planData, encoding: .utf8) else {
                 throw SessionError.planDecodingFailed(detail: "could not encode submitted plan")
@@ -1399,19 +1436,36 @@ public actor Session {
 
         if contract.access == .read {
             let result: String
-            switch contract.id {
-            case "scene.find_entities":
-                result = findEntitiesResult(input: call.input)
-            case "scene.get_entities":
-                result = entityIndexJSON()
-            case "scene.get_selection":
-                let object: [String: Any] = ["selected": worldView.selectedEntityRefs]
-                let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
-                result = String(data: data, encoding: .utf8) ?? "{}"
-            default:
-                throw SessionError.malformedResponse(
-                    detail: "no read adapter is registered for \(contract.id)"
+            if let pluginID = contract.source.pluginID,
+               let pluginCapabilityExecutor {
+                let querySnapshot = try await pluginQuerySnapshotProvider?(pluginID, revision)
+                let payload = try pluginCapabilityExecutor.executeRead(
+                    toolName: call.name,
+                    input: Data(call.inputJSON.utf8),
+                    snapshot: snapshot,
+                    currentSceneRevision: revision,
+                    querySnapshot: querySnapshot
                 )
+                guard let value = String(data: payload, encoding: .utf8) else {
+                    throw PluginCapabilityExecutorError.invalidReadResult(contract.id)
+                }
+                result = value
+            } else {
+                switch contract.id {
+                case "scene.find_entities":
+                    result = findEntitiesResult(input: call.input)
+                case "scene.get_entities":
+                    result = entityIndexJSON()
+                case "scene.get_selection":
+                    let object: [String: Any] = ["selected": worldView.selectedEntityRefs]
+                    let data = try JSONSerialization.data(withJSONObject: object,
+                                                          options: [.sortedKeys])
+                    result = String(data: data, encoding: .utf8) ?? "{}"
+                default:
+                    throw SessionError.malformedResponse(
+                        detail: "no read adapter is registered for \(contract.id)"
+                    )
+                }
             }
             return .exchange(resultJSON: result, snapshot: snapshot)
         }

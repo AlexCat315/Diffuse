@@ -311,6 +311,7 @@ public enum SceneComponentRequirement: String, Codable, Sendable, Equatable {
     case light = "LightComponent"
     case camera = "CameraComponent"
     case renderMesh = "RenderMeshComponent"
+    case constraint = "Constraint"
 }
 
 @propertyWrapper

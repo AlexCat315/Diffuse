@@ -70,8 +70,10 @@ if sys.platform == "win32" and "VCToolsInstallDir" not in env:
 
 engine_done   = root / "Engine"  / "vendor" / "SDL3.artifactbundle"
 guava_ui_done = root / "GuavaUI" / "vendor" / "CFreeType.artifactbundle"
+wasmtime_done = root / "Engine" / "vendor" / "Wasmtime.xcframework"
+wasmtime_ready = sys.platform != "darwin" or wasmtime_done.exists()
 
-if not force and engine_done.exists() and guava_ui_done.exists():
+if not force and engine_done.exists() and guava_ui_done.exists() and wasmtime_ready:
     print("Native deps already built. Run `python bootstrap.py --force` to rebuild.")
     sys.exit(0)
 

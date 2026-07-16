@@ -2,9 +2,18 @@ import Foundation
 import CapabilityRuntime
 import IntentRuntime
 import PluginRuntime
+#if canImport(PluginWasmtimeRuntime)
+import PluginWasmtimeRuntime
+#endif
 
-let runtime: any WASIComponentRuntime = (try? WasmtimeCLIComponentRuntime())
+#if canImport(PluginWasmtimeRuntime)
+let runtime: any WASIComponentRuntime = (try? EmbeddedWasmtimeComponentRuntime())
     ?? FailClosedWASIComponentRuntime()
+let runtimeMode = runtime is EmbeddedWasmtimeComponentRuntime ? "embedded" : "unavailable"
+#else
+let runtime: any WASIComponentRuntime = FailClosedWASIComponentRuntime()
+let runtimeMode = "unavailable"
+#endif
 let capabilityRegistry = CapabilityRegistry.aiDefault
 let loader = PluginPackageLoader(registry: capabilityRegistry)
 let limits = PluginResourceLimits.secureDefault
@@ -17,6 +26,8 @@ try? FileManager.default.createDirectory(at: stagingRoot,
 struct LoadedPlugin {
     var source: ValidatedPluginPackage
     var executionCopy: ValidatedPluginPackage
+    var inspection: PluginInspection
+    var authorization: PluginAuthorizationRecord
 }
 
 enum PluginHostStagingError: Error {
@@ -64,6 +75,20 @@ func stagedExecutionCopy(of package: ValidatedPluginPackage) throws -> Validated
     }
 }
 
+func inspectExecutionCopy(of package: ValidatedPluginPackage) throws
+    -> (ValidatedPluginPackage, PluginInspection) {
+    let executionCopy = try stagedExecutionCopy(of: package)
+    do {
+        try runtime.validateComponent(executionCopy, limits: limits)
+        let contracts = PluginWITContractDeriver.contracts(for: executionCopy)
+        return (executionCopy,
+                PluginInspection(package: package, contracts: contracts))
+    } catch {
+        try? FileManager.default.removeItem(at: executionCopy.rootURL)
+        throw error
+    }
+}
+
 func readExactly(_ count: Int, from handle: FileHandle) -> Data? {
     var result = Data()
     while result.count < count {
@@ -94,8 +119,9 @@ func response(for request: PluginHostRequest) -> PluginHostResponse {
         switch request.method {
         case .handshake:
             let payload = try JSONSerialization.data(withJSONObject: [
-                "protocol_version": 1,
+                "protocol_version": 5,
                 "wasmtime_version": runtime.runtimeVersion,
+                "runtime_mode": runtimeMode,
                 "maximum_frame_bytes": PluginHostFrameCodec.maximumFrameBytes,
                 "ambient_wasi": false,
             ], options: [.sortedKeys])
@@ -105,29 +131,37 @@ func response(for request: PluginHostRequest) -> PluginHostResponse {
                 return PluginHostResponse(id: request.id, ok: false, error: "missing pluginPath")
             }
             let package = try loader.load(at: URL(fileURLWithPath: path))
-            let payload = try JSONEncoder().encode(package.manifest)
+            let (executionCopy, inspection) = try inspectExecutionCopy(of: package)
+            defer { try? FileManager.default.removeItem(at: executionCopy.rootURL) }
+            let payload = try JSONEncoder().encode(inspection)
+            guard payload.count <= limits.maximumOutputBytes else {
+                throw PluginHostFrameError.frameTooLarge
+            }
             return PluginHostResponse(id: request.id, ok: true, payload: payload)
         case .load:
             guard let path = request.pluginPath else {
                 return PluginHostResponse(id: request.id, ok: false, error: "missing pluginPath")
             }
+            guard let authorization = request.authorization else {
+                throw PluginAuthorizationError.missing
+            }
             let package = try loader.load(at: URL(fileURLWithPath: path))
-            let executionCopy = try stagedExecutionCopy(of: package)
-            do {
-                try runtime.validateComponent(executionCopy, limits: limits)
-            } catch {
+            let (executionCopy, inspection) = try inspectExecutionCopy(of: package)
+            guard authorization.isStillValid(for: inspection) else {
                 try? FileManager.default.removeItem(at: executionCopy.rootURL)
-                throw error
+                throw PluginAuthorizationError.noLongerValid
             }
             if let previous = loadedPackages[package.manifest.id] {
                 runtime.interrupt(pluginID: previous.executionCopy.manifest.id)
                 try? FileManager.default.removeItem(at: previous.executionCopy.rootURL)
             }
             loadedPackages[package.manifest.id] = LoadedPlugin(source: package,
-                                                               executionCopy: executionCopy)
+                                                               executionCopy: executionCopy,
+                                                               inspection: inspection,
+                                                               authorization: authorization)
             return PluginHostResponse(id: request.id,
                                       ok: true,
-                                      payload: try JSONEncoder().encode(package.manifest))
+                                      payload: try JSONEncoder().encode(inspection))
         case .discover:
             guard let path = request.pluginPath else {
                 return PluginHostResponse(id: request.id, ok: false, error: "missing pluginPath")
@@ -138,7 +172,15 @@ func response(for request: PluginHostRequest) -> PluginHostResponse {
                 return PluginHostResponse(id: request.id, ok: false,
                                           error: "plugin must be loaded and unchanged before discovery")
             }
-            let payload = try runtime.discover(loaded.executionCopy, limits: limits)
+            guard request.authorization == loaded.authorization,
+                  loaded.authorization.isStillValid(for: loaded.inspection) else {
+                throw PluginAuthorizationError.noLongerValid
+            }
+            let payload = try JSONEncoder().encode(
+                PluginCapabilityDiscovery(
+                    capabilityIDs: loaded.inspection.contracts.map(\.id)
+                )
+            )
             guard payload.count <= limits.maximumOutputBytes else { throw PluginHostFrameError.frameTooLarge }
             return PluginHostResponse(id: request.id, ok: true, payload: payload)
         case .prepare:
@@ -153,9 +195,21 @@ func response(for request: PluginHostRequest) -> PluginHostResponse {
                 return PluginHostResponse(id: request.id, ok: false,
                                           error: "plugin package changed after loading")
             }
+            guard request.authorization == loaded.authorization,
+                  loaded.authorization.isStillValid(for: loaded.inspection) else {
+                throw PluginAuthorizationError.noLongerValid
+            }
+            guard let contract = loaded.inspection.contracts.first(where: {
+                $0.id == capabilityID
+            }) else {
+                throw PluginCapabilityValidationError.unknownCapability(capabilityID)
+            }
+            try JSONSchemaValidator.validate(data: input,
+                                             against: contract.inputSchema)
             let rawPayload = try runtime.prepare(loaded.executionCopy,
                                                  capabilityID: capabilityID,
                                                  input: input,
+                                                 querySnapshot: request.querySnapshot,
                                                  limits: limits)
             guard rawPayload.count <= limits.maximumOutputBytes else {
                 throw PluginHostFrameError.frameTooLarge

@@ -134,6 +134,7 @@ jobs:
         shell: bash
         run: |
           swift build -c release --package-path Editor --product EditorApp
+          swift build -c release --package-path Engine --product GuavaPluginHost
           swift build -c release --package-path guava-mcp
 
       - name: Package
@@ -144,6 +145,7 @@ jobs:
 
           arch="$(uname -m)"
           editor_bin="$(swift build -c release --package-path Editor --product EditorApp --show-bin-path)"
+          plugin_host_bin="$(swift build -c release --package-path Engine --product GuavaPluginHost --show-bin-path)"
           mcp_bin="$(swift build -c release --package-path guava-mcp --show-bin-path)"
 
           dist_root="$PWD/dist"
@@ -152,6 +154,7 @@ jobs:
           mkdir -p "$package_dir/Tools"
 
           cp "$editor_bin/EditorApp" "$package_dir/"
+          cp "$plugin_host_bin/GuavaPluginHost" "$package_dir/Tools/"
           cp "$mcp_bin/GuavaMCP" "$package_dir/Tools/"
 
           find "$editor_bin" -maxdepth 1 -type d \( -name "*.bundle" -o -name "*.resources" \) \
@@ -208,6 +211,7 @@ jobs:
         shell: pwsh
         run: |
           swift build -c release --package-path Editor --product EditorApp
+          swift build -c release --package-path Engine --product GuavaPluginHost
           swift build -c release --package-path guava-mcp
 
       - name: Package
@@ -217,6 +221,7 @@ jobs:
           $ErrorActionPreference = "Stop"
 
           $editorBin = (swift build -c release --package-path Editor --product EditorApp --show-bin-path).Trim()
+          $pluginHostBin = (swift build -c release --package-path Engine --product GuavaPluginHost --show-bin-path).Trim()
           $mcpBin = (swift build -c release --package-path guava-mcp --show-bin-path).Trim()
 
           $distRoot = Join-Path $PWD "dist"
@@ -227,6 +232,7 @@ jobs:
           New-Item -ItemType Directory -Path (Join-Path $packageDir "Tools") -Force | Out-Null
 
           Copy-Item (Join-Path $editorBin "EditorApp.exe") $packageDir
+          Copy-Item (Join-Path $pluginHostBin "GuavaPluginHost.exe") (Join-Path $packageDir "Tools")
           Copy-Item (Join-Path $mcpBin "GuavaMCP.exe") (Join-Path $packageDir "Tools")
 
           Get-ChildItem $editorBin -Directory |
@@ -326,6 +332,7 @@ jobs:
         shell: bash
         run: |
           swift build -c release --package-path Editor --product EditorApp
+          swift build -c release --package-path Engine --product GuavaPluginHost
           swift build -c release --package-path guava-mcp
 
       - name: Package
@@ -335,6 +342,7 @@ jobs:
           set -euo pipefail
 
           editor_bin="$(swift build -c release --package-path Editor --product EditorApp --show-bin-path)"
+          plugin_host_bin="$(swift build -c release --package-path Engine --product GuavaPluginHost --show-bin-path)"
           mcp_bin="$(swift build -c release --package-path guava-mcp --show-bin-path)"
 
           dist_root="$PWD/dist"
@@ -343,12 +351,13 @@ jobs:
           mkdir -p "$package_dir/Tools" "$package_dir/Lib"
 
           cp "$editor_bin/EditorApp" "$package_dir/"
+          cp "$plugin_host_bin/GuavaPluginHost" "$package_dir/Tools/"
           cp "$mcp_bin/GuavaMCP" "$package_dir/Tools/"
 
           find "$editor_bin" -maxdepth 1 -type d \( -name "*.bundle" -o -name "*.resources" \) \
             -exec cp -R {} "$package_dir/" \;
 
-          ldd "$package_dir/EditorApp" "$package_dir/Tools/GuavaMCP" \
+          ldd "$package_dir/EditorApp" "$package_dir/Tools/GuavaPluginHost" "$package_dir/Tools/GuavaMCP" \
             | awk '/=> \// { print $3 } /^\// { print $1 }' \
             | sort -u \
             | { grep -E '/swift-|/usr/lib/swift|/swift/linux|libswift|libFoundation|libdispatch|libBlocksRuntime|lib_Foundation|libicu' || true; } \
@@ -359,6 +368,7 @@ jobs:
               done
 
           patchelf --set-rpath '$ORIGIN/Lib:$ORIGIN' "$package_dir/EditorApp"
+          patchelf --set-rpath '$ORIGIN/../Lib:$ORIGIN/..' "$package_dir/Tools/GuavaPluginHost"
           patchelf --set-rpath '$ORIGIN/../Lib:$ORIGIN/..' "$package_dir/Tools/GuavaMCP"
 
           cat > "$package_dir/run-editor.sh" <<'EOF'

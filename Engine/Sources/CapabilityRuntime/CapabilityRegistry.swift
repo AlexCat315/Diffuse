@@ -88,7 +88,9 @@ public struct CapabilityRegistry: Sendable {
                                  sceneRevision: UInt64? = nil,
                                  generation: UInt64 = 0,
                                  preferredCapabilityIDs: [String] = [],
-                                 includedCapabilityIDs: Set<String>? = nil) -> CapabilityExposureSnapshot {
+                                 includedCapabilityIDs: Set<String>? = nil,
+                                 pluginAuthorities: [String: PluginCapabilityAuthority] = [:])
+        -> CapabilityExposureSnapshot {
         guard integrityErrors.isEmpty else {
             return CapabilityExposureSnapshot(generation: generation,
                                               sceneRevision: sceneRevision,
@@ -104,7 +106,8 @@ public struct CapabilityRegistry: Sendable {
             if descriptor.access == .externalSideEffect && !policy.allowExternalSideEffects { return false }
             if descriptor.source.kind == .plugin {
                 guard let pluginID = descriptor.source.pluginID,
-                      policy.enabledPluginIDs.contains(pluginID) else { return false }
+                      policy.enabledPluginIDs.contains(pluginID),
+                      pluginAuthorities[pluginID]?.pluginID == pluginID else { return false }
             }
             return true
         }
@@ -123,15 +126,19 @@ public struct CapabilityRegistry: Sendable {
             }
         }
         let contracts = allowed.prefix(policy.maximumCapabilities).map(\.contract)
+        let exposedPluginIDs = Set(contracts.compactMap(\.source.pluginID))
+        let exposedAuthorities = pluginAuthorities.filter { exposedPluginIDs.contains($0.key) }
         return CapabilityExposureSnapshot(generation: generation,
                                           sceneRevision: sceneRevision,
-                                          contracts: contracts)
+                                          contracts: contracts,
+                                          pluginAuthorities: exposedAuthorities)
     }
 
     /// Searches only capabilities permitted by `policy`. Search results are
     /// contracts, never executable closures or scene runtime handles.
     public func searchContracts(query: String,
                                 policy: CapabilityExposurePolicy = CapabilityExposurePolicy(),
+                                pluginAuthorities: [String: PluginCapabilityAuthority] = [:],
                                 limit: Int = 16) -> [CapabilityContract] {
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let snapshot = exposureSnapshot(
@@ -139,7 +146,8 @@ public struct CapabilityRegistry: Sendable {
                                              allowedDomains: policy.allowedDomains,
                                              enabledPluginIDs: policy.enabledPluginIDs,
                                              allowExternalSideEffects: policy.allowExternalSideEffects,
-                                             maximumCapabilities: max(limit, allVerbs().count))
+                                             maximumCapabilities: max(limit, allVerbs().count)),
+            pluginAuthorities: pluginAuthorities
         )
         return snapshot.contracts.filter { contract in
             needle.isEmpty
@@ -159,6 +167,13 @@ public struct CapabilityRegistry: Sendable {
             merged[descriptor.verb] = descriptor
         }
         return CapabilityRegistry(capabilities: merged.values.sorted { $0.verb < $1.verb })
+    }
+
+    /// Adds descriptors without allowing the new set to override existing
+    /// registrations. A collision is retained as an integrity error, causing
+    /// model exposure to fail closed.
+    public func appending(_ descriptors: [CapabilityDescriptor]) -> CapabilityRegistry {
+        CapabilityRegistry(capabilities: Array(byVerb.values) + descriptors)
     }
 
     /// Replaces only generated contract fields while retaining host-owned
