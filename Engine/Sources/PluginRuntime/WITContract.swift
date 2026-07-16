@@ -11,6 +11,56 @@ public struct WITFunctionExport: Codable, Sendable, Equatable {
     }
 }
 
+public struct WITRecordField: Codable, Sendable, Equatable {
+    public var name: String
+    public var type: WITValueType
+
+    public init(name: String, type: WITValueType) {
+        self.name = name
+        self.type = type
+    }
+}
+
+/// The exact Component Model input type retained after aliases are resolved.
+/// This value drives both host-side typed encoding and the signature compared
+/// against Wasmtime's reflection of the compiled Component.
+public indirect enum WITValueType: Codable, Sendable, Equatable {
+    case bool
+    case string
+    case character
+    case u8, u16, u32
+    case s8, s16, s32
+    case f32, f64
+    case list(WITValueType)
+    case option(WITValueType)
+    case record([WITRecordField])
+    case enumeration([String])
+
+    public var canonicalSignature: String {
+        switch self {
+        case .bool: return "bool"
+        case .string: return "string"
+        case .character: return "char"
+        case .u8: return "u8"
+        case .u16: return "u16"
+        case .u32: return "u32"
+        case .s8: return "s8"
+        case .s16: return "s16"
+        case .s32: return "s32"
+        case .f32: return "f32"
+        case .f64: return "f64"
+        case let .list(child): return "list<\(child.canonicalSignature)>"
+        case let .option(child): return "option<\(child.canonicalSignature)>"
+        case let .record(fields):
+            let body = fields.map { "\($0.name):\($0.type.canonicalSignature)" }
+                .joined(separator: ",")
+            return "record{\(body)}"
+        case let .enumeration(cases):
+            return "enum{\(cases.joined(separator: ","))}"
+        }
+    }
+}
+
 /// One AI-visible capability input derived from the `capabilities` WIT
 /// interface. A Component never supplies this schema at runtime.
 public struct WITCapabilityInput: Codable, Sendable, Equatable {
@@ -18,15 +68,18 @@ public struct WITCapabilityInput: Codable, Sendable, Equatable {
     public var title: String
     public var description: String
     public var inputSchema: JSONSchema
+    public var inputType: WITValueType
 
     public init(name: String,
                 title: String,
                 description: String,
-                inputSchema: JSONSchema) {
+                inputSchema: JSONSchema,
+                inputType: WITValueType) {
         self.name = name
         self.title = title
         self.description = description
         self.inputSchema = inputSchema
+        self.inputType = inputType
     }
 }
 
@@ -92,8 +145,9 @@ public enum WITContractError: Error, Sendable, Equatable, CustomStringConvertibl
 
 /// Parses the small, authority-bearing WIT subset supported by Guava plugins.
 ///
-/// `record <name>-input` declarations inside `interface capabilities` are the
-/// only source of AI input schemas. Supported fields are strict records,
+/// Every `<name>: func(input: <name>-input) -> string` declaration inside
+/// `interface capabilities` defines one AI capability. Supported inputs are
+/// strict records,
 /// enums, aliases, option/list, bool/string/char, 8/16/32-bit integers and
 /// f32/f64. Free dictionaries, resources, handles and 64-bit JSON integers are
 /// rejected at package load time.
@@ -130,43 +184,21 @@ public enum WITContractParser {
                 throw WITContractError.undeclaredImport(imported)
             }
         }
-        let exportMatches = matches(
-            pattern: #"\bexport\s+([A-Za-z][A-Za-z0-9_-]*)\s*:\s*(func\s*\([^;]*\)(?:\s*->\s*[^;]+)?)\s*;"#,
-            in: clean
-        )
-        let exports = exportMatches.compactMap { match -> WITFunctionExport? in
-            guard match.count == 3 else { return nil }
-            return WITFunctionExport(name: match[1], signature: match[2])
-        }
-        guard Set(exports.map(\.name)).count == exports.count else {
-            throw WITContractError.malformedDeclaration("duplicate export names are not allowed")
-        }
-        guard exports.count == 2 else {
+        let worldExports = captures(pattern: #"\bexport\s+([^;\s]+)\s*;"#, in: clean)
+        guard worldExports == ["capabilities"] else {
             throw WITContractError.malformedDeclaration(
-                "plugin world must export exactly discover and prepare"
+                "plugin world must export exactly the capabilities interface"
             )
         }
-        for required in ["discover", "prepare"] where !exports.contains(where: { $0.name == required }) {
-            throw WITContractError.missingRequiredExport(required)
-        }
-        let normalized = Dictionary(uniqueKeysWithValues: exports.map {
-            ($0.name, $0.signature.replacingOccurrences(of: #"\s+"#,
-                                                         with: "",
-                                                         options: .regularExpression))
-        })
-        guard normalized["discover"] == "func()->string" else {
-            throw WITContractError.malformedDeclaration("discover must be func() -> string")
-        }
-        guard normalized["prepare"] == "func(capability-id:string,input:string)->string" else {
-            throw WITContractError.malformedDeclaration(
-                "prepare must be func(capability-id: string, input: string) -> string"
-            )
-        }
+        let exports = [WITFunctionExport(name: "capabilities", signature: "interface")]
 
         let capabilityBody = try interfaceBody(named: "capabilities", in: source)
         var typeParser = try CapabilityTypeParser(source: capabilityBody)
-        let definitions = try typeParser.parse()
-        var schemaBuilder = CapabilitySchemaBuilder(definitions: definitions)
+        let parsedTypes = try typeParser.parse()
+        var schemaBuilder = CapabilitySchemaBuilder(
+            definitions: parsedTypes.definitions,
+            functions: parsedTypes.functions
+        )
         let inputs = try schemaBuilder.build()
         return WITContract(worldName: world,
                            imports: imports,
@@ -256,6 +288,16 @@ private enum CapabilityTypeDefinition: Equatable {
     case alias(documentation: String, type: CapabilityTypeReference)
 }
 
+private struct CapabilityFunctionDeclaration: Equatable {
+    var documentation: String
+    var input: CapabilityTypeReference
+}
+
+private struct CapabilityTypeParseResult: Equatable {
+    var definitions: [String: CapabilityTypeDefinition]
+    var functions: [String: CapabilityFunctionDeclaration]
+}
+
 private enum CapabilityToken: Equatable {
     case identifier(String)
     case documentation(String)
@@ -292,7 +334,7 @@ private struct CapabilityTypeLexer {
                     continue
                 }
             }
-            if "{}<>:,;=".contains(character) {
+            if "{}<>:,;=()-".contains(character) {
                 tokens.append(.symbol(character))
                 index = source.index(after: index)
                 continue
@@ -323,11 +365,50 @@ private struct CapabilityTypeParser {
         tokens = try CapabilityTypeLexer(source: source).lex()
     }
 
-    mutating func parse() throws -> [String: CapabilityTypeDefinition] {
+    mutating func parse() throws -> CapabilityTypeParseResult {
         var definitions: [String: CapabilityTypeDefinition] = [:]
+        var functions: [String: CapabilityFunctionDeclaration] = [:]
         while !isAtEnd {
             let documentation = consumeDocumentation()
             let kind = try consumeIdentifier("type declaration")
+            if peekSymbol(":") {
+                guard kind.range(of: #"^[a-z][a-z0-9-]{0,63}$"#,
+                                 options: .regularExpression) != nil else {
+                    throw WITContractError.invalidCapabilityName(kind)
+                }
+                try consumeSymbol(":")
+                guard try consumeIdentifier("capability function") == "func" else {
+                    throw WITContractError.malformedDeclaration(
+                        "capability '\(kind)' must be a func"
+                    )
+                }
+                try consumeSymbol("(")
+                guard try consumeIdentifier("input parameter") == "input" else {
+                    throw WITContractError.malformedDeclaration(
+                        "capability '\(kind)' must have one parameter named input"
+                    )
+                }
+                try consumeSymbol(":")
+                let input = try parseTypeReference()
+                try consumeSymbol(")")
+                try consumeSymbol("-")
+                try consumeSymbol(">")
+                guard try consumeIdentifier("capability result") == "string" else {
+                    throw WITContractError.malformedDeclaration(
+                        "capability '\(kind)' must return string"
+                    )
+                }
+                try consumeSymbol(";")
+                guard functions.updateValue(
+                    CapabilityFunctionDeclaration(documentation: documentation,
+                                                  input: input),
+                    forKey: kind
+                ) == nil else {
+                    throw WITContractError.duplicateCapability(kind)
+                }
+                guard functions.count <= 64 else { throw WITContractError.schemaTooLarge }
+                continue
+            }
             let name = try consumeIdentifier("type name")
             guard name.range(of: #"^[a-z][a-z0-9-]{0,63}$"#,
                              options: .regularExpression) != nil else {
@@ -357,6 +438,11 @@ private struct CapabilityTypeParser {
                     guard fields.count <= 64 else { throw WITContractError.schemaTooLarge }
                 }
                 try consumeSymbol("}")
+                guard !fields.isEmpty else {
+                    throw WITContractError.malformedDeclaration(
+                        "record '\(name)' must contain at least one field"
+                    )
+                }
                 consumeOptionalTerminator()
                 definition = .record(documentation: documentation, fields: fields)
             case "enum":
@@ -394,7 +480,8 @@ private struct CapabilityTypeParser {
             }
             guard definitions.count <= 128 else { throw WITContractError.schemaTooLarge }
         }
-        return definitions
+        return CapabilityTypeParseResult(definitions: definitions,
+                                         functions: functions)
     }
 
     private mutating func parseTypeReference() throws -> CapabilityTypeReference {
@@ -457,27 +544,37 @@ private struct CapabilityTypeParser {
 
 private struct CapabilitySchemaBuilder {
     let definitions: [String: CapabilityTypeDefinition]
+    let functions: [String: CapabilityFunctionDeclaration]
     private var nodeCount = 0
+    private var typeNodeCount = 0
 
-    init(definitions: [String: CapabilityTypeDefinition]) {
+    init(definitions: [String: CapabilityTypeDefinition],
+         functions: [String: CapabilityFunctionDeclaration]) {
         self.definitions = definitions
+        self.functions = functions
     }
 
     mutating func build() throws -> [WITCapabilityInput] {
-        let capabilityNames = definitions.keys.filter { $0.hasSuffix("-input") }.sorted()
+        let capabilityNames = functions.keys.sorted()
         guard capabilityNames.count <= PluginResourceLimits.secureDefault.maximumCapabilities else {
             throw WITContractError.schemaTooLarge
         }
-        var seen: Set<String> = []
-        return try capabilityNames.map { typeName in
-            let localName = String(typeName.dropLast("-input".count))
-            guard !localName.isEmpty,
-                  localName.range(of: #"^[a-z][a-z0-9-]{0,63}$"#,
-                                  options: .regularExpression) != nil else {
-                throw WITContractError.invalidCapabilityName(localName)
-            }
-            guard seen.insert(localName).inserted else {
-                throw WITContractError.duplicateCapability(localName)
+        let inputRecords = Set(definitions.keys.filter { $0.hasSuffix("-input") })
+        let expectedInputRecords = Set(capabilityNames.map { $0 + "-input" })
+        guard inputRecords == expectedInputRecords else {
+            let mismatched = inputRecords.symmetricDifference(expectedInputRecords)
+                .sorted().first ?? "unknown"
+            throw WITContractError.malformedDeclaration(
+                "capability input record/function mismatch for '\(mismatched)'"
+            )
+        }
+        return try capabilityNames.map { localName in
+            let typeName = localName + "-input"
+            guard let function = functions[localName],
+                  function.input == .named(typeName) else {
+                throw WITContractError.malformedDeclaration(
+                    "capability '\(localName)' input must be \(typeName)"
+                )
             }
             guard case let .record(documentation, _) = definitions[typeName] else {
                 throw WITContractError.malformedDeclaration(
@@ -485,10 +582,15 @@ private struct CapabilitySchemaBuilder {
                 )
             }
             let schema = try schema(forNamed: typeName, depth: 0, stack: [])
+            let inputType = try valueType(forNamed: typeName, depth: 0, stack: [])
+            let description = documentation.isEmpty
+                ? function.documentation
+                : documentation
             return WITCapabilityInput(name: localName,
                                       title: Self.humanisedTitle(localName),
-                                      description: documentation,
-                                      inputSchema: schema)
+                                      description: description,
+                                      inputSchema: schema,
+                                      inputType: inputType)
         }
     }
 
@@ -508,17 +610,86 @@ private struct CapabilitySchemaBuilder {
             switch name {
             case "bool": return .boolean()
             case "string": return .string(minLength: nil, maxLength: 65_536)
-            case "char": return .string(minLength: 1, maxLength: 1)
+            case "char": return .string(minLength: 1, maxLength: 1, pattern: "^.$")
             case "u8": return .integer(minimum: 0, maximum: 255)
             case "u16": return .integer(minimum: 0, maximum: 65_535)
             case "u32": return .integer(minimum: 0, maximum: Int(UInt32.max))
             case "s8": return .integer(minimum: -128, maximum: 127)
             case "s16": return .integer(minimum: -32_768, maximum: 32_767)
             case "s32": return .integer(minimum: Int(Int32.min), maximum: Int(Int32.max))
-            case "f32", "f64": return .number()
+            case "f32":
+                return .number(minimum: -Double(Float.greatestFiniteMagnitude),
+                               maximum: Double(Float.greatestFiniteMagnitude))
+            case "f64": return .number()
             case "u64", "s64": throw WITContractError.unsupportedType(name)
             default: return try schema(forNamed: name, depth: depth, stack: stack)
             }
+        }
+    }
+
+    private mutating func valueType(for reference: CapabilityTypeReference,
+                                    depth: Int,
+                                    stack: [String]) throws -> WITValueType {
+        guard depth <= 12 else { throw WITContractError.typeTooDeep }
+        typeNodeCount += 1
+        guard typeNodeCount <= 256 else { throw WITContractError.schemaTooLarge }
+        switch reference {
+        case let .option(child):
+            return .option(try valueType(for: child,
+                                         depth: depth + 1,
+                                         stack: stack))
+        case let .list(child):
+            return .list(try valueType(for: child,
+                                       depth: depth + 1,
+                                       stack: stack))
+        case let .named(name):
+            switch name {
+            case "bool": return .bool
+            case "string": return .string
+            case "char": return .character
+            case "u8": return .u8
+            case "u16": return .u16
+            case "u32": return .u32
+            case "s8": return .s8
+            case "s16": return .s16
+            case "s32": return .s32
+            case "f32": return .f32
+            case "f64": return .f64
+            case "u64", "s64": throw WITContractError.unsupportedType(name)
+            default: return try valueType(forNamed: name,
+                                          depth: depth,
+                                          stack: stack)
+            }
+        }
+    }
+
+    private mutating func valueType(forNamed name: String,
+                                    depth: Int,
+                                    stack: [String]) throws -> WITValueType {
+        guard let definition = definitions[name] else {
+            throw WITContractError.unknownType(name)
+        }
+        guard !stack.contains(name) else { throw WITContractError.recursiveType(name) }
+        let nextStack = stack + [name]
+        switch definition {
+        case let .record(_, fields):
+            var result: [WITRecordField] = []
+            result.reserveCapacity(fields.count)
+            for field in fields {
+                result.append(WITRecordField(
+                    name: field.name,
+                    type: try valueType(for: field.type,
+                                        depth: depth + 1,
+                                        stack: nextStack)
+                ))
+            }
+            return .record(result)
+        case let .enumeration(_, cases):
+            return .enumeration(cases)
+        case let .alias(_, type):
+            return try valueType(for: type,
+                                 depth: depth + 1,
+                                 stack: nextStack)
         }
     }
 

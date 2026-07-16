@@ -13,23 +13,13 @@ public struct PluginCapabilityDiscovery: Codable, Sendable, Equatable {
     }
 }
 
-public enum PluginDiscoveryValidationError: Error, Sendable, Equatable, CustomStringConvertible {
-    case invalidPayload
-    case tooManyCapabilities
-    case duplicateCapability(String)
-    case missingImplementation(String)
-    case undeclaredImplementation(String)
+public enum PluginCapabilityValidationError: Error, Sendable, Equatable, CustomStringConvertible {
+    case unknownCapability(String)
 
     public var description: String {
         switch self {
-        case .invalidPayload:
-            return "plugin discovery must be exactly {\"capability_ids\":[...]}"
-        case .tooManyCapabilities: return "plugin discovery exceeds the 64 capability limit"
-        case let .duplicateCapability(id): return "plugin discovery contains duplicate capability '\(id)'"
-        case let .missingImplementation(id):
-            return "WIT capability '\(id)' is not implemented by the Component"
-        case let .undeclaredImplementation(id):
-            return "Component implements capability '\(id)' that is absent from WIT"
+        case let .unknownCapability(id):
+            return "plugin capability '\(id)' is absent from its validated WIT contract"
         }
     }
 }
@@ -53,48 +43,6 @@ public enum PluginWITContractDeriver {
                 source: .plugin(package.manifest.id)
             )
         }.sorted { $0.id < $1.id }
-    }
-}
-
-/// The Component only proves that it implements the exact capability IDs
-/// declared by WIT. It cannot supply title, access, schema, version, source, or
-/// a schema hash, so discovery cannot be used to increase authority.
-public enum PluginDiscoveryValidator {
-    public static func validate(_ data: Data,
-                                package: ValidatedPluginPackage,
-                                limits: PluginResourceLimits = .secureDefault) throws -> [CapabilityContract] {
-        guard data.count <= limits.maximumOutputBytes,
-              let value = try? JSONSerialization.jsonObject(with: data),
-              let object = value as? [String: Any],
-              Set(object.keys) == Set(["capability_ids"]),
-              let rawIDs = object["capability_ids"] as? [Any],
-              rawIDs.allSatisfy({ $0 is String }) else {
-            throw PluginDiscoveryValidationError.invalidPayload
-        }
-        let ids = rawIDs.compactMap { $0 as? String }
-        guard ids.count <= limits.maximumCapabilities else {
-            throw PluginDiscoveryValidationError.tooManyCapabilities
-        }
-        var seen: Set<String> = []
-        for id in ids {
-            guard let range = id.range(of: #"^[a-z][a-z0-9.-]{2,127}$"#,
-                                       options: .regularExpression),
-                  range == id.startIndex..<id.endIndex else {
-                throw PluginDiscoveryValidationError.invalidPayload
-            }
-            guard seen.insert(id).inserted else {
-                throw PluginDiscoveryValidationError.duplicateCapability(id)
-            }
-        }
-        let contracts = PluginWITContractDeriver.contracts(for: package)
-        let expected = Set(contracts.map(\.id))
-        if let missing = expected.subtracting(seen).sorted().first {
-            throw PluginDiscoveryValidationError.missingImplementation(missing)
-        }
-        if let undeclared = seen.subtracting(expected).sorted().first {
-            throw PluginDiscoveryValidationError.undeclaredImplementation(undeclared)
-        }
-        return contracts
     }
 }
 

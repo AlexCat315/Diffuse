@@ -61,13 +61,19 @@ void guava_wasmtime_runtime_interrupt(guava_wasmtime_runtime_t *runtime);
 guava_wasmtime_status_t guava_wasmtime_validate_component(
     guava_wasmtime_runtime_t *runtime, const char *component_path,
     const char *const *expected_imports, size_t expected_import_count,
+    const char *const *expected_capabilities,
+    const char *const *expected_type_signatures,
+    size_t expected_capability_count,
     const guava_wasmtime_limits_t *limits, guava_wasmtime_buffer_t *error);
 
-guava_wasmtime_status_t guava_wasmtime_invoke_component(
+guava_wasmtime_status_t guava_wasmtime_invoke_capability(
     guava_wasmtime_runtime_t *runtime, const char *component_path,
-    const char *export_name, const uint8_t *const *arguments,
-    const size_t *argument_sizes, size_t argument_count,
+    const char *capability_name, const uint8_t *typed_input,
+    size_t typed_input_size,
     const char *const *expected_imports, size_t expected_import_count,
+    const char *const *expected_capabilities,
+    const char *const *expected_type_signatures,
+    size_t expected_capability_count,
     guava_wasmtime_query_callback_t query_callback, void *query_environment,
     const guava_wasmtime_limits_t *limits, guava_wasmtime_buffer_t *output,
     guava_wasmtime_buffer_t *error);
