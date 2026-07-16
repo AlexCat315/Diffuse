@@ -41,6 +41,48 @@ public struct EditorDestructionConnectionLine: Sendable, Equatable {
     public var isSourceFractured: Bool
 }
 
+public enum EditorPhysicsDebugLineKind: Sendable, Equatable {
+    case collider
+    case bounds
+    case joint
+    case jointAxis
+    case jointLimit
+    case characterGround
+}
+
+public struct EditorPhysicsDebugLine: Sendable, Equatable {
+    public var entityID: UInt64
+    public var positionA: SIMD3<Float>
+    public var positionB: SIMD3<Float>
+    public var kind: EditorPhysicsDebugLineKind
+}
+
+public struct EditorPhysicsContactMarker: Sendable, Equatable {
+    public var entityA: UInt64
+    public var entityB: UInt64
+    public var position: SIMD3<Float>
+    public var normalEnd: SIMD3<Float>
+    public var kind: PhysicsContactEventKind
+    public var penetrationDepth: Float
+    public var impulse: Float
+}
+
+public struct EditorPhysicsDebugOverlay: Sendable, Equatable {
+    public var lines: [EditorPhysicsDebugLine]
+    public var contacts: [EditorPhysicsContactMarker]
+    public var selectedBodyIsSleeping: Bool
+    public var selectedBodyIsTrigger: Bool
+    public var characterGroundState: CharacterGroundState?
+
+    public static let empty = EditorPhysicsDebugOverlay(
+        lines: [],
+        contacts: [],
+        selectedBodyIsSleeping: false,
+        selectedBodyIsTrigger: false,
+        characterGroundState: nil
+    )
+}
+
 extension EditorSceneAdapter {
 
     // MARK: - Picking
@@ -357,6 +399,409 @@ extension EditorSceneAdapter {
                     isSourceFractured: $0.isSourceFractured
                 )
             }
+    }
+
+    /// Builds the selected entity's physics overlay from the unified runtime debug frame.
+    /// The result is stable and bounded so the UI layer only needs to project and color lines.
+    public func viewportPhysicsDebugOverlay(
+        entityID rawID: UInt64,
+        maxLines: Int = 8_192,
+        maxContacts: Int = 512
+    ) -> EditorPhysicsDebugOverlay {
+        let entity = EntityID(rawValue: rawID)
+        let frame = scene.physicsDebugFrame
+        var lines: [EditorPhysicsDebugLine] = []
+        lines.reserveCapacity(min(max(0, maxLines), 512))
+
+        let selectedBody = frame.bodies.first { $0.entity == entity }
+        if let selectedBody {
+            appendAABBLines(
+                selectedBody.bounds,
+                entityID: rawID,
+                kind: .bounds,
+                to: &lines,
+                limit: maxLines
+            )
+            for instance in selectedBody.shapes where lines.count < maxLines {
+                appendColliderShapeLines(
+                    instance,
+                    bodyTransform: selectedBody.worldTransform.matrix,
+                    entityID: rawID,
+                    to: &lines,
+                    limit: maxLines
+                )
+            }
+        }
+
+        for joint in frame.constraints where lines.count < maxLines {
+            guard joint.entity == entity || joint.entityA == entity || joint.entityB == entity else {
+                continue
+            }
+            appendJointLines(joint, to: &lines, limit: maxLines)
+        }
+
+        let character = frame.characters.first { $0.entity == entity }
+        if let character, lines.count < maxLines, simd_length_squared(character.groundNormal) > 1e-8 {
+            let normal = simd_normalize(character.groundNormal)
+            lines.append(EditorPhysicsDebugLine(
+                entityID: rawID,
+                positionA: character.position,
+                positionB: character.position + normal * 0.8,
+                kind: .characterGround
+            ))
+        }
+
+        let contacts = frame.contacts.lazy
+            .filter { $0.entityA == entity || $0.entityB == entity }
+            .prefix(max(0, maxContacts))
+            .map { contact in
+                let normal = simd_length_squared(contact.normal) > 1e-8
+                    ? simd_normalize(contact.normal)
+                    : SIMD3<Float>(0, 1, 0)
+                return EditorPhysicsContactMarker(
+                    entityA: contact.entityA.rawValue,
+                    entityB: contact.entityB.rawValue,
+                    position: contact.position,
+                    normalEnd: contact.position + normal * max(0.25, contact.penetrationDepth),
+                    kind: contact.kind,
+                    penetrationDepth: contact.penetrationDepth,
+                    impulse: contact.impulse
+                )
+            }
+
+        return EditorPhysicsDebugOverlay(
+            lines: lines,
+            contacts: Array(contacts),
+            selectedBodyIsSleeping: selectedBody?.isSleeping ?? false,
+            selectedBodyIsTrigger: selectedBody?.isTrigger ?? false,
+            characterGroundState: character?.groundState
+        )
+    }
+
+    private func appendColliderShapeLines(
+        _ instance: ColliderShapeInstance,
+        bodyTransform: simd_float4x4,
+        entityID: UInt64,
+        to lines: inout [EditorPhysicsDebugLine],
+        limit: Int
+    ) {
+        let transform = bodyTransform * colliderInstanceMatrix(instance)
+        let localLimit = max(0, limit - lines.count)
+        var localLines: [EditorPhysicsDebugLine] = []
+        localLines.reserveCapacity(min(localLimit, 96))
+        let appendLocalLine: (SIMD3<Float>, SIMD3<Float>) -> Void = { a, b in
+            guard localLines.count < localLimit else { return }
+            let wa = transform * SIMD4<Float>(a, 1)
+            let wb = transform * SIMD4<Float>(b, 1)
+            localLines.append(EditorPhysicsDebugLine(
+                entityID: entityID,
+                positionA: SIMD3<Float>(wa.x, wa.y, wa.z),
+                positionB: SIMD3<Float>(wb.x, wb.y, wb.z),
+                kind: .collider
+            ))
+        }
+
+        switch instance.shape {
+        case let .box(halfExtents, center):
+            appendBoxLines(center: center, halfExtents: halfExtents, append: appendLocalLine)
+        case let .sphere(radius, center):
+            appendRingLines(center: center, radius: radius, axes: (0, 1), append: appendLocalLine)
+            appendRingLines(center: center, radius: radius, axes: (0, 2), append: appendLocalLine)
+            appendRingLines(center: center, radius: radius, axes: (1, 2), append: appendLocalLine)
+        case let .capsule(radius, halfHeight, center):
+            let top = center + SIMD3<Float>(0, halfHeight, 0)
+            let bottom = center - SIMD3<Float>(0, halfHeight, 0)
+            appendRingLines(center: top, radius: radius, axes: (0, 2), append: appendLocalLine)
+            appendRingLines(center: bottom, radius: radius, axes: (0, 2), append: appendLocalLine)
+            for direction in [SIMD3<Float>(1, 0, 0), SIMD3<Float>(-1, 0, 0),
+                              SIMD3<Float>(0, 0, 1), SIMD3<Float>(0, 0, -1)] {
+                appendLocalLine(bottom + direction * radius, top + direction * radius)
+            }
+            appendCapsuleArcLines(center: center, radius: radius, halfHeight: halfHeight, planeAxis: 0, append: appendLocalLine)
+            appendCapsuleArcLines(center: center, radius: radius, halfHeight: halfHeight, planeAxis: 2, append: appendLocalLine)
+        case let .cylinder(radius, halfHeight, center):
+            let top = center + SIMD3<Float>(0, halfHeight, 0)
+            let bottom = center - SIMD3<Float>(0, halfHeight, 0)
+            appendRingLines(center: top, radius: radius, axes: (0, 2), append: appendLocalLine)
+            appendRingLines(center: bottom, radius: radius, axes: (0, 2), append: appendLocalLine)
+            for direction in [SIMD3<Float>(1, 0, 0), SIMD3<Float>(-1, 0, 0),
+                              SIMD3<Float>(0, 0, 1), SIMD3<Float>(0, 0, -1)] {
+                appendLocalLine(bottom + direction * radius, top + direction * radius)
+            }
+        case .heightField, .mesh, .convex:
+            // Resource-backed shapes use their authoritative physics AABB above.
+            break
+        }
+        lines.append(contentsOf: localLines)
+    }
+
+    private func colliderInstanceMatrix(_ instance: ColliderShapeInstance) -> simd_float4x4 {
+        var translation = matrix_identity_float4x4
+        translation.columns.3 = SIMD4<Float>(instance.localPosition, 1)
+        let rotationVector = instance.localRotation
+        let lengthSquared = simd_length_squared(rotationVector)
+        let normalizedRotation = lengthSquared > 1e-8
+            ? rotationVector / sqrt(lengthSquared)
+            : SIMD4<Float>(0, 0, 0, 1)
+        let rotation = simd_float4x4(simd_quatf(vector: normalizedRotation))
+        var scale = matrix_identity_float4x4
+        scale.columns.0.x = instance.localScale.x
+        scale.columns.1.y = instance.localScale.y
+        scale.columns.2.z = instance.localScale.z
+        return translation * rotation * scale
+    }
+
+    private func appendBoxLines(
+        center: SIMD3<Float>,
+        halfExtents: SIMD3<Float>,
+        append: (SIMD3<Float>, SIMD3<Float>) -> Void
+    ) {
+        let corners = [
+            center + SIMD3<Float>(-halfExtents.x, -halfExtents.y, -halfExtents.z),
+            center + SIMD3<Float>( halfExtents.x, -halfExtents.y, -halfExtents.z),
+            center + SIMD3<Float>( halfExtents.x,  halfExtents.y, -halfExtents.z),
+            center + SIMD3<Float>(-halfExtents.x,  halfExtents.y, -halfExtents.z),
+            center + SIMD3<Float>(-halfExtents.x, -halfExtents.y,  halfExtents.z),
+            center + SIMD3<Float>( halfExtents.x, -halfExtents.y,  halfExtents.z),
+            center + SIMD3<Float>( halfExtents.x,  halfExtents.y,  halfExtents.z),
+            center + SIMD3<Float>(-halfExtents.x,  halfExtents.y,  halfExtents.z),
+        ]
+        for (a, b) in [(0, 1), (1, 2), (2, 3), (3, 0),
+                       (4, 5), (5, 6), (6, 7), (7, 4),
+                       (0, 4), (1, 5), (2, 6), (3, 7)] {
+            append(corners[a], corners[b])
+        }
+    }
+
+    private func appendRingLines(
+        center: SIMD3<Float>,
+        radius: Float,
+        axes: (Int, Int),
+        append: (SIMD3<Float>, SIMD3<Float>) -> Void
+    ) {
+        let segmentCount = 24
+        var previous = center
+        previous[axes.0] += radius
+        for segment in 1...segmentCount {
+            let angle = Float(segment) * 2 * .pi / Float(segmentCount)
+            var next = center
+            next[axes.0] += cos(angle) * radius
+            next[axes.1] += sin(angle) * radius
+            append(previous, next)
+            previous = next
+        }
+    }
+
+    private func appendCapsuleArcLines(
+        center: SIMD3<Float>,
+        radius: Float,
+        halfHeight: Float,
+        planeAxis: Int,
+        append: (SIMD3<Float>, SIMD3<Float>) -> Void
+    ) {
+        let segmentCount = 12
+        for sign: Float in [-1, 1] {
+            var previous = center
+            previous.y += sign * halfHeight
+            previous[planeAxis] += radius
+            for segment in 1...segmentCount {
+                let angle = Float(segment) * .pi / Float(segmentCount)
+                var next = center
+                next.y += sign * (halfHeight + sin(angle) * radius)
+                next[planeAxis] += cos(angle) * radius
+                append(previous, next)
+                previous = next
+            }
+        }
+    }
+
+    private func appendAABBLines(
+        _ bounds: SpatialAABB,
+        entityID: UInt64,
+        kind: EditorPhysicsDebugLineKind,
+        to lines: inout [EditorPhysicsDebugLine],
+        limit: Int
+    ) {
+        let corners = [
+            SIMD3<Float>(bounds.min.x, bounds.min.y, bounds.min.z),
+            SIMD3<Float>(bounds.max.x, bounds.min.y, bounds.min.z),
+            SIMD3<Float>(bounds.max.x, bounds.max.y, bounds.min.z),
+            SIMD3<Float>(bounds.min.x, bounds.max.y, bounds.min.z),
+            SIMD3<Float>(bounds.min.x, bounds.min.y, bounds.max.z),
+            SIMD3<Float>(bounds.max.x, bounds.min.y, bounds.max.z),
+            SIMD3<Float>(bounds.max.x, bounds.max.y, bounds.max.z),
+            SIMD3<Float>(bounds.min.x, bounds.max.y, bounds.max.z),
+        ]
+        for (a, b) in [(0, 1), (1, 2), (2, 3), (3, 0),
+                       (4, 5), (5, 6), (6, 7), (7, 4),
+                       (0, 4), (1, 5), (2, 6), (3, 7)] where lines.count < limit {
+            lines.append(EditorPhysicsDebugLine(
+                entityID: entityID,
+                positionA: corners[a],
+                positionB: corners[b],
+                kind: kind
+            ))
+        }
+    }
+
+    private func appendJointLines(
+        _ joint: PhysicsDebugConstraint,
+        to lines: inout [EditorPhysicsDebugLine],
+        limit: Int
+    ) {
+        let matrixA = scene.worldTransform(for: joint.entityA)?.matrix
+            ?? scene.localTransform(for: joint.entityA)?.matrix
+            ?? matrix_identity_float4x4
+        let matrixB = scene.worldTransform(for: joint.entityB)?.matrix
+            ?? scene.localTransform(for: joint.entityB)?.matrix
+            ?? matrix_identity_float4x4
+        let anchorA4 = matrixA * SIMD4<Float>(joint.pivotA, 1)
+        let anchorB4 = matrixB * SIMD4<Float>(joint.pivotB, 1)
+        let anchorA = SIMD3<Float>(anchorA4.x, anchorA4.y, anchorA4.z)
+        let anchorB = SIMD3<Float>(anchorB4.x, anchorB4.y, anchorB4.z)
+        let axisA4 = matrixA * SIMD4<Float>(joint.axisA, 0)
+        let axisB4 = matrixB * SIMD4<Float>(joint.axisB, 0)
+        let axisAValue = SIMD3<Float>(axisA4.x, axisA4.y, axisA4.z)
+        let axisBValue = SIMD3<Float>(axisB4.x, axisB4.y, axisB4.z)
+        let axisA = simd_length_squared(axisAValue) > 1e-8 ? simd_normalize(axisAValue) : SIMD3<Float>(1, 0, 0)
+        let axisB = simd_length_squared(axisBValue) > 1e-8 ? simd_normalize(axisBValue) : SIMD3<Float>(1, 0, 0)
+        func append(_ a: SIMD3<Float>, _ b: SIMD3<Float>, _ kind: EditorPhysicsDebugLineKind) {
+            guard lines.count < limit else { return }
+            lines.append(EditorPhysicsDebugLine(
+                entityID: joint.entity.rawValue,
+                positionA: a,
+                positionB: b,
+                kind: kind
+            ))
+        }
+        append(anchorA, anchorB, .joint)
+        append(anchorA, anchorA + axisA * 0.6, .jointAxis)
+        append(anchorB, anchorB + axisB * 0.6, .jointAxis)
+
+        func appendAngularLimit(
+            axis: SIMD3<Float>,
+            tangent: SIMD3<Float>,
+            minimum: Float,
+            maximum: Float,
+            radius: Float = 0.5
+        ) {
+            var previous = anchorA + rotate(tangent * radius, around: axis, angle: minimum)
+            let segmentCount = 24
+            for segment in 1...segmentCount where lines.count < limit {
+                let t = Float(segment) / Float(segmentCount)
+                let angle = minimum + (maximum - minimum) * t
+                let next = anchorA + rotate(tangent * radius, around: axis, angle: angle)
+                append(previous, next, .jointLimit)
+                previous = next
+            }
+        }
+
+        let helper = abs(axisA.y) < 0.9 ? SIMD3<Float>(0, 1, 0) : SIMD3<Float>(1, 0, 0)
+        let basisY = simd_normalize(simd_cross(axisA, helper))
+        let basisZ = simd_normalize(simd_cross(axisA, basisY))
+
+        switch joint.configuration {
+        case .point, .fixed:
+            break
+        case let .distance(configuration):
+            append(
+                anchorA + axisA * configuration.minimumDistance,
+                anchorA + axisA * configuration.maximumDistance,
+                .jointLimit
+            )
+        case let .slider(configuration):
+            append(
+                anchorA + axisA * configuration.minimumDistance,
+                anchorA + axisA * configuration.maximumDistance,
+                .jointLimit
+            )
+        case let .hinge(configuration):
+            appendAngularLimit(
+                axis: axisA,
+                tangent: basisY,
+                minimum: configuration.minimumAngle,
+                maximum: configuration.maximumAngle
+            )
+        case let .cone(configuration):
+            appendAngularLimit(
+                axis: axisA,
+                tangent: basisY,
+                minimum: configuration.minimumTwistAngle,
+                maximum: configuration.maximumTwistAngle
+            )
+            let length: Float = 0.65
+            let axial = cos(configuration.halfConeAngle) * length
+            let radial = sin(configuration.halfConeAngle) * length
+            let segmentCount = 16
+            var first: SIMD3<Float>?
+            var previous: SIMD3<Float>?
+            for segment in 0..<segmentCount where lines.count < limit {
+                let angle = Float(segment) * 2 * .pi / Float(segmentCount)
+                let rim = anchorA + axisA * axial
+                    + basisY * (cos(angle) * radial)
+                    + basisZ * (sin(angle) * radial)
+                if segment % 4 == 0 { append(anchorA, rim, .jointLimit) }
+                if let previous { append(previous, rim, .jointLimit) }
+                first = first ?? rim
+                previous = rim
+            }
+            if let first, let previous { append(previous, first, .jointLimit) }
+        case let .sixDOF(configuration):
+            let minimum = configuration.linearMinimum
+            let maximum = configuration.linearMaximum
+            func linearLimitPoint(_ x: Float, _ y: Float, _ z: Float) -> SIMD3<Float> {
+                let alongX = axisA * x
+                let alongY = basisY * y
+                let alongZ = basisZ * z
+                return anchorA + alongX + alongY + alongZ
+            }
+            let corners = [
+                linearLimitPoint(minimum.x, minimum.y, minimum.z),
+                linearLimitPoint(maximum.x, minimum.y, minimum.z),
+                linearLimitPoint(maximum.x, maximum.y, minimum.z),
+                linearLimitPoint(minimum.x, maximum.y, minimum.z),
+                linearLimitPoint(minimum.x, minimum.y, maximum.z),
+                linearLimitPoint(maximum.x, minimum.y, maximum.z),
+                linearLimitPoint(maximum.x, maximum.y, maximum.z),
+                linearLimitPoint(minimum.x, maximum.y, maximum.z),
+            ]
+            for (a, b) in [(0, 1), (1, 2), (2, 3), (3, 0),
+                           (4, 5), (5, 6), (6, 7), (7, 4),
+                           (0, 4), (1, 5), (2, 6), (3, 7)] where lines.count < limit {
+                append(corners[a], corners[b], .jointLimit)
+            }
+            appendAngularLimit(
+                axis: axisA,
+                tangent: basisY,
+                minimum: configuration.angularMinimum.x,
+                maximum: configuration.angularMaximum.x,
+                radius: 0.45
+            )
+            appendAngularLimit(
+                axis: basisY,
+                tangent: basisZ,
+                minimum: configuration.angularMinimum.y,
+                maximum: configuration.angularMaximum.y,
+                radius: 0.4
+            )
+            appendAngularLimit(
+                axis: basisZ,
+                tangent: axisA,
+                minimum: configuration.angularMinimum.z,
+                maximum: configuration.angularMaximum.z,
+                radius: 0.35
+            )
+        }
+    }
+
+    private func rotate(
+        _ vector: SIMD3<Float>,
+        around axis: SIMD3<Float>,
+        angle: Float
+    ) -> SIMD3<Float> {
+        vector * cos(angle)
+            + simd_cross(axis, vector) * sin(angle)
+            + axis * simd_dot(axis, vector) * (1 - cos(angle))
     }
 
     private func worldAABB(forLocalMin lo: SIMD3<Float>,
