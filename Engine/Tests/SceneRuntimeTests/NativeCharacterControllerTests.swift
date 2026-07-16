@@ -44,6 +44,9 @@ struct NativeCharacterControllerTests {
         // Character transforms use a stable foot-space origin, independent of stance.
         #expect(abs(state?.position.y ?? 1) < 0.08)
         #expect(runtime.worldTransform(for: character)?.translation == state?.position)
+        let debugState = runtime.physicsDebugFrame.characters.first { $0.entity == character }
+        #expect(debugState == state)
+        #expect(debugState?.groundState == .onGround)
     }
 
     @Test("native character consumes desired velocity in the current frame")

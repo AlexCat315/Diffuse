@@ -1116,7 +1116,7 @@ public struct SoftBodyStateFrameResource: Sendable, Equatable {
     public static let empty = SoftBodyStateFrameResource()
 }
 
-public enum PhysicsJointKind: String, Sendable, Equatable {
+public enum PhysicsJointKind: String, CaseIterable, Sendable, Equatable {
     case pointToPoint
     case hinge
     case fixed
@@ -1136,7 +1136,7 @@ public struct PhysicsJointSpring: Sendable, Equatable {
     }
 }
 
-public enum PhysicsJointMotorMode: String, Sendable, Equatable {
+public enum PhysicsJointMotorMode: String, CaseIterable, Sendable, Equatable {
     case disabled
     case position
     case velocity
@@ -1901,6 +1901,7 @@ struct PhysicsCommandReplayControlResource: Sendable, Equatable {
 public struct PhysicsDebugBody: Sendable, Equatable {
     public var entity: EntityID
     public var shape: ColliderShape
+    public var shapes: [ColliderShapeInstance]
     public var worldTransform: WorldTransform
     public var bounds: SpatialAABB
     public var motionType: RigidBodyMotionType
@@ -1910,6 +1911,7 @@ public struct PhysicsDebugBody: Sendable, Equatable {
     public init(
         entity: EntityID,
         shape: ColliderShape,
+        shapes: [ColliderShapeInstance]? = nil,
         worldTransform: WorldTransform,
         bounds: SpatialAABB,
         motionType: RigidBodyMotionType,
@@ -1918,6 +1920,7 @@ public struct PhysicsDebugBody: Sendable, Equatable {
     ) {
         self.entity = entity
         self.shape = shape
+        self.shapes = shapes ?? [ColliderShapeInstance(shape: shape)]
         self.worldTransform = worldTransform
         self.bounds = bounds
         self.motionType = motionType
@@ -1929,6 +1932,7 @@ public struct PhysicsDebugBody: Sendable, Equatable {
 public struct PhysicsDebugConstraint: Sendable, Equatable {
     public var entity: EntityID
     public var constraintType: ConstraintType
+    public var configuration: PhysicsJointConfiguration
     public var entityA: EntityID
     public var entityB: EntityID
     public var pivotA: SIMD3<Float>
@@ -1944,6 +1948,7 @@ public struct PhysicsDebugConstraint: Sendable, Equatable {
     public init(entity: EntityID, constraint: Constraint) {
         self.entity = entity
         constraintType = constraint.constraintType
+        configuration = constraint.configuration
         entityA = constraint.entityA
         entityB = constraint.entityB
         pivotA = constraint.pivotA
@@ -1993,17 +1998,20 @@ public struct PhysicsDebugFrameResource: Sendable, Equatable {
     public var bodies: [PhysicsDebugBody]
     public var constraints: [PhysicsDebugConstraint]
     public var contacts: [PhysicsContactEvent]
+    public var characters: [CharacterState]
     public var destructionConnections: [PhysicsDebugDestructionConnection]
 
     public init(
         bodies: [PhysicsDebugBody] = [],
         constraints: [PhysicsDebugConstraint] = [],
         contacts: [PhysicsContactEvent] = [],
+        characters: [CharacterState] = [],
         destructionConnections: [PhysicsDebugDestructionConnection] = []
     ) {
         self.bodies = bodies
         self.constraints = constraints
         self.contacts = contacts
+        self.characters = characters
         self.destructionConnections = destructionConnections
     }
 
