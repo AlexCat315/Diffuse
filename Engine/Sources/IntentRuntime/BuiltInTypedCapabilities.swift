@@ -480,10 +480,10 @@ public struct SetLightSpotAnglesCapability: GuavaCapability {
         @EntityReference(requires: [.light])
         public var entity_id: SceneEntityRef
 
-        @ValueRange(min: 0, max: 180)
+        @ValueRange(min: 0, max: 179)
         public var spot_inner_angle: Double?
 
-        @ValueRange(min: 0, max: 180)
+        @ValueRange(min: 1, max: 179)
         public var spot_outer_angle: Double?
 
         public init() {}
@@ -503,23 +503,28 @@ public struct SetLightSpotAnglesCapability: GuavaCapability {
         guard input.spot_inner_angle != nil || input.spot_outer_angle != nil else {
             throw BuiltInCapabilityPreparationError.noSpotAngleFields
         }
+        let currentOuter = context.entities.first {
+            $0.reference == input.entity_id.rawValue
+        }?.light?.spotOuterAngleDegrees
         if let inner = input.spot_inner_angle,
-           let outer = input.spot_outer_angle,
+           let outer = input.spot_outer_angle ?? currentOuter.map(Double.init),
            inner > outer {
             throw BuiltInCapabilityPreparationError.invalidSpotAngleOrder
         }
         let entityID = try preparedEntityID(input.entity_id, requiring: .light, context: context)
         var operations: [TransactionOperation] = []
-        if let inner = input.spot_inner_angle {
-            operations.append(.scene(.setLightSpotInnerAngle(
-                entityID: entityID,
-                angleDegrees: try capabilityFloat(inner, field: "spot_inner_angle")
-            )))
-        }
+        // Apply the outer angle first so a valid pair is not temporarily
+        // clamped against the previous, narrower outer cone.
         if let outer = input.spot_outer_angle {
             operations.append(.scene(.setLightSpotOuterAngle(
                 entityID: entityID,
                 angleDegrees: try capabilityFloat(outer, field: "spot_outer_angle")
+            )))
+        }
+        if let inner = input.spot_inner_angle {
+            operations.append(.scene(.setLightSpotInnerAngle(
+                entityID: entityID,
+                angleDegrees: try capabilityFloat(inner, field: "spot_inner_angle")
             )))
         }
         return PreparedCapability(

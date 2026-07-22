@@ -263,6 +263,7 @@ public enum TransactionVerificationAssertion: Codable, Sendable, Equatable {
     case createdEntityCount(Int)
     case deletedEntity(UInt64)
     case sceneRevisionAdvanced(from: UInt64)
+    case sceneState(SceneStateAssertion)
 }
 
 public struct TransactionIR: Sendable, Equatable {
