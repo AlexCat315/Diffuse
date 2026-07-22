@@ -75,6 +75,7 @@ public struct CapabilityPreparationEntity: Sendable, Equatable {
     public var renderMaterial: CapabilityPreparationMaterial?
     public var rigidBody: RigidBody?
     public var collider: Collider?
+    public var light: LightComponent?
     public var audioSource: AudioSource?
     public var animationPlayer: AnimationPlayer?
     public var scriptBindings: [ScriptBinding]
@@ -85,6 +86,7 @@ public struct CapabilityPreparationEntity: Sendable, Equatable {
                 renderMaterial: CapabilityPreparationMaterial? = nil,
                 rigidBody: RigidBody? = nil,
                 collider: Collider? = nil,
+                light: LightComponent? = nil,
                 audioSource: AudioSource? = nil,
                 animationPlayer: AnimationPlayer? = nil,
                 scriptBindings: [ScriptBinding] = []) {
@@ -94,6 +96,7 @@ public struct CapabilityPreparationEntity: Sendable, Equatable {
         self.renderMaterial = renderMaterial
         self.rigidBody = rigidBody
         self.collider = collider
+        self.light = light
         self.audioSource = audioSource
         self.animationPlayer = animationPlayer
         self.scriptBindings = scriptBindings
@@ -212,7 +215,7 @@ public struct AnyCapabilityRegistration: Sendable {
             do {
                 try JSONSchemaValidator.validate(data: data, against: contract.inputSchema)
                 let input = try JSONDecoder().decode(C.Input.self, from: data)
-                let prepared = try C.prepare(input: input, context: context)
+                var prepared = try C.prepare(input: input, context: context)
                 if contract.access.isWrite && prepared.operations.isEmpty {
                     throw CapabilityRegistrationError.writePreparationHasNoOperations(contract.id)
                 }
@@ -222,6 +225,14 @@ public struct AnyCapabilityRegistration: Sendable {
                 }
                 if contract.access.isWrite && prepared.assertions.isEmpty {
                     throw CapabilityRegistrationError.writePreparationHasNoAssertions(contract.id)
+                }
+                if contract.access.isWrite {
+                    let exactAssertions = prepared.operations.flatMap {
+                        TransactionVerificationAssertion.exactPostconditions(for: $0)
+                    }
+                    for assertion in exactAssertions where !prepared.assertions.contains(assertion) {
+                        prepared.assertions.append(assertion)
+                    }
                 }
                 return prepared
             } catch let error as CapabilityRegistrationError {
