@@ -524,11 +524,45 @@ struct CapabilityExposureTests {
             .scene(.setLightIntensity(entityID: light.rawValue, intensity: 250)),
             .scene(.setLightColor(entityID: light.rawValue, color: SIMD3<Float>(0.2, 0.4, 0.6))),
             .scene(.setLightRange(entityID: light.rawValue, range: 15)),
-            .scene(.setLightSpotInnerAngle(entityID: light.rawValue, angleDegrees: 15)),
             .scene(.setLightSpotOuterAngle(entityID: light.rawValue, angleDegrees: 25)),
+            .scene(.setLightSpotInnerAngle(entityID: light.rawValue, angleDegrees: 15)),
             .scene(.setLightCastShadows(entityID: light.rawValue, value: true)),
         ])
         #expect(transaction.capabilityInvocations.map(\.capabilityID) == capabilityIDs)
+        #expect(transaction.verificationAssertions.contains(
+            .sceneState(.lightSpotOuterAngle(entityID: light.rawValue, value: 25))
+        ))
+        #expect(transaction.verificationAssertions.contains(
+            .sceneState(.lightSpotInnerAngle(entityID: light.rawValue, value: 15))
+        ))
+        var executionContext = TransactionExecutionContext(sceneRuntime: scene)
+        _ = try TransactionExecutor().apply(transaction, to: &executionContext)
+        #expect(executionContext.sceneRuntime?.component(LightComponent.self, for: light)
+            == LightComponent(type: .spot,
+                              color: SIMD3<Float>(0.2, 0.4, 0.6),
+                              intensity: 250,
+                              range: 15,
+                              spotInnerAngleDegrees: 15,
+                              spotOuterAngleDegrees: 25,
+                              castShadows: true))
+
+        let invalidAngleData = try JSONSerialization.data(withJSONObject: [
+            "summary": "Invalid spot angle",
+            "steps": [[
+                "op": "set_light_spot_angles",
+                "entity_id": ref,
+                "spot_inner_angle": 40,
+            ]],
+        ])
+        let invalidAnglePlan = try JSONDecoder().decode(SceneEditPlan.self,
+                                                        from: invalidAngleData)
+        #expect(throws: SceneEditPlanExecutorError.self) {
+            try SceneEditPlanExecutor().buildTransaction(
+                from: invalidAnglePlan,
+                scene: scene,
+                exposureSnapshot: snapshot
+            )
+        }
 
         let nonLight = scene.createEntity()
         let invalidData = try JSONSerialization.data(withJSONObject: [
@@ -804,6 +838,19 @@ struct CapabilityExposureTests {
             #expect(abs(radius - 2) < 0.001)
         } else {
             Issue.record("expected the sequential collider state to be a sphere")
+        }
+        var executionContext = TransactionExecutionContext(sceneRuntime: scene)
+        _ = try TransactionExecutor().apply(transaction, to: &executionContext)
+        #expect(executionContext.sceneRuntime?.component(RigidBody.self, for: entity)?.motionType
+                == .kinematic)
+        #expect(executionContext.sceneRuntime?.component(RigidBody.self, for: entity)?.mass == 12)
+        #expect(executionContext.sceneRuntime?.component(Collider.self, for: entity)?.isTrigger
+                == true)
+        if case let .sphere(radius, _)? = executionContext.sceneRuntime?
+            .component(Collider.self, for: entity)?.shape {
+            #expect(radius == 2)
+        } else {
+            Issue.record("expected verified sphere collider state")
         }
 
         #expect(throws: JSONSchemaViolation.self) {
