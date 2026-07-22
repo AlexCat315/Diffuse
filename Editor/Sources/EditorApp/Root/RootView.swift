@@ -112,7 +112,7 @@ private struct EditorCallbacks {
                                                          aiSettings: s.state.aiSettings,
                                                          capabilitySettings: s.state.capabilitySettings)
                 },
-                newScene: { app.resetPreviewScene() },
+                newScene: { app.requestNewScene() },
                 saveScene: { _ = app.saveSceneManifest() },
                 openSettings: { app.openSettingsWindow() },
                 openCommandPalette: { s.dispatch(.setCommandPaletteVisible(true)) },

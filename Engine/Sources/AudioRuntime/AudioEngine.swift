@@ -51,7 +51,23 @@ public final class AudioEngine: @unchecked Sendable {
 
     // MARK: - Clip loading
 
-    public func addSearchURL(_ url: URL) { searchURLs.append(url) }
+    public func addSearchURL(_ url: URL) {
+        let normalized = url.standardizedFileURL
+        guard !searchURLs.contains(normalized) else { return }
+        searchURLs.append(normalized)
+    }
+
+    /// Replaces project-scoped clip search roots. This also clears the name cache so
+    /// opening another project with a clip of the same name loads the new file.
+    public func setSearchURLs(_ urls: [URL]) {
+        var seen = Set<String>()
+        searchURLs = urls.compactMap { url in
+            let normalized = url.standardizedFileURL
+            return seen.insert(normalized.path).inserted ? normalized : nil
+        }
+        resetPlaybackState()
+        loadedClips.removeAll(keepingCapacity: true)
+    }
 
     /// Ensure `name` is decoded and cached by the backend. Returns whether the
     /// clip is now available.

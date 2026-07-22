@@ -648,11 +648,19 @@ public struct EditorState: Codable, Sendable {
     }
 }
 
+public enum EditorPendingDocumentAction: Equatable, Sendable {
+    case close
+    case newScene
+    case openScene
+}
+
 public struct EditorPendingCloseRequest: Equatable, Sendable {
+    public var action: EditorPendingDocumentAction
     /// Window the OS asked to close; `nil` when the whole app is quitting.
     public var windowID: UInt32?
 
-    public init(windowID: UInt32?) {
+    public init(action: EditorPendingDocumentAction = .close, windowID: UInt32? = nil) {
+        self.action = action
         self.windowID = windowID
     }
 }

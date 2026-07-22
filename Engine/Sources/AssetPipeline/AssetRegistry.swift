@@ -110,7 +110,8 @@ public final class AssetRegistry: @unchecked Sendable {
     public init() {}
 
     @discardableResult
-    public func loadProject(at rootPath: String) throws -> [AssetRegistryEntry] {
+    public func loadProject(at rootPath: String,
+                            preferredMeshIndices: [String: Int] = [:]) throws -> [AssetRegistryEntry] {
         let rootURL = URL(fileURLWithPath: rootPath, isDirectory: true).resolvingSymlinksInPath()
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: rootURL.path, isDirectory: &isDirectory),
@@ -123,10 +124,23 @@ public final class AssetRegistry: @unchecked Sendable {
         var loadedMeshes: [Int: RegisteredMeshAsset] = [:]
 
         lock.lock()
-        var currentPathIndex = pathIndex
-        var currentNextIndex = nextMeshIndex
-        let existingMeshes = meshes
+        let isReloadingCurrentProject = projectRoot == rootURL.path
+        var currentPathIndex = isReloadingCurrentProject ? pathIndex : [:]
+        var currentNextIndex = isReloadingCurrentProject ? nextMeshIndex : Self.importedMeshStartIndex
+        let existingMeshes = isReloadingCurrentProject ? meshes : [:]
         lock.unlock()
+
+        // Export bundles persist mesh slots in assets.json. Reserve those slots before
+        // assigning new ones so scene references continue to point at the same meshes.
+        var usedMeshIndices = Set(currentPathIndex.values)
+        for (relativePath, preferredIndex) in preferredMeshIndices.sorted(by: { $0.key < $1.key }) {
+            guard preferredIndex >= Self.importedMeshStartIndex,
+                  currentPathIndex[relativePath] == nil,
+                  !usedMeshIndices.contains(preferredIndex) else { continue }
+            currentPathIndex[relativePath] = preferredIndex
+            usedMeshIndices.insert(preferredIndex)
+            currentNextIndex = max(currentNextIndex, preferredIndex + 1)
+        }
 
         for candidate in candidates {
             let assetURL = candidate.url.resolvingSymlinksInPath()
@@ -163,9 +177,13 @@ public final class AssetRegistry: @unchecked Sendable {
                     continue
                 }
             } else {
+                while usedMeshIndices.contains(currentNextIndex) {
+                    currentNextIndex += 1
+                }
                 meshIndex = currentNextIndex
                 currentNextIndex += 1
                 currentPathIndex[relativePath] = meshIndex
+                usedMeshIndices.insert(meshIndex)
             }
 
             let imported: (mesh: MeshAsset, topologySlices: [MeshTopologySlice]?)
@@ -174,7 +192,7 @@ public final class AssetRegistry: @unchecked Sendable {
             } catch {
                 Logger(label: "com.guava.engine.assets").warning("AssetRegistry: skipping \(candidate.url.lastPathComponent) — \(error)")
                 currentPathIndex.removeValue(forKey: relativePath)
-                if meshIndex == currentNextIndex - 1 { currentNextIndex -= 1 }
+                usedMeshIndices.remove(meshIndex)
                 continue
             }
             var mesh = imported.mesh
@@ -283,7 +301,9 @@ public final class AssetRegistry: @unchecked Sendable {
         lock.unlock()
     }
 
-    private static let buildDirectoryNames: Set<String> = ["build", ".build", "node_modules", ".gradle"]
+    private static let buildDirectoryNames: Set<String> = [
+        "build", ".build", "export", "node_modules", ".gradle",
+    ]
 
     private func findImportableAssets(in rootURL: URL) throws -> [(url: URL, kind: ImportableAssetKind)] {
         let properties: [URLResourceKey] = [.isRegularFileKey, .isHiddenKey, .isDirectoryKey]

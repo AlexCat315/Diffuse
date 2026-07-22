@@ -44,6 +44,44 @@ struct AssetRegistryTests {
         #expect(registry.entry(for: entries[1].id) == entries[1])
     }
 
+    @Test("honors persisted mesh indices from an export bundle")
+    func honorsPreferredMeshIndex() throws {
+        let registry = AssetRegistry()
+        let tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: tempRoot) }
+        let meshesDir = tempRoot.appendingPathComponent("Assets/Meshes", isDirectory: true)
+        try FileManager.default.createDirectory(at: meshesDir, withIntermediateDirectories: true)
+        try writeTriangleGLTF(into: meshesDir)
+
+        let relativePath = "Assets/Meshes/triangle.gltf"
+        let entries = try registry.loadProject(at: tempRoot.path,
+                                               preferredMeshIndices: [relativePath: 17])
+
+        #expect(entries.first?.meshIndex == 17)
+        #expect(registry.registeredMeshes().map(\.meshIndex) == [17])
+    }
+
+    @Test("switching project roots never reuses a mesh from the previous project")
+    func isolatesProjectRoots() throws {
+        let registry = AssetRegistry()
+        let parent = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let firstMeshes = parent.appendingPathComponent("First/Assets/Meshes", isDirectory: true)
+        let secondMeshes = parent.appendingPathComponent("Second/Assets/Meshes", isDirectory: true)
+        try FileManager.default.createDirectory(at: firstMeshes, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: secondMeshes, withIntermediateDirectories: true)
+        try writeTriangleGLTF(into: firstMeshes)
+        try writeTriangleGLTF(into: secondMeshes)
+
+        _ = try registry.loadProject(at: parent.appendingPathComponent("First").path)
+        #expect(registry.registeredMeshes().first?.sourceDirectory == firstMeshes.path)
+
+        _ = try registry.loadProject(at: parent.appendingPathComponent("Second").path)
+        #expect(registry.registeredMeshes().first?.sourceDirectory == secondMeshes.path)
+    }
+
     private func writeTriangleGLTF(into directory: URL) throws {
         let bufferURL = directory.appendingPathComponent("triangle.bin")
         let gltfURL = directory.appendingPathComponent("triangle.gltf")

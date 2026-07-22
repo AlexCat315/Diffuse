@@ -149,6 +149,7 @@ public final class EditorApplication: @unchecked Sendable {
     /// `SceneRuntime.tick` advances its revision even for zero-delta extraction,
     /// so this tracks when authored scene mutations actually need another pass.
     private var lastPreparedSceneRevision: UInt64?
+    private var launchedPlayerProcess: Process?
 
     public init(projectDirectory: String,
                 backendConfig: WGPUDeviceConfig? = nil,
@@ -160,6 +161,7 @@ public final class EditorApplication: @unchecked Sendable {
         let resolvedBackendConfig = backendConfig ?? .init()
         let resolvedBackend = backend ?? WGPUBackend(config: resolvedBackendConfig)
         _ = try EditorAssetCatalog.loadProject(at: projectDirectory)
+        ProjectRuntimeResources.configureAudioSearchPaths(at: projectDirectory)
         let store = EditorStore()
         let scene = EditorSceneAdapter()
         let observationDirectory = URL(fileURLWithPath: projectDirectory, isDirectory: true)
@@ -219,7 +221,11 @@ public final class EditorApplication: @unchecked Sendable {
         scene.onRevisionChanged = { revision in
             store.dispatch(.setSceneRevision(revision))
         }
+        scene.onTransactionError = { [weak self] message in
+            self?.logConsole("Scene edit failed", severity: .error, detail: message)
+        }
         store.dispatch(.setSceneRevision(scene.revision))
+        store.dispatch(.markSceneSaved(scene.revision))
         if let selection = initialSelectedEntityID {
             store.dispatch(.setSelectedEntity(selection))
         }
@@ -292,7 +298,10 @@ public final class EditorApplication: @unchecked Sendable {
         let shouldPrepareSceneForRender =
             shouldAdvanceSceneSimulation || sceneRevisionBeforePreparation != lastPreparedSceneRevision
         if shouldPrepareSceneForRender {
-            scene.tickScene(deltaTime: shouldAdvanceSceneSimulation ? simulationDelta : 0)
+            scene.tickScene(deltaTime: shouldAdvanceSceneSimulation ? simulationDelta : 0,
+                            frameIndex: state.frameIndex,
+                            inputEvents: inputEvents,
+                            drivesAudio: state.playbackState == .playing)
             lastPreparedSceneRevision = scene.revision
         }
 
@@ -325,7 +334,10 @@ public final class EditorApplication: @unchecked Sendable {
                 drawableSize: drawableSize,
                 shouldRender: state.shouldRender && renderViewport,
                 renderSceneOverride: scene.currentRenderScene(),
-                jointPaletteOverride: jointPalettes
+                sceneSnapshotOverride: scene.currentSceneSnapshot(),
+                jointPaletteOverride: jointPalettes,
+                inGameCanvasOverride: scene.currentInGameCanvas(),
+                particleFeedbackHandler: scene.makeParticleSimulationFeedbackHandler()
             )
         }
 
@@ -909,6 +921,22 @@ public final class EditorApplication: @unchecked Sendable {
         logConsole("Created new preview scene")
     }
 
+    public func requestNewScene() {
+        guard store.state.sceneRevision != store.state.lastSavedSceneRevision else {
+            resetPreviewScene()
+            return
+        }
+        store.dispatch(.requestClose(EditorPendingCloseRequest(action: .newScene)))
+    }
+
+    public func requestOpenSceneManifest() {
+        guard store.state.sceneRevision != store.state.lastSavedSceneRevision else {
+            _ = openSceneManifest()
+            return
+        }
+        store.dispatch(.requestClose(EditorPendingCloseRequest(action: .openScene)))
+    }
+
     /// Exports a portable, runnable project bundle to `<projectDirectory>/export`
     /// (scene + assets + descriptor). Returns the output directory, or nil on failure.
     @discardableResult
@@ -921,6 +949,8 @@ public final class EditorApplication: @unchecked Sendable {
             let descriptor = try ProjectExporter.export(manifest: manifest,
                                                         appName: "Guava Game",
                                                         assets: assets,
+                                                        sourceProjectDirectory: URL(fileURLWithPath: projectDirectory,
+                                                                                    isDirectory: true),
                                                         to: output)
             logConsole("Exported project bundle",
                        detail: "\(descriptor.entityCount) entities, \(descriptor.assetCount) assets → \(output.path)")
@@ -928,6 +958,41 @@ public final class EditorApplication: @unchecked Sendable {
         } catch {
             logConsole("Project export failed", severity: .error, detail: String(describing: error))
             return nil
+        }
+    }
+
+    @discardableResult
+    public func runExportedProject(at projectURL: URL) -> Bool {
+        let environmentOverride = ProcessInfo.processInfo.environment["GUAVA_PLAYER_EXECUTABLE"]
+            .map { URL(fileURLWithPath: $0) }
+        let executableDirectory = Bundle.main.executableURL?.deletingLastPathComponent()
+            ?? URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent()
+        let candidates = [
+            environmentOverride,
+            executableDirectory.appendingPathComponent("GuavaPlayer"),
+        ].compactMap { $0 }
+        guard let executable = candidates.first(where: {
+            FileManager.default.isExecutableFile(atPath: $0.path)
+        }) else {
+            logConsole("Unable to run exported build",
+                       severity: .error,
+                       detail: "GuavaPlayer is not installed next to the Editor. Set GUAVA_PLAYER_EXECUTABLE to its path.")
+            return false
+        }
+
+        let process = Process()
+        process.executableURL = executable
+        process.arguments = ["--project", projectURL.path]
+        do {
+            try process.run()
+            launchedPlayerProcess = process
+            logConsole("Started exported build", detail: projectURL.path)
+            return true
+        } catch {
+            logConsole("Unable to run exported build",
+                       severity: .error,
+                       detail: String(describing: error))
+            return false
         }
     }
 
@@ -1007,7 +1072,7 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     public func currentParticleSimulationEventApplyReport() -> ParticleSimulationEventApplyReport {
-        engine.currentParticleSimulationEventApplyReport()
+        scene.currentParticleSimulationEventApplyReport()
     }
 
     public func currentParticleScalabilityState() -> ParticleScalabilityStateResource {
@@ -1024,7 +1089,7 @@ public final class EditorApplication: @unchecked Sendable {
 
     private func makeParticleDiagnosticsSample() -> EditorParticleDiagnosticsSample {
         let stats = scene.currentParticleFrameStats()
-        let eventReport = engine.currentParticleSimulationEventApplyReport()
+        let eventReport = scene.currentParticleSimulationEventApplyReport()
         let renderSummary = scene.currentRenderScene().particleSummary
         let renderStats = engine.currentRenderStats()
         let nextSampleIndex = (store.state.particleDiagnosticsHistory.last?.sampleIndex ?? 0) &+ 1
@@ -1224,29 +1289,29 @@ public final class EditorApplication: @unchecked Sendable {
 
     // MARK: - Undo / Redo
 
-    public var canUndo: Bool { intentCoordinator.undoStack.canUndo }
-    public var canRedo: Bool { intentCoordinator.undoStack.canRedo }
+    public var canUndo: Bool { scene.canUndoEdit }
+    public var canRedo: Bool { scene.canRedoEdit }
 
     public func undo() {
-        var context = makeExecutionContext()
-        guard intentCoordinator.undo(executionContext: &context) else { return }
-        if let updatedScene = context.sceneRuntime {
-            scene.scene = updatedScene
-            scene.notifyRevisionChanged()
-        }
+        guard scene.undoEdit() else { return }
+        validateSelectionAfterHistoryNavigation()
         store.dispatch(.setAIStatusMessage("Undone"))
         logConsole("Undo applied", severity: .info)
     }
 
     public func redo() {
-        var context = makeExecutionContext()
-        guard intentCoordinator.redo(executionContext: &context) else { return }
-        if let updatedScene = context.sceneRuntime {
-            scene.scene = updatedScene
-            scene.notifyRevisionChanged()
-        }
+        guard scene.redoEdit() else { return }
+        validateSelectionAfterHistoryNavigation()
         store.dispatch(.setAIStatusMessage("Redone"))
         logConsole("Redo applied", severity: .info)
+    }
+
+    private func validateSelectionAfterHistoryNavigation() {
+        let selectedID = store.state.selectedEntityID
+        if scene.entitySummary(id: selectedID) == nil {
+            store.dispatch(.setSelectedEntity(scene.roots.first?.id))
+        }
+        displayInvalidationHandler?()
     }
 
     public func submitSpawnEntityIntent(label: String,
