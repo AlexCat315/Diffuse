@@ -2,6 +2,7 @@ import Foundation
 import AssetPipeline
 import GuavaUIRuntime
 import IntentRuntime
+import RenderBackend
 import SceneRuntime
 import ScriptRuntime
 import SIMDCompat
@@ -78,6 +79,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
     public let constraint: EditorSceneManifestConstraint?
     public let script: EditorSceneManifestScript?
     public let audioSource: EditorSceneManifestAudioSource?
+    public let audioListener: EditorSceneManifestAudioListener?
     public let animationPlayer: EditorSceneManifestAnimationPlayer?
     public let animationGraphPlayer: EditorSceneManifestAnimationGraphPlayer?
     private let particleEmitterStorage: EditorSceneManifestParticleEmitterStorage?
@@ -107,6 +109,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
                 constraint: EditorSceneManifestConstraint? = nil,
                 script: EditorSceneManifestScript? = nil,
                 audioSource: EditorSceneManifestAudioSource? = nil,
+                audioListener: EditorSceneManifestAudioListener? = nil,
                 animationPlayer: EditorSceneManifestAnimationPlayer? = nil,
                 animationGraphPlayer: EditorSceneManifestAnimationGraphPlayer? = nil,
                 particleEmitter: EditorSceneManifestParticleEmitter? = nil,
@@ -132,6 +135,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.constraint = constraint
         self.script = script
         self.audioSource = audioSource
+        self.audioListener = audioListener
         self.animationPlayer = animationPlayer
         self.animationGraphPlayer = animationGraphPlayer
         self.particleEmitterStorage = particleEmitter.map(EditorSceneManifestParticleEmitterStorage.init)
@@ -141,7 +145,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case id, name, kind, localTransform, asset, renderMesh, renderMaterial
         case camera, light, rigidBody, collider, characterController, vehicle, softBody, cloth, softBodyMesh, destructible
-        case ragdoll, constraint, script, audioSource
+        case ragdoll, constraint, script, audioSource, audioListener
         case animationPlayer, animationGraphPlayer, particleEmitter, children
     }
 
@@ -168,6 +172,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.constraint = try c.decodeIfPresent(EditorSceneManifestConstraint.self, forKey: .constraint)
         self.script = try c.decodeIfPresent(EditorSceneManifestScript.self, forKey: .script)
         self.audioSource = try c.decodeIfPresent(EditorSceneManifestAudioSource.self, forKey: .audioSource)
+        self.audioListener = try c.decodeIfPresent(EditorSceneManifestAudioListener.self, forKey: .audioListener)
         self.animationPlayer = try c.decodeIfPresent(EditorSceneManifestAnimationPlayer.self, forKey: .animationPlayer)
         self.animationGraphPlayer = try c.decodeIfPresent(EditorSceneManifestAnimationGraphPlayer.self,
                                                           forKey: .animationGraphPlayer)
@@ -199,6 +204,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         try c.encodeIfPresent(constraint, forKey: .constraint)
         try c.encodeIfPresent(script, forKey: .script)
         try c.encodeIfPresent(audioSource, forKey: .audioSource)
+        try c.encodeIfPresent(audioListener, forKey: .audioListener)
         try c.encodeIfPresent(animationPlayer, forKey: .animationPlayer)
         try c.encodeIfPresent(animationGraphPlayer, forKey: .animationGraphPlayer)
         try c.encodeIfPresent(particleEmitterStorage, forKey: .particleEmitter)
@@ -1762,6 +1768,18 @@ public struct EditorSceneManifestAudioSource: Codable, Sendable, Equatable {
     }
 }
 
+public struct EditorSceneManifestAudioListener: Codable, Sendable, Equatable {
+    public let masterVolume: Float
+
+    public init(_ component: AudioListener) {
+        self.masterVolume = component.masterVolume
+    }
+
+    var component: AudioListener {
+        AudioListener(masterVolume: masterVolume)
+    }
+}
+
 public struct EditorSceneManifestAnimationPlayer: Codable, Sendable, Equatable {
     public let clipName: String?
     public let speed: Float
@@ -2457,19 +2475,35 @@ public struct EditorInspectorAssetRef: Sendable, Equatable {
 /// 主线程约定的编辑器场景适配层。底层数据来自 Swift `SceneRuntime`；
 /// 面板只读取这里导出的树与属性 schema，不再依赖 stub 列表。
 public final class EditorSceneAdapter: @unchecked Sendable {
-    var scene = SceneRuntime()
+    var scene = SceneRuntime() {
+        didSet { scene.setScriptDriver(scriptRuntime) }
+    }
     let transactionExecutor = TransactionExecutor()
     private var initialSelectionID: UInt64?
     private var initialExpandedIDs: Set<UInt64> = []
-    let animationRuntime = AnimationRuntime()
+    let scriptRuntime = ScriptRuntime()
+    let particleFeedbackLock = NSLock()
+    var pendingParticleFeedback: [GPUParticleSimulationEventSnapshot] = []
+    var particleFeedbackGeneration: UInt64 = 0
+    var lastParticleFeedbackReport = ParticleSimulationEventApplyReport.empty
+    private var historyCurrentScene: SceneRuntime?
+    private var undoScenes: [SceneRuntime] = []
+    private var redoScenes: [SceneRuntime] = []
+    private var historyGroupDepth = 0
+    private var historyGroupStartScene: SceneRuntime?
+    private var lockedEntityIDs = Set<UInt64>()
+    private let historyLimit = 100
 
     public var onRevisionChanged: ((UInt64) -> Void)?
+    public var onTransactionError: ((String) -> Void)?
 
     public init() {
         scene.bootstrapEditorPreviewScene()
+        scene.setScriptDriver(scriptRuntime)
         let defaults = scene.resource(SceneBootstrapDefaultsResource.self)
         initialSelectionID = defaults?.defaultSelection?.rawValue
         initialExpandedIDs = Set(defaults?.defaultExpanded.map(\ .rawValue) ?? [])
+        historyCurrentScene = scene
     }
 
     public func resetToPreviewScene() {
@@ -2479,11 +2513,16 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     private func resetToPreviewScene(notify: Bool) {
         scene = SceneRuntime()
         scene.bootstrapEditorPreviewScene()
+        scriptRuntime.reset()
+        scene.setScriptDriver(scriptRuntime)
+        invalidateParticleFeedback()
         let defaults = scene.resource(SceneBootstrapDefaultsResource.self)
         initialSelectionID = defaults?.defaultSelection?.rawValue
         initialExpandedIDs = Set(defaults?.defaultExpanded.map(\ .rawValue) ?? [])
+        resetEditHistory()
+        lockedEntityIDs.removeAll(keepingCapacity: true)
         if notify {
-            notifyRevisionChanged()
+            notifyRevisionChanged(recordHistory: false)
         }
     }
 
@@ -2564,10 +2603,27 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             _ = restoredScene.setLocalTransform(node.localTransform?.localTransform ?? .identity,
                                                 for: entity)
             if let asset = node.asset {
-                _ = restoredScene.setComponent(asset.component, for: entity)
+                var component = asset.component
+                if let registered = AssetRegistry.shared.entry(for: asset.assetID)
+                    ?? AssetRegistry.shared.entry(for: asset.relativePath) {
+                    component.assetID = registered.id
+                    component.name = registered.name
+                    component.relativePath = registered.relativePath
+                    component.absolutePath = registered.absolutePath
+                    component.kind = registered.kind.rawValue
+                    component.meshIndex = registered.meshIndex
+                }
+                _ = restoredScene.setComponent(component, for: entity)
             }
             if let renderMesh = node.renderMesh {
-                _ = restoredScene.setComponent(renderMesh.component, for: entity)
+                var component = renderMesh.component
+                let registeredAssetID = renderMesh.assetID ?? node.asset?.assetID
+                if let registeredAssetID,
+                   let registered = AssetRegistry.shared.entry(for: registeredAssetID) {
+                    component.meshIndex = registered.meshIndex
+                    component.assetID = registered.id
+                }
+                _ = restoredScene.setComponent(component, for: entity)
             }
             if let renderMaterial = node.renderMaterial {
                 _ = restoredScene.setComponent(renderMaterial.component, for: entity)
@@ -2607,6 +2663,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             }
             if let audioSource = node.audioSource {
                 _ = restoredScene.setComponent(audioSource.component, for: entity)
+            }
+            if let audioListener = node.audioListener {
+                _ = restoredScene.setComponent(audioListener.component, for: entity)
             }
             if let animationPlayer = node.animationPlayer {
                 _ = restoredScene.setComponent(animationPlayer.component, for: entity)
@@ -2656,12 +2715,17 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         rebuildMeshColliderResources(in: &restoredScene)
         restoredScene.propagateTransforms()
 
+        scriptRuntime.reset()
+        restoredScene.setScriptDriver(scriptRuntime)
+        invalidateParticleFeedback()
         scene = restoredScene
         initialSelectionID = manifest.selectedEntityID.flatMap { idMap[$0]?.rawValue }
             ?? scene.roots().first?.rawValue
         initialExpandedIDs = Set(scene.roots().map(\.rawValue))
+        resetEditHistory()
+        lockedEntityIDs.removeAll(keepingCapacity: true)
         if notify {
-            notifyRevisionChanged()
+            notifyRevisionChanged(recordHistory: false)
         }
         return EditorSceneManifestLoadResult(entityCount: entityCount,
                                              selectedEntityID: initialSelectionID)
@@ -2673,10 +2737,66 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                            at index: Int) -> TransactionApplyResult? {
         applySceneTransaction(intentVerb: "scene.move_entity",
                               summary: "Move entity in hierarchy",
-                              targetRawIDs: [entityID],
+                              targetRawIDs: [entityID] + (parentID.map { [$0] } ?? []),
                               mutations: [.moveEntity(entityID: entityID,
                                                       parentID: parentID,
                                                       index: index)])
+    }
+
+    @discardableResult
+    public func setHierarchyVisibility(_ isVisible: Bool,
+                                       for entityIDs: Set<UInt64>) -> Bool {
+        var renderableIDs = Set<UInt64>()
+        func collect(_ entity: EntityID) {
+            if scene.hasComponent(RenderMeshComponent.self, for: entity) {
+                renderableIDs.insert(entity.rawValue)
+            }
+            for child in scene.children(of: entity) {
+                collect(child)
+            }
+        }
+        for rawID in entityIDs {
+            guard let entity = entity(from: rawID), scene.contains(entity) else { continue }
+            collect(entity)
+        }
+        let mutations = renderableIDs.sorted().compactMap { rawID -> SceneMutation? in
+            guard let entity = entity(from: rawID),
+                  let mesh = scene.component(RenderMeshComponent.self, for: entity),
+                  mesh.isVisible != isVisible else { return nil }
+            return .setRenderMeshVisibility(entityID: rawID, isVisible: isVisible)
+        }
+        guard !mutations.isEmpty else { return false }
+        return applySceneTransaction(intentVerb: "scene.set_hierarchy_visibility",
+                                     summary: isVisible ? "Show hierarchy entities" : "Hide hierarchy entities",
+                                     targetRawIDs: renderableIDs.sorted(),
+                                     mutations: mutations) != nil
+    }
+
+    public func isHierarchyVisible(_ rawID: UInt64) -> Bool {
+        guard let root = entity(from: rawID), scene.contains(root) else { return true }
+        var visibility: [Bool] = []
+        func collect(_ entity: EntityID) {
+            if let mesh = scene.component(RenderMeshComponent.self, for: entity) {
+                visibility.append(mesh.isVisible)
+            }
+            for child in scene.children(of: entity) {
+                collect(child)
+            }
+        }
+        collect(root)
+        return visibility.allSatisfy { $0 }
+    }
+
+    public func setEntityLocked(_ isLocked: Bool, entityIDs: Set<UInt64>) {
+        if isLocked {
+            lockedEntityIDs.formUnion(entityIDs)
+        } else {
+            lockedEntityIDs.subtract(entityIDs)
+        }
+    }
+
+    public func isEntityLocked(_ rawID: UInt64) -> Bool {
+        lockedEntityIDs.contains(rawID)
     }
 
     public func entitySummary(id rawID: UInt64?) -> EditorSceneEntitySummary? {
@@ -2814,6 +2934,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             .map(EditorSceneManifestScript.init)
         let audioSource = scene.component(AudioSource.self, for: entity)
             .map(EditorSceneManifestAudioSource.init)
+        let audioListener = scene.component(AudioListener.self, for: entity)
+            .map(EditorSceneManifestAudioListener.init)
         let animationPlayer = scene.component(AnimationPlayer.self, for: entity)
             .map(EditorSceneManifestAnimationPlayer.init)
         let animationGraphPlayer = scene.component(AnimationGraphPlayer.self, for: entity)
@@ -2848,6 +2970,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             constraint: constraint,
             script: script,
             audioSource: audioSource,
+            audioListener: audioListener,
             animationPlayer: animationPlayer,
             animationGraphPlayer: animationGraphPlayer,
             particleEmitter: particleEmitter,
@@ -7430,12 +7553,83 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
-    private func publishRevision() {
+    func notifyRevisionChanged(recordHistory: Bool = true) {
+        if recordHistory, historyGroupDepth == 0, let previous = historyCurrentScene {
+            recordHistoryEntry(previous)
+        }
+        if historyGroupDepth == 0 || !recordHistory {
+            historyCurrentScene = scene
+        }
+        invalidateParticleFeedback()
         onRevisionChanged?(scene.snapshot.revision)
     }
 
-    func notifyRevisionChanged() {
+    func withEditHistoryGroup<Result>(_ body: () -> Result) -> Result {
+        if historyGroupDepth == 0 {
+            historyGroupStartScene = historyCurrentScene ?? scene
+        }
+        historyGroupDepth += 1
+        defer {
+            historyGroupDepth -= 1
+            if historyGroupDepth == 0 {
+                if let previous = historyGroupStartScene {
+                    recordHistoryEntry(previous)
+                }
+                historyGroupStartScene = nil
+                historyCurrentScene = scene
+            }
+        }
+        return body()
+    }
+
+    public var canUndoEdit: Bool { !undoScenes.isEmpty }
+    public var canRedoEdit: Bool { !redoScenes.isEmpty }
+
+    @discardableResult
+    public func undoEdit() -> Bool {
+        guard let previous = undoScenes.popLast() else { return false }
+        redoScenes.append(scene)
+        scene = previous
+        historyCurrentScene = scene
+        invalidateParticleFeedback()
         onRevisionChanged?(scene.snapshot.revision)
+        return true
+    }
+
+    @discardableResult
+    public func redoEdit() -> Bool {
+        guard let next = redoScenes.popLast() else { return false }
+        undoScenes.append(scene)
+        scene = next
+        historyCurrentScene = scene
+        invalidateParticleFeedback()
+        onRevisionChanged?(scene.snapshot.revision)
+        return true
+    }
+
+    private func resetEditHistory() {
+        undoScenes.removeAll(keepingCapacity: true)
+        redoScenes.removeAll(keepingCapacity: true)
+        historyGroupDepth = 0
+        historyGroupStartScene = nil
+        historyCurrentScene = scene
+    }
+
+    private func recordHistoryEntry(_ previous: SceneRuntime) {
+        guard previous.snapshot.revision != scene.snapshot.revision else { return }
+        undoScenes.append(previous)
+        if undoScenes.count > historyLimit {
+            undoScenes.removeFirst(undoScenes.count - historyLimit)
+        }
+        redoScenes.removeAll(keepingCapacity: true)
+    }
+
+    private func invalidateParticleFeedback() {
+        particleFeedbackLock.lock()
+        particleFeedbackGeneration &+= 1
+        pendingParticleFeedback.removeAll(keepingCapacity: true)
+        particleFeedbackLock.unlock()
+        lastParticleFeedbackReport = .empty
     }
 
     private func displayName(for entity: EntityID) -> String {
@@ -7592,6 +7786,11 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                summary: String,
                                targetRawIDs: [UInt64] = [],
                                mutations: [SceneMutation]) -> TransactionApplyResult? {
+        let lockedTargets = targetRawIDs.filter { lockedEntityIDs.contains($0) }
+        guard lockedTargets.isEmpty else {
+            onTransactionError?("\(summary): entity is locked (\(lockedTargets.map(String.init).joined(separator: ", ")))")
+            return nil
+        }
         let intent = IntentIR(verb: intentVerb,
                               summary: summary,
                               targetObjectIDs: targetRawIDs.map { "scene:\($0)" },
@@ -7602,9 +7801,15 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                         baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
                                         provenance: .authored)
         var context = TransactionExecutionContext(sceneRuntime: scene)
-        guard let result = try? transactionExecutor.apply(transaction, to: &context),
-              let updatedScene = context.sceneRuntime
-        else {
+        let result: TransactionApplyResult
+        do {
+            result = try transactionExecutor.apply(transaction, to: &context)
+        } catch {
+            onTransactionError?("\(summary): \(error)")
+            return nil
+        }
+        guard let updatedScene = context.sceneRuntime else {
+            onTransactionError?("\(summary): transaction completed without a scene result")
             return nil
         }
         scene = updatedScene

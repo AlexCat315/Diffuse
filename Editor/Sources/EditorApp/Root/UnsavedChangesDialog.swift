@@ -4,10 +4,7 @@ import GuavaUIApp
 import GuavaUICompose
 import GuavaUIRuntime
 
-/// Modal raised when the OS asks to close a dirty window (the platform close
-/// was vetoed by the interceptor). Resolves by saving, discarding, or
-/// cancelling; the close is then re-issued programmatically, which bypasses
-/// the interceptor.
+/// Resolves a destructive document action by saving, discarding, or cancelling.
 struct UnsavedChangesDialog: View {
     let app: EditorApplication
     let request: EditorPendingCloseRequest
@@ -33,7 +30,7 @@ struct UnsavedChangesDialog: View {
                             .font(.headline)
                             .foregroundColor(.onSurface)
 
-                        Text(L("The scene has unsaved changes. Save before closing?"))
+                        Text(message)
                             .font(.body)
                             .foregroundColor(.onSurfaceVariant)
                             .lineHeight(20)
@@ -45,7 +42,7 @@ struct UnsavedChangesDialog: View {
                 // macOS sheet convention: destructive option parked on the
                 // leading edge, cancel + default action trailing.
                 Row(alignment: .center, spacing: 8) {
-                    Button(L("Close Without Saving"), role: .destructive) {
+                    Button(discardTitle, role: .destructive) {
                         proceed()
                     }
                     .buttonStyle(.secondary)
@@ -57,8 +54,8 @@ struct UnsavedChangesDialog: View {
                     }
                     .buttonStyle(.ghost)
 
-                    Button(L("Save and Close")) {
-                        saveAndClose()
+                    Button(saveTitle) {
+                        saveAndProceed()
                     }
                     .buttonStyle(.primary)
                 }
@@ -79,7 +76,7 @@ struct UnsavedChangesDialog: View {
         case Scancode.escape:
             cancel()
         case Scancode.return, Scancode.keypadEnter:
-            saveAndClose()
+            saveAndProceed()
         default:
             break
         }
@@ -90,20 +87,54 @@ struct UnsavedChangesDialog: View {
         app.store.dispatch(.dismissCloseRequest)
     }
 
-    private func saveAndClose() {
-        _ = app.saveSceneManifest()
+    private var message: String {
+        switch request.action {
+        case .close:
+            return L("The scene has unsaved changes. Save before closing?")
+        case .newScene:
+            return L("The scene has unsaved changes. Save before creating a new scene?")
+        case .openScene:
+            return L("The scene has unsaved changes. Save before opening another scene?")
+        }
+    }
+
+    private var discardTitle: String {
+        switch request.action {
+        case .close: return L("Close Without Saving")
+        case .newScene: return L("Discard and Create New")
+        case .openScene: return L("Discard and Open")
+        }
+    }
+
+    private var saveTitle: String {
+        switch request.action {
+        case .close: return L("Save and Close")
+        case .newScene: return L("Save and Create New")
+        case .openScene: return L("Save and Open")
+        }
+    }
+
+    private func saveAndProceed() {
+        guard app.saveSceneManifest() != nil else { return }
         proceed()
     }
 
     private func proceed() {
         app.store.dispatch(.dismissCloseRequest)
-        let windowID = request.windowID
-        MainActor.assumeIsolated {
-            guard let display = AppDisplayHandleHolder.current else { return }
-            if let windowID {
-                display.closeWindow(windowID)
-            } else {
-                display.quit()
+        switch request.action {
+        case .newScene:
+            app.resetPreviewScene()
+        case .openScene:
+            _ = app.openSceneManifest()
+        case .close:
+            let windowID = request.windowID
+            MainActor.assumeIsolated {
+                guard let display = AppDisplayHandleHolder.current else { return }
+                if let windowID {
+                    display.closeWindow(windowID)
+                } else {
+                    display.quit()
+                }
             }
         }
     }

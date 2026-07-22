@@ -72,6 +72,7 @@ private struct EngineHostState {
     var particleSimulationEventApplyReport: ParticleSimulationEventApplyReport = .empty
     var viewportSurfaceState: ViewportSurfaceState = .init()
     var renderCompletionHandler: (@Sendable (EngineRenderCompletion) -> Void)?
+    var externalParticleFeedbackHandlers: [Int: @Sendable ([GPUParticleSimulationEventSnapshot]) -> Void] = [:]
 }
 
 public struct EngineRenderCompletion: Sendable {
@@ -193,22 +194,34 @@ public final class EngineHost: @unchecked Sendable {
         drawableSize: RenderDrawableSize = .init(),
         shouldRender: Bool = true,
         renderSceneOverride: RenderScene? = nil,
-        jointPaletteOverride: JointPaletteMap? = nil
+        sceneSnapshotOverride: SceneRuntimeSnapshot? = nil,
+        jointPaletteOverride: JointPaletteMap? = nil,
+        inGameCanvasOverride: InGameCanvas? = nil,
+        particleFeedbackHandler: (@Sendable ([GPUParticleSimulationEventSnapshot]) -> Void)? = nil
     ) {
         let request = state.withLock { state -> SimulationFrameRequest? in
             guard state.started else { return nil }
             let frameIndex = state.nextFrameIndex
             state.nextFrameIndex += 1
             state.currentInputEvents = inputEvents
+            let willRender = shouldRender && renderThread != nil
+            if willRender, let particleFeedbackHandler {
+                state.externalParticleFeedbackHandlers[frameIndex] = particleFeedbackHandler
+            }
+            state.externalParticleFeedbackHandlers = state.externalParticleFeedbackHandlers.filter {
+                $0.key >= frameIndex - 8
+            }
             return SimulationFrameRequest(
                 frameIndex: frameIndex,
                 deltaTime: deltaTime,
                 inputEvents: inputEvents,
                 drawableSize: drawableSize,
-                shouldRender: shouldRender && renderThread != nil,
+                shouldRender: willRender,
                 renderSettings: state.renderSettings,
                 renderSceneOverride: renderSceneOverride,
-                jointPaletteOverride: jointPaletteOverride
+                sceneSnapshotOverride: sceneSnapshotOverride,
+                jointPaletteOverride: jointPaletteOverride,
+                inGameCanvasOverride: inGameCanvasOverride
             )
         }
         guard let request, let simulationThread else { return }
@@ -282,9 +295,6 @@ public final class EngineHost: @unchecked Sendable {
     }
 
     private func handleRenderedFrame(_ report: RenderThreadReport) {
-        simulationThread?.submitParticleSimulationEventSnapshots(
-            report.particleSimulationEventSnapshots
-        )
         let completion = EngineRenderCompletion(
             frameIndex: report.frameIndex,
             deltaTime: report.deltaTime,
@@ -292,15 +302,23 @@ public final class EngineHost: @unchecked Sendable {
             stats: report.stats,
             viewportSurfaceState: report.viewportSurfaceState
         )
-        let handler = state.withLock { state in
+        let (completionHandler, particleFeedbackHandler) = state.withLock { state in
             state.renderStats = report.stats
             state.viewportSurfaceState = report.viewportSurfaceState
-            return state.renderCompletionHandler
+            return (state.renderCompletionHandler,
+                    state.externalParticleFeedbackHandlers.removeValue(forKey: report.frameIndex))
+        }
+        if let particleFeedbackHandler {
+            particleFeedbackHandler(report.particleSimulationEventSnapshots)
+        } else {
+            simulationThread?.submitParticleSimulationEventSnapshots(
+                report.particleSimulationEventSnapshots
+            )
         }
         timings.withLock { ledger in
             ledger.completeRender(report)
         }
-        handler?(completion)
+        completionHandler?(completion)
     }
 }
 
