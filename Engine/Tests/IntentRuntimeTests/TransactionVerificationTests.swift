@@ -105,7 +105,10 @@ struct TransactionVerificationTests {
         #expect(registration.contract.id == "test.rename")
         #expect(registration.descriptor.contract.schemaHash == registration.contract.schemaHash)
         #expect(prepared.operations == [.scene(.setSceneName(entityID: 42, value: "Renamed"))])
-        #expect(prepared.assertions == [.entityExists(42)])
+        #expect(prepared.assertions == [
+            .entityExists(42),
+            .sceneState(.sceneName(entityID: 42, value: "Renamed")),
+        ])
 
         #expect(throws: CapabilityRegistrationError.writeSchemaContainsUnsupportedType("test.unsafe")) {
             try AnyCapabilityRegistration(UnsafeCapability.self)
@@ -132,7 +135,10 @@ struct TransactionVerificationTests {
             context: CapabilityPreparationContext(sceneRevision: 1)
         )
         #expect(prepared.preview.targetReferences == ["scene:42"])
-        #expect(prepared.assertions == [.entityExists(42)])
+        #expect(prepared.assertions == [
+            .entityExists(42),
+            .sceneState(.sceneName(entityID: 42, value: "Declared")),
+        ])
 
         #expect(throws: CapabilityRegistrationError.self) {
             try registration.prepare(
@@ -162,6 +168,74 @@ struct TransactionVerificationTests {
         }
         #expect(context.sceneRuntime?.snapshot.revision == originalRevision)
         #expect(context.sceneRuntime?.component(SceneNameComponent.self, for: entity)?.value == "Original")
+    }
+
+    @Test("exact scene-state mismatch restores the scene snapshot")
+    func exactSceneStateFailureRollsBack() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(SceneNameComponent(value: "Original"), for: entity)
+        let originalRevision = scene.snapshot.revision
+        let transaction = TransactionIR(
+            summary: "Rename with an incorrect exact postcondition",
+            operations: [.scene(.setSceneName(entityID: entity.rawValue, value: "Changed"))],
+            verificationAssertions: [
+                .sceneState(.sceneName(entityID: entity.rawValue, value: "Unexpected")),
+            ],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: originalRevision),
+            provenance: .proposal
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+
+        do {
+            try TransactionExecutor().apply(transaction, to: &context)
+            Issue.record("expected exact scene-state verification to fail")
+        } catch {
+            #expect(error is TransactionExecutorError)
+            #expect(!String(describing: error).contains("Unexpected"))
+        }
+        #expect(context.sceneRuntime?.snapshot.revision == originalRevision)
+        #expect(context.sceneRuntime?.component(SceneNameComponent.self, for: entity)?.value
+                == "Original")
+    }
+
+    @Test("the final exact assertion wins when a field is written more than once")
+    func repeatedFieldUsesFinalPostcondition() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(SceneNameComponent(value: "Original"), for: entity)
+        let transaction = TransactionIR(
+            summary: "Rename twice",
+            operations: [
+                .scene(.setSceneName(entityID: entity.rawValue, value: "Intermediate")),
+                .scene(.setSceneName(entityID: entity.rawValue, value: "Final")),
+            ],
+            verificationAssertions: [
+                .sceneState(.sceneName(entityID: entity.rawValue, value: "Intermediate")),
+                .sceneState(.sceneName(entityID: entity.rawValue, value: "Final")),
+            ],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .proposal
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+
+        _ = try TransactionExecutor().apply(transaction, to: &context)
+        #expect(context.sceneRuntime?.component(SceneNameComponent.self, for: entity)?.value
+                == "Final")
+    }
+
+    @Test("exact scene assertions preserve their Codable contract")
+    func exactSceneAssertionCodableRoundTrip() throws {
+        let assertion = TransactionVerificationAssertion.sceneState(.material(
+            entityID: 42,
+            baseColor: [0.1, 0.2, 0.3, 1],
+            metallic: 0.4,
+            roughness: 0.5,
+            emissive: [0.6, 0.7, 0.8]
+        ))
+        let encoded = try JSONEncoder().encode(assertion)
+        #expect(try JSONDecoder().decode(TransactionVerificationAssertion.self,
+                                         from: encoded) == assertion)
     }
 
     @Test("explicit destructive AI invocation requires plan and destructive confirmations")

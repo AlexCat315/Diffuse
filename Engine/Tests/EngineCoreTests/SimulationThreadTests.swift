@@ -101,6 +101,41 @@ struct SimulationThreadTests {
         thread.shutdown()
     }
 
+    @Test("external scene frames publish their own snapshot and canvas")
+    func externalSceneFrameOwnsPacketMetadata() {
+        let ring = RingBuffer<RenderPacket>()
+        let packetPublished = DispatchSemaphore(value: 0)
+        let thread = SimulationThread(
+            runtime: IdleRuntime(),
+            ringBuffer: ring,
+            onFrameReady: { _ in },
+            onPacketPublished: { packetPublished.signal() }
+        )
+        var canvas = InGameCanvas()
+        canvas.label("external", x: 4, y: 8)
+        let snapshot = SceneRuntimeSnapshot(entityCount: 42, revision: 9001)
+
+        thread.submit(
+            SimulationFrameRequest(
+                frameIndex: 3,
+                deltaTime: 1.0 / 60.0,
+                inputEvents: [],
+                drawableSize: .init(width: 64, height: 64),
+                shouldRender: true,
+                renderSettings: .init(),
+                renderSceneOverride: RenderScene(camera: .fallbackPerspective),
+                sceneSnapshotOverride: snapshot,
+                inGameCanvasOverride: canvas
+            )
+        )
+
+        #expect(packetPublished.wait(timeout: .now() + 2) == .success)
+        let packet = ring.consumeLatest()
+        #expect(packet?.sceneSnapshot == snapshot)
+        #expect(packet?.inGameCanvas.commands.count == 1)
+        thread.shutdown()
+    }
+
     @Test("SimulationThread applies GPU particle event snapshots before publishing the next packet")
     func simulationThreadAppliesGPUParticleEventSnapshots() {
         var initialScene = SceneRuntime()

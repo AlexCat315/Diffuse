@@ -57,11 +57,19 @@ struct ProjectExporterTests {
         let source = EditorSceneAdapter()
         let manifest = source.manifest(selectedEntityID: source.defaultSelectionID)
         let output = tempDir()
-        defer { try? FileManager.default.removeItem(at: output) }
+        let project = tempDir()
+        defer {
+            try? FileManager.default.removeItem(at: output)
+            try? FileManager.default.removeItem(at: project)
+        }
+        let modelURL = project.appendingPathComponent("models/barrel.glb")
+        try FileManager.default.createDirectory(at: modelURL.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        try Data([1, 2, 3]).write(to: modelURL)
 
         let assets = [
             EditorAsset(id: "a1", name: "Barrel", relativePath: "models/barrel.glb",
-                        absolutePath: "/proj/models/barrel.glb", kind: .glb, meshIndex: 3),
+                        absolutePath: modelURL.path, kind: .glb, meshIndex: 3),
         ]
         let descriptor = try ProjectExporter.export(manifest: manifest, appName: "Demo",
                                                     assets: assets, to: output)
@@ -72,5 +80,120 @@ struct ProjectExporterTests {
         #expect(list.assets.count == 1)
         #expect(list.assets.first?.id == "a1")
         #expect(list.assets.first?.relativePath == "models/barrel.glb")
+    }
+
+    @Test("export copies model dependencies and audio resources")
+    func exportCopiesRuntimeResources() throws {
+        let project = tempDir()
+        let output = project.appendingPathComponent("export", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: project) }
+        let modelDirectory = project.appendingPathComponent("Assets/Models", isDirectory: true)
+        let audioDirectory = project.appendingPathComponent("Assets/Audio", isDirectory: true)
+        try FileManager.default.createDirectory(at: modelDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: audioDirectory, withIntermediateDirectories: true)
+        let modelURL = modelDirectory.appendingPathComponent("ship.gltf")
+        try Data(#"{"asset":{"version":"2.0"},"buffers":[{"uri":"ship.bin","byteLength":4}],"images":[{"uri":"textures/albedo.png"}]}"#.utf8)
+            .write(to: modelURL)
+        try Data([0, 1, 2, 3]).write(to: modelDirectory.appendingPathComponent("ship.bin"))
+        try FileManager.default.createDirectory(at: modelDirectory.appendingPathComponent("textures"),
+                                                withIntermediateDirectories: true)
+        try Data([0x89, 0x50, 0x4E, 0x47]).write(
+            to: modelDirectory.appendingPathComponent("textures/albedo.png")
+        )
+        try Data([0x52, 0x49, 0x46, 0x46]).write(to: audioDirectory.appendingPathComponent("theme.wav"))
+        let asset = EditorAsset(id: "Assets/Models/ship.gltf",
+                                name: "ship",
+                                relativePath: "Assets/Models/ship.gltf",
+                                absolutePath: modelURL.path,
+                                kind: .gltf,
+                                meshIndex: 9)
+
+        _ = try ProjectExporter.export(manifest: EditorSceneAdapter().manifest(),
+                                       appName: "Demo",
+                                       assets: [asset],
+                                       sourceProjectDirectory: project,
+                                       to: output)
+
+        #expect(FileManager.default.fileExists(
+            atPath: output.appendingPathComponent("Assets/Models/ship.gltf").path
+        ))
+        #expect(FileManager.default.fileExists(
+            atPath: output.appendingPathComponent("Assets/Models/ship.bin").path
+        ))
+        #expect(FileManager.default.fileExists(
+            atPath: output.appendingPathComponent("Assets/Models/textures/albedo.png").path
+        ))
+        #expect(FileManager.default.fileExists(
+            atPath: output.appendingPathComponent("Assets/Audio/theme.wav").path
+        ))
+    }
+
+    @Test("re-export replaces stale bundle contents")
+    func exportReplacesStaleContents() throws {
+        let project = tempDir()
+        let output = project.appendingPathComponent("export", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: project) }
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        let sourceURL = project.appendingPathComponent("old.glb")
+        try Data([1, 2, 3]).write(to: sourceURL)
+        let asset = EditorAsset(id: "old.glb", name: "old", relativePath: "old.glb",
+                                absolutePath: sourceURL.path, kind: .glb, meshIndex: 2)
+        let manifest = EditorSceneAdapter().manifest()
+
+        _ = try ProjectExporter.export(manifest: manifest, appName: "Demo",
+                                       assets: [asset], to: output)
+        #expect(FileManager.default.fileExists(atPath: output.appendingPathComponent("old.glb").path))
+
+        _ = try ProjectExporter.export(manifest: manifest, appName: "Demo", to: output)
+        #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent("old.glb").path))
+    }
+
+    @Test("export packages a self-contained macOS application when a player is available")
+    func exportPackagesApplication() throws {
+        let output = tempDir()
+        let playerDirectory = tempDir()
+        defer {
+            try? FileManager.default.removeItem(at: output)
+            try? FileManager.default.removeItem(at: playerDirectory)
+        }
+        try FileManager.default.createDirectory(at: playerDirectory,
+                                                withIntermediateDirectories: true)
+        let player = playerDirectory.appendingPathComponent("GuavaPlayer")
+        try Data("#!/bin/sh\nexit 0\n".utf8).write(to: player)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755],
+                                              ofItemAtPath: player.path)
+        let resourceBundle = playerDirectory.appendingPathComponent("GuavaUI_Test.bundle",
+                                                                    isDirectory: true)
+        try FileManager.default.createDirectory(at: resourceBundle,
+                                                withIntermediateDirectories: true)
+        try Data("resource".utf8).write(to: resourceBundle.appendingPathComponent("marker.txt"))
+
+        _ = try ProjectExporter.export(manifest: EditorSceneAdapter().manifest(),
+                                       appName: "Demo/Game",
+                                       playerExecutableURL: player,
+                                       to: output)
+
+        let app = ProjectExporter.applicationBundleURL(appName: "Demo/Game", in: output)
+        let executable = ProjectExporter.applicationExecutableURL(appName: "Demo/Game", in: output)
+        #expect(FileManager.default.fileExists(atPath: app.path))
+        #expect(FileManager.default.isExecutableFile(atPath: executable.path))
+        #expect(FileManager.default.fileExists(
+            atPath: app.appendingPathComponent("GuavaUI_Test.bundle/marker.txt").path
+        ))
+        let embeddedProject = app.appendingPathComponent("Contents/Resources/GuavaProject",
+                                                         isDirectory: true)
+        #expect(FileManager.default.fileExists(
+            atPath: embeddedProject.appendingPathComponent("build.json").path
+        ))
+        #expect(FileManager.default.fileExists(
+            atPath: GameSaveDocument.url(slot: ProjectExporter.sceneSlot,
+                                         projectDirectory: embeddedProject.path).path
+        ))
+        let plistData = try Data(contentsOf: app.appendingPathComponent("Contents/Info.plist"))
+        let plist = try #require(
+            PropertyListSerialization.propertyList(from: plistData, format: nil) as? [String: Any]
+        )
+        #expect(plist["CFBundleExecutable"] as? String == "Demo_Game")
+        #expect(plist["LSMinimumSystemVersion"] as? String == "13.0")
     }
 }

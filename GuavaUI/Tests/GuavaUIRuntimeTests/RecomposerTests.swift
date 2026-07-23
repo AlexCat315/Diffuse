@@ -138,7 +138,7 @@ struct RecomposerTests {
     @Test("State change wires into Recomposer")
     func stateWiresRecomposer() {
         let r = Recomposer()
-        var state = State(wrappedValue: 0)
+        let state = State(wrappedValue: 0)
         var recomposeCount = 0
 
         let id = ObjectIdentifier(state._storage)
@@ -159,7 +159,7 @@ struct RecomposerTests {
 
     @Test("Binding projectedValue setter fires onChange")
     func bindingFiresOnChange() {
-        var state = State(wrappedValue: "hello")
+        let state = State(wrappedValue: "hello")
         var fired = false
         state._storage.onChange = { fired = true }
 

@@ -34,8 +34,10 @@ public struct EditorAsset: Identifiable, Sendable, Equatable {
 
 public enum EditorAssetCatalog {
     @discardableResult
-    public static func loadProject(at rootPath: String) throws -> [EditorAsset] {
-        try AssetRegistry.shared.loadProject(at: rootPath).map(makeAsset)
+    public static func loadProject(at rootPath: String,
+                                   preferredMeshIndices: [String: Int] = [:]) throws -> [EditorAsset] {
+        try AssetRegistry.shared.loadProject(at: rootPath,
+                                             preferredMeshIndices: preferredMeshIndices).map(makeAsset)
     }
 
     public static func entries() -> [EditorAsset] {

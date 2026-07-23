@@ -11,20 +11,22 @@ extension EditorSceneAdapter {
     @discardableResult
     public func spawnEntity(from asset: EditorAsset,
                             at position: SIMD3<Float> = SIMD3<Float>(0, 0, 0)) -> UInt64? {
-        let label = uniqueDisplayName(base: asset.name)
-        let result = applySceneTransaction(intentVerb: "scene.spawn_entity",
-                                           summary: "Spawn imported mesh entity",
-                                           mutations: [
-                                            .spawnImportedMeshEntity(label: label,
-                                                                     kindLabel: asset.kind.sceneKindLabel,
-                                                                     meshIndex: asset.meshIndex,
-                                                                     position: position)
-                                           ])
-        guard let entityID = result?.createdEntityIDs.first else { return nil }
-        attachAssetReference(entityID: entityID, asset: asset)
-        attachMeshColliderIfAvailable(entityID: entityID, meshIndex: asset.meshIndex)
-        attachAnimationPlayerIfAvailable(entityID: entityID, meshIndex: asset.meshIndex)
-        return entityID
+        withEditHistoryGroup {
+            let label = uniqueDisplayName(base: asset.name)
+            let result = applySceneTransaction(intentVerb: "scene.spawn_entity",
+                                               summary: "Spawn imported mesh entity",
+                                               mutations: [
+                                                .spawnImportedMeshEntity(label: label,
+                                                                         kindLabel: asset.kind.sceneKindLabel,
+                                                                         meshIndex: asset.meshIndex,
+                                                                         position: position)
+                                               ])
+            guard let entityID = result?.createdEntityIDs.first else { return nil }
+            attachAssetReference(entityID: entityID, asset: asset)
+            attachMeshColliderIfAvailable(entityID: entityID, meshIndex: asset.meshIndex)
+            attachAnimationPlayerIfAvailable(entityID: entityID, meshIndex: asset.meshIndex)
+            return entityID
+        }
     }
 
     private func uniqueDisplayName(base: String) -> String {
