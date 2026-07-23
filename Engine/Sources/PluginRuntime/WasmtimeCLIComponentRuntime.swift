@@ -219,8 +219,6 @@ public final class WasmtimeCLIComponentRuntime: WASIComponentRuntime, @unchecked
         let finished = DispatchSemaphore(value: 0)
         process.terminationHandler = { _ in finished.signal() }
         try process.run()
-        let reader = BoundedPipeReader(handle: output.fileHandleForReading, limit: 4_096)
-        reader.start()
         guard finished.wait(timeout: .now() + .seconds(2)) == .success else {
             process.terminate()
 #if canImport(Darwin) || canImport(Glibc)
@@ -228,10 +226,13 @@ public final class WasmtimeCLIComponentRuntime: WASIComponentRuntime, @unchecked
 #else
             if process.isRunning { process.interrupt() }
 #endif
-            _ = reader.result()
+            try? output.fileHandleForReading.close()
             throw WasmtimeCLIError.timedOut
         }
-        let data = reader.result()
+        // `--version` emits a single short line, far below the pipe capacity.
+        // Reading synchronously after termination avoids starving a utility-QoS
+        // reader under heavy parallel builds and incorrectly observing "".
+        let data = try output.fileHandleForReading.readToEnd() ?? Data()
         return String(data: data, encoding: .utf8) ?? "unknown"
     }
 }

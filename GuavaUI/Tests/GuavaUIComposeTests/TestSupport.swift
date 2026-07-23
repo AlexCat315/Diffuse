@@ -24,7 +24,7 @@ func systemTestFontPath() -> String {
 /// must run under this lock. Swift Testing parallelises across suites, and
 /// `.serialized` only orders cases inside a single suite.
 enum GlobalTestLock {
-    nonisolated(unsafe) static let lock = NSLock()
+    static let lock = NSLock()
 
     static func locked<T>(_ body: () throws -> T) rethrows -> T {
         lock.lock()

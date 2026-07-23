@@ -12,6 +12,7 @@ public enum EditorAction: Sendable {
     case setActiveLayoutPreset(EditorLayoutPreset)
     case setSceneRevision(UInt64)
     case markSceneSaved(UInt64)
+    case setSceneRecoveryPending(Bool)
     case requestClose(EditorPendingCloseRequest)
     case dismissCloseRequest
     case setWindowFocused(Bool)
@@ -102,6 +103,9 @@ public enum EditorReducer {
             state.sceneRevision = value
         case let .markSceneSaved(revision):
             state.lastSavedSceneRevision = revision
+            state.sceneRecoveryPending = false
+        case let .setSceneRecoveryPending(pending):
+            state.sceneRecoveryPending = pending
         case let .requestClose(request):
             state.pendingCloseRequest = request
         case .dismissCloseRequest:

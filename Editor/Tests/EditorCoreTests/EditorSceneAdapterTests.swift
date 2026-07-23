@@ -1346,7 +1346,25 @@ struct EditorSceneEditHistoryTests {
 
         #expect(adapter.entityLocalTranslation(entityID) == original)
         #expect(reportedError?.contains("locked") == true)
-        #expect(!adapter.canUndoEdit)
+        #expect(adapter.canUndoEdit)
+        #expect(adapter.undoEdit())
+        #expect(!adapter.isEntityLocked(entityID))
+    }
+
+    @Test("hierarchy locks round-trip and remap entity identifiers")
+    func lockedEntityRoundTrip() throws {
+        let adapter = EditorSceneAdapter()
+        let originalID = try #require(adapter.defaultSelectionID)
+        adapter.setEntityLocked(true, entityIDs: [originalID])
+
+        let data = try JSONEncoder().encode(adapter.manifest(selectedEntityID: originalID))
+        let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
+        #expect(manifest.lockedEntityIDs == [originalID])
+
+        let restored = EditorSceneAdapter()
+        let result = restored.load(manifest: manifest, notify: false)
+        let remappedID = try #require(result.selectedEntityID)
+        #expect(restored.isEntityLocked(remappedID))
     }
 }
 
