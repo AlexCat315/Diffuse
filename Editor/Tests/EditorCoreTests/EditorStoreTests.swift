@@ -29,6 +29,21 @@ struct EditorStoreTests {
         #expect(store.connected)
     }
 
+    @Test("recovered autosaves stay dirty until an explicit save")
+    func recoveredAutosaveDirtyState() {
+        let store = EditorStore(state: EditorState(sceneRevision: 12,
+                                                   lastSavedSceneRevision: 12))
+        #expect(!store.sceneDirty)
+
+        store.dispatch(.setSceneRecoveryPending(true))
+        #expect(store.sceneDirty)
+        #expect(store.sceneRecoveryPending)
+
+        store.dispatch(.markSceneSaved(12))
+        #expect(!store.sceneDirty)
+        #expect(!store.sceneRecoveryPending)
+    }
+
     @Test("Console changes notify subscribers")
     func consoleChangesNotifySubscribers() {
         let store = EditorStore()

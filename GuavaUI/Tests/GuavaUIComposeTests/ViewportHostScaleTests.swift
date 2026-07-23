@@ -47,7 +47,8 @@ struct ViewportHostScaleTests: GuavaUIComposeSerializedSuite {
         graph.computeLayout(width: 200, height: 120)
 
         let list = DrawList()
-        let node = try? #require(firstDrawNode(tree.root))
+        let node = firstDrawNode(tree.root)
+        #expect(node != nil)
         node?.draw?(list, .zero)
 
         #expect(reported.last == RenderDrawableSize(width: 400, height: 240))
@@ -78,7 +79,8 @@ struct ViewportHostScaleTests: GuavaUIComposeSerializedSuite {
         graph.computeLayout(width: 200, height: 120)
 
         let list = DrawList()
-        let node = try? #require(firstDrawNode(tree.root))
+        let node = firstDrawNode(tree.root)
+        #expect(node != nil)
         node?.draw?(list, .zero)
 
         #expect(bridge.registeredSize?.width == 512)

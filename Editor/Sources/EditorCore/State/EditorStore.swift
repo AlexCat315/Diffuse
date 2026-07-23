@@ -22,6 +22,7 @@ public final class EditorStore: @unchecked Sendable {
         case activeLayoutPreset
         case sceneRevision
         case lastSavedSceneRevision
+        case sceneRecoveryPending
         case pendingCloseRequest
         case frameIndex
         case frameTimingRevision
@@ -150,6 +151,9 @@ public final class EditorStore: @unchecked Sendable {
             mark(.sceneRevision, old.sceneRevision, new.sceneRevision)
         case .markSceneSaved:
             mark(.lastSavedSceneRevision, old.lastSavedSceneRevision, new.lastSavedSceneRevision)
+            mark(.sceneRecoveryPending, old.sceneRecoveryPending, new.sceneRecoveryPending)
+        case .setSceneRecoveryPending:
+            mark(.sceneRecoveryPending, old.sceneRecoveryPending, new.sceneRecoveryPending)
         case .requestClose, .dismissCloseRequest:
             mark(.pendingCloseRequest, old.pendingCloseRequest, new.pendingCloseRequest)
         case .setWindowFocused:
@@ -273,8 +277,9 @@ extension EditorStore {
     public var selectedEntityIDsCount: Int { read(.selectedEntityIDs, storage.selectedEntityIDs.count) }
     public var sceneRevision: UInt64 { read(.sceneRevision, storage.sceneRevision) }
     public var lastSavedSceneRevision: UInt64 { read(.lastSavedSceneRevision, storage.lastSavedSceneRevision) }
-    /// Unsaved scene edits exist. Reading subscribes to both revisions.
-    public var sceneDirty: Bool { sceneRevision != lastSavedSceneRevision }
+    public var sceneRecoveryPending: Bool { read(.sceneRecoveryPending, storage.sceneRecoveryPending) }
+    /// Unsaved scene edits or a recovered autosave exist.
+    public var sceneDirty: Bool { sceneRecoveryPending || sceneRevision != lastSavedSceneRevision }
     public var pendingCloseRequest: EditorPendingCloseRequest? { read(.pendingCloseRequest, storage.pendingCloseRequest) }
     public var frameIndex: UInt64 { read(.frameIndex, storage.frameIndex) }
     public var frameTimingRevision: UInt64 { read(.frameTimingRevision, storage.frameTimingRevision) }

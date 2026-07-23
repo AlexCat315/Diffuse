@@ -57,6 +57,11 @@ private final class EditorSceneManifestParticleEmitterStorage: Codable, @uncheck
     }
 }
 
+/// Editor-only component so hierarchy locks participate in SceneRuntime
+/// snapshots, undo/redo and dirty revision tracking without leaking into game
+/// manifests as a runtime feature.
+private struct EditorHierarchyLockComponent: RuntimeComponent, Sendable, Equatable {}
+
 public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
     public let id: UInt64
     public let name: String
@@ -332,6 +337,9 @@ public struct EditorSceneManifest: Codable, Sendable, Equatable {
     public let particleScalabilityPolicy: EditorSceneManifestParticleScalabilityPolicy?
     public let projectAssetCount: Int?
     public let lastModifiedAt: String?
+    /// Editor-only hierarchy locks. Optional so schema-v5 scenes written by
+    /// older Editor builds remain decodable without a migration.
+    public let lockedEntityIDs: [UInt64]?
     public let roots: [EditorSceneManifestNode]
 
     public init(schemaVersion: Int = EditorSceneManifest.currentSchemaVersion,
@@ -344,6 +352,7 @@ public struct EditorSceneManifest: Codable, Sendable, Equatable {
                 particleScalabilityPolicy: EditorSceneManifestParticleScalabilityPolicy? = nil,
                 projectAssetCount: Int? = nil,
                 lastModifiedAt: String? = nil,
+                lockedEntityIDs: [UInt64]? = nil,
                 roots: [EditorSceneManifestNode]) {
         self.schemaVersion = schemaVersion
         self.revision = revision
@@ -355,6 +364,7 @@ public struct EditorSceneManifest: Codable, Sendable, Equatable {
         self.particleScalabilityPolicy = particleScalabilityPolicy
         self.projectAssetCount = projectAssetCount
         self.lastModifiedAt = lastModifiedAt
+        self.lockedEntityIDs = lockedEntityIDs
         self.roots = roots
     }
 }
@@ -2491,7 +2501,6 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     private var redoScenes: [SceneRuntime] = []
     private var historyGroupDepth = 0
     private var historyGroupStartScene: SceneRuntime?
-    private var lockedEntityIDs = Set<UInt64>()
     private let historyLimit = 100
 
     public var onRevisionChanged: ((UInt64) -> Void)?
@@ -2520,7 +2529,6 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         initialSelectionID = defaults?.defaultSelection?.rawValue
         initialExpandedIDs = Set(defaults?.defaultExpanded.map(\ .rawValue) ?? [])
         resetEditHistory()
-        lockedEntityIDs.removeAll(keepingCapacity: true)
         if notify {
             notifyRevisionChanged(recordHistory: false)
         }
@@ -2579,6 +2587,11 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                    particleScalabilityPolicy: particleScalabilityPolicy,
                                    projectAssetCount: assetCount > 0 ? assetCount : nil,
                                    lastModifiedAt: timestamp,
+                                   lockedEntityIDs: scene.entities(with: EditorHierarchyLockComponent.self).isEmpty
+                                       ? nil
+                                       : scene.entities(with: EditorHierarchyLockComponent.self)
+                                           .map(\.rawValue)
+                                           .sorted(),
                                    roots: manifestRoots)
     }
 
@@ -2712,6 +2725,11 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         if let particleScalabilityPolicy = manifest.particleScalabilityPolicy {
             restoredScene.setResource(particleScalabilityPolicy.policy)
         }
+        for originalID in manifest.lockedEntityIDs ?? [] {
+            if let entity = idMap[originalID] {
+                _ = restoredScene.setComponent(EditorHierarchyLockComponent(), for: entity)
+            }
+        }
         rebuildMeshColliderResources(in: &restoredScene)
         restoredScene.propagateTransforms()
 
@@ -2723,7 +2741,6 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             ?? scene.roots().first?.rawValue
         initialExpandedIDs = Set(scene.roots().map(\.rawValue))
         resetEditHistory()
-        lockedEntityIDs.removeAll(keepingCapacity: true)
         if notify {
             notifyRevisionChanged(recordHistory: false)
         }
@@ -2788,15 +2805,25 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     }
 
     public func setEntityLocked(_ isLocked: Bool, entityIDs: Set<UInt64>) {
-        if isLocked {
-            lockedEntityIDs.formUnion(entityIDs)
-        } else {
-            lockedEntityIDs.subtract(entityIDs)
+        var changed = false
+        for rawID in entityIDs.sorted() {
+            guard let entity = entity(from: rawID), scene.contains(entity) else { continue }
+            let wasLocked = scene.hasComponent(EditorHierarchyLockComponent.self, for: entity)
+            guard wasLocked != isLocked else { continue }
+            if isLocked {
+                changed = scene.setComponent(EditorHierarchyLockComponent(), for: entity) || changed
+            } else {
+                changed = scene.removeComponent(EditorHierarchyLockComponent.self, from: entity) != nil || changed
+            }
+        }
+        if changed {
+            notifyRevisionChanged()
         }
     }
 
     public func isEntityLocked(_ rawID: UInt64) -> Bool {
-        lockedEntityIDs.contains(rawID)
+        guard let entity = entity(from: rawID), scene.contains(entity) else { return false }
+        return scene.hasComponent(EditorHierarchyLockComponent.self, for: entity)
     }
 
     public func entitySummary(id rawID: UInt64?) -> EditorSceneEntitySummary? {
@@ -7786,7 +7813,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                summary: String,
                                targetRawIDs: [UInt64] = [],
                                mutations: [SceneMutation]) -> TransactionApplyResult? {
-        let lockedTargets = targetRawIDs.filter { lockedEntityIDs.contains($0) }
+        let lockedTargets = targetRawIDs.filter { isEntityLocked($0) }
         guard lockedTargets.isEmpty else {
             onTransactionError?("\(summary): entity is locked (\(lockedTargets.map(String.init).joined(separator: ", ")))")
             return nil

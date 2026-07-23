@@ -255,6 +255,9 @@ public struct EditorState: Codable, Sendable {
     /// `sceneRevision` captured at the last manifest save/load. The scene is
     /// "dirty" (unsaved edits) whenever the two diverge.
     public var lastSavedSceneRevision: UInt64
+    /// Ephemeral flag for an autosave restored over the last explicit save.
+    /// Kept out of Codable storage; the recovery document is the authority.
+    public var sceneRecoveryPending: Bool
     /// A vetoed OS close/quit waiting on the user's save decision. Non-nil
     /// shows the unsaved-changes dialog; `windowID == nil` means app quit.
     public var pendingCloseRequest: EditorPendingCloseRequest?
@@ -317,6 +320,7 @@ public struct EditorState: Codable, Sendable {
         activeLayoutPreset: EditorLayoutPreset = .levelDefault,
         sceneRevision: UInt64 = 0,
         lastSavedSceneRevision: UInt64 = 0,
+        sceneRecoveryPending: Bool = false,
         pendingCloseRequest: EditorPendingCloseRequest? = nil,
         frameIndex: UInt64 = 0,
         frameTimingRevision: UInt64 = 0,
@@ -370,6 +374,7 @@ public struct EditorState: Codable, Sendable {
         self.activeLayoutPreset = activeLayoutPreset
         self.sceneRevision = sceneRevision
         self.lastSavedSceneRevision = lastSavedSceneRevision
+        self.sceneRecoveryPending = sceneRecoveryPending
         self.pendingCloseRequest = pendingCloseRequest
         self.frameTimingRevision = frameTimingRevision
         self.viewportSurfaceRevision = viewportSurfaceRevision
@@ -420,6 +425,10 @@ public struct EditorState: Codable, Sendable {
 
     public var shouldRender: Bool {
         !windowMinimized && !windowOccluded
+    }
+
+    public var sceneDirty: Bool {
+        sceneRecoveryPending || sceneRevision != lastSavedSceneRevision
     }
 
     public var themeMode: EditorThemeMode {
