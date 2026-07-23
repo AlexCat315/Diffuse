@@ -11,9 +11,9 @@ enum EditorCommandDispatcher {
 
         switch command {
         case .newScene:
-            app.resetPreviewScene()
+            app.requestNewScene()
         case .openScene:
-            _ = app.openSceneManifest()
+            app.requestOpenSceneManifest()
         case .saveScene:
             _ = app.saveSceneManifest()
         case .importAssets:
@@ -55,8 +55,7 @@ enum EditorCommandDispatcher {
             _ = app.exportProject()
         case .buildAndRun:
             if let output = app.exportProject() {
-                app.logConsole("Run exported build",
-                               detail: "swift run GuavaPlayer --project \(output.path)")
+                _ = app.runExportedProject(at: output)
             }
         case .openDocumentation:
             app.logConsole("Documentation command recorded", detail: "Docs live under docs/")

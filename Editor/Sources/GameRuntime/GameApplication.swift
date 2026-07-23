@@ -28,6 +28,7 @@ public final class GameApplication: @unchecked Sendable {
     private var _viewportDrawableSize: RenderDrawableSize = .init(width: 1280, height: 720)
     private var _lastViewportSurface: ViewportSurfaceState = .init()
     private var _pendingInputEvents: [InputEvent] = []
+    private var _frameIndex: UInt64 = 0
 
     /// Called on the main thread whenever the engine publishes a new viewport
     /// surface (i.e. a new rendered frame is ready). Used by the root view to
@@ -39,6 +40,22 @@ public final class GameApplication: @unchecked Sendable {
         let scene = EditorSceneAdapter()
 
         if let dir = projectDirectory {
+            let assetListURL = URL(fileURLWithPath: dir, isDirectory: true)
+                .appendingPathComponent("assets.json")
+            let preferredMeshIndices: [String: Int]
+            if let data = try? Data(contentsOf: assetListURL),
+               let assetList = try? JSONDecoder().decode(ProjectExportAssetList.self, from: data) {
+                preferredMeshIndices = assetList.assets.reduce(into: [:]) { result, asset in
+                    if asset.meshIndex >= 2, result[asset.relativePath] == nil {
+                        result[asset.relativePath] = asset.meshIndex
+                    }
+                }
+            } else {
+                preferredMeshIndices = [:]
+            }
+            _ = try EditorAssetCatalog.loadProject(at: dir,
+                                                   preferredMeshIndices: preferredMeshIndices)
+            ProjectRuntimeResources.configureAudioSearchPaths(at: dir)
             let url = GameSaveDocument.url(slot: 0, projectDirectory: dir)
             if let doc = try GameSaveDocument.read(from: url) {
                 _ = scene.load(manifest: doc.manifest)
@@ -79,13 +96,21 @@ public final class GameApplication: @unchecked Sendable {
         let events = _pendingInputEvents
         _pendingInputEvents.removeAll(keepingCapacity: true)
 
-        scene.tickScene(deltaTime: deltaTime)
+        _frameIndex &+= 1
+        scene.tickScene(deltaTime: deltaTime,
+                        frameIndex: _frameIndex,
+                        inputEvents: events,
+                        drivesAudio: true)
         engine.tick(
             deltaTime: deltaTime,
             inputEvents: events,
             drawableSize: _viewportDrawableSize,
             shouldRender: true,
-            renderSceneOverride: scene.currentRenderScene()
+            renderSceneOverride: scene.currentRenderScene(),
+            sceneSnapshotOverride: scene.currentSceneSnapshot(),
+            jointPaletteOverride: scene.currentJointPaletteMap(),
+            inGameCanvasOverride: scene.currentInGameCanvas(),
+            particleFeedbackHandler: scene.makeParticleSimulationFeedbackHandler()
         )
 
         let surface = engine.currentViewportSurfaceState()

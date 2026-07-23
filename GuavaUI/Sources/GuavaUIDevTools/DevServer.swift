@@ -264,7 +264,9 @@ public final class DevServer: @unchecked Sendable {
         conn.receiveMessage { [weak self, weak conn] data, ctx, _, error in
             guard let self, let conn else { return }
             if let error {
-                self.log("DevServer recv error: \(error)")
+                if !Self.isExpectedDisconnect(error) {
+                    self.log("DevServer recv error: \(error)")
+                }
                 conn.cancel()
                 return
             }
@@ -275,6 +277,16 @@ public final class DevServer: @unchecked Sendable {
             if conn.state != .cancelled {
                 self.scheduleReceive(on: conn)
             }
+        }
+    }
+
+    private static func isExpectedDisconnect(_ error: NWError) -> Bool {
+        guard case let .posix(code) = error else { return false }
+        switch code {
+        case .ECANCELED, .ECONNRESET, .ENODATA, .ENOTCONN, .EPIPE, .ESHUTDOWN:
+            return true
+        default:
+            return false
         }
     }
 

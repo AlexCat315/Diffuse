@@ -1270,6 +1270,104 @@ struct EditorSceneAdapterTests {
     }
 }
 
+@Suite("Editor scene edit history")
+struct EditorSceneEditHistoryTests {
+    @Test("human transform edits undo and redo through the adapter history")
+    func transformUndoRedo() throws {
+        let adapter = EditorSceneAdapter()
+        let entityID = try #require(adapter.defaultSelectionID)
+        let original = try #require(adapter.entityLocalTranslation(entityID))
+        let edited = original + SIMD3<Float>(1, 2, 3)
+
+        adapter.setEntityLocalTranslation(entityID, to: edited)
+        #expect(adapter.canUndoEdit)
+        #expect(adapter.entityLocalTranslation(entityID) == edited)
+
+        #expect(adapter.undoEdit())
+        #expect(adapter.entityLocalTranslation(entityID) == original)
+        #expect(adapter.canRedoEdit)
+
+        #expect(adapter.redoEdit())
+        #expect(adapter.entityLocalTranslation(entityID) == edited)
+    }
+
+    @Test("loading a document starts a fresh edit history")
+    func loadResetsHistory() throws {
+        let adapter = EditorSceneAdapter()
+        let entityID = try #require(adapter.defaultSelectionID)
+        let original = try #require(adapter.entityLocalTranslation(entityID))
+        adapter.setEntityLocalTranslation(entityID, to: original + SIMD3<Float>(1, 0, 0))
+        #expect(adapter.canUndoEdit)
+
+        _ = adapter.load(manifest: adapter.manifest())
+        #expect(!adapter.canUndoEdit)
+        #expect(!adapter.canRedoEdit)
+    }
+
+    @Test("hierarchy visibility updates render state and participates in undo")
+    func visibilityUndo() throws {
+        let adapter = EditorSceneAdapter()
+        let entity = try #require(adapter.scene.entities(with: RenderMeshComponent.self).first)
+        #expect(adapter.isHierarchyVisible(entity.rawValue))
+
+        #expect(adapter.setHierarchyVisibility(false, for: [entity.rawValue]))
+        #expect(!adapter.isHierarchyVisible(entity.rawValue))
+
+        #expect(adapter.undoEdit())
+        #expect(adapter.isHierarchyVisible(entity.rawValue))
+    }
+
+    @Test("imported entity setup is a single undo step")
+    func groupedSpawnUndo() throws {
+        let adapter = EditorSceneAdapter()
+        let originalCount = adapter.entityCount
+        let asset = EditorAsset(id: "models/crate.glb", name: "Crate",
+                                relativePath: "models/crate.glb",
+                                absolutePath: "/tmp/crate.glb", kind: .glb, meshIndex: 2)
+
+        #expect(adapter.spawnEntity(from: asset) != nil)
+        #expect(adapter.entityCount == originalCount + 1)
+
+        #expect(adapter.undoEdit())
+        #expect(adapter.entityCount == originalCount)
+        #expect(!adapter.canUndoEdit)
+    }
+
+    @Test("locked entities reject authored edits")
+    func lockedEntityRejectsEdit() throws {
+        let adapter = EditorSceneAdapter()
+        let entityID = try #require(adapter.defaultSelectionID)
+        let original = try #require(adapter.entityLocalTranslation(entityID))
+        var reportedError: String?
+        adapter.onTransactionError = { reportedError = $0 }
+        adapter.setEntityLocked(true, entityIDs: [entityID])
+
+        adapter.setEntityLocalTranslation(entityID, to: original + SIMD3<Float>(1, 0, 0))
+
+        #expect(adapter.entityLocalTranslation(entityID) == original)
+        #expect(reportedError?.contains("locked") == true)
+        #expect(adapter.canUndoEdit)
+        #expect(adapter.undoEdit())
+        #expect(!adapter.isEntityLocked(entityID))
+    }
+
+    @Test("hierarchy locks round-trip and remap entity identifiers")
+    func lockedEntityRoundTrip() throws {
+        let adapter = EditorSceneAdapter()
+        let originalID = try #require(adapter.defaultSelectionID)
+        adapter.setEntityLocked(true, entityIDs: [originalID])
+
+        let data = try JSONEncoder().encode(adapter.manifest(selectedEntityID: originalID))
+        let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
+        #expect(manifest.lockedEntityIDs == [originalID])
+
+        let restored = EditorSceneAdapter()
+        let result = restored.load(manifest: manifest, notify: false)
+        let remappedID = try #require(result.selectedEntityID)
+        #expect(restored.isEntityLocked(remappedID))
+    }
+}
+
 @Suite("GameSaveDocument")
 struct GameSaveDocumentTests {
     @Test("AudioSource round-trips through manifest encode/decode")
@@ -1283,7 +1381,7 @@ struct GameSaveDocumentTests {
                               loop: true, playOnAwake: false, spatialBlend: 0.5)
         _ = scene.setComponent(src, for: entity)
 
-        var adapter = EditorSceneAdapter()
+        let adapter = EditorSceneAdapter()
         adapter.scene = scene
         let manifest = adapter.manifest()
 
@@ -1295,6 +1393,27 @@ struct GameSaveDocumentTests {
         #expect(restored?.volume == 0.8)
         #expect(restored?.loop == true)
         #expect(restored?.playOnAwake == false)
+    }
+
+    @Test("AudioListener round-trips through manifest encode/decode")
+    func audioListenerRoundTrip() throws {
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(SceneNameComponent(value: "Listener"), for: entity)
+        _ = scene.setComponent(SceneKindComponent(value: "Audio Listener"), for: entity)
+        _ = scene.setLocalTransform(.identity, for: entity)
+        _ = scene.setComponent(AudioListener(masterVolume: 0.35), for: entity)
+
+        let adapter = EditorSceneAdapter()
+        adapter.scene = scene
+        let encoded = try JSONEncoder().encode(adapter.manifest())
+        let decoded = try JSONDecoder().decode(EditorSceneManifest.self, from: encoded)
+
+        let restoredAdapter = EditorSceneAdapter()
+        _ = restoredAdapter.load(manifest: decoded, notify: false)
+        let restoredEntity = try #require(restoredAdapter.scene.entities().first)
+        let restored = restoredAdapter.scene.component(AudioListener.self, for: restoredEntity)
+        #expect(restored?.masterVolume == 0.35)
     }
 
     @Test("AnimationPlayer round-trips through manifest encode/decode")

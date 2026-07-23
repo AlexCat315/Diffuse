@@ -1,5 +1,22 @@
 cmake_minimum_required(VERSION 3.20)
+if(POLICY CMP0177)
+    cmake_policy(SET CMP0177 NEW)
+endif()
 project(guava-third-party LANGUAGES C CXX)
+
+# Keep locally-built artifacts compatible with Engine/Package.swift. Recent
+# Xcode toolchains otherwise stamp the host SDK (for example macOS 26) into
+# objects when no deployment target is supplied.
+if(APPLE)
+    set(GUAVA_MACOS_DEPLOYMENT_TARGET "13.0" CACHE STRING
+        "Minimum macOS version for Guava native artifacts")
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "${GUAVA_MACOS_DEPLOYMENT_TARGET}"
+        CACHE STRING "" FORCE)
+    set(GUAVA_PLATFORM_CMAKE_ARGS
+        -DCMAKE_OSX_DEPLOYMENT_TARGET=${GUAVA_MACOS_DEPLOYMENT_TARGET})
+else()
+    set(GUAVA_PLATFORM_CMAKE_ARGS "")
+endif()
 
 include(${CMAKE_SOURCE_DIR}/../../cmake/ArtifactBundleManifest.cmake)
 

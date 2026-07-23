@@ -269,7 +269,17 @@ public struct TransactionExecutor {
     private func verify(_ assertions: [TransactionVerificationAssertion],
                         result: TransactionApplyResult,
                         context: TransactionExecutionContext) throws {
-        for assertion in assertions {
+        var retainedSceneStateIndices = Set<Int>()
+        var seenSceneStateKeys = Set<String>()
+        var supersededSceneStateKeys = Set<String>()
+        for (index, assertion) in assertions.enumerated().reversed() {
+            guard case let .sceneState(state) = assertion,
+                  !supersededSceneStateKeys.contains(state.verificationKey),
+                  seenSceneStateKeys.insert(state.verificationKey).inserted else { continue }
+            retainedSceneStateIndices.insert(index)
+            supersededSceneStateKeys.formUnion(state.supersededVerificationKeys)
+        }
+        for (index, assertion) in assertions.enumerated() {
             switch assertion {
             case let .entityExists(rawID):
                 guard let scene = context.sceneRuntime,
@@ -302,6 +312,14 @@ public struct TransactionExecutor {
                     throw TransactionExecutorError.verificationFailed(
                         "expected scene revision after \(previous), got \(result.sceneRevision.map(String.init) ?? "nil")"
                     )
+                }
+            case let .sceneState(state):
+                guard retainedSceneStateIndices.contains(index) else { continue }
+                guard let scene = context.sceneRuntime else {
+                    throw TransactionExecutorError.missingSceneRuntime
+                }
+                if let failure = state.failureDescription(in: scene) {
+                    throw TransactionExecutorError.verificationFailed(failure)
                 }
             }
         }

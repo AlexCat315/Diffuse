@@ -1,3 +1,5 @@
+import AudioRuntime
+import EngineKernel
 import Foundation
 import IntentRuntime
 import RenderBackend
@@ -11,14 +13,83 @@ extension EditorSceneAdapter {
     }
 
     @discardableResult
-    public func tickScene(deltaTime: Double = 0) -> Bool {
-        _ = scene.tick(deltaTime: deltaTime)
-        tickAnimationRuntime(deltaTime: deltaTime)
+    public func tickScene(deltaTime: Double = 0,
+                          frameIndex: UInt64 = 0,
+                          inputEvents: [InputEvent] = [],
+                          drivesAudio: Bool = false) -> Bool {
+        applyPendingParticleFeedback()
+        _ = scene.tick(deltaTime: deltaTime,
+                       frameIndex: frameIndex,
+                       inputEvents: inputEvents)
+        if drivesAudio {
+            AudioEngine.shared.tick(scene: scene)
+        }
         return true
     }
 
-    private func tickAnimationRuntime(deltaTime: Double) {
-        scene.runScriptDriver(animationRuntime, deltaTime: deltaTime)
+    public func registerScript(_ script: Script, named name: String? = nil) -> ScriptHandle {
+        scriptRuntime.register(script, named: name)
+    }
+
+    public func currentSceneSnapshot() -> SceneRuntimeSnapshot {
+        scene.snapshot
+    }
+
+    public func currentInGameCanvas() -> InGameCanvas {
+        scene.resource(InGameCanvas.self) ?? InGameCanvas()
+    }
+
+    public func makeParticleSimulationFeedbackHandler()
+        -> @Sendable ([GPUParticleSimulationEventSnapshot]) -> Void {
+        particleFeedbackLock.lock()
+        let generation = particleFeedbackGeneration
+        particleFeedbackLock.unlock()
+        return { [weak self] snapshots in
+            guard !snapshots.isEmpty, let self else { return }
+            self.particleFeedbackLock.lock()
+            if self.particleFeedbackGeneration == generation {
+                self.pendingParticleFeedback.append(contentsOf: snapshots)
+            }
+            self.particleFeedbackLock.unlock()
+        }
+    }
+
+    private func applyPendingParticleFeedback() {
+        particleFeedbackLock.lock()
+        let snapshots = pendingParticleFeedback
+        pendingParticleFeedback.removeAll(keepingCapacity: true)
+        particleFeedbackLock.unlock()
+        guard !snapshots.isEmpty else { return }
+
+        let totalReadbackEventCount = snapshots.reduce(0) { $0 + $1.totalEventCount }
+        let droppedReadbackEventCount = snapshots.reduce(0) { $0 + $1.droppedEventCount }
+        let gpuAliveParticleCount = snapshots.reduce(0) { $0 + $1.aliveParticleCount }
+        let gpuExpiredParticleCount = snapshots.reduce(0) { $0 + $1.expiredParticleCount }
+        let gpuCollisionEventCount = snapshots.reduce(0) { $0 + $1.collisionEventCount }
+        let gpuSpawnedParticleCount = snapshots.reduce(0) { $0 + $1.gpuSpawnedParticleCount }
+        let gpuDroppedSpawnCount = snapshots.reduce(0) { $0 + $1.gpuDroppedSpawnCount }
+        let gpuCompactedParticleCount = snapshots.reduce(0) { $0 + $1.compactedParticleCount }
+        var eventsByEntity: [EntityID: [ParticleEvent]] = [:]
+        for snapshot in snapshots {
+            guard let rawValue = snapshot.emitterRawValue else { continue }
+            let events = snapshot.makeParticleEvents()
+            guard !events.isEmpty else { continue }
+            eventsByEntity[EntityID(rawValue: rawValue), default: []].append(contentsOf: events)
+        }
+
+        var report = eventsByEntity.isEmpty
+            ? ParticleSimulationEventApplyReport.empty
+            : scene.applyParticleSimulationEvents(eventsByEntity)
+        report.totalReadbackEventCount = totalReadbackEventCount
+        report.droppedReadbackEventCount = droppedReadbackEventCount
+        report.gpuAliveParticleCount = gpuAliveParticleCount
+        report.gpuExpiredParticleCount = gpuExpiredParticleCount
+        report.gpuCollisionEventCount = gpuCollisionEventCount
+        report.gpuSpawnedParticleCount = gpuSpawnedParticleCount
+        report.gpuDroppedSpawnCount = gpuDroppedSpawnCount
+        report.gpuCompactedParticleCount = gpuCompactedParticleCount
+        scene.applyParticleSimulationReadbackStats(report)
+        lastParticleFeedbackReport = report
     }
 
     public func currentJointPaletteMap() -> JointPaletteMap {
@@ -31,6 +102,10 @@ extension EditorSceneAdapter {
 
     public func currentParticleFrameStats() -> ParticleFrameStatsResource {
         scene.particleFrameStats
+    }
+
+    public func currentParticleSimulationEventApplyReport() -> ParticleSimulationEventApplyReport {
+        lastParticleFeedbackReport
     }
 
     public func currentParticleScalabilityState() -> ParticleScalabilityStateResource {

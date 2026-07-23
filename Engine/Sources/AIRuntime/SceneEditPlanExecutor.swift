@@ -245,6 +245,7 @@ public struct SceneEditPlanExecutor: Sendable {
                     renderMaterial: renderMaterial,
                     rigidBody: rigidBody,
                     collider: collider,
+                    light: scene.component(LightComponent.self, for: entity),
                     audioSource: scene.component(AudioSource.self, for: entity),
                     animationPlayer: scene.component(AnimationPlayer.self, for: entity),
                     scriptBindings: scene.component(ScriptComponent.self, for: entity)?.bindings ?? []
@@ -283,7 +284,8 @@ public struct SceneEditPlanExecutor: Sendable {
 
     /// Applies the component-level side-effects of `mutations` to `scene` so that subsequent
     /// steps in the same plan see the accumulated state. Only updates the fields that
-    /// read-modify-write operations care about (Collider, RigidBody, transform).
+    /// read-modify-write operations care about (physics, transforms, lights, media,
+    /// scripts, cameras, and materials).
     private func applyToLocalScene(_ scene: inout SceneRuntime, mutations: [SceneMutation]) {
         for m in mutations {
             switch m {
@@ -343,6 +345,37 @@ public struct SceneEditPlanExecutor: Sendable {
                                     isPlaying: isPlaying),
                     for: entityID(fromRaw: rawID)
                 )
+            case let .setLightType(rawID, value):
+                _ = scene.updateComponent(LightComponent.self, for: entityID(fromRaw: rawID)) {
+                    $0.type = value
+                }
+            case let .setLightColor(rawID, value):
+                _ = scene.updateComponent(LightComponent.self, for: entityID(fromRaw: rawID)) {
+                    $0.color = value
+                }
+            case let .setLightIntensity(rawID, value):
+                _ = scene.updateComponent(LightComponent.self, for: entityID(fromRaw: rawID)) {
+                    $0.intensity = max(0, value)
+                }
+            case let .setLightRange(rawID, value):
+                _ = scene.updateComponent(LightComponent.self, for: entityID(fromRaw: rawID)) {
+                    $0.range = max(0, value)
+                }
+            case let .setLightSpotInnerAngle(rawID, value):
+                _ = scene.updateComponent(LightComponent.self, for: entityID(fromRaw: rawID)) {
+                    let inner = max(0, min(179, value))
+                    $0.spotInnerAngleDegrees = min(inner, $0.spotOuterAngleDegrees)
+                }
+            case let .setLightSpotOuterAngle(rawID, value):
+                _ = scene.updateComponent(LightComponent.self, for: entityID(fromRaw: rawID)) {
+                    let outer = max(1, min(179, value))
+                    $0.spotOuterAngleDegrees = outer
+                    $0.spotInnerAngleDegrees = min($0.spotInnerAngleDegrees, outer)
+                }
+            case let .setLightCastShadows(rawID, value):
+                _ = scene.updateComponent(LightComponent.self, for: entityID(fromRaw: rawID)) {
+                    $0.castShadows = value
+                }
             default:
                 break
             }
