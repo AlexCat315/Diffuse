@@ -10,7 +10,6 @@ struct HierarchyPanel: View {
 
     @State private var expandedKeys: Set<TreeNodeKey<UInt64>>
     @State private var searchQuery: String
-    @State private var hiddenEntityIDs: Set<UInt64>
     @State private var lockedEntityIDs: Set<UInt64>
 
     init(store: EditorStore, scene: EditorSceneAdapter) {
@@ -21,7 +20,6 @@ struct HierarchyPanel: View {
                                                    roots: scene.roots)
         )
         _searchQuery = State(wrappedValue: "")
-        _hiddenEntityIDs = State(wrappedValue: [])
         _lockedEntityIDs = State(wrappedValue: [])
     }
 
@@ -85,8 +83,8 @@ struct HierarchyPanel: View {
                      trailingContent: { entity, isSelected, _, _, isHovered, _ in
                          AnyView(
                             HierarchyRowTrailingSlots(
-                                isVisible: !hiddenEntityIDs.contains(entity.id),
-                                isLocked: lockedEntityIDs.contains(entity.id),
+                                isVisible: scene.isHierarchyVisible(entity.id),
+                                isLocked: scene.isEntityLocked(entity.id),
                                 showsControls: isHovered || isSelected,
                                 isSelected: isSelected,
                                 onToggleVisibility: {
@@ -139,22 +137,24 @@ struct HierarchyPanel: View {
 
     private func toggleVisibility(entityID: UInt64, selectedIDs: Set<UInt64>) {
         applyToSelectionOrEntity(entityID, selectedIDs: selectedIDs) { targets in
-            let allHidden = targets.allSatisfy { hiddenEntityIDs.contains($0) }
+            let allHidden = targets.allSatisfy { !scene.isHierarchyVisible($0) }
             if allHidden {
-                hiddenEntityIDs.subtract(targets)
+                _ = scene.setHierarchyVisibility(true, for: targets)
             } else {
-                hiddenEntityIDs.formUnion(targets)
+                _ = scene.setHierarchyVisibility(false, for: targets)
             }
         }
     }
 
     private func toggleLock(entityID: UInt64, selectedIDs: Set<UInt64>) {
         applyToSelectionOrEntity(entityID, selectedIDs: selectedIDs) { targets in
-            let allLocked = targets.allSatisfy { lockedEntityIDs.contains($0) }
+            let allLocked = targets.allSatisfy { scene.isEntityLocked($0) }
             if allLocked {
                 lockedEntityIDs.subtract(targets)
+                scene.setEntityLocked(false, entityIDs: targets)
             } else {
                 lockedEntityIDs.formUnion(targets)
+                scene.setEntityLocked(true, entityIDs: targets)
             }
         }
     }
@@ -163,19 +163,21 @@ struct HierarchyPanel: View {
         guard event.modifiers.isEmpty, !selectedIDs.isEmpty else { return false }
         switch event.scancode {
         case 25: // SDL_SCANCODE_V
-            let allHidden = selectedIDs.allSatisfy { hiddenEntityIDs.contains($0) }
+            let allHidden = selectedIDs.allSatisfy { !scene.isHierarchyVisible($0) }
             if allHidden {
-                hiddenEntityIDs.subtract(selectedIDs)
+                _ = scene.setHierarchyVisibility(true, for: selectedIDs)
             } else {
-                hiddenEntityIDs.formUnion(selectedIDs)
+                _ = scene.setHierarchyVisibility(false, for: selectedIDs)
             }
             return true
         case 15: // SDL_SCANCODE_L
-            let allLocked = selectedIDs.allSatisfy { lockedEntityIDs.contains($0) }
+            let allLocked = selectedIDs.allSatisfy { scene.isEntityLocked($0) }
             if allLocked {
                 lockedEntityIDs.subtract(selectedIDs)
+                scene.setEntityLocked(false, entityIDs: selectedIDs)
             } else {
                 lockedEntityIDs.formUnion(selectedIDs)
+                scene.setEntityLocked(true, entityIDs: selectedIDs)
             }
             return true
         default:
@@ -187,6 +189,8 @@ struct HierarchyPanel: View {
                                      on targetID: UInt64,
                                      position: TreeDropPosition,
                                      roots: [EditorSceneNode]) {
+        guard !scene.isEntityLocked(entityID),
+              !scene.isEntityLocked(targetID) else { return }
         guard let destination = hierarchyDropDestination(for: targetID,
                                                          position: position,
                                                          roots: roots) else {
@@ -207,7 +211,9 @@ struct HierarchyPanel: View {
                          on targetID: UInt64,
                          position: TreeDropPosition,
                          in roots: [EditorSceneNode]) -> Bool {
-        guard sourceID != targetID,
+        guard !scene.isEntityLocked(sourceID),
+              !scene.isEntityLocked(targetID),
+              sourceID != targetID,
               let destination = hierarchyDropDestination(for: targetID,
                                                          position: position,
                                                          roots: roots),

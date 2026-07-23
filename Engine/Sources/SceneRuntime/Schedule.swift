@@ -233,6 +233,9 @@ public struct RuntimeWorldSchedule {
     }
 
     public mutating func setScriptDriver(_ driver: any RuntimeScriptDriver) {
+        if let current = scriptDriver, current === driver {
+            return
+        }
         scriptDriver?.reset()
         scriptDriver = driver
     }

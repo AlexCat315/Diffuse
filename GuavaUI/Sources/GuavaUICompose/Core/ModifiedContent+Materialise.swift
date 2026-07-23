@@ -32,7 +32,7 @@ extension ModifiedContent: _AnyModifiedContent {
             scopeAnchor.isHitTestable = false
             scopeAnchor.viewTag = ViewGraph.slotTag(self)
             parent.addChild(scopeAnchor)
-            scopeApply._applyScope(node: scopeAnchor)
+            _ = scopeApply._applyScope(node: scopeAnchor)
             _ = graph.materialise(content,
                                   into: scopeAnchor,
                                   layoutParent: layoutParent)

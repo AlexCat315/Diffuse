@@ -1,5 +1,21 @@
 cmake_minimum_required(VERSION 3.20)
+if(POLICY CMP0177)
+    cmake_policy(SET CMP0177 NEW)
+endif()
 project(guavaui-third-party LANGUAGES C CXX)
+
+# Match GuavaUI/Package.swift instead of inheriting the current host SDK as
+# the minimum version in FreeType/HarfBuzz object files.
+if(APPLE)
+    set(GUAVA_MACOS_DEPLOYMENT_TARGET "13.0" CACHE STRING
+        "Minimum macOS version for GuavaUI native artifacts")
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "${GUAVA_MACOS_DEPLOYMENT_TARGET}"
+        CACHE STRING "" FORCE)
+    set(GUAVA_PLATFORM_CMAKE_ARGS
+        -DCMAKE_OSX_DEPLOYMENT_TARGET=${GUAVA_MACOS_DEPLOYMENT_TARGET})
+else()
+    set(GUAVA_PLATFORM_CMAKE_ARGS "")
+endif()
 
 include(${CMAKE_SOURCE_DIR}/../../cmake/ArtifactBundleManifest.cmake)
 

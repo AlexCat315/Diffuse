@@ -15,7 +15,9 @@ struct SimulationFrameRequest: Sendable {
     let shouldRender: Bool
     let renderSettings: RenderSettings
     let renderSceneOverride: RenderScene?
+    let sceneSnapshotOverride: SceneRuntimeSnapshot?
     let jointPaletteOverride: JointPaletteMap?
+    let inGameCanvasOverride: InGameCanvas?
 
     init(
         frameIndex: Int,
@@ -25,7 +27,9 @@ struct SimulationFrameRequest: Sendable {
         shouldRender: Bool,
         renderSettings: RenderSettings,
         renderSceneOverride: RenderScene? = nil,
-        jointPaletteOverride: JointPaletteMap? = nil
+        sceneSnapshotOverride: SceneRuntimeSnapshot? = nil,
+        jointPaletteOverride: JointPaletteMap? = nil,
+        inGameCanvasOverride: InGameCanvas? = nil
     ) {
         self.frameIndex = frameIndex
         self.deltaTime = deltaTime
@@ -34,7 +38,9 @@ struct SimulationFrameRequest: Sendable {
         self.shouldRender = shouldRender
         self.renderSettings = renderSettings
         self.renderSceneOverride = renderSceneOverride
+        self.sceneSnapshotOverride = sceneSnapshotOverride
         self.jointPaletteOverride = jointPaletteOverride
+        self.inGameCanvasOverride = inGameCanvasOverride
     }
 }
 
@@ -123,12 +129,14 @@ final class SimulationThread: @unchecked Sendable {
         begin = Date().timeIntervalSinceReferenceDate
         onKernelPhase(.simulation, frameContext)
         runtime.tickSimulation(deltaTime: request.deltaTime)
-        sceneRuntime.tick(
-            deltaTime: request.deltaTime,
-            frameIndex: UInt64(request.frameIndex),
-            inputEvents: request.inputEvents
-        )
-        AudioEngine.shared.tick(scene: sceneRuntime)
+        if request.renderSceneOverride == nil {
+            sceneRuntime.tick(
+                deltaTime: request.deltaTime,
+                frameIndex: UInt64(request.frameIndex),
+                inputEvents: request.inputEvents
+            )
+            AudioEngine.shared.tick(scene: sceneRuntime)
+        }
         simulationTimeSeconds += request.deltaTime
         simulationSeconds = Date().timeIntervalSinceReferenceDate - begin
 
@@ -143,13 +151,15 @@ final class SimulationThread: @unchecked Sendable {
             let paletteMap = request.jointPaletteOverride
                 ?? sceneRuntime.resource(JointPaletteMap.self)
                 ?? JointPaletteMap()
-            let canvas = sceneRuntime.resource(InGameCanvas.self) ?? InGameCanvas()
+            let canvas = request.inGameCanvasOverride
+                ?? sceneRuntime.resource(InGameCanvas.self)
+                ?? InGameCanvas()
             let packet = RenderPacket(
                 frameIndex: request.frameIndex,
                 deltaTime: request.deltaTime,
                 drawableSize: request.drawableSize,
                 scene: scene,
-                sceneSnapshot: sceneRuntime.snapshot,
+                sceneSnapshot: request.sceneSnapshotOverride ?? sceneRuntime.snapshot,
                 renderSettings: request.renderSettings,
                 simulationTimeSeconds: simulationTimeSeconds,
                 jointPaletteMap: paletteMap,
