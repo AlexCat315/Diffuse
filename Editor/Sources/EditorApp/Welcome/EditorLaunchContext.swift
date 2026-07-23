@@ -58,7 +58,7 @@ final class EditorLaunchContext: @unchecked Sendable {
         // .guava/editor-scene-manifest.json). Without this, saved edits only
         // come back via a manual File → Open Scene — a relaunch always showed
         // the seeded preview scene.
-        _ = app.openSceneManifest()
+        _ = app.restoreProjectSceneAtLaunch()
 
         let registry = EditorRootViewFactory.makeRegistry(app: app)
         let controller = EditorRootViewFactory.makeController(
@@ -130,7 +130,7 @@ final class EditorLaunchContext: @unchecked Sendable {
             // Auxiliary windows (settings) close freely; only the main window
             // and whole-app quit guard the scene.
             if let windowID, windowID != display?.mainWindowID { return true }
-            guard app.store.state.sceneRevision != app.store.state.lastSavedSceneRevision else {
+            guard app.hasUnsavedSceneChanges else {
                 return true
             }
             app.store.dispatch(.requestClose(EditorPendingCloseRequest(windowID: windowID)))

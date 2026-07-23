@@ -147,4 +147,53 @@ struct ProjectExporterTests {
         _ = try ProjectExporter.export(manifest: manifest, appName: "Demo", to: output)
         #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent("old.glb").path))
     }
+
+    @Test("export packages a self-contained macOS application when a player is available")
+    func exportPackagesApplication() throws {
+        let output = tempDir()
+        let playerDirectory = tempDir()
+        defer {
+            try? FileManager.default.removeItem(at: output)
+            try? FileManager.default.removeItem(at: playerDirectory)
+        }
+        try FileManager.default.createDirectory(at: playerDirectory,
+                                                withIntermediateDirectories: true)
+        let player = playerDirectory.appendingPathComponent("GuavaPlayer")
+        try Data("#!/bin/sh\nexit 0\n".utf8).write(to: player)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755],
+                                              ofItemAtPath: player.path)
+        let resourceBundle = playerDirectory.appendingPathComponent("GuavaUI_Test.bundle",
+                                                                    isDirectory: true)
+        try FileManager.default.createDirectory(at: resourceBundle,
+                                                withIntermediateDirectories: true)
+        try Data("resource".utf8).write(to: resourceBundle.appendingPathComponent("marker.txt"))
+
+        _ = try ProjectExporter.export(manifest: EditorSceneAdapter().manifest(),
+                                       appName: "Demo/Game",
+                                       playerExecutableURL: player,
+                                       to: output)
+
+        let app = ProjectExporter.applicationBundleURL(appName: "Demo/Game", in: output)
+        let executable = ProjectExporter.applicationExecutableURL(appName: "Demo/Game", in: output)
+        #expect(FileManager.default.fileExists(atPath: app.path))
+        #expect(FileManager.default.isExecutableFile(atPath: executable.path))
+        #expect(FileManager.default.fileExists(
+            atPath: app.appendingPathComponent("GuavaUI_Test.bundle/marker.txt").path
+        ))
+        let embeddedProject = app.appendingPathComponent("Contents/Resources/GuavaProject",
+                                                         isDirectory: true)
+        #expect(FileManager.default.fileExists(
+            atPath: embeddedProject.appendingPathComponent("build.json").path
+        ))
+        #expect(FileManager.default.fileExists(
+            atPath: GameSaveDocument.url(slot: ProjectExporter.sceneSlot,
+                                         projectDirectory: embeddedProject.path).path
+        ))
+        let plistData = try Data(contentsOf: app.appendingPathComponent("Contents/Info.plist"))
+        let plist = try #require(
+            PropertyListSerialization.propertyList(from: plistData, format: nil) as? [String: Any]
+        )
+        #expect(plist["CFBundleExecutable"] as? String == "Demo_Game")
+        #expect(plist["LSMinimumSystemVersion"] as? String == "13.0")
+    }
 }

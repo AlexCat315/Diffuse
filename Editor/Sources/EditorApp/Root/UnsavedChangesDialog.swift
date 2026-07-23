@@ -43,7 +43,7 @@ struct UnsavedChangesDialog: View {
                 // leading edge, cancel + default action trailing.
                 Row(alignment: .center, spacing: 8) {
                     Button(discardTitle, role: .destructive) {
-                        proceed()
+                        discardAndProceed()
                     }
                     .buttonStyle(.secondary)
 
@@ -116,6 +116,11 @@ struct UnsavedChangesDialog: View {
 
     private func saveAndProceed() {
         guard app.saveSceneManifest() != nil else { return }
+        proceed()
+    }
+
+    private func discardAndProceed() {
+        app.discardAutosavedScene()
         proceed()
     }
 

@@ -2,6 +2,7 @@ import Foundation
 
 public enum ProjectExporterError: Error, CustomStringConvertible, Equatable {
     case missingAsset(String)
+    case missingPlayerExecutable(String)
     case unsafeRelativePath(String)
     case conflictingAssetDestination(String)
 
@@ -9,6 +10,8 @@ public enum ProjectExporterError: Error, CustomStringConvertible, Equatable {
         switch self {
         case let .missingAsset(path):
             return "export asset is missing: \(path)"
+        case let .missingPlayerExecutable(path):
+            return "GuavaPlayer executable is missing or not executable: \(path)"
         case let .unsafeRelativePath(path):
             return "export asset path escapes the bundle: \(path)"
         case let .conflictingAssetDestination(path):
@@ -59,8 +62,8 @@ public struct ProjectExportAssetList: Codable, Sendable, Equatable {
 ///     .guava/game-saves/slot-0.json  scene captured as a GameSaveDocument
 ///     <project-relative paths>        asset files and external model dependencies
 ///
-/// This is the data half of "build" — codesigned `.app` packaging is a separate, platform
-/// specific step layered on top of this bundle.
+/// When a `playerExecutableURL` is supplied, the export also contains a macOS
+/// application bundle with the project data embedded under Contents/Resources.
 public enum ProjectExporter {
     public static let schemaVersion = 1
     public static let sceneSlot = 0
@@ -70,6 +73,7 @@ public enum ProjectExporter {
                               appName: String,
                               assets: [EditorAsset] = [],
                               sourceProjectDirectory: URL? = nil,
+                              playerExecutableURL: URL? = nil,
                               to outputDirectory: URL) throws -> ProjectExportDescriptor {
         let fileManager = FileManager.default
         let parentDirectory = outputDirectory.deletingLastPathComponent()
@@ -107,6 +111,12 @@ public enum ProjectExporter {
             sceneSlot: sceneSlot
         )
         try writeJSON(descriptor, to: stagingDirectory.appendingPathComponent("build.json"))
+        if let playerExecutableURL {
+            try createApplicationBundle(appName: appName,
+                                        playerExecutableURL: playerExecutableURL,
+                                        projectDirectory: stagingDirectory,
+                                        fileManager: fileManager)
+        }
         try replaceBundle(at: outputDirectory,
                           with: stagingDirectory,
                           fileManager: fileManager)
@@ -119,10 +129,111 @@ public enum ProjectExporter {
         return try JSONDecoder().decode(ProjectExportDescriptor.self, from: data)
     }
 
+    public static func applicationBundleURL(appName: String,
+                                            in outputDirectory: URL) -> URL {
+        outputDirectory.appendingPathComponent("\(safeApplicationName(appName)).app",
+                                               isDirectory: true)
+    }
+
+    public static func applicationExecutableURL(appName: String,
+                                                in outputDirectory: URL) -> URL {
+        applicationBundleURL(appName: appName, in: outputDirectory)
+            .appendingPathComponent("Contents/MacOS/\(safeApplicationName(appName))")
+    }
+
     private static func writeJSON<T: Encodable>(_ value: T, to url: URL) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(value).write(to: url, options: [.atomic])
+    }
+
+    private static func createApplicationBundle(appName: String,
+                                                playerExecutableURL: URL,
+                                                projectDirectory: URL,
+                                                fileManager: FileManager) throws {
+        guard fileManager.isExecutableFile(atPath: playerExecutableURL.path) else {
+            throw ProjectExporterError.missingPlayerExecutable(playerExecutableURL.path)
+        }
+
+        // Capture the portable project entries before creating the app inside
+        // that same staging directory, avoiding recursive self-copy.
+        let projectEntries = try fileManager.contentsOfDirectory(
+            at: projectDirectory,
+            includingPropertiesForKeys: nil,
+            options: []
+        )
+        let safeName = safeApplicationName(appName)
+        let appURL = applicationBundleURL(appName: appName, in: projectDirectory)
+        let contentsURL = appURL.appendingPathComponent("Contents", isDirectory: true)
+        let macOSURL = contentsURL.appendingPathComponent("MacOS", isDirectory: true)
+        let resourcesURL = contentsURL.appendingPathComponent("Resources", isDirectory: true)
+        let bundledProjectURL = resourcesURL.appendingPathComponent("GuavaProject", isDirectory: true)
+        try fileManager.createDirectory(at: macOSURL, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: bundledProjectURL, withIntermediateDirectories: true)
+
+        let executableURL = macOSURL.appendingPathComponent(safeName)
+        try fileManager.copyItem(at: playerExecutableURL, to: executableURL)
+        try fileManager.setAttributes([.posixPermissions: 0o755],
+                                      ofItemAtPath: executableURL.path)
+
+        // SwiftPM's generated Bundle.module accessor looks next to Bundle.main
+        // (the .app root), so retain all sibling resource bundles there.
+        let playerDirectory = playerExecutableURL.deletingLastPathComponent()
+        let siblingResources = try fileManager.contentsOfDirectory(
+            at: playerDirectory,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        )
+        for resource in siblingResources where resource.pathExtension == "bundle" {
+            try fileManager.copyItem(at: resource,
+                                     to: appURL.appendingPathComponent(resource.lastPathComponent,
+                                                                       isDirectory: true))
+        }
+
+        for entry in projectEntries {
+            try fileManager.copyItem(at: entry,
+                                     to: bundledProjectURL.appendingPathComponent(entry.lastPathComponent,
+                                                                                  isDirectory: false))
+        }
+
+        let info: [String: Any] = [
+            "CFBundleDisplayName": appName,
+            "CFBundleExecutable": safeName,
+            "CFBundleIdentifier": "com.guava.export.\(bundleIdentifierSuffix(safeName))",
+            "CFBundleInfoDictionaryVersion": "6.0",
+            "CFBundleName": appName,
+            "CFBundlePackageType": "APPL",
+            "CFBundleShortVersionString": "1.0",
+            "CFBundleVersion": "1",
+            "LSMinimumSystemVersion": "13.0",
+            "NSHighResolutionCapable": true,
+        ]
+        let plist = try PropertyListSerialization.data(fromPropertyList: info,
+                                                       format: .xml,
+                                                       options: 0)
+        try plist.write(to: contentsURL.appendingPathComponent("Info.plist"), options: [.atomic])
+    }
+
+    private static func safeApplicationName(_ appName: String) -> String {
+        let allowed = CharacterSet.alphanumerics
+            .union(.whitespaces)
+            .union(CharacterSet(charactersIn: "-_."))
+        let sanitizedScalars = appName.unicodeScalars.map { scalar -> Character in
+            allowed.contains(scalar) ? Character(String(scalar)) : "_"
+        }
+        let sanitized = String(sanitizedScalars)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return sanitized.isEmpty ? "Guava Game" : sanitized
+    }
+
+    private static func bundleIdentifierSuffix(_ value: String) -> String {
+        let mapped = value.lowercased().unicodeScalars.map { scalar -> Character in
+            let code = scalar.value
+            let isASCIIAlphaNumeric = (48...57).contains(code) || (97...122).contains(code)
+            return isASCIIAlphaNumeric ? Character(String(scalar)) : "-"
+        }
+        let components = String(mapped).split(separator: "-", omittingEmptySubsequences: true)
+        return components.isEmpty ? "game" : components.joined(separator: "-")
     }
 
     private static func copyAssets(_ assets: [EditorAsset],
