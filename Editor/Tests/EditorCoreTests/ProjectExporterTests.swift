@@ -82,7 +82,7 @@ struct ProjectExporterTests {
         #expect(list.assets.first?.relativePath == "models/barrel.glb")
     }
 
-    @Test("export copies model dependencies and audio resources")
+    @Test("export copies model dependencies, audio resources, and project scripts")
     func exportCopiesRuntimeResources() throws {
         let project = tempDir()
         let output = project.appendingPathComponent("export", isDirectory: true)
@@ -101,6 +101,10 @@ struct ProjectExporterTests {
             to: modelDirectory.appendingPathComponent("textures/albedo.png")
         )
         try Data([0x52, 0x49, 0x46, 0x46]).write(to: audioDirectory.appendingPathComponent("theme.wav"))
+        let scriptsURL = project.appendingPathComponent(ProjectScriptCatalog.relativePath)
+        try FileManager.default.createDirectory(at: scriptsURL.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        try Data(#"{"schemaVersion":1,"scripts":[]}"#.utf8).write(to: scriptsURL)
         let asset = EditorAsset(id: "Assets/Models/ship.gltf",
                                 name: "ship",
                                 relativePath: "Assets/Models/ship.gltf",
@@ -125,6 +129,9 @@ struct ProjectExporterTests {
         ))
         #expect(FileManager.default.fileExists(
             atPath: output.appendingPathComponent("Assets/Audio/theme.wav").path
+        ))
+        #expect(FileManager.default.fileExists(
+            atPath: output.appendingPathComponent(ProjectScriptCatalog.relativePath).path
         ))
     }
 

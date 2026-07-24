@@ -18,7 +18,9 @@ extension Script {
                 let jumpSpeed = (ctx.parameters["jumpSpeed"] as? Double).map(Float.init) ?? 8
                 let crouchAction = ctx.parameters["crouchAction"] as? String ?? "crouch"
 
-                var direction = SIMD3<Float>.zero
+                var direction = SIMD3<Float>(ctx.input.axis("move_x"),
+                                             0,
+                                             -ctx.input.axis("move_y"))
                 if ctx.input.isHeld("move_forward") { direction.z -= 1 }
                 if ctx.input.isHeld("move_back") { direction.z += 1 }
                 if ctx.input.isHeld("move_left") { direction.x -= 1 }

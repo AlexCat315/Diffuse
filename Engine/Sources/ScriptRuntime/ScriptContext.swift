@@ -12,14 +12,17 @@ public final class ScriptContext {
     /// JSON string from the `ScriptBinding` that triggered this script invocation.
     public let parametersJSON: String
 
+    private let defaultParametersJSON: String
+
     /// Decoded JSON dictionary from `parametersJSON`, cached on first access.
     public var parameters: [String: Any] {
         if let cached = _cachedParameters { return cached }
-        guard let data = parametersJSON.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { return [:] }
-        _cachedParameters = obj
-        return obj
+        var merged = Self.decodeParameters(defaultParametersJSON)
+        for (key, value) in Self.decodeParameters(parametersJSON) {
+            merged[key] = value
+        }
+        _cachedParameters = merged
+        return merged
     }
 
     private var _cachedParameters: [String: Any]?
@@ -27,11 +30,64 @@ public final class ScriptContext {
     init(phaseContext: RuntimeScriptPhaseContext,
          entity: EntityID,
          deltaTime: Double,
-         parametersJSON: String = "{}") {
+         parametersJSON: String = "{}",
+         defaultParametersJSON: String = "{}") {
         self.phaseContext = phaseContext
         self.entity = entity
         self.deltaTime = deltaTime
         self.parametersJSON = parametersJSON
+        self.defaultParametersJSON = defaultParametersJSON
+    }
+
+    private static func decodeParameters(_ json: String) -> [String: Any] {
+        guard let data = json.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return [:] }
+        return object
+    }
+
+    public func floatParameter(_ name: String) -> Float? {
+        (parameters[name] as? NSNumber).map { Float(truncating: $0) }
+    }
+
+    public func doubleParameter(_ name: String) -> Double? {
+        (parameters[name] as? NSNumber).map { Double(truncating: $0) }
+    }
+
+    public func stringParameter(_ name: String) -> String? {
+        parameters[name] as? String
+    }
+
+    public func vector3Parameter(_ name: String) -> SIMD3<Float>? {
+        if let values = parameters[name] as? [NSNumber], values.count == 3 {
+            return SIMD3(Float(truncating: values[0]),
+                         Float(truncating: values[1]),
+                         Float(truncating: values[2]))
+        }
+        if let value = parameters[name] as? [String: Any],
+           let x = value["x"] as? NSNumber,
+           let y = value["y"] as? NSNumber,
+           let z = value["z"] as? NSNumber {
+            return SIMD3(Float(truncating: x), Float(truncating: y), Float(truncating: z))
+        }
+        return nil
+    }
+
+    public func entityParameter(_ name: String) -> EntityID? {
+        guard let number = parameters[name] as? NSNumber else { return nil }
+        let candidate = EntityID(rawValue: number.uint64Value)
+        return contains(candidate) ? candidate : nil
+    }
+
+    public func entities() -> [EntityID] {
+        phaseContext.entities()
+    }
+
+    public func entity(named name: String) -> EntityID? {
+        guard !name.isEmpty else { return nil }
+        return phaseContext.entities(with: SceneNameComponent.self).first {
+            phaseContext.component(SceneNameComponent.self, for: $0)?.value == name
+        }
     }
 
     public var isAlive: Bool {

@@ -1662,9 +1662,15 @@ public struct TransactionExecutor {
             case let .setScriptBindings(entityID, bindings):
                 let ref = "scene:\(entityID)"
                 let records = bindings.map { b -> [String: Any] in
-                    ["handle": b.script.rawValue,
-                     "isEnabled": b.isEnabled,
-                     "parametersJSON": b.parametersJSON]
+                    var record: [String: Any] = [
+                        "handle": b.script.rawValue,
+                        "isEnabled": b.isEnabled,
+                        "parametersJSON": b.parametersJSON,
+                    ]
+                    if let identifier = b.identifier {
+                        record["identifier"] = identifier
+                    }
+                    return record
                 }
                 if let data = try? JSONSerialization.data(withJSONObject: records),
                    let json = String(data: data, encoding: .utf8) {

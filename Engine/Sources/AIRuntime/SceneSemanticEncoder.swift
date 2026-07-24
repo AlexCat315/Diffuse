@@ -204,6 +204,7 @@ public struct SceneSemanticEncoder: Sendable {
                 scriptBindings = sc.bindings.map {
                     SceneSemanticSnapshot.ScriptBindingRecord(
                         handle: $0.script.rawValue,
+                        identifier: $0.identifier,
                         isEnabled: $0.isEnabled,
                         parametersJSON: $0.parametersJSON
                     )

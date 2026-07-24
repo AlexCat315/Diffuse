@@ -59,6 +59,7 @@ public struct ProjectExportAssetList: Codable, Sendable, Equatable {
 ///
 ///     build.json                     descriptor / metadata
 ///     assets.json                    referenced asset list
+///     Scripts/scripts.json           optional project script aliases and defaults
 ///     .guava/game-saves/slot-0.json  scene captured as a GameSaveDocument
 ///     <project-relative paths>        asset files and external model dependencies
 ///
@@ -94,6 +95,9 @@ public enum ProjectExporter {
             try copyAudioResources(from: sourceProjectDirectory,
                                    to: stagingDirectory,
                                    fileManager: fileManager)
+            try copyProjectScriptCatalog(from: sourceProjectDirectory,
+                                         to: stagingDirectory,
+                                         fileManager: fileManager)
         }
 
         let assetList = ProjectExportAssetList(assets: assets.map {
@@ -305,6 +309,18 @@ public enum ProjectExporter {
                 try fileManager.copyItem(at: source, to: destination)
             }
         }
+    }
+
+    private static func copyProjectScriptCatalog(from sourceDirectory: URL,
+                                                 to outputDirectory: URL,
+                                                 fileManager: FileManager) throws {
+        let source = sourceDirectory.appendingPathComponent(ProjectScriptCatalog.relativePath)
+        guard fileManager.fileExists(atPath: source.path) else { return }
+        let destination = try safeDestination(relativePath: ProjectScriptCatalog.relativePath,
+                                              in: outputDirectory)
+        try fileManager.createDirectory(at: destination.deletingLastPathComponent(),
+                                        withIntermediateDirectories: true)
+        try fileManager.copyItem(at: source, to: destination)
     }
 
     private static func safeDestination(relativePath: String,

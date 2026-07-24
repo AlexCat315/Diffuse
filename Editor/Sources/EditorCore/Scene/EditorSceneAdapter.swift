@@ -1727,17 +1727,20 @@ public struct EditorSceneManifestConstraint: Codable, Sendable, Equatable {
 
 public struct EditorSceneManifestScriptBinding: Codable, Sendable, Equatable {
     public let script: UInt64
+    public let identifier: String?
     public let isEnabled: Bool
     public let parametersJSON: String
 
     public init(_ binding: ScriptBinding) {
         self.script = binding.script.rawValue
+        self.identifier = binding.identifier
         self.isEnabled = binding.isEnabled
         self.parametersJSON = binding.parametersJSON
     }
 
     var binding: ScriptBinding {
         ScriptBinding(ScriptHandle(rawValue: script),
+                      identifier: identifier,
                       isEnabled: isEnabled,
                       parametersJSON: parametersJSON)
     }
@@ -2425,9 +2428,21 @@ public struct EditorInspectorEntityOption: Sendable, Equatable {
     }
 }
 
+public struct EditorInspectorStringOption: Sendable, Equatable {
+    public let value: String
+    public let label: String
+
+    public init(value: String, label: String) {
+        self.value = value
+        self.label = label
+    }
+}
+
 public enum EditorInspectorFieldValue {
     case readOnly(String)
     case text(Binding<String>)
+    case stringOptions(Binding<String>, options: [EditorInspectorStringOption])
+    case action(title: String, isDestructive: Bool, action: () -> Void)
     case bool(Binding<Bool>)
     case number(Binding<Float>)
     case constrainedNumber(Binding<Float>, min: Float?, max: Float?, step: Float?, showsStepper: Bool)
@@ -2492,6 +2507,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     private var initialSelectionID: UInt64?
     private var initialExpandedIDs: Set<UInt64> = []
     let scriptRuntime = ScriptRuntime()
+    var scriptCatalogEntries: [ProjectScriptCatalogEntry] = []
+    var managedScriptIdentifiers: Set<String> = []
     let particleFeedbackLock = NSLock()
     var pendingParticleFeedback: [GPUParticleSimulationEventSnapshot] = []
     var particleFeedbackGeneration: UInt64 = 0
@@ -2508,6 +2525,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
 
     public init() {
         scene.bootstrapEditorPreviewScene()
+        scene.setResource(InputActionMap.guavaDefault)
         scene.setScriptDriver(scriptRuntime)
         let defaults = scene.resource(SceneBootstrapDefaultsResource.self)
         initialSelectionID = defaults?.defaultSelection?.rawValue
@@ -2522,6 +2540,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     private func resetToPreviewScene(notify: Bool) {
         scene = SceneRuntime()
         scene.bootstrapEditorPreviewScene()
+        scene.setResource(InputActionMap.guavaDefault)
         scriptRuntime.reset()
         scene.setScriptDriver(scriptRuntime)
         invalidateParticleFeedback()
@@ -2725,6 +2744,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         if let particleScalabilityPolicy = manifest.particleScalabilityPolicy {
             restoredScene.setResource(particleScalabilityPolicy.policy)
         }
+        restoredScene.setResource(InputActionMap.guavaDefault)
         for originalID in manifest.lockedEntityIDs ?? [] {
             if let entity = idMap[originalID] {
                 _ = restoredScene.setComponent(EditorHierarchyLockComponent(), for: entity)
@@ -5197,16 +5217,26 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             let ordinal = index + 1
             fields.append(
                 EditorInspectorField(
-                    id: "script-\(index)-enabled",
+                    id: "script-\(index)-identifier",
                     label: String(format: L("Script %d"), ordinal),
+                    value: .stringOptions(scriptIdentifierBinding(for: entity, index: index),
+                                          options: availableScriptOptions)
+                )
+            )
+            fields.append(
+                EditorInspectorField(
+                    id: "script-\(index)-enabled",
+                    label: L("Enabled"),
                     value: .bool(scriptEnabledBinding(for: entity, index: index))
                 )
             )
             fields.append(
                 EditorInspectorField(
-                    id: "script-\(index)-handle",
-                    label: L("Handle"),
-                    value: .readOnly("#\(binding.script.rawValue)")
+                    id: "script-\(index)-status",
+                    label: L("Status"),
+                    value: .readOnly(scriptRuntime.canResolve(binding)
+                                     ? L("Ready")
+                                     : L("Missing script"))
                 )
             )
             fields.append(
@@ -5214,6 +5244,15 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                     id: "script-\(index)-parameters",
                     label: L("Parameters"),
                     value: .json(scriptParametersBinding(for: entity, index: index), minHeight: 96)
+                )
+            )
+            fields.append(
+                EditorInspectorField(
+                    id: "script-\(index)-remove",
+                    label: L("Binding"),
+                    value: .action(title: L("Remove Script"), isDestructive: true) { [weak self] in
+                        _ = self?.removeScriptBinding(from: entity.rawValue, at: index)
+                    }
                 )
             )
         }
@@ -5227,6 +5266,16 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 )
             )
         }
+
+        fields.append(
+            EditorInspectorField(
+                id: "script-add",
+                label: L("Binding"),
+                value: .action(title: L("Add Script"), isDestructive: false) { [weak self] in
+                    _ = self?.addScriptBinding(to: entity.rawValue)
+                }
+            )
+        )
 
         return EditorInspectorSection(id: "scripts", title: L("Scripts"), fields: fields)
     }
@@ -7548,6 +7597,35 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 bindings[index].isEnabled = next
                 _ = applySceneTransaction(intentVerb: "scene.set_script_enabled",
                                           summary: "Update script enabled flag",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setScriptBindings(entityID: entity.rawValue,
+                                                                         bindings: bindings)])
+            }
+        )
+    }
+
+    private func scriptIdentifierBinding(for entity: EntityID, index: Int) -> Binding<String> {
+        Binding(
+            get: { [self] in
+                guard let bindings = scene.component(ScriptComponent.self, for: entity)?.bindings,
+                      bindings.indices.contains(index) else { return "" }
+                let binding = bindings[index]
+                return binding.identifier
+                    ?? scriptRuntime.identifier(for: binding.script)
+                    ?? "handle:#\(binding.script.rawValue)"
+            },
+            set: { [self] next in
+                let normalized = next.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !normalized.isEmpty,
+                      var bindings = scene.component(ScriptComponent.self, for: entity)?.bindings,
+                      bindings.indices.contains(index),
+                      bindings[index].identifier != normalized else { return }
+                bindings[index].identifier = normalized
+                bindings[index].script = scriptRuntime.handle(named: normalized)
+                    ?? ScriptHandle(rawValue: 0)
+                bindings[index].parametersJSON = "{}"
+                _ = applySceneTransaction(intentVerb: "scene.set_script_identifier",
+                                          summary: "Change script binding",
                                           targetRawIDs: [entity.rawValue],
                                           mutations: [.setScriptBindings(entityID: entity.rawValue,
                                                                          bindings: bindings)])
