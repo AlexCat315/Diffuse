@@ -4,8 +4,8 @@ import SceneRuntime
 extension SceneSerializer {
 
     /// Serializes a full scene including ScriptComponent bindings.
-    /// Script handles are NOT persisted (they're runtime-registered); only parametersJSON
-    /// and isEnabled flags are saved.
+    /// Numeric script handles are NOT persisted because they are process-local. Stable
+    /// identifiers, parameters and enabled flags are preserved.
     public static func serializeFull(_ scene: SceneRuntime) throws -> Data {
         guard let base = try JSONSerialization.jsonObject(with: serialize(scene)) as? [String: Any],
               var entities = base["entities"] as? [[String: Any]]
@@ -16,11 +16,16 @@ extension SceneSerializer {
             guard i < entities.count else { break }
             guard let sc = scene.component(ScriptComponent.self, for: entity) else { continue }
             var comps = entities[i]["components"] as? [String: Any] ?? [:]
-            comps["script"] = [
-                "bindings": sc.bindings.map { b in
-                    ["parametersJSON": b.parametersJSON, "isEnabled": b.isEnabled] as [String: Any]
+            comps["script"] = ["bindings": sc.bindings.map { binding -> [String: Any] in
+                var encoded: [String: Any] = [
+                    "parametersJSON": binding.parametersJSON,
+                    "isEnabled": binding.isEnabled,
+                ]
+                if let identifier = binding.identifier {
+                    encoded["identifier"] = identifier
                 }
-            ]
+                return encoded
+            }]
             entities[i]["components"] = comps
         }
 
@@ -30,7 +35,7 @@ extension SceneSerializer {
     }
 
     /// Deserializes a scene and restores ScriptComponent bindings.
-    /// Script handles are set to rawValue 0; re-register scripts and update handles after loading.
+    /// Script handles are set to rawValue 0 and resolve through their stable identifiers.
     public static func deserializeFull(_ data: Data, into scene: inout SceneRuntime) throws {
         try deserialize(data, into: &scene)
 
@@ -49,6 +54,7 @@ extension SceneSerializer {
             let scriptBindings: [ScriptBinding] = bindings.map { b in
                 ScriptBinding(
                     ScriptHandle(rawValue: 0),
+                    identifier: b["identifier"] as? String,
                     isEnabled: b["isEnabled"] as? Bool ?? true,
                     parametersJSON: b["parametersJSON"] as? String ?? "{}"
                 )

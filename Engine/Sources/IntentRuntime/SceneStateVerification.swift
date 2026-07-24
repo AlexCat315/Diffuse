@@ -57,11 +57,13 @@ public struct SceneAudioSourceVerificationState: Codable, Sendable, Equatable {
 
 public struct SceneScriptBindingVerificationState: Codable, Sendable, Equatable {
     public var scriptHandle: UInt64
+    public var scriptIdentifier: String?
     public var isEnabled: Bool
     public var parametersJSON: String
 
     public init(_ binding: ScriptBinding) {
         scriptHandle = binding.script.rawValue
+        scriptIdentifier = binding.identifier
         isEnabled = binding.isEnabled
         parametersJSON = binding.parametersJSON
     }

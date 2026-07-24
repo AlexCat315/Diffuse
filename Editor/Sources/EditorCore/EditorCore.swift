@@ -155,6 +155,9 @@ public final class EditorApplication: @unchecked Sendable {
     private var editorAutosaveElapsed: Double = 0
     private var lastEditorAutosavedRevision: UInt64?
     private var recoverySuppressedRevision: UInt64?
+    private let projectScriptCatalogMonitor: ProjectScriptCatalogMonitor
+    private var projectScriptReloadElapsed: Double = 0
+    private static let projectScriptReloadInterval: Double = 1
 
     /// Revision equality covers ordinary edits/undo. A recovered autosave is
     /// explicitly dirty because rebuilding two structurally similar manifests
@@ -209,6 +212,9 @@ public final class EditorApplication: @unchecked Sendable {
         let pluginAuthorizationStore = EditorPluginAuthorizationStore(
             projectDirectory: projectDirectory
         )
+        let projectScriptCatalogMonitor = ProjectScriptCatalogMonitor(
+            projectDirectory: projectDirectory
+        )
         self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: resolvedBackend)
         self.projectDirectory = projectDirectory
         self.store = store
@@ -221,6 +227,7 @@ public final class EditorApplication: @unchecked Sendable {
         self.editLog = EditLog(projectDirectory: projectDirectory)
         self.contextMemoryStore = contextMemoryStore
         self.pluginAuthorizationStore = pluginAuthorizationStore
+        self.projectScriptCatalogMonitor = projectScriptCatalogMonitor
         self.trustedPluginHostExecutableURL = EditorPluginHostLocator.resolve(
             injectedURL: trustedPluginHostExecutableURL
         )
@@ -246,6 +253,7 @@ public final class EditorApplication: @unchecked Sendable {
         if let selection = initialSelectedEntityID {
             store.dispatch(.setSelectedEntity(selection))
         }
+        reloadProjectScripts(force: true)
 
         startMCPBridge()
 
@@ -257,7 +265,8 @@ public final class EditorApplication: @unchecked Sendable {
 
         // Propagate initial workflow context, observation bus, and context memory to Session.
         if let initialSession {
-            let ctx = Self.workflowContext(for: store.state.workspaceMode)
+            let ctx = Self.workflowContext(for: store.state.workspaceMode,
+                                           scriptEntries: scene.scriptCatalogEntries)
             let bus = observationBus
             let mem = contextMemoryStore
             Task {
@@ -274,7 +283,8 @@ public final class EditorApplication: @unchecked Sendable {
             let newMode = s.state.workspaceMode
             guard newMode != lastObservedMode, let sess = self.session else { return }
             lastObservedMode = newMode
-            let ctx = Self.workflowContext(for: newMode)
+            let ctx = Self.workflowContext(for: newMode,
+                                           scriptEntries: self.scene.scriptCatalogEntries)
             Task { await sess.setWorkflowContext(ctx) }
         }
     }
@@ -369,6 +379,11 @@ public final class EditorApplication: @unchecked Sendable {
         }
         if wantsContinuousFrames {
             displayInvalidationHandler?()
+        }
+        projectScriptReloadElapsed += max(0, deltaTime)
+        if projectScriptReloadElapsed >= Self.projectScriptReloadInterval {
+            projectScriptReloadElapsed = 0
+            reloadProjectScripts()
         }
         autosaveSceneIfNeeded(elapsed: deltaTime)
     }
@@ -854,6 +869,8 @@ public final class EditorApplication: @unchecked Sendable {
                 return false
             }
             let result = scene.load(manifest: doc.manifest)
+            guard result.error == nil else { throw result.error! }
+            reportUnresolvedScriptBindings()
             store.dispatch(.setSelectedEntity(result.selectedEntityID))
             store.dispatch(.setSceneRevision(scene.revision))
             logConsole("Game state loaded",
@@ -1120,6 +1137,7 @@ public final class EditorApplication: @unchecked Sendable {
             guard result.error == nil else {
                 throw result.error!
             }
+            reportUnresolvedScriptBindings()
             store.dispatch(.setSelectedEntity(result.selectedEntityID))
             store.dispatch(.setSceneRecoveryPending(true))
             recoverySuppressedRevision = nil
@@ -1166,6 +1184,7 @@ public final class EditorApplication: @unchecked Sendable {
             let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
             let result = scene.load(manifest: manifest)
             guard result.error == nil else { throw result.error! }
+            reportUnresolvedScriptBindings()
             store.dispatch(.setSelectedEntity(result.selectedEntityID))
             store.dispatch(.markSceneSaved(store.state.sceneRevision))
             store.dispatch(.setSceneRecoveryPending(false))
@@ -1244,6 +1263,7 @@ public final class EditorApplication: @unchecked Sendable {
     public func reloadAssets() -> Int {
         do {
             let assets = try EditorAssetCatalog.loadProject(at: projectDirectory)
+            reloadProjectScripts(force: true)
             logConsole("Reloaded assets", detail: "\(assets.count) importable files")
             return assets.count
         } catch {
@@ -1251,6 +1271,49 @@ public final class EditorApplication: @unchecked Sendable {
                        severity: .error,
                        detail: String(describing: error))
             return 0
+        }
+    }
+
+    public func reloadProjectScripts(force: Bool = false) {
+        do {
+            guard let catalog = try projectScriptCatalogMonitor.loadIfChanged(force: force) else {
+                return
+            }
+            let report = scene.applyProjectScriptCatalog(catalog)
+            store.dispatch(.forceUIRefresh)
+            if let session {
+                let context = Self.workflowContext(for: store.state.workspaceMode,
+                                                   scriptEntries: catalog.entries)
+                Task { await session.setWorkflowContext(context) }
+            }
+            let source = catalog.sourceURL?.path ?? "built-in catalog"
+            logConsole("Reloaded script catalog",
+                       detail: "\(report.registeredScriptCount) scripts (\(report.projectScriptCount) project) · \(source)")
+            for diagnostic in catalog.diagnostics {
+                logConsole("Script catalog: \(diagnostic.message)",
+                           severity: diagnostic.severity == .error ? .error : .warning)
+            }
+            for unresolved in report.unresolvedBindings {
+                logConsole("Unresolved script binding",
+                           severity: .error,
+                           detail: unresolved)
+            }
+        } catch {
+            if scene.scriptCatalogEntries.isEmpty {
+                _ = scene.applyProjectScriptCatalog(.builtIn)
+                store.dispatch(.forceUIRefresh)
+            }
+            logConsole("Failed to reload script catalog",
+                       severity: .error,
+                       detail: String(describing: error))
+        }
+    }
+
+    private func reportUnresolvedScriptBindings() {
+        for unresolved in scene.unresolvedScriptBindingDescriptions() {
+            logConsole("Unresolved script binding",
+                       severity: .error,
+                       detail: unresolved)
         }
     }
 
@@ -1677,7 +1740,8 @@ public final class EditorApplication: @unchecked Sendable {
         )
         if let newSession {
             let worldContext = self.aiWorldContext
-            let ctx = Self.workflowContext(for: store.state.workspaceMode)
+            let ctx = Self.workflowContext(for: store.state.workspaceMode,
+                                           scriptEntries: scene.scriptCatalogEntries)
             let bus = self.observationBus
             let mem = self.contextMemoryStore
             Task {
@@ -2029,7 +2093,10 @@ public final class EditorApplication: @unchecked Sendable {
         )
         session = nextSession
         if let nextSession {
-            await nextSession.setWorkflowContext(Self.workflowContext(for: store.state.workspaceMode))
+            await nextSession.setWorkflowContext(Self.workflowContext(
+                for: store.state.workspaceMode,
+                scriptEntries: scene.scriptCatalogEntries
+            ))
             await nextSession.setObservationBus(observationBus)
             await nextSession.setContextMemory(contextMemoryStore)
         }
@@ -2054,21 +2121,54 @@ public final class EditorApplication: @unchecked Sendable {
         AIKeychain.hasKey(for: store.state.aiSettings.provider)
     }
 
-    static func workflowContext(for mode: EditorWorkspaceMode) -> WorkflowContext {
+    static func workflowContext(
+        for mode: EditorWorkspaceMode,
+        scriptEntries: [ProjectScriptCatalogEntry] = []
+    ) -> WorkflowContext {
         let intent = GameplayIntent(genre: "game", winCondition: "not_specified", pacing: "exploration")
+        let constraints = GameKnownConstraints(
+            scriptingRegistry: scriptEntries.map(\.identifier),
+            scriptSchemas: scriptEntries.map(scriptSchema)
+        )
         switch mode {
         case .level:
             return .game(GameWorkflowContext(levelPhase: .blockout,
                                             gameplayIntent: intent,
-                                            targetExperience: "Interactive level editing"))
+                                            targetExperience: "Interactive level editing",
+                                            knownConstraints: constraints))
         case .modeling:
             return .game(GameWorkflowContext(levelPhase: .polish,
                                             gameplayIntent: intent,
-                                            targetExperience: "Asset creation and modeling"))
+                                            targetExperience: "Asset creation and modeling",
+                                            knownConstraints: constraints))
         case .animation:
             return .game(GameWorkflowContext(levelPhase: .polish,
                                             gameplayIntent: intent,
-                                            targetExperience: "Animation authoring"))
+                                            targetExperience: "Animation authoring",
+                                            knownConstraints: constraints))
+        }
+    }
+
+    private static func scriptSchema(_ entry: ProjectScriptCatalogEntry) -> ScriptSchema {
+        guard let data = entry.defaultParametersJSON.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return ScriptSchema(name: entry.identifier)
+        }
+        let parameters = object.keys.sorted().map { name in
+            ScriptParameterDescriptor(name: name,
+                                      type: scriptParameterType(object[name]))
+        }
+        return ScriptSchema(name: entry.identifier, parameters: parameters)
+    }
+
+    private static func scriptParameterType(_ value: Any?) -> String {
+        switch value {
+        case is Bool: return "Bool"
+        case is NSNumber: return "Number"
+        case is String: return "String"
+        case let array as [Any]: return array.count == 3 ? "Vec3" : "Array"
+        case is [String: Any]: return "Object"
+        default: return "Value"
         }
     }
 

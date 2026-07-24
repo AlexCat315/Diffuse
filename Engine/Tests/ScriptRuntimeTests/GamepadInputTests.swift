@@ -145,4 +145,49 @@ struct GamepadInputTests {
         let state = runtime.resource(InputFrameState.self)
         #expect(abs(state!.axis("look_x") - 0.3) < 0.01)
     }
+
+    @Test("mouse motion axes honor required button gates")
+    func mouseMotionButtonGate() {
+        var runtime = makeScene()
+        var map = InputActionMap()
+        map.bind("look_x", to: .mouseMotion(axis: .x, requiredButton: .right, scale: 0.5))
+        runtime.setResource(map)
+
+        _ = runtime.tick(deltaTime: 0.1, inputEvents: [
+            .mouseMotion(MouseMotionEvent(x: 10, y: 0, deltaX: 10, deltaY: 0)),
+        ])
+        #expect(runtime.resource(InputFrameState.self)?.axis("look_x") == 0)
+
+        _ = runtime.tick(deltaTime: 0.1, inputEvents: [
+            .mouseButtonDown(MouseButtonEvent(button: .right, x: 0, y: 0, clicks: 1)),
+            .mouseMotion(MouseMotionEvent(x: 18, y: 0, deltaX: 8, deltaY: 0)),
+        ])
+        #expect(runtime.resource(InputFrameState.self)?.axis("look_x") == 4)
+    }
+
+    @Test("mouse wheel contributes a per-frame camera axis")
+    func mouseWheelAxis() {
+        var runtime = makeScene()
+        var map = InputActionMap()
+        map.bind("camera_zoom", to: .mouseWheel(axis: .y, scale: -2))
+        runtime.setResource(map)
+
+        _ = runtime.tick(deltaTime: 0.1, inputEvents: [
+            .mouseWheel(MouseWheelEvent(x: 0, y: 1.5)),
+        ])
+        #expect(runtime.resource(InputFrameState.self)?.axis("camera_zoom") == -3)
+        _ = runtime.tick(deltaTime: 0.1)
+        #expect(runtime.resource(InputFrameState.self)?.axis("camera_zoom") == 0)
+    }
+
+    @Test("Guava defaults cover built-in movement, camera, and jump actions")
+    func standardInputMap() {
+        let map = InputActionMap.guavaDefault
+        #expect(map.bindings["move_forward"]?.contains(.key(Scancode.w)) == true)
+        #expect(map.bindings["jump"]?.contains(.key(Scancode.space)) == true)
+        #expect(map.bindings["look_x"]?.contains(
+            .mouseMotion(axis: .x, requiredButton: .right)
+        ) == true)
+        #expect(map.bindings["camera_zoom"]?.contains(.mouseWheel(axis: .y)) == true)
+    }
 }

@@ -3,11 +3,47 @@ import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
 import SceneRuntime
+import ScriptRuntime
 import SIMDCompat
 import Testing
 
 @Suite("EditorInspectorSections", .serialized)
 struct EditorInspectorSectionsTests {
+
+    @Test("script component exposes catalog selection and binding actions")
+    func scriptCatalogInspector() throws {
+        let adapter = EditorSceneAdapter()
+        _ = adapter.applyProjectScriptCatalog(.builtIn)
+        let id = makeEntity(in: adapter)
+        let entity = try #require(EntityID(rawValue: id))
+
+        #expect(adapter.addComponent(.script, to: id))
+        guard case let .stringOptions(identifier, options) =
+                field(adapter, id, section: "scripts", field: "script-0-identifier") else {
+            Issue.record("expected script catalog selector"); return
+        }
+        #expect(identifier.wrappedValue == "guava.rotator")
+        #expect(options.contains { $0.value == "guava.character-controller" })
+
+        identifier.wrappedValue = "guava.mover"
+        #expect(adapter.scene.component(ScriptComponent.self, for: entity)?.bindings.first?.identifier
+                == "guava.mover")
+
+        guard case let .action(_, _, add) =
+                field(adapter, id, section: "scripts", field: "script-add") else {
+            Issue.record("expected add script action"); return
+        }
+        add()
+        #expect(adapter.scene.component(ScriptComponent.self, for: entity)?.bindings.count == 2)
+
+        guard case let .action(_, isDestructive, remove) =
+                field(adapter, id, section: "scripts", field: "script-1-remove") else {
+            Issue.record("expected remove script action"); return
+        }
+        #expect(isDestructive)
+        remove()
+        #expect(adapter.scene.component(ScriptComponent.self, for: entity)?.bindings.count == 1)
+    }
 
     private func makeEntity(in adapter: EditorSceneAdapter) -> UInt64 {
         adapter.scene.createEntity().rawValue

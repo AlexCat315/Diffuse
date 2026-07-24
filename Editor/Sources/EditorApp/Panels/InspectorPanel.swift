@@ -18,6 +18,7 @@ struct InspectorPanel: View {
     var body: some View {
         StoreScope(store) { store in
             let _ = store.sceneRevision
+            let _ = store.uiRefreshRevision
             let selectedEntityID = store.selectedEntityID
             let entity = scene.entitySummary(id: selectedEntityID)
             let sections = scene.inspectorSections(for: selectedEntityID)
@@ -164,6 +165,57 @@ struct InspectorPanel: View {
             CommitOnBlurTextField(identity: identity, text: binding, size: .small)
                 .flex()
                 .clipped()
+        }
+    }
+
+    private struct InspectorStringOptionsValue: View {
+        let binding: Binding<String>
+        let options: [EditorInspectorStringOption]
+        @State private var isPresented: Bool = false
+
+        var body: some View {
+            Popover(isPresented: $isPresented, width: 230) {
+                Row(alignment: .center, spacing: 5) {
+                    Text(selectedLabel, lineLimit: 1)
+                        .font(.caption)
+                        .foregroundColor(.onSurface)
+                        .flex()
+                    Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
+                }
+                .padding(horizontal: 8, vertical: 4)
+                .background(.surfaceSunken)
+                .cornerRadius(3)
+            } content: {
+                Menu(options.map { option in
+                    .item(MenuItem(id: "string-option-\(option.value)",
+                                   title: option.label,
+                                   isSelected: option.value == binding.wrappedValue,
+                                   action: { binding.wrappedValue = option.value }))
+                }, width: 230, maxVisibleRows: 12, onItemActivated: {
+                    isPresented = false
+                })
+            }
+        }
+
+        private var selectedLabel: String {
+            options.first(where: { $0.value == binding.wrappedValue })?.label
+                ?? "\(L("Missing")): \(binding.wrappedValue)"
+        }
+    }
+
+    private struct InspectorActionValue: View {
+        let title: String
+        let isDestructive: Bool
+        let action: () -> Void
+
+        var body: some View {
+            if isDestructive {
+                Button(title, role: .destructive, action: action)
+                    .buttonStyle(.destructive)
+            } else {
+                Button(title, action: action)
+                    .buttonStyle(.secondary)
+            }
         }
     }
 
@@ -382,6 +434,12 @@ struct InspectorPanel: View {
             return AnyView(InspectorReadOnlyValue(text: text))
         case let .text(binding):
             return AnyView(InspectorTextValue(identity: identity, binding: binding))
+        case let .stringOptions(binding, options):
+            return AnyView(InspectorStringOptionsValue(binding: binding, options: options))
+        case let .action(title, isDestructive, action):
+            return AnyView(InspectorActionValue(title: title,
+                                                isDestructive: isDestructive,
+                                                action: action))
         case let .bool(binding):
             return AnyView(InspectorBooleanValue(binding: binding))
         case let .number(binding):

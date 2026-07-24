@@ -987,9 +987,11 @@ public actor Session {
         - For set_script_property: use `script_property_name` (the parameter key) and \
         `script_property_value` (the new value — string, number, boolean, or array). The entity's \
         `scriptBindings` shows existing scripts and their current `params`. Use `script_index` \
-        (default 0) to target a specific binding when an entity has multiple scripts.
+        (default 0) to target a specific binding when an entity has multiple scripts. Provide \
+        `script_identifier` with a stable catalog ID to create or replace a binding.
         - For set_script_enabled: use `is_enabled` (true/false) and `script_index` (default 0) to \
-        enable or disable a specific script binding on the entity.
+        enable or disable a specific script binding on the entity; `script_identifier` can create \
+        or replace that binding.
         - For set_collider_layer: use `collider_layer_id` (0–15, which layer the collider \
         occupies) and/or `collider_layer_mask` (bitmask of layers this collider interacts with, \
         e.g. 0xFFFF = collide with all layers). An entity's `colliderLayerID` and \
@@ -1128,6 +1130,7 @@ public actor Session {
         if let bindings = e.scriptBindings, !bindings.isEmpty {
             d["scriptBindings"] = bindings.map { b -> [String: Any] in
                 var entry: [String: Any] = ["handle": b.handle, "enabled": b.isEnabled]
+                if let identifier = b.identifier { entry["identifier"] = identifier }
                 if b.parametersJSON != "{}" && !b.parametersJSON.isEmpty,
                    let data = b.parametersJSON.data(using: .utf8),
                    let parsed = try? JSONSerialization.jsonObject(with: data) {
@@ -1683,6 +1686,7 @@ public actor Session {
             if let bindings = e.scriptBindings, !bindings.isEmpty {
                 entry["scriptBindings"] = bindings.map { b -> [String: Any] in
                     var rec: [String: Any] = ["handle": b.handle, "enabled": b.isEnabled]
+                    if let identifier = b.identifier { rec["identifier"] = identifier }
                     if b.parametersJSON != "{}" && !b.parametersJSON.isEmpty,
                        let data = b.parametersJSON.data(using: .utf8),
                        let parsed = try? JSONSerialization.jsonObject(with: data) {
