@@ -1500,7 +1500,8 @@ struct UndoStackTests {
         var scene = SceneRuntime()
         let entity = scene.createEntity()
         _ = scene.setComponent(ScriptComponent(bindings: []), for: entity)
-        let binding = ScriptBinding(ScriptHandle(rawValue: 42), isEnabled: true,
+        let binding = ScriptBinding(ScriptHandle(rawValue: 42),
+                                    identifier: "project.runner", isEnabled: true,
                                     parametersJSON: #"{"speed":5}"#)
         let transaction = TransactionIR(
             summary: "Attach script",
@@ -1518,6 +1519,7 @@ struct UndoStackTests {
         #expect(scriptEvent != nil, "setScriptBindings must emit a scriptBindings authored world event")
         if case let .entityAuthoredChanged(_, _, .string(json)) = scriptEvent {
             #expect(json.contains("42"))
+            #expect(json.contains("project.runner"))
             #expect(json.contains("speed"))
         }
     }

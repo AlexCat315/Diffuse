@@ -29,6 +29,8 @@ public final class GameApplication: @unchecked Sendable {
     private var _lastViewportSurface: ViewportSurfaceState = .init()
     private var _pendingInputEvents: [InputEvent] = []
     private var _frameIndex: UInt64 = 0
+    private let scriptCatalogMonitor: ProjectScriptCatalogMonitor?
+    private var scriptCatalogReloadElapsed: Double = 0
 
     /// Called on the main thread whenever the engine publishes a new viewport
     /// surface (i.e. a new rendered frame is ready). Used by the root view to
@@ -38,6 +40,7 @@ public final class GameApplication: @unchecked Sendable {
     public init(projectDirectory: String? = nil, backend: WGPUBackend? = nil) throws {
         let resolvedBackend = backend ?? WGPUBackend()
         let scene = EditorSceneAdapter()
+        var scriptMonitor: ProjectScriptCatalogMonitor?
 
         if let dir = projectDirectory {
             let assetListURL = URL(fileURLWithPath: dir, isDirectory: true)
@@ -60,10 +63,24 @@ public final class GameApplication: @unchecked Sendable {
             if let doc = try GameSaveDocument.read(from: url) {
                 _ = scene.load(manifest: doc.manifest)
             }
+            let monitor = ProjectScriptCatalogMonitor(projectDirectory: dir)
+            scriptMonitor = monitor
+            do {
+                if let catalog = try monitor.loadIfChanged(force: true) {
+                    let report = scene.applyProjectScriptCatalog(catalog)
+                    Self.writeScriptCatalogReport(report, diagnostics: catalog.diagnostics)
+                }
+            } catch {
+                _ = scene.applyProjectScriptCatalog(.builtIn)
+                Self.writeStandardError("script catalog failed to load: \(error)")
+            }
+        } else {
+            _ = scene.applyProjectScriptCatalog(.builtIn)
         }
 
         self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: resolvedBackend)
         self.scene = scene
+        self.scriptCatalogMonitor = scriptMonitor
     }
 
     public var viewportDrawableSize: RenderDrawableSize { _viewportDrawableSize }
@@ -93,6 +110,11 @@ public final class GameApplication: @unchecked Sendable {
     }
 
     public func tick(deltaTime: Double) {
+        scriptCatalogReloadElapsed += max(0, deltaTime)
+        if scriptCatalogReloadElapsed >= 1 {
+            scriptCatalogReloadElapsed = 0
+            reloadProjectScripts()
+        }
         let events = _pendingInputEvents
         _pendingInputEvents.removeAll(keepingCapacity: true)
 
@@ -122,5 +144,32 @@ public final class GameApplication: @unchecked Sendable {
 
     public func shutdown() {
         engine.shutdown()
+    }
+
+    private func reloadProjectScripts() {
+        guard let scriptCatalogMonitor else { return }
+        do {
+            guard let catalog = try scriptCatalogMonitor.loadIfChanged() else { return }
+            let report = scene.applyProjectScriptCatalog(catalog)
+            Self.writeScriptCatalogReport(report, diagnostics: catalog.diagnostics)
+        } catch {
+            Self.writeStandardError("script catalog reload failed: \(error)")
+        }
+    }
+
+    private static func writeScriptCatalogReport(
+        _ report: EditorScriptCatalogApplyReport,
+        diagnostics: [ProjectScriptCatalogDiagnostic]
+    ) {
+        for diagnostic in diagnostics {
+            writeStandardError("script catalog \(diagnostic.severity.rawValue): \(diagnostic.message)")
+        }
+        for binding in report.unresolvedBindings {
+            writeStandardError("unresolved script binding: \(binding)")
+        }
+    }
+
+    private static func writeStandardError(_ message: String) {
+        FileHandle.standardError.write(Data("[GuavaPlayer] \(message)\n".utf8))
     }
 }

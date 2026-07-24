@@ -8,6 +8,7 @@ public enum SceneUtilityCapabilityPreparationError: Error, Sendable, Equatable,
     CustomStringConvertible {
     case entityCannotParentItself(String)
     case emptyScriptPropertyName
+    case missingScriptBinding(Int)
     case noAudioFields
     case noAnimationFields
 
@@ -17,6 +18,8 @@ public enum SceneUtilityCapabilityPreparationError: Error, Sendable, Equatable,
             return "entity '\(reference)' cannot be its own parent"
         case .emptyScriptPropertyName:
             return "script_property_name must not be empty"
+        case let .missingScriptBinding(index):
+            return "script binding \(index) does not exist; provide script_identifier to create it"
         case .noAudioFields:
             return "set_audio_source requires at least one audio field"
         case .noAnimationFields:
@@ -489,6 +492,10 @@ public struct SetScriptPropertyCapability: GuavaCapability {
         @ValueRange(min: 0, max: 255)
         public var script_index: Int?
 
+        @AIField(description: "Stable script catalog id. Provide it to create or replace a binding.",
+                 minLength: 1, maxLength: 256)
+        public var script_identifier: String?
+
         @AIField(description: "Script property name.", minLength: 1, maxLength: 256)
         public var script_property_name: String
 
@@ -517,8 +524,17 @@ public struct SetScriptPropertyCapability: GuavaCapability {
         var bindings = context.entities.first {
             $0.reference == input.entity_id.rawValue
         }?.scriptBindings ?? []
-        while bindings.count <= index {
-            bindings.append(ScriptBinding(ScriptHandle(rawValue: 0)))
+        guard index <= bindings.count else {
+            throw SceneUtilityCapabilityPreparationError.missingScriptBinding(index)
+        }
+        if index == bindings.count {
+            guard let identifier = input.script_identifier else {
+                throw SceneUtilityCapabilityPreparationError.missingScriptBinding(index)
+            }
+            bindings.append(ScriptBinding(identifier: identifier))
+        } else if let identifier = input.script_identifier {
+            bindings[index].identifier = identifier
+            bindings[index].script = ScriptHandle(rawValue: 0)
         }
         bindings[index].parametersJSON = try mergeScriptProperty(
             json: bindings[index].parametersJSON,
@@ -563,6 +579,10 @@ public struct SetScriptBindingsCapability: GuavaCapability {
         @ValueRange(min: 0, max: 255)
         public var script_index: Int?
 
+        @AIField(description: "Stable script catalog id. Provide it to create or replace a binding.",
+                 minLength: 1, maxLength: 256)
+        public var script_identifier: String?
+
         @AIField(description: "Whether the selected script binding is enabled.")
         public var is_enabled: Bool
 
@@ -570,8 +590,8 @@ public struct SetScriptBindingsCapability: GuavaCapability {
     }
 
     public static let id = "scene.set_script_bindings"
-    public static let title = "Set script enabled"
-    public static let description = "Enable or disable an existing script binding."
+    public static let title = "Set script binding"
+    public static let description = "Create, replace, enable, or disable a stable script binding."
     public static let domain = "scene"
     public static let access = CapabilityAccess.reversibleWrite
     public static let releasePhase = CapabilityReleasePhase.stable
@@ -585,10 +605,22 @@ public struct SetScriptBindingsCapability: GuavaCapability {
         var bindings = context.entities.first {
             $0.reference == input.entity_id.rawValue
         }?.scriptBindings ?? []
-        while bindings.count <= index {
-            bindings.append(ScriptBinding(ScriptHandle(rawValue: 0)))
+        guard index <= bindings.count else {
+            throw SceneUtilityCapabilityPreparationError.missingScriptBinding(index)
         }
-        bindings[index].isEnabled = input.is_enabled
+        if index == bindings.count {
+            guard let identifier = input.script_identifier else {
+                throw SceneUtilityCapabilityPreparationError.missingScriptBinding(index)
+            }
+            bindings.append(ScriptBinding(identifier: identifier,
+                                          isEnabled: input.is_enabled))
+        } else {
+            if let identifier = input.script_identifier {
+                bindings[index].identifier = identifier
+                bindings[index].script = ScriptHandle(rawValue: 0)
+            }
+            bindings[index].isEnabled = input.is_enabled
+        }
         return PreparedCapability(
             operations: [.scene(.setScriptBindings(entityID: entityID, bindings: bindings))],
             preview: CapabilityPreview(summary: "Set script binding",

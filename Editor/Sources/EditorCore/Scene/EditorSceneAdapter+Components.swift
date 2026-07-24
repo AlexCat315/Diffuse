@@ -1,4 +1,5 @@
 import SceneRuntime
+import ScriptRuntime
 import SIMDCompat
 
 /// Component types the editor can add to / remove from an entity through the inspector.
@@ -23,6 +24,7 @@ public enum EditorComponentKind: String, CaseIterable, Sendable {
     case animationPlayer
     case animationGraphPlayer
     case particleEmitter
+    case script
 
     public var displayName: String {
         switch self {
@@ -44,6 +46,7 @@ public enum EditorComponentKind: String, CaseIterable, Sendable {
         case .animationPlayer: return "Animation Player"
         case .animationGraphPlayer: return "Animation Graph"
         case .particleEmitter: return "Particle Emitter"
+        case .script:          return "Script"
         }
     }
 }
@@ -71,6 +74,7 @@ extension EditorSceneAdapter {
         case .animationPlayer: return scene.hasComponent(AnimationPlayer.self, for: entity)
         case .animationGraphPlayer: return scene.hasComponent(AnimationGraphPlayer.self, for: entity)
         case .particleEmitter: return scene.hasComponent(ParticleEmitter.self, for: entity)
+        case .script:          return scene.hasComponent(ScriptComponent.self, for: entity)
         }
     }
 
@@ -119,6 +123,11 @@ extension EditorSceneAdapter {
         case .animationPlayer: _ = scene.setComponent(AnimationPlayer(), for: entity)
         case .animationGraphPlayer: _ = scene.setComponent(defaultAnimationGraphPlayer(), for: entity)
         case .particleEmitter: _ = scene.setComponent(ParticleEmitter(), for: entity)
+        case .script:
+            _ = scene.setComponent(
+                ScriptComponent(ScriptBinding(identifier: defaultScriptIdentifier)),
+                for: entity
+            )
         }
         notifyRevisionChanged()
         return true
@@ -149,6 +158,7 @@ extension EditorSceneAdapter {
         case .animationPlayer: _ = scene.removeComponent(AnimationPlayer.self, from: entity)
         case .animationGraphPlayer: _ = scene.removeComponent(AnimationGraphPlayer.self, from: entity)
         case .particleEmitter: _ = scene.removeComponent(ParticleEmitter.self, from: entity)
+        case .script:          _ = scene.removeComponent(ScriptComponent.self, from: entity)
         }
         notifyRevisionChanged()
         return true

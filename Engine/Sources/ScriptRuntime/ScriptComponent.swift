@@ -10,15 +10,29 @@ public struct ScriptHandle: Hashable, Sendable, Equatable {
 
 public struct ScriptBinding: Sendable, Equatable {
     public var script: ScriptHandle
+    /// Stable project-facing identifier. Numeric handles are process-local and are
+    /// retained only for source compatibility with programmatically registered scripts.
+    public var identifier: String?
     public var isEnabled: Bool
     public var parametersJSON: String
 
     public init(_ script: ScriptHandle,
+                identifier: String? = nil,
                 isEnabled: Bool = true,
                 parametersJSON: String = "{}") {
         self.script = script
+        self.identifier = identifier
         self.isEnabled = isEnabled
         self.parametersJSON = parametersJSON
+    }
+
+    public init(identifier: String,
+                isEnabled: Bool = true,
+                parametersJSON: String = "{}") {
+        self.init(ScriptHandle(rawValue: 0),
+                  identifier: identifier,
+                  isEnabled: isEnabled,
+                  parametersJSON: parametersJSON)
     }
 }
 

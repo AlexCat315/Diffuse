@@ -274,6 +274,7 @@ final class AIRuntimeTests: XCTestCase {
     func testSnapshotScriptBindingsCopiedToEntityRecord() {
         let binding = SceneSemanticSnapshot.ScriptBindingRecord(
             handle: 42,
+            identifier: "project.runner",
             isEnabled: true,
             parametersJSON: "{\"speed\":5}"
         )
@@ -294,6 +295,7 @@ final class AIRuntimeTests: XCTestCase {
         let r = worldView.entityIndex["scene:20"]
         XCTAssertEqual(r?.scriptBindings?.count, 1)
         XCTAssertEqual(r?.scriptBindings?.first?.handle, 42)
+        XCTAssertEqual(r?.scriptBindings?.first?.identifier, "project.runner")
         XCTAssertEqual(r?.scriptBindings?.first?.isEnabled, true)
         XCTAssertEqual(r?.scriptBindings?.first?.parametersJSON, "{\"speed\":5}")
     }
@@ -810,7 +812,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let json = """
         {"summary":"add label","steps":[{"op":"set_script_property","entity_id":"\(ref)",\
-        "script_property_name":"label","script_property_value":"Patrol"}]}
+        "script_identifier":"project.patrol","script_property_name":"label","script_property_value":"Patrol"}]}
         """
         let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
@@ -822,6 +824,7 @@ final class AIRuntimeTests: XCTestCase {
         }
         let bindings = try XCTUnwrap(foundBindings, "expected setScriptBindings mutation")
         XCTAssertEqual(bindings.count, 1, "executor must create a binding when none exist")
+        XCTAssertEqual(bindings[0].identifier, "project.patrol")
         let params = try XCTUnwrap(bindings[0].parametersJSON.data(using: .utf8))
         let dict = try XCTUnwrap(JSONSerialization.jsonObject(with: params) as? [String: Any])
         XCTAssertEqual(dict["label"] as? String, "Patrol")
@@ -857,7 +860,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let json = """
         {"summary":"enable script","steps":[{"op":"set_script_enabled","entity_id":"\(ref)",\
-        "is_enabled":true}]}
+        "script_identifier":"project.runner","is_enabled":true}]}
         """
         let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
@@ -870,6 +873,7 @@ final class AIRuntimeTests: XCTestCase {
         let bindings = try XCTUnwrap(foundBindings, "expected setScriptBindings mutation")
         XCTAssertEqual(bindings.count, 1)
         XCTAssertTrue(bindings[0].isEnabled)
+        XCTAssertEqual(bindings[0].identifier, "project.runner")
     }
 
     func testSetScriptEnabledMissingFieldThrows() throws {
@@ -1670,10 +1674,11 @@ final class AIRuntimeTests: XCTestCase {
 
     func testWorldEntityRecordApplyScriptBindingsFromJSONEvent() {
         var record = WorldEntityRecord(ref: "scene:99", name: "Mover")
-        let json = #"[{"handle":42,"isEnabled":true,"parametersJSON":"{\"speed\":5}"}]"#
+        let json = #"[{"handle":42,"identifier":"project.runner","isEnabled":true,"parametersJSON":"{\"speed\":5}"}]"#
         record.apply(property: "scriptBindings", value: .string(json))
         XCTAssertEqual(record.scriptBindings?.count, 1)
         XCTAssertEqual(record.scriptBindings?.first?.handle, 42)
+        XCTAssertEqual(record.scriptBindings?.first?.identifier, "project.runner")
         XCTAssertEqual(record.scriptBindings?.first?.isEnabled, true)
         XCTAssertEqual(record.scriptBindings?.first?.parametersJSON, #"{"speed":5}"#)
     }
@@ -4129,7 +4134,8 @@ final class AIRuntimeTests: XCTestCase {
 
         let json = """
         {"summary":"s","steps":[{"op":"set_script_property","entity_id":"\(ref)",
-        "script_property_name":"tags","script_property_value":["enemy","boss"]}]}
+        "script_identifier":"project.tags","script_property_name":"tags",\
+        "script_property_value":["enemy","boss"]}]}
         """
         let plan = try JSONDecoder().decode(SceneEditPlan.self, from: Data(json.utf8))
         let transaction = try SceneEditPlanExecutor().buildTransaction(from: plan, scene: scene)
@@ -4140,7 +4146,7 @@ final class AIRuntimeTests: XCTestCase {
                 let data = first.parametersJSON.data(using: .utf8)!
                 let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
                 let tags = dict?["tags"] as? [String]
-                return tags == ["enemy", "boss"]
+                return first.identifier == "project.tags" && tags == ["enemy", "boss"]
             }
             return false
         }
@@ -4474,7 +4480,9 @@ final class AIRuntimeTests: XCTestCase {
             parentRef: nil, childRefs: [], isSelected: false, position: nil,
             components: ["script"],
             scriptBindings: [
-                SceneSemanticSnapshot.ScriptBindingRecord(handle: 5, isEnabled: true,
+                SceneSemanticSnapshot.ScriptBindingRecord(handle: 5,
+                                                          identifier: "project.enemy",
+                                                          isEnabled: true,
                                                           parametersJSON: "{\"speed\":3.5,\"patrol\":true}")
             ]
         )
@@ -4488,6 +4496,7 @@ final class AIRuntimeTests: XCTestCase {
         XCTAssertEqual(entities.count, 1)
         let scriptBindings = entities[0]["scriptBindings"] as? [[String: Any]]
         XCTAssertNotNil(scriptBindings)
+        XCTAssertEqual(scriptBindings?.first?["identifier"] as? String, "project.enemy")
         let params = scriptBindings?.first?["params"] as? [String: Any]
         XCTAssertEqual(params?["speed"] as? Double, 3.5,
                        "findEntities must include script binding params when parametersJSON is not empty")
