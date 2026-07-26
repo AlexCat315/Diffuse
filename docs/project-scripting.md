@@ -1,3 +1,14 @@
+---
+path: /zh/docs/project-scripting
+title: 项目脚本
+description: 使用稳定脚本 ID、项目级默认参数和热重载配置 Guava 场景行为。
+locale: zh
+translationKey: docs.project-scripting
+category: 开始
+order: 35
+kind: doc
+---
+
 # 项目脚本
 
 Guava 场景中的脚本绑定使用稳定字符串 ID，而不是仅在当前进程有效的数字句柄。Editor 和 GuavaPlayer 都会加载项目下的 `Scripts/scripts.json`，运行期间每秒检查一次文件变化；有效变更会替换脚本实例并依次触发旧实例的 `onDestroy` 与新实例的 `onStart`。

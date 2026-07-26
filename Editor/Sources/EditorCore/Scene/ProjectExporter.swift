@@ -5,6 +5,7 @@ public enum ProjectExporterError: Error, CustomStringConvertible, Equatable {
     case missingPlayerExecutable(String)
     case unsafeRelativePath(String)
     case conflictingAssetDestination(String)
+    case outputContainsSourceProject(String)
 
     public var description: String {
         switch self {
@@ -16,6 +17,8 @@ public enum ProjectExporterError: Error, CustomStringConvertible, Equatable {
             return "export asset path escapes the bundle: \(path)"
         case let .conflictingAssetDestination(path):
             return "multiple assets target the same export path: \(path)"
+        case let .outputContainsSourceProject(path):
+            return "export output cannot contain the source project: \(path)"
         }
     }
 }
@@ -77,6 +80,13 @@ public enum ProjectExporter {
                               playerExecutableURL: URL? = nil,
                               to outputDirectory: URL) throws -> ProjectExportDescriptor {
         let fileManager = FileManager.default
+        if let sourceProjectDirectory {
+            let sourcePath = sourceProjectDirectory.resolvingSymlinksInPath().standardizedFileURL.path
+            let outputPath = outputDirectory.resolvingSymlinksInPath().standardizedFileURL.path
+            guard !pathContains(sourcePath, root: outputPath) else {
+                throw ProjectExporterError.outputContainsSourceProject(outputDirectory.path)
+            }
+        }
         let parentDirectory = outputDirectory.deletingLastPathComponent()
         try fileManager.createDirectory(at: parentDirectory, withIntermediateDirectories: true)
         let stagingDirectory = parentDirectory.appendingPathComponent(
@@ -94,6 +104,7 @@ public enum ProjectExporter {
         if let sourceProjectDirectory {
             try copyAudioResources(from: sourceProjectDirectory,
                                    to: stagingDirectory,
+                                   excluding: [outputDirectory, stagingDirectory],
                                    fileManager: fileManager)
             try copyProjectScriptCatalog(from: sourceProjectDirectory,
                                          to: stagingDirectory,
@@ -278,8 +289,12 @@ public enum ProjectExporter {
 
     private static func copyAudioResources(from sourceDirectory: URL,
                                            to outputDirectory: URL,
+                                           excluding excludedDirectories: [URL] = [],
                                            fileManager: FileManager) throws {
         let sourceRoot = sourceDirectory.resolvingSymlinksInPath()
+        let excludedPaths = excludedDirectories.map {
+            $0.resolvingSymlinksInPath().standardizedFileURL.path
+        }
         let properties: [URLResourceKey] = [.isDirectoryKey, .isRegularFileKey]
         guard let enumerator = fileManager.enumerator(at: sourceRoot,
                                                       includingPropertiesForKeys: properties,
@@ -289,7 +304,9 @@ public enum ProjectExporter {
         for case let source as URL in enumerator {
             let values = try source.resourceValues(forKeys: Set(properties))
             if values.isDirectory == true {
-                if excludedResourceDirectories.contains(source.lastPathComponent) {
+                let resolvedPath = source.resolvingSymlinksInPath().standardizedFileURL.path
+                if excludedResourceDirectories.contains(source.lastPathComponent)
+                    || excludedPaths.contains(where: { pathContains(resolvedPath, root: $0) }) {
                     enumerator.skipDescendants()
                 }
                 continue
@@ -309,6 +326,12 @@ public enum ProjectExporter {
                 try fileManager.copyItem(at: source, to: destination)
             }
         }
+    }
+
+    private static func pathContains(_ candidate: String, root: String) -> Bool {
+        guard candidate != root else { return true }
+        let rootPrefix = root.hasSuffix("/") ? root : root + "/"
+        return candidate.hasPrefix(rootPrefix)
     }
 
     private static func copyProjectScriptCatalog(from sourceDirectory: URL,
