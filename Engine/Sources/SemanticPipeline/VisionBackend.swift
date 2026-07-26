@@ -11,10 +11,14 @@ public struct VisionBackend: SemanticAnalyzerBackend, Sendable {
 
     private let maxResults: Int
     private let confidenceThreshold: Float
+    private let worker: any PerceptionWorker
 
-    public init(maxResults: Int = 3, confidenceThreshold: Float = 0.40) {
+    public init(maxResults: Int = 3,
+                confidenceThreshold: Float = 0.40,
+                worker: any PerceptionWorker = AppleVisionPerceptionWorker()) {
         self.maxResults = maxResults
         self.confidenceThreshold = confidenceThreshold
+        self.worker = worker
     }
 
     public func analyze(regions: CandidateRegionSet,
@@ -30,7 +34,6 @@ public struct VisionBackend: SemanticAnalyzerBackend, Sendable {
 
         guard FileManager.default.fileExists(atPath: imageURL.path) else { return [] }
 
-        let worker = AppleVisionPerceptionWorker()
         let result: PerceptionResult
         do {
             result = try await worker.analyzeImageAsync(at: imageURL, maxResults: maxResults)
