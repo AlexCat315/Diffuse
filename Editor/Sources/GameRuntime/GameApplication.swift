@@ -43,25 +43,16 @@ public final class GameApplication: @unchecked Sendable {
         var scriptMonitor: ProjectScriptCatalogMonitor?
 
         if let dir = projectDirectory {
-            let assetListURL = URL(fileURLWithPath: dir, isDirectory: true)
-                .appendingPathComponent("assets.json")
-            let preferredMeshIndices: [String: Int]
-            if let data = try? Data(contentsOf: assetListURL),
-               let assetList = try? JSONDecoder().decode(ProjectExportAssetList.self, from: data) {
-                preferredMeshIndices = assetList.assets.reduce(into: [:]) { result, asset in
-                    if asset.meshIndex >= 2, result[asset.relativePath] == nil {
-                        result[asset.relativePath] = asset.meshIndex
-                    }
-                }
-            } else {
-                preferredMeshIndices = [:]
-            }
+            let projectURL = URL(fileURLWithPath: dir, isDirectory: true)
+            let preferredMeshIndices = try GameProjectAssetIndexLoader.load(
+                projectDirectory: projectURL
+            )
             _ = try EditorAssetCatalog.loadProject(at: dir,
                                                    preferredMeshIndices: preferredMeshIndices)
             ProjectRuntimeResources.configureAudioSearchPaths(at: dir)
-            let url = GameSaveDocument.url(slot: 0, projectDirectory: dir)
-            if let doc = try GameSaveDocument.read(from: url) {
-                _ = scene.load(manifest: doc.manifest)
+            if let manifest = try GameProjectSceneLoader.load(projectDirectory: projectURL) {
+                let result = scene.load(manifest: manifest)
+                if let error = result.error { throw error }
             }
             let monitor = ProjectScriptCatalogMonitor(projectDirectory: dir)
             scriptMonitor = monitor

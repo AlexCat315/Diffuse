@@ -50,6 +50,18 @@ final class InputStateProcessor: @unchecked Sendable {
             case let .mouseWheel(e):
                 wheelDeltaX += e.x
                 wheelDeltaY += e.y
+            case .windowFocusLost, .windowMinimized:
+                // Platforms commonly stop delivering key/button-up events once
+                // the window loses input focus. Treat that boundary as an
+                // explicit release so gameplay cannot remain stuck moving,
+                // firing, or rotating while the app is inactive.
+                keysJustReleased.formUnion(heldKeys)
+                buttonsJustReleased.formUnion(heldMouseButtons)
+                gpadButtonsJustReleased.formUnion(heldGamepadButtons)
+                heldKeys.removeAll(keepingCapacity: true)
+                heldMouseButtons.removeAll(keepingCapacity: true)
+                heldGamepadButtons.removeAll(keepingCapacity: true)
+                gamepadAxes.removeAll(keepingCapacity: true)
             default:
                 break
             }

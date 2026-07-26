@@ -66,9 +66,8 @@ public extension Image {
          height: Float,
          tint: Color = .white,
          contentMode: ContentMode = .stretch,
-         renderingMode: RenderingMode = .color) {
+        renderingMode: RenderingMode = .color) {
         guard let url = resource.url else {
-            assertionFailure("Bundle image resource not found: \(resource)")
             ImageLoadDiagnostics.emit(path: String(describing: resource),
                                       reason: .resourceNotFound,
                                       details: "bundle resource URL is nil")
