@@ -95,7 +95,12 @@ private func waitForMCPCapabilityResult<Value: Sendable>(
 /// 自身不持有窗口 / wgpu surface — UI 渲染由 GuavaUIApp 接管，引擎仅负责
 /// 仿真与（未来的）离屏渲染。
 public final class EditorApplication: @unchecked Sendable {
-    private static let exportedApplicationName = "Guava Game"
+    private var exportedApplicationName: String {
+        let name = URL(fileURLWithPath: projectDirectory, isDirectory: true)
+            .standardizedFileURL.lastPathComponent
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? "Guava Game" : name
+    }
     private struct PendingPluginApproval {
         var packageURL: URL
         var inspection: PluginInspection
@@ -155,6 +160,9 @@ public final class EditorApplication: @unchecked Sendable {
     private var editorAutosaveElapsed: Double = 0
     private var lastEditorAutosavedRevision: UInt64?
     private var recoverySuppressedRevision: UInt64?
+    private let projectScriptCatalogMonitor: ProjectScriptCatalogMonitor
+    private var projectScriptReloadElapsed: Double = 0
+    private static let projectScriptReloadInterval: Double = 1
 
     /// Revision equality covers ordinary edits/undo. A recovered autosave is
     /// explicitly dirty because rebuilding two structurally similar manifests
@@ -209,6 +217,9 @@ public final class EditorApplication: @unchecked Sendable {
         let pluginAuthorizationStore = EditorPluginAuthorizationStore(
             projectDirectory: projectDirectory
         )
+        let projectScriptCatalogMonitor = ProjectScriptCatalogMonitor(
+            projectDirectory: projectDirectory
+        )
         self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: resolvedBackend)
         self.projectDirectory = projectDirectory
         self.store = store
@@ -221,6 +232,7 @@ public final class EditorApplication: @unchecked Sendable {
         self.editLog = EditLog(projectDirectory: projectDirectory)
         self.contextMemoryStore = contextMemoryStore
         self.pluginAuthorizationStore = pluginAuthorizationStore
+        self.projectScriptCatalogMonitor = projectScriptCatalogMonitor
         self.trustedPluginHostExecutableURL = EditorPluginHostLocator.resolve(
             injectedURL: trustedPluginHostExecutableURL
         )
@@ -246,6 +258,7 @@ public final class EditorApplication: @unchecked Sendable {
         if let selection = initialSelectedEntityID {
             store.dispatch(.setSelectedEntity(selection))
         }
+        reloadProjectScripts(force: true)
 
         startMCPBridge()
 
@@ -257,7 +270,8 @@ public final class EditorApplication: @unchecked Sendable {
 
         // Propagate initial workflow context, observation bus, and context memory to Session.
         if let initialSession {
-            let ctx = Self.workflowContext(for: store.state.workspaceMode)
+            let ctx = Self.workflowContext(for: store.state.workspaceMode,
+                                           scriptEntries: scene.scriptCatalogEntries)
             let bus = observationBus
             let mem = contextMemoryStore
             Task {
@@ -274,7 +288,8 @@ public final class EditorApplication: @unchecked Sendable {
             let newMode = s.state.workspaceMode
             guard newMode != lastObservedMode, let sess = self.session else { return }
             lastObservedMode = newMode
-            let ctx = Self.workflowContext(for: newMode)
+            let ctx = Self.workflowContext(for: newMode,
+                                           scriptEntries: self.scene.scriptCatalogEntries)
             Task { await sess.setWorkflowContext(ctx) }
         }
     }
@@ -369,6 +384,11 @@ public final class EditorApplication: @unchecked Sendable {
         }
         if wantsContinuousFrames {
             displayInvalidationHandler?()
+        }
+        projectScriptReloadElapsed += max(0, deltaTime)
+        if projectScriptReloadElapsed >= Self.projectScriptReloadInterval {
+            projectScriptReloadElapsed = 0
+            reloadProjectScripts()
         }
         autosaveSceneIfNeeded(elapsed: deltaTime)
     }
@@ -778,7 +798,7 @@ public final class EditorApplication: @unchecked Sendable {
     /// - On `.stopped`: restores the pre-play scene snapshot and disables physics.
     public func applyPlaybackState(_ next: PlaybackState) {
         let current = store.state.playbackState
-        guard current != next else { return }
+        guard current.canTransition(to: next) else { return }
 
         switch next {
         case .playing:
@@ -854,6 +874,8 @@ public final class EditorApplication: @unchecked Sendable {
                 return false
             }
             let result = scene.load(manifest: doc.manifest)
+            guard result.error == nil else { throw result.error! }
+            reportUnresolvedScriptBindings()
             store.dispatch(.setSelectedEntity(result.selectedEntityID))
             store.dispatch(.setSceneRevision(scene.revision))
             logConsole("Game state loaded",
@@ -965,25 +987,30 @@ public final class EditorApplication: @unchecked Sendable {
         let output = URL(fileURLWithPath: projectDirectory, isDirectory: true)
             .appendingPathComponent("export", isDirectory: true)
         do {
-            let manifest = scene.manifest(selectedEntityID: store.state.selectedEntityID)
-            let assets = (try? EditorAssetCatalog.loadProject(at: projectDirectory)) ?? []
+            let authoredOutput = authoredSceneManifest()
+            let manifest = authoredOutput.manifest
+            // A failed scan must fail the export. Treating it as an empty
+            // catalog produces a seemingly successful build with missing assets.
+            let assets = try EditorAssetCatalog.loadProject(at: projectDirectory)
             let playerExecutableURL = resolvePlayerExecutableURL()
             let descriptor = try ProjectExporter.export(manifest: manifest,
-                                                        appName: Self.exportedApplicationName,
+                                                        appName: exportedApplicationName,
                                                         assets: assets,
                                                         sourceProjectDirectory: URL(fileURLWithPath: projectDirectory,
                                                                                     isDirectory: true),
                                                         playerExecutableURL: playerExecutableURL,
                                                         to: output)
             if playerExecutableURL != nil {
-                adHocSignExportedApplication(in: output)
+                adHocSignExportedApplication(appName: descriptor.appName, in: output)
             } else {
                 logConsole("Exported portable project data without an application",
                            severity: .warning,
-                           detail: "Build GuavaPlayer or set GUAVA_PLAYER_EXECUTABLE to generate a self-contained .app")
+                           detail: "Build GuavaPlayer or set GUAVA_PLAYER_EXECUTABLE to include a self-contained player")
             }
             logConsole("Exported project bundle",
-                       detail: "\(descriptor.entityCount) entities, \(descriptor.assetCount) assets → \(output.path)")
+                       detail: "\(descriptor.entityCount) entities, \(descriptor.assetCount) assets"
+                           + (authoredOutput.usedPlaySnapshot ? ", authored pre-play state" : "")
+                           + " → \(output.path)")
             return output
         } catch {
             logConsole("Project export failed", severity: .error, detail: String(describing: error))
@@ -993,15 +1020,34 @@ public final class EditorApplication: @unchecked Sendable {
 
     @discardableResult
     public func runExportedProject(at projectURL: URL) -> Bool {
-        let packagedExecutable = ProjectExporter.applicationExecutableURL(
-            appName: Self.exportedApplicationName,
+        let descriptor: ProjectExportDescriptor
+        do {
+            descriptor = try ProjectExporter.readDescriptor(from: projectURL)
+        } catch {
+            logConsole("Unable to run exported build",
+                       severity: .error,
+                       detail: "Invalid build descriptor: \(error)")
+            return false
+        }
+        guard descriptor.schemaVersion == ProjectExporter.schemaVersion else {
+            logConsole("Unable to run exported build",
+                       severity: .error,
+                       detail: "Unsupported build descriptor version \(descriptor.schemaVersion)")
+            return false
+        }
+        let packagedExecutable = ProjectExporter.runnableExecutableURL(
+            appName: descriptor.appName,
             in: projectURL
         )
         let executable: URL
         let arguments: [String]
         if FileManager.default.isExecutableFile(atPath: packagedExecutable.path) {
             executable = packagedExecutable
+            #if os(macOS)
             arguments = []
+            #else
+            arguments = ["--project", projectURL.path]
+            #endif
         } else if let player = resolvePlayerExecutableURL() {
             executable = player
             arguments = ["--project", projectURL.path]
@@ -1033,18 +1079,23 @@ public final class EditorApplication: @unchecked Sendable {
             .map { URL(fileURLWithPath: $0) }
         let executableDirectory = Bundle.main.executableURL?.deletingLastPathComponent()
             ?? URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent()
+        #if os(Windows)
+        let playerExecutableName = "GuavaPlayer.exe"
+        #else
+        let playerExecutableName = "GuavaPlayer"
+        #endif
         return [
             environmentOverride,
-            executableDirectory.appendingPathComponent("GuavaPlayer"),
+            executableDirectory.appendingPathComponent(playerExecutableName),
         ]
         .compactMap { $0 }
         .first { FileManager.default.isExecutableFile(atPath: $0.path) }
     }
 
-    private func adHocSignExportedApplication(in output: URL) {
+    private func adHocSignExportedApplication(appName: String, in output: URL) {
         #if os(macOS)
         let appURL = ProjectExporter.applicationBundleURL(
-            appName: Self.exportedApplicationName,
+            appName: appName,
             in: output
         )
         let process = Process()
@@ -1076,13 +1127,17 @@ public final class EditorApplication: @unchecked Sendable {
             let guavaDirectory = sceneManifestURL.deletingLastPathComponent()
             try FileManager.default.createDirectory(at: guavaDirectory,
                                                     withIntermediateDirectories: true)
+            let authoredOutput = authoredSceneManifest()
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(scene.manifest(selectedEntityID: store.state.selectedEntityID))
+            let data = try encoder.encode(authoredOutput.manifest)
             try data.write(to: sceneManifestURL, options: [.atomic])
-            store.dispatch(.markSceneSaved(store.state.sceneRevision))
+            store.dispatch(.markSceneSaved(authoredOutput.revision))
             removeEditorAutosave()
-            logConsole("Saved scene manifest", detail: sceneManifestURL.path)
+            logConsole(authoredOutput.usedPlaySnapshot
+                           ? "Saved authored scene snapshot during playback"
+                           : "Saved scene manifest",
+                       detail: sceneManifestURL.path)
             return sceneManifestURL
         } catch {
             logConsole("Failed to save scene manifest",
@@ -1090,6 +1145,31 @@ public final class EditorApplication: @unchecked Sendable {
                        detail: String(describing: error))
             return nil
         }
+    }
+
+    /// Returns the edit-time scene used by durable authoring outputs. Gameplay
+    /// saves deliberately use the live runtime state, while scene saves and
+    /// packaged builds must not capture transient physics results.
+    private func authoredSceneManifest() -> (
+        manifest: EditorSceneManifest,
+        revision: UInt64,
+        usedPlaySnapshot: Bool
+    ) {
+        if store.state.playbackState != .stopped,
+           let physicsPlaySnapshot {
+            let snapshotAdapter = EditorSceneAdapter()
+            snapshotAdapter.scene = physicsPlaySnapshot
+            return (
+                snapshotAdapter.manifest(selectedEntityID: store.state.selectedEntityID),
+                snapshotAdapter.revision,
+                true
+            )
+        }
+        return (
+            scene.manifest(selectedEntityID: store.state.selectedEntityID),
+            store.state.sceneRevision,
+            false
+        )
     }
 
     public func openSceneManifest() -> EditorSceneManifest? {
@@ -1120,6 +1200,7 @@ public final class EditorApplication: @unchecked Sendable {
             guard result.error == nil else {
                 throw result.error!
             }
+            reportUnresolvedScriptBindings()
             store.dispatch(.setSelectedEntity(result.selectedEntityID))
             store.dispatch(.setSceneRecoveryPending(true))
             recoverySuppressedRevision = nil
@@ -1166,6 +1247,7 @@ public final class EditorApplication: @unchecked Sendable {
             let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
             let result = scene.load(manifest: manifest)
             guard result.error == nil else { throw result.error! }
+            reportUnresolvedScriptBindings()
             store.dispatch(.setSelectedEntity(result.selectedEntityID))
             store.dispatch(.markSceneSaved(store.state.sceneRevision))
             store.dispatch(.setSceneRecoveryPending(false))
@@ -1244,6 +1326,7 @@ public final class EditorApplication: @unchecked Sendable {
     public func reloadAssets() -> Int {
         do {
             let assets = try EditorAssetCatalog.loadProject(at: projectDirectory)
+            reloadProjectScripts(force: true)
             logConsole("Reloaded assets", detail: "\(assets.count) importable files")
             return assets.count
         } catch {
@@ -1251,6 +1334,49 @@ public final class EditorApplication: @unchecked Sendable {
                        severity: .error,
                        detail: String(describing: error))
             return 0
+        }
+    }
+
+    public func reloadProjectScripts(force: Bool = false) {
+        do {
+            guard let catalog = try projectScriptCatalogMonitor.loadIfChanged(force: force) else {
+                return
+            }
+            let report = scene.applyProjectScriptCatalog(catalog)
+            store.dispatch(.forceUIRefresh)
+            if let session {
+                let context = Self.workflowContext(for: store.state.workspaceMode,
+                                                   scriptEntries: catalog.entries)
+                Task { await session.setWorkflowContext(context) }
+            }
+            let source = catalog.sourceURL?.path ?? "built-in catalog"
+            logConsole("Reloaded script catalog",
+                       detail: "\(report.registeredScriptCount) scripts (\(report.projectScriptCount) project) · \(source)")
+            for diagnostic in catalog.diagnostics {
+                logConsole("Script catalog: \(diagnostic.message)",
+                           severity: diagnostic.severity == .error ? .error : .warning)
+            }
+            for unresolved in report.unresolvedBindings {
+                logConsole("Unresolved script binding",
+                           severity: .error,
+                           detail: unresolved)
+            }
+        } catch {
+            if scene.scriptCatalogEntries.isEmpty {
+                _ = scene.applyProjectScriptCatalog(.builtIn)
+                store.dispatch(.forceUIRefresh)
+            }
+            logConsole("Failed to reload script catalog",
+                       severity: .error,
+                       detail: String(describing: error))
+        }
+    }
+
+    private func reportUnresolvedScriptBindings() {
+        for unresolved in scene.unresolvedScriptBindingDescriptions() {
+            logConsole("Unresolved script binding",
+                       severity: .error,
+                       detail: unresolved)
         }
     }
 
@@ -1677,7 +1803,8 @@ public final class EditorApplication: @unchecked Sendable {
         )
         if let newSession {
             let worldContext = self.aiWorldContext
-            let ctx = Self.workflowContext(for: store.state.workspaceMode)
+            let ctx = Self.workflowContext(for: store.state.workspaceMode,
+                                           scriptEntries: scene.scriptCatalogEntries)
             let bus = self.observationBus
             let mem = self.contextMemoryStore
             Task {
@@ -2029,7 +2156,10 @@ public final class EditorApplication: @unchecked Sendable {
         )
         session = nextSession
         if let nextSession {
-            await nextSession.setWorkflowContext(Self.workflowContext(for: store.state.workspaceMode))
+            await nextSession.setWorkflowContext(Self.workflowContext(
+                for: store.state.workspaceMode,
+                scriptEntries: scene.scriptCatalogEntries
+            ))
             await nextSession.setObservationBus(observationBus)
             await nextSession.setContextMemory(contextMemoryStore)
         }
@@ -2054,21 +2184,54 @@ public final class EditorApplication: @unchecked Sendable {
         AIKeychain.hasKey(for: store.state.aiSettings.provider)
     }
 
-    static func workflowContext(for mode: EditorWorkspaceMode) -> WorkflowContext {
+    static func workflowContext(
+        for mode: EditorWorkspaceMode,
+        scriptEntries: [ProjectScriptCatalogEntry] = []
+    ) -> WorkflowContext {
         let intent = GameplayIntent(genre: "game", winCondition: "not_specified", pacing: "exploration")
+        let constraints = GameKnownConstraints(
+            scriptingRegistry: scriptEntries.map(\.identifier),
+            scriptSchemas: scriptEntries.map(scriptSchema)
+        )
         switch mode {
         case .level:
             return .game(GameWorkflowContext(levelPhase: .blockout,
                                             gameplayIntent: intent,
-                                            targetExperience: "Interactive level editing"))
+                                            targetExperience: "Interactive level editing",
+                                            knownConstraints: constraints))
         case .modeling:
             return .game(GameWorkflowContext(levelPhase: .polish,
                                             gameplayIntent: intent,
-                                            targetExperience: "Asset creation and modeling"))
+                                            targetExperience: "Asset creation and modeling",
+                                            knownConstraints: constraints))
         case .animation:
             return .game(GameWorkflowContext(levelPhase: .polish,
                                             gameplayIntent: intent,
-                                            targetExperience: "Animation authoring"))
+                                            targetExperience: "Animation authoring",
+                                            knownConstraints: constraints))
+        }
+    }
+
+    private static func scriptSchema(_ entry: ProjectScriptCatalogEntry) -> ScriptSchema {
+        guard let data = entry.defaultParametersJSON.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return ScriptSchema(name: entry.identifier)
+        }
+        let parameters = object.keys.sorted().map { name in
+            ScriptParameterDescriptor(name: name,
+                                      type: scriptParameterType(object[name]))
+        }
+        return ScriptSchema(name: entry.identifier, parameters: parameters)
+    }
+
+    private static func scriptParameterType(_ value: Any?) -> String {
+        switch value {
+        case is Bool: return "Bool"
+        case is NSNumber: return "Number"
+        case is String: return "String"
+        case let array as [Any]: return array.count == 3 ? "Vec3" : "Array"
+        case is [String: Any]: return "Object"
+        default: return "Value"
         }
     }
 

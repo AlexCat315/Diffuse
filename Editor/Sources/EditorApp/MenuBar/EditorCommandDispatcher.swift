@@ -46,6 +46,8 @@ enum EditorCommandDispatcher {
             EditorRootViewFactory.saveWorkspaceLayout(controller, for: mode, preset: preset)
             saveShellState(app)
         case let .setPlaybackState(next):
+            guard EditorPlaybackCommandPolicy.canTransition(from: store.state.playbackState,
+                                                            to: next) else { return }
             app.applyPlaybackState(next)
         case .openSettings:
             app.openSettingsWindow()

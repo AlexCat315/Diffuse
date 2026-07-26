@@ -788,8 +788,19 @@ public struct SceneEditPlanExecutor: Sendable {
             }
             let bindingIdx = step.scriptIndex ?? 0
             var component = scene.component(ScriptComponent.self, for: eid) ?? ScriptComponent()
-            while component.bindings.count <= bindingIdx {
-                component.bindings.append(ScriptBinding(ScriptHandle(rawValue: 0)))
+            guard bindingIdx <= component.bindings.count else {
+                throw SceneEditPlanExecutorError.missingField(op: step.op,
+                                                              field: "valid script_index")
+            }
+            if bindingIdx == component.bindings.count {
+                guard let identifier = step.scriptIdentifier else {
+                    throw SceneEditPlanExecutorError.missingField(op: step.op,
+                                                                  field: "script_identifier")
+                }
+                component.bindings.append(ScriptBinding(identifier: identifier))
+            } else if let identifier = step.scriptIdentifier {
+                component.bindings[bindingIdx].identifier = identifier
+                component.bindings[bindingIdx].script = ScriptHandle(rawValue: 0)
             }
             let updatedJSON = mergeScriptProperty(
                 into: component.bindings[bindingIdx].parametersJSON,
@@ -807,10 +818,24 @@ public struct SceneEditPlanExecutor: Sendable {
             }
             let bindingIdx = step.scriptIndex ?? 0
             var component = scene.component(ScriptComponent.self, for: eid) ?? ScriptComponent()
-            while component.bindings.count <= bindingIdx {
-                component.bindings.append(ScriptBinding(ScriptHandle(rawValue: 0)))
+            guard bindingIdx <= component.bindings.count else {
+                throw SceneEditPlanExecutorError.missingField(op: step.op,
+                                                              field: "valid script_index")
             }
-            component.bindings[bindingIdx].isEnabled = enabled
+            if bindingIdx == component.bindings.count {
+                guard let identifier = step.scriptIdentifier else {
+                    throw SceneEditPlanExecutorError.missingField(op: step.op,
+                                                                  field: "script_identifier")
+                }
+                component.bindings.append(ScriptBinding(identifier: identifier,
+                                                        isEnabled: enabled))
+            } else {
+                if let identifier = step.scriptIdentifier {
+                    component.bindings[bindingIdx].identifier = identifier
+                    component.bindings[bindingIdx].script = ScriptHandle(rawValue: 0)
+                }
+                component.bindings[bindingIdx].isEnabled = enabled
+            }
             return [.setScriptBindings(entityID: id, bindings: component.bindings)]
         }
     }

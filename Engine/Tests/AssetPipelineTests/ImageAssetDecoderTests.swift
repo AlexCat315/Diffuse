@@ -77,6 +77,23 @@ struct ImageAssetDecoderTests {
         ])
     }
 
+    @Test("decodes percent-escaped and backslash mesh texture paths")
+    func resolvesPortableMeshTextureURI() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let textures = root.appendingPathComponent("textures", isDirectory: true)
+        try FileManager.default.createDirectory(at: textures, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let textureURL = textures.appendingPathComponent("hero base.png")
+        try writePNG(url: textureURL, pixels: [7, 8, 9, 255], width: 1, height: 1)
+
+        let texture = MeshTexture(sourceURI: "textures\\hero%20base.png", mimeType: "image/png")
+        let resolved = try MeshTextureResolver.decode(texture, sourceDirectory: root.path)
+
+        #expect(resolved.path == textureURL.path)
+        #expect(resolved.texture.pixels == [7, 8, 9, 255])
+    }
+
     @Test("rejects embedded mesh texture uri until buffer image import is implemented")
     func rejectsEmbeddedMeshTextureURI() throws {
         let texture = MeshTexture(sourceURI: "data:image/png;base64,AAAA", mimeType: "image/png")

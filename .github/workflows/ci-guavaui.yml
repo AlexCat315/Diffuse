@@ -55,11 +55,10 @@ jobs:
           swift build --target GuavaUICompose
           swift build --target GuavaUIWorkspace
           swift build --target GuavaUIDevTools
+          swift build --target GuavaUIApp
 
       - name: Run tests
         working-directory: GuavaUI
-        run: |
-          swift test --filter GuavaUIRuntimeTests
-          swift test --filter GuavaUIComposeTests
-          swift test --filter GuavaUIWorkspaceTests
-          swift test --filter GuavaUIDevToolsTests
+        # Run every test target, including GuavaUIAppTests, and automatically
+        # cover future targets without requiring workflow edits.
+        run: swift test

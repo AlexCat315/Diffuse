@@ -50,12 +50,14 @@ jobs:
         working-directory: Editor
         run: swift package resolve
 
-      - name: Build EditorCore
+      - name: Build Editor and Player
         working-directory: Editor
-        run: swift build --target EditorCore
+        run: |
+          swift build --product EditorApp
+          swift build --product GuavaPlayer
 
       - name: Run tests
         working-directory: Editor
-        run: |
-          swift test --filter EditorCoreTests
-          swift test --filter EditorAppTests
+        # Run the package as a whole so GameRuntimeTests and any future test
+        # targets cannot be added without being exercised by CI.
+        run: swift test

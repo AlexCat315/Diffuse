@@ -26,6 +26,11 @@ public protocol AudioBackend: AnyObject {
     /// Whether a clip with `name` is loaded and ready.
     func isClipLoaded(_ name: String) -> Bool
 
+    /// Release every decoded clip cached by the backend. Implementations must
+    /// stop voices that reference clip storage before freeing that storage.
+    /// Called when the active project's audio search roots change.
+    func unloadAllClips()
+
     /// Start a tracked voice for an already-loaded clip. Returns `nil` if the
     /// clip is missing or no voice could be allocated.
     func play(clip: String, volume: Float, pitch: Float, loop: Bool) -> AudioVoiceID?
@@ -59,6 +64,9 @@ public protocol AudioBackend: AnyObject {
 }
 
 public extension AudioBackend {
+    /// Kept as a default for source compatibility with custom backends. Such
+    /// backends should override this method if they retain decoded clip data.
+    func unloadAllClips() {}
     func pump() {}
     func setPan(_ voice: AudioVoiceID, pan: Float) {}
     func setPitch(_ voice: AudioVoiceID, pitch: Float) {}

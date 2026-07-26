@@ -1,5 +1,12 @@
 import EditorCore
 
+enum EditorPlaybackCommandPolicy {
+    static func canTransition(from current: PlaybackState,
+                              to next: PlaybackState) -> Bool {
+        current.canTransition(to: next)
+    }
+}
+
 struct EditorMenuModel {
     let menus: [EditorApplicationMenu]
 
@@ -44,11 +51,20 @@ struct EditorMenuModel {
                 action(L("Reset Layout"), key: "", command: .resetLayout),
             ]),
             EditorApplicationMenu(title: L("Tools"), items: [
-                action(L("Play"), key: "", selected: playbackState == .playing,
+                action(L("Play"), key: "",
+                       enabled: EditorPlaybackCommandPolicy.canTransition(from: playbackState,
+                                                                          to: .playing),
+                       selected: playbackState == .playing,
                        command: .setPlaybackState(.playing)),
-                action(L("Pause"), key: "", selected: playbackState == .paused,
+                action(L("Pause"), key: "",
+                       enabled: EditorPlaybackCommandPolicy.canTransition(from: playbackState,
+                                                                          to: .paused),
+                       selected: playbackState == .paused,
                        command: .setPlaybackState(.paused)),
-                action(L("Stop"), key: "", selected: playbackState == .stopped,
+                action(L("Stop"), key: "",
+                       enabled: EditorPlaybackCommandPolicy.canTransition(from: playbackState,
+                                                                          to: .stopped),
+                       selected: playbackState == .stopped,
                        command: .setPlaybackState(.stopped)),
                 .separator,
                 action(L("Toggle Theme"), key: "", command: .toggleTheme),

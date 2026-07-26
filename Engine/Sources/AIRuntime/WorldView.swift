@@ -252,6 +252,7 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
                           let enabled = d["isEnabled"] as? Bool,
                           let params = d["parametersJSON"] as? String else { return nil }
                     return SceneSemanticSnapshot.ScriptBindingRecord(handle: handle,
+                                                                     identifier: d["identifier"] as? String,
                                                                      isEnabled: enabled,
                                                                      parametersJSON: params)
                 }

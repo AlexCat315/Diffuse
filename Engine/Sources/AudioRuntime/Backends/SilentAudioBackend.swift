@@ -18,6 +18,11 @@ public final class SilentAudioBackend: AudioBackend, @unchecked Sendable {
 
     public func isClipLoaded(_ name: String) -> Bool { loaded.contains(name) }
 
+    public func unloadAllClips() {
+        stopAll()
+        loaded.removeAll(keepingCapacity: true)
+    }
+
     public func play(clip: String, volume: Float, pitch: Float, loop: Bool) -> AudioVoiceID? {
         guard loaded.contains(clip) else { return nil }
         defer { nextVoice &+= 1 }

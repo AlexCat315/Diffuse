@@ -82,6 +82,24 @@ struct AssetRegistryTests {
         #expect(registry.registeredMeshes().first?.sourceDirectory == secondMeshes.path)
     }
 
+    @Test("build directory matching is case-insensitive")
+    func ignoresBuildDirectoryCaseVariants() throws {
+        let registry = AssetRegistry()
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let assets = root.appendingPathComponent("Assets", isDirectory: true)
+        let generated = root.appendingPathComponent("Build", isDirectory: true)
+        try FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: generated, withIntermediateDirectories: true)
+        try Data([1]).write(to: assets.appendingPathComponent("kept.png"))
+        try Data([2]).write(to: generated.appendingPathComponent("ignored.png"))
+
+        let entries = try registry.loadProject(at: root.path)
+
+        #expect(entries.map(\.relativePath) == ["Assets/kept.png"])
+    }
+
     private func writeTriangleGLTF(into directory: URL) throws {
         let bufferURL = directory.appendingPathComponent("triangle.bin")
         let gltfURL = directory.appendingPathComponent("triangle.gltf")
