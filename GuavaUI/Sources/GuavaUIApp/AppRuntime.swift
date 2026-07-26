@@ -131,6 +131,10 @@ public final class AppRuntime {
     private var fpsTickAccum = 0.0
 
     private var currentPresentMode: GPUPresentMode = .fifo
+    /// Callback APIs on SDL3PlatformHost are non-throwing. Preserve the first
+    /// fatal main-window lifecycle failure so `run` can surface it after the
+    /// event loop has been stopped instead of leaving an unexplained blank UI.
+    private var runLoopError: Error?
 
     /// 进程内 DevTools 调试服务器。仅当 `config.devTools != nil` 时创建。
     private var devTools: DevTools?
@@ -241,10 +245,20 @@ public final class AppRuntime {
         ClipboardHolder.write = { SDL3Clipboard.write($0) }
 
         host.onInit = { [weak self] native, w, h in
-            try? self?.handleInit(native: native, widthPx: w, heightPx: h, rootView: rootView)
+            guard let self else { return }
+            do {
+                try self.handleInit(native: native, widthPx: w, heightPx: h, rootView: rootView)
+            } catch {
+                self.failRunLoop(error, context: "main window initialization")
+            }
         }
         host.onResize = { [weak self] w, h in
-            try? self?.handleResize(widthPx: w, heightPx: h)
+            guard let self else { return }
+            do {
+                try self.handleResize(widthPx: w, heightPx: h)
+            } catch {
+                self.failRunLoop(error, context: "main window resize")
+            }
         }
         host.onEvent = { [weak self] event in
             self?.events.publish(event)
@@ -373,9 +387,17 @@ public final class AppRuntime {
         )
         onDisplayReady?(displayHandle)
         host.run(tree: tree)
+        if let runLoopError { throw runLoopError }
     }
 
     // MARK: - Lifecycle callbacks
+
+    private func failRunLoop(_ error: Error, context: String) {
+        guard runLoopError == nil else { return }
+        runLoopError = error
+        Logger(label: "com.guava.ui.app").error("\(context) failed: \(error)")
+        host.stop()
+    }
 
     /// Release every GPU surface (main window + auxiliary windows) before the host
     /// shell destroys its windows and quits SDL. A `GPUSurface` built from a
@@ -904,33 +926,42 @@ public final class AppRuntime {
                                                 self?.host.setWindowChromeHitTest(id, hitTest)
                                             })
             auxiliaryWindows[session.id] = window
+            let windowID = session.id
 
             session.onInit = { [weak self, weak window] native, widthPx, heightPx in
                 guard let self, let window else { return }
-                try? window.handleInit(
-                    native: native,
-                    widthPx: widthPx,
-                    heightPx: heightPx,
-                    configureTextEnvironment: { scale in
-                        self.configureTextEnvironment(scale: scale)
-                    },
-                    uploadAtlasIfNeeded: { force in
-                        try self.uploadAtlasIfNeeded(force: force)
-                    }
-                )
+                do {
+                    try window.handleInit(
+                        native: native,
+                        widthPx: widthPx,
+                        heightPx: heightPx,
+                        configureTextEnvironment: { scale in
+                            self.configureTextEnvironment(scale: scale)
+                        },
+                        uploadAtlasIfNeeded: { force in
+                            try self.uploadAtlasIfNeeded(force: force)
+                        }
+                    )
+                } catch {
+                    self.failAuxiliaryWindow(windowID, error: error, context: "initialization")
+                }
             }
             session.onResize = { [weak self, weak window] widthPx, heightPx in
                 guard let self, let window else { return }
-                try? window.handleResize(
-                    widthPx: widthPx,
-                    heightPx: heightPx,
-                    configureTextEnvironment: { scale in
-                        self.configureTextEnvironment(scale: scale)
-                    },
-                    uploadAtlasIfNeeded: { force in
-                        try self.uploadAtlasIfNeeded(force: force)
-                    }
-                )
+                do {
+                    try window.handleResize(
+                        widthPx: widthPx,
+                        heightPx: heightPx,
+                        configureTextEnvironment: { scale in
+                            self.configureTextEnvironment(scale: scale)
+                        },
+                        uploadAtlasIfNeeded: { force in
+                            try self.uploadAtlasIfNeeded(force: force)
+                        }
+                    )
+                } catch {
+                    self.failAuxiliaryWindow(windowID, error: error, context: "resize")
+                }
             }
             session.onFrame = { [weak self, weak window] _ in
                 guard let self, let window else { return false }
@@ -954,6 +985,16 @@ public final class AppRuntime {
     private func closeAuxiliaryWindow(_ windowID: WindowID) {
         host.closeWindow(windowID)
         auxiliaryWindows.removeValue(forKey: windowID)
+    }
+
+    private func failAuxiliaryWindow(_ windowID: WindowID,
+                                     error: Error,
+                                     context: String) {
+        Logger(label: "com.guava.ui.app")
+            .error("auxiliary window \(context) failed: \(error)")
+        host.enqueueMainThreadWork { [weak self] in
+            self?.closeAuxiliaryWindow(windowID)
+        }
     }
 
     private func isAuxiliaryWindowOpen(_ windowID: WindowID) -> Bool {

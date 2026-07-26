@@ -169,13 +169,19 @@ public enum AssetImportResolver {
     /// Normalizes a relative path and rejects anything that would escape the
     /// destination folder (absolute paths, drive letters, `..` segments).
     public static func sanitizedRelativePath(_ path: String) -> String? {
-        var p = path.replacingOccurrences(of: "\\", with: "/")
-        while p.hasPrefix("./") { p.removeFirst(2) }
-        guard !p.isEmpty,
-              !p.hasPrefix("/"),
-              !p.contains(".."),
-              p.range(of: "^[A-Za-z]:", options: .regularExpression) == nil
+        let portablePath = path.replacingOccurrences(of: "\\", with: "/")
+        guard !portablePath.isEmpty,
+              !portablePath.hasPrefix("/"),
+              portablePath.range(of: "^[A-Za-z]:", options: .regularExpression) == nil
         else { return nil }
-        return p
+
+        var components: [Substring] = []
+        for component in portablePath.split(separator: "/", omittingEmptySubsequences: true) {
+            if component == "." { continue }
+            guard component != ".." else { return nil }
+            components.append(component)
+        }
+        guard !components.isEmpty else { return nil }
+        return components.joined(separator: "/")
     }
 }

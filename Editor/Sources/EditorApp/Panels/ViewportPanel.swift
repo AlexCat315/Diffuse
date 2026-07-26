@@ -1480,7 +1480,8 @@ private struct ViewportInfoBar: View {
                     .frame(width: 1, height: 16)
                     .foregroundColor(Color(r: 0, g: 0, b: 0, a: 0.4))
 
-                Button(isEnabled: playbackState != .playing,
+                Button(isEnabled: EditorPlaybackCommandPolicy.canTransition(from: playbackState,
+                                                                            to: .playing),
                        isSelected: playbackState == .playing,
                        tooltip: L("Play physics simulation"),
                        action: onPlay) {
@@ -1488,7 +1489,8 @@ private struct ViewportInfoBar: View {
                 }
                 .buttonStyle(.toggle)
 
-                Button(isEnabled: playbackState != .stopped,
+                Button(isEnabled: EditorPlaybackCommandPolicy.canTransition(from: playbackState,
+                                                                            to: .paused),
                        isSelected: playbackState == .paused,
                        tooltip: L("Pause physics simulation"),
                        action: onPause) {
@@ -1496,7 +1498,8 @@ private struct ViewportInfoBar: View {
                 }
                 .buttonStyle(.toggle)
 
-                Button(isEnabled: playbackState != .stopped,
+                Button(isEnabled: EditorPlaybackCommandPolicy.canTransition(from: playbackState,
+                                                                            to: .stopped),
                        isSelected: false,
                        tooltip: L("Stop physics simulation"),
                        action: onStop) {

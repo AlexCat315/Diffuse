@@ -121,6 +121,11 @@ let package = Package(
                 "EditorCore",
             ]
         ),
+
+        .testTarget(
+            name: "GameRuntimeTests",
+            dependencies: ["GameRuntime"]
+        ),
     ],
     cxxLanguageStandard: .cxx17
 )
