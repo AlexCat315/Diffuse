@@ -39,6 +39,15 @@ public enum MeshTextureResolver {
             throw MeshTextureResolverError.unsupportedEmbeddedURI(uri)
         }
 
+        let decodedURI = (uri.removingPercentEncoding ?? uri)
+            .replacingOccurrences(of: "\\", with: "/")
+        #if os(Windows)
+        if decodedURI.hasPrefix("//")
+            || decodedURI.range(of: "^[A-Za-z]:/", options: .regularExpression) != nil {
+            return URL(fileURLWithPath: decodedURI).standardizedFileURL.path
+        }
+        #endif
+
         if let components = URLComponents(string: uri), let scheme = components.scheme {
             guard scheme == "file", let url = components.url else {
                 throw MeshTextureResolverError.unsupportedURI(uri)
@@ -46,15 +55,15 @@ public enum MeshTextureResolver {
             return url.path
         }
 
-        if uri.hasPrefix("/") {
-            return URL(fileURLWithPath: uri).standardizedFileURL.path
+        if decodedURI.hasPrefix("/") {
+            return URL(fileURLWithPath: decodedURI).standardizedFileURL.path
         }
 
         guard let sourceDirectory, !sourceDirectory.isEmpty else {
             throw MeshTextureResolverError.relativeURIWithoutSourceDirectory(uri)
         }
         return URL(fileURLWithPath: sourceDirectory)
-            .appendingPathComponent(uri)
+            .appendingPathComponent(decodedURI)
             .standardizedFileURL
             .path
     }

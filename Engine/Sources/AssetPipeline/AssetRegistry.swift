@@ -144,8 +144,11 @@ public final class AssetRegistry: @unchecked Sendable {
 
         for candidate in candidates {
             let assetURL = candidate.url.resolvingSymlinksInPath()
-            let rootPathWithSlash = rootURL.path.hasSuffix("/") ? rootURL.path : rootURL.path + "/"
-            let relativePath = assetURL.path.replacingOccurrences(of: rootPathWithSlash, with: "")
+            guard let relativePath = Self.relativePath(of: candidate.url, within: rootURL) else {
+                Logger(label: "com.guava.engine.assets")
+                    .warning("AssetRegistry: skipping path outside project root: \(candidate.url.path)")
+                continue
+            }
             let kind = candidate.kind
 
             guard kind.isMesh else {
@@ -305,6 +308,24 @@ public final class AssetRegistry: @unchecked Sendable {
         "build", ".build", "export", "node_modules", ".gradle",
     ]
 
+    private static func relativePath(of candidate: URL, within root: URL) -> String? {
+        let candidateComponents = candidate.standardizedFileURL.pathComponents
+        let rootComponents = root.standardizedFileURL.pathComponents
+        guard candidateComponents.count > rootComponents.count else { return nil }
+
+        #if os(Windows)
+        let comparableCandidate = candidateComponents.map { $0.lowercased() }
+        let comparableRoot = rootComponents.map { $0.lowercased() }
+        #else
+        let comparableCandidate = candidateComponents
+        let comparableRoot = rootComponents
+        #endif
+        guard comparableCandidate.prefix(comparableRoot.count).elementsEqual(comparableRoot) else {
+            return nil
+        }
+        return candidateComponents.dropFirst(rootComponents.count).joined(separator: "/")
+    }
+
     private func findImportableAssets(in rootURL: URL) throws -> [(url: URL, kind: ImportableAssetKind)] {
         let properties: [URLResourceKey] = [.isRegularFileKey, .isHiddenKey, .isDirectoryKey]
         guard let enumerator = FileManager.default.enumerator(at: rootURL,
@@ -317,7 +338,7 @@ public final class AssetRegistry: @unchecked Sendable {
         for case let url as URL in enumerator {
             let values = try url.resourceValues(forKeys: Set(properties))
             if values.isDirectory == true {
-                if Self.buildDirectoryNames.contains(url.lastPathComponent) {
+                if Self.buildDirectoryNames.contains(url.lastPathComponent.lowercased()) {
                     enumerator.skipDescendants()
                 }
                 continue

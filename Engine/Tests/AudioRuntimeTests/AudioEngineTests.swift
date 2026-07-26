@@ -271,6 +271,25 @@ struct AudioEngineTests {
         #expect(mock.loaded.isEmpty)
     }
 
+    @Test("supports aif clips and rejects clip names that escape search roots")
+    func portableClipLookupStaysWithinSearchRoot() throws {
+        let parent = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava-audio-paths-\(UUID().uuidString)", isDirectory: true)
+        let clips = parent.appendingPathComponent("clips", isDirectory: true)
+        try FileManager.default.createDirectory(at: clips, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: parent) }
+        try Data().write(to: clips.appendingPathComponent("theme.AIF"))
+        try Data().write(to: parent.appendingPathComponent("outside.wav"))
+        let mock = MockAudioBackend()
+        let engine = AudioEngine(backend: mock)
+        engine.addSearchURL(clips)
+
+        #expect(engine.preload("theme"))
+        #expect(mock.loadedURLs["theme"]?.lastPathComponent.lowercased() == "theme.aif")
+        #expect(!engine.preload("../outside"))
+        #expect(mock.loadedURLs["../outside"] == nil)
+    }
+
     @Test("play-on-awake retries when a missing clip becomes available")
     func playOnAwakeRetriesAfterMissingClipAppears() throws {
         let dir = try makeClipDir([])
@@ -366,5 +385,30 @@ struct AudioEngineTests {
         #expect(!mock.isClipLoaded("shared"))
         #expect(engine.preload("shared"))
         #expect(mock.loadedURLs["shared"] == secondProject.appendingPathComponent("shared.wav"))
+    }
+
+    @Test("project reload and playback operations are serialized across threads")
+    func concurrentOperationsAreSerialized() throws {
+        let directory = try makeClipDir(["shared"])
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let mock = MockAudioBackend()
+        let engine = AudioEngine(backend: mock)
+
+        DispatchQueue.concurrentPerform(iterations: 80) { index in
+            switch index % 4 {
+            case 0:
+                engine.setSearchURLs([directory])
+            case 1:
+                _ = engine.preload("shared")
+            case 2:
+                engine.playSFX("shared")
+            default:
+                engine.resetPlaybackState()
+            }
+        }
+
+        engine.setSearchURLs([directory])
+        #expect(engine.preload("shared"))
+        #expect(mock.loadedURLs["shared"] == directory.appendingPathComponent("shared.wav"))
     }
 }
