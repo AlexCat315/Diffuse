@@ -1093,13 +1093,36 @@ public final class EditorApplication: @unchecked Sendable {
             let guavaDirectory = sceneManifestURL.deletingLastPathComponent()
             try FileManager.default.createDirectory(at: guavaDirectory,
                                                     withIntermediateDirectories: true)
+            let manifest: EditorSceneManifest
+            let savedRevision: UInt64
+            let savedPrePlaySnapshot: Bool
+            if store.state.playbackState != .stopped,
+               let physicsPlaySnapshot {
+                // Editor scene saves must never persist transient simulation
+                // transforms or the play-only Jolt backend configuration. Keep
+                // playback running, but serialize the authored pre-play scene.
+                let snapshotAdapter = EditorSceneAdapter()
+                snapshotAdapter.scene = physicsPlaySnapshot
+                manifest = snapshotAdapter.manifest(
+                    selectedEntityID: store.state.selectedEntityID
+                )
+                savedRevision = snapshotAdapter.revision
+                savedPrePlaySnapshot = true
+            } else {
+                manifest = scene.manifest(selectedEntityID: store.state.selectedEntityID)
+                savedRevision = store.state.sceneRevision
+                savedPrePlaySnapshot = false
+            }
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(scene.manifest(selectedEntityID: store.state.selectedEntityID))
+            let data = try encoder.encode(manifest)
             try data.write(to: sceneManifestURL, options: [.atomic])
-            store.dispatch(.markSceneSaved(store.state.sceneRevision))
+            store.dispatch(.markSceneSaved(savedRevision))
             removeEditorAutosave()
-            logConsole("Saved scene manifest", detail: sceneManifestURL.path)
+            logConsole(savedPrePlaySnapshot
+                           ? "Saved authored scene snapshot during playback"
+                           : "Saved scene manifest",
+                       detail: sceneManifestURL.path)
             return sceneManifestURL
         } catch {
             logConsole("Failed to save scene manifest",

@@ -155,6 +155,54 @@ struct ProjectExporterTests {
         #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent("old.glb").path))
     }
 
+    @Test("custom project-local output is excluded from runtime resource scanning")
+    func exportDoesNotRecopyPreviousCustomOutput() throws {
+        let project = tempDir()
+        let output = project.appendingPathComponent("Builds/Demo", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: project) }
+
+        let audio = project.appendingPathComponent("Assets/Audio/theme.wav")
+        try FileManager.default.createDirectory(at: audio.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        try Data([0x52, 0x49, 0x46, 0x46]).write(to: audio)
+
+        // Simulate a previous export. Without explicitly excluding the requested
+        // output directory, its stale resource is copied into Builds/Demo again.
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        try Data("stale".utf8).write(to: output.appendingPathComponent("old.wav"))
+
+        _ = try ProjectExporter.export(manifest: EditorSceneAdapter().manifest(),
+                                       appName: "Demo",
+                                       sourceProjectDirectory: project,
+                                       to: output)
+
+        #expect(FileManager.default.fileExists(
+            atPath: output.appendingPathComponent("Assets/Audio/theme.wav").path
+        ))
+        #expect(!FileManager.default.fileExists(
+            atPath: output.appendingPathComponent("Builds/Demo/old.wav").path
+        ))
+        #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent("old.wav").path))
+    }
+
+    @Test("export rejects replacing a directory that contains the source project")
+    func exportRejectsOutputContainingSourceProject() throws {
+        let container = tempDir()
+        let project = container.appendingPathComponent("Project", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: container) }
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        let marker = project.appendingPathComponent("keep.txt")
+        try Data("keep".utf8).write(to: marker)
+
+        #expect(throws: ProjectExporterError.outputContainsSourceProject(container.path)) {
+            _ = try ProjectExporter.export(manifest: EditorSceneAdapter().manifest(),
+                                           appName: "Demo",
+                                           sourceProjectDirectory: project,
+                                           to: container)
+        }
+        #expect(FileManager.default.fileExists(atPath: marker.path))
+    }
+
     @Test("export packages a self-contained macOS application when a player is available")
     func exportPackagesApplication() throws {
         let output = tempDir()
