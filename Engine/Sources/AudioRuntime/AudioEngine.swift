@@ -76,6 +76,7 @@ public final class AudioEngine: @unchecked Sendable {
             return seen.insert(normalized.path).inserted ? normalized : nil
         }
         resetPlaybackState()
+        backend.unloadAllClips()
         loadedClips.removeAll(keepingCapacity: true)
     }
 

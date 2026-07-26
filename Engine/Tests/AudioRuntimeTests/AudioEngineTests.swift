@@ -11,6 +11,8 @@ private final class MockAudioBackend: AudioBackend, @unchecked Sendable {
     struct PlayCall { let clip: String; var volume: Float; var pitch: Float; let loop: Bool }
 
     private(set) var loaded: Set<String> = []
+    private(set) var loadedURLs: [String: URL] = [:]
+    private(set) var unloadAllClipsCount = 0
     private(set) var plays: [AudioVoiceID: PlayCall] = [:]
     private(set) var playOrder: [AudioVoiceID] = []
     private(set) var pans: [AudioVoiceID: Float] = [:]
@@ -22,8 +24,19 @@ private final class MockAudioBackend: AudioBackend, @unchecked Sendable {
     private var nextRaw: UInt64 = 1
     private var active: Set<AudioVoiceID> = []
 
-    func loadClip(name: String, url: URL) -> Bool { loaded.insert(name); return true }
+    func loadClip(name: String, url: URL) -> Bool {
+        guard !loaded.contains(name) else { return true }
+        loaded.insert(name)
+        loadedURLs[name] = url
+        return true
+    }
     func isClipLoaded(_ name: String) -> Bool { loaded.contains(name) }
+    func unloadAllClips() {
+        stopAll()
+        unloadAllClipsCount += 1
+        loaded.removeAll(keepingCapacity: true)
+        loadedURLs.removeAll(keepingCapacity: true)
+    }
 
     func play(clip: String, volume: Float, pitch: Float, loop: Bool) -> AudioVoiceID? {
         let id = AudioVoiceID(raw: nextRaw); nextRaw &+= 1
@@ -334,5 +347,24 @@ struct AudioEngineTests {
 
         #expect(mock.playOrder.count == 2)
         #expect(mock.lastPlay?.clip == "beep")
+    }
+
+    @Test("changing project search roots reloads same-named clips")
+    func changingSearchRootsReloadsSameNamedClips() throws {
+        let firstProject = try makeClipDir(["shared"])
+        let secondProject = try makeClipDir(["shared"])
+        let mock = MockAudioBackend()
+        let engine = AudioEngine(backend: mock)
+
+        engine.setSearchURLs([firstProject])
+        #expect(engine.preload("shared"))
+        #expect(mock.loadedURLs["shared"] == firstProject.appendingPathComponent("shared.wav"))
+        let unloadCount = mock.unloadAllClipsCount
+
+        engine.setSearchURLs([secondProject])
+        #expect(mock.unloadAllClipsCount == unloadCount + 1)
+        #expect(!mock.isClipLoaded("shared"))
+        #expect(engine.preload("shared"))
+        #expect(mock.loadedURLs["shared"] == secondProject.appendingPathComponent("shared.wav"))
     }
 }
