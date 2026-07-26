@@ -4,6 +4,22 @@ import Testing
 
 @Suite("Editor scene recovery", .serialized)
 struct EditorSceneRecoveryTests {
+    @Test("core playback state machine rejects stopping-to-paused and no-op transitions")
+    func corePlaybackStateMachineRejectsInvalidTransitions() throws {
+        let project = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava-editor-playback-policy-\(UUID().uuidString)",
+                                    isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: project) }
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        let app = try EditorApplication(projectDirectory: project.path)
+        defer { app.shutdown() }
+
+        app.applyPlaybackState(.paused)
+        #expect(app.store.playbackState == .stopped)
+        app.applyPlaybackState(.stopped)
+        #expect(app.store.playbackState == .stopped)
+    }
+
     @Test("dirty scene is autosaved on shutdown, restored, and cleared by an explicit save")
     func shutdownRecoveryRoundTrip() throws {
         let project = FileManager.default.temporaryDirectory
@@ -38,5 +54,72 @@ struct EditorSceneRecoveryTests {
         #expect(restored.saveSceneManifest() != nil)
         #expect(restored.hasUnsavedSceneChanges == false)
         #expect(!FileManager.default.fileExists(atPath: recoveryURL.path))
+    }
+
+    @Test("saving during playback persists the authored scene, not runtime mutations")
+    func saveDuringPlaybackUsesPrePlaySnapshot() throws {
+        let project = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava-editor-play-save-\(UUID().uuidString)",
+                                    isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: project) }
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+
+        let app = try EditorApplication(projectDirectory: project.path)
+        defer { app.shutdown() }
+        let entityID = try #require(app.scene.defaultSelectionID)
+        let original = try #require(app.scene.entityLocalTranslation(entityID))
+        let authored = original + SIMD3<Float>(2, 3, 4)
+        let runtimeOnly = original + SIMD3<Float>(20, 30, 40)
+        app.scene.setEntityLocalTranslation(entityID, to: authored)
+        app.applyPlaybackState(.playing)
+        app.scene.setEntityLocalTranslation(entityID, to: runtimeOnly)
+
+        let savedURL = try #require(app.saveSceneManifest())
+        #expect(app.store.playbackState == .playing)
+        #expect(app.scene.entityLocalTranslation(entityID) == runtimeOnly)
+
+        let data = try Data(contentsOf: savedURL)
+        let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
+        let restored = EditorSceneAdapter()
+        let loadResult = restored.load(manifest: manifest, notify: false)
+        let restoredID = try #require(loadResult.selectedEntityID)
+        #expect(restored.entityLocalTranslation(restoredID) == authored)
+
+        app.applyPlaybackState(.stopped)
+        #expect(app.scene.entityLocalTranslation(entityID) == authored)
+        #expect(!app.hasUnsavedSceneChanges)
+    }
+
+    @Test("exporting during playback packages the authored scene, not runtime mutations")
+    func exportDuringPlaybackUsesPrePlaySnapshot() throws {
+        let project = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava-editor-play-export-\(UUID().uuidString)",
+                                    isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: project) }
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+
+        let app = try EditorApplication(projectDirectory: project.path)
+        defer { app.shutdown() }
+        let entityID = try #require(app.scene.defaultSelectionID)
+        let original = try #require(app.scene.entityLocalTranslation(entityID))
+        let authored = original + SIMD3<Float>(3, 4, 5)
+        let runtimeOnly = original + SIMD3<Float>(30, 40, 50)
+        app.scene.setEntityLocalTranslation(entityID, to: authored)
+        app.applyPlaybackState(.playing)
+        app.scene.setEntityLocalTranslation(entityID, to: runtimeOnly)
+
+        let output = try #require(app.exportProject())
+        #expect(try ProjectExporter.readDescriptor(from: output).appName
+            == project.lastPathComponent)
+        let sceneURL = GameSaveDocument.url(slot: ProjectExporter.sceneSlot,
+                                            projectDirectory: output.path)
+        let document = try #require(try GameSaveDocument.read(from: sceneURL))
+        let restored = EditorSceneAdapter()
+        let loadResult = restored.load(manifest: document.manifest, notify: false)
+        let restoredID = try #require(loadResult.selectedEntityID)
+
+        #expect(app.store.playbackState == .playing)
+        #expect(app.scene.entityLocalTranslation(entityID) == runtimeOnly)
+        #expect(restored.entityLocalTranslation(restoredID) == authored)
     }
 }

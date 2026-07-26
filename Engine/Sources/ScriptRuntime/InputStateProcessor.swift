@@ -17,6 +17,10 @@ final class InputStateProcessor: @unchecked Sendable {
         var buttonsJustReleased: Set<MouseButton> = []
         var gpadButtonsJustPressed: Set<GamepadButton> = []
         var gpadButtonsJustReleased: Set<GamepadButton> = []
+        var mouseDeltaX: Float = 0
+        var mouseDeltaY: Float = 0
+        var wheelDeltaX: Float = 0
+        var wheelDeltaY: Float = 0
 
         for event in frame.events {
             switch event {
@@ -40,6 +44,24 @@ final class InputStateProcessor: @unchecked Sendable {
                 heldGamepadButtons.remove(e.button)
             case let .gamepadAxisMotion(e):
                 gamepadAxes[e.axis] = e.value
+            case let .mouseMotion(e):
+                mouseDeltaX += e.deltaX
+                mouseDeltaY += e.deltaY
+            case let .mouseWheel(e):
+                wheelDeltaX += e.x
+                wheelDeltaY += e.y
+            case .windowFocusLost, .windowMinimized:
+                // Platforms commonly stop delivering key/button-up events once
+                // the window loses input focus. Treat that boundary as an
+                // explicit release so gameplay cannot remain stuck moving,
+                // firing, or rotating while the app is inactive.
+                keysJustReleased.formUnion(heldKeys)
+                buttonsJustReleased.formUnion(heldMouseButtons)
+                gpadButtonsJustReleased.formUnion(heldGamepadButtons)
+                heldKeys.removeAll(keepingCapacity: true)
+                heldMouseButtons.removeAll(keepingCapacity: true)
+                heldGamepadButtons.removeAll(keepingCapacity: true)
+                gamepadAxes.removeAll(keepingCapacity: true)
             default:
                 break
             }
@@ -72,6 +94,15 @@ final class InputStateProcessor: @unchecked Sendable {
                     let p: Float = heldKeys.contains(pos) ?  1 : 0
                     let v = (p + n).clamped(to: -1...1)
                     axes[action] = (axes[action] ?? 0) + v
+
+                case let .mouseMotion(axis, requiredButton, scale):
+                    guard requiredButton.map(heldMouseButtons.contains) ?? true else { continue }
+                    let value = axis == .x ? mouseDeltaX : mouseDeltaY
+                    axes[action] = (axes[action] ?? 0) + value * scale
+
+                case let .mouseWheel(axis, scale):
+                    let value = axis == .x ? wheelDeltaX : wheelDeltaY
+                    axes[action] = (axes[action] ?? 0) + value * scale
 
                 case let .gamepadButton(btn):
                     if heldGamepadButtons.contains(btn)        { isHeld = true }

@@ -104,6 +104,24 @@ struct ImageFileContentModeTests: GuavaUIComposeSerializedSuite {
         #expect(events.contains { $0.reason == .missingRegistry })
     } }
 
+    @Test("missing bundle resource emits a diagnostic and uses the empty texture")
+    func missingBundleResourceFallsBack() { GlobalTestLock.locked {
+        var events: [ImageLoadDiagnostic] = []
+        let previous = ImageLoadDiagnostics.onEvent
+        ImageLoadDiagnostics.onEvent = { events.append($0) }
+        defer { ImageLoadDiagnostics.onEvent = previous }
+
+        let resource = BundleImageResource(
+            name: "definitely-missing-\(UUID().uuidString)",
+            fileExtension: "svg",
+            bundle: .main
+        )
+        let image = Image(resource: resource, width: 24, height: 24)
+
+        #expect(image.textureID == .none)
+        #expect(events.contains { $0.reason == .resourceNotFound })
+    } }
+
     #if canImport(ImageIO)
     private func makePNG(width: Int, height: Int) throws -> URL {
         let bytes = [UInt8](repeating: 255, count: width * height * 4)

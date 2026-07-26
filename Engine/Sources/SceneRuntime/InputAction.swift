@@ -68,11 +68,29 @@ public enum InputBinding: Sendable, Equatable {
     /// A 1-D axis from two keys: negative key → -1.0, positive key → +1.0.
     case keyAxis(negative: UInt32, positive: UInt32)
 
+    /// Per-frame relative mouse movement, optionally gated by a held button.
+    case mouseMotion(axis: MouseMotionAxis,
+                     requiredButton: MouseButton? = nil,
+                     scale: Float = 1)
+
+    /// Per-frame mouse wheel delta.
+    case mouseWheel(axis: MouseWheelAxis, scale: Float = 1)
+
     /// A gamepad button.
     case gamepadButton(GamepadButton)
 
     /// A gamepad axis (stick or trigger).
     case gamepadAxis(GamepadAxis)
+}
+
+public enum MouseMotionAxis: String, Sendable, Equatable {
+    case x
+    case y
+}
+
+public enum MouseWheelAxis: String, Sendable, Equatable {
+    case x
+    case y
 }
 
 // MARK: - InputActionMap resource
@@ -117,7 +135,8 @@ public struct InputFrameState: Sendable {
     public var justPressed: Set<String>
     /// Actions whose button was released **this frame** (trailing edge).
     public var justReleased: Set<String>
-    /// Axis values in -1…1 range for keyAxis bindings.
+    /// Axis values. Key/gamepad values are normalized; relative mouse and wheel
+    /// bindings retain their scaled per-frame deltas.
     public var axes: [String: Float]
 
     public init(

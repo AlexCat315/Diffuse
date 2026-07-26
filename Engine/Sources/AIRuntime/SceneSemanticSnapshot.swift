@@ -182,12 +182,17 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
     /// Compact snapshot of a single ScriptBinding for AI context.
     public struct ScriptBindingRecord: Codable, Sendable, Equatable {
         public var handle: UInt64
+        public var identifier: String?
         public var isEnabled: Bool
         /// Raw JSON string of parameters (e.g. `{"speed":5,"label":"Patrol"}`).
         public var parametersJSON: String
 
-        public init(handle: UInt64, isEnabled: Bool, parametersJSON: String) {
+        public init(handle: UInt64,
+                    identifier: String? = nil,
+                    isEnabled: Bool,
+                    parametersJSON: String) {
             self.handle = handle
+            self.identifier = identifier
             self.isEnabled = isEnabled
             self.parametersJSON = parametersJSON
         }

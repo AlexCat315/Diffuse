@@ -11,6 +11,8 @@ private final class MockAudioBackend: AudioBackend, @unchecked Sendable {
     struct PlayCall { let clip: String; var volume: Float; var pitch: Float; let loop: Bool }
 
     private(set) var loaded: Set<String> = []
+    private(set) var loadedURLs: [String: URL] = [:]
+    private(set) var unloadAllClipsCount = 0
     private(set) var plays: [AudioVoiceID: PlayCall] = [:]
     private(set) var playOrder: [AudioVoiceID] = []
     private(set) var pans: [AudioVoiceID: Float] = [:]
@@ -22,8 +24,19 @@ private final class MockAudioBackend: AudioBackend, @unchecked Sendable {
     private var nextRaw: UInt64 = 1
     private var active: Set<AudioVoiceID> = []
 
-    func loadClip(name: String, url: URL) -> Bool { loaded.insert(name); return true }
+    func loadClip(name: String, url: URL) -> Bool {
+        guard !loaded.contains(name) else { return true }
+        loaded.insert(name)
+        loadedURLs[name] = url
+        return true
+    }
     func isClipLoaded(_ name: String) -> Bool { loaded.contains(name) }
+    func unloadAllClips() {
+        stopAll()
+        unloadAllClipsCount += 1
+        loaded.removeAll(keepingCapacity: true)
+        loadedURLs.removeAll(keepingCapacity: true)
+    }
 
     func play(clip: String, volume: Float, pitch: Float, loop: Bool) -> AudioVoiceID? {
         let id = AudioVoiceID(raw: nextRaw); nextRaw &+= 1
@@ -44,6 +57,7 @@ private final class MockAudioBackend: AudioBackend, @unchecked Sendable {
 
     var lastPlay: PlayCall? { playOrder.last.flatMap { plays[$0] } }
     var lastVoice: AudioVoiceID? { playOrder.last }
+    func finish(_ voice: AudioVoiceID) { active.remove(voice) }
 }
 
 @Suite("AudioEngine")
@@ -255,5 +269,146 @@ struct AudioEngineTests {
         engine.tick(scene: scene)
         #expect(mock.plays.isEmpty)
         #expect(mock.loaded.isEmpty)
+    }
+
+    @Test("supports aif clips and rejects clip names that escape search roots")
+    func portableClipLookupStaysWithinSearchRoot() throws {
+        let parent = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava-audio-paths-\(UUID().uuidString)", isDirectory: true)
+        let clips = parent.appendingPathComponent("clips", isDirectory: true)
+        try FileManager.default.createDirectory(at: clips, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: parent) }
+        try Data().write(to: clips.appendingPathComponent("theme.AIF"))
+        try Data().write(to: parent.appendingPathComponent("outside.wav"))
+        let mock = MockAudioBackend()
+        let engine = AudioEngine(backend: mock)
+        engine.addSearchURL(clips)
+
+        #expect(engine.preload("theme"))
+        #expect(mock.loadedURLs["theme"]?.lastPathComponent.lowercased() == "theme.aif")
+        #expect(!engine.preload("../outside"))
+        #expect(mock.loadedURLs["../outside"] == nil)
+    }
+
+    @Test("play-on-awake retries when a missing clip becomes available")
+    func playOnAwakeRetriesAfterMissingClipAppears() throws {
+        let dir = try makeClipDir([])
+        let mock = MockAudioBackend()
+        let engine = AudioEngine(backend: mock)
+        engine.addSearchURL(dir)
+
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(
+            AudioSource(clipName: "late", playOnAwake: true, spatialBlend: 0),
+            for: entity
+        )
+
+        engine.tick(scene: scene)
+        #expect(mock.plays.isEmpty)
+
+        let clipURL = dir.appendingPathComponent("late.wav")
+        #expect(FileManager.default.createFile(atPath: clipURL.path, contents: Data()))
+        engine.tick(scene: scene)
+
+        #expect(mock.lastPlay?.clip == "late")
+        #expect(mock.plays.count == 1)
+    }
+
+    @Test("changing an audio source clip replaces its live voice")
+    func changingClipReplacesLiveVoice() throws {
+        let dir = try makeClipDir(["first", "second"])
+        let mock = MockAudioBackend()
+        let engine = AudioEngine(backend: mock)
+        engine.addSearchURL(dir)
+
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(
+            AudioSource(clipName: "first", playOnAwake: true, spatialBlend: 0),
+            for: entity
+        )
+        engine.tick(scene: scene)
+        let firstVoice = try #require(mock.lastVoice)
+
+        _ = scene.setComponent(
+            AudioSource(clipName: "second", playOnAwake: true, spatialBlend: 0),
+            for: entity
+        )
+        engine.tick(scene: scene)
+
+        #expect(mock.stopped == [firstVoice])
+        #expect(mock.playOrder.count == 2)
+        #expect(mock.lastPlay?.clip == "second")
+    }
+
+    @Test("removing a finished source re-arms play-on-awake")
+    func removingFinishedSourceRearmsPlayOnAwake() throws {
+        let dir = try makeClipDir(["beep"])
+        let mock = MockAudioBackend()
+        let engine = AudioEngine(backend: mock)
+        engine.addSearchURL(dir)
+
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let source = AudioSource(clipName: "beep", playOnAwake: true, spatialBlend: 0)
+        _ = scene.setComponent(source, for: entity)
+        engine.tick(scene: scene)
+
+        let firstVoice = try #require(mock.lastVoice)
+        mock.finish(firstVoice)
+        engine.tick(scene: scene)
+
+        _ = scene.setComponent(AudioSource(clipName: "", playOnAwake: true), for: entity)
+        engine.tick(scene: scene)
+        _ = scene.setComponent(source, for: entity)
+        engine.tick(scene: scene)
+
+        #expect(mock.playOrder.count == 2)
+        #expect(mock.lastPlay?.clip == "beep")
+    }
+
+    @Test("changing project search roots reloads same-named clips")
+    func changingSearchRootsReloadsSameNamedClips() throws {
+        let firstProject = try makeClipDir(["shared"])
+        let secondProject = try makeClipDir(["shared"])
+        let mock = MockAudioBackend()
+        let engine = AudioEngine(backend: mock)
+
+        engine.setSearchURLs([firstProject])
+        #expect(engine.preload("shared"))
+        #expect(mock.loadedURLs["shared"] == firstProject.appendingPathComponent("shared.wav"))
+        let unloadCount = mock.unloadAllClipsCount
+
+        engine.setSearchURLs([secondProject])
+        #expect(mock.unloadAllClipsCount == unloadCount + 1)
+        #expect(!mock.isClipLoaded("shared"))
+        #expect(engine.preload("shared"))
+        #expect(mock.loadedURLs["shared"] == secondProject.appendingPathComponent("shared.wav"))
+    }
+
+    @Test("project reload and playback operations are serialized across threads")
+    func concurrentOperationsAreSerialized() throws {
+        let directory = try makeClipDir(["shared"])
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let mock = MockAudioBackend()
+        let engine = AudioEngine(backend: mock)
+
+        DispatchQueue.concurrentPerform(iterations: 80) { index in
+            switch index % 4 {
+            case 0:
+                engine.setSearchURLs([directory])
+            case 1:
+                _ = engine.preload("shared")
+            case 2:
+                engine.playSFX("shared")
+            default:
+                engine.resetPlaybackState()
+            }
+        }
+
+        engine.setSearchURLs([directory])
+        #expect(engine.preload("shared"))
+        #expect(mock.loadedURLs["shared"] == directory.appendingPathComponent("shared.wav"))
     }
 }

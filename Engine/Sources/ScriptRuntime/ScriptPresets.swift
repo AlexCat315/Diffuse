@@ -11,7 +11,8 @@ extension Script {
     /// Rotates the entity each frame by `speed` (radians/second).
     public static func rotator(speed: SIMD3<Float> = SIMD3<Float>(0, 1.57, 0)) -> Script {
         Script().onTick { ctx in
-            let delta = speed * Float(ctx.deltaTime)
+            let resolvedSpeed = ctx.vector3Parameter("speed") ?? speed
+            let delta = resolvedSpeed * Float(ctx.deltaTime)
             let qx = simd_quatf(angle: delta.x, axis: SIMD3<Float>(1, 0, 0))
             let qy = simd_quatf(angle: delta.y, axis: SIMD3<Float>(0, 1, 0))
             let qz = simd_quatf(angle: delta.z, axis: SIMD3<Float>(0, 0, 1))
@@ -37,7 +38,11 @@ extension Script {
                 base.value = ctx.localTransform?.translation ?? .zero
             }
             guard let b = base.value else { return }
-            let offset = axis * (sin(elapsed.value * frequency * .pi * 2) * amplitude)
+            let resolvedAxis = ctx.vector3Parameter("axis") ?? axis
+            let resolvedAmplitude = ctx.floatParameter("amplitude") ?? amplitude
+            let resolvedFrequency = ctx.floatParameter("frequency") ?? frequency
+            let offset = resolvedAxis
+                * (sin(elapsed.value * resolvedFrequency * .pi * 2) * resolvedAmplitude)
             _ = ctx.setLocalTransform(LocalTransform(translation: b + offset))
         }
     }
@@ -49,13 +54,18 @@ extension Script {
         arrivalRadius: Float = 0.1
     ) -> Script {
         Script().onTick { ctx in
-            guard ctx.contains(target),
-                  let targetWT = ctx.worldTransform(of: target),
+            let resolvedTarget = ctx.entityParameter("targetEntityID")
+                ?? ctx.stringParameter("targetEntityName").flatMap(ctx.entity(named:))
+                ?? (ctx.contains(target) ? target : nil)
+            guard let resolvedTarget,
+                  let targetWT = ctx.worldTransform(of: resolvedTarget),
                   let myWT = ctx.worldTransform else { return }
             let toTarget = targetWT.translation - myWT.translation
             let dist = simd_length(toTarget)
-            guard dist > arrivalRadius else { return }
-            let step = min(speed * Float(ctx.deltaTime), dist)
+            let resolvedArrivalRadius = ctx.floatParameter("arrivalRadius") ?? arrivalRadius
+            guard dist > resolvedArrivalRadius else { return }
+            let resolvedSpeed = ctx.floatParameter("speed") ?? speed
+            let step = min(resolvedSpeed * Float(ctx.deltaTime), dist)
             ctx.translate(by: simd_normalize(toTarget) * step)
         }
     }
@@ -66,8 +76,11 @@ extension Script {
         forward: SIMD3<Float> = SIMD3<Float>(0, 0, -1)
     ) -> Script {
         Script().onTick { ctx in
-            guard ctx.contains(target),
-                  let targetWT = ctx.worldTransform(of: target),
+            let resolvedTarget = ctx.entityParameter("targetEntityID")
+                ?? ctx.stringParameter("targetEntityName").flatMap(ctx.entity(named:))
+                ?? (ctx.contains(target) ? target : nil)
+            guard let resolvedTarget,
+                  let targetWT = ctx.worldTransform(of: resolvedTarget),
                   let myWT = ctx.worldTransform else { return }
             let dir = simd_normalize(targetWT.translation - myWT.translation)
             guard simd_length(dir) > 1e-6 else { return }
@@ -83,14 +96,15 @@ extension Script {
         let elapsed = ScriptVar<Double>(0)
         return Script().onTick { ctx in
             elapsed.value += ctx.deltaTime
-            if elapsed.value >= seconds { ctx.destroySelf() }
+            if elapsed.value >= (ctx.doubleParameter("seconds") ?? seconds) { ctx.destroySelf() }
         }
     }
 
     /// Moves the entity at constant velocity in world space.
     public static func mover(velocity: SIMD3<Float>) -> Script {
         Script().onTick { ctx in
-            ctx.translate(by: velocity * Float(ctx.deltaTime))
+            let resolvedVelocity = ctx.vector3Parameter("velocity") ?? velocity
+            ctx.translate(by: resolvedVelocity * Float(ctx.deltaTime))
         }
     }
 }
