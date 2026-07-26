@@ -1351,6 +1351,51 @@ struct EditorSceneEditHistoryTests {
         #expect(!adapter.isEntityLocked(entityID))
     }
 
+    @Test("multi-entity deletion is atomic and uses one undo step")
+    func multiEntityDeletionIsAtomic() throws {
+        let adapter = EditorSceneAdapter()
+        let entityIDs = Set(adapter.roots.prefix(2).map(\.id))
+        let originalCount = adapter.entityCount
+        #expect(entityIDs.count == 2)
+
+        #expect(adapter.deleteEntities(entityIDs))
+        #expect(adapter.entityCount == originalCount - 2)
+        #expect(entityIDs.allSatisfy { adapter.entitySummary(id: $0) == nil })
+
+        #expect(adapter.undoEdit())
+        #expect(adapter.entityCount == originalCount)
+        #expect(entityIDs.allSatisfy { adapter.entitySummary(id: $0) != nil })
+        #expect(!adapter.canUndoEdit)
+    }
+
+    @Test("multi-entity deletion fails as a unit when one entity is locked")
+    func multiEntityDeletionHonorsLocksAtomically() throws {
+        let adapter = EditorSceneAdapter()
+        let entityIDs = Set(adapter.roots.prefix(2).map(\.id))
+        let lockedID = try #require(entityIDs.first)
+        let originalCount = adapter.entityCount
+        var reportedError: String?
+        adapter.onTransactionError = { reportedError = $0 }
+        adapter.setEntityLocked(true, entityIDs: [lockedID])
+
+        #expect(!adapter.deleteEntities(entityIDs))
+        #expect(adapter.entityCount == originalCount)
+        #expect(entityIDs.allSatisfy { adapter.entitySummary(id: $0) != nil })
+        #expect(reportedError?.contains("locked") == true)
+    }
+
+    @Test("multi-entity deletion rejects stale selections instead of partially deleting")
+    func multiEntityDeletionRejectsStaleSelections() throws {
+        let adapter = EditorSceneAdapter()
+        let validID = try #require(adapter.roots.first?.id)
+        let originalCount = adapter.entityCount
+
+        #expect(!adapter.deleteEntities([validID, UInt64.max]))
+        #expect(adapter.entityCount == originalCount)
+        #expect(adapter.entitySummary(id: validID) != nil)
+        #expect(!adapter.canUndoEdit)
+    }
+
     @Test("hierarchy locks round-trip and remap entity identifiers")
     func lockedEntityRoundTrip() throws {
         let adapter = EditorSceneAdapter()

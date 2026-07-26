@@ -104,21 +104,14 @@ jobs:
           # audio backend, on macOS the AVFoundation one.
           swift build --target AudioRuntime
 
-      - name: Run pure-Swift tests
+      - name: Run tests
         shell: bash
         working-directory: Engine
-        run: |
-          swift test --filter EngineMathTests
-          swift test --filter ObservationBusTests
-          swift test --filter SceneRuntimeTests
-          swift test --filter ScriptRuntimeTests
-          swift test --filter AssetPipelineTests
-          swift test --filter AudioRuntimeTests
-          swift test --filter SequenceRuntimeTests
-          swift test --filter CardBattleRuntimeTests
-          swift test --filter IntentRuntimeTests
-          swift test --filter AIRuntimeTests
-          swift test --filter PluginRuntimeTests
+        # Run the package as a whole so every current and future test target is
+        # exercised. Real GPU and host Vision smoke cases remain opt-in via
+        # GUAVA_RUN_GPU_SMOKE_TESTS / GUAVA_RUN_VISION_SMOKE_TESTS and are
+        # skipped on ordinary CI runners.
+        run: swift test
 
       - name: Run M7 destruction performance gates
         if: runner.os == 'macOS'

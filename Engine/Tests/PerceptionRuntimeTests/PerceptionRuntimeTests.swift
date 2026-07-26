@@ -113,6 +113,9 @@ final class PerceptionRuntimeTests: XCTestCase {
 
     func testAppleVisionWorkerRunsAgainstFixtureImage() throws {
         #if canImport(Vision)
+        guard ProcessInfo.processInfo.environment["GUAVA_RUN_VISION_SMOKE_TESTS"] == "1" else {
+            throw XCTSkip("set GUAVA_RUN_VISION_SMOKE_TESTS=1 to run the Apple Vision smoke test")
+        }
         let testFile = URL(fileURLWithPath: #filePath)
         let engineRoot = testFile
             .deletingLastPathComponent()

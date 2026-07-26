@@ -958,11 +958,22 @@ extension EditorSceneAdapter {
     /// 直接销毁实体；选择状态由调用方负责清理。
     @discardableResult
     public func deleteEntity(_ rawID: UInt64) -> Bool {
-        guard makeEntityID(rawID) != nil else { return false }
-        return applySceneTransaction(intentVerb: "scene.delete_entity",
-                                     summary: "Delete entity",
-                                     targetRawIDs: [rawID],
-                                     mutations: [.deleteEntity(entityID: rawID)]) != nil
+        deleteEntities([rawID])
+    }
+
+    /// Deletes the complete editor selection as one transaction so a multi-select
+    /// Delete is atomic and can be restored with a single Undo.
+    @discardableResult
+    public func deleteEntities(_ rawIDs: Set<UInt64>) -> Bool {
+        let entityIDs = rawIDs.sorted()
+        guard !entityIDs.isEmpty else { return false }
+        guard entityIDs.allSatisfy({ rawID in
+            makeEntityID(rawID).map(scene.contains) == true
+        }) else { return false }
+        return applySceneTransaction(intentVerb: "scene.delete_entities",
+                                     summary: entityIDs.count == 1 ? "Delete entity" : "Delete entities",
+                                     targetRawIDs: entityIDs,
+                                     mutations: entityIDs.map(SceneMutation.deleteEntity)) != nil
     }
 
     /// 浅复制：复制名字 / kind / 本地矩阵 / 渲染网格 / collider / rigid body / camera。
