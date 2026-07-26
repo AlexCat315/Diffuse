@@ -16,10 +16,18 @@ public enum ProjectRuntimeResources {
     /// must be registered explicitly.
     @discardableResult
     public static func configureAudioSearchPaths(at rootPath: String) -> [URL] {
+        let directories = discoverAudioSearchPaths(at: rootPath)
+        AudioEngine.shared.setSearchURLs(directories)
+        return directories
+    }
+
+    /// Pure discovery half of configuration, kept internal for deterministic
+    /// tests without mutating the process-wide audio engine.
+    static func discoverAudioSearchPaths(at rootPath: String) -> [URL] {
         let fileManager = FileManager.default
         let root = URL(fileURLWithPath: rootPath, isDirectory: true).standardizedFileURL
         var directories: [URL] = [root]
-        var seen = Set([root.path])
+        var seen = Set([pathKey(root)])
         let properties: [URLResourceKey] = [.isDirectoryKey, .isRegularFileKey]
         if let enumerator = fileManager.enumerator(at: root,
                                                    includingPropertiesForKeys: properties,
@@ -27,7 +35,7 @@ public enum ProjectRuntimeResources {
             for case let url as URL in enumerator {
                 guard let values = try? url.resourceValues(forKeys: Set(properties)) else { continue }
                 if values.isDirectory == true {
-                    if excludedDirectories.contains(url.lastPathComponent) {
+                    if excludedDirectories.contains(url.lastPathComponent.lowercased()) {
                         enumerator.skipDescendants()
                     }
                     continue
@@ -35,12 +43,19 @@ public enum ProjectRuntimeResources {
                 guard values.isRegularFile == true,
                       audioExtensions.contains(url.pathExtension.lowercased()) else { continue }
                 let directory = url.deletingLastPathComponent().standardizedFileURL
-                if seen.insert(directory.path).inserted {
+                if seen.insert(pathKey(directory)).inserted {
                     directories.append(directory)
                 }
             }
         }
-        AudioEngine.shared.setSearchURLs(directories)
         return directories
+    }
+
+    private static func pathKey(_ url: URL) -> String {
+        #if os(Windows)
+        return url.standardizedFileURL.path.lowercased()
+        #else
+        return url.standardizedFileURL.path
+        #endif
     }
 }

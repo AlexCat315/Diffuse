@@ -5,6 +5,19 @@ public enum PlaybackState: String, Codable, Sendable, Hashable {
     case stopped
     case playing
     case paused
+
+    public func canTransition(to next: PlaybackState) -> Bool {
+        switch (self, next) {
+        case (.stopped, .playing),
+             (.playing, .paused),
+             (.playing, .stopped),
+             (.paused, .playing),
+             (.paused, .stopped):
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 public enum EditorWorkspaceMode: String, Codable, Sendable, Hashable {

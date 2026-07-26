@@ -97,11 +97,22 @@ public struct PluginPackageLoader: Sendable {
 
     private func fixedFile(_ name: String, beneath root: URL) throws -> URL {
         let url = root.appendingPathComponent(name, isDirectory: false).standardizedFileURL
-        let prefix = root.path.hasSuffix("/") ? root.path : root.path + "/"
-        guard url.path.hasPrefix(prefix) else { throw PluginPackageError.missingFile(name) }
+        let parentComponents = comparablePathComponents(url.deletingLastPathComponent())
+        guard parentComponents == comparablePathComponents(root) else {
+            throw PluginPackageError.missingFile(name)
+        }
         let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
         guard values?.isSymbolicLink != true else { throw PluginPackageError.symbolicLinkNotAllowed(name) }
         guard values?.isRegularFile == true else { throw PluginPackageError.missingFile(name) }
         return url
+    }
+
+    private func comparablePathComponents(_ url: URL) -> [String] {
+        let components = url.standardizedFileURL.pathComponents
+        #if os(Windows)
+        return components.map { $0.lowercased() }
+        #else
+        return components
+        #endif
     }
 }

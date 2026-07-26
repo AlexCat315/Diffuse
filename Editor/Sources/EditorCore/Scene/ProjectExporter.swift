@@ -1,3 +1,4 @@
+import AssetPipeline
 import Foundation
 
 public enum ProjectExporterError: Error, CustomStringConvertible, Equatable {
@@ -5,6 +6,8 @@ public enum ProjectExporterError: Error, CustomStringConvertible, Equatable {
     case missingPlayerExecutable(String)
     case unsafeRelativePath(String)
     case conflictingAssetDestination(String)
+    case conflictingMeshIndex(Int)
+    case outputContainsSourceProject(String)
 
     public var description: String {
         switch self {
@@ -16,6 +19,10 @@ public enum ProjectExporterError: Error, CustomStringConvertible, Equatable {
             return "export asset path escapes the bundle: \(path)"
         case let .conflictingAssetDestination(path):
             return "multiple assets target the same export path: \(path)"
+        case let .conflictingMeshIndex(index):
+            return "multiple assets use export mesh index: \(index)"
+        case let .outputContainsSourceProject(path):
+            return "export output cannot contain the source project: \(path)"
         }
     }
 }
@@ -48,10 +55,26 @@ public struct ProjectExportAsset: Codable, Sendable, Equatable {
     public var relativePath: String
     public var kind: String
     public var meshIndex: Int
+
+    public init(id: String,
+                name: String,
+                relativePath: String,
+                kind: String,
+                meshIndex: Int) {
+        self.id = id
+        self.name = name
+        self.relativePath = relativePath
+        self.kind = kind
+        self.meshIndex = meshIndex
+    }
 }
 
 public struct ProjectExportAssetList: Codable, Sendable, Equatable {
     public var assets: [ProjectExportAsset]
+
+    public init(assets: [ProjectExportAsset]) {
+        self.assets = assets
+    }
 }
 
 /// Writes a self-contained, platform-agnostic project export bundle. The layout is exactly
@@ -59,11 +82,13 @@ public struct ProjectExportAssetList: Codable, Sendable, Equatable {
 ///
 ///     build.json                     descriptor / metadata
 ///     assets.json                    referenced asset list
+///     Scripts/scripts.json           optional project script aliases and defaults
 ///     .guava/game-saves/slot-0.json  scene captured as a GameSaveDocument
 ///     <project-relative paths>        asset files and external model dependencies
 ///
-/// When a `playerExecutableURL` is supplied, the export also contains a macOS
-/// application bundle with the project data embedded under Contents/Resources.
+/// When a `playerExecutableURL` is supplied, the export also contains a runnable
+/// player: a macOS application bundle with embedded project data, or a portable
+/// `Player/` directory on Windows and Linux.
 public enum ProjectExporter {
     public static let schemaVersion = 1
     public static let sceneSlot = 0
@@ -76,6 +101,14 @@ public enum ProjectExporter {
                               playerExecutableURL: URL? = nil,
                               to outputDirectory: URL) throws -> ProjectExportDescriptor {
         let fileManager = FileManager.default
+        let assets = try validatedAssets(assets)
+        if let sourceProjectDirectory {
+            let sourceURL = sourceProjectDirectory.resolvingSymlinksInPath().standardizedFileURL
+            let outputURL = outputDirectory.resolvingSymlinksInPath().standardizedFileURL
+            guard !pathContains(sourceURL, root: outputURL) else {
+                throw ProjectExporterError.outputContainsSourceProject(outputDirectory.path)
+            }
+        }
         let parentDirectory = outputDirectory.deletingLastPathComponent()
         try fileManager.createDirectory(at: parentDirectory, withIntermediateDirectories: true)
         let stagingDirectory = parentDirectory.appendingPathComponent(
@@ -93,7 +126,11 @@ public enum ProjectExporter {
         if let sourceProjectDirectory {
             try copyAudioResources(from: sourceProjectDirectory,
                                    to: stagingDirectory,
+                                   excluding: [outputDirectory, stagingDirectory],
                                    fileManager: fileManager)
+            try copyProjectScriptCatalog(from: sourceProjectDirectory,
+                                         to: stagingDirectory,
+                                         fileManager: fileManager)
         }
 
         let assetList = ProjectExportAssetList(assets: assets.map {
@@ -112,10 +149,16 @@ public enum ProjectExporter {
         )
         try writeJSON(descriptor, to: stagingDirectory.appendingPathComponent("build.json"))
         if let playerExecutableURL {
+            #if os(macOS)
             try createApplicationBundle(appName: appName,
                                         playerExecutableURL: playerExecutableURL,
                                         projectDirectory: stagingDirectory,
                                         fileManager: fileManager)
+            #else
+            try createPortablePlayerBundle(playerExecutableURL: playerExecutableURL,
+                                           projectDirectory: stagingDirectory,
+                                           fileManager: fileManager)
+            #endif
         }
         try replaceBundle(at: outputDirectory,
                           with: stagingDirectory,
@@ -141,10 +184,49 @@ public enum ProjectExporter {
             .appendingPathComponent("Contents/MacOS/\(safeApplicationName(appName))")
     }
 
+    /// Executable produced for the host platform by an export with a player.
+    public static func runnableExecutableURL(appName: String,
+                                             in outputDirectory: URL) -> URL {
+        #if os(macOS)
+        applicationExecutableURL(appName: appName, in: outputDirectory)
+        #else
+        portablePlayerExecutableURL(in: outputDirectory)
+        #endif
+    }
+
+    static func portablePlayerExecutableURL(in outputDirectory: URL) -> URL {
+        outputDirectory
+            .appendingPathComponent("Player", isDirectory: true)
+            .appendingPathComponent(playerExecutableName)
+    }
+
     private static func writeJSON<T: Encodable>(_ value: T, to url: URL) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(value).write(to: url, options: [.atomic])
+    }
+
+    private static func validatedAssets(_ assets: [EditorAsset]) throws -> [EditorAsset] {
+        var relativePaths = Set<String>()
+        var meshIndices = Set<Int>()
+        return try assets.map { asset in
+            guard let relativePath = AssetImportResolver.sanitizedRelativePath(asset.relativePath) else {
+                throw ProjectExporterError.unsafeRelativePath(asset.relativePath)
+            }
+            guard relativePaths.insert(relativePath).inserted else {
+                throw ProjectExporterError.conflictingAssetDestination(relativePath)
+            }
+            if asset.meshIndex >= AssetRegistry.importedMeshStartIndex,
+               !meshIndices.insert(asset.meshIndex).inserted {
+                throw ProjectExporterError.conflictingMeshIndex(asset.meshIndex)
+            }
+            return EditorAsset(id: asset.id,
+                               name: asset.name,
+                               relativePath: relativePath,
+                               absolutePath: asset.absolutePath,
+                               kind: asset.kind,
+                               meshIndex: asset.meshIndex)
+        }
     }
 
     private static func createApplicationBundle(appName: String,
@@ -214,6 +296,55 @@ public enum ProjectExporter {
         try plist.write(to: contentsURL.appendingPathComponent("Info.plist"), options: [.atomic])
     }
 
+    /// Creates the non-macOS runnable layout. Kept internal so the layout can be
+    /// regression-tested on macOS even though host selection happens at compile time.
+    static func createPortablePlayerBundle(playerExecutableURL: URL,
+                                           projectDirectory: URL,
+                                           fileManager: FileManager = .default) throws {
+        guard fileManager.isExecutableFile(atPath: playerExecutableURL.path) else {
+            throw ProjectExporterError.missingPlayerExecutable(playerExecutableURL.path)
+        }
+        let playerDirectory = projectDirectory.appendingPathComponent("Player", isDirectory: true)
+        try fileManager.createDirectory(at: playerDirectory, withIntermediateDirectories: true)
+        let executableURL = portablePlayerExecutableURL(in: projectDirectory)
+        try fileManager.copyItem(at: playerExecutableURL, to: executableURL)
+        #if !os(Windows)
+        try fileManager.setAttributes([.posixPermissions: 0o755],
+                                      ofItemAtPath: executableURL.path)
+        #endif
+
+        let sourceDirectory = playerExecutableURL.deletingLastPathComponent()
+        let siblings = try fileManager.contentsOfDirectory(
+            at: sourceDirectory,
+            includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        )
+        for sibling in siblings where sibling != playerExecutableURL {
+            let values = try sibling.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey])
+            let extensionName = sibling.pathExtension.lowercased()
+            let copyDirectory = values.isDirectory == true
+                && (extensionName == "bundle"
+                    || extensionName == "resources"
+                    || sibling.lastPathComponent == "Lib")
+            let copyLibrary = values.isRegularFile == true
+                && ["dll", "so", "dylib"].contains(extensionName)
+            guard copyDirectory || copyLibrary else { continue }
+            try fileManager.copyItem(
+                at: sibling,
+                to: playerDirectory.appendingPathComponent(sibling.lastPathComponent,
+                                                            isDirectory: copyDirectory)
+            )
+        }
+    }
+
+    private static var playerExecutableName: String {
+        #if os(Windows)
+        "GuavaPlayer.exe"
+        #else
+        "GuavaPlayer"
+        #endif
+    }
+
     private static func safeApplicationName(_ appName: String) -> String {
         let allowed = CharacterSet.alphanumerics
             .union(.whitespaces)
@@ -274,8 +405,12 @@ public enum ProjectExporter {
 
     private static func copyAudioResources(from sourceDirectory: URL,
                                            to outputDirectory: URL,
+                                           excluding excludedDirectories: [URL] = [],
                                            fileManager: FileManager) throws {
         let sourceRoot = sourceDirectory.resolvingSymlinksInPath()
+        let excludedURLs = excludedDirectories.map {
+            $0.resolvingSymlinksInPath().standardizedFileURL
+        }
         let properties: [URLResourceKey] = [.isDirectoryKey, .isRegularFileKey]
         guard let enumerator = fileManager.enumerator(at: sourceRoot,
                                                       includingPropertiesForKeys: properties,
@@ -285,19 +420,19 @@ public enum ProjectExporter {
         for case let source as URL in enumerator {
             let values = try source.resourceValues(forKeys: Set(properties))
             if values.isDirectory == true {
-                if excludedResourceDirectories.contains(source.lastPathComponent) {
+                let resolvedURL = source.resolvingSymlinksInPath().standardizedFileURL
+                if excludedResourceDirectories.contains(source.lastPathComponent.lowercased())
+                    || excludedURLs.contains(where: { pathContains(resolvedURL, root: $0) }) {
                     enumerator.skipDescendants()
                 }
                 continue
             }
             guard values.isRegularFile == true,
                   audioExtensions.contains(source.pathExtension.lowercased()) else { continue }
-            let resolvedSourcePath = source.resolvingSymlinksInPath().path
-            let sourceRootPrefix = sourceRoot.path.hasSuffix("/")
-                ? sourceRoot.path
-                : sourceRoot.path + "/"
-            guard resolvedSourcePath.hasPrefix(sourceRootPrefix) else { continue }
-            let relativePath = String(resolvedSourcePath.dropFirst(sourceRootPrefix.count))
+            let resolvedSource = source.resolvingSymlinksInPath().standardizedFileURL
+            guard let relativePath = relativePath(of: resolvedSource, within: sourceRoot) else {
+                continue
+            }
             let destination = try safeDestination(relativePath: relativePath, in: outputDirectory)
             try fileManager.createDirectory(at: destination.deletingLastPathComponent(),
                                             withIntermediateDirectories: true)
@@ -307,14 +442,48 @@ public enum ProjectExporter {
         }
     }
 
+    private static func pathContains(_ candidate: URL, root: URL) -> Bool {
+        let candidateComponents = comparablePathComponents(candidate)
+        let rootComponents = comparablePathComponents(root)
+        guard candidateComponents.count >= rootComponents.count else { return false }
+        return candidateComponents.prefix(rootComponents.count).elementsEqual(rootComponents)
+    }
+
+    private static func relativePath(of candidate: URL, within root: URL) -> String? {
+        guard pathContains(candidate, root: root) else { return nil }
+        let candidateComponents = candidate.standardizedFileURL.pathComponents
+        let rootComponentCount = root.standardizedFileURL.pathComponents.count
+        guard candidateComponents.count > rootComponentCount else { return nil }
+        return candidateComponents.dropFirst(rootComponentCount).joined(separator: "/")
+    }
+
+    private static func comparablePathComponents(_ url: URL) -> [String] {
+        let components = url.standardizedFileURL.pathComponents
+        #if os(Windows)
+        return components.map { $0.lowercased() }
+        #else
+        return components
+        #endif
+    }
+
+    private static func copyProjectScriptCatalog(from sourceDirectory: URL,
+                                                 to outputDirectory: URL,
+                                                 fileManager: FileManager) throws {
+        let source = sourceDirectory.appendingPathComponent(ProjectScriptCatalog.relativePath)
+        guard fileManager.fileExists(atPath: source.path) else { return }
+        let destination = try safeDestination(relativePath: ProjectScriptCatalog.relativePath,
+                                              in: outputDirectory)
+        try fileManager.createDirectory(at: destination.deletingLastPathComponent(),
+                                        withIntermediateDirectories: true)
+        try fileManager.copyItem(at: source, to: destination)
+    }
+
     private static func safeDestination(relativePath: String,
                                         in root: URL) throws -> URL {
         let standardizedRoot = root.standardizedFileURL
         let destination = standardizedRoot.appendingPathComponent(relativePath).standardizedFileURL
-        let rootPrefix = standardizedRoot.path.hasSuffix("/")
-            ? standardizedRoot.path
-            : standardizedRoot.path + "/"
-        guard destination.path.hasPrefix(rootPrefix) else {
+        guard destination != standardizedRoot,
+              pathContains(destination, root: standardizedRoot) else {
             throw ProjectExporterError.unsafeRelativePath(relativePath)
         }
         return destination

@@ -262,6 +262,7 @@ public struct SceneEditStep: Codable, Sendable {
 
     // set_script_property
     public var scriptIndex: Int?        // binding index, default 0
+    public var scriptIdentifier: String? // stable catalog id; creates/replaces binding when provided
     public var scriptPropertyName: String?
     public var scriptPropertyValue: JSONValue?
 
@@ -339,6 +340,7 @@ public struct SceneEditStep: Codable, Sendable {
         case audioPlayOnAwake   = "audio_play_on_awake"
         case audioSpatialBlend  = "audio_spatial_blend"
         case scriptIndex        = "script_index"
+        case scriptIdentifier   = "script_identifier"
         case scriptPropertyName = "script_property_name"
         case scriptPropertyValue = "script_property_value"
         case isVisible          = "is_visible"

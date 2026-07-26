@@ -57,6 +57,16 @@ public final class SDL3AudioBackend: AudioBackend, @unchecked Sendable {
 
     public func isClipLoaded(_ name: String) -> Bool { clips[name] != nil }
 
+    public func unloadAllClips() {
+        // Voices and BGM streams may still hold pointers into a clip buffer.
+        // Tear them down before releasing the decoded storage.
+        stopAll()
+        for clip in clips.values {
+            SDL_free(clip.buffer)
+        }
+        clips.removeAll(keepingCapacity: true)
+    }
+
     // MARK: - Voices
 
     public func play(clip: String, volume: Float, pitch: Float, loop: Bool) -> AudioVoiceID? {

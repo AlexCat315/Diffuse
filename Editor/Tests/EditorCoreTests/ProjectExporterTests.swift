@@ -82,7 +82,7 @@ struct ProjectExporterTests {
         #expect(list.assets.first?.relativePath == "models/barrel.glb")
     }
 
-    @Test("export copies model dependencies and audio resources")
+    @Test("export copies model dependencies, audio resources, and project scripts")
     func exportCopiesRuntimeResources() throws {
         let project = tempDir()
         let output = project.appendingPathComponent("export", isDirectory: true)
@@ -101,6 +101,10 @@ struct ProjectExporterTests {
             to: modelDirectory.appendingPathComponent("textures/albedo.png")
         )
         try Data([0x52, 0x49, 0x46, 0x46]).write(to: audioDirectory.appendingPathComponent("theme.wav"))
+        let scriptsURL = project.appendingPathComponent(ProjectScriptCatalog.relativePath)
+        try FileManager.default.createDirectory(at: scriptsURL.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        try Data(#"{"schemaVersion":1,"scripts":[]}"#.utf8).write(to: scriptsURL)
         let asset = EditorAsset(id: "Assets/Models/ship.gltf",
                                 name: "ship",
                                 relativePath: "Assets/Models/ship.gltf",
@@ -126,6 +130,9 @@ struct ProjectExporterTests {
         #expect(FileManager.default.fileExists(
             atPath: output.appendingPathComponent("Assets/Audio/theme.wav").path
         ))
+        #expect(FileManager.default.fileExists(
+            atPath: output.appendingPathComponent(ProjectScriptCatalog.relativePath).path
+        ))
     }
 
     @Test("re-export replaces stale bundle contents")
@@ -146,6 +153,112 @@ struct ProjectExporterTests {
 
         _ = try ProjectExporter.export(manifest: manifest, appName: "Demo", to: output)
         #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent("old.glb").path))
+    }
+
+    @Test("custom project-local output is excluded from runtime resource scanning")
+    func exportDoesNotRecopyPreviousCustomOutput() throws {
+        let project = tempDir()
+        let output = project.appendingPathComponent("Builds/Demo", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: project) }
+
+        let audio = project.appendingPathComponent("Assets/Audio/theme.wav")
+        try FileManager.default.createDirectory(at: audio.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        try Data([0x52, 0x49, 0x46, 0x46]).write(to: audio)
+
+        // Simulate a previous export. Without explicitly excluding the requested
+        // output directory, its stale resource is copied into Builds/Demo again.
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        try Data("stale".utf8).write(to: output.appendingPathComponent("old.wav"))
+
+        _ = try ProjectExporter.export(manifest: EditorSceneAdapter().manifest(),
+                                       appName: "Demo",
+                                       sourceProjectDirectory: project,
+                                       to: output)
+
+        #expect(FileManager.default.fileExists(
+            atPath: output.appendingPathComponent("Assets/Audio/theme.wav").path
+        ))
+        #expect(!FileManager.default.fileExists(
+            atPath: output.appendingPathComponent("Builds/Demo/old.wav").path
+        ))
+        #expect(!FileManager.default.fileExists(atPath: output.appendingPathComponent("old.wav").path))
+    }
+
+    @Test("export rejects replacing a directory that contains the source project")
+    func exportRejectsOutputContainingSourceProject() throws {
+        let container = tempDir()
+        let project = container.appendingPathComponent("Project", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: container) }
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        let marker = project.appendingPathComponent("keep.txt")
+        try Data("keep".utf8).write(to: marker)
+
+        #expect(throws: ProjectExporterError.outputContainsSourceProject(container.path)) {
+            _ = try ProjectExporter.export(manifest: EditorSceneAdapter().manifest(),
+                                           appName: "Demo",
+                                           sourceProjectDirectory: project,
+                                           to: container)
+        }
+        #expect(FileManager.default.fileExists(atPath: marker.path))
+    }
+
+    @Test("export rejects asset destinations that traverse outside the bundle")
+    func exportRejectsEscapingAssetDestination() throws {
+        let root = tempDir()
+        let output = root.appendingPathComponent("Export", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appendingPathComponent("source.glb")
+        try Data([1, 2, 3]).write(to: source)
+        let asset = EditorAsset(id: "asset",
+                                name: "asset",
+                                relativePath: "../escaped.glb",
+                                absolutePath: source.path,
+                                kind: .glb,
+                                meshIndex: 2)
+
+        #expect(throws: ProjectExporterError.unsafeRelativePath("../escaped.glb")) {
+            _ = try ProjectExporter.export(manifest: EditorSceneAdapter().manifest(),
+                                           appName: "Demo",
+                                           assets: [asset],
+                                           to: output)
+        }
+        #expect(try Data(contentsOf: source) == Data([1, 2, 3]))
+    }
+
+    @Test("export normalizes portable asset paths and rejects duplicate mesh slots")
+    func exportValidatesAssetList() throws {
+        let root = tempDir()
+        let output = root.appendingPathComponent("Export", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let firstURL = root.appendingPathComponent("first.glb")
+        let secondURL = root.appendingPathComponent("second.glb")
+        try Data([1]).write(to: firstURL)
+        try Data([2]).write(to: secondURL)
+        let first = EditorAsset(id: "first", name: "first",
+                                relativePath: "Assets\\first.glb",
+                                absolutePath: firstURL.path, kind: .glb, meshIndex: 3)
+
+        _ = try ProjectExporter.export(manifest: EditorSceneAdapter().manifest(),
+                                       appName: "Demo", assets: [first], to: output)
+        let list = try JSONDecoder().decode(
+            ProjectExportAssetList.self,
+            from: Data(contentsOf: output.appendingPathComponent("assets.json"))
+        )
+        #expect(list.assets.first?.relativePath == "Assets/first.glb")
+        #expect(FileManager.default.fileExists(
+            atPath: output.appendingPathComponent("Assets/first.glb").path
+        ))
+
+        let second = EditorAsset(id: "second", name: "second",
+                                 relativePath: "Assets/second.glb",
+                                 absolutePath: secondURL.path, kind: .glb, meshIndex: 3)
+        #expect(throws: ProjectExporterError.conflictingMeshIndex(3)) {
+            _ = try ProjectExporter.export(manifest: EditorSceneAdapter().manifest(),
+                                           appName: "Demo", assets: [first, second], to: output)
+        }
     }
 
     @Test("export packages a self-contained macOS application when a player is available")
@@ -195,5 +308,46 @@ struct ProjectExporterTests {
         )
         #expect(plist["CFBundleExecutable"] as? String == "Demo_Game")
         #expect(plist["LSMinimumSystemVersion"] as? String == "13.0")
+    }
+
+    @Test("portable player layout copies executable, resources, and runtime libraries")
+    func portablePlayerLayoutCopiesRuntime() throws {
+        let project = tempDir()
+        let playerBuild = tempDir()
+        defer {
+            try? FileManager.default.removeItem(at: project)
+            try? FileManager.default.removeItem(at: playerBuild)
+        }
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: playerBuild, withIntermediateDirectories: true)
+        let player = playerBuild.appendingPathComponent("custom-player")
+        try Data("#!/bin/sh\nexit 0\n".utf8).write(to: player)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755],
+                                              ofItemAtPath: player.path)
+        let resources = playerBuild.appendingPathComponent("GameRuntime.resources", isDirectory: true)
+        try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true)
+        try Data("resource".utf8).write(to: resources.appendingPathComponent("marker.txt"))
+        let libraries = playerBuild.appendingPathComponent("Lib", isDirectory: true)
+        try FileManager.default.createDirectory(at: libraries, withIntermediateDirectories: true)
+        try Data("runtime".utf8).write(to: libraries.appendingPathComponent("libswiftCore.so"))
+        try Data("native".utf8).write(to: playerBuild.appendingPathComponent("runtime.dll"))
+
+        try ProjectExporter.createPortablePlayerBundle(playerExecutableURL: player,
+                                                       projectDirectory: project)
+
+        let executable = ProjectExporter.portablePlayerExecutableURL(in: project)
+        #expect(FileManager.default.isExecutableFile(atPath: executable.path))
+        #expect(FileManager.default.fileExists(
+            atPath: project.appendingPathComponent("Player/GameRuntime.resources/marker.txt").path
+        ))
+        #expect(FileManager.default.fileExists(
+            atPath: project.appendingPathComponent("Player/Lib/libswiftCore.so").path
+        ))
+        #expect(FileManager.default.fileExists(
+            atPath: project.appendingPathComponent("Player/runtime.dll").path
+        ))
+        #expect(!FileManager.default.fileExists(
+            atPath: project.appendingPathComponent("Player/custom-player").path
+        ))
     }
 }

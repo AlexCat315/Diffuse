@@ -40,9 +40,39 @@ struct EditorMenuModelTests {
         let model = make(.playing)
         for action in actions(model) {
             switch action.command {
-            case .setPlaybackState(.playing): #expect(action.isSelected)
-            case .setPlaybackState(.paused): #expect(!action.isSelected)
-            case .setPlaybackState(.stopped): #expect(!action.isSelected)
+            case .setPlaybackState(.playing):
+                #expect(action.isSelected)
+                #expect(!action.isEnabled)
+            case .setPlaybackState(.paused), .setPlaybackState(.stopped):
+                #expect(!action.isSelected)
+                #expect(action.isEnabled)
+            default: break
+            }
+        }
+    }
+
+    @Test("playback policy rejects no-op and stopped-to-paused transitions")
+    func playbackTransitionPolicy() {
+        #expect(EditorPlaybackCommandPolicy.canTransition(from: .stopped, to: .playing))
+        #expect(!EditorPlaybackCommandPolicy.canTransition(from: .stopped, to: .paused))
+        #expect(!EditorPlaybackCommandPolicy.canTransition(from: .stopped, to: .stopped))
+
+        #expect(EditorPlaybackCommandPolicy.canTransition(from: .playing, to: .paused))
+        #expect(EditorPlaybackCommandPolicy.canTransition(from: .playing, to: .stopped))
+        #expect(!EditorPlaybackCommandPolicy.canTransition(from: .playing, to: .playing))
+
+        #expect(EditorPlaybackCommandPolicy.canTransition(from: .paused, to: .playing))
+        #expect(EditorPlaybackCommandPolicy.canTransition(from: .paused, to: .stopped))
+        #expect(!EditorPlaybackCommandPolicy.canTransition(from: .paused, to: .paused))
+    }
+
+    @Test("stopped tools menu disables pause and the already-active stop command")
+    func stoppedPlaybackMenuAvailability() {
+        for action in actions(make(.stopped)) {
+            switch action.command {
+            case .setPlaybackState(.playing): #expect(action.isEnabled)
+            case .setPlaybackState(.paused), .setPlaybackState(.stopped):
+                #expect(!action.isEnabled)
             default: break
             }
         }

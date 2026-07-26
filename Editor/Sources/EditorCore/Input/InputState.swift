@@ -36,13 +36,23 @@ public final class InputState {
                 pressedMouseButtons.insert(e.button)
                 mouseX = e.x
                 mouseY = e.y
+                modifiers = e.modifiers
             case .mouseButtonUp(let e):
                 pressedMouseButtons.remove(e.button)
                 mouseX = e.x
                 mouseY = e.y
+                modifiers = e.modifiers
             case .mouseWheel(let e):
                 scrollDeltaX += e.x
                 scrollDeltaY += e.y
+            case .windowFocusLost, .windowMinimized:
+                pressedKeys.removeAll(keepingCapacity: true)
+                pressedMouseButtons.removeAll(keepingCapacity: true)
+                modifiers = []
+                mouseDeltaX = 0
+                mouseDeltaY = 0
+                scrollDeltaX = 0
+                scrollDeltaY = 0
             default:
                 break
             }

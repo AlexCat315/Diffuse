@@ -90,6 +90,9 @@ struct AssetImportResolverTests {
         #expect(AssetImportResolver.sanitizedRelativePath("/etc/passwd") == nil)
         #expect(AssetImportResolver.sanitizedRelativePath("C:/Windows/system32") == nil)
         #expect(AssetImportResolver.sanitizedRelativePath("./textures/ok.png") == "textures/ok.png")
+        #expect(AssetImportResolver.sanitizedRelativePath("textures/./ok.png") == "textures/ok.png")
+        #expect(AssetImportResolver.sanitizedRelativePath("textures\\ok.png") == "textures/ok.png")
+        #expect(AssetImportResolver.sanitizedRelativePath("textures/a..b.png") == "textures/a..b.png")
         #expect(AssetImportResolver.sanitizedRelativePath("buf.bin") == "buf.bin")
     }
 

@@ -58,30 +58,7 @@ private struct GamePlayerRootView: View {
 // MARK: - Entry point helpers
 
 private func resolveProjectDirectory() -> String? {
-    let args = CommandLine.arguments
-    if let idx = args.firstIndex(of: "--project"), args.indices.contains(idx + 1) {
-        return args[idx + 1]
-    }
-    if let environmentPath = ProcessInfo.processInfo.environment["GUAVA_PROJECT_DIR"],
-       !environmentPath.isEmpty {
-        return environmentPath
-    }
-    if let resourceURL = Bundle.main.resourceURL {
-        let bundledProject = resourceURL.appendingPathComponent("GuavaProject", isDirectory: true)
-        if FileManager.default.fileExists(
-            atPath: bundledProject.appendingPathComponent("build.json").path
-        ) {
-            return bundledProject.path
-        }
-    }
-    let currentDirectory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath,
-                               isDirectory: true)
-    if FileManager.default.fileExists(
-        atPath: currentDirectory.appendingPathComponent("build.json").path
-    ) {
-        return currentDirectory.path
-    }
-    return nil
+    GameProjectDirectoryResolver.resolve()
 }
 
 @MainActor
