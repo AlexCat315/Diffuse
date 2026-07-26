@@ -20,9 +20,19 @@ public final class AudioEngine: @unchecked Sendable {
 
     private var searchURLs: [URL] = []
     private var loadedClips: Set<String> = []
-    private var awakened: Set<EntityID> = []
-    /// Tracked voices keyed by the entity that owns them.
-    private var entityVoices: [EntityID: AudioVoiceID] = [:]
+    /// The clip that successfully completed play-on-awake for each entity.
+    /// Recording the clip (rather than only the entity) lets a later source
+    /// edit arm the replacement clip even after the old voice has finished.
+    private var awakenedClips: [EntityID: String] = [:]
+    private struct EntityVoice {
+        var id: AudioVoiceID
+        var clipName: String
+    }
+
+    /// Tracked voices keyed by the entity that owns them. Keep the clip name
+    /// alongside the handle so live AudioSource edits can replace the old
+    /// voice instead of continuing to play stale content.
+    private var entityVoices: [EntityID: EntityVoice] = [:]
 
     private struct ResolvedListener {
         var position: SIMD3<Float>
@@ -116,55 +126,71 @@ public final class AudioEngine: @unchecked Sendable {
                   !source.clipName.isEmpty else { continue }
             activeIDs.insert(id)
 
-            if source.playOnAwake && !awakened.contains(id) {
-                awakened.insert(id)
-                playEntity(id: id, source: source, scene: scene, listener: resolvedListener)
-            } else if let voice = entityVoices[id], backend.isActive(voice) {
+            if let voice = entityVoices[id], voice.clipName != source.clipName {
+                stopEntity(id: id)
+            }
+
+            if source.playOnAwake && awakenedClips[id] != source.clipName {
+                if playEntity(id: id, source: source, scene: scene, listener: resolvedListener) {
+                    // A missing asset or a temporarily unavailable audio device
+                    // must remain eligible for retry on a later tick.
+                    awakenedClips[id] = source.clipName
+                }
+            } else if let voice = entityVoices[id], backend.isActive(voice.id) {
                 // Re-mix live voices so moving sources fade and pan with position.
                 let mix = spatialMix(source: source, entityID: id, scene: scene,
                                      listener: resolvedListener)
-                backend.setVolume(voice, volume: mix.volume)
-                backend.setPan(voice, pan: mix.pan)
-                backend.setPitch(voice, pitch: mix.pitch)
+                backend.setVolume(voice.id, volume: mix.volume)
+                backend.setPan(voice.id, pan: mix.pan)
+                backend.setPitch(voice.id, pitch: mix.pitch)
+            } else {
+                // Non-looping voices are reclaimed by the backend. Forget the
+                // stale handle while retaining `awakenedClips`, since each clip
+                // should still fire only once after a successful start.
+                entityVoices.removeValue(forKey: id)
             }
         }
 
-        // Drop voices whose entity or component went away.
-        let stale = entityVoices.keys.filter { !activeIDs.contains($0) }
+        // Drop both live handles and play-on-awake state when an entity or its
+        // usable source goes away. The voice may already have finished, so the
+        // awakened map must participate in stale-state discovery too.
+        let trackedIDs = Set(entityVoices.keys).union(awakenedClips.keys)
+        let stale = trackedIDs.filter { !activeIDs.contains($0) }
         for id in stale { stopEntity(id: id) }
     }
 
     public func playEntity(id: EntityID, source: AudioSource, scene: SceneRuntime,
                            listenerPosition: SIMD3<Float> = .zero) {
-        playEntity(id: id, source: source, scene: scene,
-                   listener: ResolvedListener(position: listenerPosition, masterVolume: 1,
-                                              linearVelocity: .zero))
+        _ = playEntity(id: id, source: source, scene: scene,
+                       listener: ResolvedListener(position: listenerPosition, masterVolume: 1,
+                                                  linearVelocity: .zero))
     }
 
     private func playEntity(id: EntityID, source: AudioSource, scene: SceneRuntime,
-                            listener: ResolvedListener) {
-        guard preload(source.clipName) else { return }
-        if let existing = entityVoices[id] { backend.stop(existing) }
+                            listener: ResolvedListener) -> Bool {
+        guard preload(source.clipName) else { return false }
+        if let existing = entityVoices[id] { backend.stop(existing.id) }
         let mix = spatialMix(source: source, entityID: id, scene: scene, listener: listener)
         guard let voice = backend.play(clip: source.clipName, volume: mix.volume,
                                        pitch: mix.pitch, loop: source.loop) else {
             entityVoices.removeValue(forKey: id)
-            return
+            return false
         }
-        entityVoices[id] = voice
+        entityVoices[id] = EntityVoice(id: voice, clipName: source.clipName)
         backend.setPan(voice, pan: mix.pan)
+        return true
     }
 
     public func stopEntity(id: EntityID) {
-        if let voice = entityVoices.removeValue(forKey: id) { backend.stop(voice) }
-        awakened.remove(id)
+        if let voice = entityVoices.removeValue(forKey: id) { backend.stop(voice.id) }
+        awakenedClips.removeValue(forKey: id)
     }
 
     /// Stop everything and forget which entities have awakened. Called when play
     /// mode stops so the next run restarts cleanly.
     public func resetPlaybackState() {
         backend.stopAll()
-        awakened.removeAll()
+        awakenedClips.removeAll()
         entityVoices.removeAll()
     }
 

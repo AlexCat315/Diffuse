@@ -98,9 +98,11 @@ struct ObservationBusTests {
         let bus = try ObservationBus()
         let semaphore = DispatchSemaphore(value: 0)
         let lock = NSLock()
+        let deliveryQueue = DispatchQueue(label: "ObservationBusTests.sink.delivery")
         nonisolated(unsafe) var receivedIDs: [String] = []
 
         let token = bus.sink(spec: SubscriptionSpec(filter: .kindIn([.transactionApplied])),
+                             queue: deliveryQueue,
                              interval: .milliseconds(10)) { envelopes in
             lock.lock()
             envelopes.forEach { receivedIDs.append($0.eventID) }

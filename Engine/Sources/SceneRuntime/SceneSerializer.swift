@@ -236,11 +236,17 @@ public enum SceneSerializer {
 
     // MARK: Load
 
-    public static func deserialize(_ data: Data, into scene: inout SceneRuntime) throws {
+    /// Deserializes authored entities into `scene` and returns the entities created by
+    /// this document in document order. Returning the mapping lets serializers in
+    /// higher-level modules restore their own components without guessing from the
+    /// world's slot order (which is unsafe when the destination already has entities).
+    @discardableResult
+    public static func deserialize(_ data: Data, into scene: inout SceneRuntime) throws -> [EntityID] {
         try deserialize(data, into: &scene, restoreGameState: false)
     }
 
-    static func deserializeGameState(_ data: Data, into scene: inout SceneRuntime) throws {
+    @discardableResult
+    static func deserializeGameState(_ data: Data, into scene: inout SceneRuntime) throws -> [EntityID] {
         try deserialize(data, into: &scene, restoreGameState: true)
     }
 
@@ -248,15 +254,21 @@ public enum SceneSerializer {
         _ data: Data,
         into scene: inout SceneRuntime,
         restoreGameState: Bool
-    ) throws {
+    ) throws -> [EntityID] {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let entities = jsonToArray(json["entities"])
         else { throw SceneSerializerError.invalidFormat }
+        // A partially decoded entity array cannot preserve document indices used by
+        // parents, constraints, ragdolls, and higher-level component serializers.
+        // Reject it instead of silently compacting the entity map and misattaching data.
+        guard entities.allSatisfy({ jsonToDict($0) != nil }) else {
+            throw SceneSerializerError.invalidFormat
+        }
         let version = jsonToInt(json["version"]) ?? 0
         guard version == currentVersion else {
             throw SceneSerializerError.unsupportedVersion(version)
         }
-        _ = loadEntities(entities, into: &scene, restoreGameState: restoreGameState)
+        return loadEntities(entities, into: &scene, restoreGameState: restoreGameState)
     }
 
     /// Creates one entity from a JSON dictionary and applies its transform and components.

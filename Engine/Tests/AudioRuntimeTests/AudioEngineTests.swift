@@ -44,6 +44,7 @@ private final class MockAudioBackend: AudioBackend, @unchecked Sendable {
 
     var lastPlay: PlayCall? { playOrder.last.flatMap { plays[$0] } }
     var lastVoice: AudioVoiceID? { playOrder.last }
+    func finish(_ voice: AudioVoiceID) { active.remove(voice) }
 }
 
 @Suite("AudioEngine")
@@ -255,5 +256,83 @@ struct AudioEngineTests {
         engine.tick(scene: scene)
         #expect(mock.plays.isEmpty)
         #expect(mock.loaded.isEmpty)
+    }
+
+    @Test("play-on-awake retries when a missing clip becomes available")
+    func playOnAwakeRetriesAfterMissingClipAppears() throws {
+        let dir = try makeClipDir([])
+        let mock = MockAudioBackend()
+        let engine = AudioEngine(backend: mock)
+        engine.addSearchURL(dir)
+
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(
+            AudioSource(clipName: "late", playOnAwake: true, spatialBlend: 0),
+            for: entity
+        )
+
+        engine.tick(scene: scene)
+        #expect(mock.plays.isEmpty)
+
+        let clipURL = dir.appendingPathComponent("late.wav")
+        #expect(FileManager.default.createFile(atPath: clipURL.path, contents: Data()))
+        engine.tick(scene: scene)
+
+        #expect(mock.lastPlay?.clip == "late")
+        #expect(mock.plays.count == 1)
+    }
+
+    @Test("changing an audio source clip replaces its live voice")
+    func changingClipReplacesLiveVoice() throws {
+        let dir = try makeClipDir(["first", "second"])
+        let mock = MockAudioBackend()
+        let engine = AudioEngine(backend: mock)
+        engine.addSearchURL(dir)
+
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(
+            AudioSource(clipName: "first", playOnAwake: true, spatialBlend: 0),
+            for: entity
+        )
+        engine.tick(scene: scene)
+        let firstVoice = try #require(mock.lastVoice)
+
+        _ = scene.setComponent(
+            AudioSource(clipName: "second", playOnAwake: true, spatialBlend: 0),
+            for: entity
+        )
+        engine.tick(scene: scene)
+
+        #expect(mock.stopped == [firstVoice])
+        #expect(mock.playOrder.count == 2)
+        #expect(mock.lastPlay?.clip == "second")
+    }
+
+    @Test("removing a finished source re-arms play-on-awake")
+    func removingFinishedSourceRearmsPlayOnAwake() throws {
+        let dir = try makeClipDir(["beep"])
+        let mock = MockAudioBackend()
+        let engine = AudioEngine(backend: mock)
+        engine.addSearchURL(dir)
+
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let source = AudioSource(clipName: "beep", playOnAwake: true, spatialBlend: 0)
+        _ = scene.setComponent(source, for: entity)
+        engine.tick(scene: scene)
+
+        let firstVoice = try #require(mock.lastVoice)
+        mock.finish(firstVoice)
+        engine.tick(scene: scene)
+
+        _ = scene.setComponent(AudioSource(clipName: "", playOnAwake: true), for: entity)
+        engine.tick(scene: scene)
+        _ = scene.setComponent(source, for: entity)
+        engine.tick(scene: scene)
+
+        #expect(mock.playOrder.count == 2)
+        #expect(mock.lastPlay?.clip == "beep")
     }
 }

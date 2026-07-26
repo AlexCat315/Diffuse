@@ -1,4 +1,5 @@
 import IntentRuntime
+import PerceptionRuntime
 import SemanticPipeline
 import XCTest
 
@@ -407,8 +408,7 @@ final class SemanticPipelineTests: XCTestCase {
         XCTAssertTrue(proposals.isEmpty, "VisionBackend must return empty when image file is missing")
     }
 
-    func testVisionBackendProducesProposalsForFixtureImage() async throws {
-        #if canImport(Vision)
+    func testVisionBackendMapsWorkerClassificationsToProposals() async throws {
         let testFile = URL(fileURLWithPath: #filePath)
         let engineRoot = testFile
             .deletingLastPathComponent()
@@ -424,16 +424,17 @@ final class SemanticPipelineTests: XCTestCase {
         let regions = CandidateRegionSet(assetURI: raw.assetURI, regions: [
             Region(id: "region:root", source: .structural, parentRegionID: nil),
         ])
-        let proposals = await VisionBackend(maxResults: 2, confidenceThreshold: 0.0)
+        let proposals = await VisionBackend(
+            maxResults: 2,
+            confidenceThreshold: 0.0,
+            worker: StubVisionWorker(label: "trash_can", confidence: 0.75)
+        )
             .analyze(regions: regions, rawStructure: raw, signals: signals)
 
         XCTAssertFalse(proposals.isEmpty, "VisionBackend must produce proposals for a real image")
         XCTAssertEqual(proposals.first?.source, "vision")
-        let confidence = proposals.first?.confidence ?? 0
-        XCTAssertGreaterThan(confidence, 0, "proposals must have positive confidence")
-        #else
-        throw XCTSkip("Vision framework unavailable")
-        #endif
+        XCTAssertEqual(proposals.first?.label, "trash_can")
+        XCTAssertEqual(proposals.first?.confidence ?? -1, 0.6, accuracy: 0.0001)
     }
 
     func testStandardPipelineIncludesVisionBackend() {
@@ -460,5 +461,39 @@ final class SemanticPipelineTests: XCTestCase {
         if case let .entityInferredUpdated(_, _, value, _, _) = roleEvent! {
             XCTAssertEqual(value, .string("confirmed_label"))
         } else { XCTFail("Expected semanticRole event") }
+    }
+}
+
+private struct StubVisionWorker: PerceptionWorker {
+    let manifest = AppleVisionPerceptionWorker().manifest
+    let label: String
+    let confidence: Double
+
+    func analyzeImage(at url: URL,
+                      requestID: String,
+                      maxResults: Int) throws -> PerceptionResult {
+        PerceptionResult(
+            requestID: requestID,
+            modelID: manifest.modelID,
+            modelVersion: "test",
+            task: .classification,
+            status: "success",
+            observations: [
+                .classification(ClassificationObservation(
+                    id: "classification_0",
+                    label: label,
+                    labelSpace: "fixture",
+                    confidence: confidence,
+                    semanticCandidates: [
+                        PerceptionSemanticCandidate(kind: "object_category",
+                                                    label: label,
+                                                    confidence: confidence),
+                    ],
+                    evidence: []
+                )),
+            ],
+            timing: PerceptionTimingInfo(totalMilliseconds: 0),
+            provenance: PerceptionProvenance(source: "fixture", modelID: manifest.modelID)
+        )
     }
 }

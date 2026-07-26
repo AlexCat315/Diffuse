@@ -393,8 +393,9 @@ struct ViewportPanel: View {
             scene.frameEntity(id)
             return true
         case 0x08 /* backspace */, 0x7F /* delete */:
-            guard let id = selected else { return false }
-            if scene.deleteEntity(id) {
+            let selectedIDs = app.store.state.selectedEntityIDs
+            guard !selectedIDs.isEmpty else { return false }
+            if scene.deleteEntities(selectedIDs) {
                 app.store.dispatch(.setSelectedEntity(nil))
             }
             return true

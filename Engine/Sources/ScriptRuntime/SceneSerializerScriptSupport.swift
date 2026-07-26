@@ -11,8 +11,14 @@ extension SceneSerializer {
               var entities = base["entities"] as? [[String: Any]]
         else { return try serialize(scene) }
 
-        let allEntities = scene.entities()
-        for (i, entity) in allEntities.enumerated() {
+        // SceneSerializer's authored format deliberately omits derived destruction
+        // entities. Mirror that list exactly or a skipped fragment shifts every later
+        // script component onto the wrong serialized entity.
+        let authoredEntities = scene.entities().filter { entity in
+            scene.component(DestructibleFragment.self, for: entity) == nil
+                && scene.component(DestructibleRetainedFragment.self, for: entity) == nil
+        }
+        for (i, entity) in authoredEntities.enumerated() {
             guard i < entities.count else { break }
             guard let sc = scene.component(ScriptComponent.self, for: entity) else { continue }
             var comps = entities[i]["components"] as? [String: Any] ?? [:]
@@ -37,15 +43,14 @@ extension SceneSerializer {
     /// Deserializes a scene and restores ScriptComponent bindings.
     /// Script handles are set to rawValue 0 and resolve through their stable identifiers.
     public static func deserializeFull(_ data: Data, into scene: inout SceneRuntime) throws {
-        try deserialize(data, into: &scene)
+        let loadedEntities = try deserialize(data, into: &scene)
 
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let entities = json["entities"] as? [[String: Any]]
         else { return }
 
-        let allEntities = scene.entities()
         for (i, obj) in entities.enumerated() {
-            guard i < allEntities.count else { break }
+            guard i < loadedEntities.count else { break }
             guard let comps = obj["components"] as? [String: Any],
                   let script = comps["script"] as? [String: Any],
                   let bindings = script["bindings"] as? [[String: Any]]
@@ -59,7 +64,7 @@ extension SceneSerializer {
                     parametersJSON: b["parametersJSON"] as? String ?? "{}"
                 )
             }
-            _ = scene.setComponent(ScriptComponent(bindings: scriptBindings), for: allEntities[i])
+            _ = scene.setComponent(ScriptComponent(bindings: scriptBindings), for: loadedEntities[i])
         }
     }
 }
