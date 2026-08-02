@@ -3,10 +3,10 @@ import GuavaUIRuntime
 
 private enum PropertyGridIcons {
     static let chevronDown = BundleImageResource.svg(named: "chevron-down",
-                                                      in: .module,
+                                                      in: GuavaUIComposeResourceBundle.bundle,
                                                       subdirectory: "UIIcons")
     static let chevronRight = BundleImageResource.svg(named: "chevron-right",
-                                                       in: .module,
+                                                       in: GuavaUIComposeResourceBundle.bundle,
                                                        subdirectory: "UIIcons")
 }
 

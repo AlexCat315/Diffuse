@@ -22,10 +22,41 @@
 "Directional" = "方向光";
 "Point" = "点光";
 "Spot" = "聚光";
+"Add Component" = "添加组件";
+"Remove Component" = "移除组件";
+"Locked — unlock in Hierarchy to edit components" = "实体已锁定，请先在层级面板中解锁再编辑组件";
+"Rigid Body" = "刚体";
+"Collider" = "碰撞器";
+"Character Controller" = "角色控制器";
+"Vehicle" = "载具";
+"Soft Body" = "软体";
+"Cloth" = "布料";
+"Soft Body Mesh" = "软体网格";
+"Destructible" = "可破坏对象";
+"Ragdoll" = "布娃娃";
+"Render Mesh" = "渲染网格";
+"Render Material" = "渲染材质";
+"Camera" = "相机";
+"Light" = "灯光";
+"Audio Source" = "音频源";
+"Audio Listener" = "音频监听器";
+"Animation Player" = "动画播放器";
+"Animation Graph" = "动画图";
+"Particle Emitter" = "粒子发射器";
+"Script" = "脚本";
 
 /* Hierarchy */
 "Hierarchy" = "层级";
 "Search" = "搜索";
+"Create" = "创建";
+"Empty Entity" = "空实体";
+"Cube" = "立方体";
+"Directional Light" = "方向光";
+"Point Light" = "点光源";
+"Spot Light" = "聚光灯";
+"entity" = "个实体";
+"entities" = "个实体";
+"Live" = "实时";
 
 /* Panels */
 "Viewport" = "视口";
@@ -60,16 +91,22 @@
 "Help" = "帮助";
 "New Scene" = "新建场景";
 "Open Scene..." = "打开场景...";
+"Guava Scene" = "Guava 场景";
 "Save Scene" = "保存场景";
 "Import Assets..." = "导入资源...";
 "Undo" = "撤销";
 "Redo" = "重做";
+"Duplicate Selection" = "复制所选实体";
 "Reset Layout" = "重置布局";
+"Reopen Closed Panel" = "重新打开已关闭面板";
 "Toggle Theme" = "切换主题";
-"Build Editor" = "构建编辑器";
+"Build Project" = "构建项目";
 "Build and Run" = "构建并运行";
 "Documentation" = "文档";
 "About Guava" = "关于 Guava";
+"Version" = "版本";
+"Development Build" = "开发版本";
+"A native scene editor powered by Guava Engine." = "由 Guava Engine 驱动的原生场景编辑器。";
 "Workspace: Level" = "工作区：关卡";
 "Workspace: Modeling" = "工作区：建模";
 "Workspace: Animation" = "工作区：动画";
@@ -97,7 +134,7 @@
 "Animation" = "动画";
 "Appearance" = "外观";
 "Dark" = "深色";
-"Light" = "浅色";
+"Light Theme" = "浅色";
 "Frame Rate" = "帧率";
 "Unlimited" = "不限制";
 "Vertical Sync" = "垂直同步";

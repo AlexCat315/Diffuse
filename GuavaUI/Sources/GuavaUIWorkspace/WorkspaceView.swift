@@ -1960,19 +1960,19 @@ private func absoluteFrame(of node: Node) -> CGRect {
 
 private enum WorkspaceIcons {
     static let collapse = BundleImageResource.svg(named: "collapse",
-                                                  in: .module,
+                                                  in: GuavaUIWorkspaceResourceBundle.bundle,
                                                   subdirectory: "WorkspaceIcons")
     static let panelLeading = BundleImageResource.svg(named: "panel-leading",
-                                                      in: .module,
+                                                      in: GuavaUIWorkspaceResourceBundle.bundle,
                                                       subdirectory: "WorkspaceIcons")
     static let panelTrailing = BundleImageResource.svg(named: "panel-trailing",
-                                                       in: .module,
+                                                       in: GuavaUIWorkspaceResourceBundle.bundle,
                                                        subdirectory: "WorkspaceIcons")
     static let panelTop = BundleImageResource.svg(named: "panel-top",
-                                                  in: .module,
+                                                  in: GuavaUIWorkspaceResourceBundle.bundle,
                                                   subdirectory: "WorkspaceIcons")
     static let panelBottom = BundleImageResource.svg(named: "panel-bottom",
-                                                     in: .module,
+                                                     in: GuavaUIWorkspaceResourceBundle.bundle,
                                                      subdirectory: "WorkspaceIcons")
 
     /// Slot-aware collapse glyph: a panel frame with the docked side filled
@@ -1987,15 +1987,15 @@ private enum WorkspaceIcons {
         }
     }
     static let expandRight = BundleImageResource.svg(named: "expand-right",
-                                                     in: .module,
+                                                     in: GuavaUIWorkspaceResourceBundle.bundle,
                                                      subdirectory: "WorkspaceIcons")
     static let expandDown = BundleImageResource.svg(named: "expand-down",
-                                                    in: .module,
+                                                    in: GuavaUIWorkspaceResourceBundle.bundle,
                                                     subdirectory: "WorkspaceIcons")
     static let close = BundleImageResource.svg(named: "close",
-                                               in: .module,
+                                               in: GuavaUIWorkspaceResourceBundle.bundle,
                                                subdirectory: "WorkspaceIcons")
     static let pinDot = BundleImageResource.svg(named: "pin-dot",
-                                                in: .module,
+                                                in: GuavaUIWorkspaceResourceBundle.bundle,
                                                 subdirectory: "WorkspaceIcons")
 }

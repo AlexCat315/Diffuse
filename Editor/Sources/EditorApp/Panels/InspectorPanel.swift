@@ -29,7 +29,7 @@ struct InspectorPanel: View {
                     InspectorSelectionSummary(entity: entity,
                                               componentCount: max(0, sections.count - 2))
 
-                    AddComponentButton(scene: scene, entityID: entity.id)
+                    ComponentActionsBar(scene: scene, entityID: entity.id)
 
                     PropertyGrid(propertySections(sections,
                                                   collapsedIDs: collapsedIDs,
@@ -644,19 +644,26 @@ private extension EditorInspectorFieldValue {
 }
 
 
-/// Inspector affordance that surfaces `EditorSceneAdapter.addComponent`, so any
-/// supported component (Particle Emitter, Rigid Body, Audio Source, …) can be
-/// added to the selected entity. Hidden when every kind is already present.
-private struct AddComponentButton: View {
+/// Inspector affordances for adding and removing optional SceneRuntime
+/// components. Structural components such as name and transform stay outside
+/// these menus so an entity cannot be left in an invalid editor state.
+private struct ComponentActionsBar: View {
     let scene: EditorSceneAdapter
     let entityID: UInt64
-    @State private var isPresented: Bool = false
+    @State private var isAddPresented: Bool = false
+    @State private var isRemovePresented: Bool = false
 
     var body: some View {
-        let kinds = scene.addableComponentKinds(on: entityID)
-        return Box(direction: .column, alignItems: .flexStart) {
-            if !kinds.isEmpty {
-                Popover(isPresented: $isPresented, width: 200) {
+        let addableKinds = scene.addableComponentKinds(on: entityID)
+        let removableKinds = scene.componentKinds(on: entityID)
+        return Row(alignment: .center, spacing: 6) {
+            if scene.isEntityLocked(entityID) {
+                Text(L("Locked — unlock in Hierarchy to edit components"))
+                    .font(.caption)
+                    .foregroundColor(.warning)
+                    .padding(horizontal: 4, vertical: 4)
+            } else if !addableKinds.isEmpty {
+                Popover(isPresented: $isAddPresented, width: 210) {
                     Row(alignment: .center, spacing: 6) {
                         Text("+", lineLimit: 1)
                             .font(.bodyStrong)
@@ -669,12 +676,37 @@ private struct AddComponentButton: View {
                     .background(.surfaceSunken)
                     .cornerRadius(4)
                 } content: {
-                    Menu(kinds.map { kind in
+                    Menu(addableKinds.map { kind in
                         MenuEntry.item(MenuItem(id: "add-component-\(kind.rawValue)",
                                                 title: L(kind.displayName),
                                                 action: { scene.addComponent(kind, to: entityID) }))
-                    }, width: 200, maxVisibleRows: 10, onItemActivated: {
-                        isPresented = false
+                    }, width: 210, maxVisibleRows: 10, onItemActivated: {
+                        isAddPresented = false
+                    })
+                }
+            }
+
+            if !scene.isEntityLocked(entityID), !removableKinds.isEmpty {
+                Popover(isPresented: $isRemovePresented, width: 210) {
+                    Row(alignment: .center, spacing: 6) {
+                        Text("−", lineLimit: 1)
+                            .font(.bodyStrong)
+                            .foregroundColor(.error)
+                        Text(L("Remove Component"), lineLimit: 1)
+                            .font(.caption)
+                            .foregroundColor(.onSurface)
+                    }
+                    .padding(horizontal: 10, vertical: 6)
+                    .background(.surfaceSunken)
+                    .cornerRadius(4)
+                } content: {
+                    Menu(removableKinds.map { kind in
+                        MenuEntry.item(MenuItem(id: "remove-component-\(kind.rawValue)",
+                                                title: L(kind.displayName),
+                                                role: .destructive,
+                                                action: { scene.removeComponent(kind, from: entityID) }))
+                    }, width: 210, maxVisibleRows: 10, onItemActivated: {
+                        isRemovePresented = false
                     })
                 }
             }

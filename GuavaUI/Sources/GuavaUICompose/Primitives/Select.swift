@@ -6,19 +6,19 @@ import GuavaUIRuntime
 /// same glyphs instead of approximating them with text characters.
 public enum UICommonIcons {
     public static let chevronDown = BundleImageResource.svg(named: "chevron-down",
-                                                            in: .module,
+                                                            in: GuavaUIComposeResourceBundle.bundle,
                                                             subdirectory: "UIIcons")
     public static let chevronUp = BundleImageResource.svg(named: "chevron-up",
-                                                          in: .module,
+                                                          in: GuavaUIComposeResourceBundle.bundle,
                                                           subdirectory: "UIIcons")
     public static let chevronRight = BundleImageResource.svg(named: "chevron-right",
-                                                             in: .module,
+                                                             in: GuavaUIComposeResourceBundle.bundle,
                                                              subdirectory: "UIIcons")
     public static let checkmark = BundleImageResource.svg(named: "checkmark",
-                                                          in: .module,
+                                                          in: GuavaUIComposeResourceBundle.bundle,
                                                           subdirectory: "UIIcons")
     public static let close = BundleImageResource.svg(named: "close",
-                                                      in: .module,
+                                                      in: GuavaUIComposeResourceBundle.bundle,
                                                       subdirectory: "UIIcons")
 }
 

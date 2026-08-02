@@ -680,10 +680,16 @@ public struct EditorPendingCloseRequest: Equatable, Sendable {
     public var action: EditorPendingDocumentAction
     /// Window the OS asked to close; `nil` when the whole app is quitting.
     public var windowID: UInt32?
+    /// Scene selected by an Open dialog. Stored as a path to keep presentation
+    /// state independent from any platform file-dialog type.
+    public var documentPath: String?
 
-    public init(action: EditorPendingDocumentAction = .close, windowID: UInt32? = nil) {
+    public init(action: EditorPendingDocumentAction = .close,
+                windowID: UInt32? = nil,
+                documentPath: String? = nil) {
         self.action = action
         self.windowID = windowID
+        self.documentPath = documentPath
     }
 }
 

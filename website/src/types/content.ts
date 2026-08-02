@@ -20,7 +20,6 @@ export interface ContentMeta {
 
 export interface ContentEntry extends ContentMeta {
   component: Component
-  sourcePath: string
   editPath: string
   text: string
   headings: Array<{ level: number; title: string; slug: string }>

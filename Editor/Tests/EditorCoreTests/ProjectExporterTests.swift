@@ -263,6 +263,7 @@ struct ProjectExporterTests {
 
     @Test("export packages a self-contained macOS application when a player is available")
     func exportPackagesApplication() throws {
+        #if os(macOS)
         let output = tempDir()
         let playerDirectory = tempDir()
         defer {
@@ -280,6 +281,12 @@ struct ProjectExporterTests {
         try FileManager.default.createDirectory(at: resourceBundle,
                                                 withIntermediateDirectories: true)
         try Data("resource".utf8).write(to: resourceBundle.appendingPathComponent("marker.txt"))
+        let resourceDirectory = playerDirectory.appendingPathComponent("GuavaUI_Test.resources",
+                                                                       isDirectory: true)
+        try FileManager.default.createDirectory(at: resourceDirectory,
+                                                withIntermediateDirectories: true)
+        try Data("resource".utf8).write(to: resourceDirectory.appendingPathComponent("marker.txt"))
+        try Data("runtime".utf8).write(to: playerDirectory.appendingPathComponent("runtime.dylib"))
 
         _ = try ProjectExporter.export(manifest: EditorSceneAdapter().manifest(),
                                        appName: "Demo/Game",
@@ -291,7 +298,17 @@ struct ProjectExporterTests {
         #expect(FileManager.default.fileExists(atPath: app.path))
         #expect(FileManager.default.isExecutableFile(atPath: executable.path))
         #expect(FileManager.default.fileExists(
-            atPath: app.appendingPathComponent("GuavaUI_Test.bundle/marker.txt").path
+            atPath: app.appendingPathComponent(
+                "Contents/Resources/GuavaUI_Test.bundle/marker.txt"
+            ).path
+        ))
+        #expect(FileManager.default.fileExists(
+            atPath: app.appendingPathComponent(
+                "Contents/Resources/GuavaUI_Test.resources/marker.txt"
+            ).path
+        ))
+        #expect(FileManager.default.fileExists(
+            atPath: app.appendingPathComponent("Contents/MacOS/runtime.dylib").path
         ))
         let embeddedProject = app.appendingPathComponent("Contents/Resources/GuavaProject",
                                                          isDirectory: true)
@@ -308,6 +325,7 @@ struct ProjectExporterTests {
         )
         #expect(plist["CFBundleExecutable"] as? String == "Demo_Game")
         #expect(plist["LSMinimumSystemVersion"] as? String == "13.0")
+        #endif
     }
 
     @Test("portable player layout copies executable, resources, and runtime libraries")
@@ -320,10 +338,15 @@ struct ProjectExporterTests {
         }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: playerBuild, withIntermediateDirectories: true)
+        #if os(Windows)
+        let player = playerBuild.appendingPathComponent("custom-player.exe")
+        try Data("player".utf8).write(to: player)
+        #else
         let player = playerBuild.appendingPathComponent("custom-player")
         try Data("#!/bin/sh\nexit 0\n".utf8).write(to: player)
         try FileManager.default.setAttributes([.posixPermissions: 0o755],
                                               ofItemAtPath: player.path)
+        #endif
         let resources = playerBuild.appendingPathComponent("GameRuntime.resources", isDirectory: true)
         try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true)
         try Data("resource".utf8).write(to: resources.appendingPathComponent("marker.txt"))

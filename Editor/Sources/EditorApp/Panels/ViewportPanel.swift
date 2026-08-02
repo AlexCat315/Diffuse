@@ -395,6 +395,10 @@ struct ViewportPanel: View {
         case 0x08 /* backspace */, 0x7F /* delete */:
             let selectedIDs = app.store.state.selectedEntityIDs
             guard !selectedIDs.isEmpty else { return false }
+            guard selectedIDs.allSatisfy({ !scene.isEntityLocked($0) }) else {
+                app.logConsole("Cannot delete locked entities", severity: .warning)
+                return true
+            }
             if scene.deleteEntities(selectedIDs) {
                 app.store.dispatch(.setSelectedEntity(nil))
             }
@@ -402,6 +406,10 @@ struct ViewportPanel: View {
         case 0x64 /* d */:
             let mods = key.modifiers
             guard mods.hasGui || mods.hasCtrl, let id = selected else { return false }
+            guard !scene.isEntityLocked(id) else {
+                app.logConsole("Cannot duplicate a locked entity", severity: .warning)
+                return true
+            }
             if let new = scene.duplicateEntity(id) {
                 app.store.dispatch(.setSelectedEntity(new))
             }
@@ -1668,7 +1676,7 @@ private enum ViewportToolbarIcon: String {
 
     var resource: BundleImageResource {
         .svg(named: rawValue,
-             in: .module,
+             in: EditorAppResourceBundle.bundle,
              subdirectory: self == .shadows ? "HierarchyIcons" : "ToolbarIcons")
     }
 }

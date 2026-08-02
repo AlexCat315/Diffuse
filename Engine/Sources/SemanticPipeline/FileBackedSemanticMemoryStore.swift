@@ -40,7 +40,7 @@ public actor FileBackedSemanticMemoryStore: SemanticMemoryStore {
 
     public func record(regionID: String,
                        fingerprint: GeometryFingerprint,
-                       confirmation: SemanticConfirmation) async {
+                       confirmation: SemanticConfirmation) async throws {
         guard case let .accepted(label) = confirmation.outcome else { return }
         let key = hashKey(fingerprint)
         let entry = SemanticMemoryEntry(
@@ -53,22 +53,35 @@ public actor FileBackedSemanticMemoryStore: SemanticMemoryStore {
             confidence: 1.0,
             updatedAt: confirmation.confirmedAt
         )
-        index[key, default: []].append(entry)
-        try? persist()
+        var next = index
+        next[key, default: []].append(entry)
+        try persist(next)
+        index = next
     }
 
     // MARK: - Explicit write
 
     /// Adds a raw entry directly (e.g. for bulk import from legacy stores).
-    public func insert(_ entry: SemanticMemoryEntry) {
-        index[entry.fingerprintHash, default: []].append(entry)
-        try? persist()
+    public func insert(_ entry: SemanticMemoryEntry) throws {
+        var next = index
+        next[entry.fingerprintHash, default: []].append(entry)
+        try persist(next)
+        index = next
     }
 
     // MARK: - Private
 
-    private func persist() throws {
-        let all = index.values.flatMap { $0 }
+    private func persist(_ index: [String: [SemanticMemoryEntry]]) throws {
+        let all = index.values.flatMap { $0 }.sorted {
+            if $0.fingerprintHash != $1.fingerprintHash {
+                return $0.fingerprintHash < $1.fingerprintHash
+            }
+            if $0.regionAlias != $1.regionAlias {
+                return $0.regionAlias < $1.regionAlias
+            }
+            return $0.updatedAt < $1.updatedAt
+        }
+        encoder.outputFormatting = [.sortedKeys]
         let data = try encoder.encode(all)
         try data.write(to: storageURL, options: .atomic)
     }
