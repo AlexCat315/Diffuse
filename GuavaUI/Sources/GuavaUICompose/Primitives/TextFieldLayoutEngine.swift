@@ -71,8 +71,8 @@ extension TextField {
                     )
                 }
                 return RenderState(
-                    displayText: current,
-                    measurementText: current,
+                    displayText: textField.displayValue(current),
+                    measurementText: textField.displayValue(current),
                     cursorIndex: clamp(state.cursorIndex, 0, current.count),
                     compositionRange: nil,
                     showsPlaceholder: false,
@@ -93,8 +93,8 @@ extension TextField {
                 : state.compositionText.count
 
             return RenderState(
-                displayText: preview,
-                measurementText: preview,
+                displayText: textField.displayValue(preview),
+                measurementText: textField.displayValue(preview),
                 cursorIndex: compositionStart + clamp(cursorOffset, 0, state.compositionText.count),
                 compositionRange: compositionStart..<compositionEnd,
                 showsPlaceholder: false,

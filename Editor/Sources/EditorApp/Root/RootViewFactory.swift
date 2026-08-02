@@ -118,6 +118,9 @@ enum EditorRootViewFactory {
     }
 
     static func activatePanel(_ id: PanelID, in controller: WorkspaceController) {
+        if controller.document.groupContaining(panelID: id) == nil {
+            _ = controller.dispatch(.reopenPanel(id))
+        }
         guard let group = controller.document.groupContaining(panelID: id) else { return }
         _ = controller.dispatch(.setActivePanel(groupID: group.id, panelID: id))
     }
@@ -192,7 +195,7 @@ enum EditorRootViewFactory {
                             title: localizedPanelTitle(for: "render-pipeline"),
                             preferredSlot: .bottom,
                             iconAssetKey: "panel.render-pipeline") {
-                RenderPipelinePanel()
+                RenderPipelinePanel(app: app)
             },
             PanelDescriptor(id: "developer-tools",
                             title: localizedPanelTitle(for: "developer-tools"),
@@ -205,7 +208,9 @@ enum EditorRootViewFactory {
 
     private static func registerPanelIcons() {
         func panelIcon(_ name: String, subdirectory: String = "PanelIcons") -> BundleImageResource {
-            .svg(named: name, in: .module, subdirectory: subdirectory)
+            .svg(named: name,
+                 in: EditorAppResourceBundle.bundle,
+                 subdirectory: subdirectory)
         }
         WorkspacePanelIconCatalog.register("panel.hierarchy", panelIcon("hierarchy"))
         WorkspacePanelIconCatalog.register("panel.inspector", panelIcon("inspector"))
@@ -252,7 +257,7 @@ enum EditorRootViewFactory {
         do {
             let data = try encoder.encode(shell)
             let path = layoutDir.appendingPathComponent(shellStatePersistenceKey + ".json")
-            try data.write(to: path)
+            try data.write(to: path, options: .atomic)
         } catch {
             FileHandle.standardError.write(Data("[EditorRootViewFactory] failed to save shell state: \(error)\n".utf8))
         }
@@ -272,6 +277,9 @@ enum EditorRootViewFactory {
             }
             return shell
         } catch {
+            quarantinePersistenceFile(at: path,
+                                      label: "shell state",
+                                      reason: String(describing: error))
             FileHandle.standardError.write(Data("[EditorRootViewFactory] failed to load shell state: \(error)\n".utf8))
             return nil
         }
@@ -309,8 +317,8 @@ enum EditorRootViewFactory {
         }
     }
 
-    private static func reconciledWorkspaceDocument(_ document: WorkspaceDocument,
-                                                    registry: PanelRegistry) -> WorkspaceDocument {
+    static func reconciledWorkspaceDocument(_ document: WorkspaceDocument,
+                                            registry: PanelRegistry) -> WorkspaceDocument {
         var next = document
         next.ensureStandardEditorSlotSchema()
         let registeredIDs = Set(registry.ids)
@@ -346,6 +354,13 @@ enum EditorRootViewFactory {
         for descriptor in registry.descriptors {
             next.panels[descriptor.id] = workspacePanel(for: descriptor)
             guard next.groupContaining(panelID: descriptor.id) == nil else { continue }
+            // A panel intentionally closed by the user remains represented in
+            // `closedHistory`. Reattaching it here made panel closure appear to
+            // work only until the next launch. Descriptors with no history are
+            // genuinely new panels and should still be added automatically.
+            guard !next.closedHistory.contains(where: { $0.panelID == descriptor.id }) else {
+                continue
+            }
             let groupID = defaultGroupID(for: descriptor.preferredSlot)
             var group = next.groups[groupID] ?? WorkspaceTabGroup(id: groupID, panels: [])
             if !group.panels.contains(descriptor.id) {
@@ -403,14 +418,16 @@ enum EditorRootViewFactory {
             let data = try Data(contentsOf: layoutPath)
             let document = try JSONDecoder().decode(WorkspaceDocument.self, from: data)
             guard document.hasValidLayoutReferences else {
-                try? FileManager.default.removeItem(at: layoutPath)
-                FileHandle.standardError.write(Data("[EditorRootViewFactory] discarded obsolete workspace layout: missing layout tree references\n".utf8))
+                quarantinePersistenceFile(at: layoutPath,
+                                          label: "workspace layout",
+                                          reason: "missing layout tree references")
                 return nil
             }
             return document
         } catch {
-            try? FileManager.default.removeItem(at: layoutPath)
-            FileHandle.standardError.write(Data("[EditorRootViewFactory] discarded invalid workspace layout: \(error)\n".utf8))
+            quarantinePersistenceFile(at: layoutPath,
+                                      label: "workspace layout",
+                                      reason: String(describing: error))
             return nil
         }
     }
@@ -427,7 +444,7 @@ enum EditorRootViewFactory {
             let path = layoutDir.appendingPathComponent(
                 layoutPersistenceKey(for: mode, preset: preset) + ".json"
             )
-            try data.write(to: path)
+            try data.write(to: path, options: .atomic)
         } catch {
             FileHandle.standardError.write(Data("[EditorRootViewFactory] failed to save workspace layout: \(error)\n".utf8))
         }
@@ -453,8 +470,35 @@ enum EditorRootViewFactory {
             return nil
         }
         let guavaDir = appSupport.appendingPathComponent("Guava")
-        try? FileManager.default.createDirectory(at: guavaDir, withIntermediateDirectories: true)
-        return guavaDir
+        do {
+            try FileManager.default.createDirectory(at: guavaDir, withIntermediateDirectories: true)
+            return guavaDir
+        } catch {
+            FileHandle.standardError.write(Data("[EditorRootViewFactory] failed to create persistence directory: \(error)\n".utf8))
+            return nil
+        }
+    }
+
+    /// Retains invalid user state for diagnostics instead of deleting it. An
+    /// absent return means the original file was preserved because quarantine
+    /// itself failed.
+    @discardableResult
+    static func quarantinePersistenceFile(at url: URL,
+                                          label: String,
+                                          reason: String) -> URL? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let stem = url.deletingPathExtension().lastPathComponent
+        let suffix = url.pathExtension.isEmpty ? "" : ".\(url.pathExtension)"
+        let quarantineURL = url.deletingLastPathComponent()
+            .appendingPathComponent("\(stem).corrupt-\(UUID().uuidString)\(suffix)")
+        do {
+            try FileManager.default.moveItem(at: url, to: quarantineURL)
+            FileHandle.standardError.write(Data("[EditorRootViewFactory] moved invalid \(label) to \(quarantineURL.lastPathComponent): \(reason)\n".utf8))
+            return quarantineURL
+        } catch {
+            FileHandle.standardError.write(Data("[EditorRootViewFactory] invalid \(label) could not be quarantined and was preserved at \(url.path): \(error); original error: \(reason)\n".utf8))
+            return nil
+        }
     }
 }
 

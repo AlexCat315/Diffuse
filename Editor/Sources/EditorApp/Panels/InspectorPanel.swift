@@ -2,6 +2,7 @@
 import CoreGraphics
 #endif
 import EditorCore
+import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
 import SceneRuntime
@@ -23,17 +24,26 @@ struct InspectorPanel: View {
             let entity = scene.entitySummary(id: selectedEntityID)
             let sections = scene.inspectorSections(for: selectedEntityID)
             let collapsedIDs = store.inspectorCollapsedSectionIDs
+            let isAuthoringEnabled = EditorSceneAuthoringPolicy.canEditScene(
+                during: store.playbackState
+            )
+            let canEditSelection = isAuthoringEnabled
+                && selectedEntityID.map { !scene.isEntityLocked($0) } == true
 
             Box(direction: .column, alignItems: .stretch) {
                 if let entity {
                     InspectorSelectionSummary(entity: entity,
                                               componentCount: max(0, sections.count - 2))
 
-                    AddComponentButton(scene: scene, entityID: entity.id)
+                    ComponentActionsBar(store: store,
+                                        scene: scene,
+                                        entityID: entity.id,
+                                        isAuthoringEnabled: isAuthoringEnabled)
 
                     PropertyGrid(propertySections(sections,
                                                   collapsedIDs: collapsedIDs,
-                                                  entityID: selectedEntityID),
+                                                  entityID: selectedEntityID,
+                                                  isEditable: canEditSelection),
                                  labelWidth: 108,
                                  minValueWidth: 132,
                                  rowHeight: 26,
@@ -393,14 +403,19 @@ struct InspectorPanel: View {
 
     private func propertySections(_ sections: [EditorInspectorSection],
                                   collapsedIDs: Set<String>,
-                                  entityID: UInt64?) -> [PropertyGridSection] {
+                                  entityID: UInt64?,
+                                  isEditable: Bool) -> [PropertyGridSection] {
         func row(for field: EditorInspectorField, sectionID: String) -> PropertyGridRow {
             PropertyGridRow(id: field.id,
                             label: field.label,
                             rowHeight: field.value.preferredRowHeight(defaultHeight: 28),
                             layout: field.value.preferredRowLayout) {
-                fieldView(field.value,
-                          identity: "\(entityID.map(String.init) ?? "none")/\(sectionID)/\(field.id)")
+                if isEditable {
+                    fieldView(field.value,
+                              identity: "\(entityID.map(String.init) ?? "none")/\(sectionID)/\(field.id)")
+                } else {
+                    InspectorReadOnlyValue(text: field.value.readOnlyDescription)
+                }
             }
         }
 
@@ -508,8 +523,8 @@ struct InspectorPanel: View {
             return AnyView(InspectorParticleSubEmitterTriggerValue(binding: binding))
         case let .particleSubEmitters(binding):
             return AnyView(InspectorParticleSubEmittersValue(binding: binding))
-        case .particleModuleStack:
-            return AnyView(EmptyView())
+        case let .particleModuleStack(binding):
+            return AnyView(InspectorParticleModuleStackValue(binding: binding))
         case let .asset(binding, acceptedKinds, placeholder):
             return AnyView(AssetRefField(value: assetRefBinding(binding),
                                          activePayload: activeAssetDropPayload,
@@ -606,9 +621,61 @@ private extension EditorAsset {
 }
 
 private extension EditorInspectorFieldValue {
+    var readOnlyDescription: String {
+        switch self {
+        case let .readOnly(value): return value
+        case let .text(binding): return binding.wrappedValue
+        case let .stringOptions(binding, options):
+            return options.first(where: { $0.value == binding.wrappedValue })?.label
+                ?? binding.wrappedValue
+        case let .action(title, _, _):
+            return "\(title) · \(L("Unavailable while scene editing is disabled"))"
+        case let .bool(binding): return binding.wrappedValue ? L("On") : L("Off")
+        case let .number(binding), let .constrainedNumber(binding, _, _, _, _):
+            return String(format: "%.3g", binding.wrappedValue)
+        case let .vector3(x, y, z):
+            return String(format: "%.3g, %.3g, %.3g",
+                          x.wrappedValue, y.wrappedValue, z.wrappedValue)
+        case let .color(binding):
+            let value = binding.wrappedValue
+            return String(format: "RGBA %.2f, %.2f, %.2f, %.2f",
+                          value.r, value.g, value.b, value.a)
+        case let .json(binding, _): return binding.wrappedValue
+        case let .lightType(binding): return String(describing: binding.wrappedValue)
+        case let .physicsSimulationMode(binding): return String(describing: binding.wrappedValue)
+        case let .vehicleControllerKind(binding): return String(describing: binding.wrappedValue)
+        case let .rigidBodyMotion(binding): return String(describing: binding.wrappedValue)
+        case let .colliderShapeKind(binding): return String(describing: binding.wrappedValue)
+        case let .colliderShapeInstances(binding): return "\(binding.wrappedValue.count)"
+        case let .entityReference(binding, options):
+            return options.first(where: { $0.id == binding.wrappedValue })?.name
+                ?? String(binding.wrappedValue)
+        case let .physicsJointKind(binding): return String(describing: binding.wrappedValue)
+        case let .physicsJointMotorMode(binding): return String(describing: binding.wrappedValue)
+        case let .particleEmissionShape(binding): return String(describing: binding.wrappedValue)
+        case let .particleCollisionMode(binding): return String(describing: binding.wrappedValue)
+        case let .particleSimulationSpace(binding): return String(describing: binding.wrappedValue)
+        case let .particleSimulationBackend(binding): return String(describing: binding.wrappedValue)
+        case let .particleCurve(binding): return String(describing: binding.wrappedValue)
+        case let .particleBlendMode(binding): return String(describing: binding.wrappedValue)
+        case let .particleRenderMode(binding): return String(describing: binding.wrappedValue)
+        case let .particleSortMode(binding): return String(describing: binding.wrappedValue)
+        case let .particleTextureSheetPlaybackMode(binding): return String(describing: binding.wrappedValue)
+        case let .particleRenderAlignment(binding): return String(describing: binding.wrappedValue)
+        case let .particleRenderBoundsMode(binding): return String(describing: binding.wrappedValue)
+        case let .particleForceMode(binding): return String(describing: binding.wrappedValue)
+        case let .particleVectorFieldMode(binding): return String(describing: binding.wrappedValue)
+        case let .particleSubEmitterTrigger(binding): return String(describing: binding.wrappedValue)
+        case let .particleSubEmitters(binding): return "\(binding.wrappedValue.count)"
+        case let .particleModuleStack(binding): return "\(binding.wrappedValue.modules.count)"
+        case let .asset(binding, _, placeholder):
+            return binding.wrappedValue?.name ?? placeholder
+        }
+    }
+
     var preferredRowLayout: PropertyGridRowLayout {
         switch self {
-        case .colliderShapeInstances, .particleCurve, .particleSubEmitters:
+        case .colliderShapeInstances, .particleCurve, .particleSubEmitters, .particleModuleStack:
             return .fullWidth
         default:
             return .twoColumn
@@ -633,8 +700,9 @@ private extension EditorInspectorFieldValue {
             return max(defaultHeight, ParticleCurveEditorLayout.linearRowHeight)
         case let .particleSubEmitters(binding):
             return max(defaultHeight, ParticleSubEmitterEditorLayout.rowHeight(ruleCount: binding.wrappedValue.count))
-        case .particleModuleStack:
-            return nil
+        case let .particleModuleStack(binding):
+            return max(defaultHeight,
+                       ParticleModuleStackEditorLayout.rowHeight(stack: binding.wrappedValue))
         case let .json(_, minHeight):
             return max(defaultHeight, minHeight + 34)
         default:
@@ -644,19 +712,33 @@ private extension EditorInspectorFieldValue {
 }
 
 
-/// Inspector affordance that surfaces `EditorSceneAdapter.addComponent`, so any
-/// supported component (Particle Emitter, Rigid Body, Audio Source, …) can be
-/// added to the selected entity. Hidden when every kind is already present.
-private struct AddComponentButton: View {
+/// Inspector affordances for adding and removing optional SceneRuntime
+/// components. Structural components such as name and transform stay outside
+/// these menus so an entity cannot be left in an invalid editor state.
+private struct ComponentActionsBar: View {
+    let store: EditorStore
     let scene: EditorSceneAdapter
     let entityID: UInt64
-    @State private var isPresented: Bool = false
+    let isAuthoringEnabled: Bool
+    @State private var isAddPresented: Bool = false
+    @State private var isRemovePresented: Bool = false
 
     var body: some View {
-        let kinds = scene.addableComponentKinds(on: entityID)
-        return Box(direction: .column, alignItems: .flexStart) {
-            if !kinds.isEmpty {
-                Popover(isPresented: $isPresented, width: 200) {
+        let addableKinds = scene.addableComponentKinds(on: entityID)
+        let removableKinds = scene.componentKinds(on: entityID)
+        return Row(alignment: .center, spacing: 6) {
+            if !isAuthoringEnabled {
+                Text(L("Stop simulation to edit the scene"))
+                    .font(.caption)
+                    .foregroundColor(.warning)
+                    .padding(horizontal: 4, vertical: 4)
+            } else if scene.isEntityLocked(entityID) {
+                Text(L("Locked — unlock in Hierarchy to edit components"))
+                    .font(.caption)
+                    .foregroundColor(.warning)
+                    .padding(horizontal: 4, vertical: 4)
+            } else if !addableKinds.isEmpty {
+                Popover(isPresented: $isAddPresented, width: 210) {
                     Row(alignment: .center, spacing: 6) {
                         Text("+", lineLimit: 1)
                             .font(.bodyStrong)
@@ -669,12 +751,53 @@ private struct AddComponentButton: View {
                     .background(.surfaceSunken)
                     .cornerRadius(4)
                 } content: {
-                    Menu(kinds.map { kind in
+                    Menu(addableKinds.map { kind in
                         MenuEntry.item(MenuItem(id: "add-component-\(kind.rawValue)",
                                                 title: L(kind.displayName),
-                                                action: { scene.addComponent(kind, to: entityID) }))
-                    }, width: 200, maxVisibleRows: 10, onItemActivated: {
-                        isPresented = false
+                                                action: {
+                            if !scene.addComponent(kind, to: entityID) {
+                                store.dispatch(.appendConsoleMessage(
+                                    "Could not add component",
+                                    severity: .error,
+                                    detail: kind.displayName
+                                ))
+                            }
+                        }))
+                    }, width: 210, maxVisibleRows: 10, onItemActivated: {
+                        isAddPresented = false
+                    })
+                }
+            }
+
+            if !scene.isEntityLocked(entityID), !removableKinds.isEmpty {
+                Popover(isPresented: $isRemovePresented, width: 210) {
+                    Row(alignment: .center, spacing: 6) {
+                        Text("−", lineLimit: 1)
+                            .font(.bodyStrong)
+                            .foregroundColor(.error)
+                        Text(L("Remove Component"), lineLimit: 1)
+                            .font(.caption)
+                            .foregroundColor(.onSurface)
+                    }
+                    .padding(horizontal: 10, vertical: 6)
+                    .background(.surfaceSunken)
+                    .cornerRadius(4)
+                } content: {
+                    Menu(removableKinds.map { kind in
+                        MenuEntry.item(MenuItem(id: "remove-component-\(kind.rawValue)",
+                                                title: L(kind.displayName),
+                                                role: .destructive,
+                                                action: {
+                            if !scene.removeComponent(kind, from: entityID) {
+                                store.dispatch(.appendConsoleMessage(
+                                    "Could not remove component",
+                                    severity: .error,
+                                    detail: kind.displayName
+                                ))
+                            }
+                        }))
+                    }, width: 210, maxVisibleRows: 10, onItemActivated: {
+                        isRemovePresented = false
                     })
                 }
             }

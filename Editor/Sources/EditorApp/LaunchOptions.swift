@@ -5,6 +5,7 @@ struct EditorAppLaunchOptions {
     let backendConfig: WGPUDeviceConfig
     let projectDirectory: String?
     let useLegacy: Bool
+    let validateInstall: Bool
 
     static func load(
         arguments: [String] = CommandLine.arguments,
@@ -39,7 +40,8 @@ struct EditorAppLaunchOptions {
                 preferredBackends: preferredBackends
             ),
             projectDirectory: projectDirectory,
-            useLegacy: useLegacy
+            useLegacy: useLegacy,
+            validateInstall: commandLine.validateInstall
         )
     }
 
@@ -113,12 +115,14 @@ private struct ParsedCommandLine {
     let configPath: String?
     let projectDirectory: String?
     let useLegacy: Bool
+    let validateInstall: Bool
 
     init(arguments: [String]) throws {
         var backendList: String?
         var configPath: String?
         var projectDirectory: String?
         var useLegacy = false
+        var validateInstall = false
 
         var index = 1
         while index < arguments.count {
@@ -157,6 +161,9 @@ private struct ParsedCommandLine {
                 case "--legacy":
                     useLegacy = true
 
+                case "--validate-install":
+                    validateInstall = true
+
                 default:
                     break
             }
@@ -167,6 +174,7 @@ private struct ParsedCommandLine {
         self.configPath = configPath
         self.projectDirectory = projectDirectory
         self.useLegacy = useLegacy
+        self.validateInstall = validateInstall
     }
 }
 

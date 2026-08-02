@@ -254,6 +254,8 @@ public struct SetMaterialCapability: GuavaCapability {
             operations: [.scene(.setRenderMaterialComponent(
                 entityID: entityID,
                 baseColorFactor: baseColor,
+                baseColorTextureIndex: snapshot.baseColorTextureIndex,
+                normalTextureIndex: snapshot.normalTextureIndex,
                 metallicFactor: metallic,
                 roughnessFactor: roughness,
                 emissiveFactor: emissive

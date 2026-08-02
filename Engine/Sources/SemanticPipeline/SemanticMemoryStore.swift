@@ -46,7 +46,7 @@ public protocol SemanticMemoryStore: Sendable {
     func lookup(fingerprint: GeometryFingerprint) async -> [SemanticMemoryEntry]
     func record(regionID: String,
                 fingerprint: GeometryFingerprint,
-                confirmation: SemanticConfirmation) async
+                confirmation: SemanticConfirmation) async throws
 }
 
 /// In-memory implementation for tests and offline use.
@@ -63,7 +63,7 @@ public final class EphemeralSemanticMemoryStore: SemanticMemoryStore, @unchecked
 
     public func record(regionID: String,
                        fingerprint: GeometryFingerprint,
-                       confirmation: SemanticConfirmation) async {
+                       confirmation: SemanticConfirmation) async throws {
         guard case let .accepted(label) = confirmation.outcome else { return }
         let key = hashKey(fingerprint)
         let entry = SemanticMemoryEntry(

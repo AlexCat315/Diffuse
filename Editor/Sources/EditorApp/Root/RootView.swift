@@ -21,12 +21,25 @@ struct EditorRootView: View {
                         ShortcutHost(onKeyDown: cb.handleShortcut)
 
                         ImmersiveWindowTitleBar {
-                            EditorApplicationMenuBar(
-                                workspaceMode: store.workspaceMode,
-                                activeLayoutPreset: store.activeLayoutPreset,
-                                playbackState: store.playbackState,
-                                onCommand: cb.handleMenuCommand
-                            )
+                            Row(alignment: .center, spacing: 8) {
+                                EditorApplicationMenuBar(
+                                    workspaceMode: store.workspaceMode,
+                                    activeLayoutPreset: store.activeLayoutPreset,
+                                    playbackState: store.playbackState,
+                                    canUndo: app.canUndo,
+                                    canRedo: app.canRedo,
+                                    hasSelection: !store.selectedEntityIDs.isEmpty,
+                                    onCommand: cb.handleMenuCommand
+                                )
+
+                                LayoutPresetSelector(
+                                    workspaceMode: store.workspaceMode,
+                                    activePreset: store.activeLayoutPreset,
+                                    onSelectPreset: { preset in
+                                        cb.handleMenuCommand(.setLayoutPreset(preset))
+                                    }
+                                )
+                            }
                         }
 
                         // Floating-island chrome: no full-width divider — the
@@ -81,44 +94,70 @@ private struct EditorCallbacks {
                 playbackState: s.state.playbackState,
                 commandPaletteVisible: commandPaletteVisible,
                 setPlaybackState: { next in
-                    app.applyPlaybackState(next)
+                    EditorCommandDispatcher.handle(.setPlaybackState(next),
+                                                   app: app,
+                                                   controller: controller,
+                                                   registry: registry)
                 },
                 setWorkspaceMode: { next in
-                    guard s.state.workspaceMode != next else { return }
-                    let p = s.state.workspaceMode; let pp = s.state.activeLayoutPreset
-                    EditorRootViewFactory.saveWorkspaceLayout(controller, for: p, preset: pp)
-                    s.dispatch(.setWorkspaceMode(next))
-                    let np = s.state.activeLayoutPreset
-                    EditorRootViewFactory.loadLayoutPreset(into: controller, for: next, preset: np, registry: registry)
-                    EditorRootViewFactory.saveShellState(mode: next,
-                                                         preset: np,
-                                                         themeMode: s.state.themeMode,
-                                                         language: s.state.language,
-                                                         vsyncMode: s.state.vsyncMode,
-                                                         primarySelectBehavior: s.state.primarySelectBehavior,
-                                                         aiSettings: s.state.aiSettings,
-                                                         capabilitySettings: s.state.capabilitySettings)
+                    EditorCommandDispatcher.handle(.setWorkspaceMode(next),
+                                                   app: app,
+                                                   controller: controller,
+                                                   registry: registry)
                 },
                 resetLayout: {
-                    let m = s.state.workspaceMode; let p = s.state.activeLayoutPreset
-                    EditorRootViewFactory.resetLayout(into: controller, for: m, preset: p, registry: registry)
-                    EditorRootViewFactory.saveWorkspaceLayout(controller, for: m, preset: p)
-                    EditorRootViewFactory.saveShellState(mode: m,
-                                                         preset: p,
-                                                         themeMode: s.state.themeMode,
-                                                         language: s.state.language,
-                                                         vsyncMode: s.state.vsyncMode,
-                                                         primarySelectBehavior: s.state.primarySelectBehavior,
-                                                         aiSettings: s.state.aiSettings,
-                                                         capabilitySettings: s.state.capabilitySettings)
+                    EditorCommandDispatcher.handle(.resetLayout,
+                                                   app: app,
+                                                   controller: controller,
+                                                   registry: registry)
                 },
-                newScene: { app.requestNewScene() },
-                saveScene: { _ = app.saveSceneManifest() },
-                openSettings: { app.openSettingsWindow() },
+                reopenClosedPanel: {
+                    EditorCommandDispatcher.handle(.reopenClosedPanel,
+                                                   app: app,
+                                                   controller: controller,
+                                                   registry: registry)
+                },
+                newScene: {
+                    EditorCommandDispatcher.handle(.newScene, app: app, controller: controller, registry: registry)
+                },
+                openScene: {
+                    EditorCommandDispatcher.handle(.openScene, app: app, controller: controller, registry: registry)
+                },
+                saveScene: {
+                    EditorCommandDispatcher.handle(.saveScene, app: app, controller: controller, registry: registry)
+                },
+                duplicateSelection: {
+                    EditorCommandDispatcher.handle(.duplicateSelection,
+                                                   app: app,
+                                                   controller: controller,
+                                                   registry: registry)
+                },
+                deleteSelection: {
+                    EditorCommandDispatcher.handle(.deleteSelection,
+                                                   app: app,
+                                                   controller: controller,
+                                                   registry: registry)
+                },
+                buildProject: {
+                    EditorCommandDispatcher.handle(.buildProject, app: app, controller: controller, registry: registry)
+                },
+                buildAndRun: {
+                    EditorCommandDispatcher.handle(.buildAndRun, app: app, controller: controller, registry: registry)
+                },
+                openSettings: {
+                    EditorCommandDispatcher.handle(.openSettings,
+                                                   app: app,
+                                                   controller: controller,
+                                                   registry: registry)
+                },
                 openCommandPalette: { s.dispatch(.setCommandPaletteVisible(true)) },
                 closeCommandPalette: { s.dispatch(.setCommandPaletteVisible(false)) },
-                undo: { app.undo() },
-                redo: { app.redo() }
+                undo: {
+                    EditorCommandDispatcher.handle(.undo, app: app, controller: controller, registry: registry)
+                },
+                redo: {
+                    EditorCommandDispatcher.handle(.redo, app: app, controller: controller, registry: registry)
+                }
             )
         }
     }

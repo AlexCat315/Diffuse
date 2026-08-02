@@ -30,6 +30,7 @@ public enum PluginHostClientError: Error, Sendable, Equatable, CustomStringConve
 /// plugin draft can be invalidated by the caller.
 public final class PluginHostProcessClient: @unchecked Sendable {
     public let executableURL: URL
+    public let launchArguments: [String]
     public var generation: UInt64 { lock.withLock { _generation } }
     public var onInvalidation: (@Sendable (UInt64) -> Void)?
 
@@ -41,8 +42,10 @@ public final class PluginHostProcessClient: @unchecked Sendable {
     private var _generation: UInt64 = 0
 
     public init(executableURL: URL,
+                launchArguments: [String] = [],
                 onInvalidation: (@Sendable (UInt64) -> Void)? = nil) {
         self.executableURL = executableURL
+        self.launchArguments = launchArguments
         self.onInvalidation = onInvalidation
     }
 
@@ -57,6 +60,14 @@ public final class PluginHostProcessClient: @unchecked Sendable {
                     if process?.isRunning != true { try launch() }
                     guard let input, let output else { throw PluginHostClientError.communicationFailed }
                     let deadline = makeDeadline(timeoutMilliseconds: timeoutMilliseconds)
+                    #if os(Windows)
+                    let response = try exchangeOnWindows(
+                        request,
+                        input: input,
+                        output: output,
+                        deadline: deadline
+                    )
+                    #else
                     try writeExactly(PluginHostFrameCodec.encode(request),
                                      to: input,
                                      deadline: deadline)
@@ -69,6 +80,7 @@ public final class PluginHostProcessClient: @unchecked Sendable {
                     var frame = header
                     frame.append(payload)
                     let response = try PluginHostFrameCodec.decode(PluginHostResponse.self, from: frame)
+                    #endif
                     guard response.id == request.id else { throw PluginHostClientError.mismatchedResponse }
                     return response
                 } catch {
@@ -100,6 +112,7 @@ public final class PluginHostProcessClient: @unchecked Sendable {
         let stdin = Pipe()
         let stdout = Pipe()
         process.executableURL = executableURL
+        process.arguments = launchArguments
         process.standardInput = stdin
         process.standardOutput = stdout
         process.standardError = Pipe()
@@ -133,6 +146,60 @@ public final class PluginHostProcessClient: @unchecked Sendable {
         let (deadline, additionOverflow) = now.addingReportingOverflow(delta)
         return additionOverflow ? UInt64.max : deadline
     }
+
+    #if os(Windows)
+    /// Windows anonymous pipes are HANDLE-backed and cannot be waited on with
+    /// POSIX `poll`. Run the blocking Foundation exchange on a worker and close
+    /// the handles/process from the caller when the shared deadline expires.
+    private func exchangeOnWindows(_ request: PluginHostRequest,
+                                   input: FileHandle,
+                                   output: FileHandle,
+                                   deadline: UInt64) throws -> PluginHostResponse {
+        final class ResultBox: @unchecked Sendable {
+            var result: Result<PluginHostResponse, Error>?
+        }
+        let resultBox = ResultBox()
+        let finished = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                try input.write(contentsOf: PluginHostFrameCodec.encode(request))
+                let header = try self.readBlockingExactly(4, from: output)
+                let length = header.reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
+                guard length <= PluginHostFrameCodec.maximumFrameBytes else {
+                    throw PluginHostClientError.communicationFailed
+                }
+                var frame = header
+                frame.append(try self.readBlockingExactly(Int(length), from: output))
+                resultBox.result = .success(
+                    try PluginHostFrameCodec.decode(PluginHostResponse.self, from: frame)
+                )
+            } catch {
+                resultBox.result = .failure(error)
+            }
+            finished.signal()
+        }
+        let waitDeadline = DispatchTime(uptimeNanoseconds: deadline)
+        guard finished.wait(timeout: waitDeadline) == .success else {
+            throw PluginHostClientError.timedOut
+        }
+        guard let result = resultBox.result else {
+            throw PluginHostClientError.communicationFailed
+        }
+        return try result.get()
+    }
+
+    private func readBlockingExactly(_ count: Int,
+                                     from handle: FileHandle) throws -> Data {
+        guard count > 0 else { return Data() }
+        var result = Data()
+        while result.count < count {
+            let chunk = try handle.read(upToCount: count - result.count) ?? Data()
+            guard !chunk.isEmpty else { throw PluginHostClientError.communicationFailed }
+            result.append(chunk)
+        }
+        return result
+    }
+    #else
 
     private func writeExactly(_ data: Data,
                               to handle: FileHandle,
@@ -208,6 +275,7 @@ public final class PluginHostProcessClient: @unchecked Sendable {
             }
         }
     }
+    #endif
 }
 
 extension PluginHostProcessClient: PluginCapabilityInvoking {
@@ -273,6 +341,7 @@ extension PluginHostProcessClient: PluginCapabilityInvoking {
     }
 }
 
+#if !os(Windows)
 @inline(__always)
 private func guavaSystemPoll(_ descriptor: UnsafeMutablePointer<pollfd>,
                              _ timeout: Int32) -> Int32 {
@@ -304,3 +373,4 @@ private func guavaSystemWrite(_ fileDescriptor: Int32,
     Glibc.write(fileDescriptor, buffer, count)
 #endif
 }
+#endif

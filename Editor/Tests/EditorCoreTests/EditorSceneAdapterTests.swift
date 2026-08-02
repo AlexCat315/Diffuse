@@ -731,6 +731,7 @@ struct EditorSceneAdapterTests {
                 inverseBindMatrices: [matrix_identity_float4x4, translationMatrix(SIMD3<Float>(0, -1, 0))]
             )]
         ), at: meshIndex)
+        defer { AssetRegistry.shared.unregisterTestingMesh(at: meshIndex) }
         let adapter = EditorSceneAdapter()
         adapter.scene = SceneRuntime()
         let root = adapter.scene.createEntity()
@@ -1173,7 +1174,7 @@ struct EditorSceneAdapterTests {
     func currentJointPaletteMapReturnsPaletteAfterTick() {
         let meshIndex = 9001
         AssetRegistry.shared.registerForTesting(Self.makeAnimatedMesh(), at: meshIndex)
-        defer { AssetRegistry.shared.reset() }
+        defer { AssetRegistry.shared.unregisterTestingMesh(at: meshIndex) }
 
         let adapter = EditorSceneAdapter()
         let entity = adapter.scene.createEntity()
@@ -1410,6 +1411,50 @@ struct EditorSceneEditHistoryTests {
         let result = restored.load(manifest: manifest, notify: false)
         let remappedID = try #require(result.selectedEntityID)
         #expect(restored.isEntityLocked(remappedID))
+    }
+
+    @Test("interactive transform updates coalesce into one undo entry")
+    func interactiveTransformsCoalesceForUndo() throws {
+        let adapter = EditorSceneAdapter()
+        let entityID = try #require(adapter.defaultSelectionID)
+        let original = try #require(adapter.entityLocalTranslation(entityID))
+
+        adapter.beginInteractiveEditHistoryGroup()
+        for x in 1...5 {
+            var matrix = try #require(adapter.entityLocalMatrix(entityID))
+            matrix.columns.3.x = original.x + Float(x)
+            #expect(adapter.setEntityLocalMatrices([entityID: matrix]))
+        }
+        #expect(!adapter.canUndoEdit)
+        adapter.endInteractiveEditHistoryGroup()
+
+        #expect(adapter.canUndoEdit)
+        #expect(adapter.undoEdit())
+        #expect(adapter.entityLocalTranslation(entityID) == original)
+        #expect(!adapter.canUndoEdit)
+    }
+
+    @Test("multi-entity transforms reject locked members atomically")
+    func multiEntityTransformsHonorLocksAtomically() throws {
+        let adapter = EditorSceneAdapter()
+        let ids = adapter.roots.prefix(2).map(\.id)
+        #expect(ids.count == 2)
+        let firstID = try #require(ids.first)
+        let secondID = try #require(ids.last)
+        let firstOriginal = try #require(adapter.entityLocalMatrix(firstID))
+        let secondOriginal = try #require(adapter.entityLocalMatrix(secondID))
+        adapter.setEntityLocked(true, entityIDs: [secondID])
+        var firstNext = firstOriginal
+        var secondNext = secondOriginal
+        firstNext.columns.3.x += 3
+        secondNext.columns.3.x += 3
+
+        #expect(!adapter.setEntityLocalMatrices([
+            firstID: firstNext,
+            secondID: secondNext,
+        ]))
+        #expect(adapter.entityLocalMatrix(firstID)?.columns.3 == firstOriginal.columns.3)
+        #expect(adapter.entityLocalMatrix(secondID)?.columns.3 == secondOriginal.columns.3)
     }
 }
 

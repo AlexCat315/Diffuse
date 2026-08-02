@@ -652,6 +652,30 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         #expect(rig.store.value == "abc")
     } }
 
+    @Test("Secure fields mask rendered text and never copy secrets")
+    func secureFieldMasksAndBlocksCopy() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = "s3cr3t"
+        var pasteboard = "unchanged"
+        ClipboardHolder.write = { pasteboard = $0 }
+        defer { ClipboardHolder.write = nil }
+
+        let field = TextField(text: makeBinding(rig.store), secure: true)
+        let state = TextField.FieldState()
+        state.cursorIndex = rig.store.value.count
+        let renderState = TextField.LayoutEngine(textField: field)
+            .makeRenderState(current: rig.store.value, state: state, isFocused: false)
+        #expect(renderState.displayText == "••••••")
+        #expect(renderState.measurementText == "••••••")
+
+        rig.graph.install(root: field)
+        let node = fieldNode(in: rig.tree.root)
+        let handler = rig.registry.handlers(for: node).key!
+        _ = handler(key(4, primary: true), .target)
+        _ = handler(key(6, primary: true), .target)
+        #expect(pasteboard == "unchanged")
+    } }
+
     @Test("Typing with an active selection replaces the selected range")
     func typingReplacesSelection() { GlobalTestLock.locked {
         let rig = makeRig()

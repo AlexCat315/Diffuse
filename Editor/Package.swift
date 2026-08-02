@@ -58,10 +58,12 @@ let package = Package(
             dependencies: [
                 "EditorCore",
                 .product(name: "SIMDCompat", package: "Engine"),
+                .product(name: "AssetPipeline", package: "Engine"),
                 .product(name: "GuavaUIApp", package: "GuavaUI"),
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
                 .product(name: "GuavaUIWorkspace", package: "GuavaUI"),
                 .product(name: "GuavaUIRuntime", package: "GuavaUI"),
+                .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
                 .product(name: "SceneRuntime", package: "Engine"),

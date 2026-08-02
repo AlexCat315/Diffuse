@@ -33,9 +33,12 @@ public struct CapabilityInvocationResult: Sendable, Equatable {
     }
 }
 
-public enum IntentRuntimeCoordinatorError: Error, CustomStringConvertible {
+public enum IntentRuntimeCoordinatorError: Error, CustomStringConvertible, LocalizedError {
     case noPendingConfirmation
     case confirmationBatchMismatch(expected: String, actual: String)
+    case incompleteConfirmationAnswers(expected: Int, actual: Int)
+    case unexpectedConfirmationQuestion(String)
+    case invalidConfirmationOption(questionID: String, optionID: String)
     case missingCapabilityContext
 
     public var description: String {
@@ -44,10 +47,18 @@ public enum IntentRuntimeCoordinatorError: Error, CustomStringConvertible {
             return "no confirmation batch is currently staged"
         case let .confirmationBatchMismatch(expected, actual):
             return "confirmation batch mismatch: expected \(expected), actual \(actual)"
+        case let .incompleteConfirmationAnswers(expected, actual):
+            return "confirmation answers incomplete: expected \(expected), actual \(actual)"
+        case let .unexpectedConfirmationQuestion(questionID):
+            return "confirmation answer references unexpected question \(questionID)"
+        case let .invalidConfirmationOption(questionID, optionID):
+            return "confirmation option \(optionID) does not belong to question \(questionID)"
         case .missingCapabilityContext:
             return "capability-backed transactions require an invocation context"
         }
     }
+
+    public var errorDescription: String? { description }
 }
 
 private struct PendingInvocation {
@@ -198,6 +209,7 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
     public func resolvePlanConfirmation(_ resolution: ConfirmationResolution,
                                         executionContext: inout TransactionExecutionContext) throws -> CapabilityInvocationResult {
         let p = try lockedPending(for: resolution.batchID)
+        try validateConfirmationResolution(resolution, for: p.request)
 
         if let bus = executionContext.observationBus {
             _ = try bus.publish(kind: .confirmationResolved,
@@ -398,5 +410,34 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
             "picked_option_id": a.pickedOptionID.map(EventValue.string) ?? .null,
             "note": a.note.map(EventValue.string) ?? .null,
         ])
+    }
+}
+
+func validateConfirmationResolution(_ resolution: ConfirmationResolution,
+                                    for request: ConfirmationRequestBatch) throws {
+    let expectedIDs = Set(request.questions.map(\.id))
+    let actualIDs = Set(resolution.answers.map(\.questionID))
+    guard resolution.answers.count == request.questions.count,
+          actualIDs == expectedIDs else {
+        if let unexpected = actualIDs.subtracting(expectedIDs).first {
+            throw IntentRuntimeCoordinatorError.unexpectedConfirmationQuestion(unexpected)
+        }
+        throw IntentRuntimeCoordinatorError.incompleteConfirmationAnswers(
+            expected: request.questions.count,
+            actual: resolution.answers.count
+        )
+    }
+    let questionsByID = Dictionary(uniqueKeysWithValues: request.questions.map { ($0.id, $0) })
+    for answer in resolution.answers {
+        guard let question = questionsByID[answer.questionID] else {
+            throw IntentRuntimeCoordinatorError.unexpectedConfirmationQuestion(answer.questionID)
+        }
+        if let optionID = answer.pickedOptionID,
+           !question.options.contains(where: { $0.id == optionID }) {
+            throw IntentRuntimeCoordinatorError.invalidConfirmationOption(
+                questionID: answer.questionID,
+                optionID: optionID
+            )
+        }
     }
 }

@@ -114,8 +114,12 @@ public actor ContextMemoryStore {
     /// Persists all entries to `storageURL` (if configured).
     public func flush() throws {
         guard let url = storageURL else { return }
-        let all = Array(entries.values)
-        let data = try JSONEncoder().encode(all)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        let all = entries.values.sorted { $0.id < $1.id }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let data = try encoder.encode(all)
         try data.write(to: url, options: .atomic)
     }
 

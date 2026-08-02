@@ -6,10 +6,16 @@ enum EditorNativeMenuBuilder {
                      workspaceMode: EditorWorkspaceMode,
                      activeLayoutPreset: EditorLayoutPreset,
                      playbackState: PlaybackState,
+                     canUndo: Bool = false,
+                     canRedo: Bool = false,
+                     hasSelection: Bool = false,
                      onCommand: @escaping @MainActor (EditorMenuCommand) -> Void) -> NativeMenuBar {
         let model = EditorMenuModel.make(workspaceMode: workspaceMode,
                                          activeLayoutPreset: activeLayoutPreset,
-                                         playbackState: playbackState)
+                                         playbackState: playbackState,
+                                         canUndo: canUndo,
+                                         canRedo: canRedo,
+                                         hasSelection: hasSelection)
         let menus = model.menus.map { menu in
             NativeMenu(title: menu.title,
                        items: menu.items.map { nativeItem($0, onCommand: onCommand) })

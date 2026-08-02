@@ -152,12 +152,12 @@ export function collectContent(): ScannedContent[] {
 
 function moduleSource(): string {
   const entries = collectContent().filter((entry) => !entry.draft)
-  const imports = entries.map((entry, index) => `import Content${index} from ${JSON.stringify(`/@fs${entry.sourcePath}`)}`).join('\n')
-  const records = entries.map((entry, index) => {
+  const records = entries.map((entry) => {
     const { sourcePath: _sourcePath, raw: _raw, isLegacyComponent: _legacy, ...publicEntry } = entry
-    return `{ ...${JSON.stringify(publicEntry)}, component: Content${index} }`
+    const source = JSON.stringify(`/@fs${entry.sourcePath}`)
+    return `{ ...${JSON.stringify(publicEntry)}, component: defineAsyncComponent(() => import(${source})) }`
   }).join(',\n')
-  return `${imports}\nexport const contentEntries = [${records}]\n`
+  return `import { defineAsyncComponent } from 'vue'\nexport const contentEntries = [${records}]\n`
 }
 
 function invalidate(server: ViteDevServer) {

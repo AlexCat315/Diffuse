@@ -10,11 +10,18 @@ public enum EditorLocalizationPreferences {
 func L(_ key: String) -> String {
     if let lproj = EditorLocalizationPreferences.language.lprojName {
         for candidate in [lproj, lproj.lowercased()] {
-            if let path = Bundle.module.path(forResource: candidate, ofType: "lproj"),
+            if let path = EditorCoreResourceBundle.bundle.path(
+                forResource: candidate,
+                ofType: "lproj"
+            ),
                let bundle = Bundle(path: path) {
                 return bundle.localizedString(forKey: key, value: key, table: nil)
             }
         }
     }
-    return Bundle.module.localizedString(forKey: key, value: key, table: nil)
+    return EditorCoreResourceBundle.bundle.localizedString(
+        forKey: key,
+        value: key,
+        table: nil
+    )
 }

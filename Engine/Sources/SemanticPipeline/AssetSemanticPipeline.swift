@@ -57,19 +57,20 @@ public struct AssetSemanticPipeline: Sendable {
     /// and returns the final committed proposals ready to write to the `inferred` World layer.
     public func apply(confirmations: [SemanticConfirmation],
                       regions: CandidateRegionSet,
-                      pendingProposals: [SemanticProposal]) async -> [SemanticProposal] {
+                      pendingProposals: [SemanticProposal]) async throws -> [SemanticProposal] {
         var committed: [SemanticProposal] = []
         let byRegion = Dictionary(grouping: pendingProposals, by: \.regionID)
 
         for confirmation in confirmations {
+            guard byRegion[confirmation.regionID] != nil else { continue }
             guard let region = regions.regions.first(where: { $0.id == confirmation.regionID })
             else { continue }
 
             switch confirmation.outcome {
             case let .accepted(label):
-                await memory?.record(regionID: confirmation.regionID,
-                                     fingerprint: region.fingerprint,
-                                     confirmation: confirmation)
+                try await memory?.record(regionID: confirmation.regionID,
+                                         fingerprint: region.fingerprint,
+                                         confirmation: confirmation)
                 committed.append(SemanticProposal(
                     regionID: confirmation.regionID,
                     label: label,
@@ -78,13 +79,13 @@ public struct AssetSemanticPipeline: Sendable {
                     provenance: .confirmed
                 ))
             case let .renamed(newLabel):
-                await memory?.record(regionID: confirmation.regionID,
-                                     fingerprint: region.fingerprint,
-                                     confirmation: SemanticConfirmation(
-                                         regionID: confirmation.regionID,
-                                         outcome: .accepted(label: newLabel),
-                                         confirmedBy: confirmation.confirmedBy
-                                     ))
+                try await memory?.record(regionID: confirmation.regionID,
+                                         fingerprint: region.fingerprint,
+                                         confirmation: SemanticConfirmation(
+                                             regionID: confirmation.regionID,
+                                             outcome: .accepted(label: newLabel),
+                                             confirmedBy: confirmation.confirmedBy
+                                         ))
                 committed.append(SemanticProposal(
                     regionID: confirmation.regionID,
                     label: newLabel,

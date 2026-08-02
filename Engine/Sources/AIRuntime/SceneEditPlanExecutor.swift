@@ -230,6 +230,8 @@ public struct SceneEditPlanExecutor: Sendable {
                                 material.baseColorFactor.x, material.baseColorFactor.y,
                                 material.baseColorFactor.z, material.baseColorFactor.w,
                             ],
+                            baseColorTextureIndex: material.baseColorTextureIndex,
+                            normalTextureIndex: material.normalTextureIndex,
                             metallic: material.metallicFactor,
                             roughness: material.roughnessFactor,
                             emissive: [
@@ -300,10 +302,12 @@ public struct SceneEditPlanExecutor: Sendable {
                 _ = scene.setComponent(body, for: entityID(fromRaw: rawID))
             case let .setLocalTransform(rawID, transform):
                 _ = scene.setLocalTransform(transform, for: entityID(fromRaw: rawID))
-            case let .setRenderMaterialComponent(rawID, baseColor, metallic, roughness, emissive):
+            case let .setRenderMaterialComponent(rawID, baseColor, baseColorTextureIndex, normalTextureIndex, metallic, roughness, emissive):
                 _ = scene.setComponent(
                     RenderMaterialComponent(
                         baseColorFactor: baseColor,
+                        baseColorTextureIndex: baseColorTextureIndex,
+                        normalTextureIndex: normalTextureIndex,
                         metallicFactor: metallic,
                         roughnessFactor: roughness,
                         emissiveFactor: emissive
@@ -513,6 +517,8 @@ public struct SceneEditPlanExecutor: Sendable {
             }
             return [.setRenderMaterialComponent(entityID: id,
                                                 baseColorFactor: mat.baseColorFactor,
+                                                baseColorTextureIndex: mat.baseColorTextureIndex,
+                                                normalTextureIndex: mat.normalTextureIndex,
                                                 metallicFactor: mat.metallicFactor,
                                                 roughnessFactor: mat.roughnessFactor,
                                                 emissiveFactor: mat.emissiveFactor)]

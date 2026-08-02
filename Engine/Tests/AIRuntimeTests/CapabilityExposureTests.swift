@@ -750,7 +750,7 @@ struct CapabilityExposureTests {
             exposureSnapshot: snapshot
         )
         guard transaction.operations.count == 2,
-              case let .scene(.setRenderMaterialComponent(_, base, metallic, roughness, emissive))
+              case let .scene(.setRenderMaterialComponent(_, base, _, _, metallic, roughness, emissive))
                 = transaction.operations[1] else {
             Issue.record("expected a second typed material operation")
             return
@@ -1169,7 +1169,10 @@ private func makePluginBinding(
         inspection: inspection,
         authorisedAt: Date(timeIntervalSince1970: 1)
     )
-    return (try PluginExecutionBinding(pluginPath: "/tmp/\(pluginID).guavaplugin",
+    let pluginPath = FileManager.default.temporaryDirectory
+        .appendingPathComponent("\(pluginID).guavaplugin", isDirectory: true)
+        .path
+    return (try PluginExecutionBinding(pluginPath: pluginPath,
                                        inspection: inspection,
                                        authorization: authorization,
                                        hostGeneration: hostGeneration),

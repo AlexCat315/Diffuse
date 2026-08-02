@@ -24,8 +24,8 @@ private enum MCPAsyncBridgeError: Error, CustomStringConvertible {
 
     var description: String {
         switch self {
-        case .timedOut: return "capability service timed out"
-        case .missingResult: return "capability service returned no result"
+        case .timedOut: return "asynchronous editor operation timed out"
+        case .missingResult: return "asynchronous editor operation returned no result"
         }
     }
 }
@@ -95,6 +95,11 @@ private func waitForMCPCapabilityResult<Value: Sendable>(
 /// 自身不持有窗口 / wgpu surface — UI 渲染由 GuavaUIApp 接管，引擎仅负责
 /// 仿真与（未来的）离屏渲染。
 public final class EditorApplication: @unchecked Sendable {
+    private struct ContextMemoryInitialization {
+        var store: ContextMemoryStore?
+        var warning: String?
+    }
+
     private var exportedApplicationName: String {
         let name = URL(fileURLWithPath: projectDirectory, isDirectory: true)
             .standardizedFileURL.lastPathComponent
@@ -130,8 +135,16 @@ public final class EditorApplication: @unchecked Sendable {
     private var displayInvalidationHandler: (() -> Void)?
     private var vsyncModeHandler: ((EditorVSyncMode) -> Void)?
     private var session: Session?
+    private var pendingAISetupTask: Task<Void, Never>?
+    private var pendingWorldObservationTask: Task<Void, Never>?
+    private var activeAIRequestID: UUID?
+    private var activeAIRequestTask: Task<Void, Never>?
+    private var isShuttingDown = false
     private var pendingSessionProposal: Proposal?
     private var pendingAssistantMessageID: String?
+    /// Existing scene entities referenced by the plan currently awaiting approval.
+    /// This lets a lock added after preview still prevent the confirmed mutation.
+    private var pendingConfirmationTargetEntityIDs: Set<UInt64> = []
     private let mcpBridge = MCPBridge()
     private let mcpCapabilitySessions = CapabilityExposureSessionStore()
     private var pluginHostClient: PluginHostProcessClient?
@@ -213,7 +226,8 @@ public final class EditorApplication: @unchecked Sendable {
         let contextMemoryURL = URL(fileURLWithPath: projectDirectory, isDirectory: true)
             .appendingPathComponent(".guava", isDirectory: true)
             .appendingPathComponent("context_memory.json")
-        let contextMemoryStore = try? ContextMemoryStore(storageURL: contextMemoryURL)
+        let contextMemoryInitialization = Self.initializeContextMemory(at: contextMemoryURL)
+        let contextMemoryStore = contextMemoryInitialization.store
         let pluginAuthorizationStore = EditorPluginAuthorizationStore(
             projectDirectory: projectDirectory
         )
@@ -238,6 +252,16 @@ public final class EditorApplication: @unchecked Sendable {
         )
         self.session = initialSession
         self.perceptionService = ps
+        if let warning = contextMemoryInitialization.warning {
+            logConsole("Recovered AI context memory storage",
+                       severity: .warning,
+                       detail: warning)
+        }
+        if let warning = pluginAuthorizationStore.loadWarning {
+            logConsole("Recovered plugin authorization storage",
+                       severity: .warning,
+                       detail: warning)
+        }
         #if canImport(Vision)
         Task { await ps.register(AppleVisionPerceptionWorker()) }
         #endif
@@ -274,10 +298,10 @@ public final class EditorApplication: @unchecked Sendable {
                                            scriptEntries: scene.scriptCatalogEntries)
             let bus = observationBus
             let mem = contextMemoryStore
-            Task {
-                await initialSession.setWorkflowContext(ctx)
+            pendingAISetupTask = Task {
                 await initialSession.setObservationBus(bus)
                 await initialSession.setContextMemory(mem)
+                await initialSession.setWorkflowContext(ctx)
             }
         }
 
@@ -290,7 +314,43 @@ public final class EditorApplication: @unchecked Sendable {
             lastObservedMode = newMode
             let ctx = Self.workflowContext(for: newMode,
                                            scriptEntries: self.scene.scriptCatalogEntries)
-            Task { await sess.setWorkflowContext(ctx) }
+            let previousTask = self.pendingAISetupTask
+            self.pendingAISetupTask = Task {
+                await previousTask?.value
+                await sess.setWorkflowContext(ctx)
+            }
+        }
+    }
+
+    private static func initializeContextMemory(at storageURL: URL) -> ContextMemoryInitialization {
+        do {
+            return ContextMemoryInitialization(
+                store: try ContextMemoryStore(storageURL: storageURL),
+                warning: nil
+            )
+        } catch {
+            let originalError = error
+            guard FileManager.default.fileExists(atPath: storageURL.path) else {
+                return ContextMemoryInitialization(
+                    store: nil,
+                    warning: "Context memory could not be initialized: \(originalError)"
+                )
+            }
+            let quarantineURL = storageURL.deletingPathExtension()
+                .appendingPathExtension("corrupt-\(UUID().uuidString).json")
+            do {
+                try FileManager.default.moveItem(at: storageURL, to: quarantineURL)
+                let replacement = try ContextMemoryStore(storageURL: storageURL)
+                return ContextMemoryInitialization(
+                    store: replacement,
+                    warning: "The unreadable file was moved to \(quarantineURL.lastPathComponent): \(originalError)"
+                )
+            } catch {
+                return ContextMemoryInitialization(
+                    store: nil,
+                    warning: "Context memory is disabled because recovery failed: \(error); original error: \(originalError)"
+                )
+            }
         }
     }
 
@@ -394,7 +454,28 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     public func shutdown() {
+        isShuttingDown = true
+        scene.endInteractiveEditHistoryGroup()
+        let activeSession = session
+        cancelActiveAIRequest()
+        if activeSession != nil {
+            do {
+                try waitForMCPCapabilityResult {
+                    await activeSession?.cancelActiveRun()
+                }
+            } catch {
+                logConsole("Failed to cancel the active AI request",
+                           severity: .warning,
+                           detail: String(describing: error))
+            }
+        }
         autosaveSceneIfNeeded(elapsed: Self.editorAutosaveInterval, force: true)
+        if physicsPlaySnapshot != nil {
+            // A clean shutdown must not masquerade as an interrupted Play on
+            // the next launch. Crashes never reach this cleanup path.
+            deletePersistedPhysicsPlaySnapshot()
+        }
+        flushContextMemoryBeforeShutdown()
         logConsole("Editor runtime shutdown")
         mcpBridge.stop()
         pluginHostClient?.stop()
@@ -411,6 +492,25 @@ public final class EditorApplication: @unchecked Sendable {
             self.workspaceModeToken = nil
         }
         engine.shutdown()
+    }
+
+    private func flushContextMemoryBeforeShutdown() {
+        guard let contextMemoryStore else { return }
+        let setupTask = pendingAISetupTask
+        let observationTask = pendingWorldObservationTask
+        do {
+            try waitForMCPCapabilityResult {
+                await setupTask?.value
+                await observationTask?.value
+                try await contextMemoryStore.flush()
+            }
+            pendingAISetupTask = nil
+            pendingWorldObservationTask = nil
+        } catch {
+            logConsole("Failed to persist AI context memory",
+                       severity: .error,
+                       detail: String(describing: error))
+        }
     }
 
     public func enqueueViewportInput(_ event: InputEvent) {
@@ -492,6 +592,18 @@ public final class EditorApplication: @unchecked Sendable {
         openSettingsWindowHandler?()
     }
 
+    /// Whether the configured provider currently has a usable runtime session.
+    /// A provider name can be restored from shell state while its Keychain
+    /// credential is missing, so UI should not treat `provider != .none` as
+    /// sufficient proof that requests can be submitted.
+    public var isAIAvailable: Bool {
+        session != nil
+    }
+
+    public var isSceneAuthoringEnabled: Bool {
+        store.state.playbackState == .stopped && scene.isAuthoringEnabled
+    }
+
     public func setDisplayInvalidationHandler(_ handler: (() -> Void)?) {
         displayInvalidationHandler = handler
     }
@@ -535,7 +647,6 @@ public final class EditorApplication: @unchecked Sendable {
         guard let mesh = AssetRegistry.shared.meshAsset(for: asset.meshIndex) else { return }
         let entityRef = "scene:\(entityID)"
         let assetURI = asset.relativePath
-        let session = self.session
 
         let previewImagePath = Self.siblingPreviewImagePath(for: asset.absolutePath)
         Task.detached(priority: .utility) { [weak self] in
@@ -556,10 +667,8 @@ public final class EditorApplication: @unchecked Sendable {
             let events = SemanticWorldEventMapper().makeWorldEvents(from: proposals, targetRef: entityRef)
             guard !events.isEmpty else { return }
 
-            if let session {
-                await session.observe(events: events)
-            }
             await MainActor.run {
+                guard !self.isShuttingDown else { return }
                 self.observeWorldEvents(events)
                 self.logConsole("Semantic annotations applied to \(entityRef)",
                                 detail: "\(proposals.count) proposals")
@@ -672,14 +781,16 @@ public final class EditorApplication: @unchecked Sendable {
     /// Call this from the UI or MCP after the user selects a reference image for an entity.
     public func tagEntity(_ entityRef: String, imageURL: URL) {
         let ps = perceptionService
-        Task { [weak self] in
+        Task { @MainActor [weak self] in
             guard let self else { return }
             do {
                 let events = try await ps.tag(entityRef: entityRef, imageURL: imageURL)
+                guard !self.isShuttingDown else { return }
                 self.observeWorldEvents(events)
                 self.logConsole("Tagged \(entityRef)",
                                 detail: "\(events.count) inferred properties")
             } catch {
+                guard !self.isShuttingDown else { return }
                 self.logConsole("Perception unavailable for \(entityRef)",
                                 severity: .warning,
                                 detail: error.localizedDescription)
@@ -720,8 +831,7 @@ public final class EditorApplication: @unchecked Sendable {
             return false
         }
         let position = dropWorldPosition(cursorX: cursorX, cursorY: cursorY, frame: frame)
-        spawnAsset(asset, at: position)
-        return true
+        return spawnAsset(asset, at: position) != nil
     }
 
     /// 把视口内光标坐标投到世界 y=0 平面，作为资产落点。
@@ -806,6 +916,7 @@ public final class EditorApplication: @unchecked Sendable {
                 physicsPlaySnapshot = scene.scene
                 persistPhysicsPlaySnapshot()
             }
+            scene.setAuthoringEnabled(false)
             var settings = scene.scene.physicsSettings
             settings.simulationMode = .play
             settings.backendKind = .jolt
@@ -814,6 +925,7 @@ public final class EditorApplication: @unchecked Sendable {
             logConsole("Physics simulation started")
 
         case .paused:
+            scene.setAuthoringEnabled(false)
             var settings = scene.scene.physicsSettings
             settings.simulationMode = .off
             scene.scene.setPhysicsSettings(settings)
@@ -826,17 +938,24 @@ public final class EditorApplication: @unchecked Sendable {
             if physicsPlaySnapshot == nil {
                 physicsPlaySnapshot = loadPersistedPhysicsPlaySnapshot()
             }
+            let restoredPlaySnapshot: Bool
             if let snapshot = physicsPlaySnapshot {
                 scene.scene = snapshot
-                scene.notifyRevisionChanged()
                 physicsPlaySnapshot = nil
-                store.dispatch(.setSceneRevision(scene.revision))
+                restoredPlaySnapshot = true
+            } else {
+                restoredPlaySnapshot = false
             }
             deletePersistedPhysicsPlaySnapshot()
-            var settings = scene.scene.physicsSettings
-            settings.simulationMode = .off
-            settings.backendKind = .none
-            scene.scene.setPhysicsSettings(settings)
+            if !restoredPlaySnapshot {
+                var settings = scene.scene.physicsSettings
+                settings.simulationMode = .off
+                settings.backendKind = .none
+                scene.scene.setPhysicsSettings(settings)
+            }
+            scene.setAuthoringEnabled(true)
+            scene.notifyRevisionChanged(recordHistory: false)
+            store.dispatch(.setSceneRevision(scene.revision))
             store.dispatch(.setPlaybackState(.stopped))
             logConsole("Physics simulation stopped")
         }
@@ -905,7 +1024,7 @@ public final class EditorApplication: @unchecked Sendable {
                                                     withIntermediateDirectories: true)
             let tmpAdapter = EditorSceneAdapter()
             tmpAdapter.scene = snapshot
-            let manifest = tmpAdapter.manifest()
+            let manifest = tmpAdapter.manifest(selectedEntityID: store.state.selectedEntityID)
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(manifest)
@@ -965,6 +1084,10 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     public func requestNewScene() {
+        guard store.state.playbackState == .stopped else {
+            reportSceneAuthoringUnavailable("Stop simulation before creating a new scene.")
+            return
+        }
         guard hasUnsavedSceneChanges else {
             resetPreviewScene()
             return
@@ -973,11 +1096,30 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     public func requestOpenSceneManifest() {
+        guard store.state.playbackState == .stopped else {
+            reportSceneAuthoringUnavailable("Stop simulation before opening another scene.")
+            return
+        }
         guard hasUnsavedSceneChanges else {
             _ = openSceneManifest()
             return
         }
         store.dispatch(.requestClose(EditorPendingCloseRequest(action: .openScene)))
+    }
+
+    /// Opens a scene chosen by the user, deferring the actual load behind the
+    /// unsaved-changes confirmation when necessary.
+    public func requestOpenSceneManifest(at url: URL) {
+        guard store.state.playbackState == .stopped else {
+            reportSceneAuthoringUnavailable("Stop simulation before opening another scene.")
+            return
+        }
+        guard hasUnsavedSceneChanges else {
+            _ = openSceneManifest(at: url)
+            return
+        }
+        store.dispatch(.requestClose(EditorPendingCloseRequest(action: .openScene,
+                                                               documentPath: url.path)))
     }
 
     /// Exports a portable, runnable project bundle to `<projectDirectory>/export`
@@ -1176,17 +1318,35 @@ public final class EditorApplication: @unchecked Sendable {
         openSceneManifest(clearRecoveryOnSuccess: true, logMissing: true)
     }
 
+    /// Loads an Editor scene manifest from an explicit location. Subsequent
+    /// saves still target this project's canonical `.guava` manifest.
+    public func openSceneManifest(at url: URL) -> EditorSceneManifest? {
+        openSceneManifest(from: url, clearRecoveryOnSuccess: true, logMissing: true)
+    }
+
     /// Restores the normal scene and then overlays a newer autosave when the
     /// previous Editor process did not complete a save/discard workflow.
     @discardableResult
     public func restoreProjectSceneAtLaunch() -> EditorSceneManifest? {
         let saved = openSceneManifest(clearRecoveryOnSuccess: false, logMissing: false)
+        let savedDate = fileModificationDate(sceneManifestURL) ?? .distantPast
+        let autosaveDate = fileModificationDate(editorAutosaveURL) ?? .distantPast
+        let interruptedPlayDate = fileModificationDate(physicsPlaySnapshotURL) ?? .distantPast
+
+        if interruptedPlayDate > max(savedDate, autosaveDate) {
+            if let recovered = restoreInterruptedPlaySnapshotAtLaunch() {
+                return recovered
+            }
+        } else if interruptedPlayDate != .distantPast {
+            // A newer durable save/autosave already supersedes this snapshot.
+            deletePersistedPhysicsPlaySnapshot()
+        }
+
         guard FileManager.default.fileExists(atPath: editorAutosaveURL.path) else {
             return saved
         }
 
         let recoveryDate = fileModificationDate(editorAutosaveURL) ?? .distantPast
-        let savedDate = fileModificationDate(sceneManifestURL) ?? .distantPast
         guard saved == nil || recoveryDate > savedDate else {
             removeEditorAutosave()
             return saved
@@ -1211,11 +1371,47 @@ public final class EditorApplication: @unchecked Sendable {
                        detail: "\(result.entityCount) entities from \(document.savedAt); save the scene to keep it")
             return document.manifest
         } catch {
-            quarantineEditorAutosave()
+            let quarantineDetail = quarantineEditorAutosave()
             logConsole("Failed to restore autosaved scene",
                        severity: .warning,
-                       detail: String(describing: error))
+                       detail: "\(error). \(quarantineDetail)")
             return saved
+        }
+    }
+
+    private func restoreInterruptedPlaySnapshotAtLaunch() -> EditorSceneManifest? {
+        do {
+            let data = try Data(contentsOf: physicsPlaySnapshotURL)
+            let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
+            let result = scene.load(manifest: manifest)
+            guard result.error == nil else { throw result.error! }
+            reportUnresolvedScriptBindings()
+            store.dispatch(.setSelectedEntity(result.selectedEntityID))
+            store.dispatch(.setSceneRecoveryPending(true))
+            recoverySuppressedRevision = nil
+            lastEditorAutosavedRevision = store.state.sceneRevision
+            editorAutosaveElapsed = 0
+
+            let recoveredManifest = scene.manifest(selectedEntityID: result.selectedEntityID)
+            do {
+                try GameSaveDocument(slot: GameSaveDocument.autoSaveSlot,
+                                     manifest: recoveredManifest).write(to: editorAutosaveURL)
+                deletePersistedPhysicsPlaySnapshot()
+            } catch {
+                logConsole("Recovered interrupted Play but could not convert its snapshot to autosave",
+                           severity: .warning,
+                           detail: String(describing: error))
+            }
+            logConsole("Recovered scene from an interrupted Play session",
+                       severity: .warning,
+                       detail: "\(result.entityCount) entities; save the scene to keep it")
+            return recoveredManifest
+        } catch {
+            let quarantineDetail = quarantineInterruptedPlaySnapshot()
+            logConsole("Failed to restore interrupted Play snapshot",
+                       severity: .warning,
+                       detail: "\(error). \(quarantineDetail)")
+            return nil
         }
     }
 
@@ -1226,7 +1422,15 @@ public final class EditorApplication: @unchecked Sendable {
         recoverySuppressedRevision = store.state.sceneRevision
         editorAutosaveElapsed = 0
         lastEditorAutosavedRevision = nil
-        try? FileManager.default.removeItem(at: editorAutosaveURL)
+        do {
+            if FileManager.default.fileExists(atPath: editorAutosaveURL.path) {
+                try FileManager.default.removeItem(at: editorAutosaveURL)
+            }
+        } catch {
+            logConsole("Failed to discard autosaved scene",
+                       severity: .warning,
+                       detail: String(describing: error))
+        }
     }
 
     private var sceneManifestURL: URL {
@@ -1242,8 +1446,16 @@ public final class EditorApplication: @unchecked Sendable {
 
     private func openSceneManifest(clearRecoveryOnSuccess: Bool,
                                    logMissing: Bool) -> EditorSceneManifest? {
+        openSceneManifest(from: sceneManifestURL,
+                          clearRecoveryOnSuccess: clearRecoveryOnSuccess,
+                          logMissing: logMissing)
+    }
+
+    private func openSceneManifest(from sourceURL: URL,
+                                   clearRecoveryOnSuccess: Bool,
+                                   logMissing: Bool) -> EditorSceneManifest? {
         do {
-            let data = try Data(contentsOf: sceneManifestURL)
+            let data = try Data(contentsOf: sourceURL)
             let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
             let result = scene.load(manifest: manifest)
             guard result.error == nil else { throw result.error! }
@@ -1256,13 +1468,13 @@ public final class EditorApplication: @unchecked Sendable {
                 removeEditorAutosave()
             }
             logConsole("Opened scene manifest",
-                       detail: "\(result.entityCount) entities restored from revision \(manifest.revision)")
+                       detail: "\(result.entityCount) entities restored from revision \(manifest.revision) · \(sourceURL.path)")
             return manifest
         } catch CocoaError.fileReadNoSuchFile {
             if logMissing {
                 logConsole("No saved scene manifest",
                            severity: .warning,
-                           detail: sceneManifestURL.path)
+                           detail: sourceURL.path)
             }
             return nil
         } catch {
@@ -1311,11 +1523,32 @@ public final class EditorApplication: @unchecked Sendable {
         try? FileManager.default.removeItem(at: editorAutosaveURL)
     }
 
-    private func quarantineEditorAutosave() {
-        guard FileManager.default.fileExists(atPath: editorAutosaveURL.path) else { return }
+    private func quarantineEditorAutosave() -> String {
+        guard FileManager.default.fileExists(atPath: editorAutosaveURL.path) else {
+            return "The recovery file was already absent."
+        }
         let quarantineURL = editorAutosaveURL.deletingPathExtension()
-            .appendingPathExtension("corrupt-\(Int(Date().timeIntervalSince1970)).json")
-        try? FileManager.default.moveItem(at: editorAutosaveURL, to: quarantineURL)
+            .appendingPathExtension("corrupt-\(UUID().uuidString).json")
+        do {
+            try FileManager.default.moveItem(at: editorAutosaveURL, to: quarantineURL)
+            return "The unreadable recovery file was moved to \(quarantineURL.lastPathComponent)."
+        } catch {
+            return "The unreadable recovery file was preserved at \(editorAutosaveURL.path) because quarantine failed: \(error)"
+        }
+    }
+
+    private func quarantineInterruptedPlaySnapshot() -> String {
+        guard FileManager.default.fileExists(atPath: physicsPlaySnapshotURL.path) else {
+            return "The interrupted Play snapshot was already absent."
+        }
+        let quarantineURL = physicsPlaySnapshotURL.deletingPathExtension()
+            .appendingPathExtension("corrupt-\(UUID().uuidString).json")
+        do {
+            try FileManager.default.moveItem(at: physicsPlaySnapshotURL, to: quarantineURL)
+            return "The unreadable snapshot was moved to \(quarantineURL.lastPathComponent)."
+        } catch {
+            return "The unreadable snapshot was preserved at \(physicsPlaySnapshotURL.path) because quarantine failed: \(error)"
+        }
     }
 
     private func fileModificationDate(_ url: URL) -> Date? {
@@ -1323,17 +1556,18 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     @discardableResult
-    public func reloadAssets() -> Int {
+    public func reloadAssets() -> Int? {
         do {
             let assets = try EditorAssetCatalog.loadProject(at: projectDirectory)
             reloadProjectScripts(force: true)
+            store.dispatch(.forceUIRefresh)
             logConsole("Reloaded assets", detail: "\(assets.count) importable files")
             return assets.count
         } catch {
             logConsole("Failed to reload assets",
                        severity: .error,
                        detail: String(describing: error))
-            return 0
+            return nil
         }
     }
 
@@ -1347,7 +1581,11 @@ public final class EditorApplication: @unchecked Sendable {
             if let session {
                 let context = Self.workflowContext(for: store.state.workspaceMode,
                                                    scriptEntries: catalog.entries)
-                Task { await session.setWorkflowContext(context) }
+                let previousTask = pendingAISetupTask
+                pendingAISetupTask = Task {
+                    await previousTask?.value
+                    await session.setWorkflowContext(context)
+                }
             }
             let source = catalog.sourceURL?.path ?? "built-in catalog"
             logConsole("Reloaded script catalog",
@@ -1457,26 +1695,38 @@ public final class EditorApplication: @unchecked Sendable {
         return scene.scene.localTransform(for: entity)?.translation
     }
 
-    /// Session-era stub: returns empty — Session handles NL inference.
-    public func localIntentSuggestions(
-        for text: String,
-        maxCount: Int = 3
-    ) -> [(verbID: String, summary: String, confidence: Double)] { [] }
+    /// Starts a natural-language request and reports whether it was accepted.
+    /// Callers use the result to avoid discarding the user's draft when a
+    /// request is rejected because AI is unavailable, busy, or awaiting review.
+    @discardableResult
+    public func submitNaturalLanguageIntent(_ text: String) -> Bool {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
 
-    public func submitNaturalLanguageIntent(_ text: String) {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard isSceneAuthoringEnabled else {
+            store.dispatch(.setAIStatusMessage(
+                "Stop simulation before submitting a scene-editing request."
+            ))
+            return false
+        }
 
-        if store.state.pendingConfirmationRequest != nil {
-            store.dispatch(.setAIStatusMessage("Resolve the pending confirmation before submitting another AI action."))
-            return
+        if let rejection = EditorAIRequestPolicy.rejectionMessage(
+            hasPendingConfirmation: store.state.pendingConfirmationRequest != nil,
+            requestInFlight: activeAIRequestID != nil
+        ) {
+            store.dispatch(.setAIStatusMessage(rejection))
+            return false
         }
 
         if let session {
             submitNaturalLanguageIntentWithSession(text, session: session)
-            return
+            return true
         }
 
-        store.dispatch(.setAIStatusMessage("No AI provider configured."))
+        let message = store.state.aiSettings.provider == .none
+            ? "No AI provider configured."
+            : "The configured AI provider has no usable credential."
+        store.dispatch(.setAIStatusMessage(message))
+        return false
     }
 
     private func submitNaturalLanguageIntentWithSession(_ text: String, session: Session) {
@@ -1485,6 +1735,8 @@ public final class EditorApplication: @unchecked Sendable {
         store.dispatch(.setAIStatusMessage("Planning..."))
         store.dispatch(.appendChatMessage(AIChatMessage(role: .user, text: text)))
         let assistantID = UUID().uuidString
+        let requestID = UUID()
+        activeAIRequestID = requestID
         pendingAssistantMessageID = assistantID
         store.dispatch(.appendChatMessage(AIChatMessage(id: assistantID,
                                                         role: .assistant,
@@ -1494,18 +1746,30 @@ public final class EditorApplication: @unchecked Sendable {
         let capturedAid = assistantID
         let progressHandler: @Sendable (String) -> Void = { [weak self] partial in
             Task { @MainActor [weak self] in
-                self?.store.dispatch(.updateChatMessage(id: capturedAid,
-                                                        assistantState: .streaming(partial)))
+                guard let self,
+                      !self.isShuttingDown,
+                      self.activeAIRequestID == requestID else { return }
+                self.store.dispatch(.updateChatMessage(id: capturedAid,
+                                                       assistantState: .streaming(partial)))
             }
         }
 
-        Task { @MainActor [weak self] in
+        activeAIRequestTask = Task { @MainActor [weak self] in
             guard let self else { return }
+            defer {
+                if self.activeAIRequestID == requestID {
+                    self.activeAIRequestID = nil
+                    self.activeAIRequestTask = nil
+                }
+            }
             do {
                 let proposal = try await session.process(
                     .naturalLanguage(text: text, locale: locale ?? "en"),
                     onProgress: progressHandler
                 )
+                try Task.checkCancellation()
+                guard !self.isShuttingDown,
+                      self.activeAIRequestID == requestID else { return }
                 let latencyMs = Int(Date().timeIntervalSince(t0) * 1000)
 
                 guard !proposal.plan.isEmpty || !proposal.capabilityDrafts.isEmpty else {
@@ -1516,9 +1780,9 @@ public final class EditorApplication: @unchecked Sendable {
                                                                assistantState: .replied(reply)))
                         self.pendingAssistantMessageID = nil
                     }
-                    Task { await session.recordOutcome(toolUseID: proposal.toolUseID,
-                                                       content: "Acknowledged.",
-                                                       proposalID: proposal.id) }
+                    await session.recordOutcome(toolUseID: proposal.toolUseID,
+                                                content: "Acknowledged.",
+                                                proposalID: proposal.id)
                     return
                 }
 
@@ -1561,7 +1825,7 @@ public final class EditorApplication: @unchecked Sendable {
                 }
                 self.logConsole("AI inference: \(latencyMs)ms", detail: proposal.plan.summary)
                 self.pendingSessionProposal = proposal
-                self.submitPlanTransaction(
+                try self.submitPlanTransaction(
                     transaction,
                     capabilityContext: self.makeCapabilityInvocationContext(
                         defaultSource: .ai,
@@ -1569,7 +1833,10 @@ public final class EditorApplication: @unchecked Sendable {
                     )
                 )
             } catch {
+                guard !self.isShuttingDown,
+                      self.activeAIRequestID == requestID else { return }
                 let message = error.localizedDescription
+                self.pendingSessionProposal = nil
                 self.store.dispatch(.setAIStatusMessage(message))
                 if let aid = self.pendingAssistantMessageID {
                     self.store.dispatch(.updateChatMessage(id: aid,
@@ -1581,32 +1848,71 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     private func submitPlanTransaction(_ transaction: TransactionIR,
-                                       capabilityContext: CapabilityInvocationContext? = nil) {
-        if store.state.pendingConfirmationRequest != nil {
-            store.dispatch(.setAIStatusMessage("Resolve the pending confirmation before submitting another AI action."))
-            return
-        }
-        do {
-            _ = try runPlanTransaction(transaction, capabilityContext: capabilityContext)
-        } catch {
-            store.dispatch(.setPendingConfirmationRequest(nil))
-            store.dispatch(.setAIWarnings([]))
-            store.dispatch(.setAIStatusMessage(error.localizedDescription))
-        }
+                                       capabilityContext: CapabilityInvocationContext? = nil) throws {
+        _ = try runPlanTransaction(transaction, capabilityContext: capabilityContext)
     }
 
     @discardableResult
     private func runPlanTransaction(_ transaction: TransactionIR,
                                     capabilityContext: CapabilityInvocationContext? = nil) throws -> CapabilityInvocationResult {
+        guard store.state.pendingConfirmationRequest == nil else {
+            throw EditorPlanSubmissionError.pendingConfirmation
+        }
+        let targetEntityIDs = referencedExistingEntityIDs(in: transaction)
+        let lockedEntityIDs = targetEntityIDs.filter(scene.isEntityLocked).sorted()
+        guard lockedEntityIDs.isEmpty else {
+            throw EditorPlanSubmissionError.lockedEntities(lockedEntityIDs)
+        }
+
         var context = makeExecutionContext()
         let result = try intentCoordinator.submitPlan(transaction,
                                                       executionContext: &context,
                                                       capabilityContext: capabilityContext)
+        if result.disposition == .confirmationRequested {
+            pendingConfirmationTargetEntityIDs = targetEntityIDs
+        }
         applyInvocationResult(result, executionContext: &context)
         return result
     }
 
-    public func dismissUnresolvedIntent(id: String) {}
+    /// Collects every existing entity whose state or hierarchy the transaction
+    /// directly references. Parent IDs matter as well: spawning or moving a child
+    /// changes the locked parent's hierarchy even when the child itself is new.
+    private func referencedExistingEntityIDs(in transaction: TransactionIR) -> Set<UInt64> {
+        var result = Set<UInt64>()
+
+        func insertParent(of rawID: UInt64) {
+            guard let entity = entityID(from: rawID),
+                  scene.scene.contains(entity),
+                  let parent = scene.scene.parent(of: entity) else { return }
+            result.insert(parent.rawValue)
+        }
+
+        for operation in transaction.operations {
+            guard case let .scene(mutation) = operation else { continue }
+            if let entityID = mutation.entityID {
+                result.insert(entityID)
+            }
+            switch mutation {
+            case let .spawnImportedMeshEntity(_, _, _, _, parentID),
+                 let .spawnEmptyEntity(_, _, parentID),
+                 let .spawnLightEntity(_, _, _, _, _, _, _, parentID),
+                 let .spawnCameraEntity(_, _, _, parentID):
+                if let parentID { result.insert(parentID) }
+            case let .moveEntity(entityID, parentID, _):
+                insertParent(of: entityID)
+                if let parentID { result.insert(parentID) }
+            case let .deleteEntity(entityID):
+                insertParent(of: entityID)
+                if let entity = self.entityID(from: entityID), scene.scene.contains(entity) {
+                    result.formUnion(scene.scene.children(of: entity).map(\.rawValue))
+                }
+            default:
+                break
+            }
+        }
+        return result
+    }
 
     // MARK: - Undo / Redo
 
@@ -1614,6 +1920,10 @@ public final class EditorApplication: @unchecked Sendable {
     public var canRedo: Bool { scene.canRedoEdit }
 
     public func undo() {
+        guard store.state.playbackState == .stopped else {
+            reportSceneAuthoringUnavailable("Stop simulation before undoing scene edits.")
+            return
+        }
         guard scene.undoEdit() else { return }
         validateSelectionAfterHistoryNavigation()
         store.dispatch(.setAIStatusMessage("Undone"))
@@ -1621,10 +1931,19 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     public func redo() {
+        guard store.state.playbackState == .stopped else {
+            reportSceneAuthoringUnavailable("Stop simulation before redoing scene edits.")
+            return
+        }
         guard scene.redoEdit() else { return }
         validateSelectionAfterHistoryNavigation()
         store.dispatch(.setAIStatusMessage("Redone"))
         logConsole("Redo applied", severity: .info)
+    }
+
+    private func reportSceneAuthoringUnavailable(_ message: String) {
+        store.dispatch(.setAIStatusMessage(message))
+        logConsole(message, severity: .warning)
     }
 
     private func validateSelectionAfterHistoryNavigation() {
@@ -1715,24 +2034,49 @@ public final class EditorApplication: @unchecked Sendable {
         submitResolvedIntent(intent)
     }
 
-    public func resolvePendingConfirmation(pickedOptionID: String) {
+    public func resolvePendingConfirmation(pickedOptionIDsByQuestionID selections: [String: String]) {
         guard let request = store.state.pendingConfirmationRequest,
-              let question = request.questions.first
-        else {
+              !request.questions.isEmpty else {
             store.dispatch(.setAIStatusMessage("No confirmation request is pending."))
             return
         }
 
-        let outcome: ConfirmationAnswerOutcome = pickedOptionID == "skip" ? .skipped : .accepted
+        var answers: [ConfirmationAnswer] = []
+        for question in request.questions {
+            guard let pickedOptionID = selections[question.id],
+                  question.options.contains(where: { $0.id == pickedOptionID }) else {
+                store.dispatch(.setAIStatusMessage(
+                    "Choose an option for every confirmation item before continuing."
+                ))
+                return
+            }
+            let normalized = pickedOptionID.lowercased()
+            let outcome: ConfirmationAnswerOutcome = ["skip", "discard", "reject", "deny", "cancel"]
+                .contains(normalized) ? .skipped : .accepted
+            answers.append(ConfirmationAnswer(questionID: question.id,
+                                              outcome: outcome,
+                                              pickedOptionID: pickedOptionID))
+        }
         let resolution = ConfirmationResolution(batchID: request.batchID,
                                                 correlationID: request.correlationID,
-                                                answers: [
-                                                    ConfirmationAnswer(questionID: question.id,
-                                                                       outcome: outcome,
-                                                                       pickedOptionID: pickedOptionID)
-                                                ],
+                                                answers: answers,
                                                 userID: "local-editor",
                                                 partial: false)
+        resolvePendingConfirmation(resolution)
+    }
+
+    private func resolvePendingConfirmation(_ resolution: ConfirmationResolution) {
+        let lockedEntityIDs = pendingConfirmationTargetEntityIDs
+            .filter(scene.isEntityLocked)
+            .sorted()
+        let acceptsAnyMutation = resolution.answers.contains { $0.outcome == .accepted }
+        guard lockedEntityIDs.isEmpty || !acceptsAnyMutation else {
+            store.dispatch(.setAIStatusMessage(
+                "The pending plan targets locked entities: \(lockedEntityIDs.map(String.init).joined(separator: ", ")). "
+                    + "Discard this confirmation, unlock them, and submit the action again."
+            ))
+            return
+        }
         var context = makeExecutionContext()
         do {
             let result = try intentCoordinator.resolvePlanConfirmation(resolution,
@@ -1743,12 +2087,50 @@ public final class EditorApplication: @unchecked Sendable {
         }
     }
 
+    public func resolvePendingConfirmation(pickedOptionID: String) {
+        guard let request = store.state.pendingConfirmationRequest else {
+            store.dispatch(.setAIStatusMessage("No confirmation request is pending."))
+            return
+        }
+        let selections: [String: String] = Dictionary(uniqueKeysWithValues: request.questions.compactMap { question in
+            guard question.options.contains(where: { $0.id == pickedOptionID }) else { return nil }
+            return (question.id, pickedOptionID)
+        })
+        resolvePendingConfirmation(pickedOptionIDsByQuestionID: selections)
+    }
+
     public func acceptPendingConfirmation() {
-        resolvePendingConfirmation(pickedOptionID: "confirm")
+        guard let request = store.state.pendingConfirmationRequest else {
+            store.dispatch(.setAIStatusMessage("No confirmation request is pending."))
+            return
+        }
+        let selections: [String: String] = Dictionary(uniqueKeysWithValues: request.questions.compactMap { question in
+            let optionID = question.defaultOptionID ?? question.options.first?.id
+            return optionID.map { (question.id, $0) }
+        })
+        resolvePendingConfirmation(pickedOptionIDsByQuestionID: selections)
     }
 
     public func skipPendingConfirmation() {
-        resolvePendingConfirmation(pickedOptionID: "skip")
+        guard let request = store.state.pendingConfirmationRequest else {
+            store.dispatch(.setAIStatusMessage("No confirmation request is pending."))
+            return
+        }
+        let answers = request.questions.map { question in
+            let optionID = question.options.first(where: {
+                ["skip", "discard", "reject", "deny", "cancel"].contains($0.id.lowercased())
+            })?.id
+            return ConfirmationAnswer(questionID: question.id,
+                                      outcome: .skipped,
+                                      pickedOptionID: optionID)
+        }
+        resolvePendingConfirmation(ConfirmationResolution(
+            batchID: request.batchID,
+            correlationID: request.correlationID,
+            answers: answers,
+            userID: "local-editor",
+            partial: false
+        ))
     }
 
     private func handlePlatformEvent(_ event: InputEvent) {
@@ -1756,12 +2138,14 @@ public final class EditorApplication: @unchecked Sendable {
         case let .mouseButtonDown(button):
             if EditorViewportInputController.shared.hasActivePointerSession,
                EditorViewportDropTarget.frame?.contains(x: button.x, y: button.y) != true {
+                scene.endInteractiveEditHistoryGroup()
                 EditorGizmoController.shared.clearDrag()
                 EditorViewportInputController.shared.endPointerSession()
             }
         case let .mouseButtonUp(button):
             if EditorViewportInputController.shared.hasActivePointerSession,
                EditorViewportDropTarget.frame?.contains(x: button.x, y: button.y) != true {
+                scene.endInteractiveEditHistoryGroup()
                 EditorGizmoController.shared.clearDrag()
                 EditorViewportInputController.shared.endPointerSession()
             }
@@ -1769,10 +2153,12 @@ public final class EditorApplication: @unchecked Sendable {
             store.dispatch(.setWindowFocused(true))
         case .windowFocusLost:
             store.dispatch(.setWindowFocused(false))
+            scene.endInteractiveEditHistoryGroup()
             EditorGizmoController.shared.clearDrag()
             EditorViewportInputController.shared.reset()
         case .windowMinimized:
             store.dispatch(.setWindowMinimized(true))
+            scene.endInteractiveEditHistoryGroup()
             EditorGizmoController.shared.clearDrag()
             EditorViewportInputController.shared.reset()
         case .windowRestored:
@@ -1791,30 +2177,54 @@ public final class EditorApplication: @unchecked Sendable {
 
     /// Applies new AI settings: persists provider/model, writes the key to Keychain,
     /// and hot-swaps the Session without restart.
-    public func applyAISettings(_ settings: EditorAISettings, apiKey: String) {
-        AIKeychain.save(key: apiKey, provider: settings.provider)
+    @discardableResult
+    public func applyAISettings(_ settings: EditorAISettings, apiKey: String) -> Bool {
+        do {
+            if settings.provider != .none, !apiKey.isEmpty {
+                try AIKeychain.save(key: apiKey, provider: settings.provider)
+            }
+            guard settings.provider == .none || AIKeychain.hasKey(for: settings.provider) else {
+                logConsole("AI settings were not applied",
+                           severity: .error,
+                           detail: "Enter an API key for \(settings.provider.displayName).")
+                return false
+            }
+        } catch {
+            logConsole("AI credentials could not be saved",
+                       severity: .error,
+                       detail: error.localizedDescription)
+            return false
+        }
         store.dispatch(.setAISettings(settings))
         store.dispatch(.clearChatHistory)
+        let oldSession = session
+        cancelActiveAIRequest()
         pendingAssistantMessageID = nil
         let newSession = Self.makeSession(
             for: settings,
             pluginCapabilityExecutor: pluginCapabilityExecutor,
             pluginQuerySnapshotProvider: makePluginQuerySnapshotProvider()
         )
-        if let newSession {
+        if oldSession != nil || newSession != nil {
             let worldContext = self.aiWorldContext
             let ctx = Self.workflowContext(for: store.state.workspaceMode,
                                            scriptEntries: scene.scriptCatalogEntries)
             let bus = self.observationBus
             let mem = self.contextMemoryStore
-            Task {
-                await newSession.replaceWorldView(await worldContext.snapshot())
-                await newSession.setWorkflowContext(ctx)
-                await newSession.setObservationBus(bus)
-                await newSession.setContextMemory(mem)
+            let previousTask = pendingAISetupTask
+            pendingAISetupTask = Task {
+                await previousTask?.value
+                await oldSession?.cancelActiveRun()
+                if let newSession {
+                    await newSession.replaceWorldView(await worldContext.snapshot())
+                    await newSession.setObservationBus(bus)
+                    await newSession.setContextMemory(mem)
+                    await newSession.setWorkflowContext(ctx)
+                }
             }
         }
         session = newSession
+        return true
     }
 
     public func applyCapabilitySettings(_ settings: EditorCapabilitySettings) {
@@ -2130,6 +2540,8 @@ public final class EditorApplication: @unchecked Sendable {
 
     @MainActor
     private func activatePluginExecutor(_ executor: PluginCapabilityExecutor?) async {
+        await pendingAISetupTask?.value
+        pendingAISetupTask = nil
         pluginCapabilityExecutor = executor
         let settings = store.state.capabilitySettings
         intentCoordinator.configureCapabilityPlanner(
@@ -2146,6 +2558,7 @@ public final class EditorApplication: @unchecked Sendable {
         )
 
         let oldSession = session
+        cancelActiveAIRequest()
         await oldSession?.cancelActiveRun()
         let world = await aiWorldContext.snapshot()
         let nextSession = Self.makeSession(
@@ -2156,12 +2569,12 @@ public final class EditorApplication: @unchecked Sendable {
         )
         session = nextSession
         if let nextSession {
+            await nextSession.setObservationBus(observationBus)
+            await nextSession.setContextMemory(contextMemoryStore)
             await nextSession.setWorkflowContext(Self.workflowContext(
                 for: store.state.workspaceMode,
                 scriptEntries: scene.scriptCatalogEntries
             ))
-            await nextSession.setObservationBus(observationBus)
-            await nextSession.setContextMemory(contextMemoryStore)
         }
         pendingSessionProposal = nil
         pendingAssistantMessageID = nil
@@ -2169,19 +2582,48 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     /// Removes the stored API key for the current provider and disables AI.
-    public func clearAIKey() {
-        AIKeychain.delete(provider: store.state.aiSettings.provider)
+    @discardableResult
+    public func clearAIKey() -> Bool {
+        do {
+            try AIKeychain.delete(provider: store.state.aiSettings.provider)
+        } catch {
+            logConsole("AI credentials could not be removed",
+                       severity: .error,
+                       detail: error.localizedDescription)
+            return false
+        }
+        let oldSession = session
+        cancelActiveAIRequest()
+        let previousTask = pendingAISetupTask
+        pendingAISetupTask = Task {
+            await previousTask?.value
+            await oldSession?.cancelActiveRun()
+        }
         session = nil
         store.dispatch(.clearChatHistory)
         pendingAssistantMessageID = nil
         var settings = store.state.aiSettings
         settings.provider = .none
         store.dispatch(.setAISettings(settings))
+        return true
+    }
+
+    private func cancelActiveAIRequest() {
+        activeAIRequestID = nil
+        activeAIRequestTask?.cancel()
+        activeAIRequestTask = nil
+        pendingSessionProposal = nil
     }
 
     /// Returns `true` if a non-empty API key is stored for the current provider.
-    public func hasStoredAIKey() -> Bool {
-        AIKeychain.hasKey(for: store.state.aiSettings.provider)
+    public func hasStoredAIKey(for provider: EditorAIProvider? = nil) -> Bool {
+        AIKeychain.hasKey(for: provider ?? store.state.aiSettings.provider)
+    }
+
+    public func aiCredentialSource(
+        for provider: EditorAIProvider? = nil
+    ) -> AICredentialSource? {
+        AIKeychain.credentialSource(for: provider ?? store.state.aiSettings.provider)
     }
 
     static func workflowContext(
@@ -2367,7 +2809,7 @@ public final class EditorApplication: @unchecked Sendable {
         do {
             let transaction = try intentTransactionBuilder.buildTransaction(from: intent,
                                                                             context: makeIntentTransactionBuildContext())
-            submitPlanTransaction(
+            try submitPlanTransaction(
                 transaction,
                 capabilityContext: makeCapabilityInvocationContext(
                     defaultSource: intent.source,
@@ -2375,6 +2817,10 @@ public final class EditorApplication: @unchecked Sendable {
                     defaultEvidence: intent.evidence
                 )
             )
+        } catch EditorPlanSubmissionError.pendingConfirmation {
+            store.dispatch(.setAIStatusMessage(
+                EditorAIRequestPolicy.pendingConfirmationMessage
+            ))
         } catch {
             store.dispatch(.setPendingConfirmationRequest(nil))
             store.dispatch(.setAIWarnings([]))
@@ -2393,7 +2839,7 @@ public final class EditorApplication: @unchecked Sendable {
                                                  defaultEvidence: [IntentEvidence] = []) -> CapabilityInvocationContext {
         CapabilityInvocationContext(sceneRuntime: scene.scene,
                                     selectedEntityID: store.state.selectedEntityID,
-                                    isSceneEditable: store.state.playbackState != .playing,
+                                    isSceneEditable: store.state.playbackState == .stopped,
                                     defaultSource: defaultSource,
                                     defaultConfidence: defaultConfidence,
                                     defaultEvidence: defaultEvidence)
@@ -2408,6 +2854,7 @@ public final class EditorApplication: @unchecked Sendable {
 
         switch result.disposition {
         case .applied:
+            pendingConfirmationTargetEntityIDs.removeAll()
             store.dispatch(.setPendingConfirmationRequest(nil))
             store.dispatch(.setAIWarnings(result.warnings))
             updateSelection(after: result.applyResult)
@@ -2434,7 +2881,13 @@ public final class EditorApplication: @unchecked Sendable {
                     }
                     pendingSessionProposal = nil
                 }
-                editLog.append(edit)
+                do {
+                    try editLog.append(edit)
+                } catch {
+                    logConsole("Failed to record applied edit",
+                               severity: .error,
+                               detail: "\(edit.id): \(error)")
+                }
             }
             if let events = result.applyResult?.worldEvents, !events.isEmpty {
                 observeWorldEvents(events)
@@ -2448,6 +2901,7 @@ public final class EditorApplication: @unchecked Sendable {
                 store.dispatch(.updateChatMessage(id: aid, assistantState: .pendingConfirmation(summary: prompt)))
             }
         case .discarded:
+            pendingConfirmationTargetEntityIDs.removeAll()
             store.dispatch(.setPendingConfirmationRequest(nil))
             store.dispatch(.setAIWarnings(result.warnings))
             store.dispatch(.setAIStatusMessage("Discarded \(result.transactionID)"))
@@ -2922,7 +3376,9 @@ public final class EditorApplication: @unchecked Sendable {
         guard !events.isEmpty else { return }
         let worldContext = self.aiWorldContext
         let session = session
-        Task {
+        let previousTask = pendingWorldObservationTask
+        pendingWorldObservationTask = Task {
+            await previousTask?.value
             await worldContext.observe(events: events)
             if let session {
                 await session.observe(events: events)

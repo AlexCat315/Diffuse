@@ -4,6 +4,25 @@ import Testing
 
 @Suite("AssetRegistry")
 struct AssetRegistryTests {
+    @Test("explicit mesh registration survives project reload and can be removed independently")
+    func explicitMeshOverlaySurvivesReload() throws {
+        let registry = AssetRegistry()
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("asset-registry-overlay-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+
+        let meshIndex = 77
+        registry.registerForTesting(MeshAsset(name: "transient", vertices: [], indices: []),
+                                    at: meshIndex)
+        _ = try registry.loadProject(at: root.path)
+
+        #expect(registry.meshAsset(for: meshIndex)?.name == "transient")
+        #expect(registry.registeredMeshes().contains { $0.meshIndex == meshIndex })
+        registry.unregisterTestingMesh(at: meshIndex)
+        #expect(registry.meshAsset(for: meshIndex) == nil)
+    }
+
     @Test("scans project directory and registers importable meshes")
     func scansProjectDirectory() throws {
         let registry = AssetRegistry()
