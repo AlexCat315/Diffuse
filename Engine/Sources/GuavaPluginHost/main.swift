@@ -6,6 +6,22 @@ import PluginRuntime
 import PluginWasmtimeRuntime
 #endif
 
+private func createSecureDirectory(at url: URL,
+                                   withIntermediateDirectories: Bool) throws {
+    #if os(Windows)
+    try FileManager.default.createDirectory(
+        at: url,
+        withIntermediateDirectories: withIntermediateDirectories
+    )
+    #else
+    try FileManager.default.createDirectory(
+        at: url,
+        withIntermediateDirectories: withIntermediateDirectories,
+        attributes: [.posixPermissions: 0o700]
+    )
+    #endif
+}
+
 #if canImport(PluginWasmtimeRuntime)
 let runtime: any WASIComponentRuntime = (try? EmbeddedWasmtimeComponentRuntime())
     ?? FailClosedWASIComponentRuntime()
@@ -19,9 +35,7 @@ let loader = PluginPackageLoader(registry: capabilityRegistry)
 let limits = PluginResourceLimits.secureDefault
 let stagingRoot = FileManager.default.temporaryDirectory
     .appendingPathComponent("GuavaPluginHost-\(UUID().uuidString)", isDirectory: true)
-try? FileManager.default.createDirectory(at: stagingRoot,
-                                         withIntermediateDirectories: true,
-                                         attributes: [.posixPermissions: 0o700])
+try? createSecureDirectory(at: stagingRoot, withIntermediateDirectories: true)
 
 struct LoadedPlugin {
     var source: ValidatedPluginPackage
@@ -53,9 +67,7 @@ func stagedExecutionCopy(of package: ValidatedPluginPackage) throws -> Validated
     let destination = stagingRoot
         .appendingPathComponent("\(package.manifest.id)-\(UUID().uuidString).guavaplugin",
                                isDirectory: true)
-    try FileManager.default.createDirectory(at: destination,
-                                            withIntermediateDirectories: false,
-                                            attributes: [.posixPermissions: 0o700])
+    try createSecureDirectory(at: destination, withIntermediateDirectories: false)
     do {
         for name in ["plugin.json", "component.wasm", "capabilities.wit"] {
             try FileManager.default.copyItem(at: package.rootURL.appendingPathComponent(name),

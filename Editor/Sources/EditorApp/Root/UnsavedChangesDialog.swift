@@ -10,7 +10,10 @@ struct UnsavedChangesDialog: View {
     let request: EditorPendingCloseRequest
 
     private static let warningIcon = BundleImageResource.svg(
-        named: "warning", in: .module, subdirectory: "PanelIcons")
+        named: "warning",
+        in: EditorAppResourceBundle.bundle,
+        subdirectory: "PanelIcons"
+    )
 
     var body: some View {
         ModalBarrier {
@@ -120,6 +123,14 @@ struct UnsavedChangesDialog: View {
     }
 
     private func discardAndProceed() {
+        // Keep the recovery snapshot until the selected scene has actually
+        // loaded. If the file is corrupt or incompatible, the user's current
+        // unsaved work must remain recoverable.
+        if request.action == .openScene {
+            app.store.dispatch(.dismissCloseRequest)
+            _ = openRequestedScene()
+            return
+        }
         app.discardAutosavedScene()
         proceed()
     }
@@ -130,7 +141,7 @@ struct UnsavedChangesDialog: View {
         case .newScene:
             app.resetPreviewScene()
         case .openScene:
-            _ = app.openSceneManifest()
+            _ = openRequestedScene()
         case .close:
             let windowID = request.windowID
             MainActor.assumeIsolated {
@@ -142,5 +153,12 @@ struct UnsavedChangesDialog: View {
                 }
             }
         }
+    }
+
+    private func openRequestedScene() -> EditorSceneManifest? {
+        if let path = request.documentPath {
+            return app.openSceneManifest(at: URL(fileURLWithPath: path))
+        }
+        return app.openSceneManifest()
     }
 }

@@ -462,6 +462,25 @@ struct ContextMemoryTests {
         #expect(entries.contains { $0.id == "edit:e20" })
     }
 
+    @Test("flush creates missing parent directories and writes deterministic entry order")
+    func flushCreatesParentsAndSortsEntries() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("context-memory-nested-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url = root.appendingPathComponent("nested/context_memory.json")
+        let store = try ContextMemoryStore(storageURL: url)
+        await store.upsert(ContextEntry(id: "z", kind: .userPreference, subject: "z",
+                                        payload: [:], importance: 1))
+        await store.upsert(ContextEntry(id: "a", kind: .userPreference, subject: "a",
+                                        payload: [:], importance: 1))
+
+        try await store.flush()
+
+        #expect(FileManager.default.fileExists(atPath: url.path))
+        let decoded = try JSONDecoder().decode([ContextEntry].self, from: Data(contentsOf: url))
+        #expect(decoded.map(\.id) == ["a", "z"])
+    }
+
     @Test("eviction uses timestamp as tiebreaker when importance is equal")
     func evictionTimestampTiebreakerEvictsOldest() async throws {
         let store = try ContextMemoryStore(capacity: 2)

@@ -100,9 +100,19 @@ private func runPlayer() throws {
     }
 }
 
-do {
-    try runPlayer()
-} catch {
-    FileHandle.standardError.write(Data("[GuavaPlayer] startup failed: \(error)\n".utf8))
-    exit(1)
+if CommandLine.arguments.contains("--validate-install") {
+    do {
+        let report = try PlayerInstallValidator.validateLayout()
+        FileHandle.standardOutput.write(Data("\(report)\n".utf8))
+    } catch {
+        FileHandle.standardError.write(Data("\(error)\n".utf8))
+        exit(1)
+    }
+} else {
+    do {
+        try runPlayer()
+    } catch {
+        FileHandle.standardError.write(Data("[GuavaPlayer] startup failed: \(error)\n".utf8))
+        exit(1)
+    }
 }

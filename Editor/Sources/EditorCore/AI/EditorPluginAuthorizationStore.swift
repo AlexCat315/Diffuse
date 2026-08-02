@@ -4,12 +4,15 @@ import PluginRuntime
 public enum EditorPluginAuthorizationStoreError: Error, Sendable, Equatable,
     LocalizedError {
     case duplicatePlugin(String)
+    case unsupportedFormatVersion(Int)
     case couldNotEncode
 
     public var errorDescription: String? {
         switch self {
         case let .duplicatePlugin(id):
             return "Plugin authorization storage contains duplicate plugin '\(id)'."
+        case let .unsupportedFormatVersion(version):
+            return "Plugin authorization storage uses unsupported format version \(version)."
         case .couldNotEncode:
             return "Plugin authorization storage could not be encoded."
         }
@@ -33,14 +36,34 @@ public final class EditorPluginAuthorizationStore: @unchecked Sendable {
     }
 
     public let storageURL: URL
+    public let loadWarning: String?
     private let lock = NSLock()
     private var recordsByPluginID: [String: PluginAuthorizationRecord] = [:]
 
     public init(projectDirectory: String) {
-        storageURL = URL(fileURLWithPath: projectDirectory, isDirectory: true)
+        let storageURL = URL(fileURLWithPath: projectDirectory, isDirectory: true)
             .appendingPathComponent(".guava", isDirectory: true)
             .appendingPathComponent("plugin_authorizations.json")
-        recordsByPluginID = (try? Self.load(from: storageURL)) ?? [:]
+        self.storageURL = storageURL
+        do {
+            recordsByPluginID = try Self.load(from: storageURL)
+            loadWarning = nil
+        } catch {
+            recordsByPluginID = [:]
+            let originalError = error
+            let originalDescription = (originalError as? LocalizedError)?.errorDescription
+                ?? String(describing: originalError)
+            let quarantineURL = storageURL.deletingPathExtension()
+                .appendingPathExtension("corrupt-\(UUID().uuidString).json")
+            do {
+                try FileManager.default.moveItem(at: storageURL, to: quarantineURL)
+                loadWarning = "The invalid authorization file was moved to "
+                    + "\(quarantineURL.lastPathComponent): \(originalDescription)"
+            } catch {
+                loadWarning = "Plugin authorizations were rejected, but the invalid file "
+                    + "could not be quarantined: \(error); original error: \(originalDescription)"
+            }
+        }
     }
 
     public func authorization(for inspection: PluginInspection)
@@ -81,7 +104,11 @@ public final class EditorPluginAuthorizationStore: @unchecked Sendable {
         guard FileManager.default.fileExists(atPath: url.path) else { return [:] }
         let document = try JSONDecoder().decode(Document.self,
                                                 from: Data(contentsOf: url))
-        guard document.formatVersion == 1 else { return [:] }
+        guard document.formatVersion == 1 else {
+            throw EditorPluginAuthorizationStoreError.unsupportedFormatVersion(
+                document.formatVersion
+            )
+        }
         var result: [String: PluginAuthorizationRecord] = [:]
         for record in document.records {
             guard result.updateValue(record, forKey: record.pluginID) == nil else {

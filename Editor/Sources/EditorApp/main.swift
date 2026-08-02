@@ -11,6 +11,11 @@ import CardBattleRuntime
 @MainActor
 private func runEditor() throws {
     let launchOptions = try EditorAppLaunchOptions.load()
+    if launchOptions.validateInstall {
+        let report = try EditorInstallValidator.validateEditorLayout()
+        FileHandle.standardOutput.write(Data("\(report)\n".utf8))
+        return
+    }
     // The editor runs on the GuavaUICompose + AppRuntime stack. The GuavaKit
     // from-scratch rewrite served as the architecture blueprint for the
     // in-place runtime refactor and has been deleted

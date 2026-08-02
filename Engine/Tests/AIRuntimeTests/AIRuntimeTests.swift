@@ -2070,8 +2070,6 @@ final class AIRuntimeTests: XCTestCase {
         let store = try ContextMemoryStore()
         await session.setContextMemory(store)
         await session.observe(event: .entityAdded(ref: "scene:1", name: "Rock", kind: "mesh"))
-        // Give the fire-and-forget Task a tick to complete.
-        try await Task.sleep(nanoseconds: 10_000_000)
         let entries = await store.allEntries()
         XCTAssertFalse(entries.isEmpty)
         XCTAssertEqual(entries.first?.subject, "scene:1")
@@ -2085,7 +2083,6 @@ final class AIRuntimeTests: XCTestCase {
             .entityAdded(ref: "scene:2", name: "A", kind: nil),
             .entityAdded(ref: "scene:3", name: "B", kind: nil),
         ])
-        try await Task.sleep(nanoseconds: 10_000_000)
         let count = await store.allEntries().count
         XCTAssertEqual(count, 2)
     }
@@ -2106,7 +2103,6 @@ final class AIRuntimeTests: XCTestCase {
 
         let emptyPlan = SceneEditPlan(summary: "Nothing to do.", steps: [])
         await session.updateIssueMemory(intent: "make it fly", plan: emptyPlan)
-        try await Task.sleep(nanoseconds: 10_000_000)
 
         let entries = await store.lookup(kind: .issueTracked)
         XCTAssertEqual(entries.count, 1)
@@ -2122,14 +2118,12 @@ final class AIRuntimeTests: XCTestCase {
 
         let emptyPlan = SceneEditPlan(summary: "Cannot do that.", steps: [])
         await session.updateIssueMemory(intent: "rotate 45 degrees", plan: emptyPlan)
-        try await Task.sleep(nanoseconds: 10_000_000)
         let beforeEntries = await store.lookup(kind: .issueTracked)
         XCTAssertFalse(beforeEntries.isEmpty)
 
         let step = SceneEditStep(op: .setTransform, entityRef: "scene:1")
         let resolvedPlan = SceneEditPlan(summary: "Done.", steps: [step])
         await session.updateIssueMemory(intent: "rotate 45 degrees", plan: resolvedPlan)
-        try await Task.sleep(nanoseconds: 10_000_000)
         let afterEntries = await store.lookup(kind: .issueTracked)
         XCTAssertTrue(afterEntries.isEmpty)
     }
@@ -2168,7 +2162,6 @@ final class AIRuntimeTests: XCTestCase {
             targetExperience: "challenging but fair"
         ))
         await session.setWorkflowContext(ctx)
-        try await Task.sleep(nanoseconds: 10_000_000)
 
         let entry = await store.entry(id: "workflow:active")
         XCTAssertNotNil(entry)
@@ -2190,7 +2183,6 @@ final class AIRuntimeTests: XCTestCase {
             directorIntent: "wide establishing shot"
         ))
         await session.setWorkflowContext(ctx)
-        try await Task.sleep(nanoseconds: 10_000_000)
 
         let entry = await store.entry(id: "workflow:active")
         XCTAssertEqual(entry?.payload["kind"], "film")
@@ -2210,12 +2202,10 @@ final class AIRuntimeTests: XCTestCase {
             targetExperience: "epic"
         ))
         await session.setWorkflowContext(ctx)
-        try await Task.sleep(nanoseconds: 10_000_000)
         let beforeEntry = await store.entry(id: "workflow:active")
         XCTAssertNotNil(beforeEntry)
 
         await session.setWorkflowContext(nil)
-        try await Task.sleep(nanoseconds: 10_000_000)
         let afterEntry = await store.entry(id: "workflow:active")
         XCTAssertNil(afterEntry)
     }
@@ -2236,7 +2226,6 @@ final class AIRuntimeTests: XCTestCase {
         await session.recordTurn(ConversationTurn(kind: .userText("place a spotlight above the stage")))
         await session.recordTurn(ConversationTurn(kind: .userText("set its color to warm white")))
         await session.clearHistory()
-        try await Task.sleep(nanoseconds: 10_000_000)
 
         let entries = await store.lookup(kind: .sessionSummary)
         XCTAssertEqual(entries.count, 1)
@@ -2253,7 +2242,6 @@ final class AIRuntimeTests: XCTestCase {
         // Only a tool result turn — no user intents.
         await session.recordOutcome(toolUseID: "t1", content: "ok")
         await session.clearHistory()
-        try await Task.sleep(nanoseconds: 10_000_000)
         let entries = await store.lookup(kind: .sessionSummary)
         XCTAssertTrue(entries.isEmpty)
     }
@@ -2274,7 +2262,6 @@ final class AIRuntimeTests: XCTestCase {
 
         await session.recordTurn(ConversationTurn(kind: .userText("second intent")))
         await session.clearHistory()
-        try await Task.sleep(nanoseconds: 50_000_000)
 
         let entries = await store.lookup(kind: .sessionSummary)
         XCTAssertEqual(entries.count, 1, "same session ID produces exactly one summary entry")
@@ -2288,7 +2275,6 @@ final class AIRuntimeTests: XCTestCase {
         let emptyPlan = SceneEditPlan(summary: "Can't do it.", steps: [])
         await session.updateIssueMemory(intent: "delete all", plan: emptyPlan)
         await session.updateIssueMemory(intent: "delete all", plan: emptyPlan)
-        try await Task.sleep(nanoseconds: 10_000_000)
 
         let entries = await store.lookup(kind: .issueTracked)
         XCTAssertEqual(entries.count, 1)
@@ -2958,13 +2944,23 @@ final class AIRuntimeTests: XCTestCase {
     }
 
     func testSessionObserveEditSummaryUpdatesRevisionAndTriggersFlush() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava-session-memory-\(UUID().uuidString)",
+                                    isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let storageURL = directory.appendingPathComponent("context_memory.json")
         let session = Session(id: "obs3", config: makeTestConfig())
-        let store = try ContextMemoryStore()
+        let store = try ContextMemoryStore(storageURL: storageURL)
         await session.setContextMemory(store)
-        await session.observe(editSummary: "rotated cube", revision: 99)
+        await session.observe(event: .entityAdded(ref: "scene:99", name: "Cube", kind: "mesh"))
+        try await session.observe(editSummary: "rotated cube", revision: 99)
         let view = await session.worldViewSnapshot()
         XCTAssertEqual(view.sceneRevision, 99)
         XCTAssertEqual(view.recentEdits.first?.summary, "rotated cube")
+
+        let reloaded = try ContextMemoryStore(storageURL: storageURL)
+        let persistedEntry = await reloaded.entry(id: "entity_added:scene:99")
+        XCTAssertEqual(persistedEntry?.payload["name"], "Cube")
     }
 
     func testSessionHistorySnapshotReflectsRecordedTurns() async {
@@ -3277,9 +3273,6 @@ final class AIRuntimeTests: XCTestCase {
             acceptedStepIDs: [],
             rejectedStepIDs: ["step_0"]
         ))
-
-        // Allow the async Task { await mem.upsert } to complete
-        try await Task.sleep(nanoseconds: 10_000_000)
 
         let entry = await mem.entry(id: "pref:rejected:prop_r1")
         XCTAssertNotNil(entry, "rejected correction must produce a userPreference entry")

@@ -1169,7 +1169,10 @@ private func makePluginBinding(
         inspection: inspection,
         authorisedAt: Date(timeIntervalSince1970: 1)
     )
-    return (try PluginExecutionBinding(pluginPath: "/tmp/\(pluginID).guavaplugin",
+    let pluginPath = FileManager.default.temporaryDirectory
+        .appendingPathComponent("\(pluginID).guavaplugin", isDirectory: true)
+        .path
+    return (try PluginExecutionBinding(pluginPath: pluginPath,
                                        inspection: inspection,
                                        authorization: authorization,
                                        hostGeneration: hostGeneration),

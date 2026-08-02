@@ -1,20 +1,16 @@
 import type { RouteRecordRaw } from 'vue-router'
 import { contentEntries } from 'virtual:guava-content'
-import BlogIndexPage from '@/pages/BlogIndexPage.vue'
-import CommunityPage from '@/pages/CommunityPage.vue'
-import ContentPage from '@/pages/ContentPage.vue'
-import DownloadPage from '@/pages/DownloadPage.vue'
-import FeaturesPage from '@/pages/FeaturesPage.vue'
-import HomePage from '@/pages/HomePage.vue'
-import NotFoundPage from '@/pages/NotFoundPage.vue'
 
 const staticPages = [
-  ['', HomePage, 'home'],
-  ['/features', FeaturesPage, 'features'],
-  ['/download', DownloadPage, 'download'],
-  ['/blog', BlogIndexPage, 'blog'],
-  ['/community', CommunityPage, 'community'],
+  ['', () => import('@/pages/HomePage.vue'), 'home'],
+  ['/features', () => import('@/pages/FeaturesPage.vue'), 'features'],
+  ['/download', () => import('@/pages/DownloadPage.vue'), 'download'],
+  ['/blog', () => import('@/pages/BlogIndexPage.vue'), 'blog'],
+  ['/community', () => import('@/pages/CommunityPage.vue'), 'community'],
 ] as const
+
+const ContentPage = () => import('@/pages/ContentPage.vue')
+const NotFoundPage = () => import('@/pages/NotFoundPage.vue')
 
 export const routes: RouteRecordRaw[] = [
   { path: '/', redirect: '/zh' },

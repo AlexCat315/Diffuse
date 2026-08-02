@@ -5,7 +5,99 @@ import RenderBackend
 import SceneRuntime
 import SIMDCompat
 
+/// Ready-to-use entities exposed by the editor's Hierarchy create menu.
+/// These templates intentionally map to SceneRuntime primitives so they work
+/// in a new project before any assets have been imported.
+public enum EditorEntityTemplate: String, CaseIterable, Sendable {
+    case empty
+    case cube
+    case directionalLight
+    case pointLight
+    case spotLight
+    case camera
+
+    public var displayName: String {
+        switch self {
+        case .empty: return "Empty Entity"
+        case .cube: return "Cube"
+        case .directionalLight: return "Directional Light"
+        case .pointLight: return "Point Light"
+        case .spotLight: return "Spot Light"
+        case .camera: return "Camera"
+        }
+    }
+}
+
 extension EditorSceneAdapter {
+    /// Creates a built-in entity without requiring a project asset. The
+    /// operation participates in editor history and returns the new raw id so
+    /// the caller can select it immediately.
+    @discardableResult
+    public func spawnEntity(template: EditorEntityTemplate,
+                            at position: SIMD3<Float>? = nil,
+                            parentID: UInt64? = nil) -> UInt64? {
+        let spawnPosition = position ?? defaultSpawnPosition(for: template)
+        let mutation: SceneMutation
+        switch template {
+        case .empty:
+            mutation = .spawnEmptyEntity(label: uniqueDisplayName(base: "Empty Entity"),
+                                         position: spawnPosition,
+                                         parentID: parentID)
+        case .cube:
+            mutation = .spawnImportedMeshEntity(label: uniqueDisplayName(base: "Cube"),
+                                                kindLabel: "Mesh",
+                                                meshIndex: 0,
+                                                position: spawnPosition,
+                                                parentID: parentID)
+        case .directionalLight:
+            mutation = .spawnLightEntity(label: uniqueDisplayName(base: "Directional Light"),
+                                         lightType: .directional,
+                                         position: spawnPosition,
+                                         initialIntensity: 3,
+                                         initialCastShadows: true,
+                                         parentID: parentID)
+        case .pointLight:
+            mutation = .spawnLightEntity(label: uniqueDisplayName(base: "Point Light"),
+                                         lightType: .point,
+                                         position: spawnPosition,
+                                         initialIntensity: 10,
+                                         initialRange: 10,
+                                         initialCastShadows: true,
+                                         parentID: parentID)
+        case .spotLight:
+            mutation = .spawnLightEntity(label: uniqueDisplayName(base: "Spot Light"),
+                                         lightType: .spot,
+                                         position: spawnPosition,
+                                         initialIntensity: 10,
+                                         initialRange: 10,
+                                         initialCastShadows: true,
+                                         parentID: parentID)
+        case .camera:
+            mutation = .spawnCameraEntity(label: uniqueDisplayName(base: "Camera"),
+                                          position: spawnPosition,
+                                          initialFovYDegrees: 60,
+                                          parentID: parentID)
+        }
+
+        let result = applySceneTransaction(intentVerb: "scene.create_entity",
+                                           summary: "Create \(template.displayName.lowercased())",
+                                           mutations: [mutation])
+        return result?.createdEntityIDs.first
+    }
+
+    private func defaultSpawnPosition(for template: EditorEntityTemplate) -> SIMD3<Float> {
+        switch template {
+        case .empty, .cube:
+            return .zero
+        case .directionalLight:
+            return SIMD3<Float>(0, 3, 0)
+        case .pointLight, .spotLight:
+            return SIMD3<Float>(0, 2, 0)
+        case .camera:
+            return SIMD3<Float>(0, 1.5, 5)
+        }
+    }
+
     /// 在场景里生成一个新实体并立即可见，返回 raw entity id。
     /// 调用方一般紧接着把返回的 id 写回 store 作为新的选中态。
     @discardableResult

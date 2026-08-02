@@ -377,6 +377,48 @@ public struct TransactionExecutor {
                             deletedEntityIDs: inout [UInt64]) throws {
         for mutation in operations {
             switch mutation {
+            case .spawnImportedMeshEntity, .spawnEmptyEntity, .spawnLightEntity,
+                 .spawnCameraEntity, .deleteEntity, .duplicateEntity,
+                 .duplicateEntityWithOffset:
+                try applyEntityMutation(mutation,
+                                        to: &scene,
+                                        createdEntityIDs: &createdEntityIDs,
+                                        deletedEntityIDs: &deletedEntityIDs)
+
+            case .moveEntity, .setLocalTransform, .setSceneName,
+                 .setRigidBodyMotionType, .setRigidBodyMass,
+                 .setRigidBodyGravityScale, .setRigidBodyAllowSleep,
+                 .setRigidBody, .setCollider, .setColliderTrigger,
+                 .setColliderShapeType, .setColliderShapeBoxHalfExtents,
+                 .setColliderShapeSphereRadius, .setColliderShapeCapsuleRadius,
+                 .setColliderShapeCapsuleHalfHeight, .setColliderMaterialFriction,
+                 .setColliderMaterialRestitution, .setColliderMaterialDensity,
+                 .setColliderLayer, .setColliderLayerMask, .setConstraintEnabled:
+                try applyPhysicsMutation(mutation, to: &scene)
+
+            case .setLightType, .setLightColor, .setLightIntensity, .setLightRange,
+                 .setLightSpotInnerAngle, .setLightSpotOuterAngle, .setLightCastShadows,
+                 .setMeshColorTint, .setRenderMeshVisibility, .setRenderMaterialComponent,
+                 .setScriptBindings, .setCameraPose, .setCameraFOV, .setCameraAspectRatio,
+                 .setCameraActive, .setAudioSource, .setAnimationPlayer,
+                 .setAnimationGraphPlayer, .setAudioListener, .setParticleEmitter:
+                try applyPresentationMutation(mutation, to: &scene)
+            }
+        }
+
+        scene.propagateTransforms()
+        _ = transaction
+    }
+
+    /// Keep mutation execution split into bounded stack frames. A single switch
+    /// over every SceneMutation makes Swift's unoptimised build reserve storage
+    /// for all generic component-update temporaries at once, which can exceed a
+    /// cooperative task's stack before the selected case even starts.
+    private func applyEntityMutation(_ mutation: SceneMutation,
+                                     to scene: inout SceneRuntime,
+                                     createdEntityIDs: inout [UInt64],
+                                     deletedEntityIDs: inout [UInt64]) throws {
+        switch mutation {
             case let .spawnImportedMeshEntity(label, kindLabel, meshIndex, position, parentID):
                 let entity = scene.createEntity()
                 _ = scene.setComponent(SceneNameComponent(value: label), for: entity)
@@ -511,6 +553,15 @@ public struct TransactionExecutor {
                     _ = scene.setComponent(player, for: entity)
                 }
                 createdEntityIDs.append(entity.rawValue)
+
+            default:
+                preconditionFailure("non-entity mutation routed to applyEntityMutation")
+        }
+    }
+
+    private func applyPhysicsMutation(_ mutation: SceneMutation,
+                                      to scene: inout SceneRuntime) throws {
+        switch mutation {
 
             case let .moveEntity(entityID, parentID, index):
                 let entity = try requireEntity(entityID, in: scene)
@@ -714,6 +765,15 @@ public struct TransactionExecutor {
                                                                    type: "Constraint")
                 }
 
+            default:
+                preconditionFailure("non-physics mutation routed to applyPhysicsMutation")
+        }
+    }
+
+    private func applyPresentationMutation(_ mutation: SceneMutation,
+                                           to scene: inout SceneRuntime) throws {
+        switch mutation {
+
             case let .setLightType(entityID, type):
                 let entity = try requireEntity(entityID, in: scene)
                 guard scene.updateComponent(LightComponent.self, for: entity, { $0.type = type }) else {
@@ -872,11 +932,10 @@ public struct TransactionExecutor {
             case let .setParticleEmitter(entityID, emitter):
                 let entity = try requireEntity(entityID, in: scene)
                 _ = scene.setComponent(emitter, for: entity)
-            }
-        }
 
-        scene.propagateTransforms()
-        _ = transaction
+            default:
+                preconditionFailure("non-presentation mutation routed to applyPresentationMutation")
+        }
     }
 
     private func requireEntity(_ rawID: UInt64,

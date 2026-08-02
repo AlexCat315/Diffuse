@@ -112,6 +112,12 @@ private struct EditorCallbacks {
                                                          aiSettings: s.state.aiSettings,
                                                          capabilitySettings: s.state.capabilitySettings)
                 },
+                reopenClosedPanel: {
+                    EditorCommandDispatcher.handle(.reopenClosedPanel,
+                                                   app: app,
+                                                   controller: controller,
+                                                   registry: registry)
+                },
                 newScene: { app.requestNewScene() },
                 saveScene: { _ = app.saveSceneManifest() },
                 openSettings: { app.openSettingsWindow() },
