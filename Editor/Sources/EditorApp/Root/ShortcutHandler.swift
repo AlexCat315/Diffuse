@@ -10,6 +10,7 @@ enum EditorShortcutHandler {
                        setPlaybackState: (PlaybackState) -> Void,
                        setWorkspaceMode: (EditorWorkspaceMode) -> Void,
                        resetLayout: () -> Void,
+                       reopenClosedPanel: () -> Void,
                        newScene: () -> Void,
                        saveScene: () -> Void,
                        openSettings: () -> Void,
@@ -51,6 +52,10 @@ enum EditorShortcutHandler {
             return true
         case Scancode.digit0:
             resetLayout()
+            return true
+        case 23: // SDL_SCANCODE_T
+            guard key.modifiers.hasShift else { return false }
+            reopenClosedPanel()
             return true
         case Scancode.digit1:
             setWorkspaceMode(.level)

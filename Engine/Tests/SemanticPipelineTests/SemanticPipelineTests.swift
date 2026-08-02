@@ -118,7 +118,7 @@ final class SemanticPipelineTests: XCTestCase {
         }
     }
 
-    func testApplyConfirmationRecordsInMemory() async {
+    func testApplyConfirmationRecordsInMemory() async throws {
         let memory = EphemeralSemanticMemoryStore()
         let pipeline = AssetSemanticPipeline(memory: memory)
 
@@ -131,9 +131,9 @@ final class SemanticPipelineTests: XCTestCase {
                                                 outcome: .accepted(label: "seat"),
                                                 confirmedBy: "user")
 
-        let committed = await pipeline.apply(confirmations: [confirmation],
-                                             regions: regionSet,
-                                             pendingProposals: [proposal])
+        let committed = try await pipeline.apply(confirmations: [confirmation],
+                                                 regions: regionSet,
+                                                 pendingProposals: [proposal])
 
         XCTAssertEqual(committed.count, 1)
         XCTAssertEqual(committed.first?.label, "seat")
@@ -142,6 +142,27 @@ final class SemanticPipelineTests: XCTestCase {
         let entries = await memory.lookup(fingerprint: fingerprint)
         XCTAssertFalse(entries.isEmpty)
         XCTAssertEqual(entries.first?.label, "seat")
+    }
+
+    func testApplyIgnoresConfirmationWithoutPendingProposal() async throws {
+        let memory = EphemeralSemanticMemoryStore()
+        let pipeline = AssetSemanticPipeline(memory: memory)
+        let fingerprint = GeometryFingerprint(genus: 0, boundaryLoops: 1, faceCountBucket: 2)
+        let regions = CandidateRegionSet(
+            assetURI: "test://x.glb",
+            regions: [Region(id: "region:n0", source: .structural, fingerprint: fingerprint)]
+        )
+        let confirmation = SemanticConfirmation(regionID: "region:n0",
+                                                outcome: .accepted(label: "injected"),
+                                                confirmedBy: "user")
+
+        let committed = try await pipeline.apply(confirmations: [confirmation],
+                                                 regions: regions,
+                                                 pendingProposals: [])
+        let remembered = await memory.lookup(fingerprint: fingerprint)
+
+        XCTAssertTrue(committed.isEmpty)
+        XCTAssertTrue(remembered.isEmpty)
     }
 
     func testGeometryFingerprintDefaultVersion() {
@@ -243,7 +264,9 @@ final class SemanticPipelineTests: XCTestCase {
         let confirmation = SemanticConfirmation(regionID: "region:body",
                                                 outcome: .accepted(label: "chair"),
                                                 confirmedBy: "user")
-        await store.record(regionID: "body", fingerprint: fingerprint, confirmation: confirmation)
+        try await store.record(regionID: "body",
+                               fingerprint: fingerprint,
+                               confirmation: confirmation)
 
         let results = await store.lookup(fingerprint: fingerprint)
         XCTAssertEqual(results.count, 1)
@@ -262,7 +285,9 @@ final class SemanticPipelineTests: XCTestCase {
             let confirmation = SemanticConfirmation(regionID: "region:leg",
                                                     outcome: .accepted(label: "table_leg"),
                                                     confirmedBy: "pipeline")
-            await store.record(regionID: "leg", fingerprint: fingerprint, confirmation: confirmation)
+            try await store.record(regionID: "leg",
+                                   fingerprint: fingerprint,
+                                   confirmation: confirmation)
         }
 
         // Re-open from same file
@@ -283,10 +308,41 @@ final class SemanticPipelineTests: XCTestCase {
         let rejection = SemanticConfirmation(regionID: "region:x",
                                              outcome: .rejected,
                                              confirmedBy: "user")
-        await store.record(regionID: "x", fingerprint: fingerprint, confirmation: rejection)
+        try await store.record(regionID: "x",
+                               fingerprint: fingerprint,
+                               confirmation: rejection)
 
         let results = await store.lookup(fingerprint: fingerprint)
         XCTAssertTrue(results.isEmpty)
+    }
+
+    func testFileBackedStoreReportsWriteFailureWithoutChangingMemory() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava_semantic_failure_\(UUID().uuidString)")
+        let storeURL = directory.appendingPathComponent("memory.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try FileBackedSemanticMemoryStore(storageURL: storeURL)
+        try FileManager.default.removeItem(at: directory)
+        try Data("parent-is-a-file".utf8).write(to: directory)
+
+        let fingerprint = GeometryFingerprint(genus: 0,
+                                              boundaryLoops: 1,
+                                              faceCountBucket: 2,
+                                              version: 1)
+        let confirmation = SemanticConfirmation(regionID: "region:failed",
+                                                outcome: .accepted(label: "seat"),
+                                                confirmedBy: "user")
+        do {
+            try await store.record(regionID: "failed",
+                                   fingerprint: fingerprint,
+                                   confirmation: confirmation)
+            XCTFail("record must surface persistence failures")
+        } catch {
+            // Expected: the storage parent was deliberately replaced by a file.
+        }
+
+        let results = await store.lookup(fingerprint: fingerprint)
+        XCTAssertTrue(results.isEmpty, "failed persistence must not mutate the live index")
     }
 
     // MARK: - GeometryBackend

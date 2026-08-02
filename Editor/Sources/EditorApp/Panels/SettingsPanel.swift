@@ -8,10 +8,20 @@ import GuavaUIRuntime
 struct SettingsPanel: View {
     let store: EditorStore
     let app: EditorApplication
+    @State private var aiProviderDraft: EditorAIProvider
+    @State private var aiModelDraft: String
+    @State private var aiKeyDraft: String
+    @State private var aiStatusMessage: String?
+    @State private var aiStatusIsError: Bool
 
     init(app: EditorApplication) {
         self.app = app
         self.store = app.store
+        _aiProviderDraft = State(wrappedValue: app.store.aiSettings.provider)
+        _aiModelDraft = State(wrappedValue: app.store.aiSettings.model)
+        _aiKeyDraft = State(wrappedValue: "")
+        _aiStatusMessage = State(wrappedValue: nil)
+        _aiStatusIsError = State(wrappedValue: false)
     }
 
     var body: some View {
@@ -24,7 +34,7 @@ struct SettingsPanel: View {
                             store.dispatch(.setThemeMode(.dark))
                             applySettingsChange()
                         }
-                        SettingsChoiceButton(title: L("Light"),
+                        SettingsChoiceButton(title: L("Light Theme"),
                                              isActive: store.themeMode == .light) {
                             store.dispatch(.setThemeMode(.light))
                             applySettingsChange()
@@ -86,6 +96,10 @@ struct SettingsPanel: View {
                     }
                 }
 
+                SettingsSection(title: L("AI Assistant")) {
+                    aiProviderContent
+                }
+
                 SettingsSection(title: L("Capability Gate")) {
                     Row(alignment: .center, spacing: 8) {
                         for phase in EditorCapabilityReleasePhase.allCases {
@@ -127,6 +141,124 @@ struct SettingsPanel: View {
         guard store.capabilitySettings.releasePhase != phase else { return }
         app.applyCapabilitySettings(EditorCapabilitySettings(releasePhase: phase))
         applySettingsChange()
+    }
+
+    @ViewBuilder
+    private var aiProviderContent: some View {
+        Column(alignment: .leading, spacing: 8) {
+            Row(alignment: .center, spacing: 8) {
+                aiProviderButton(.none)
+                aiProviderButton(.anthropic)
+            }
+            Row(alignment: .center, spacing: 8) {
+                aiProviderButton(.openai)
+                aiProviderButton(.deepseek)
+            }
+
+            if aiProviderDraft != .none {
+                let credentialSource = app.aiCredentialSource(for: aiProviderDraft)
+                TextField(L("Model"), text: $aiModelDraft, clearable: true)
+                TextField(
+                    credentialSource != nil
+                        ? L("API key (leave blank to use the available credential)")
+                        : L("API key"),
+                    text: $aiKeyDraft,
+                    secure: true,
+                    clearable: true,
+                    onSubmit: applyAIProviderSettings
+                )
+                Text(aiCredentialStatus(credentialSource))
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
+
+            Row(alignment: .center, spacing: 8) {
+                Button(L("Apply AI Settings"), action: applyAIProviderSettings)
+                    .buttonStyle(.primary)
+                if store.aiSettings.provider != .none,
+                   app.aiCredentialSource(for: store.aiSettings.provider)
+                    == .operatingSystemStore {
+                    Button(L("Remove Stored Key"), action: removeStoredAIKey)
+                        .buttonStyle(.secondary)
+                }
+            }
+
+            if let aiStatusMessage {
+                Text(aiStatusMessage)
+                    .font(.caption)
+                    .foregroundColor(aiStatusIsError ? .warning : .success)
+            }
+        }
+    }
+
+    private func aiCredentialStatus(_ source: AICredentialSource?) -> String {
+        switch source {
+        case .operatingSystemStore:
+            return L("A credential is stored securely.")
+        case let .environment(variable):
+            return L("Using credential from environment variable \(variable).")
+        case nil:
+            return L("No credential is available for this provider.")
+        }
+    }
+
+    private func aiProviderButton(_ provider: EditorAIProvider) -> some View {
+        SettingsChoiceButton(
+            title: L(provider.displayName),
+            isActive: aiProviderDraft == provider
+        ) {
+            let previousDefault = aiProviderDraft.defaultModel
+            aiProviderDraft = provider
+            if aiModelDraft.isEmpty || aiModelDraft == previousDefault {
+                aiModelDraft = provider.defaultModel
+            }
+            aiStatusMessage = nil
+        }
+        .flex(1, shrink: 1)
+    }
+
+    private func applyAIProviderSettings() {
+        let model = aiModelDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard aiProviderDraft == .none || !model.isEmpty else {
+            aiStatusMessage = L("Enter a model name.")
+            aiStatusIsError = true
+            return
+        }
+        let settings = EditorAISettings(
+            provider: aiProviderDraft,
+            model: model.isEmpty ? aiProviderDraft.defaultModel : model,
+            autoApprove: store.aiSettings.autoApprove
+        )
+        if app.applyAISettings(
+            settings,
+            apiKey: aiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        ) {
+            aiKeyDraft = ""
+            aiStatusMessage = settings.provider == .none
+                ? L("AI Assistant disabled.")
+                : L("AI settings applied.")
+            aiStatusIsError = false
+            persistShell()
+            app.requestDisplayRefresh()
+        } else {
+            aiStatusMessage = L("AI settings could not be applied. See Console for details.")
+            aiStatusIsError = true
+        }
+    }
+
+    private func removeStoredAIKey() {
+        if app.clearAIKey() {
+            aiProviderDraft = .none
+            aiModelDraft = EditorAIProvider.none.defaultModel
+            aiKeyDraft = ""
+            aiStatusMessage = L("Stored credential removed and AI Assistant disabled.")
+            aiStatusIsError = false
+            persistShell()
+            app.requestDisplayRefresh()
+        } else {
+            aiStatusMessage = L("Stored credential could not be removed. See Console for details.")
+            aiStatusIsError = true
+        }
     }
 
     @ViewBuilder

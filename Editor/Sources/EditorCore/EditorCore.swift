@@ -24,8 +24,8 @@ private enum MCPAsyncBridgeError: Error, CustomStringConvertible {
 
     var description: String {
         switch self {
-        case .timedOut: return "capability service timed out"
-        case .missingResult: return "capability service returned no result"
+        case .timedOut: return "asynchronous editor operation timed out"
+        case .missingResult: return "asynchronous editor operation returned no result"
         }
     }
 }
@@ -95,6 +95,11 @@ private func waitForMCPCapabilityResult<Value: Sendable>(
 /// 自身不持有窗口 / wgpu surface — UI 渲染由 GuavaUIApp 接管，引擎仅负责
 /// 仿真与（未来的）离屏渲染。
 public final class EditorApplication: @unchecked Sendable {
+    private struct ContextMemoryInitialization {
+        var store: ContextMemoryStore?
+        var warning: String?
+    }
+
     private var exportedApplicationName: String {
         let name = URL(fileURLWithPath: projectDirectory, isDirectory: true)
             .standardizedFileURL.lastPathComponent
@@ -130,6 +135,11 @@ public final class EditorApplication: @unchecked Sendable {
     private var displayInvalidationHandler: (() -> Void)?
     private var vsyncModeHandler: ((EditorVSyncMode) -> Void)?
     private var session: Session?
+    private var pendingAISetupTask: Task<Void, Never>?
+    private var pendingWorldObservationTask: Task<Void, Never>?
+    private var activeAIRequestID: UUID?
+    private var activeAIRequestTask: Task<Void, Never>?
+    private var isShuttingDown = false
     private var pendingSessionProposal: Proposal?
     private var pendingAssistantMessageID: String?
     private let mcpBridge = MCPBridge()
@@ -213,7 +223,8 @@ public final class EditorApplication: @unchecked Sendable {
         let contextMemoryURL = URL(fileURLWithPath: projectDirectory, isDirectory: true)
             .appendingPathComponent(".guava", isDirectory: true)
             .appendingPathComponent("context_memory.json")
-        let contextMemoryStore = try? ContextMemoryStore(storageURL: contextMemoryURL)
+        let contextMemoryInitialization = Self.initializeContextMemory(at: contextMemoryURL)
+        let contextMemoryStore = contextMemoryInitialization.store
         let pluginAuthorizationStore = EditorPluginAuthorizationStore(
             projectDirectory: projectDirectory
         )
@@ -238,6 +249,16 @@ public final class EditorApplication: @unchecked Sendable {
         )
         self.session = initialSession
         self.perceptionService = ps
+        if let warning = contextMemoryInitialization.warning {
+            logConsole("Recovered AI context memory storage",
+                       severity: .warning,
+                       detail: warning)
+        }
+        if let warning = pluginAuthorizationStore.loadWarning {
+            logConsole("Recovered plugin authorization storage",
+                       severity: .warning,
+                       detail: warning)
+        }
         #if canImport(Vision)
         Task { await ps.register(AppleVisionPerceptionWorker()) }
         #endif
@@ -274,10 +295,10 @@ public final class EditorApplication: @unchecked Sendable {
                                            scriptEntries: scene.scriptCatalogEntries)
             let bus = observationBus
             let mem = contextMemoryStore
-            Task {
-                await initialSession.setWorkflowContext(ctx)
+            pendingAISetupTask = Task {
                 await initialSession.setObservationBus(bus)
                 await initialSession.setContextMemory(mem)
+                await initialSession.setWorkflowContext(ctx)
             }
         }
 
@@ -290,7 +311,43 @@ public final class EditorApplication: @unchecked Sendable {
             lastObservedMode = newMode
             let ctx = Self.workflowContext(for: newMode,
                                            scriptEntries: self.scene.scriptCatalogEntries)
-            Task { await sess.setWorkflowContext(ctx) }
+            let previousTask = self.pendingAISetupTask
+            self.pendingAISetupTask = Task {
+                await previousTask?.value
+                await sess.setWorkflowContext(ctx)
+            }
+        }
+    }
+
+    private static func initializeContextMemory(at storageURL: URL) -> ContextMemoryInitialization {
+        do {
+            return ContextMemoryInitialization(
+                store: try ContextMemoryStore(storageURL: storageURL),
+                warning: nil
+            )
+        } catch {
+            let originalError = error
+            guard FileManager.default.fileExists(atPath: storageURL.path) else {
+                return ContextMemoryInitialization(
+                    store: nil,
+                    warning: "Context memory could not be initialized: \(originalError)"
+                )
+            }
+            let quarantineURL = storageURL.deletingPathExtension()
+                .appendingPathExtension("corrupt-\(UUID().uuidString).json")
+            do {
+                try FileManager.default.moveItem(at: storageURL, to: quarantineURL)
+                let replacement = try ContextMemoryStore(storageURL: storageURL)
+                return ContextMemoryInitialization(
+                    store: replacement,
+                    warning: "The unreadable file was moved to \(quarantineURL.lastPathComponent): \(originalError)"
+                )
+            } catch {
+                return ContextMemoryInitialization(
+                    store: nil,
+                    warning: "Context memory is disabled because recovery failed: \(error); original error: \(originalError)"
+                )
+            }
         }
     }
 
@@ -394,7 +451,22 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     public func shutdown() {
+        isShuttingDown = true
+        let activeSession = session
+        cancelActiveAIRequest()
+        if activeSession != nil {
+            do {
+                try waitForMCPCapabilityResult {
+                    await activeSession?.cancelActiveRun()
+                }
+            } catch {
+                logConsole("Failed to cancel the active AI request",
+                           severity: .warning,
+                           detail: String(describing: error))
+            }
+        }
         autosaveSceneIfNeeded(elapsed: Self.editorAutosaveInterval, force: true)
+        flushContextMemoryBeforeShutdown()
         logConsole("Editor runtime shutdown")
         mcpBridge.stop()
         pluginHostClient?.stop()
@@ -411,6 +483,25 @@ public final class EditorApplication: @unchecked Sendable {
             self.workspaceModeToken = nil
         }
         engine.shutdown()
+    }
+
+    private func flushContextMemoryBeforeShutdown() {
+        guard let contextMemoryStore else { return }
+        let setupTask = pendingAISetupTask
+        let observationTask = pendingWorldObservationTask
+        do {
+            try waitForMCPCapabilityResult {
+                await setupTask?.value
+                await observationTask?.value
+                try await contextMemoryStore.flush()
+            }
+            pendingAISetupTask = nil
+            pendingWorldObservationTask = nil
+        } catch {
+            logConsole("Failed to persist AI context memory",
+                       severity: .error,
+                       detail: String(describing: error))
+        }
     }
 
     public func enqueueViewportInput(_ event: InputEvent) {
@@ -535,7 +626,6 @@ public final class EditorApplication: @unchecked Sendable {
         guard let mesh = AssetRegistry.shared.meshAsset(for: asset.meshIndex) else { return }
         let entityRef = "scene:\(entityID)"
         let assetURI = asset.relativePath
-        let session = self.session
 
         let previewImagePath = Self.siblingPreviewImagePath(for: asset.absolutePath)
         Task.detached(priority: .utility) { [weak self] in
@@ -556,10 +646,8 @@ public final class EditorApplication: @unchecked Sendable {
             let events = SemanticWorldEventMapper().makeWorldEvents(from: proposals, targetRef: entityRef)
             guard !events.isEmpty else { return }
 
-            if let session {
-                await session.observe(events: events)
-            }
             await MainActor.run {
+                guard !self.isShuttingDown else { return }
                 self.observeWorldEvents(events)
                 self.logConsole("Semantic annotations applied to \(entityRef)",
                                 detail: "\(proposals.count) proposals")
@@ -672,14 +760,16 @@ public final class EditorApplication: @unchecked Sendable {
     /// Call this from the UI or MCP after the user selects a reference image for an entity.
     public func tagEntity(_ entityRef: String, imageURL: URL) {
         let ps = perceptionService
-        Task { [weak self] in
+        Task { @MainActor [weak self] in
             guard let self else { return }
             do {
                 let events = try await ps.tag(entityRef: entityRef, imageURL: imageURL)
+                guard !self.isShuttingDown else { return }
                 self.observeWorldEvents(events)
                 self.logConsole("Tagged \(entityRef)",
                                 detail: "\(events.count) inferred properties")
             } catch {
+                guard !self.isShuttingDown else { return }
                 self.logConsole("Perception unavailable for \(entityRef)",
                                 severity: .warning,
                                 detail: error.localizedDescription)
@@ -980,6 +1070,17 @@ public final class EditorApplication: @unchecked Sendable {
         store.dispatch(.requestClose(EditorPendingCloseRequest(action: .openScene)))
     }
 
+    /// Opens a scene chosen by the user, deferring the actual load behind the
+    /// unsaved-changes confirmation when necessary.
+    public func requestOpenSceneManifest(at url: URL) {
+        guard hasUnsavedSceneChanges else {
+            _ = openSceneManifest(at: url)
+            return
+        }
+        store.dispatch(.requestClose(EditorPendingCloseRequest(action: .openScene,
+                                                               documentPath: url.path)))
+    }
+
     /// Exports a portable, runnable project bundle to `<projectDirectory>/export`
     /// (scene + assets + descriptor). Returns the output directory, or nil on failure.
     @discardableResult
@@ -1176,6 +1277,12 @@ public final class EditorApplication: @unchecked Sendable {
         openSceneManifest(clearRecoveryOnSuccess: true, logMissing: true)
     }
 
+    /// Loads an Editor scene manifest from an explicit location. Subsequent
+    /// saves still target this project's canonical `.guava` manifest.
+    public func openSceneManifest(at url: URL) -> EditorSceneManifest? {
+        openSceneManifest(from: url, clearRecoveryOnSuccess: true, logMissing: true)
+    }
+
     /// Restores the normal scene and then overlays a newer autosave when the
     /// previous Editor process did not complete a save/discard workflow.
     @discardableResult
@@ -1211,10 +1318,10 @@ public final class EditorApplication: @unchecked Sendable {
                        detail: "\(result.entityCount) entities from \(document.savedAt); save the scene to keep it")
             return document.manifest
         } catch {
-            quarantineEditorAutosave()
+            let quarantineDetail = quarantineEditorAutosave()
             logConsole("Failed to restore autosaved scene",
                        severity: .warning,
-                       detail: String(describing: error))
+                       detail: "\(error). \(quarantineDetail)")
             return saved
         }
     }
@@ -1226,7 +1333,15 @@ public final class EditorApplication: @unchecked Sendable {
         recoverySuppressedRevision = store.state.sceneRevision
         editorAutosaveElapsed = 0
         lastEditorAutosavedRevision = nil
-        try? FileManager.default.removeItem(at: editorAutosaveURL)
+        do {
+            if FileManager.default.fileExists(atPath: editorAutosaveURL.path) {
+                try FileManager.default.removeItem(at: editorAutosaveURL)
+            }
+        } catch {
+            logConsole("Failed to discard autosaved scene",
+                       severity: .warning,
+                       detail: String(describing: error))
+        }
     }
 
     private var sceneManifestURL: URL {
@@ -1242,8 +1357,16 @@ public final class EditorApplication: @unchecked Sendable {
 
     private func openSceneManifest(clearRecoveryOnSuccess: Bool,
                                    logMissing: Bool) -> EditorSceneManifest? {
+        openSceneManifest(from: sceneManifestURL,
+                          clearRecoveryOnSuccess: clearRecoveryOnSuccess,
+                          logMissing: logMissing)
+    }
+
+    private func openSceneManifest(from sourceURL: URL,
+                                   clearRecoveryOnSuccess: Bool,
+                                   logMissing: Bool) -> EditorSceneManifest? {
         do {
-            let data = try Data(contentsOf: sceneManifestURL)
+            let data = try Data(contentsOf: sourceURL)
             let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
             let result = scene.load(manifest: manifest)
             guard result.error == nil else { throw result.error! }
@@ -1256,13 +1379,13 @@ public final class EditorApplication: @unchecked Sendable {
                 removeEditorAutosave()
             }
             logConsole("Opened scene manifest",
-                       detail: "\(result.entityCount) entities restored from revision \(manifest.revision)")
+                       detail: "\(result.entityCount) entities restored from revision \(manifest.revision) · \(sourceURL.path)")
             return manifest
         } catch CocoaError.fileReadNoSuchFile {
             if logMissing {
                 logConsole("No saved scene manifest",
                            severity: .warning,
-                           detail: sceneManifestURL.path)
+                           detail: sourceURL.path)
             }
             return nil
         } catch {
@@ -1311,11 +1434,18 @@ public final class EditorApplication: @unchecked Sendable {
         try? FileManager.default.removeItem(at: editorAutosaveURL)
     }
 
-    private func quarantineEditorAutosave() {
-        guard FileManager.default.fileExists(atPath: editorAutosaveURL.path) else { return }
+    private func quarantineEditorAutosave() -> String {
+        guard FileManager.default.fileExists(atPath: editorAutosaveURL.path) else {
+            return "The recovery file was already absent."
+        }
         let quarantineURL = editorAutosaveURL.deletingPathExtension()
-            .appendingPathExtension("corrupt-\(Int(Date().timeIntervalSince1970)).json")
-        try? FileManager.default.moveItem(at: editorAutosaveURL, to: quarantineURL)
+            .appendingPathExtension("corrupt-\(UUID().uuidString).json")
+        do {
+            try FileManager.default.moveItem(at: editorAutosaveURL, to: quarantineURL)
+            return "The unreadable recovery file was moved to \(quarantineURL.lastPathComponent)."
+        } catch {
+            return "The unreadable recovery file was preserved at \(editorAutosaveURL.path) because quarantine failed: \(error)"
+        }
     }
 
     private func fileModificationDate(_ url: URL) -> Date? {
@@ -1347,7 +1477,11 @@ public final class EditorApplication: @unchecked Sendable {
             if let session {
                 let context = Self.workflowContext(for: store.state.workspaceMode,
                                                    scriptEntries: catalog.entries)
-                Task { await session.setWorkflowContext(context) }
+                let previousTask = pendingAISetupTask
+                pendingAISetupTask = Task {
+                    await previousTask?.value
+                    await session.setWorkflowContext(context)
+                }
             }
             let source = catalog.sourceURL?.path ?? "built-in catalog"
             logConsole("Reloaded script catalog",
@@ -1466,8 +1600,11 @@ public final class EditorApplication: @unchecked Sendable {
     public func submitNaturalLanguageIntent(_ text: String) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
-        if store.state.pendingConfirmationRequest != nil {
-            store.dispatch(.setAIStatusMessage("Resolve the pending confirmation before submitting another AI action."))
+        if let rejection = EditorAIRequestPolicy.rejectionMessage(
+            hasPendingConfirmation: store.state.pendingConfirmationRequest != nil,
+            requestInFlight: activeAIRequestID != nil
+        ) {
+            store.dispatch(.setAIStatusMessage(rejection))
             return
         }
 
@@ -1485,6 +1622,8 @@ public final class EditorApplication: @unchecked Sendable {
         store.dispatch(.setAIStatusMessage("Planning..."))
         store.dispatch(.appendChatMessage(AIChatMessage(role: .user, text: text)))
         let assistantID = UUID().uuidString
+        let requestID = UUID()
+        activeAIRequestID = requestID
         pendingAssistantMessageID = assistantID
         store.dispatch(.appendChatMessage(AIChatMessage(id: assistantID,
                                                         role: .assistant,
@@ -1494,18 +1633,30 @@ public final class EditorApplication: @unchecked Sendable {
         let capturedAid = assistantID
         let progressHandler: @Sendable (String) -> Void = { [weak self] partial in
             Task { @MainActor [weak self] in
-                self?.store.dispatch(.updateChatMessage(id: capturedAid,
-                                                        assistantState: .streaming(partial)))
+                guard let self,
+                      !self.isShuttingDown,
+                      self.activeAIRequestID == requestID else { return }
+                self.store.dispatch(.updateChatMessage(id: capturedAid,
+                                                       assistantState: .streaming(partial)))
             }
         }
 
-        Task { @MainActor [weak self] in
+        activeAIRequestTask = Task { @MainActor [weak self] in
             guard let self else { return }
+            defer {
+                if self.activeAIRequestID == requestID {
+                    self.activeAIRequestID = nil
+                    self.activeAIRequestTask = nil
+                }
+            }
             do {
                 let proposal = try await session.process(
                     .naturalLanguage(text: text, locale: locale ?? "en"),
                     onProgress: progressHandler
                 )
+                try Task.checkCancellation()
+                guard !self.isShuttingDown,
+                      self.activeAIRequestID == requestID else { return }
                 let latencyMs = Int(Date().timeIntervalSince(t0) * 1000)
 
                 guard !proposal.plan.isEmpty || !proposal.capabilityDrafts.isEmpty else {
@@ -1516,9 +1667,9 @@ public final class EditorApplication: @unchecked Sendable {
                                                                assistantState: .replied(reply)))
                         self.pendingAssistantMessageID = nil
                     }
-                    Task { await session.recordOutcome(toolUseID: proposal.toolUseID,
-                                                       content: "Acknowledged.",
-                                                       proposalID: proposal.id) }
+                    await session.recordOutcome(toolUseID: proposal.toolUseID,
+                                                content: "Acknowledged.",
+                                                proposalID: proposal.id)
                     return
                 }
 
@@ -1561,7 +1712,7 @@ public final class EditorApplication: @unchecked Sendable {
                 }
                 self.logConsole("AI inference: \(latencyMs)ms", detail: proposal.plan.summary)
                 self.pendingSessionProposal = proposal
-                self.submitPlanTransaction(
+                try self.submitPlanTransaction(
                     transaction,
                     capabilityContext: self.makeCapabilityInvocationContext(
                         defaultSource: .ai,
@@ -1569,7 +1720,10 @@ public final class EditorApplication: @unchecked Sendable {
                     )
                 )
             } catch {
+                guard !self.isShuttingDown,
+                      self.activeAIRequestID == requestID else { return }
                 let message = error.localizedDescription
+                self.pendingSessionProposal = nil
                 self.store.dispatch(.setAIStatusMessage(message))
                 if let aid = self.pendingAssistantMessageID {
                     self.store.dispatch(.updateChatMessage(id: aid,
@@ -1581,18 +1735,11 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     private func submitPlanTransaction(_ transaction: TransactionIR,
-                                       capabilityContext: CapabilityInvocationContext? = nil) {
-        if store.state.pendingConfirmationRequest != nil {
-            store.dispatch(.setAIStatusMessage("Resolve the pending confirmation before submitting another AI action."))
-            return
+                                       capabilityContext: CapabilityInvocationContext? = nil) throws {
+        guard store.state.pendingConfirmationRequest == nil else {
+            throw EditorPlanSubmissionError.pendingConfirmation
         }
-        do {
-            _ = try runPlanTransaction(transaction, capabilityContext: capabilityContext)
-        } catch {
-            store.dispatch(.setPendingConfirmationRequest(nil))
-            store.dispatch(.setAIWarnings([]))
-            store.dispatch(.setAIStatusMessage(error.localizedDescription))
-        }
+        _ = try runPlanTransaction(transaction, capabilityContext: capabilityContext)
     }
 
     @discardableResult
@@ -1791,30 +1938,54 @@ public final class EditorApplication: @unchecked Sendable {
 
     /// Applies new AI settings: persists provider/model, writes the key to Keychain,
     /// and hot-swaps the Session without restart.
-    public func applyAISettings(_ settings: EditorAISettings, apiKey: String) {
-        AIKeychain.save(key: apiKey, provider: settings.provider)
+    @discardableResult
+    public func applyAISettings(_ settings: EditorAISettings, apiKey: String) -> Bool {
+        do {
+            if settings.provider != .none, !apiKey.isEmpty {
+                try AIKeychain.save(key: apiKey, provider: settings.provider)
+            }
+            guard settings.provider == .none || AIKeychain.hasKey(for: settings.provider) else {
+                logConsole("AI settings were not applied",
+                           severity: .error,
+                           detail: "Enter an API key for \(settings.provider.displayName).")
+                return false
+            }
+        } catch {
+            logConsole("AI credentials could not be saved",
+                       severity: .error,
+                       detail: error.localizedDescription)
+            return false
+        }
         store.dispatch(.setAISettings(settings))
         store.dispatch(.clearChatHistory)
+        let oldSession = session
+        cancelActiveAIRequest()
         pendingAssistantMessageID = nil
         let newSession = Self.makeSession(
             for: settings,
             pluginCapabilityExecutor: pluginCapabilityExecutor,
             pluginQuerySnapshotProvider: makePluginQuerySnapshotProvider()
         )
-        if let newSession {
+        if oldSession != nil || newSession != nil {
             let worldContext = self.aiWorldContext
             let ctx = Self.workflowContext(for: store.state.workspaceMode,
                                            scriptEntries: scene.scriptCatalogEntries)
             let bus = self.observationBus
             let mem = self.contextMemoryStore
-            Task {
-                await newSession.replaceWorldView(await worldContext.snapshot())
-                await newSession.setWorkflowContext(ctx)
-                await newSession.setObservationBus(bus)
-                await newSession.setContextMemory(mem)
+            let previousTask = pendingAISetupTask
+            pendingAISetupTask = Task {
+                await previousTask?.value
+                await oldSession?.cancelActiveRun()
+                if let newSession {
+                    await newSession.replaceWorldView(await worldContext.snapshot())
+                    await newSession.setObservationBus(bus)
+                    await newSession.setContextMemory(mem)
+                    await newSession.setWorkflowContext(ctx)
+                }
             }
         }
         session = newSession
+        return true
     }
 
     public func applyCapabilitySettings(_ settings: EditorCapabilitySettings) {
@@ -2130,6 +2301,8 @@ public final class EditorApplication: @unchecked Sendable {
 
     @MainActor
     private func activatePluginExecutor(_ executor: PluginCapabilityExecutor?) async {
+        await pendingAISetupTask?.value
+        pendingAISetupTask = nil
         pluginCapabilityExecutor = executor
         let settings = store.state.capabilitySettings
         intentCoordinator.configureCapabilityPlanner(
@@ -2146,6 +2319,7 @@ public final class EditorApplication: @unchecked Sendable {
         )
 
         let oldSession = session
+        cancelActiveAIRequest()
         await oldSession?.cancelActiveRun()
         let world = await aiWorldContext.snapshot()
         let nextSession = Self.makeSession(
@@ -2156,12 +2330,12 @@ public final class EditorApplication: @unchecked Sendable {
         )
         session = nextSession
         if let nextSession {
+            await nextSession.setObservationBus(observationBus)
+            await nextSession.setContextMemory(contextMemoryStore)
             await nextSession.setWorkflowContext(Self.workflowContext(
                 for: store.state.workspaceMode,
                 scriptEntries: scene.scriptCatalogEntries
             ))
-            await nextSession.setObservationBus(observationBus)
-            await nextSession.setContextMemory(contextMemoryStore)
         }
         pendingSessionProposal = nil
         pendingAssistantMessageID = nil
@@ -2169,19 +2343,48 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     /// Removes the stored API key for the current provider and disables AI.
-    public func clearAIKey() {
-        AIKeychain.delete(provider: store.state.aiSettings.provider)
+    @discardableResult
+    public func clearAIKey() -> Bool {
+        do {
+            try AIKeychain.delete(provider: store.state.aiSettings.provider)
+        } catch {
+            logConsole("AI credentials could not be removed",
+                       severity: .error,
+                       detail: error.localizedDescription)
+            return false
+        }
+        let oldSession = session
+        cancelActiveAIRequest()
+        let previousTask = pendingAISetupTask
+        pendingAISetupTask = Task {
+            await previousTask?.value
+            await oldSession?.cancelActiveRun()
+        }
         session = nil
         store.dispatch(.clearChatHistory)
         pendingAssistantMessageID = nil
         var settings = store.state.aiSettings
         settings.provider = .none
         store.dispatch(.setAISettings(settings))
+        return true
+    }
+
+    private func cancelActiveAIRequest() {
+        activeAIRequestID = nil
+        activeAIRequestTask?.cancel()
+        activeAIRequestTask = nil
+        pendingSessionProposal = nil
     }
 
     /// Returns `true` if a non-empty API key is stored for the current provider.
-    public func hasStoredAIKey() -> Bool {
-        AIKeychain.hasKey(for: store.state.aiSettings.provider)
+    public func hasStoredAIKey(for provider: EditorAIProvider? = nil) -> Bool {
+        AIKeychain.hasKey(for: provider ?? store.state.aiSettings.provider)
+    }
+
+    public func aiCredentialSource(
+        for provider: EditorAIProvider? = nil
+    ) -> AICredentialSource? {
+        AIKeychain.credentialSource(for: provider ?? store.state.aiSettings.provider)
     }
 
     static func workflowContext(
@@ -2367,7 +2570,7 @@ public final class EditorApplication: @unchecked Sendable {
         do {
             let transaction = try intentTransactionBuilder.buildTransaction(from: intent,
                                                                             context: makeIntentTransactionBuildContext())
-            submitPlanTransaction(
+            try submitPlanTransaction(
                 transaction,
                 capabilityContext: makeCapabilityInvocationContext(
                     defaultSource: intent.source,
@@ -2375,6 +2578,10 @@ public final class EditorApplication: @unchecked Sendable {
                     defaultEvidence: intent.evidence
                 )
             )
+        } catch EditorPlanSubmissionError.pendingConfirmation {
+            store.dispatch(.setAIStatusMessage(
+                EditorAIRequestPolicy.pendingConfirmationMessage
+            ))
         } catch {
             store.dispatch(.setPendingConfirmationRequest(nil))
             store.dispatch(.setAIWarnings([]))
@@ -2434,7 +2641,13 @@ public final class EditorApplication: @unchecked Sendable {
                     }
                     pendingSessionProposal = nil
                 }
-                editLog.append(edit)
+                do {
+                    try editLog.append(edit)
+                } catch {
+                    logConsole("Failed to record applied edit",
+                               severity: .error,
+                               detail: "\(edit.id): \(error)")
+                }
             }
             if let events = result.applyResult?.worldEvents, !events.isEmpty {
                 observeWorldEvents(events)
@@ -2922,7 +3135,9 @@ public final class EditorApplication: @unchecked Sendable {
         guard !events.isEmpty else { return }
         let worldContext = self.aiWorldContext
         let session = session
-        Task {
+        let previousTask = pendingWorldObservationTask
+        pendingWorldObservationTask = Task {
+            await previousTask?.value
             await worldContext.observe(events: events)
             if let session {
                 await session.observe(events: events)

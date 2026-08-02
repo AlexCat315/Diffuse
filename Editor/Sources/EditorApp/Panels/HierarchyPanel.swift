@@ -54,7 +54,11 @@ struct HierarchyPanel: View {
 
             Box(direction: .column, alignItems: .stretch) {
                 HierarchyPanelHeader(entityCount: scene.entityCount,
-                                     isConnected: store.connected)
+                                     isConnected: store.connected,
+                                     onCreateEntity: { template in
+                        guard let newID = scene.spawnEntity(template: template) else { return }
+                        store.dispatch(.setSelectedEntity(newID))
+                    })
                     .padding(horizontal: 10, vertical: 7)
 
                 Box(direction: .row, alignItems: .center, spacing: 6) {
@@ -160,7 +164,29 @@ struct HierarchyPanel: View {
     }
 
     private func handleBatchKey(event: KeyEvent, selectedIDs: Set<UInt64>) -> Bool {
-        guard event.modifiers.isEmpty, !selectedIDs.isEmpty else { return false }
+        guard !selectedIDs.isEmpty else { return false }
+
+        switch event.keycode {
+        case 0x08, 0x7F: // Backspace / Delete
+            guard event.modifiers.isEmpty,
+                  selectedIDs.allSatisfy({ !scene.isEntityLocked($0) }) else { return false }
+            if scene.deleteEntities(selectedIDs) {
+                store.dispatch(.setSelectedEntity(nil))
+            }
+            return true
+        case 0x64: // D
+            guard event.modifiers.hasGui || event.modifiers.hasCtrl,
+                  let sourceID = store.state.selectedEntityID,
+                  !scene.isEntityLocked(sourceID) else { return false }
+            if let newID = scene.duplicateEntity(sourceID) {
+                store.dispatch(.setSelectedEntity(newID))
+            }
+            return true
+        default:
+            break
+        }
+
+        guard event.modifiers.isEmpty else { return false }
         switch event.scancode {
         case 25: // SDL_SCANCODE_V
             let allHidden = selectedIDs.allSatisfy { !scene.isHierarchyVisible($0) }
@@ -326,14 +352,38 @@ private struct HierarchyTreeRowStyle: TreeRowStyle {
 private struct HierarchyPanelHeader: View {
     let entityCount: Int
     let isConnected: Bool
+    let onCreateEntity: (EditorEntityTemplate) -> Void
+    @State private var isCreatePresented: Bool = false
 
     var body: some View {
         Row(alignment: .center, spacing: 8) {
-            Text("\(entityCount) entities")
+            Text("\(entityCount) \(L(entityCount == 1 ? "entity" : "entities"))")
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
 
             Spacer(minLength: 0)
+
+            Popover(isPresented: $isCreatePresented, width: 210) {
+                Row(alignment: .center, spacing: 5) {
+                    Text("+")
+                        .font(.bodyStrong)
+                        .foregroundColor(.accent)
+                    Text(L("Create"))
+                        .font(.caption)
+                        .foregroundColor(.onSurface)
+                }
+                .padding(horizontal: 8, vertical: 4)
+                .background(.surfaceSunken)
+                .cornerRadius(4)
+            } content: {
+                Menu(EditorEntityTemplate.allCases.map { template in
+                    .item(MenuItem(id: "create-entity-\(template.rawValue)",
+                                   title: L(template.displayName),
+                                   action: { onCreateEntity(template) }))
+                }, width: 210, maxVisibleRows: 8, onItemActivated: {
+                    isCreatePresented = false
+                })
+            }
 
             Row(alignment: .center, spacing: 5) {
                 Box { EmptyView() }
@@ -341,7 +391,7 @@ private struct HierarchyPanelHeader: View {
                     .background(isConnected ? .success : .warning)
                     .cornerRadius(3)
 
-                Text(isConnected ? "Live" : "Offline")
+                Text(isConnected ? L("Live") : L("Offline"))
                     .font(.caption)
                     .foregroundColor(isConnected ? .success : .warning)
             }
@@ -506,7 +556,7 @@ private enum HierarchyIconCatalog {
 
     private static func resource(named name: String) -> BundleImageResource {
         .svg(named: name,
-             in: .module,
+             in: EditorAppResourceBundle.bundle,
              subdirectory: "HierarchyIcons")
     }
 }

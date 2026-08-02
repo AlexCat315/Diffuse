@@ -30,4 +30,16 @@ struct Transform3DTests {
         #expect(FloatComparisons.nearlyEqual(SIMD3<Float>(local4.x, local4.y, local4.z),
                                             SIMD3<Float>(1, 2, 3)))
     }
+
+    @Test("quaternion slerp follows the shortest normalized arc")
+    func quaternionSlerpUsesShortestArc() {
+        let start = simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0))
+        let end = simd_quatf(angle: .pi / 2, axis: SIMD3<Float>(0, 1, 0))
+        let expected = simd_quatf(angle: .pi / 4, axis: SIMD3<Float>(0, 1, 0))
+
+        let midpoint = guavaSlerp(start, end, 0.5)
+
+        #expect(Swift.abs(simd_dot(midpoint.vector, expected.vector)) > 0.9999)
+        #expect(Swift.abs(simd_length(midpoint.vector) - 1) < 0.0001)
+    }
 }

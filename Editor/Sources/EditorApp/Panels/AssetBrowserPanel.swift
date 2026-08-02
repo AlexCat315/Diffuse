@@ -24,105 +24,7 @@ struct AssetBrowserPanel: View {
     @State private var currentFolder: String = ""
 
     private func importAssets() {
-        guard let display = AppDisplayHandleHolder.current else { return }
-        let folder = currentFolder
-        // The picker is invoked from a button tap on the main loop thread.
-        MainActor.assumeIsolated {
-            display.requestOpenFile(
-                filters: [(name: L("3D Models"),
-                           extensions: AssetImportResolver.supportedModelExtensions.sorted()),
-                          (name: L("Textures"),
-                           extensions: AssetImportResolver.supportedTextureExtensions.sorted())],
-                allowsMultiple: true,
-                defaultPath: importDestination(for: folder)
-            ) { paths in
-                // Delivered on the main thread by the platform host.
-                importFiles(paths, into: folder)
-            }
-        }
-    }
-
-    private func importDestination(for folder: String) -> String {
-        let base = URL(fileURLWithPath: app.projectDirectory, isDirectory: true)
-        return folder.isEmpty ? base.path : base.appendingPathComponent(folder, isDirectory: true).path
-    }
-
-    /// Imports the chosen files into the viewed folder. Each file is dispatched
-    /// through `AssetImportResolver`, which (like UE/Godot) pulls every external
-    /// dependency — glTF `.bin` buffers and textures, OBJ `.mtl` + its maps —
-    /// along with the asset, preserving relative layout. Results are reported in
-    /// the console: imported count, missing dependencies, unsupported formats.
-    private func importFiles(_ paths: [String], into folder: String) {
-        guard !paths.isEmpty else { return }
-        let destDir = URL(fileURLWithPath: importDestination(for: folder), isDirectory: true)
-            .resolvingSymlinksInPath()
-        try? FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
-
-        var importedNames: [String] = []
-        var missingDependencies: [String] = []
-        var unsupported: [String] = []
-
-        for path in paths {
-            let src = URL(fileURLWithPath: path)
-            guard AssetImportResolver.isSupported(src) else {
-                unsupported.append(src.lastPathComponent)
-                continue
-            }
-            let outcome = copyAsset(from: src, into: destDir)
-            if outcome.copied { importedNames.append(src.lastPathComponent) }
-            missingDependencies.append(contentsOf: outcome.missing)
-        }
-
-        if !importedNames.isEmpty {
-            _ = app.reloadAssets()
-            // A re-imported file may reuse an id, so drop cached thumbnails.
-            AssetThumbnailRasterizer.invalidate()
-            ImageAssetRegistryHolder.current?.clear()
-            app.logConsole("Imported \(importedNames.count) asset\(importedNames.count == 1 ? "" : "s")",
-                           detail: importedNames.joined(separator: ", "))
-        }
-        if !missingDependencies.isEmpty {
-            app.logConsole("Asset imported with missing dependencies",
-                           severity: .warning,
-                           detail: missingDependencies.joined(separator: ", "))
-        }
-        if !unsupported.isEmpty {
-            app.logConsole("Unsupported format — import models or textures",
-                           severity: .warning,
-                           detail: unsupported.joined(separator: ", "))
-        }
-    }
-
-    /// Copies a resolved asset (and its dependencies) into `destDir`, preserving
-    /// each file's relative path. Returns whether anything was copied and the
-    /// relative paths of any referenced files missing from disk.
-    private func copyAsset(from src: URL, into destDir: URL) -> (copied: Bool, missing: [String]) {
-        var copiedAny = false
-        var missing: [String] = []
-        for file in AssetImportResolver.resolve(src) {
-            let target = destDir.appendingPathComponent(file.relativePath)
-            // Already in place (importing from inside the project)? Count it.
-            if file.source.resolvingSymlinksInPath().path == target.resolvingSymlinksInPath().path {
-                copiedAny = true
-                continue
-            }
-            guard FileManager.default.fileExists(atPath: file.source.path) else {
-                missing.append(file.relativePath)
-                continue
-            }
-            do {
-                try FileManager.default.createDirectory(at: target.deletingLastPathComponent(),
-                                                        withIntermediateDirectories: true)
-                if FileManager.default.fileExists(atPath: target.path) {
-                    try FileManager.default.removeItem(at: target)
-                }
-                try FileManager.default.copyItem(at: file.source, to: target)
-                copiedAny = true
-            } catch {
-                missing.append(file.relativePath)
-            }
-        }
-        return (copiedAny, missing)
+        EditorAssetImportCoordinator.requestImport(app: app, into: currentFolder)
     }
 
     private var trimmedQuery: String {
@@ -333,7 +235,11 @@ private struct AssetBreadcrumbBar: View {
 
     var body: some View {
         Row(alignment: .center, spacing: 4) {
-            Icon(.svg(named: "folder", in: .module, subdirectory: "ToolbarIcons"), size: 13, color: .onSurfaceVariant)
+            Icon(.svg(named: "folder",
+                      in: EditorAppResourceBundle.bundle,
+                      subdirectory: "ToolbarIcons"),
+                 size: 13,
+                 color: .onSurfaceVariant)
                 .frame(width: 15, height: 15)
 
             if isSearching {
@@ -405,7 +311,11 @@ private struct AssetFolderTile: View {
         Button(action: onOpen) {
             Box(direction: .column, alignItems: .center, spacing: 6) {
                 Box(direction: .column, alignItems: .center, justifyContent: .center) {
-                    Icon(.svg(named: "folder", in: .module, subdirectory: "ToolbarIcons"), size: 38, color: .accent)
+                    Icon(.svg(named: "folder",
+                              in: EditorAppResourceBundle.bundle,
+                              subdirectory: "ToolbarIcons"),
+                         size: 38,
+                         color: .accent)
                         .frame(width: 38, height: 38)
                 }
                 .frame(width: 76, height: 72)
@@ -434,7 +344,11 @@ private struct AssetFolderListRow: View {
         Button(action: onOpen) {
             Row(alignment: .center, spacing: 9) {
                 Box(direction: .column, alignItems: .center, justifyContent: .center) {
-                    Icon(.svg(named: "folder", in: .module, subdirectory: "ToolbarIcons"), size: 18, color: .accent)
+                    Icon(.svg(named: "folder",
+                              in: EditorAppResourceBundle.bundle,
+                              subdirectory: "ToolbarIcons"),
+                         size: 18,
+                         color: .accent)
                         .frame(width: 18, height: 18)
                 }
                 .frame(width: 26, height: 26)
@@ -496,7 +410,9 @@ private struct AssetThumbnail: View {
                     .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
             } else {
                 Box(direction: .column, alignItems: .center, justifyContent: .center) {
-                    Icon(.svg(named: asset.kind.iconName, in: .module, subdirectory: "HierarchyIcons"),
+                    Icon(.svg(named: asset.kind.iconName,
+                              in: EditorAppResourceBundle.bundle,
+                              subdirectory: "HierarchyIcons"),
                          size: 24,
                          color: asset.kind.tint)
                 }
@@ -529,7 +445,9 @@ private struct TextureThumbnailView: View {
         Box(direction: .column, alignItems: .center, justifyContent: .center) {
             AsyncImageThumbnail(path: path, width: width, height: height) {
                 Box(direction: .column, alignItems: .center, justifyContent: .center) {
-                    Icon(.svg(named: "squares-2x2", in: .module, subdirectory: "HierarchyIcons"),
+                    Icon(.svg(named: "squares-2x2",
+                              in: EditorAppResourceBundle.bundle,
+                              subdirectory: "HierarchyIcons"),
                          size: Swift.min(Swift.min(width, height), 24),
                          color: .success)
                 }
@@ -557,7 +475,9 @@ private struct AssetListRow: View {
                         TextureThumbnailView(path: asset.absolutePath, width: 26, height: 26)
                             .cornerRadius(3)
                     } else {
-                        Icon(.svg(named: asset.kind.iconName, in: .module, subdirectory: "HierarchyIcons"),
+                        Icon(.svg(named: asset.kind.iconName,
+                                  in: EditorAppResourceBundle.bundle,
+                                  subdirectory: "HierarchyIcons"),
                              size: 18,
                              color: asset.kind.tint)
                             .frame(width: 18, height: 18)

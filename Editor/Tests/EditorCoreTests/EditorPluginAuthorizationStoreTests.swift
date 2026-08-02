@@ -21,11 +21,13 @@ final class EditorPluginAuthorizationStoreTests: XCTestCase {
 
         try store.record(authorization)
         XCTAssertEqual(store.authorization(for: inspection), authorization)
+        #if !os(Windows)
         XCTAssertEqual(
             try FileManager.default.attributesOfItem(atPath: store.storageURL.path)[.posixPermissions]
                 as? NSNumber,
             NSNumber(value: 0o600)
         )
+        #endif
 
         let reopened = EditorPluginAuthorizationStore(projectDirectory: directory.path)
         XCTAssertEqual(reopened.authorization(for: inspection), authorization)
@@ -56,6 +58,33 @@ final class EditorPluginAuthorizationStoreTests: XCTestCase {
         let store = EditorPluginAuthorizationStore(projectDirectory: directory.path)
         XCTAssertTrue(store.allRecords().isEmpty)
         XCTAssertNil(store.authorization(for: inspection))
+        XCTAssertNotNil(store.loadWarning)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: store.storageURL.path))
+        let quarantinedFiles = try FileManager.default.contentsOfDirectory(
+            at: guava,
+            includingPropertiesForKeys: nil
+        )
+        XCTAssertTrue(quarantinedFiles.contains {
+            $0.lastPathComponent.hasPrefix("plugin_authorizations.corrupt-")
+                && $0.pathExtension == "json"
+        })
+    }
+
+    func testUnknownStorageFormatIsQuarantinedInsteadOfSilentlyDiscarded() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let guava = directory.appendingPathComponent(".guava", isDirectory: true)
+        try FileManager.default.createDirectory(at: guava,
+                                                withIntermediateDirectories: true)
+        let storageURL = guava.appendingPathComponent("plugin_authorizations.json")
+        try Data("{\"format_version\":2,\"records\":[]}".utf8).write(to: storageURL)
+
+        let store = EditorPluginAuthorizationStore(projectDirectory: directory.path)
+
+        XCTAssertTrue(store.allRecords().isEmpty)
+        XCTAssertTrue(store.loadWarning?.contains("unsupported format version 2") == true)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: storageURL.path))
     }
 
     private func makeInspection(maximumLength: Int) -> PluginInspection {

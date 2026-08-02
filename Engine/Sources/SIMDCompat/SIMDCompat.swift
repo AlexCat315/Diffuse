@@ -2,6 +2,8 @@
 // On Apple platforms, re-exports the native simd framework.
 // On Windows/Linux, provides equivalent types and functions.
 
+import Foundation
+
 #if canImport(simd)
 @_exported import simd
 #else
@@ -461,3 +463,35 @@ public func * (lhs: simd_quatf, rhs: simd_quatf) -> simd_quatf {
 }
 
 #endif
+
+/// Spherical interpolation matching the Apple simd shortest-arc behavior.
+public func guavaSlerp(_ start: simd_quatf,
+                       _ end: simd_quatf,
+                       _ t: Float) -> simd_quatf {
+    func normalized(_ vector: SIMD4<Float>) -> SIMD4<Float> {
+        let magnitude = simd_length(vector)
+        return magnitude > 1e-8 ? vector / magnitude : SIMD4<Float>(0, 0, 0, 1)
+    }
+
+    let startVector = normalized(start.vector)
+    var endVector = normalized(end.vector)
+    var cosine = simd_dot(startVector, endVector)
+    if cosine < 0 {
+        endVector = -endVector
+        cosine = -cosine
+    }
+    cosine = simd_clamp(cosine, -1, 1)
+
+    if cosine > 0.9995 {
+        return simd_quatf(vector: normalized(startVector + (endVector - startVector) * t))
+    }
+
+    let angle = Float(Foundation.acos(Double(cosine)))
+    let denominator = Float(Foundation.sin(Double(angle)))
+    guard Swift.abs(denominator) > 1e-8 else {
+        return simd_quatf(vector: startVector)
+    }
+    let startWeight = Float(Foundation.sin(Double((1 - t) * angle))) / denominator
+    let endWeight = Float(Foundation.sin(Double(t * angle))) / denominator
+    return simd_quatf(vector: normalized(startVector * startWeight + endVector * endWeight))
+}

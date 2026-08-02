@@ -35,6 +35,7 @@ public struct TextField: View {
     public let size: Size
     public let disabled: Bool
     public let readOnly: Bool
+    public let secure: Bool
     public let clearable: Bool
     public let maxLength: Int?
     public let showWordLimit: Bool
@@ -66,6 +67,7 @@ public struct TextField: View {
                 size: Size = .regular,
                 disabled: Bool = false,
                 readOnly: Bool = false,
+                secure: Bool = false,
                 clearable: Bool = false,
                 maxLength: Int? = nil,
                 showWordLimit: Bool = false,
@@ -88,6 +90,7 @@ public struct TextField: View {
         self.size = size
         self.disabled = disabled
         self.readOnly = readOnly
+        self.secure = secure
         self.clearable = clearable
         self.maxLength = maxLength
         self.showWordLimit = showWordLimit
@@ -114,6 +117,7 @@ public struct TextField: View {
         let text: String
         let placeholder: String
         let axis: Axis
+        let secure: Bool
     }
 
     private struct PaintIdentity: Equatable {
@@ -123,6 +127,7 @@ public struct TextField: View {
         let size: Size
         let disabled: Bool
         let readOnly: Bool
+        let secure: Bool
         let clearable: Bool
         let maxLength: Int?
         let showWordLimit: Bool
@@ -229,6 +234,7 @@ public struct TextField: View {
                                           size: size,
                                           disabled: disabled,
                                           readOnly: readOnly,
+                                          secure: secure,
                                           clearable: clearable,
                                           maxLength: maxLength,
                                           showWordLimit: showWordLimit,
@@ -315,7 +321,8 @@ public struct TextField: View {
         Self.installMeasureFunc(on: layout, snapshot: self)
         let inputs = MeasureInputs(text: text.wrappedValue,
                                    placeholder: placeholder,
-                                   axis: axis)
+                                   axis: axis,
+                                   secure: secure)
         layout.attachments[Self.measureInputsKey] = inputs
         if axis == .vertical {
             layout.height = nil
@@ -331,7 +338,8 @@ public struct TextField: View {
         Self.installMeasureFunc(on: layout, snapshot: self)
         let next = MeasureInputs(text: text.wrappedValue,
                                  placeholder: placeholder,
-                                 axis: axis)
+                                 axis: axis,
+                                 secure: secure)
         let previous = layout.attachments[Self.measureInputsKey] as? MeasureInputs
         layout.attachments[Self.measureInputsKey] = next
         if axis == .vertical {
@@ -378,7 +386,7 @@ public struct TextField: View {
                 recordCaretActivity(state)
                 return true
             case Scancode.c:
-                if let r = selectionRange(state) {
+                if !secure, let r = selectionRange(state) {
                     ClipboardHolder.write?(substring(text.wrappedValue, r))
                 }
                 return true
@@ -391,7 +399,9 @@ public struct TextField: View {
             case Scancode.x:
                 guard !blockMutations else { return true }
                 if let r = selectionRange(state) {
-                    ClipboardHolder.write?(substring(text.wrappedValue, r))
+                    if !secure {
+                        ClipboardHolder.write?(substring(text.wrappedValue, r))
+                    }
                     deleteSelection(state: state)
                 }
                 return true
@@ -1050,7 +1060,7 @@ public struct TextField: View {
                                                             override: lineHeightOverride)
             let measureText = snapshot.text.wrappedValue.isEmpty
                 ? snapshot.placeholder
-                : snapshot.text.wrappedValue
+                : snapshot.displayValue(snapshot.text.wrappedValue)
             let wrapWidth: Float
             switch widthMode {
             case .exactly, .atMost:
@@ -1106,7 +1116,9 @@ public struct TextField: View {
         guard axis != .vertical else {
             return minimumFieldHeight
         }
-        let measureText = text.wrappedValue.isEmpty ? placeholder : text.wrappedValue
+        let measureText = text.wrappedValue.isEmpty
+            ? placeholder
+            : displayValue(text.wrappedValue)
         let lineCount = max(1, layoutEngine.lineRanges(in: measureText).count)
         guard axis == .vertical || lineCount > 1 else {
             return minimumFieldHeight
@@ -1136,6 +1148,10 @@ public struct TextField: View {
             font: resolvedFont(node: node, env: env),
             override: node.attachments[StyleAttachmentKey.lineHeight] as? Float
         )
+    }
+
+    func displayValue(_ value: String) -> String {
+        secure ? String(repeating: "•", count: value.count) : value
     }
 
     /// Find the word covering `index` in `s`. A "word" is a maximal run of

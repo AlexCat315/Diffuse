@@ -22,10 +22,41 @@
 "Directional" = "Directional";
 "Point" = "Point";
 "Spot" = "Spot";
+"Add Component" = "Add Component";
+"Remove Component" = "Remove Component";
+"Locked — unlock in Hierarchy to edit components" = "Locked — unlock in Hierarchy to edit components";
+"Rigid Body" = "Rigid Body";
+"Collider" = "Collider";
+"Character Controller" = "Character Controller";
+"Vehicle" = "Vehicle";
+"Soft Body" = "Soft Body";
+"Cloth" = "Cloth";
+"Soft Body Mesh" = "Soft Body Mesh";
+"Destructible" = "Destructible";
+"Ragdoll" = "Ragdoll";
+"Render Mesh" = "Render Mesh";
+"Render Material" = "Render Material";
+"Camera" = "Camera";
+"Light" = "Light";
+"Audio Source" = "Audio Source";
+"Audio Listener" = "Audio Listener";
+"Animation Player" = "Animation Player";
+"Animation Graph" = "Animation Graph";
+"Particle Emitter" = "Particle Emitter";
+"Script" = "Script";
 
 /* Hierarchy */
 "Hierarchy" = "Hierarchy";
 "Search" = "Search";
+"Create" = "Create";
+"Empty Entity" = "Empty Entity";
+"Cube" = "Cube";
+"Directional Light" = "Directional Light";
+"Point Light" = "Point Light";
+"Spot Light" = "Spot Light";
+"entity" = "entity";
+"entities" = "entities";
+"Live" = "Live";
 
 /* Panels */
 "Viewport" = "Viewport";
@@ -60,16 +91,22 @@
 "Help" = "Help";
 "New Scene" = "New Scene";
 "Open Scene..." = "Open Scene...";
+"Guava Scene" = "Guava Scene";
 "Save Scene" = "Save Scene";
 "Import Assets..." = "Import Assets...";
 "Undo" = "Undo";
 "Redo" = "Redo";
+"Duplicate Selection" = "Duplicate Selection";
 "Reset Layout" = "Reset Layout";
+"Reopen Closed Panel" = "Reopen Closed Panel";
 "Toggle Theme" = "Toggle Theme";
-"Build Editor" = "Build Editor";
+"Build Project" = "Build Project";
 "Build and Run" = "Build and Run";
 "Documentation" = "Documentation";
 "About Guava" = "About Guava";
+"Version" = "Version";
+"Development Build" = "Development Build";
+"A native scene editor powered by Guava Engine." = "A native scene editor powered by Guava Engine.";
 "Workspace: Level" = "Workspace: Level";
 "Workspace: Modeling" = "Workspace: Modeling";
 "Workspace: Animation" = "Workspace: Animation";
@@ -97,7 +134,7 @@
 "Animation" = "Animation";
 "Appearance" = "Appearance";
 "Dark" = "Dark";
-"Light" = "Light";
+"Light Theme" = "Light";
 "Frame Rate" = "Frame Rate";
 "Unlimited" = "Unlimited";
 "Vertical Sync" = "Vertical Sync";

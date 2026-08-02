@@ -25,6 +25,9 @@ struct EditorMenuModel {
                 action(L("Undo"), key: "z", command: .undo),
                 action(L("Redo"), key: "z", modifiers: [.primary, .shift], command: .redo),
                 .separator,
+                action(L("Duplicate Selection"), key: "d", command: .duplicateSelection),
+                action(L("Delete Selection"), key: "", command: .deleteSelection),
+                .separator,
                 action(L("Settings"), key: ",", command: .openSettings),
             ]),
             EditorApplicationMenu(title: L("Window"), items: [
@@ -48,6 +51,8 @@ struct EditorMenuModel {
                 action(presetTitle(.animationSequencer), key: "", selected: activeLayoutPreset == .animationSequencer,
                        command: .setLayoutPreset(.animationSequencer)),
                 .separator,
+                action(L("Reopen Closed Panel"), key: "t", modifiers: [.primary, .shift],
+                       command: .reopenClosedPanel),
                 action(L("Reset Layout"), key: "", command: .resetLayout),
             ]),
             EditorApplicationMenu(title: L("Tools"), items: [
@@ -70,7 +75,7 @@ struct EditorMenuModel {
                 action(L("Toggle Theme"), key: "", command: .toggleTheme),
             ]),
             EditorApplicationMenu(title: L("Build"), items: [
-                action(L("Build Editor"), key: "b", command: .buildProject),
+                action(L("Build Project"), key: "b", command: .buildProject),
                 action(L("Build and Run"), key: "r", command: .buildAndRun),
             ]),
             EditorApplicationMenu(title: L("Help"), items: [

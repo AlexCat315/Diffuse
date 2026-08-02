@@ -66,6 +66,46 @@ struct AppStorageTests: GuavaUIComposeSerializedSuite {
         #expect(reloaded.value(forKey: "missing") == nil)
     } }
 
+    @Test("FileAppStorageStore quarantines corrupt JSON before creating fresh preferences")
+    func fileStoreQuarantinesCorruptJSON() throws { try GlobalTestLock.locked {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava-appstorage-corrupt-\(UUID().uuidString)")
+        let url = directory.appendingPathComponent("app-storage.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data("{ definitely-not-json".utf8).write(to: url, options: .atomic)
+
+        let store = FileAppStorageStore(url: url)
+        #expect(store.value(forKey: "theme") == nil)
+        #expect(store.loadWarning != nil)
+        let quarantinedURL = try #require(store.quarantinedURL)
+        #expect(FileManager.default.fileExists(atPath: quarantinedURL.path))
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+
+        store.set(.string("light"), forKey: "theme")
+        #expect(store.lastSaveError == nil)
+        #expect(FileManager.default.fileExists(atPath: quarantinedURL.path))
+        #expect(FileAppStorageStore(url: url).value(forKey: "theme") == .string("light"))
+    } }
+
+    @Test("FileAppStorageStore reports disk failures while retaining the live value")
+    func fileStoreReportsDiskFailure() throws { try GlobalTestLock.locked {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava-appstorage-readonly-\(UUID().uuidString)")
+        let blockedParent = directory.appendingPathComponent("not-a-directory")
+        let url = blockedParent.appendingPathComponent("app-storage.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data("block directory creation".utf8).write(to: blockedParent)
+
+        let store = FileAppStorageStore(url: url)
+        store.set(.bool(true), forKey: "grid")
+
+        #expect(store.value(forKey: "grid") == .bool(true))
+        #expect(store.lastSaveError != nil)
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+    } }
+
     @Test("RawRepresentable enums persist through their raw value")
     func enumSupport() { GlobalTestLock.locked {
         withStore { store in

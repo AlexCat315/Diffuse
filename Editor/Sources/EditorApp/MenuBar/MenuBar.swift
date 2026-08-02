@@ -7,9 +7,12 @@ enum EditorMenuCommand {
     case importAssets
     case undo
     case redo
+    case duplicateSelection
+    case deleteSelection
     case setWorkspaceMode(EditorWorkspaceMode)
     case setLayoutPreset(EditorLayoutPreset)
     case resetLayout
+    case reopenClosedPanel
     case setPlaybackState(PlaybackState)
     case openSettings
     case toggleTheme

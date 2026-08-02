@@ -246,16 +246,16 @@ private struct WindowControlButton: View {
 
 private enum WindowChromeIcons {
     static let minimize = BundleImageResource.svg(named: "minimize",
-                                                  in: .module,
+                                                  in: GuavaUIAppResourceBundle.bundle,
                                                   subdirectory: "WindowChromeIcons")
     static let maximize = BundleImageResource.svg(named: "maximize",
-                                                  in: .module,
+                                                  in: GuavaUIAppResourceBundle.bundle,
                                                   subdirectory: "WindowChromeIcons")
     static let restore = BundleImageResource.svg(named: "restore",
-                                                 in: .module,
+                                                 in: GuavaUIAppResourceBundle.bundle,
                                                  subdirectory: "WindowChromeIcons")
     static let close = BundleImageResource.svg(named: "close",
-                                               in: .module,
+                                               in: GuavaUIAppResourceBundle.bundle,
                                                subdirectory: "WindowChromeIcons")
 }
 

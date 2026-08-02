@@ -31,8 +31,11 @@ struct EditorMenuModelTests {
         #expect(has { if case .importAssets = $0 { return true }; return false })
         #expect(has { if case .undo = $0 { return true }; return false })
         #expect(has { if case .redo = $0 { return true }; return false })
+        #expect(has { if case .duplicateSelection = $0 { return true }; return false })
+        #expect(has { if case .deleteSelection = $0 { return true }; return false })
         #expect(has { if case .buildProject = $0 { return true }; return false })
         #expect(has { if case .buildAndRun = $0 { return true }; return false })
+        #expect(has { if case .reopenClosedPanel = $0 { return true }; return false })
     }
 
     @Test("playback state selects exactly the matching transport command")
