@@ -97,7 +97,8 @@ extension EditorSceneAdapter {
     /// entity is unknown or already has that component (existing data is never overwritten).
     @discardableResult
     public func addComponent(_ kind: EditorComponentKind, to rawID: UInt64) -> Bool {
-        guard !isEntityLocked(rawID),
+        guard isAuthoringEnabled,
+              !isEntityLocked(rawID),
               let entity = resolveEntity(rawID), !hasComponent(kind, on: rawID) else { return false }
         if kind == .cloth, hasComponent(.softBodyMesh, on: rawID) { return false }
         if kind == .softBodyMesh, hasComponent(.cloth, on: rawID) { return false }
@@ -137,7 +138,8 @@ extension EditorSceneAdapter {
     /// carry that component.
     @discardableResult
     public func removeComponent(_ kind: EditorComponentKind, from rawID: UInt64) -> Bool {
-        guard !isEntityLocked(rawID),
+        guard isAuthoringEnabled,
+              !isEntityLocked(rawID),
               let entity = resolveEntity(rawID), hasComponent(kind, on: rawID) else { return false }
         switch kind {
         case .rigidBody:       _ = scene.removeComponent(RigidBody.self, from: entity)

@@ -11,8 +11,12 @@ import RHIWGPU
 final class EditorLaunchContext: @unchecked Sendable {
     private(set) var bundle: EditorLaunchBundle?
     private var shellPreferenceToken: EditorStore.SubscriptionToken?
+    private var nativeMenuToken: EditorStore.SubscriptionToken?
+    private var workspaceSubscriptionToken: WorkspaceController.SubscriptionToken?
+    private var workspacePersistenceTask: Task<Void, Never>?
     private(set) var display: AppDisplayHandle?
     private var settingsWindowID: WindowID?
+    private var nativeMenuState: NativeMenuState?
 
     let backendConfig: WGPUDeviceConfig
     let backend: WGPUBackend
@@ -68,10 +72,15 @@ final class EditorLaunchContext: @unchecked Sendable {
         )
 
         subscribeShellPreferences(app: app, controller: controller, registry: registry)
+        subscribeWorkspacePersistence(app: app, controller: controller)
+        subscribeNativeMenu(app: app, controller: controller, registry: registry)
         bundle = EditorLaunchBundle(app: app, controller: controller, registry: registry)
 
         if let display {
-            wireDisplayHandlers(app: app, display: display)
+            wireDisplayHandlers(app: app,
+                                controller: controller,
+                                registry: registry,
+                                display: display)
         }
 
         RecentProjectsStore.record(directory)
@@ -80,8 +89,11 @@ final class EditorLaunchContext: @unchecked Sendable {
 
     @MainActor func wireDisplay(_ display: AppDisplayHandle) {
         self.display = display
-        if let app = bundle?.app {
-            wireDisplayHandlers(app: app, display: display)
+        if let bundle {
+            wireDisplayHandlers(app: bundle.app,
+                                controller: bundle.controller,
+                                registry: bundle.registry,
+                                display: display)
         }
     }
 
@@ -111,10 +123,21 @@ final class EditorLaunchContext: @unchecked Sendable {
         if let token = shellPreferenceToken {
             app.store.unsubscribe(token)
         }
+        if let token = nativeMenuToken {
+            app.store.unsubscribe(token)
+        }
+        if let token = workspaceSubscriptionToken {
+            bundle.controller.unsubscribe(token)
+        }
+        workspacePersistenceTask?.cancel()
+        workspacePersistenceTask = nil
         app.shutdown()
     }
 
-    @MainActor private func wireDisplayHandlers(app: EditorApplication, display: AppDisplayHandle) {
+    @MainActor private func wireDisplayHandlers(app: EditorApplication,
+                                                controller: WorkspaceController,
+                                                registry: PanelRegistry,
+                                                display: AppDisplayHandle) {
         display.setVSyncEnabled(app.store.state.vsyncMode.isEnabled)
         app.setVSyncModeHandler { mode in
             display.setVSyncEnabled(mode.isEnabled)
@@ -143,6 +166,73 @@ final class EditorLaunchContext: @unchecked Sendable {
                 EditorSettingsWindowRoot(app: app)
             }
         }
+        refreshNativeMenu(app: app,
+                          controller: controller,
+                          registry: registry,
+                          display: display,
+                          force: true)
+    }
+
+    private struct NativeMenuState: Equatable {
+        var workspaceMode: EditorWorkspaceMode
+        var layoutPreset: EditorLayoutPreset
+        var playbackState: PlaybackState
+        var canUndo: Bool
+        var canRedo: Bool
+        var hasSelection: Bool
+        var language: EditorLanguage
+    }
+
+    @MainActor
+    private func subscribeNativeMenu(app: EditorApplication,
+                                     controller: WorkspaceController,
+                                     registry: PanelRegistry) {
+        nativeMenuToken = app.store.subscribe { [weak self, weak app, weak controller, weak registry] _ in
+            MainActor.assumeIsolated {
+                guard let self, let app, let controller, let registry,
+                      let display = self.display else { return }
+                self.refreshNativeMenu(app: app,
+                                       controller: controller,
+                                       registry: registry,
+                                       display: display)
+            }
+        }
+    }
+
+    @MainActor
+    private func refreshNativeMenu(app: EditorApplication,
+                                   controller: WorkspaceController,
+                                   registry: PanelRegistry,
+                                   display: AppDisplayHandle,
+                                   force: Bool = false) {
+        let store = app.store.state
+        let next = NativeMenuState(workspaceMode: store.workspaceMode,
+                                   layoutPreset: store.activeLayoutPreset,
+                                   playbackState: store.playbackState,
+                                   canUndo: app.canUndo,
+                                   canRedo: app.canRedo,
+                                   hasSelection: !store.selectedEntityIDs.isEmpty,
+                                   language: store.language)
+        guard force || next != nativeMenuState else { return }
+        nativeMenuState = next
+        // Menu labels are built outside the Compose presentation boundary, so
+        // explicitly align the localization preference before regenerating.
+        EditorLocalizationPreferences.language = next.language
+        display.installNativeMenuBar(EditorNativeMenuBuilder.make(
+            workspaceMode: next.workspaceMode,
+            activeLayoutPreset: next.layoutPreset,
+            playbackState: next.playbackState,
+            canUndo: next.canUndo,
+            canRedo: next.canRedo,
+            hasSelection: next.hasSelection,
+            onCommand: { [weak app, weak controller, weak registry] command in
+                guard let app, let controller, let registry else { return }
+                EditorCommandDispatcher.handle(command,
+                                               app: app,
+                                               controller: controller,
+                                               registry: registry)
+            }
+        ))
     }
 
     private func subscribeShellPreferences(app: EditorApplication,
@@ -174,6 +264,32 @@ final class EditorLaunchContext: @unchecked Sendable {
                 capabilitySettings: store.state.capabilitySettings
             )
             app.requestDisplayRefresh()
+        }
+    }
+
+    @MainActor
+    private func subscribeWorkspacePersistence(app: EditorApplication,
+                                               controller: WorkspaceController) {
+        workspaceSubscriptionToken = controller.subscribe { [weak self, weak app, weak controller] _ in
+            Task { @MainActor in
+                guard let self, let app, let controller else { return }
+                self.scheduleWorkspacePersistence(app: app, controller: controller)
+            }
+        }
+    }
+
+    @MainActor
+    private func scheduleWorkspacePersistence(app: EditorApplication,
+                                              controller: WorkspaceController) {
+        workspacePersistenceTask?.cancel()
+        workspacePersistenceTask = Task { @MainActor [weak self, weak app, weak controller] in
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled, let self, let app, let controller else { return }
+            let state = app.store.state
+            EditorRootViewFactory.saveWorkspaceLayout(controller,
+                                                       for: state.workspaceMode,
+                                                       preset: state.activeLayoutPreset)
+            self.workspacePersistenceTask = nil
         }
     }
 

@@ -28,6 +28,7 @@ let package = Package(
                 .product(name: "IntentRuntime", package: "Engine"),
                 .product(name: "ObservationBus", package: "Engine"),
                 .product(name: "PerceptionRuntime", package: "Engine"),
+                .product(name: "PluginRuntime", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
                 .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "SceneRuntime", package: "Engine"),

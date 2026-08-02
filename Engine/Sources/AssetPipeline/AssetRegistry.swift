@@ -103,6 +103,10 @@ public final class AssetRegistry: @unchecked Sendable {
     private var projectRoot: String?
     private var entries: [AssetRegistryEntry] = []
     private var meshes: [Int: RegisteredMeshAsset] = [:]
+    /// Explicit transient meshes are an overlay, not part of a project scan.
+    /// A catalog reload therefore cannot invalidate one between registration
+    /// and consumption.
+    private var explicitlyRegisteredMeshes: [Int: RegisteredMeshAsset] = [:]
     /// Stable relativePath → meshIndex map; survives across reloads so indices never change for known paths.
     private var pathIndex: [String: Int] = [:]
     private var nextMeshIndex = importedMeshStartIndex
@@ -262,7 +266,11 @@ public final class AssetRegistry: @unchecked Sendable {
 
     public func registeredMeshes() -> [RegisteredMeshAsset] {
         lock.lock()
-        let value = meshes.values.sorted { $0.meshIndex < $1.meshIndex }
+        var merged = meshes
+        for (index, registered) in explicitlyRegisteredMeshes {
+            merged[index] = registered
+        }
+        let value = merged.values.sorted { $0.meshIndex < $1.meshIndex }
         lock.unlock()
         return value
     }
@@ -276,7 +284,7 @@ public final class AssetRegistry: @unchecked Sendable {
 
     public func meshAsset(for meshIndex: Int) -> MeshAsset? {
         lock.lock()
-        let value = meshes[meshIndex]?.mesh
+        let value = explicitlyRegisteredMeshes[meshIndex]?.mesh ?? meshes[meshIndex]?.mesh
         lock.unlock()
         return value
     }
@@ -286,6 +294,7 @@ public final class AssetRegistry: @unchecked Sendable {
         projectRoot = nil
         entries.removeAll(keepingCapacity: true)
         meshes.removeAll(keepingCapacity: true)
+        explicitlyRegisteredMeshes.removeAll(keepingCapacity: true)
         pathIndex.removeAll(keepingCapacity: true)
         nextMeshIndex = Self.importedMeshStartIndex
         lock.unlock()
@@ -295,12 +304,20 @@ public final class AssetRegistry: @unchecked Sendable {
     /// Intended for unit tests that need a pre-built MeshAsset without loading from disk.
     public func registerForTesting(_ mesh: MeshAsset, at meshIndex: Int) {
         lock.lock()
-        meshes[meshIndex] = RegisteredMeshAsset(
+        explicitlyRegisteredMeshes[meshIndex] = RegisteredMeshAsset(
             meshIndex: meshIndex,
             assetID: "test:\(meshIndex)",
             kind: .gltf,
             mesh: mesh
         )
+        lock.unlock()
+    }
+
+    /// Removes one explicit mesh without disturbing the active project's
+    /// catalog or any other transient registration.
+    public func unregisterTestingMesh(at meshIndex: Int) {
+        lock.lock()
+        explicitlyRegisteredMeshes.removeValue(forKey: meshIndex)
         lock.unlock()
     }
 

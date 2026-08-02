@@ -750,7 +750,7 @@ struct CapabilityExposureTests {
             exposureSnapshot: snapshot
         )
         guard transaction.operations.count == 2,
-              case let .scene(.setRenderMaterialComponent(_, base, metallic, roughness, emissive))
+              case let .scene(.setRenderMaterialComponent(_, base, _, _, metallic, roughness, emissive))
                 = transaction.operations[1] else {
             Issue.record("expected a second typed material operation")
             return

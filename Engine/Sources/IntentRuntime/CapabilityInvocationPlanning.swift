@@ -467,7 +467,7 @@ private struct CapabilityOperationProjection {
         case let .setRenderMeshVisibility(_, isVisible):
             self.verb = "scene.set_mesh_visibility"
             self.arguments["is_visible"] = .bool(isVisible)
-        case let .setRenderMaterialComponent(_, baseColorFactor, metallicFactor, roughnessFactor, _):
+        case let .setRenderMaterialComponent(_, baseColorFactor, _, _, metallicFactor, roughnessFactor, _):
             self.verb = "scene.set_render_material"
             self.arguments["base_color"] = .vec3(IntentVector3(SIMD3(baseColorFactor.x, baseColorFactor.y, baseColorFactor.z)))
             self.arguments["metallic"] = .number(Double(metallicFactor))

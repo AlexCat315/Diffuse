@@ -2328,7 +2328,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let hasMaterial = ops.contains {
-            if case let .setRenderMaterialComponent(id, base, metallic, roughness, _) = $0 {
+            if case let .setRenderMaterialComponent(id, base, _, _, metallic, roughness, _) = $0 {
                 return id == entity.rawValue
                     && abs(base.x - 1.0) < 0.001
                     && abs(base.y - 0.8) < 0.001
@@ -3519,6 +3519,8 @@ final class AIRuntimeTests: XCTestCase {
         let entity = scene.createEntity()
         var mat = RenderMaterialComponent()
         mat.baseColorFactor = SIMD4<Float>(0.2, 0.4, 0.6, 1.0)
+        mat.baseColorTextureIndex = 3
+        mat.normalTextureIndex = 7
         mat.metallicFactor = 0.8
         mat.roughnessFactor = 0.9
         _ = scene.setComponent(mat, for: entity)
@@ -3532,11 +3534,13 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let ok = ops.contains {
-            if case let .setRenderMaterialComponent(id, base, metallic, roughness, _) = $0 {
+            if case let .setRenderMaterialComponent(id, base, baseTexture, normalTexture, metallic, roughness, _) = $0 {
                 return id == entity.rawValue
                     && abs(base.x - 0.2) < 0.001   // preserved
                     && abs(base.y - 0.4) < 0.001   // preserved
                     && abs(base.z - 0.6) < 0.001   // preserved
+                    && baseTexture == 3
+                    && normalTexture == 7
                     && abs(metallic - 0.8) < 0.001 // preserved
                     && abs(roughness - 0.1) < 0.001 // updated
             }
@@ -3562,7 +3566,7 @@ final class AIRuntimeTests: XCTestCase {
 
         let ops = transaction.operations.compactMap { if case let .scene(m) = $0 { return m } else { return nil } }
         let ok = ops.contains {
-            if case let .setRenderMaterialComponent(id, base, metallic, roughness, _) = $0 {
+            if case let .setRenderMaterialComponent(id, base, _, _, metallic, roughness, _) = $0 {
                 return id == entity.rawValue
                     && abs(base.x - 1.0) < 0.001   // preserved
                     && abs(base.z - 0.0) < 0.001   // preserved

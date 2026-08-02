@@ -28,6 +28,10 @@ enum EditorCommandDispatcher {
         case .redo:
             app.redo()
         case .duplicateSelection:
+            guard EditorSceneAuthoringPolicy.canEditScene(during: store.state.playbackState) else {
+                app.logConsole("Stop simulation before duplicating entities", severity: .warning)
+                return
+            }
             guard let selected = store.state.selectedEntityID else {
                 app.logConsole("Nothing to duplicate", severity: .warning)
                 return
@@ -38,8 +42,14 @@ enum EditorCommandDispatcher {
             }
             if let newID = app.scene.duplicateEntity(selected) {
                 store.dispatch(.setSelectedEntity(newID))
+            } else {
+                app.logConsole("Could not duplicate selection", severity: .error)
             }
         case .deleteSelection:
+            guard EditorSceneAuthoringPolicy.canEditScene(during: store.state.playbackState) else {
+                app.logConsole("Stop simulation before deleting entities", severity: .warning)
+                return
+            }
             let selectedIDs = store.state.selectedEntityIDs
             guard !selectedIDs.isEmpty else {
                 app.logConsole("Nothing to delete", severity: .warning)
@@ -51,6 +61,8 @@ enum EditorCommandDispatcher {
             }
             if app.scene.deleteEntities(selectedIDs) {
                 store.dispatch(.setSelectedEntity(nil))
+            } else {
+                app.logConsole("Could not delete selection", severity: .error)
             }
         case let .setWorkspaceMode(next):
             guard store.state.workspaceMode != next else { return }
@@ -62,10 +74,17 @@ enum EditorCommandDispatcher {
             EditorRootViewFactory.loadLayoutPreset(into: controller, for: next, preset: nextPreset, registry: registry)
             saveShellState(app)
         case let .setLayoutPreset(nextPreset):
-            guard nextPreset != store.state.activeLayoutPreset else { return }
-            let mode = store.state.workspaceMode
+            let mode = nextPreset.mode
+            guard nextPreset != store.state.activeLayoutPreset
+                    || mode != store.state.workspaceMode else { return }
+            let previousMode = store.state.workspaceMode
             let previousPreset = store.state.activeLayoutPreset
-            EditorRootViewFactory.saveWorkspaceLayout(controller, for: mode, preset: previousPreset)
+            EditorRootViewFactory.saveWorkspaceLayout(controller,
+                                                       for: previousMode,
+                                                       preset: previousPreset)
+            if mode != previousMode {
+                store.dispatch(.setWorkspaceMode(mode))
+            }
             store.dispatch(.setActiveLayoutPreset(nextPreset))
             EditorRootViewFactory.loadLayoutPreset(into: controller, for: mode, preset: nextPreset, registry: registry)
             saveShellState(app)

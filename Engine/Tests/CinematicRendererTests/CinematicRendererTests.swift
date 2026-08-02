@@ -119,4 +119,84 @@ struct CinematicRendererTests {
         #expect(p.y == 0)
         #expect(p.z == 5)
     }
+
+    @Test("Path tracer returns the configured environment and tolerates a degenerate camera")
+    func pathTracerEnvironmentAndDegenerateCamera() {
+        let environment = SIMD3<Float>(0.2, 0.35, 0.5)
+        let tracer = PathTracer(config: PathTracerConfig(
+            maxBounces: 0,
+            samplesPerPixel: 1,
+            environmentColor: environment
+        ))
+        var framebuffer = [Float](repeating: 0, count: 2 * 2 * 3)
+
+        tracer.accumulatePass(into: &framebuffer,
+                              width: 2,
+                              height: 2,
+                              cameraOrigin: .zero,
+                              cameraForward: .zero,
+                              cameraUp: .zero,
+                              cameraFOVYRadians: .nan,
+                              cameraAspectRatio: .nan,
+                              geometry: EmptyPathTraceGeometry())
+
+        for pixel in 0..<4 {
+            #expect(abs(framebuffer[pixel * 3] - environment.x) < 0.000_001)
+            #expect(abs(framebuffer[pixel * 3 + 1] - environment.y) < 0.000_001)
+            #expect(abs(framebuffer[pixel * 3 + 2] - environment.z) < 0.000_001)
+        }
+    }
+
+    @Test("renderPass projects pixel coordinates instead of reusing one ray")
+    func renderPassProjectsPixelCoordinates() {
+        let tracer = PathTracer(config: PathTracerConfig(maxBounces: 0,
+                                                         samplesPerPixel: 1))
+        let left = tracer.renderPass(
+            width: 4,
+            height: 1,
+            camera: CameraRay(origin: .zero,
+                              direction: SIMD3<Float>(0, 0, -1),
+                              pixelX: 0,
+                              pixelY: 0),
+            geometry: DirectionEmissionGeometry(),
+            sample: 0
+        )
+        let right = tracer.renderPass(
+            width: 4,
+            height: 1,
+            camera: CameraRay(origin: .zero,
+                              direction: SIMD3<Float>(0, 0, -1),
+                              pixelX: 3,
+                              pixelY: 0),
+            geometry: DirectionEmissionGeometry(),
+            sample: 0
+        )
+
+        #expect(abs(left.x - right.x) > 0.01)
+        #expect(left.x.isFinite && right.x.isFinite)
+    }
+}
+
+private struct EmptyPathTraceGeometry: SceneGeometry {
+    func intersect(ray: Ray) -> HitResult? { nil }
+
+    func bounds() -> (min: SIMD3<Float>, max: SIMD3<Float>) {
+        (.zero, .zero)
+    }
+}
+
+private struct DirectionEmissionGeometry: SceneGeometry {
+    func intersect(ray: Ray) -> HitResult? {
+        HitResult(t: 1,
+                  position: ray.point(at: 1),
+                  normal: SIMD3<Float>(0, 1, 0),
+                  albedo: .zero,
+                  emission: SIMD3<Float>((ray.direction.x + 1) * 0.5,
+                                         (ray.direction.y + 1) * 0.5,
+                                         abs(ray.direction.z)))
+    }
+
+    func bounds() -> (min: SIMD3<Float>, max: SIMD3<Float>) {
+        (SIMD3<Float>(repeating: -1), SIMD3<Float>(repeating: 1))
+    }
 }

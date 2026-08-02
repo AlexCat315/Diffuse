@@ -16,11 +16,15 @@ enum EditorAIRequestPolicy {
 
 enum EditorPlanSubmissionError: Error, LocalizedError, Equatable {
     case pendingConfirmation
+    case lockedEntities([UInt64])
 
     var errorDescription: String? {
         switch self {
         case .pendingConfirmation:
             return EditorAIRequestPolicy.pendingConfirmationMessage
+        case let .lockedEntities(entityIDs):
+            let labels = entityIDs.sorted().map(String.init).joined(separator: ", ")
+            return "The plan targets locked entities: \(labels). Unlock them before applying the action."
         }
     }
 }

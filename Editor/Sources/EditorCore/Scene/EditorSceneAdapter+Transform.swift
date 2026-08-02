@@ -183,13 +183,31 @@ extension EditorSceneAdapter {
     }
 
     public func setEntityLocalMatrix(_ rawID: UInt64, to matrix: simd_float4x4) {
-        guard let entity = makeEntityID(rawID) else { return }
-        var local = scene.localTransform(for: entity) ?? LocalTransform()
-        local.matrix = matrix
-        _ = applySceneTransaction(intentVerb: "scene.set_local_transform",
-                                  summary: "Update entity transform",
-                                  targetRawIDs: [rawID],
-                                  mutations: [.setLocalTransform(entityID: rawID, transform: local)])
+        _ = setEntityLocalMatrices([rawID: matrix])
+    }
+
+    /// Applies a multi-selection transform atomically. This prevents a locked
+    /// or stale member from leaving only part of the selection transformed.
+    @discardableResult
+    public func setEntityLocalMatrices(_ matricesByEntityID: [UInt64: simd_float4x4]) -> Bool {
+        let entityIDs = matricesByEntityID.keys.sorted()
+        guard !entityIDs.isEmpty else { return false }
+        var mutations: [SceneMutation] = []
+        mutations.reserveCapacity(entityIDs.count)
+        for rawID in entityIDs {
+            guard let matrix = matricesByEntityID[rawID],
+                  let entity = makeEntityID(rawID),
+                  scene.contains(entity) else { return false }
+            var local = scene.localTransform(for: entity) ?? LocalTransform()
+            local.matrix = matrix
+            mutations.append(.setLocalTransform(entityID: rawID, transform: local))
+        }
+        return applySceneTransaction(
+            intentVerb: entityIDs.count == 1 ? "scene.set_local_transform" : "scene.set_local_transforms",
+            summary: entityIDs.count == 1 ? "Update entity transform" : "Update entity transforms",
+            targetRawIDs: entityIDs,
+            mutations: mutations
+        ) != nil
     }
 
     private func makeEntityID(_ rawID: UInt64) -> EntityID? {
