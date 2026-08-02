@@ -52,14 +52,45 @@ public enum AppStorageDefaults {
 public final class FileAppStorageStore: AppStorageStore {
     public let url: URL
     private var values: [String: AppStorageValue]
+    private var persistenceEnabled = true
+
+    /// Non-nil when an unreadable file was moved aside during initialization.
+    /// Hosts may surface this as a recoverable preferences warning.
+    public private(set) var loadWarning: String?
+
+    /// The most recent persistence failure. Values still update in memory so a
+    /// read-only or temporarily unavailable preferences directory does not make
+    /// controls appear broken.
+    public private(set) var lastSaveError: String?
+
+    /// Location of the unreadable file retained for diagnostics/recovery.
+    public private(set) var quarantinedURL: URL?
 
     public init(url: URL) {
         self.url = url
-        if let data = try? Data(contentsOf: url),
-           let decoded = try? JSONDecoder().decode([String: AppStorageValue].self, from: data) {
-            values = decoded
-        } else {
+        guard FileManager.default.fileExists(atPath: url.path) else {
             values = [:]
+            return
+        }
+
+        do {
+            let data = try Data(contentsOf: url)
+            values = try JSONDecoder().decode([String: AppStorageValue].self, from: data)
+        } catch {
+            values = [:]
+            let originalError = error
+            let quarantineURL = Self.quarantineURL(for: url)
+            do {
+                try FileManager.default.moveItem(at: url, to: quarantineURL)
+                quarantinedURL = quarantineURL
+                loadWarning = "Unreadable app storage was moved to \(quarantineURL.lastPathComponent): \(originalError)"
+            } catch {
+                persistenceEnabled = false
+                loadWarning = "Unreadable app storage could not be quarantined; disk writes are disabled to preserve it: \(error); original error: \(originalError)"
+            }
+            if let loadWarning {
+                FileHandle.standardError.write(Data("[FileAppStorageStore] \(loadWarning)\n".utf8))
+            }
         }
     }
 
@@ -77,10 +108,24 @@ public final class FileAppStorageStore: AppStorageStore {
 
     public func set(_ value: AppStorageValue?, forKey key: String) {
         values[key] = value
-        guard let data = try? JSONEncoder().encode(values) else { return }
-        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
-                                                 withIntermediateDirectories: true)
-        try? data.write(to: url, options: .atomic)
+        guard persistenceEnabled else { return }
+        do {
+            let data = try JSONEncoder().encode(values)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            try data.write(to: url, options: .atomic)
+            lastSaveError = nil
+        } catch {
+            lastSaveError = String(describing: error)
+            FileHandle.standardError.write(Data("[FileAppStorageStore] failed to persist \(url.path): \(error)\n".utf8))
+        }
+    }
+
+    private static func quarantineURL(for url: URL) -> URL {
+        let stem = url.deletingPathExtension().lastPathComponent
+        let suffix = url.pathExtension.isEmpty ? "" : ".\(url.pathExtension)"
+        return url.deletingLastPathComponent()
+            .appendingPathComponent("\(stem).corrupt-\(UUID().uuidString)\(suffix)")
     }
 }
 

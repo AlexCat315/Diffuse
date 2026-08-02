@@ -1,5 +1,6 @@
 import EditorCore
 import GuavaUICompose
+import GuavaUIRuntime
 import IntentRuntime
 
 /// Pending-AI-action confirmation panel: question cards on sunken wells with
@@ -18,6 +19,7 @@ struct ConfirmationHostPanel: View {
             Column(alignment: .leading, spacing: 10) {
                 if let request = store.pendingConfirmationRequest {
                     ConfirmationBatchView(app: app, request: request)
+                        .id(request.batchID)
                 } else {
                     Column(alignment: .leading, spacing: 6) {
                         Text(L("No pending confirmation"))
@@ -40,6 +42,18 @@ struct ConfirmationHostPanel: View {
 private struct ConfirmationBatchView: View {
     let app: EditorApplication
     let request: ConfirmationRequestBatch
+    @State private var selectedOptionIDs: [String: String]
+
+    init(app: EditorApplication, request: ConfirmationRequestBatch) {
+        self.app = app
+        self.request = request
+        _selectedOptionIDs = State(wrappedValue: Dictionary(uniqueKeysWithValues:
+            request.questions.compactMap { question in
+                let optionID = question.defaultOptionID ?? question.options.first?.id
+                return optionID.map { (question.id, $0) }
+            }
+        ))
+    }
 
     var body: some View {
         Column(alignment: .leading, spacing: 10) {
@@ -52,15 +66,41 @@ private struct ConfirmationBatchView: View {
             }
 
             for question in request.questions {
-                ConfirmationQuestionCard(app: app, question: question)
+                ConfirmationQuestionCard(
+                    question: question,
+                    selectedOptionID: Binding(
+                        get: { selectedOptionIDs[question.id] },
+                        set: { optionID in
+                            if let optionID {
+                                selectedOptionIDs[question.id] = optionID
+                            } else {
+                                selectedOptionIDs.removeValue(forKey: question.id)
+                            }
+                        }
+                    )
+                )
+            }
+
+            Row(alignment: .center, spacing: 8) {
+                Button(L("Submit Decisions"),
+                       isEnabled: selectedOptionIDs.count == request.questions.count) {
+                    app.resolvePendingConfirmation(
+                        pickedOptionIDsByQuestionID: selectedOptionIDs
+                    )
+                }
+                .buttonStyle(.primary)
+                Button(L("Discard All")) {
+                    app.skipPendingConfirmation()
+                }
+                .buttonStyle(.secondary)
             }
         }
     }
 }
 
 private struct ConfirmationQuestionCard: View {
-    let app: EditorApplication
     let question: ConfirmationQuestion
+    let selectedOptionID: Binding<String?>
 
     var body: some View {
         Column(alignment: .leading, spacing: 8) {
@@ -80,12 +120,13 @@ private struct ConfirmationQuestionCard: View {
             Row(alignment: .center, spacing: 8) {
                 for option in question.options {
                     AnyView(
-                        Button(action: {
-                            app.resolvePendingConfirmation(pickedOptionID: option.id)
+                        Button(isSelected: selectedOptionID.wrappedValue == option.id,
+                               action: {
+                            selectedOptionID.wrappedValue = option.id
                         }) {
                             Text(option.labelShort)
                         }
-                        .buttonStyle(SecondaryButtonStyle())
+                        .buttonStyle(.toggle)
                     )
                 }
             }

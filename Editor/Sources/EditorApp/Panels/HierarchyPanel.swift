@@ -10,7 +10,6 @@ struct HierarchyPanel: View {
 
     @State private var expandedKeys: Set<TreeNodeKey<UInt64>>
     @State private var searchQuery: String
-    @State private var lockedEntityIDs: Set<UInt64>
 
     init(store: EditorStore, scene: EditorSceneAdapter) {
         self.store = store
@@ -20,13 +19,15 @@ struct HierarchyPanel: View {
                                                    roots: scene.roots)
         )
         _searchQuery = State(wrappedValue: "")
-        _lockedEntityIDs = State(wrappedValue: [])
     }
 
     var body: some View {
         StoreScope(store) { store in
             let _ = store.sceneRevision
             let hierarchyRoots = scene.roots
+            let isAuthoringEnabled = EditorSceneAuthoringPolicy.canEditScene(
+                during: store.playbackState
+            )
             let keysByID = Self.keyIndex(in: hierarchyRoots)
             let selectionKey = Binding<TreeNodeKey<UInt64>?>(
                 get: {
@@ -54,7 +55,17 @@ struct HierarchyPanel: View {
 
             Box(direction: .column, alignItems: .stretch) {
                 HierarchyPanelHeader(entityCount: scene.entityCount,
-                                     isConnected: store.connected)
+                                     isConnected: store.connected,
+                                     isAuthoringEnabled: isAuthoringEnabled,
+                                     onCreateEntity: { template in
+                        guard isAuthoringEnabled else { return }
+                        guard let newID = scene.spawnEntity(template: template) else {
+                            log("Could not create entity", severity: .error,
+                                detail: template.displayName)
+                            return
+                        }
+                        store.dispatch(.setSelectedEntity(newID))
+                    })
                     .padding(horizontal: 10, vertical: 7)
 
                 Box(direction: .row, alignItems: .center, spacing: 6) {
@@ -85,6 +96,7 @@ struct HierarchyPanel: View {
                             HierarchyRowTrailingSlots(
                                 isVisible: scene.isHierarchyVisible(entity.id),
                                 isLocked: scene.isEntityLocked(entity.id),
+                                isEnabled: isAuthoringEnabled,
                                 showsControls: isHovered || isSelected,
                                 isSelected: isSelected,
                                 onToggleVisibility: {
@@ -102,15 +114,18 @@ struct HierarchyPanel: View {
                      searchText: { node in node.name },
                      searchFilterPolicy: .filterAndAutoExpand,
                      onKeyCommand: { event, selectedIDs in
-                         handleBatchKey(event: event, selectedIDs: selectedIDs)
+                         handleBatchKey(event: event,
+                                        selectedIDs: selectedIDs,
+                                        isAuthoringEnabled: isAuthoringEnabled)
                      },
                      canDrop: { source, target, position in
-                         canDrop(entityID: source.id,
+                         isAuthoringEnabled && canDrop(entityID: source.id,
                                  on: target.id,
                                  position: position,
                                  in: hierarchyRoots)
                      },
                      onDrop: { source, target, position in
+                         guard isAuthoringEnabled else { return }
                          handleHierarchyDrop(entityID: source.id,
                                              on: target.id,
                                              position: position,
@@ -138,10 +153,9 @@ struct HierarchyPanel: View {
     private func toggleVisibility(entityID: UInt64, selectedIDs: Set<UInt64>) {
         applyToSelectionOrEntity(entityID, selectedIDs: selectedIDs) { targets in
             let allHidden = targets.allSatisfy { !scene.isHierarchyVisible($0) }
-            if allHidden {
-                _ = scene.setHierarchyVisibility(true, for: targets)
-            } else {
-                _ = scene.setHierarchyVisibility(false, for: targets)
+            let changed = scene.setHierarchyVisibility(allHidden, for: targets)
+            if !changed {
+                log("Could not change hierarchy visibility", severity: .warning)
             }
         }
     }
@@ -149,36 +163,70 @@ struct HierarchyPanel: View {
     private func toggleLock(entityID: UInt64, selectedIDs: Set<UInt64>) {
         applyToSelectionOrEntity(entityID, selectedIDs: selectedIDs) { targets in
             let allLocked = targets.allSatisfy { scene.isEntityLocked($0) }
-            if allLocked {
-                lockedEntityIDs.subtract(targets)
-                scene.setEntityLocked(false, entityIDs: targets)
-            } else {
-                lockedEntityIDs.formUnion(targets)
-                scene.setEntityLocked(true, entityIDs: targets)
-            }
+            scene.setEntityLocked(!allLocked, entityIDs: targets)
         }
     }
 
-    private func handleBatchKey(event: KeyEvent, selectedIDs: Set<UInt64>) -> Bool {
-        guard event.modifiers.isEmpty, !selectedIDs.isEmpty else { return false }
+    private func handleBatchKey(event: KeyEvent,
+                                selectedIDs: Set<UInt64>,
+                                isAuthoringEnabled: Bool) -> Bool {
+        guard !selectedIDs.isEmpty else { return false }
+
+        if !isAuthoringEnabled {
+            let requestsMutation = event.keycode == 0x08
+                || event.keycode == 0x7F
+                || event.scancode == 25
+                || event.scancode == 15
+                || (event.keycode == 0x64
+                    && (event.modifiers.hasGui || event.modifiers.hasCtrl))
+            if requestsMutation {
+                log("Stop simulation before editing the hierarchy", severity: .warning)
+                return true
+            }
+            return false
+        }
+
+        switch event.keycode {
+        case 0x08, 0x7F: // Backspace / Delete
+            guard event.modifiers.isEmpty else { return false }
+            guard selectedIDs.allSatisfy({ !scene.isEntityLocked($0) }) else {
+                log("Cannot delete locked entities", severity: .warning)
+                return true
+            }
+            guard scene.deleteEntities(selectedIDs) else {
+                log("Could not delete selection", severity: .error)
+                return true
+            }
+            store.dispatch(.setSelectedEntity(nil))
+            return true
+        case 0x64: // D
+            guard event.modifiers.hasGui || event.modifiers.hasCtrl,
+                  let sourceID = store.state.selectedEntityID else { return false }
+            guard !scene.isEntityLocked(sourceID) else {
+                log("Cannot duplicate a locked entity", severity: .warning)
+                return true
+            }
+            guard let newID = scene.duplicateEntity(sourceID) else {
+                log("Could not duplicate selection", severity: .error)
+                return true
+            }
+            store.dispatch(.setSelectedEntity(newID))
+            return true
+        default:
+            break
+        }
+
+        guard event.modifiers.isEmpty else { return false }
         switch event.scancode {
         case 25: // SDL_SCANCODE_V
             let allHidden = selectedIDs.allSatisfy { !scene.isHierarchyVisible($0) }
-            if allHidden {
-                _ = scene.setHierarchyVisibility(true, for: selectedIDs)
-            } else {
-                _ = scene.setHierarchyVisibility(false, for: selectedIDs)
+            if !scene.setHierarchyVisibility(allHidden, for: selectedIDs) {
+                log("Could not change hierarchy visibility", severity: .warning)
             }
             return true
         case 15: // SDL_SCANCODE_L
             let allLocked = selectedIDs.allSatisfy { scene.isEntityLocked($0) }
-            if allLocked {
-                lockedEntityIDs.subtract(selectedIDs)
-                scene.setEntityLocked(false, entityIDs: selectedIDs)
-            } else {
-                lockedEntityIDs.formUnion(selectedIDs)
-                scene.setEntityLocked(true, entityIDs: selectedIDs)
-            }
+            scene.setEntityLocked(!allLocked, entityIDs: selectedIDs)
             return true
         default:
             return false
@@ -197,6 +245,7 @@ struct HierarchyPanel: View {
             return
         }
         guard scene.moveEntity(entityID, to: destination.parentID, at: destination.index) != nil else {
+            log("Could not move hierarchy entity", severity: .error)
             return
         }
         if position == .inside {
@@ -287,6 +336,12 @@ struct HierarchyPanel: View {
         let keysByID = keyIndex(in: roots)
         return Set(defaultIDs.compactMap { keysByID[$0]?.first })
     }
+
+    private func log(_ message: String,
+                     severity: EditorConsoleSeverity,
+                     detail: String? = nil) {
+        store.dispatch(.appendConsoleMessage(message, severity: severity, detail: detail))
+    }
 }
 
 private struct HierarchyNodeLocation {
@@ -326,14 +381,38 @@ private struct HierarchyTreeRowStyle: TreeRowStyle {
 private struct HierarchyPanelHeader: View {
     let entityCount: Int
     let isConnected: Bool
+    let isAuthoringEnabled: Bool
+    let onCreateEntity: (EditorEntityTemplate) -> Void
+    @State private var isCreatePresented: Bool = false
 
     var body: some View {
         Row(alignment: .center, spacing: 8) {
-            Text("\(entityCount) entities")
+            Text("\(entityCount) \(L(entityCount == 1 ? "entity" : "entities"))")
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
 
             Spacer(minLength: 0)
+
+            if isAuthoringEnabled {
+                Popover(isPresented: $isCreatePresented, width: 210) {
+                    createLabel()
+                } content: {
+                    Menu(EditorEntityTemplate.allCases.map { template in
+                        .item(MenuItem(id: "create-entity-\(template.rawValue)",
+                                       title: L(template.displayName),
+                                       action: { onCreateEntity(template) }))
+                    }, width: 210, maxVisibleRows: 8, onItemActivated: {
+                        isCreatePresented = false
+                    })
+                }
+            } else {
+                Button(isEnabled: false,
+                       tooltip: L("Stop simulation to edit the scene"),
+                       action: {}) {
+                    createLabel()
+                }
+                .buttonStyle(.plain)
+            }
 
             Row(alignment: .center, spacing: 5) {
                 Box { EmptyView() }
@@ -341,11 +420,25 @@ private struct HierarchyPanelHeader: View {
                     .background(isConnected ? .success : .warning)
                     .cornerRadius(3)
 
-                Text(isConnected ? "Live" : "Offline")
+                Text(isConnected ? L("Live") : L("Offline"))
                     .font(.caption)
                     .foregroundColor(isConnected ? .success : .warning)
             }
         }
+    }
+
+    private func createLabel() -> some View {
+        Row(alignment: .center, spacing: 5) {
+            Text("+")
+                .font(.bodyStrong)
+                .foregroundColor(isAuthoringEnabled ? .accent : .onSurfaceMuted)
+            Text(L("Create"))
+                .font(.caption)
+                .foregroundColor(isAuthoringEnabled ? .onSurface : .onSurfaceMuted)
+        }
+        .padding(horizontal: 8, vertical: 4)
+        .background(.surfaceSunken)
+        .cornerRadius(4)
     }
 }
 
@@ -417,6 +510,7 @@ private struct HierarchyEntityRow: View {
 private struct HierarchyRowTrailingSlots: View {
     let isVisible: Bool
     let isLocked: Bool
+    let isEnabled: Bool
     let showsControls: Bool
     let isSelected: Bool
     let onToggleVisibility: () -> Void
@@ -425,7 +519,7 @@ private struct HierarchyRowTrailingSlots: View {
     var body: some View {
         Row(alignment: .center, spacing: 0) {
             Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                Button(action: onToggleVisibility) {
+                Button(isEnabled: isEnabled, action: onToggleVisibility) {
                     Icon(HierarchyIconCatalog.visibilityResource(isVisible: isVisible), size: 13, color: isSelected ? .onSurface : .onSurfaceVariant)
                         .frame(width: 16, height: 16)
                 }
@@ -434,7 +528,7 @@ private struct HierarchyRowTrailingSlots: View {
             .frame(width: 20, height: 26)
 
             Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                Button(action: onToggleLock) {
+                Button(isEnabled: isEnabled, action: onToggleLock) {
                     Icon(HierarchyIconCatalog.lockResource(isLocked: isLocked), size: 13, color: isSelected ? .onSurface : .onSurfaceVariant)
                         .frame(width: 16, height: 16)
                 }
@@ -506,7 +600,7 @@ private enum HierarchyIconCatalog {
 
     private static func resource(named name: String) -> BundleImageResource {
         .svg(named: name,
-             in: .module,
+             in: EditorAppResourceBundle.bundle,
              subdirectory: "HierarchyIcons")
     }
 }

@@ -132,7 +132,7 @@ public actor Session {
         self.pluginQuerySnapshotProvider = pluginQuerySnapshotProvider
     }
 
-    public func setWorkflowContext(_ context: WorkflowContext?) {
+    public func setWorkflowContext(_ context: WorkflowContext?) async {
         workflowContext = context
         let mem = contextMemory
         guard let mem else { return }
@@ -145,9 +145,9 @@ public actor Session {
                 importance: 0.5,
                 revision: worldView.sceneRevision ?? 0
             )
-            Task { await mem.upsert(entry) }
+            await mem.upsert(entry)
         } else {
-            Task { await mem.remove(id: "workflow:active") }
+            await mem.remove(id: "workflow:active")
         }
     }
 
@@ -232,7 +232,7 @@ public actor Session {
                         importance: min(0.9, max(0.3, confidence)),
                         revision: worldView.sceneRevision ?? 0
                     )
-                    Task { await mem.upsert(entry) }
+                    await mem.upsert(entry)
                 }
             }
         }
@@ -260,7 +260,7 @@ public actor Session {
             recordTurn(ConversationTurn(kind: .assistantToolCall(toolUseID: toolUseID,
                                                                  name: "execute_edit_plan",
                                                                  inputJSON: inputJSON)))
-            updateIssueMemory(intent: text, plan: plan)
+            await updateIssueMemory(intent: text, plan: plan)
             return Proposal(
                 sessionID: id,
                 semanticIntent: text,
@@ -356,7 +356,7 @@ public actor Session {
                 payload: payload,
                 importance: 0.7
             )
-            Task { await mem.upsert(entry) }
+            await mem.upsert(entry)
         }
 
         // Re-infer a revised plan for the rejected steps.
@@ -439,17 +439,19 @@ public actor Session {
     }
 
     /// Applies a fine-grained WorldEvent to the entity index (Phase 5 delta path).
-    public func observe(event: WorldEvent) {
+    public func observe(event: WorldEvent) async {
         worldView.apply(event: event)
-        let mem = contextMemory
-        if let mem { Task { await mem.apply(event: event) } }
+        if let mem = contextMemory {
+            await mem.apply(event: event)
+        }
     }
 
     /// Applies a batch of WorldEvents in order.
-    public func observe(events: [WorldEvent]) {
+    public func observe(events: [WorldEvent]) async {
         for event in events { worldView.apply(event: event) }
-        let mem = contextMemory
-        if let mem { Task { await mem.apply(events: events) } }
+        if let mem = contextMemory {
+            await mem.apply(events: events)
+        }
     }
 
     public func replaceWorldView(_ worldView: WorldView) {
@@ -460,10 +462,9 @@ public actor Session {
         worldView
     }
 
-    public func observe(editSummary: String, revision: UInt64) {
+    public func observe(editSummary: String, revision: UInt64) async throws {
         worldView.apply(editSummary: editSummary, revision: revision)
-        let mem = contextMemory
-        if let mem { Task { try? await mem.flush() } }
+        try await contextMemory?.flush()
     }
 
     /// Persists the context memory store to disk (if a storageURL was configured).
@@ -478,7 +479,7 @@ public actor Session {
     /// An empty plan means the model couldn't fulfill the intent — we record the
     /// outstanding request so future sessions know it's unresolved. When a subsequent
     /// request for the same intent produces a non-empty plan, we remove the stale entry.
-    func updateIssueMemory(intent: String, plan: SceneEditPlan) {
+    func updateIssueMemory(intent: String, plan: SceneEditPlan) async {
         guard let mem = contextMemory else { return }
         let key = Self.issueKey(for: intent)
         if plan.isEmpty {
@@ -491,9 +492,9 @@ public actor Session {
                 importance: 0.6,
                 revision: worldView.sceneRevision ?? 0
             )
-            Task { await mem.upsert(entry) }
+            await mem.upsert(entry)
         } else {
-            Task { await mem.remove(id: key) }
+            await mem.remove(id: key)
         }
     }
 
@@ -516,12 +517,12 @@ public actor Session {
 
     // MARK: - History
 
-    public func clearHistory() {
-        recordSessionSummary()
+    public func clearHistory() async {
+        await recordSessionSummary()
         conversationHistory.removeAll()
     }
 
-    private func recordSessionSummary() {
+    private func recordSessionSummary() async {
         guard let mem = contextMemory, !conversationHistory.isEmpty else { return }
         let intents: [String] = conversationHistory.compactMap {
             guard case let .userText(text) = $0.kind else { return nil }
@@ -543,7 +544,7 @@ public actor Session {
             importance: 0.5,
             revision: revision
         )
-        Task { await mem.upsert(entry) }
+        await mem.upsert(entry)
     }
 
     public func historySnapshot() -> [ConversationTurn] {

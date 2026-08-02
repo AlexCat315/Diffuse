@@ -15,25 +15,18 @@ jobs:
   build:
     name: Build (${{ matrix.name }})
     runs-on: ${{ matrix.runs-on }}
-    # Linux/Windows are newly added. Keep them non-blocking until the native
-    # build + pure-Swift portability is green on those platforms; macOS stays
-    # the required check so nothing currently-green can regress.
-    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - name: macOS
             runs-on: macos-15
-            experimental: false
           - name: Linux
             runs-on: ubuntu-latest
-            experimental: true
           - name: Windows
             # Pinned: windows-latest now resolves to windows-2025-vs2026, whose
             # MSVC (VS 18) intermittently ICEs compiling plutovg.
             runs-on: windows-2025
-            experimental: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,6 +48,20 @@ jobs:
       - name: Swift version
         shell: bash
         run: swift --version
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev libdbus-1-dev libdrm-dev libegl1-mesa-dev \
+            libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libibus-1.0-dev \
+            libjack-jackd2-dev libpipewire-0.3-dev libpulse-dev libsndio-dev \
+            libudev-dev libwayland-dev libx11-dev libxcursor-dev libxext-dev \
+            libxfixes-dev libxi-dev libxinerama-dev libxkbcommon-dev \
+            libxrandr-dev libxrender-dev libxss-dev libxtst-dev \
+            mesa-common-dev ninja-build
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable

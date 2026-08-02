@@ -272,6 +272,22 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertTrue(controller.document.closedHistory.isEmpty)
     }
 
+    func testReopenSpecificPanelDoesNotConsumeNewerClosedPanels() {
+        var document = makeDocument()
+        document.panels["assets"] = WorkspacePanel(id: "assets", title: "Assets")
+        document.panels["timeline"] = WorkspacePanel(id: "timeline", title: "Timeline")
+        document.groups["bottom"]?.panels = ["console", "assets", "timeline"]
+        let controller = WorkspaceController(document: document)
+
+        _ = controller.dispatch(.closePanel("assets"))
+        _ = controller.dispatch(.closePanel("timeline"))
+        _ = controller.dispatch(.reopenPanel("assets"))
+
+        XCTAssertEqual(controller.document.groups["bottom"]?.panels, ["console", "assets"])
+        XCTAssertEqual(controller.document.groups["bottom"]?.activePanelID, "assets")
+        XCTAssertEqual(controller.document.closedHistory.map(\.panelID), ["timeline"])
+    }
+
     func testCloseOthersKeepsPinnedTabsAndSelectedTab() {
         var document = makeDocument()
         document.panels["assets"] = WorkspacePanel(id: "assets", title: "Assets")

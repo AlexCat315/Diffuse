@@ -22,7 +22,12 @@ struct EditorMenuModelTests {
 
     @Test("exposes the core file / edit / build commands")
     func coreCommands() {
-        let cmds = actions(make()).map(\.command)
+        let cmds = actions(EditorMenuModel.make(workspaceMode: .level,
+                                                activeLayoutPreset: .levelDefault,
+                                                playbackState: .stopped,
+                                                canUndo: true,
+                                                canRedo: true,
+                                                hasSelection: true)).map(\.command)
         func has(_ predicate: (EditorMenuCommand) -> Bool) -> Bool { cmds.contains(where: predicate) }
 
         #expect(has { if case .newScene = $0 { return true }; return false })
@@ -31,8 +36,60 @@ struct EditorMenuModelTests {
         #expect(has { if case .importAssets = $0 { return true }; return false })
         #expect(has { if case .undo = $0 { return true }; return false })
         #expect(has { if case .redo = $0 { return true }; return false })
+        #expect(has { if case .duplicateSelection = $0 { return true }; return false })
+        #expect(has { if case .deleteSelection = $0 { return true }; return false })
         #expect(has { if case .buildProject = $0 { return true }; return false })
         #expect(has { if case .buildAndRun = $0 { return true }; return false })
+        #expect(has { if case .reopenClosedPanel = $0 { return true }; return false })
+    }
+
+    @Test("edit commands reflect actual history and selection availability")
+    func editCommandAvailability() {
+        let unavailable = actions(make())
+        for action in unavailable {
+            switch action.command {
+            case .undo, .redo, .duplicateSelection, .deleteSelection:
+                #expect(!action.isEnabled)
+            default: break
+            }
+        }
+
+        let available = actions(EditorMenuModel.make(workspaceMode: .level,
+                                                     activeLayoutPreset: .levelDefault,
+                                                     playbackState: .stopped,
+                                                     canUndo: true,
+                                                     canRedo: true,
+                                                     hasSelection: true))
+        for action in available {
+            switch action.command {
+            case .undo, .redo, .duplicateSelection, .deleteSelection:
+                #expect(action.isEnabled)
+            default: break
+            }
+        }
+    }
+
+    @Test("scene authoring commands are disabled while playing or paused")
+    func playbackDisablesSceneAuthoringCommands() {
+        for playbackState in [PlaybackState.playing, .paused] {
+            let model = EditorMenuModel.make(workspaceMode: .level,
+                                             activeLayoutPreset: .levelDefault,
+                                             playbackState: playbackState,
+                                             canUndo: true,
+                                             canRedo: true,
+                                             hasSelection: true)
+            for action in actions(model) {
+                switch action.command {
+                case .newScene, .openScene, .undo, .redo, .duplicateSelection, .deleteSelection:
+                    #expect(!action.isEnabled)
+                default:
+                    break
+                }
+            }
+        }
+        #expect(EditorSceneAuthoringPolicy.canEditScene(during: .stopped))
+        #expect(!EditorSceneAuthoringPolicy.canEditScene(during: .playing))
+        #expect(!EditorSceneAuthoringPolicy.canEditScene(during: .paused))
     }
 
     @Test("playback state selects exactly the matching transport command")
@@ -104,6 +161,21 @@ struct EditorMenuModelTests {
         // `.primary` is Cmd on macOS, Ctrl elsewhere — assert against it rather
         // than hardcoding `.command`, which is wrong on Windows/Linux.
         #expect(undo?.keyModifiers.contains(.primary) == true)
+    }
+
+    @Test("delete binds to an unmodified native Delete key")
+    func deleteShortcut() {
+        let model = EditorMenuModel.make(workspaceMode: .level,
+                                         activeLayoutPreset: .levelDefault,
+                                         playbackState: .stopped,
+                                         hasSelection: true)
+        let deletion = actions(model).first { action in
+            if case .deleteSelection = action.command { return true }
+            return false
+        }
+        #expect(deletion?.keyEquivalent == "\u{8}")
+        #expect(deletion?.keyModifiers.isEmpty == true)
+        #expect(deletion?.isEnabled == true)
     }
 
     @Test("model is non-empty across every playback state")

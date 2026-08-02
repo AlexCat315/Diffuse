@@ -19,110 +19,27 @@ struct AssetBrowserPanel: View {
     @State private var searchText: String = ""
     @AppStorage("assetBrowser.viewMode") private var viewMode: AssetViewMode = .grid
     @State private var selectedAssetID: String? = nil
+    @State private var reloadStatusMessage: String? = nil
+    @State private var reloadStatusIsError: Bool = false
     /// Relative folder path currently shown ("" == project root). Uses "/" as
     /// separator, matching `AssetRegistryEntry.relativePath`.
     @State private var currentFolder: String = ""
 
     private func importAssets() {
-        guard let display = AppDisplayHandleHolder.current else { return }
-        let folder = currentFolder
-        // The picker is invoked from a button tap on the main loop thread.
-        MainActor.assumeIsolated {
-            display.requestOpenFile(
-                filters: [(name: L("3D Models"),
-                           extensions: AssetImportResolver.supportedModelExtensions.sorted()),
-                          (name: L("Textures"),
-                           extensions: AssetImportResolver.supportedTextureExtensions.sorted())],
-                allowsMultiple: true,
-                defaultPath: importDestination(for: folder)
-            ) { paths in
-                // Delivered on the main thread by the platform host.
-                importFiles(paths, into: folder)
-            }
-        }
+        EditorAssetImportCoordinator.requestImport(app: app, into: currentFolder)
     }
 
-    private func importDestination(for folder: String) -> String {
-        let base = URL(fileURLWithPath: app.projectDirectory, isDirectory: true)
-        return folder.isEmpty ? base.path : base.appendingPathComponent(folder, isDirectory: true).path
-    }
-
-    /// Imports the chosen files into the viewed folder. Each file is dispatched
-    /// through `AssetImportResolver`, which (like UE/Godot) pulls every external
-    /// dependency — glTF `.bin` buffers and textures, OBJ `.mtl` + its maps —
-    /// along with the asset, preserving relative layout. Results are reported in
-    /// the console: imported count, missing dependencies, unsupported formats.
-    private func importFiles(_ paths: [String], into folder: String) {
-        guard !paths.isEmpty else { return }
-        let destDir = URL(fileURLWithPath: importDestination(for: folder), isDirectory: true)
-            .resolvingSymlinksInPath()
-        try? FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
-
-        var importedNames: [String] = []
-        var missingDependencies: [String] = []
-        var unsupported: [String] = []
-
-        for path in paths {
-            let src = URL(fileURLWithPath: path)
-            guard AssetImportResolver.isSupported(src) else {
-                unsupported.append(src.lastPathComponent)
-                continue
-            }
-            let outcome = copyAsset(from: src, into: destDir)
-            if outcome.copied { importedNames.append(src.lastPathComponent) }
-            missingDependencies.append(contentsOf: outcome.missing)
+    private func reloadAssets() {
+        let result = app.reloadAssets()
+        AssetThumbnailRasterizer.invalidate()
+        ImageAssetRegistryHolder.current?.clear()
+        if let count = result {
+            reloadStatusMessage = String(format: L("Reloaded %lld assets."), Int64(count))
+            reloadStatusIsError = false
+        } else {
+            reloadStatusMessage = L("Asset reload failed. See Console for details.")
+            reloadStatusIsError = true
         }
-
-        if !importedNames.isEmpty {
-            _ = app.reloadAssets()
-            // A re-imported file may reuse an id, so drop cached thumbnails.
-            AssetThumbnailRasterizer.invalidate()
-            ImageAssetRegistryHolder.current?.clear()
-            app.logConsole("Imported \(importedNames.count) asset\(importedNames.count == 1 ? "" : "s")",
-                           detail: importedNames.joined(separator: ", "))
-        }
-        if !missingDependencies.isEmpty {
-            app.logConsole("Asset imported with missing dependencies",
-                           severity: .warning,
-                           detail: missingDependencies.joined(separator: ", "))
-        }
-        if !unsupported.isEmpty {
-            app.logConsole("Unsupported format — import models or textures",
-                           severity: .warning,
-                           detail: unsupported.joined(separator: ", "))
-        }
-    }
-
-    /// Copies a resolved asset (and its dependencies) into `destDir`, preserving
-    /// each file's relative path. Returns whether anything was copied and the
-    /// relative paths of any referenced files missing from disk.
-    private func copyAsset(from src: URL, into destDir: URL) -> (copied: Bool, missing: [String]) {
-        var copiedAny = false
-        var missing: [String] = []
-        for file in AssetImportResolver.resolve(src) {
-            let target = destDir.appendingPathComponent(file.relativePath)
-            // Already in place (importing from inside the project)? Count it.
-            if file.source.resolvingSymlinksInPath().path == target.resolvingSymlinksInPath().path {
-                copiedAny = true
-                continue
-            }
-            guard FileManager.default.fileExists(atPath: file.source.path) else {
-                missing.append(file.relativePath)
-                continue
-            }
-            do {
-                try FileManager.default.createDirectory(at: target.deletingLastPathComponent(),
-                                                        withIntermediateDirectories: true)
-                if FileManager.default.fileExists(atPath: target.path) {
-                    try FileManager.default.removeItem(at: target)
-                }
-                try FileManager.default.copyItem(at: file.source, to: target)
-                copiedAny = true
-            } catch {
-                missing.append(file.relativePath)
-            }
-        }
-        return (copiedAny, missing)
     }
 
     private var trimmedQuery: String {
@@ -144,7 +61,8 @@ struct AssetBrowserPanel: View {
     }
 
     var body: some View {
-        StoreScope(app.store) { _ in
+        StoreScope(app.store) { store in
+            let _ = store.presentationRevision
             let allAssets = EditorAssetCatalog.entries()
             let isSearching = !trimmedQuery.isEmpty
             // While searching, ignore folder structure and show flat matches
@@ -159,7 +77,8 @@ struct AssetBrowserPanel: View {
                                     totalCount: allAssets.count,
                                     visibleCount: itemCount,
                                     isFiltering: isSearching,
-                                    onImport: { importAssets() })
+                                    onImport: { importAssets() },
+                                    onReload: { reloadAssets() })
                     .padding(horizontal: 10, vertical: 7)
 
                 Divider()
@@ -173,7 +92,30 @@ struct AssetBrowserPanel: View {
 
                 Divider()
 
+                if let reloadStatusMessage {
+                    Text(reloadStatusMessage)
+                        .font(.caption)
+                        .foregroundColor(reloadStatusIsError ? .error : .success)
+                        .padding(horizontal: 10, vertical: 5)
+                    Divider()
+                }
+
                 content(allAssets: allAssets, listing: listing, isSearching: isSearching)
+
+                if let selectedAssetID,
+                   let selectedAsset = allAssets.first(where: { $0.id == selectedAssetID }) {
+                    Divider()
+                    AssetSelectionBar(
+                        asset: selectedAsset,
+                        isAddEnabled: store.playbackState == .stopped,
+                        onAddToScene: {
+                            _ = app.spawnAsset(selectedAsset)
+                        },
+                        onReveal: {
+                            revealAsset(selectedAsset)
+                        }
+                    )
+                }
             }
             .frame(minWidth: 240)
         }
@@ -238,6 +180,19 @@ struct AssetBrowserPanel: View {
             .flex()
         }
     }
+
+    private func revealAsset(_ asset: EditorAsset) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = ["-R", asset.absolutePath]
+        do {
+            try process.run()
+        } catch {
+            app.logConsole("Could not reveal asset",
+                           severity: .error,
+                           detail: error.localizedDescription)
+        }
+    }
 }
 
 private enum AssetViewMode: String, Sendable, AppStorageConvertible {
@@ -291,10 +246,14 @@ private struct AssetBrowserToolbar: View {
     let visibleCount: Int
     let isFiltering: Bool
     let onImport: () -> Void
+    let onReload: () -> Void
 
     var body: some View {
         Row(alignment: .center, spacing: 8) {
             Button(L("Import…")) { onImport() }
+                .buttonStyle(.secondary)
+
+            Button(L("Reload")) { onReload() }
                 .buttonStyle(.secondary)
 
             TextField(L("Search Assets"),
@@ -333,7 +292,11 @@ private struct AssetBreadcrumbBar: View {
 
     var body: some View {
         Row(alignment: .center, spacing: 4) {
-            Icon(.svg(named: "folder", in: .module, subdirectory: "ToolbarIcons"), size: 13, color: .onSurfaceVariant)
+            Icon(.svg(named: "folder",
+                      in: EditorAppResourceBundle.bundle,
+                      subdirectory: "ToolbarIcons"),
+                 size: 13,
+                 color: .onSurfaceVariant)
                 .frame(width: 15, height: 15)
 
             if isSearching {
@@ -395,6 +358,42 @@ private struct AssetViewModeButton: View {
     }
 }
 
+private struct AssetSelectionBar: View {
+    let asset: EditorAsset
+    let isAddEnabled: Bool
+    let onAddToScene: () -> Void
+    let onReveal: () -> Void
+
+    var body: some View {
+        Row(alignment: .center, spacing: 8) {
+            Column(alignment: .leading, spacing: 1) {
+                Text(asset.name, lineLimit: 1)
+                    .font(.caption)
+                    .foregroundColor(.onSurface)
+                Text(asset.relativePath, lineLimit: 1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
+            .flex(1, shrink: 1)
+
+            Text(asset.kind.sceneKindLabel)
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+            if asset.kind.isMesh {
+                Button(L("Add to Scene"),
+                       isEnabled: isAddEnabled,
+                       tooltip: isAddEnabled ? nil : L("Stop simulation to edit the scene"),
+                       action: onAddToScene)
+                    .buttonStyle(.primary)
+            }
+            Button(L("Reveal in Finder"), action: onReveal)
+                .buttonStyle(.secondary)
+        }
+        .padding(horizontal: 10, vertical: 7)
+        .background(.surfaceVariant)
+    }
+}
+
 // MARK: - Folder tile / row
 
 private struct AssetFolderTile: View {
@@ -405,7 +404,11 @@ private struct AssetFolderTile: View {
         Button(action: onOpen) {
             Box(direction: .column, alignItems: .center, spacing: 6) {
                 Box(direction: .column, alignItems: .center, justifyContent: .center) {
-                    Icon(.svg(named: "folder", in: .module, subdirectory: "ToolbarIcons"), size: 38, color: .accent)
+                    Icon(.svg(named: "folder",
+                              in: EditorAppResourceBundle.bundle,
+                              subdirectory: "ToolbarIcons"),
+                         size: 38,
+                         color: .accent)
                         .frame(width: 38, height: 38)
                 }
                 .frame(width: 76, height: 72)
@@ -434,7 +437,11 @@ private struct AssetFolderListRow: View {
         Button(action: onOpen) {
             Row(alignment: .center, spacing: 9) {
                 Box(direction: .column, alignItems: .center, justifyContent: .center) {
-                    Icon(.svg(named: "folder", in: .module, subdirectory: "ToolbarIcons"), size: 18, color: .accent)
+                    Icon(.svg(named: "folder",
+                              in: EditorAppResourceBundle.bundle,
+                              subdirectory: "ToolbarIcons"),
+                         size: 18,
+                         color: .accent)
                         .frame(width: 18, height: 18)
                 }
                 .frame(width: 26, height: 26)
@@ -496,7 +503,9 @@ private struct AssetThumbnail: View {
                     .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
             } else {
                 Box(direction: .column, alignItems: .center, justifyContent: .center) {
-                    Icon(.svg(named: asset.kind.iconName, in: .module, subdirectory: "HierarchyIcons"),
+                    Icon(.svg(named: asset.kind.iconName,
+                              in: EditorAppResourceBundle.bundle,
+                              subdirectory: "HierarchyIcons"),
                          size: 24,
                          color: asset.kind.tint)
                 }
@@ -529,7 +538,9 @@ private struct TextureThumbnailView: View {
         Box(direction: .column, alignItems: .center, justifyContent: .center) {
             AsyncImageThumbnail(path: path, width: width, height: height) {
                 Box(direction: .column, alignItems: .center, justifyContent: .center) {
-                    Icon(.svg(named: "squares-2x2", in: .module, subdirectory: "HierarchyIcons"),
+                    Icon(.svg(named: "squares-2x2",
+                              in: EditorAppResourceBundle.bundle,
+                              subdirectory: "HierarchyIcons"),
                          size: Swift.min(Swift.min(width, height), 24),
                          color: .success)
                 }
@@ -557,7 +568,9 @@ private struct AssetListRow: View {
                         TextureThumbnailView(path: asset.absolutePath, width: 26, height: 26)
                             .cornerRadius(3)
                     } else {
-                        Icon(.svg(named: asset.kind.iconName, in: .module, subdirectory: "HierarchyIcons"),
+                        Icon(.svg(named: asset.kind.iconName,
+                                  in: EditorAppResourceBundle.bundle,
+                                  subdirectory: "HierarchyIcons"),
                              size: 18,
                              color: asset.kind.tint)
                             .frame(width: 18, height: 18)
@@ -708,6 +721,8 @@ private struct AssetDragSource<Content: View>: _PrimitiveView {
         let app = self.app
         let onSelect = self.onSelect
         let capture = PointerCaptureHolder.current
+        let isDragEnabled = asset.kind.isMesh
+            && app.store.state.playbackState == .stopped
 
         registry.setPointer(node, route: InputHandlerRoute(role: .drag,
                                                            priority: .capture,
@@ -716,6 +731,7 @@ private struct AssetDragSource<Content: View>: _PrimitiveView {
             switch phase {
             case .down:
                 onSelect()
+                guard isDragEnabled else { return .handled }
                 AssetDragGesture.pending = AssetDragGesture.Pending(assetID: asset.id,
                                                                     startX: event.x,
                                                                     startY: event.y,
