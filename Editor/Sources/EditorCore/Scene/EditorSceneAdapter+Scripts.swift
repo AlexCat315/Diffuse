@@ -48,7 +48,8 @@ extension EditorSceneAdapter {
 
     @discardableResult
     public func addScriptBinding(to rawID: UInt64) -> Bool {
-        guard !isEntityLocked(rawID),
+        guard isAuthoringEnabled,
+              !isEntityLocked(rawID),
               let entity = scriptEntity(rawID) else { return false }
         var bindings = scene.component(ScriptComponent.self, for: entity)?.bindings ?? []
         bindings.append(ScriptBinding(identifier: defaultScriptIdentifier))
@@ -61,7 +62,8 @@ extension EditorSceneAdapter {
 
     @discardableResult
     public func removeScriptBinding(from rawID: UInt64, at index: Int) -> Bool {
-        guard !isEntityLocked(rawID),
+        guard isAuthoringEnabled,
+              !isEntityLocked(rawID),
               let entity = scriptEntity(rawID),
               var bindings = scene.component(ScriptComponent.self, for: entity)?.bindings,
               bindings.indices.contains(index) else { return false }

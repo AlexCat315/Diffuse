@@ -432,8 +432,10 @@ extension TransactionVerificationAssertion {
             state = [.meshColor(entityID: entityID, value: clamped.verificationArray)]
         case let .setRenderMeshVisibility(entityID, value):
             state = [.meshVisibility(entityID: entityID, value: value)]
-        case let .setRenderMaterialComponent(entityID, baseColor, metallic, roughness, emissive):
+        case let .setRenderMaterialComponent(entityID, baseColor, baseColorTextureIndex, normalTextureIndex, metallic, roughness, emissive):
             let material = RenderMaterialComponent(baseColorFactor: baseColor,
+                                                   baseColorTextureIndex: baseColorTextureIndex,
+                                                   normalTextureIndex: normalTextureIndex,
                                                    metallicFactor: metallic,
                                                    roughnessFactor: roughness,
                                                    emissiveFactor: emissive)

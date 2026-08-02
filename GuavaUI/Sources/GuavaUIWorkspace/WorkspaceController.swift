@@ -88,6 +88,7 @@ public enum WorkspaceCommand: Sendable, Equatable {
     case closeOthers(groupID: WorkspaceTabGroupID, keeping: WorkspacePanelID)
     case closeToTheRight(groupID: WorkspaceTabGroupID, of: WorkspacePanelID)
     case reopenLastClosed
+    case reopenPanel(WorkspacePanelID)
     case setPinned(panelID: WorkspacePanelID, isPinned: Bool)
     case floatGroup(WorkspaceTabGroupID, windowID: WorkspaceFloatingWindowID, frame: WorkspaceRect)
     case redockFloatingWindow(WorkspaceFloatingWindowID, to: WorkspaceTarget)
@@ -200,6 +201,8 @@ public final class WorkspaceController: @unchecked Sendable {
             return closeToTheRight(groupID: groupID, of: panelID)
         case .reopenLastClosed:
             return reopenLastClosed()
+        case let .reopenPanel(panelID):
+            return reopenPanel(panelID)
         case .setPinned(let panelID, let isPinned):
             return setPinned(panelID: panelID, isPinned: isPinned)
         case .floatGroup(let groupID, let windowID, let frame):
@@ -428,27 +431,39 @@ public final class WorkspaceController: @unchecked Sendable {
                   locate(panelID: closed.panelID) == nil else {
                 continue
             }
-            let groupID: WorkspaceTabGroupID
-            let restoreSlot = closed.slotID ?? .center
-            if document.groups[closed.groupID] != nil {
-                groupID = closed.groupID
-                ensureGroup(groupID, in: restoreSlot)
-            } else {
-                groupID = closed.groupID
-                document.groups[groupID] = WorkspaceTabGroup(id: groupID, panels: [])
-                ensureGroup(groupID, in: restoreSlot)
-            }
-            var group = document.groups[groupID] ?? WorkspaceTabGroup(id: groupID, panels: [])
-            insert(panelID: closed.panelID, into: &group, at: closed.index)
-            group.activePanelID = closed.panelID
-            group.isCollapsed = false
-            document.groups[groupID] = group
-            return WorkspaceTransactionResult(didChange: true,
-                                              changedSlots: [restoreSlot],
-                                              focusPanelID: closed.panelID,
-                                              persistenceDirty: true)
+            return restoreClosedPanel(closed)
         }
         return .unchanged
+    }
+
+    private func reopenPanel(_ panelID: WorkspacePanelID) -> WorkspaceTransactionResult {
+        guard locate(panelID: panelID) == nil,
+              document.panels[panelID] != nil,
+              let historyIndex = document.closedHistory.lastIndex(where: { $0.panelID == panelID }) else {
+            return .unchanged
+        }
+        let closed = document.closedHistory.remove(at: historyIndex)
+        return restoreClosedPanel(closed)
+    }
+
+    private func restoreClosedPanel(_ closed: WorkspaceClosedPanel) -> WorkspaceTransactionResult {
+        let groupID = closed.groupID
+        let restoreSlot = closed.slotID ?? .center
+        if document.groups[groupID] != nil {
+            ensureGroup(groupID, in: restoreSlot)
+        } else {
+            document.groups[groupID] = WorkspaceTabGroup(id: groupID, panels: [])
+            ensureGroup(groupID, in: restoreSlot)
+        }
+        var group = document.groups[groupID] ?? WorkspaceTabGroup(id: groupID, panels: [])
+        insert(panelID: closed.panelID, into: &group, at: closed.index)
+        group.activePanelID = closed.panelID
+        group.isCollapsed = false
+        document.groups[groupID] = group
+        return WorkspaceTransactionResult(didChange: true,
+                                          changedSlots: [restoreSlot],
+                                          focusPanelID: closed.panelID,
+                                          persistenceDirty: true)
     }
 
     private func setPinned(panelID: WorkspacePanelID,

@@ -11,6 +11,7 @@ struct SettingsPanel: View {
     @State private var aiProviderDraft: EditorAIProvider
     @State private var aiModelDraft: String
     @State private var aiKeyDraft: String
+    @State private var aiAutoApproveDraft: Bool
     @State private var aiStatusMessage: String?
     @State private var aiStatusIsError: Bool
 
@@ -20,6 +21,7 @@ struct SettingsPanel: View {
         _aiProviderDraft = State(wrappedValue: app.store.aiSettings.provider)
         _aiModelDraft = State(wrappedValue: app.store.aiSettings.model)
         _aiKeyDraft = State(wrappedValue: "")
+        _aiAutoApproveDraft = State(wrappedValue: app.store.aiSettings.autoApprove)
         _aiStatusMessage = State(wrappedValue: nil)
         _aiStatusIsError = State(wrappedValue: false)
     }
@@ -170,6 +172,18 @@ struct SettingsPanel: View {
                 Text(aiCredentialStatus(credentialSource))
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
+
+                Row(alignment: .center, spacing: 8) {
+                    Toggle(isOn: $aiAutoApproveDraft)
+                    Column(alignment: .leading, spacing: 2) {
+                        Text(L("Automatically apply safe AI changes"))
+                            .font(.caption)
+                            .foregroundColor(.onSurface)
+                        Text(L("Operations that require confirmation will still wait for approval."))
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                    }
+                }
             }
 
             Row(alignment: .center, spacing: 8) {
@@ -196,7 +210,7 @@ struct SettingsPanel: View {
         case .operatingSystemStore:
             return L("A credential is stored securely.")
         case let .environment(variable):
-            return L("Using credential from environment variable \(variable).")
+            return String(format: L("Using credential from environment variable %@."), variable)
         case nil:
             return L("No credential is available for this provider.")
         }
@@ -227,7 +241,7 @@ struct SettingsPanel: View {
         let settings = EditorAISettings(
             provider: aiProviderDraft,
             model: model.isEmpty ? aiProviderDraft.defaultModel : model,
-            autoApprove: store.aiSettings.autoApprove
+            autoApprove: aiAutoApproveDraft
         )
         if app.applyAISettings(
             settings,
@@ -250,6 +264,7 @@ struct SettingsPanel: View {
         if app.clearAIKey() {
             aiProviderDraft = .none
             aiModelDraft = EditorAIProvider.none.defaultModel
+            aiAutoApproveDraft = EditorAISettings.default.autoApprove
             aiKeyDraft = ""
             aiStatusMessage = L("Stored credential removed and AI Assistant disabled.")
             aiStatusIsError = false
@@ -333,7 +348,12 @@ struct SettingsPanel: View {
     }
 
     private func choosePluginPackage() {
-        guard let display = AppDisplayHandleHolder.current else { return }
+        guard let display = AppDisplayHandleHolder.current else {
+            app.logConsole("Plugin picker is unavailable",
+                           severity: .error,
+                           detail: "No active display is available to present the folder picker.")
+            return
+        }
         MainActor.assumeIsolated {
             display.requestOpenFolder(defaultPath: app.projectDirectory) { path in
                 guard let path else { return }

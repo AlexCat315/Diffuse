@@ -51,27 +51,33 @@ struct LayoutPresetSelector: View {
             return [
                 .item(MenuItem(id: "level-default",
                                title: L("Default"),
+                               isSelected: activePreset == .levelDefault,
                                action: { onSelectPreset(.levelDefault) })),
                 .item(MenuItem(id: "level-cine",
                                title: L("Cine"),
+                               isSelected: activePreset == .levelCinematics,
                                action: { onSelectPreset(.levelCinematics) })),
             ]
         case .modeling:
             return [
                 .item(MenuItem(id: "modeling-default",
                                title: L("Default"),
+                               isSelected: activePreset == .modelingDefault,
                                action: { onSelectPreset(.modelingDefault) })),
                 .item(MenuItem(id: "modeling-sculpt",
                                title: L("Sculpt"),
+                               isSelected: activePreset == .modelingSculpt,
                                action: { onSelectPreset(.modelingSculpt) })),
             ]
         case .animation:
             return [
                 .item(MenuItem(id: "animation-default",
                                title: L("Default"),
+                               isSelected: activePreset == .animationDefault,
                                action: { onSelectPreset(.animationDefault) })),
                 .item(MenuItem(id: "animation-seq",
                                title: L("Seq"),
+                               isSelected: activePreset == .animationSequencer,
                                action: { onSelectPreset(.animationSequencer) })),
             ]
         }

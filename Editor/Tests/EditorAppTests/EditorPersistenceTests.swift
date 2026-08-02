@@ -1,4 +1,7 @@
 import Foundation
+import GuavaUIApp
+import GuavaUICompose
+import GuavaUIWorkspace
 import Testing
 @testable import EditorApp
 
@@ -45,5 +48,37 @@ struct EditorPersistenceTests {
 
         #expect(result == nil)
         #expect((try FileManager.default.contentsOfDirectory(atPath: directory.path)).isEmpty)
+    }
+
+    @Test("Workspace reconciliation preserves closed panels while adding new descriptors")
+    func workspaceReconciliationPreservesClosedPanels() {
+        let registry = PanelRegistry([
+            PanelDescriptor(id: "assets", title: "Assets", preferredSlot: .bottom) {
+                EmptyView()
+            },
+            PanelDescriptor(id: "new-tool", title: "New Tool", preferredSlot: .bottom) {
+                EmptyView()
+            },
+        ])
+        let document = WorkspaceDocument(
+            panels: ["assets": WorkspacePanel(id: "assets", title: "Assets")],
+            groups: [:],
+            slots: WorkspaceSlot.standardEditorSlots(),
+            closedHistory: [
+                WorkspaceClosedPanel(panelID: "assets",
+                                     groupID: "bottom",
+                                     slotID: .bottom,
+                                     index: 0),
+            ]
+        )
+
+        let reconciled = EditorRootViewFactory.reconciledWorkspaceDocument(
+            document,
+            registry: registry
+        )
+
+        #expect(reconciled.groupContaining(panelID: "assets") == nil)
+        #expect(reconciled.closedHistory.map(\.panelID) == ["assets"])
+        #expect(reconciled.groupContaining(panelID: "new-tool")?.panels.contains("new-tool") == true)
     }
 }

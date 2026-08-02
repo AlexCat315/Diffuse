@@ -7,26 +7,37 @@ enum EditorPlaybackCommandPolicy {
     }
 }
 
+enum EditorSceneAuthoringPolicy {
+    static func canEditScene(during playbackState: PlaybackState) -> Bool {
+        playbackState == .stopped
+    }
+}
+
 struct EditorMenuModel {
     let menus: [EditorApplicationMenu]
 
     static func make(workspaceMode: EditorWorkspaceMode,
                      activeLayoutPreset: EditorLayoutPreset,
-                     playbackState: PlaybackState) -> EditorMenuModel {
-        EditorMenuModel(menus: [
+                     playbackState: PlaybackState,
+                     canUndo: Bool = false,
+                     canRedo: Bool = false,
+                     hasSelection: Bool = false) -> EditorMenuModel {
+        let canAuthorScene = EditorSceneAuthoringPolicy.canEditScene(during: playbackState)
+        return EditorMenuModel(menus: [
             EditorApplicationMenu(title: L("File"), items: [
-                action(L("New Scene"), key: "n", command: .newScene),
-                action(L("Open Scene..."), key: "o", command: .openScene),
+                action(L("New Scene"), key: "n", enabled: canAuthorScene, command: .newScene),
+                action(L("Open Scene..."), key: "o", enabled: canAuthorScene, command: .openScene),
                 action(L("Save Scene"), key: "s", command: .saveScene),
                 .separator,
                 action(L("Import Assets..."), key: "", command: .importAssets),
             ]),
             EditorApplicationMenu(title: L("Edit"), items: [
-                action(L("Undo"), key: "z", command: .undo),
-                action(L("Redo"), key: "z", modifiers: [.primary, .shift], command: .redo),
+                action(L("Undo"), key: "z", enabled: canAuthorScene && canUndo, command: .undo),
+                action(L("Redo"), key: "z", modifiers: [.primary, .shift], enabled: canAuthorScene && canRedo, command: .redo),
                 .separator,
-                action(L("Duplicate Selection"), key: "d", command: .duplicateSelection),
-                action(L("Delete Selection"), key: "", command: .deleteSelection),
+                action(L("Duplicate Selection"), key: "d", enabled: canAuthorScene && hasSelection, command: .duplicateSelection),
+                action(L("Delete Selection"), key: "\u{8}", modifiers: [],
+                       enabled: canAuthorScene && hasSelection, command: .deleteSelection),
                 .separator,
                 action(L("Settings"), key: ",", command: .openSettings),
             ]),

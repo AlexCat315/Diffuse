@@ -58,6 +58,7 @@ let package = Package(
             dependencies: [
                 "EditorCore",
                 .product(name: "SIMDCompat", package: "Engine"),
+                .product(name: "AssetPipeline", package: "Engine"),
                 .product(name: "GuavaUIApp", package: "GuavaUI"),
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
                 .product(name: "GuavaUIWorkspace", package: "GuavaUI"),

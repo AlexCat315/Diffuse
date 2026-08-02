@@ -854,10 +854,12 @@ public struct TransactionExecutor {
                                                                    type: "RenderMeshComponent")
                 }
 
-            case let .setRenderMaterialComponent(entityID, baseColorFactor, metallicFactor, roughnessFactor, emissiveFactor):
+            case let .setRenderMaterialComponent(entityID, baseColorFactor, baseColorTextureIndex, normalTextureIndex, metallicFactor, roughnessFactor, emissiveFactor):
                 let entity = try requireEntity(entityID, in: scene)
                 let component = RenderMaterialComponent(
                     baseColorFactor: baseColorFactor,
+                    baseColorTextureIndex: baseColorTextureIndex,
+                    normalTextureIndex: normalTextureIndex,
                     metallicFactor: metallicFactor,
                     roughnessFactor: roughnessFactor,
                     emissiveFactor: emissiveFactor
@@ -1263,7 +1265,7 @@ public struct TransactionExecutor {
             return "scene:mesh_color:\(id)"
         case let .setRenderMeshVisibility(id, _):
             return "scene:mesh_visibility:\(id)"
-        case let .setRenderMaterialComponent(id, _, _, _, _):
+        case let .setRenderMaterialComponent(id, _, _, _, _, _, _):
             return "scene:render_material:\(id)"
         case let .setScriptBindings(id, _):
             return "scene:scripts:\(id)"
@@ -1447,7 +1449,7 @@ public struct TransactionExecutor {
                     ref: "scene:\(entityID)", property: "meshIsVisible",
                     value: .bool(isVisible)))
 
-            case let .setRenderMaterialComponent(entityID, baseColorFactor, metallicFactor, roughnessFactor, emissiveFactor):
+            case let .setRenderMaterialComponent(entityID, baseColorFactor, _, _, metallicFactor, roughnessFactor, emissiveFactor):
                 let ref = "scene:\(entityID)"
                 events.append(.entityAuthoredChanged(ref: ref, property: "materialBaseColor",
                     value: .vec4(baseColorFactor.x, baseColorFactor.y, baseColorFactor.z, baseColorFactor.w)))

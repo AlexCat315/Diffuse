@@ -7,19 +7,22 @@ public struct PathTracerConfig: Sendable {
     public var russianRouletteDepth: Int
     public var clampIndirect: Float
     public var samplingStrategy: any SamplingStrategy
+    public var environmentColor: SIMD3<Float>
 
     public init(
         maxBounces: Int = 4,
         samplesPerPixel: Int = 64,
         russianRouletteDepth: Int = 3,
         clampIndirect: Float = 10,
-        samplingStrategy: any SamplingStrategy = HaltonSampler()
+        samplingStrategy: any SamplingStrategy = HaltonSampler(),
+        environmentColor: SIMD3<Float> = SIMD3<Float>(0.08, 0.1, 0.14)
     ) {
         self.maxBounces = maxBounces
         self.samplesPerPixel = samplesPerPixel
         self.russianRouletteDepth = russianRouletteDepth
         self.clampIndirect = clampIndirect
         self.samplingStrategy = samplingStrategy
+        self.environmentColor = environmentColor
     }
 }
 
@@ -45,7 +48,8 @@ public struct Ray: Sendable {
 
     public init(origin: SIMD3<Float>, direction: SIMD3<Float>) {
         self.origin = origin
-        self.direction = simd_normalize(direction)
+        self.direction = normalizedOrFallback(direction,
+                                              fallback: SIMD3<Float>(0, 0, -1))
         self.invDirection = SIMD3<Float>(
             x: 1 / (abs(self.direction.x) > 1e-8 ? self.direction.x : 1e-8),
             y: 1 / (abs(self.direction.y) > 1e-8 ? self.direction.y : 1e-8),
@@ -63,6 +67,16 @@ public struct CameraRay: Sendable {
     public var direction: SIMD3<Float>
     public var pixelX: Int
     public var pixelY: Int
+
+    public init(origin: SIMD3<Float>,
+                direction: SIMD3<Float>,
+                pixelX: Int,
+                pixelY: Int) {
+        self.origin = origin
+        self.direction = direction
+        self.pixelX = pixelX
+        self.pixelY = pixelY
+    }
 }
 
 public protocol SceneGeometry: Sendable {
@@ -121,11 +135,19 @@ public final class PathTracer: @unchecked Sendable {
         geometry: any SceneGeometry,
         sample: Int
     ) -> SIMD3<Float> {
+        guard width > 0, height > 0 else { return config.environmentColor }
         let sampler = config.samplingStrategy
         let jitter = sampler.sample2D(sample * width * height + camera.pixelY * width + camera.pixelX, sample: sample)
         let u = (Float(camera.pixelX) + jitter.x) / Float(width)
         let v = (Float(camera.pixelY) + jitter.y) / Float(height)
-        let ray = camera.ray(forUV: SIMD2<Float>(u, v))
+        let projection = SimpleCamera(
+            origin: camera.origin,
+            forward: camera.direction,
+            up: SIMD3<Float>(0, 1, 0),
+            fovYRadians: .pi / 4,
+            aspectRatio: Float(width) / Float(height)
+        )
+        let ray = projection.ray(forUV: SIMD2<Float>(u, v))
         return trace(ray: ray, geometry: geometry, depth: 0)
     }
 
@@ -136,13 +158,17 @@ public final class PathTracer: @unchecked Sendable {
         cameraOrigin: SIMD3<Float>,
         cameraForward: SIMD3<Float>,
         cameraUp: SIMD3<Float>,
+        cameraFOVYRadians: Float = .pi / 4,
+        cameraAspectRatio: Float? = nil,
         geometry: any SceneGeometry
     ) {
+        guard width > 0, height > 0 else { return }
         let camera = SimpleCamera(
             origin: cameraOrigin,
             forward: cameraForward,
             up: cameraUp,
-            fovDegrees: 45
+            fovYRadians: cameraFOVYRadians,
+            aspectRatio: cameraAspectRatio ?? (height > 0 ? Float(width) / Float(height) : 1)
         )
         let sampler = config.samplingStrategy
         let s = state.completedSamples
@@ -170,7 +196,7 @@ public final class PathTracer: @unchecked Sendable {
 
     private func trace(ray: Ray, geometry: any SceneGeometry, depth: Int) -> SIMD3<Float> {
         guard let hit = geometry.intersect(ray: ray) else {
-            return SIMD3<Float>(0, 0, 0) // Sky / environment (black for now)
+            return config.environmentColor
         }
 
         // Direct emission
@@ -212,14 +238,33 @@ private struct SimpleCamera {
     let halfHeight: Float
     let halfWidth: Float
 
-    init(origin: SIMD3<Float>, forward: SIMD3<Float>, up: SIMD3<Float>, fovDegrees: Float) {
+    init(origin: SIMD3<Float>,
+         forward: SIMD3<Float>,
+         up: SIMD3<Float>,
+         fovYRadians: Float,
+         aspectRatio: Float) {
         self.origin = origin
-        self.forward = simd_normalize(forward)
-        self.right = simd_normalize(simd_cross(self.forward, up))
-        self.up = simd_normalize(simd_cross(self.right, self.forward))
-        let aspect: Float = 1.0 // square default
-        self.halfHeight = tanf(fovDegrees * .pi / 360)
-        self.halfWidth = halfHeight * aspect
+        let safeForward = normalizedOrFallback(forward,
+                                               fallback: SIMD3<Float>(0, 0, -1))
+        let safeUp = normalizedOrFallback(up,
+                                          fallback: SIMD3<Float>(0, 1, 0))
+        var rightRaw = simd_cross(safeForward, safeUp)
+        if simd_length(rightRaw) <= 0.000_001 {
+            let alternateUp = abs(safeForward.y) < 0.99
+                ? SIMD3<Float>(0, 1, 0)
+                : SIMD3<Float>(1, 0, 0)
+            rightRaw = simd_cross(safeForward, alternateUp)
+        }
+        let safeRight = normalizedOrFallback(rightRaw,
+                                             fallback: SIMD3<Float>(1, 0, 0))
+        self.forward = safeForward
+        self.right = safeRight
+        self.up = normalizedOrFallback(simd_cross(safeRight, safeForward),
+                                       fallback: SIMD3<Float>(0, 1, 0))
+        let safeFOV = fovYRadians.isFinite ? fovYRadians : .pi / 4
+        let safeAspect = aspectRatio.isFinite ? aspectRatio : 1
+        self.halfHeight = tanf(max(0.01, min(.pi - 0.01, safeFOV)) * 0.5)
+        self.halfWidth = halfHeight * max(0.001, safeAspect)
     }
 
     func ray(forUV uv: SIMD2<Float>) -> Ray {
@@ -246,10 +291,12 @@ private func cosineWeightedHemisphere(normal: SIMD3<Float>) -> SIMD3<Float> {
     )
 }
 
-extension CameraRay {
-    func ray(forUV uv: SIMD2<Float>) -> Ray {
-        // Simplification: derive from stored direction + pixel offset.
-        // Full camera model should replace this with proper projection.
-        Ray(origin: origin, direction: direction)
+private func normalizedOrFallback(_ vector: SIMD3<Float>,
+                                  fallback: SIMD3<Float>) -> SIMD3<Float> {
+    guard vector.x.isFinite, vector.y.isFinite, vector.z.isFinite else {
+        return fallback
     }
+    let length = simd_length(vector)
+    guard length.isFinite, length > 0.000_001 else { return fallback }
+    return vector / length
 }

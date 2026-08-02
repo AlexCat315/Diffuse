@@ -118,6 +118,9 @@ enum EditorRootViewFactory {
     }
 
     static func activatePanel(_ id: PanelID, in controller: WorkspaceController) {
+        if controller.document.groupContaining(panelID: id) == nil {
+            _ = controller.dispatch(.reopenPanel(id))
+        }
         guard let group = controller.document.groupContaining(panelID: id) else { return }
         _ = controller.dispatch(.setActivePanel(groupID: group.id, panelID: id))
     }
@@ -192,7 +195,7 @@ enum EditorRootViewFactory {
                             title: localizedPanelTitle(for: "render-pipeline"),
                             preferredSlot: .bottom,
                             iconAssetKey: "panel.render-pipeline") {
-                RenderPipelinePanel()
+                RenderPipelinePanel(app: app)
             },
             PanelDescriptor(id: "developer-tools",
                             title: localizedPanelTitle(for: "developer-tools"),
@@ -314,8 +317,8 @@ enum EditorRootViewFactory {
         }
     }
 
-    private static func reconciledWorkspaceDocument(_ document: WorkspaceDocument,
-                                                    registry: PanelRegistry) -> WorkspaceDocument {
+    static func reconciledWorkspaceDocument(_ document: WorkspaceDocument,
+                                            registry: PanelRegistry) -> WorkspaceDocument {
         var next = document
         next.ensureStandardEditorSlotSchema()
         let registeredIDs = Set(registry.ids)
@@ -351,6 +354,13 @@ enum EditorRootViewFactory {
         for descriptor in registry.descriptors {
             next.panels[descriptor.id] = workspacePanel(for: descriptor)
             guard next.groupContaining(panelID: descriptor.id) == nil else { continue }
+            // A panel intentionally closed by the user remains represented in
+            // `closedHistory`. Reattaching it here made panel closure appear to
+            // work only until the next launch. Descriptors with no history are
+            // genuinely new panels and should still be added automatically.
+            guard !next.closedHistory.contains(where: { $0.panelID == descriptor.id }) else {
+                continue
+            }
             let groupID = defaultGroupID(for: descriptor.preferredSlot)
             var group = next.groups[groupID] ?? WorkspaceTabGroup(id: groupID, panels: [])
             if !group.panels.contains(descriptor.id) {

@@ -19,12 +19,27 @@ struct AssetBrowserPanel: View {
     @State private var searchText: String = ""
     @AppStorage("assetBrowser.viewMode") private var viewMode: AssetViewMode = .grid
     @State private var selectedAssetID: String? = nil
+    @State private var reloadStatusMessage: String? = nil
+    @State private var reloadStatusIsError: Bool = false
     /// Relative folder path currently shown ("" == project root). Uses "/" as
     /// separator, matching `AssetRegistryEntry.relativePath`.
     @State private var currentFolder: String = ""
 
     private func importAssets() {
         EditorAssetImportCoordinator.requestImport(app: app, into: currentFolder)
+    }
+
+    private func reloadAssets() {
+        let result = app.reloadAssets()
+        AssetThumbnailRasterizer.invalidate()
+        ImageAssetRegistryHolder.current?.clear()
+        if let count = result {
+            reloadStatusMessage = String(format: L("Reloaded %lld assets."), Int64(count))
+            reloadStatusIsError = false
+        } else {
+            reloadStatusMessage = L("Asset reload failed. See Console for details.")
+            reloadStatusIsError = true
+        }
     }
 
     private var trimmedQuery: String {
@@ -46,7 +61,8 @@ struct AssetBrowserPanel: View {
     }
 
     var body: some View {
-        StoreScope(app.store) { _ in
+        StoreScope(app.store) { store in
+            let _ = store.presentationRevision
             let allAssets = EditorAssetCatalog.entries()
             let isSearching = !trimmedQuery.isEmpty
             // While searching, ignore folder structure and show flat matches
@@ -61,7 +77,8 @@ struct AssetBrowserPanel: View {
                                     totalCount: allAssets.count,
                                     visibleCount: itemCount,
                                     isFiltering: isSearching,
-                                    onImport: { importAssets() })
+                                    onImport: { importAssets() },
+                                    onReload: { reloadAssets() })
                     .padding(horizontal: 10, vertical: 7)
 
                 Divider()
@@ -75,7 +92,30 @@ struct AssetBrowserPanel: View {
 
                 Divider()
 
+                if let reloadStatusMessage {
+                    Text(reloadStatusMessage)
+                        .font(.caption)
+                        .foregroundColor(reloadStatusIsError ? .error : .success)
+                        .padding(horizontal: 10, vertical: 5)
+                    Divider()
+                }
+
                 content(allAssets: allAssets, listing: listing, isSearching: isSearching)
+
+                if let selectedAssetID,
+                   let selectedAsset = allAssets.first(where: { $0.id == selectedAssetID }) {
+                    Divider()
+                    AssetSelectionBar(
+                        asset: selectedAsset,
+                        isAddEnabled: store.playbackState == .stopped,
+                        onAddToScene: {
+                            _ = app.spawnAsset(selectedAsset)
+                        },
+                        onReveal: {
+                            revealAsset(selectedAsset)
+                        }
+                    )
+                }
             }
             .frame(minWidth: 240)
         }
@@ -140,6 +180,19 @@ struct AssetBrowserPanel: View {
             .flex()
         }
     }
+
+    private func revealAsset(_ asset: EditorAsset) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = ["-R", asset.absolutePath]
+        do {
+            try process.run()
+        } catch {
+            app.logConsole("Could not reveal asset",
+                           severity: .error,
+                           detail: error.localizedDescription)
+        }
+    }
 }
 
 private enum AssetViewMode: String, Sendable, AppStorageConvertible {
@@ -193,10 +246,14 @@ private struct AssetBrowserToolbar: View {
     let visibleCount: Int
     let isFiltering: Bool
     let onImport: () -> Void
+    let onReload: () -> Void
 
     var body: some View {
         Row(alignment: .center, spacing: 8) {
             Button(L("Import…")) { onImport() }
+                .buttonStyle(.secondary)
+
+            Button(L("Reload")) { onReload() }
                 .buttonStyle(.secondary)
 
             TextField(L("Search Assets"),
@@ -298,6 +355,42 @@ private struct AssetViewModeButton: View {
             Text(title, lineLimit: 1)
         }
         .buttonStyle(ToggleButtonStyle(height: 22))
+    }
+}
+
+private struct AssetSelectionBar: View {
+    let asset: EditorAsset
+    let isAddEnabled: Bool
+    let onAddToScene: () -> Void
+    let onReveal: () -> Void
+
+    var body: some View {
+        Row(alignment: .center, spacing: 8) {
+            Column(alignment: .leading, spacing: 1) {
+                Text(asset.name, lineLimit: 1)
+                    .font(.caption)
+                    .foregroundColor(.onSurface)
+                Text(asset.relativePath, lineLimit: 1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
+            .flex(1, shrink: 1)
+
+            Text(asset.kind.sceneKindLabel)
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+            if asset.kind.isMesh {
+                Button(L("Add to Scene"),
+                       isEnabled: isAddEnabled,
+                       tooltip: isAddEnabled ? nil : L("Stop simulation to edit the scene"),
+                       action: onAddToScene)
+                    .buttonStyle(.primary)
+            }
+            Button(L("Reveal in Finder"), action: onReveal)
+                .buttonStyle(.secondary)
+        }
+        .padding(horizontal: 10, vertical: 7)
+        .background(.surfaceVariant)
     }
 }
 
@@ -628,6 +721,8 @@ private struct AssetDragSource<Content: View>: _PrimitiveView {
         let app = self.app
         let onSelect = self.onSelect
         let capture = PointerCaptureHolder.current
+        let isDragEnabled = asset.kind.isMesh
+            && app.store.state.playbackState == .stopped
 
         registry.setPointer(node, route: InputHandlerRoute(role: .drag,
                                                            priority: .capture,
@@ -636,6 +731,7 @@ private struct AssetDragSource<Content: View>: _PrimitiveView {
             switch phase {
             case .down:
                 onSelect()
+                guard isDragEnabled else { return .handled }
                 AssetDragGesture.pending = AssetDragGesture.Pending(assetID: asset.id,
                                                                     startX: event.x,
                                                                     startY: event.y,

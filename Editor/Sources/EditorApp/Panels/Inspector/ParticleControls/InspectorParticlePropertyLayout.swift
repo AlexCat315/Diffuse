@@ -36,6 +36,12 @@ enum InspectorParticlePropertyLayout {
 
     private static let groups: [Group] = [
         Group(
+            id: "modules",
+            title: L("Modules"),
+            startsCollapsed: false,
+            fieldIDs: ["particle-module-stack"]
+        ),
+        Group(
             id: "overview",
             title: L("Particle Emitter"),
             startsCollapsed: false,
