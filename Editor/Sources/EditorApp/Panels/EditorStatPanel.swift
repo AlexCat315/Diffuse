@@ -92,7 +92,8 @@ struct DeveloperToolsPanel: View {
                         renderStats: renderStats,
                         particleHistory: store.particleDiagnosticsHistory,
                         issues: diagnostics.filter { $0.target.tab == .frame || $0.target.tab == .render },
-                        selectedSampleIndex: $selectedFrameSampleIndex
+                        selectedSampleIndex: $selectedFrameSampleIndex,
+                        onOpenTarget: openDiagnosticTarget
                     )
                 },
                 TabItem("Monitors", id: DeveloperToolTab.monitors) {
@@ -103,7 +104,8 @@ struct DeveloperToolsPanel: View {
                 TabItem("Render", id: DeveloperToolTab.render) {
                     RenderFrameDebuggerView(frameStats: frameStats,
                                             renderStats: renderStats,
-                                            issues: diagnostics.filter { $0.target.tab == .render })
+                                            issues: diagnostics.filter { $0.target.tab == .render },
+                                            onOpenTarget: openDiagnosticTarget)
                 },
                 TabItem("Particles", id: DeveloperToolTab.particles) {
                     ParticleDiagnosticsTabView(app: app,
@@ -115,6 +117,13 @@ struct DeveloperToolsPanel: View {
                 },
             ])
             .frame(minHeight: 160)
+        }
+    }
+
+    private func openDiagnosticTarget(_ target: DeveloperDiagnosticTarget) {
+        selectedTab = developerToolTabDestination(for: target.tab)
+        if let frameSampleIndex = target.frameSampleIndex {
+            selectedFrameSampleIndex = frameSampleIndex
         }
     }
 }
@@ -130,7 +139,7 @@ enum DeveloperToolTab: Hashable {
     case debugger
 }
 
-private func developerToolTabDestination(for target: DeveloperToolTab) -> DeveloperToolTab {
+func developerToolTabDestination(for target: DeveloperToolTab) -> DeveloperToolTab {
     switch target {
     case .frame:
         return .profiler
@@ -308,39 +317,6 @@ struct DeveloperTraceSampleContext: Equatable {
     var previous: DeveloperTraceSampleContextRow?
     var selected: DeveloperTraceSampleContextRow
     var next: DeveloperTraceSampleContextRow?
-}
-
-private struct DeveloperTraceEventCellKey: Hashable {
-    var track: DeveloperTraceTrack
-    var sampleIndex: UInt64
-}
-
-struct DeveloperTraceEventIndex {
-    private var eventsByCell: [DeveloperTraceEventCellKey: [DeveloperTraceEvent]]
-    private var eventsBySample: [UInt64: [DeveloperTraceEvent]]
-
-    init(trace: DeveloperTraceSnapshot) {
-        var eventsByCell: [DeveloperTraceEventCellKey: [DeveloperTraceEvent]] = [:]
-        var eventsBySample: [UInt64: [DeveloperTraceEvent]] = [:]
-        for event in trace.events {
-            eventsByCell[DeveloperTraceEventCellKey(track: event.track,
-                                                    sampleIndex: event.sampleIndex),
-                         default: []].append(event)
-            eventsBySample[event.sampleIndex, default: []].append(event)
-        }
-        self.eventsByCell = eventsByCell
-        self.eventsBySample = eventsBySample
-    }
-
-    func events(track: DeveloperTraceTrack, sampleIndex: UInt64) -> [DeveloperTraceEvent] {
-        eventsByCell[DeveloperTraceEventCellKey(track: track, sampleIndex: sampleIndex)] ?? []
-    }
-
-    func events(sampleIndex: UInt64, excluding excludedEventID: String? = nil) -> [DeveloperTraceEvent] {
-        let events = eventsBySample[sampleIndex] ?? []
-        guard let excludedEventID else { return events }
-        return events.filter { $0.id != excludedEventID }
-    }
 }
 
 struct DeveloperMonitorSnapshot: Equatable {
@@ -1783,6 +1759,7 @@ private struct RenderFrameDebuggerView: View {
     let frameStats: EditorFrameStats
     let renderStats: RenderFrameStats
     let issues: [DeveloperDiagnosticIssue]
+    let onOpenTarget: (DeveloperDiagnosticTarget) -> Void
 
     var body: some View {
         let passes = makeDeveloperRenderPassBreakdown(renderStats: renderStats)
@@ -1792,7 +1769,7 @@ private struct RenderFrameDebuggerView: View {
                     if !issues.isEmpty {
                         DeveloperIssueQueue(issues: issues,
                                             title: "Render Issues",
-                                            onOpenTarget: { _ in })
+                                            onOpenTarget: onOpenTarget)
                     }
                     RenderPipelineSummary(frameStats: frameStats,
                                           renderStats: renderStats)

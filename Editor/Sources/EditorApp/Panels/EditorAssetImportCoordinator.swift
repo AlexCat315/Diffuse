@@ -67,11 +67,17 @@ enum EditorAssetImportCoordinator {
         }
 
         if !importedNames.isEmpty {
-            _ = app.reloadAssets()
+            let reloadCount = app.reloadAssets()
             AssetThumbnailRasterizer.invalidate()
             ImageAssetRegistryHolder.current?.clear()
-            app.logConsole("Imported \(importedNames.count) asset\(importedNames.count == 1 ? "" : "s")",
-                           detail: importedNames.joined(separator: ", "))
+            if let reloadCount {
+                app.logConsole("Imported \(importedNames.count) asset\(importedNames.count == 1 ? "" : "s")",
+                               detail: "\(importedNames.joined(separator: ", ")) · \(reloadCount) assets in catalog")
+            } else {
+                app.logConsole("Asset files were copied but the catalog could not reload",
+                               severity: .warning,
+                               detail: importedNames.joined(separator: ", "))
+            }
         }
         if !missingDependencies.isEmpty {
             app.logConsole("Asset imported with missing dependencies",

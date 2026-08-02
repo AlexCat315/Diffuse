@@ -1,6 +1,7 @@
-import EditorCore
+@testable import EditorCore
 import ContextMemory
 import Foundation
+import SceneRuntime
 import Testing
 
 @Suite("Editor scene recovery", .serialized)
@@ -113,6 +114,59 @@ struct EditorSceneRecoveryTests {
         #expect(app.store.playbackState == .stopped)
     }
 
+    @Test("an interrupted Play snapshot is recovered on the next launch")
+    func interruptedPlaySnapshotRecovery() throws {
+        let project = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava-editor-interrupted-play-\(UUID().uuidString)",
+                                    isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: project) }
+        let guavaDirectory = project.appendingPathComponent(".guava", isDirectory: true)
+        try FileManager.default.createDirectory(at: guavaDirectory,
+                                                withIntermediateDirectories: true)
+
+        let authored = EditorSceneAdapter()
+        let sourceID = try #require(authored.defaultSelectionID)
+        let recoveredPosition = SIMD3<Float>(12, 8, -4)
+        authored.setEntityLocalTranslation(sourceID, to: recoveredPosition)
+        let snapshotURL = guavaDirectory.appendingPathComponent("physics-play-snapshot.json")
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(authored.manifest(selectedEntityID: sourceID))
+            .write(to: snapshotURL, options: [.atomic])
+
+        let app = try EditorApplication(projectDirectory: project.path)
+        defer { app.shutdown() }
+        let restoredManifest = try #require(app.restoreProjectSceneAtLaunch())
+        let restoredID = try #require(app.store.state.selectedEntityID)
+        let autosaveURL = GameSaveDocument.url(slot: GameSaveDocument.autoSaveSlot,
+                                               projectDirectory: project.path)
+
+        #expect(restoredManifest.selectedEntityID != nil)
+        #expect(app.scene.entityLocalTranslation(restoredID) == recoveredPosition)
+        #expect(app.store.state.sceneRecoveryPending)
+        #expect(FileManager.default.fileExists(atPath: autosaveURL.path))
+        #expect(!FileManager.default.fileExists(atPath: snapshotURL.path))
+    }
+
+    @Test("clean shutdown removes the Play crash marker")
+    func cleanShutdownRemovesPlaySnapshot() throws {
+        let project = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava-editor-clean-play-exit-\(UUID().uuidString)",
+                                    isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: project) }
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        let app = try EditorApplication(projectDirectory: project.path)
+        let snapshotURL = project
+            .appendingPathComponent(".guava", isDirectory: true)
+            .appendingPathComponent("physics-play-snapshot.json")
+
+        app.applyPlaybackState(.playing)
+        #expect(FileManager.default.fileExists(atPath: snapshotURL.path))
+        app.shutdown()
+
+        #expect(!FileManager.default.fileExists(atPath: snapshotURL.path))
+    }
+
     @Test("dirty scene is autosaved on shutdown, restored, and cleared by an explicit save")
     func shutdownRecoveryRoundTrip() throws {
         let project = FileManager.default.temporaryDirectory
@@ -165,7 +219,11 @@ struct EditorSceneRecoveryTests {
         let runtimeOnly = original + SIMD3<Float>(20, 30, 40)
         app.scene.setEntityLocalTranslation(entityID, to: authored)
         app.applyPlaybackState(.playing)
-        app.scene.setEntityLocalTranslation(entityID, to: runtimeOnly)
+        var runtimeTransform = app.scene.scene.localTransform(for: EntityID(rawValue: entityID))
+            ?? LocalTransform()
+        runtimeTransform.matrix.columns.3 = SIMD4<Float>(runtimeOnly, 1)
+        _ = app.scene.scene.setLocalTransform(runtimeTransform,
+                                              for: EntityID(rawValue: entityID))
 
         let savedURL = try #require(app.saveSceneManifest())
         #expect(app.store.playbackState == .playing)
@@ -199,7 +257,11 @@ struct EditorSceneRecoveryTests {
         let runtimeOnly = original + SIMD3<Float>(30, 40, 50)
         app.scene.setEntityLocalTranslation(entityID, to: authored)
         app.applyPlaybackState(.playing)
-        app.scene.setEntityLocalTranslation(entityID, to: runtimeOnly)
+        var runtimeTransform = app.scene.scene.localTransform(for: EntityID(rawValue: entityID))
+            ?? LocalTransform()
+        runtimeTransform.matrix.columns.3 = SIMD4<Float>(runtimeOnly, 1)
+        _ = app.scene.scene.setLocalTransform(runtimeTransform,
+                                              for: EntityID(rawValue: entityID))
 
         let output = try #require(app.exportProject())
         #expect(try ProjectExporter.readDescriptor(from: output).appName

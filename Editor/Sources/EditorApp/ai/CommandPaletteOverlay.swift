@@ -36,6 +36,27 @@ struct CommandPaletteOverlay: View {
                           onSubmit: { submitAndClose() })
                     .padding(horizontal: 14, vertical: 10)
 
+                if store.aiStatusMessage != nil || !store.aiWarnings.isEmpty {
+                    AIStatusFeedback(status: store.aiStatusMessage,
+                                     warnings: store.aiWarnings)
+                        .padding(horizontal: 14, vertical: 8)
+                }
+
+                if !app.isAIAvailable {
+                    Row(alignment: .center, spacing: 8) {
+                        Text(store.aiSettings.provider == .none
+                             ? L("Set an AI provider in Settings to enable.")
+                             : L("AI credential unavailable"))
+                            .font(.caption)
+                            .foregroundColor(.warning)
+                            .flex(1, shrink: 1)
+                        Button(L("Open Settings")) {
+                            app.openSettingsWindow()
+                        }
+                    }
+                    .padding(horizontal: 14, vertical: 8)
+                }
+
                 Divider()
 
                 Row(alignment: .center, spacing: 6) {
@@ -56,8 +77,9 @@ struct CommandPaletteOverlay: View {
     private func submitAndClose() {
         let trimmed = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        app.submitNaturalLanguageIntent(trimmed)
-        dismiss()
+        if app.submitNaturalLanguageIntent(trimmed) {
+            dismiss()
+        }
     }
 
     private func dismiss() {

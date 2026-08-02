@@ -37,7 +37,8 @@ struct ViewportPanel: View {
             // 推送 gizmo 控制器所需的快照（摄像机 / 视口矩形 / 实体世界坐标）。
             let _: Void = updateGizmoSnapshot(selectedID: selectedEntityID,
                                               gizmoMode: gizmoMode,
-                                              gizmoSpace: gizmoSpace)
+                                              gizmoSpace: gizmoSpace,
+                                              isSceneEditable: playbackState == .stopped)
 
             ViewportHost(surface: surface,
                          onInputEvent: { event in
@@ -144,6 +145,11 @@ struct ViewportPanel: View {
         let viewport = EditorViewportInputController.shared
         switch event {
         case let .mouseButtonDown(button) where button.button == .left:
+            if viewport.hasActivePointerSession {
+                scene.endInteractiveEditHistoryGroup()
+                EditorGizmoController.shared.clearDrag()
+                viewport.endPointerSession()
+            }
             guard isInsideViewport(button.x, button.y) else {
                 EditorGizmoController.shared.clearDrag()
                 viewport.endPointerSession()
@@ -152,6 +158,7 @@ struct ViewportPanel: View {
             viewport.modifiers = button.modifiers
             viewport.gizmoGroupTargets.removeAll(keepingCapacity: false)
             if button.modifiers.hasAlt {
+                scene.beginInteractiveEditHistoryGroup()
                 viewport.begin(.camera(.orbit, button: .left),
                                at: (button.x, button.y),
                                modifiers: button.modifiers)
@@ -164,13 +171,18 @@ struct ViewportPanel: View {
                let drag = EditorGizmoController.shared.beginDrag(
                    cursorX: button.x, cursorY: button.y)
             {
-                viewport.gizmoGroupTargets = captureGizmoGroupTargets(primary: drag.entityID,
-                                                                       selectedIDs: app.store.state.selectedEntityIDs)
-                viewport.begin(.gizmo(button: .left),
-                               at: (button.x, button.y),
-                               modifiers: button.modifiers)
-                app.enqueueViewportInput(event)
-                return
+                let targets = captureGizmoGroupTargets(primary: drag.entityID,
+                                                       selectedIDs: app.store.state.selectedEntityIDs)
+                if !targets.isEmpty {
+                    viewport.gizmoGroupTargets = targets
+                    scene.beginInteractiveEditHistoryGroup()
+                    viewport.begin(.gizmo(button: .left),
+                                   at: (button.x, button.y),
+                                   modifiers: button.modifiers)
+                    app.enqueueViewportInput(event)
+                    return
+                }
+                EditorGizmoController.shared.clearDrag()
             }
             viewport.begin(.pendingClick(button: .left),
                            at: (button.x, button.y),
@@ -178,23 +190,35 @@ struct ViewportPanel: View {
             app.enqueueViewportInput(event)
             return
         case let .mouseButtonDown(button) where button.button == .right:
+            if viewport.hasActivePointerSession {
+                scene.endInteractiveEditHistoryGroup()
+                EditorGizmoController.shared.clearDrag()
+                viewport.endPointerSession()
+            }
             guard isInsideViewport(button.x, button.y) else {
                 EditorGizmoController.shared.clearDrag()
                 viewport.endPointerSession()
                 return
             }
             let drag: EditorViewportInputController.CameraDrag = button.modifiers.hasAlt ? .dolly : .freelook
+            scene.beginInteractiveEditHistoryGroup()
             viewport.begin(.camera(drag, button: .right),
                            at: (button.x, button.y),
                            modifiers: button.modifiers)
             app.enqueueViewportInput(event)
             return
         case let .mouseButtonDown(button) where button.button == .middle:
+            if viewport.hasActivePointerSession {
+                scene.endInteractiveEditHistoryGroup()
+                EditorGizmoController.shared.clearDrag()
+                viewport.endPointerSession()
+            }
             guard isInsideViewport(button.x, button.y) else {
                 EditorGizmoController.shared.clearDrag()
                 viewport.endPointerSession()
                 return
             }
+            scene.beginInteractiveEditHistoryGroup()
             viewport.begin(.camera(.pan, button: .middle),
                            at: (button.x, button.y),
                            modifiers: button.modifiers)
@@ -263,10 +287,12 @@ struct ViewportPanel: View {
             }
             switch interaction {
             case .camera(_, .left):
+                scene.endInteractiveEditHistoryGroup()
                 viewport.endPointerSession()
                 app.enqueueViewportInput(event)
                 return
             case .gizmo(.left):
+                scene.endInteractiveEditHistoryGroup()
                 EditorGizmoController.shared.clearDrag()
                 viewport.endPointerSession()
                 app.enqueueViewportInput(event)
@@ -327,6 +353,7 @@ struct ViewportPanel: View {
         case let .mouseButtonUp(button) where button.button == .right || button.button == .middle:
             if case .camera(_, let activeButton) = viewport.activeInteraction,
                activeButton == button.button {
+                scene.endInteractiveEditHistoryGroup()
                 viewport.endPointerSession()
                 app.enqueueViewportInput(event)
                 return
@@ -347,6 +374,13 @@ struct ViewportPanel: View {
             }
         case let .keyDown(key):
             viewport.modifiers = key.modifiers
+            // ViewportHost deliberately lets Cmd/Ctrl chords fall through to
+            // the application ShortcutHost. Do not execute viewport-local
+            // tools or forward gameplay input first, or one chord can both
+            // duplicate/change tools and then run its global command.
+            guard EditorViewportKeyRoutingPolicy.handlesLocally(key) else {
+                return
+            }
             viewport.pressedScancodes.insert(key.scancode)
             if isBoxSelectKey(key) {
                 viewport.boxSelectArmed = true
@@ -384,8 +418,12 @@ struct ViewportPanel: View {
         EditorViewportDropTarget.frame?.contains(x: x, y: y) == true
     }
 
-    /// F = focus selection, Backspace/Delete = delete, primary+D = duplicate.
+    /// F = focus selection, Backspace/Delete = delete. Application command
+    /// chords (including primary+D) are handled once by ShortcutHost.
     private func handleEditingShortcut(_ key: KeyEvent) -> Bool {
+        guard EditorSceneAuthoringPolicy.canEditScene(
+            during: app.store.state.playbackState
+        ) else { return false }
         let selected = app.store.state.selectedEntityID
         switch key.keycode {
         case 0x66 /* f */:
@@ -401,17 +439,8 @@ struct ViewportPanel: View {
             }
             if scene.deleteEntities(selectedIDs) {
                 app.store.dispatch(.setSelectedEntity(nil))
-            }
-            return true
-        case 0x64 /* d */:
-            let mods = key.modifiers
-            guard mods.hasGui || mods.hasCtrl, let id = selected else { return false }
-            guard !scene.isEntityLocked(id) else {
-                app.logConsole("Cannot duplicate a locked entity", severity: .warning)
-                return true
-            }
-            if let new = scene.duplicateEntity(id) {
-                app.store.dispatch(.setSelectedEntity(new))
+            } else {
+                app.logConsole("Could not delete selection", severity: .error)
             }
             return true
         default:
@@ -421,9 +450,12 @@ struct ViewportPanel: View {
 
     private func updateGizmoSnapshot(selectedID: UInt64?,
                                      gizmoMode: EditorGizmoMode,
-                                     gizmoSpace: EditorGizmoSpace) {
+                                     gizmoSpace: EditorGizmoSpace,
+                                     isSceneEditable: Bool) {
         guard let mode = controllerMode(for: gizmoMode),
+              isSceneEditable,
               let id = selectedID,
+              !scene.isEntityLocked(id),
               let world = scene.entityWorldPosition(id),
               let worldMatrix = scene.entityWorldMatrix(id),
               let local = scene.entityLocalMatrix(id),
@@ -457,18 +489,17 @@ struct ViewportPanel: View {
     private func captureGizmoGroupTargets(primary: UInt64,
                                           selectedIDs: Set<UInt64>) -> [EditorViewportInputController.GizmoGroupTarget] {
         let rawSelection = selectedIDs.isEmpty ? Set([primary]) : selectedIDs
-        var ordered = Array(rawSelection).sorted()
-        if let index = ordered.firstIndex(of: primary) {
-            ordered.remove(at: index)
-        }
-        ordered.insert(primary, at: 0)
+        let editableSelection = Set(rawSelection.filter { !scene.isEntityLocked($0) })
+        guard editableSelection.contains(primary) else { return [] }
+        let ordered = EditorGizmoSelectionPolicy.editableRootEntityIDs(
+            primary: primary,
+            editableSelection: editableSelection,
+            hasSelectedAncestor: { scene.entityHasAncestor($0, in: editableSelection) }
+        )
 
         var targets: [EditorViewportInputController.GizmoGroupTarget] = []
         targets.reserveCapacity(ordered.count)
         for id in ordered {
-            if id != primary, scene.entityHasAncestor(id, in: rawSelection) {
-                continue
-            }
             guard let world = scene.entityWorldMatrix(id) else { continue }
             let parentWorld = scene.entityParentWorldMatrix(id)
             targets.append(EditorViewportInputController.GizmoGroupTarget(
@@ -491,22 +522,19 @@ struct ViewportPanel: View {
             )]
             : viewport.gizmoGroupTargets
 
-        guard targets.count > 1 else {
-            scene.setEntityLocalMatrix(drag.entityID, to: primaryLocalMatrix)
-            return
-        }
-
         let primaryNewWorld = drag.parentWorldMatrix * primaryLocalMatrix
         let deltaWorld = primaryNewWorld * simd_inverse(drag.startEntityWorldMatrix)
+        var matricesByEntityID: [UInt64: simd_float4x4] = [:]
+        matricesByEntityID.reserveCapacity(targets.count)
         for target in targets {
             if target.entityID == drag.entityID {
-                scene.setEntityLocalMatrix(target.entityID, to: primaryLocalMatrix)
+                matricesByEntityID[target.entityID] = primaryLocalMatrix
             } else {
                 let nextWorld = deltaWorld * target.startWorldMatrix
-                scene.setEntityLocalMatrix(target.entityID,
-                                           to: target.parentInverseMatrix * nextWorld)
+                matricesByEntityID[target.entityID] = target.parentInverseMatrix * nextWorld
             }
         }
+        _ = scene.setEntityLocalMatrices(matricesByEntityID)
     }
 
     private func controllerMode(for mode: EditorGizmoMode) -> EditorGizmoController.Mode? {
@@ -1152,6 +1180,32 @@ struct ViewportPanel: View {
     }
 }
 
+enum EditorViewportKeyRoutingPolicy {
+    /// Cmd on macOS and Ctrl on every platform are application-shortcut
+    /// modifiers. ViewportHost returns `.ignored` for those events so the
+    /// global ShortcutHost receives them; the editor viewport must likewise
+    /// avoid local side effects before that fallback runs.
+    static func handlesLocally(_ key: KeyEvent) -> Bool {
+        !key.modifiers.hasGui && !key.modifiers.hasCtrl
+    }
+}
+
+enum EditorGizmoSelectionPolicy {
+    static func editableRootEntityIDs(
+        primary: UInt64,
+        editableSelection: Set<UInt64>,
+        hasSelectedAncestor: (UInt64) -> Bool
+    ) -> [UInt64] {
+        guard editableSelection.contains(primary) else { return [] }
+        var ordered = editableSelection.sorted()
+        ordered.removeAll { $0 == primary }
+        ordered.insert(primary, at: 0)
+        return ordered.filter { entityID in
+            entityID == primary || !hasSelectedAncestor(entityID)
+        }
+    }
+}
+
 private struct ViewportChromeInputBlocker<Content: View>: _PrimitiveView {
     let content: Content
 
@@ -1721,68 +1775,6 @@ private struct DropTargetCard: View {
         .background(.surfaceFloating)
         .cornerRadius(10)
         .border(.focusRing, width: 2)
-    }
-}
-
-private struct GizmoHUD: View {
-    let entity: EditorSceneEntitySummary
-    let mode: EditorGizmoMode
-
-    var body: some View {
-        Box(direction: .column, alignItems: .center, spacing: 6) {
-            Text("\(L("Selected:")) \(entity.name)")
-                .font(.caption)
-                .foregroundColor(.onSurfaceMuted)
-
-            Row(alignment: .center, spacing: 8) {
-                GizmoAxisChip(label: gizmoLabel(for: mode, axis: "X"),
-                              color: Color(r: 0.95, g: 0.27, b: 0.34, a: 1))
-                GizmoAxisChip(label: gizmoLabel(for: mode, axis: "Y"),
-                              color: Color(r: 0.36, g: 0.86, b: 0.41, a: 1))
-                GizmoAxisChip(label: gizmoLabel(for: mode, axis: "Z"),
-                              color: Color(r: 0.34, g: 0.58, b: 0.95, a: 1))
-            }
-
-            Text("\(L("Mode:")) \(modeLabel(mode))  ·  \(L("Q/W/E/R to switch"))")
-                .font(.caption)
-                .foregroundColor(.onSurfaceVariant)
-        }
-        .padding(EdgeInsets(top: 10, leading: 14, bottom: 10, trailing: 14))
-        .background(.surfaceRaised)
-        .cornerRadius(2)
-        .border(Color(r: 1, g: 1, b: 1, a: 0.1), width: 1)
-    }
-
-    private func modeLabel(_ mode: EditorGizmoMode) -> String {
-        switch mode {
-        case .none: return L("Pick")
-        case .translate: return L("Move")
-        case .rotate: return L("Rotate")
-        case .scale: return L("Scale")
-        }
-    }
-
-    private func gizmoLabel(for mode: EditorGizmoMode, axis: String) -> String {
-        switch mode {
-        case .none: return axis
-        case .translate: return "→\(axis)"
-        case .rotate: return "↻\(axis)"
-        case .scale: return "▢\(axis)"
-        }
-    }
-}
-
-private struct GizmoAxisChip: View {
-    let label: String
-    let color: Color
-
-    var body: some View {
-        Text(label)
-            .font(.mono)
-            .foregroundColor(.onSurface)
-            .padding(horizontal: 8, vertical: 3)
-            .background(color)
-            .cornerRadius(2)
     }
 }
 

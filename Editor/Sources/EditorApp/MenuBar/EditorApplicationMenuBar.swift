@@ -6,16 +6,25 @@ struct EditorApplicationMenuBar: View {
     let workspaceMode: EditorWorkspaceMode
     let activeLayoutPreset: EditorLayoutPreset
     let playbackState: PlaybackState
+    let canUndo: Bool
+    let canRedo: Bool
+    let hasSelection: Bool
     let onCommand: (EditorMenuCommand) -> Void
     @State private var openMenuIndex: Int? = nil
 
     init(workspaceMode: EditorWorkspaceMode,
          activeLayoutPreset: EditorLayoutPreset,
          playbackState: PlaybackState,
+         canUndo: Bool,
+         canRedo: Bool,
+         hasSelection: Bool,
          onCommand: @escaping (EditorMenuCommand) -> Void) {
         self.workspaceMode = workspaceMode
         self.activeLayoutPreset = activeLayoutPreset
         self.playbackState = playbackState
+        self.canUndo = canUndo
+        self.canRedo = canRedo
+        self.hasSelection = hasSelection
         self.onCommand = onCommand
         _openMenuIndex = State(wrappedValue: nil)
     }
@@ -100,7 +109,7 @@ struct EditorApplicationMenuBar: View {
         if modifiers.contains(.shift) { parts.append("Shift") }
         if modifiers.contains(.option) { parts.append("Alt") }
         if modifiers.contains(.command) { parts.append(commandModifierLabel) }
-        parts.append(key.uppercased())
+        parts.append(key == "\u{8}" || key == "\u{7F}" ? L("Delete") : key.uppercased())
         return parts.joined(separator: "+")
     }
 
@@ -115,6 +124,9 @@ struct EditorApplicationMenuBar: View {
     private var menus: [EditorApplicationMenu] {
         EditorMenuModel.make(workspaceMode: workspaceMode,
                              activeLayoutPreset: activeLayoutPreset,
-                             playbackState: playbackState).menus
+                             playbackState: playbackState,
+                             canUndo: canUndo,
+                             canRedo: canRedo,
+                             hasSelection: hasSelection).menus
     }
 }

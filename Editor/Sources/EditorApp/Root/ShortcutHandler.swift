@@ -12,7 +12,12 @@ enum EditorShortcutHandler {
                        resetLayout: () -> Void,
                        reopenClosedPanel: () -> Void,
                        newScene: () -> Void,
+                       openScene: () -> Void,
                        saveScene: () -> Void,
+                       duplicateSelection: () -> Void,
+                       deleteSelection: () -> Void,
+                       buildProject: () -> Void,
+                       buildAndRun: () -> Void,
                        openSettings: () -> Void,
                        openCommandPalette: () -> Void,
                        closeCommandPalette: () -> Void,
@@ -29,6 +34,15 @@ enum EditorShortcutHandler {
             return false
         }
 
+        // Focused text inputs receive these first. If they did not consume the
+        // event, deletion should still work from any editor panel rather than
+        // only while the hierarchy or viewport owns focus.
+        if key.modifiers.isEmpty,
+           key.scancode == Scancode.backspace || key.scancode == Scancode.delete {
+            deleteSelection()
+            return true
+        }
+
         let commandLike = key.modifiers.hasGui || key.modifiers.hasCtrl
         guard commandLike else { return false }
 
@@ -40,6 +54,18 @@ enum EditorShortcutHandler {
             return true
         case Scancode.s:
             saveScene()
+            return true
+        case Scancode.o:
+            openScene()
+            return true
+        case Scancode.d:
+            duplicateSelection()
+            return true
+        case Scancode.b:
+            buildProject()
+            return true
+        case Scancode.r:
+            buildAndRun()
             return true
         case Scancode.k:
             openCommandPalette()
@@ -53,7 +79,7 @@ enum EditorShortcutHandler {
         case Scancode.digit0:
             resetLayout()
             return true
-        case 23: // SDL_SCANCODE_T
+        case Scancode.t:
             guard key.modifiers.hasShift else { return false }
             reopenClosedPanel()
             return true

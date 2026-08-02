@@ -1,7 +1,7 @@
 import AssetPipeline
 import CapabilityRuntime
 import Foundation
-import IntentRuntime
+@testable import IntentRuntime
 import ObservationBus
 import SceneRuntime
 import SequenceRuntime
@@ -11,6 +11,18 @@ import SIMDCompat
 
 @Suite("IntentRuntime")
 struct IntentRuntimeTests {
+    @Test("scene mutation target projection includes offset duplication source")
+    func sceneMutationTargetProjection() {
+        #expect(SceneMutation.duplicateEntityWithOffset(
+            entityID: 42,
+            positionOffset: SIMD3<Float>(1, 0, 0)
+        ).entityID == 42)
+        #expect(SceneMutation.spawnEmptyEntity(
+            label: "New",
+            position: .zero
+        ).entityID == nil)
+    }
+
     @Test("scene transactions preview without mutating the base scene and apply cleanly")
     func sceneTransactionsPreviewAndApply() throws {
         let executor = TransactionExecutor()
@@ -884,6 +896,66 @@ struct IntentRuntimeTests {
         #expect(sceneEvents.map(\ .kind) == [.sceneChanged])
     }
 
+    @Test("confirmation resolution requires one valid answer for every displayed question")
+    func confirmationResolutionValidatesCompleteBatch() throws {
+        let options = [
+            ConfirmationOption(id: "confirm", labelShort: "Apply"),
+            ConfirmationOption(id: "skip", labelShort: "Discard"),
+        ]
+        let questions = ["first", "second"].map { id in
+            ConfirmationQuestion(id: id,
+                                 kind: .chooseOne,
+                                 promptShort: id,
+                                 options: options,
+                                 defaultOptionID: "confirm",
+                                 severity: .warn,
+                                 reversible: true,
+                                 ambiguityScore: 0,
+                                 sourceProposalIDs: [])
+        }
+        let request = ConfirmationRequestBatch(batchID: "batch",
+                                               origin: "test",
+                                               correlationID: "correlation",
+                                               questions: questions)
+        let incomplete = ConfirmationResolution(
+            batchID: request.batchID,
+            correlationID: request.correlationID,
+            answers: [ConfirmationAnswer(questionID: "first",
+                                         outcome: .accepted,
+                                         pickedOptionID: "confirm")],
+            partial: false
+        )
+        #expect(throws: IntentRuntimeCoordinatorError.self) {
+            try validateConfirmationResolution(incomplete, for: request)
+        }
+
+        let invalidOption = ConfirmationResolution(
+            batchID: request.batchID,
+            correlationID: request.correlationID,
+            answers: questions.map {
+                ConfirmationAnswer(questionID: $0.id,
+                                   outcome: .accepted,
+                                   pickedOptionID: $0.id == "second" ? "foreign" : "confirm")
+            },
+            partial: false
+        )
+        #expect(throws: IntentRuntimeCoordinatorError.self) {
+            try validateConfirmationResolution(invalidOption, for: request)
+        }
+
+        let complete = ConfirmationResolution(
+            batchID: request.batchID,
+            correlationID: request.correlationID,
+            answers: questions.map {
+                ConfirmationAnswer(questionID: $0.id,
+                                   outcome: .accepted,
+                                   pickedOptionID: "confirm")
+            },
+            partial: false
+        )
+        try validateConfirmationResolution(complete, for: request)
+    }
+
     private func entityID(from rawID: UInt64) -> EntityID {
         EntityID(index: UInt32(rawID & 0xFFFF_FFFF),
                  generation: UInt32(rawID >> 32))
@@ -1461,6 +1533,8 @@ struct UndoStackTests {
                 .scene(.setRenderMaterialComponent(
                     entityID: entity.rawValue,
                     baseColorFactor: SIMD4<Float>(0.8, 0.2, 0.1, 1.0),
+                    baseColorTextureIndex: 2,
+                    normalTextureIndex: 5,
                     metallicFactor: 0.9,
                     roughnessFactor: 0.3,
                     emissiveFactor: SIMD3<Float>(0.0, 0.5, 0.0)
@@ -1492,6 +1566,10 @@ struct UndoStackTests {
         #expect(metallicEvent != nil, "setRenderMaterialComponent must emit materialMetallic authored event")
         #expect(roughnessEvent != nil, "setRenderMaterialComponent must emit materialRoughness authored event")
         #expect(emissiveEvent != nil, "setRenderMaterialComponent must emit materialEmissive authored event")
+        let appliedMaterial = context.sceneRuntime?.component(RenderMaterialComponent.self,
+                                                              for: entity)
+        #expect(appliedMaterial?.baseColorTextureIndex == 2)
+        #expect(appliedMaterial?.normalTextureIndex == 5)
     }
 
     @Test("setScriptBindings emits scriptBindings authored world event as JSON string")

@@ -261,6 +261,7 @@ struct DeveloperProfilerWorkbenchView: View {
     let particleHistory: [EditorParticleDiagnosticsSample]
     let issues: [DeveloperDiagnosticIssue]
     let selectedSampleIndex: Binding<UInt64?>
+    let onOpenTarget: (DeveloperDiagnosticTarget) -> Void
 
     @State private var selectedFrameFilter: DeveloperProfilerFrameFilter = .all
 
@@ -305,7 +306,8 @@ struct DeveloperProfilerWorkbenchView: View {
                                                         renderStats: renderStats,
                                                         particleSample: selectedParticleSample)
                         DeveloperProfilerIssuePane(issues: issues,
-                                                   selectedSampleIndex: selectedSampleIndex)
+                                                   selectedSampleIndex: selectedSampleIndex,
+                                                   onOpenTarget: onOpenTarget)
                     }
                     .framePercent(width: 100, minWidth: 0)
                     .padding(horizontal: 10, vertical: 10)
@@ -1188,6 +1190,7 @@ private struct DeveloperProfilerValueRow: View {
 private struct DeveloperProfilerIssuePane: View {
     let issues: [DeveloperDiagnosticIssue]
     let selectedSampleIndex: Binding<UInt64?>
+    let onOpenTarget: (DeveloperDiagnosticTarget) -> Void
 
     var body: some View {
         let visibleIssues = Array(issues.prefix(6))
@@ -1200,7 +1203,8 @@ private struct DeveloperProfilerIssuePane: View {
                 Column(alignment: .leading, spacing: 4) {
                     for issue in visibleIssues {
                         DeveloperProfilerIssueRow(issue: issue,
-                                                  selectedSampleIndex: selectedSampleIndex)
+                                                  selectedSampleIndex: selectedSampleIndex,
+                                                  onOpenTarget: onOpenTarget)
                     }
                 }
             }
@@ -1211,6 +1215,7 @@ private struct DeveloperProfilerIssuePane: View {
 private struct DeveloperProfilerIssueRow: View {
     let issue: DeveloperDiagnosticIssue
     let selectedSampleIndex: Binding<UInt64?>
+    let onOpenTarget: (DeveloperDiagnosticTarget) -> Void
 
     var body: some View {
         let targetSampleIndex = issue.target.frameSampleIndex
@@ -1233,17 +1238,15 @@ private struct DeveloperProfilerIssueRow: View {
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
                 .flex(1, shrink: 1)
-            if let targetSampleIndex {
-                Button(action: {
-                    selectedSampleIndex.wrappedValue = targetSampleIndex
-                }) {
-                    Text(issue.target.label, lineLimit: 1)
-                        .font(.caption)
-                        .foregroundColor(selectedSampleIndex.wrappedValue == targetSampleIndex ? .accent : .onSurface)
-                }
-                .buttonStyle(.ghost)
-                .flex(0, shrink: 1)
+            Button(action: { onOpenTarget(issue.target) }) {
+                Text(issue.target.label, lineLimit: 1)
+                    .font(.caption)
+                    .foregroundColor(targetSampleIndex != nil && selectedSampleIndex.wrappedValue == targetSampleIndex
+                        ? .accent
+                        : .onSurface)
             }
+            .buttonStyle(.ghost)
+            .flex(0, shrink: 1)
         }
         .padding(horizontal: 8, vertical: 4)
         .background(.surfaceSunken)
