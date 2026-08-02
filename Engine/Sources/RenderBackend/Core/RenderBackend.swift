@@ -745,7 +745,10 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         let cubeBounds = cube.localBounds
         var objAsset: MeshAsset?
         var objMesh: GPUMesh?
-        if let url = Bundle.module.url(forResource: "FinalBaseMesh", withExtension: "obj") {
+        if let url = RenderBackendResourceBundle.bundle.url(
+            forResource: "FinalBaseMesh",
+            withExtension: "obj"
+        ) {
             do {
                 var obj = try OBJLoader.load(path: url.path)
                 obj.normalizeToUnitBounds(targetSize: 2.0)

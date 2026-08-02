@@ -1,9 +1,103 @@
-import EditorCore
+@testable import EditorCore
+import ContextMemory
 import Foundation
+import SceneRuntime
 import Testing
 
 @Suite("Editor scene recovery", .serialized)
 struct EditorSceneRecoveryTests {
+    @Test("an explicitly selected scene file loads and survives the unsaved prompt")
+    func opensExplicitSceneFile() throws {
+        let project = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava-editor-open-scene-\(UUID().uuidString)",
+                                    isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: project) }
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+
+        let authored = EditorSceneAdapter()
+        let cubeID = try #require(authored.spawnEntity(template: .cube))
+        let sceneURL = project.appendingPathComponent("alternate-scene.json")
+        let encoder = JSONEncoder()
+        try encoder.encode(authored.manifest(selectedEntityID: cubeID)).write(to: sceneURL)
+
+        let app = try EditorApplication(projectDirectory: project.path)
+        defer { app.shutdown() }
+        let opened = try #require(app.openSceneManifest(at: sceneURL))
+        #expect(opened.entityCount == authored.manifest().entityCount)
+        #expect(app.scene.entitySummary(id: app.store.state.selectedEntityID)?.name == "Cube")
+
+        app.scene.setEntityLocalTranslation(cubeID, to: SIMD3<Float>(1, 2, 3))
+        #expect(app.hasUnsavedSceneChanges)
+        app.requestOpenSceneManifest(at: sceneURL)
+        #expect(app.store.state.pendingCloseRequest?.action == .openScene)
+        #expect(app.store.state.pendingCloseRequest?.documentPath == sceneURL.path)
+    }
+
+    @Test("corrupt scene recovery is quarantined with a diagnostic")
+    func corruptSceneRecoveryIsQuarantined() throws {
+        let project = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava-editor-corrupt-recovery-\(UUID().uuidString)",
+                                    isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: project) }
+        let recoveryURL = GameSaveDocument.url(slot: GameSaveDocument.autoSaveSlot,
+                                               projectDirectory: project.path)
+        try FileManager.default.createDirectory(at: recoveryURL.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        let corruptPayload = Data("not a game save".utf8)
+        try corruptPayload.write(to: recoveryURL, options: .atomic)
+
+        let app = try EditorApplication(projectDirectory: project.path)
+        defer { app.shutdown() }
+        #expect(app.restoreProjectSceneAtLaunch() == nil)
+
+        #expect(!FileManager.default.fileExists(atPath: recoveryURL.path))
+        let files = try FileManager.default.contentsOfDirectory(
+            at: recoveryURL.deletingLastPathComponent(),
+            includingPropertiesForKeys: nil
+        )
+        let quarantinedURL = try #require(files.first {
+            $0.lastPathComponent.hasPrefix("slot-255.corrupt-") && $0.pathExtension == "json"
+        })
+        #expect(try Data(contentsOf: quarantinedURL) == corruptPayload)
+        #expect(app.store.state.consoleEntries.contains {
+            $0.message == "Failed to restore autosaved scene"
+                && $0.severity == .warning
+                && ($0.detail?.contains(quarantinedURL.lastPathComponent) ?? false)
+        })
+    }
+
+    @Test("corrupt AI context memory is quarantined instead of silently disabling memory")
+    func corruptContextMemoryIsQuarantined() throws {
+        let project = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava-editor-context-memory-\(UUID().uuidString)",
+                                    isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: project) }
+        let guavaDirectory = project.appendingPathComponent(".guava", isDirectory: true)
+        try FileManager.default.createDirectory(at: guavaDirectory, withIntermediateDirectories: true)
+        let memoryURL = guavaDirectory.appendingPathComponent("context_memory.json")
+        try Data("not-json".utf8).write(to: memoryURL)
+
+        let app = try EditorApplication(projectDirectory: project.path)
+
+        #expect(!FileManager.default.fileExists(atPath: memoryURL.path))
+        #expect(app.store.state.consoleEntries.contains {
+            $0.message == "Recovered AI context memory storage" && $0.severity == .warning
+        })
+
+        app.shutdown()
+        let files = try FileManager.default.contentsOfDirectory(at: guavaDirectory,
+                                                                includingPropertiesForKeys: nil)
+        #expect(files.contains {
+            $0.lastPathComponent.hasPrefix("context_memory.corrupt-")
+                && $0.pathExtension == "json"
+        })
+        let recoveredEntries = try JSONDecoder().decode(
+            [ContextEntry].self,
+            from: Data(contentsOf: memoryURL)
+        )
+        #expect(recoveredEntries.isEmpty)
+    }
+
     @Test("core playback state machine rejects stopping-to-paused and no-op transitions")
     func corePlaybackStateMachineRejectsInvalidTransitions() throws {
         let project = FileManager.default.temporaryDirectory
@@ -18,6 +112,59 @@ struct EditorSceneRecoveryTests {
         #expect(app.store.playbackState == .stopped)
         app.applyPlaybackState(.stopped)
         #expect(app.store.playbackState == .stopped)
+    }
+
+    @Test("an interrupted Play snapshot is recovered on the next launch")
+    func interruptedPlaySnapshotRecovery() throws {
+        let project = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava-editor-interrupted-play-\(UUID().uuidString)",
+                                    isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: project) }
+        let guavaDirectory = project.appendingPathComponent(".guava", isDirectory: true)
+        try FileManager.default.createDirectory(at: guavaDirectory,
+                                                withIntermediateDirectories: true)
+
+        let authored = EditorSceneAdapter()
+        let sourceID = try #require(authored.defaultSelectionID)
+        let recoveredPosition = SIMD3<Float>(12, 8, -4)
+        authored.setEntityLocalTranslation(sourceID, to: recoveredPosition)
+        let snapshotURL = guavaDirectory.appendingPathComponent("physics-play-snapshot.json")
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(authored.manifest(selectedEntityID: sourceID))
+            .write(to: snapshotURL, options: [.atomic])
+
+        let app = try EditorApplication(projectDirectory: project.path)
+        defer { app.shutdown() }
+        let restoredManifest = try #require(app.restoreProjectSceneAtLaunch())
+        let restoredID = try #require(app.store.state.selectedEntityID)
+        let autosaveURL = GameSaveDocument.url(slot: GameSaveDocument.autoSaveSlot,
+                                               projectDirectory: project.path)
+
+        #expect(restoredManifest.selectedEntityID != nil)
+        #expect(app.scene.entityLocalTranslation(restoredID) == recoveredPosition)
+        #expect(app.store.state.sceneRecoveryPending)
+        #expect(FileManager.default.fileExists(atPath: autosaveURL.path))
+        #expect(!FileManager.default.fileExists(atPath: snapshotURL.path))
+    }
+
+    @Test("clean shutdown removes the Play crash marker")
+    func cleanShutdownRemovesPlaySnapshot() throws {
+        let project = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava-editor-clean-play-exit-\(UUID().uuidString)",
+                                    isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: project) }
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        let app = try EditorApplication(projectDirectory: project.path)
+        let snapshotURL = project
+            .appendingPathComponent(".guava", isDirectory: true)
+            .appendingPathComponent("physics-play-snapshot.json")
+
+        app.applyPlaybackState(.playing)
+        #expect(FileManager.default.fileExists(atPath: snapshotURL.path))
+        app.shutdown()
+
+        #expect(!FileManager.default.fileExists(atPath: snapshotURL.path))
     }
 
     @Test("dirty scene is autosaved on shutdown, restored, and cleared by an explicit save")
@@ -72,7 +219,11 @@ struct EditorSceneRecoveryTests {
         let runtimeOnly = original + SIMD3<Float>(20, 30, 40)
         app.scene.setEntityLocalTranslation(entityID, to: authored)
         app.applyPlaybackState(.playing)
-        app.scene.setEntityLocalTranslation(entityID, to: runtimeOnly)
+        var runtimeTransform = app.scene.scene.localTransform(for: EntityID(rawValue: entityID))
+            ?? LocalTransform()
+        runtimeTransform.matrix.columns.3 = SIMD4<Float>(runtimeOnly, 1)
+        _ = app.scene.scene.setLocalTransform(runtimeTransform,
+                                              for: EntityID(rawValue: entityID))
 
         let savedURL = try #require(app.saveSceneManifest())
         #expect(app.store.playbackState == .playing)
@@ -106,7 +257,11 @@ struct EditorSceneRecoveryTests {
         let runtimeOnly = original + SIMD3<Float>(30, 40, 50)
         app.scene.setEntityLocalTranslation(entityID, to: authored)
         app.applyPlaybackState(.playing)
-        app.scene.setEntityLocalTranslation(entityID, to: runtimeOnly)
+        var runtimeTransform = app.scene.scene.localTransform(for: EntityID(rawValue: entityID))
+            ?? LocalTransform()
+        runtimeTransform.matrix.columns.3 = SIMD4<Float>(runtimeOnly, 1)
+        _ = app.scene.scene.setLocalTransform(runtimeTransform,
+                                              for: EntityID(rawValue: entityID))
 
         let output = try #require(app.exportProject())
         #expect(try ProjectExporter.readDescriptor(from: output).appName

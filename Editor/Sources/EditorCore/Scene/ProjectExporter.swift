@@ -258,18 +258,29 @@ public enum ProjectExporter {
         try fileManager.setAttributes([.posixPermissions: 0o755],
                                       ofItemAtPath: executableURL.path)
 
-        // SwiftPM's generated Bundle.module accessor looks next to Bundle.main
-        // (the .app root), so retain all sibling resource bundles there.
+        // Keep resources in the standard signed-app location. Runtime resource
+        // lookup supports this layout as well as SwiftPM's adjacent dev layout.
         let playerDirectory = playerExecutableURL.deletingLastPathComponent()
         let siblingResources = try fileManager.contentsOfDirectory(
             at: playerDirectory,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
         )
-        for resource in siblingResources where resource.pathExtension == "bundle" {
-            try fileManager.copyItem(at: resource,
-                                     to: appURL.appendingPathComponent(resource.lastPathComponent,
-                                                                       isDirectory: true))
+        for resource in siblingResources {
+            let extensionName = resource.pathExtension.lowercased()
+            if extensionName == "bundle" || extensionName == "resources" {
+                try fileManager.copyItem(at: resource,
+                                         to: resourcesURL.appendingPathComponent(
+                                            resource.lastPathComponent,
+                                            isDirectory: true
+                                         ))
+            } else if extensionName == "dylib" {
+                try fileManager.copyItem(at: resource,
+                                         to: macOSURL.appendingPathComponent(
+                                            resource.lastPathComponent,
+                                            isDirectory: false
+                                         ))
+            }
         }
 
         for entry in projectEntries {

@@ -81,7 +81,11 @@ let package = Package(
         // panel semantics out of Compose primitives and App hosting.
         .target(
             name: "GuavaUIWorkspace",
-            dependencies: ["GuavaUICompose", "GuavaUIRuntime"],
+            dependencies: [
+                "GuavaUICompose",
+                "GuavaUIRuntime",
+                .product(name: "EngineKernel", package: "Engine"),
+            ],
             resources: [
                 .process("Resources"),
             ]

@@ -41,15 +41,20 @@ public struct CapabilityPreparationTransform: Codable, Sendable, Equatable {
 }
 
 /// Value-only material state used by read-modify-write capability preparation.
-/// Texture handles are deliberately excluded because the AI material primitive
-/// cannot author them and must not receive resource-runtime objects.
+/// Texture indices are carried through so factor-only AI edits preserve the
+/// existing material bindings, even though the AI primitive cannot author new
+/// texture resources.
 public struct CapabilityPreparationMaterial: Codable, Sendable, Equatable {
     public var baseColor: [Float]
+    public var baseColorTextureIndex: Int?
+    public var normalTextureIndex: Int?
     public var metallic: Float
     public var roughness: Float
     public var emissive: [Float]
 
     public init?(baseColor: [Float],
+                 baseColorTextureIndex: Int? = nil,
+                 normalTextureIndex: Int? = nil,
                  metallic: Float,
                  roughness: Float,
                  emissive: [Float]) {
@@ -62,6 +67,8 @@ public struct CapabilityPreparationMaterial: Codable, Sendable, Equatable {
             return nil
         }
         self.baseColor = baseColor
+        self.baseColorTextureIndex = baseColorTextureIndex
+        self.normalTextureIndex = normalTextureIndex
         self.metallic = metallic
         self.roughness = roughness
         self.emissive = emissive

@@ -2,7 +2,18 @@
 import ColorPipeline
 import Foundation
 import EXRIO
+import SceneRuntime
 import SIMDCompat
+
+enum RenderPipelineRunnerError: LocalizedError {
+    case cancelled
+
+    var errorDescription: String? {
+        switch self {
+        case .cancelled: return L("Render cancelled.")
+        }
+    }
+}
 
 final class RenderPipelineRunner: @unchecked Sendable {
 
@@ -24,35 +35,62 @@ final class RenderPipelineRunner: @unchecked Sendable {
 
     private let config: Config
     private let queue = DispatchQueue(label: "com.guava.renderpipeline")
+    private let stateLock = NSLock()
+    private var isCancelled = false
 
     init(config: Config = Config()) {
         self.config = config
     }
 
+    func cancel() {
+        stateLock.lock()
+        isCancelled = true
+        stateLock.unlock()
+    }
+
     func run(
-        scene: any SceneGeometry = SimpleTestScene(),
+        scene: any SceneGeometry,
+        camera: RenderCamera,
+        environmentColor: SIMD3<Float>,
         onProgress: @escaping @Sendable (Progress) -> Void,
         onComplete: @escaping @Sendable (Result<String, Error>) -> Void
     ) {
         let cfg = config
+        stateLock.lock()
+        isCancelled = false
+        stateLock.unlock()
         queue.async {
             let tracer = PathTracer(config: PathTracerConfig(
                 maxBounces: cfg.maxBounces,
-                samplesPerPixel: cfg.samplesPerPixel))
+                samplesPerPixel: cfg.samplesPerPixel,
+                environmentColor: environmentColor))
             var fb = [Float](repeating: 0, count: cfg.width * cfg.height * 3)
-            let cam = SIMD3<Float>(2.5, 2.0, 3.5)
-            let target = SIMD3<Float>(0, 0.7, 0)
-            let fwd = simd_normalize(target - cam)
-            let up = SIMD3<Float>(0, 1, 0)
+            let forward = camera.target - camera.eye
+            let fwd = simd_length(forward) > 0.000_001
+                ? simd_normalize(forward)
+                : SIMD3<Float>(0, 0, -1)
             let geo = scene
 
             for s in 0..<cfg.samplesPerPixel {
+                if self.cancelledSnapshot() {
+                    DispatchQueue.main.async { onComplete(.failure(RenderPipelineRunnerError.cancelled)) }
+                    return
+                }
                 tracer.accumulatePass(into: &fb, width: cfg.width, height: cfg.height,
-                                     cameraOrigin: cam, cameraForward: fwd, cameraUp: up,
+                                     cameraOrigin: camera.eye,
+                                     cameraForward: fwd,
+                                     cameraUp: camera.up,
+                                     cameraFOVYRadians: camera.fovYRadians,
+                                     cameraAspectRatio: Float(cfg.width) / Float(cfg.height),
                                      geometry: geo)
                 DispatchQueue.main.async {
                     onProgress(Progress(completed: s + 1, total: cfg.samplesPerPixel))
                 }
+            }
+
+            if self.cancelledSnapshot() {
+                DispatchQueue.main.async { onComplete(.failure(RenderPipelineRunnerError.cancelled)) }
+                return
             }
 
             var rgba = [Float](repeating: 0, count: cfg.width * cfg.height * 4)
@@ -73,5 +111,12 @@ final class RenderPipelineRunner: @unchecked Sendable {
                 DispatchQueue.main.async { onComplete(.failure(error)) }
             }
         }
+    }
+
+    private func cancelledSnapshot() -> Bool {
+        stateLock.lock()
+        let value = isCancelled
+        stateLock.unlock()
+        return value
     }
 }

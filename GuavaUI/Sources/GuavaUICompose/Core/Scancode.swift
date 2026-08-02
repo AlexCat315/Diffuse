@@ -2,10 +2,15 @@
 /// constant per key the components handle — no scattered magic numbers.
 public enum Scancode {
     public static let a: UInt32 = 4
+    public static let b: UInt32 = 5
     public static let c: UInt32 = 6
+    public static let d: UInt32 = 7
     public static let k: UInt32 = 14
     public static let n: UInt32 = 17
+    public static let o: UInt32 = 18
+    public static let r: UInt32 = 21
     public static let s: UInt32 = 22
+    public static let t: UInt32 = 23
     public static let v: UInt32 = 25
     public static let x: UInt32 = 27
     public static let z: UInt32 = 29

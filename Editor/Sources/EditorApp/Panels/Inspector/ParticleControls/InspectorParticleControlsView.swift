@@ -8,6 +8,160 @@ import RenderBackend
 import SceneRuntime
 
 extension InspectorPanel {
+    struct InspectorParticleModuleStackValue: View {
+        let binding: Binding<ParticleModuleStack>
+
+        var body: some View {
+            let stack = binding.wrappedValue
+            let issues = stack.validationIssues()
+            Box(direction: .column, alignItems: .stretch, spacing: 4) {
+                Row(alignment: .center, spacing: 6) {
+                    Text("\(stack.modules.count) \(L("modules"))")
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                        .flex(1, shrink: 1)
+                    if !issues.isEmpty {
+                        Text("\(issues.count) \(L(issues.count == 1 ? "issue" : "issues"))")
+                            .font(.caption)
+                            .foregroundColor(.warning)
+                        Button(L("Repair")) {
+                            updateStack { $0.repairValidationIssues() }
+                        }
+                        .buttonStyle(.secondary)
+                    }
+                    Button(L("Reset All")) {
+                        updateStack { stack in
+                            for moduleID in stack.modules.map(\.id) {
+                                stack.resetModuleSettings(for: moduleID)
+                            }
+                            stack.resetAuthoringState()
+                        }
+                    }
+                    .buttonStyle(.secondary)
+                }
+                .frame(height: ParticleModuleStackEditorLayout.toolbarHeight)
+
+                for index in stack.modules.indices {
+                    AnyView(moduleRow(index: index,
+                                      module: stack.modules[index],
+                                      issues: issues.filter { $0.moduleID == stack.modules[index].id }))
+                }
+            }
+            .padding(horizontal: 7, vertical: 7)
+            .background(.surfaceSunken)
+            .cornerRadius(6)
+            .border(.border, width: 1)
+            .frame(height: ParticleModuleStackEditorLayout.rowHeight(stack: stack))
+            .clipped()
+        }
+
+        @ViewBuilder
+        private func moduleRow(index: Int,
+                               module: ParticleEmitterModule,
+                               issues: [ParticleModuleIssue]) -> some View {
+            Box(direction: .column, alignItems: .stretch, spacing: 2) {
+                Row(alignment: .center, spacing: 5) {
+                    Button(action: {
+                        updateStack { stack in
+                            guard stack.modules.indices.contains(index) else { return }
+                            stack.modules[index].isExpanded.toggle()
+                        }
+                    }) {
+                        Text(module.isExpanded ? "▾" : "▸")
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(width: 18)
+
+                    Checkbox(isOn: moduleEnabledBinding(index: index))
+
+                    Text(L(module.displayName), lineLimit: 1)
+                        .font(.caption)
+                        .foregroundColor(module.isEnabled ? .onSurface : .onSurfaceMuted)
+                        .flex(1, shrink: 1)
+
+                    Text(L(module.stage.rawValue.capitalized))
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+
+                    if !issues.isEmpty {
+                        Text("!\(issues.count)")
+                            .font(.mono)
+                            .foregroundColor(issues.contains { $0.severity == .error } ? .error : .warning)
+                    }
+
+                    Button(L("↑"), isEnabled: index > 0) {
+                        updateStack { $0.moveModule(from: index, to: index - 1) }
+                    }
+                    .buttonStyle(.ghost)
+                    Button(L("↓"), isEnabled: index + 1 < binding.wrappedValue.modules.count) {
+                        updateStack { $0.moveModule(from: index, to: index + 1) }
+                    }
+                    .buttonStyle(.ghost)
+                    Button(L("Reset"),
+                           isEnabled: binding.wrappedValue.moduleSettingsDifferFromDefault(module.id)) {
+                        updateStack { $0.resetModuleSettings(for: module.id) }
+                    }
+                    .buttonStyle(.ghost)
+                }
+                .frame(height: ParticleModuleStackEditorLayout.moduleRowHeight)
+
+                if module.isExpanded {
+                    if issues.isEmpty {
+                        Text(L("No validation issues"))
+                            .font(.caption)
+                            .foregroundColor(.success)
+                            .padding(horizontal: 42, vertical: 2)
+                            .frame(height: ParticleModuleStackEditorLayout.detailRowHeight)
+                    } else {
+                        for issue in issues {
+                            AnyView(Row(alignment: .top, spacing: 5) {
+                                Text(issue.severity == .error ? "×" : "!")
+                                    .font(.mono)
+                                    .foregroundColor(issue.severity == .error ? .error : .warning)
+                                Text(issue.message, lineLimit: 2)
+                                    .font(.caption)
+                                    .foregroundColor(issue.severity == .error ? .error : .warning)
+                                    .flex(1, shrink: 1)
+                                Button(L("Repair")) {
+                                    updateStack { $0.repairValidationIssues(for: module.id) }
+                                }
+                                .buttonStyle(.ghost)
+                            }
+                            .padding(horizontal: 42, vertical: 2)
+                            .frame(height: ParticleModuleStackEditorLayout.detailRowHeight))
+                        }
+                    }
+                }
+            }
+        }
+
+        private func moduleEnabledBinding(index: Int) -> Binding<Bool> {
+            Binding(
+                get: {
+                    let stack = binding.wrappedValue
+                    guard stack.modules.indices.contains(index) else { return false }
+                    return stack.modules[index].isEnabled
+                },
+                set: { enabled in
+                    updateStack { stack in
+                        guard stack.modules.indices.contains(index) else { return }
+                        stack.modules[index].isEnabled = enabled
+                    }
+                }
+            )
+        }
+
+        private func updateStack(_ mutate: (inout ParticleModuleStack) -> Void) {
+            var stack = binding.wrappedValue
+            mutate(&stack)
+            if stack != binding.wrappedValue {
+                binding.wrappedValue = stack
+            }
+        }
+    }
+
     struct InspectorParticleEmissionShapeValue: View {
         let binding: Binding<ParticleEmissionShape>
 
@@ -644,6 +798,28 @@ extension InspectorPanel {
         }
     }
 
+}
+
+enum ParticleModuleStackEditorLayout {
+    static let toolbarHeight: Float = 28
+    static let moduleRowHeight: Float = 28
+    static let detailRowHeight: Float = 30
+    static let outerPadding: Float = 14
+    static let rowGap: Float = 4
+
+    static func rowHeight(stack: ParticleModuleStack) -> Float {
+        let issues = stack.validationIssues()
+        let detailRows = stack.modules.reduce(into: 0) { count, module in
+            guard module.isExpanded else { return }
+            count += max(1, issues.filter { $0.moduleID == module.id }.count)
+        }
+        let visibleRows = 1 + stack.modules.count + detailRows
+        return outerPadding
+            + toolbarHeight
+            + Float(stack.modules.count) * moduleRowHeight
+            + Float(detailRows) * detailRowHeight
+            + Float(max(0, visibleRows - 1)) * rowGap
+    }
 }
 
 enum ParticleCurveEditorLayout {

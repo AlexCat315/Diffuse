@@ -118,6 +118,8 @@ public enum SceneMutation: Sendable, Equatable {
     case setRenderMeshVisibility(entityID: UInt64, isVisible: Bool)
     case setRenderMaterialComponent(entityID: UInt64,
                                     baseColorFactor: SIMD4<Float>,
+                                    baseColorTextureIndex: Int?,
+                                    normalTextureIndex: Int?,
                                     metallicFactor: Float,
                                     roughnessFactor: Float,
                                     emissiveFactor: SIMD3<Float>)
@@ -140,11 +142,11 @@ public enum SceneMutation: Sendable, Equatable {
     /// rather than referencing an existing one.
     public var entityID: UInt64? {
         switch self {
-        case .spawnImportedMeshEntity, .spawnEmptyEntity, .spawnLightEntity, .spawnCameraEntity,
-             .duplicateEntityWithOffset:
+        case .spawnImportedMeshEntity, .spawnEmptyEntity, .spawnLightEntity, .spawnCameraEntity:
             return nil
         case let .deleteEntity(id),
              let .duplicateEntity(id),
+             let .duplicateEntityWithOffset(id, _),
              let .setRigidBody(id, _),
              let .moveEntity(id, _, _),
              let .setLocalTransform(id, _),
@@ -175,7 +177,7 @@ public enum SceneMutation: Sendable, Equatable {
              let .setLightCastShadows(id, _),
              let .setMeshColorTint(id, _),
              let .setRenderMeshVisibility(id, _),
-             let .setRenderMaterialComponent(id, _, _, _, _),
+             let .setRenderMaterialComponent(id, _, _, _, _, _, _),
              let .setScriptBindings(id, _),
              let .setCameraPose(id, _, _, _),
              let .setCameraFOV(id, _),

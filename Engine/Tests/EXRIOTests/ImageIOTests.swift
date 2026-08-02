@@ -9,7 +9,9 @@ struct ImageIOTests {
     func exrWriterLayerConstruction() throws {
         let beauty = EXRWriter.Layer(name: "beauty", channels: ["R", "G", "B", "A"])
         let depth = EXRWriter.Layer(name: "depth", channels: ["Z"], pixelType: .float)
-        let writer = try EXRWriter(path: "/tmp/test.exr", width: 1920, height: 1080)
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava-layer-\(UUID().uuidString).exr").path
+        let writer = try EXRWriter(path: path, width: 1920, height: 1080)
         writer.addLayer(beauty)
         writer.addLayer(depth)
 
@@ -21,8 +23,10 @@ struct ImageIOTests {
 
     @Test("EXRReader init fails gracefully for nonexistent path")
     func exrReaderNonexistentPath() {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nonexistent-guava-\(UUID().uuidString).exr").path
         #expect(throws: EXRReaderError.self) {
-            _ = try EXRReader(path: "/tmp/nonexistent_guava_test.exr")
+            _ = try EXRReader(path: path)
         }
     }
 
@@ -30,8 +34,10 @@ struct ImageIOTests {
     func exrReaderLayerInfoOutOfBounds() throws {
         // Since the C bridge isn't available in tests, the reader won't open.
         // Verify the error type is correct.
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("nonexistent-guava-\(UUID().uuidString).exr").path
         do {
-            _ = try EXRReader(path: "/tmp/nonexistent_guava_test.exr")
+            _ = try EXRReader(path: path)
             #expect(Bool(false), "Should have thrown")
         } catch let error as EXRReaderError {
             #expect(String(describing: error).contains("nonexistent"))

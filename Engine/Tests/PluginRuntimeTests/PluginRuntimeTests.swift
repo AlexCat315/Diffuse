@@ -230,6 +230,7 @@ struct PluginRuntimeTests {
 
     @Test("legacy CLI runtime fails closed for the typed Component ABI")
     func cliRuntimeCannotBypassTypedABI() throws {
+        #if !os(Windows)
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -269,6 +270,7 @@ struct PluginRuntimeTests {
         #expect(throws: WasmtimeCLIError.typedComponentABIRequiresEmbeddedRuntime) {
             try runtime.validateComponent(package, limits: .secureDefault)
         }
+        #endif
     }
 
     @Test("plugin composition cannot call an ungranted primitive")
@@ -697,6 +699,12 @@ struct PluginRuntimeTests {
 
     @Test("Editor RPC client restarts a PluginHost that misses its deadline")
     func processClientDeadlineRestartsHost() throws {
+        #if os(Windows)
+        let executable = URL(fileURLWithPath:
+            ProcessInfo.processInfo.environment["ComSpec"]
+                ?? "C:\\Windows\\System32\\cmd.exe")
+        let launchArguments = ["/d", "/s", "/c", "ping -n 6 127.0.0.1 >nul"]
+        #else
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: root,
@@ -710,7 +718,10 @@ struct PluginRuntimeTests {
         try Data(script.utf8).write(to: executable)
         try FileManager.default.setAttributes([.posixPermissions: 0o700],
                                               ofItemAtPath: executable.path)
-        let client = PluginHostProcessClient(executableURL: executable)
+        let launchArguments: [String] = []
+        #endif
+        let client = PluginHostProcessClient(executableURL: executable,
+                                             launchArguments: launchArguments)
         defer { client.stop() }
         let clock = ContinuousClock()
         let start = clock.now

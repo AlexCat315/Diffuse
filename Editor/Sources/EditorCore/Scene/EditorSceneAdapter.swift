@@ -2518,10 +2518,19 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     private var redoScenes: [SceneRuntime] = []
     private var historyGroupDepth = 0
     private var historyGroupStartScene: SceneRuntime?
+    private var interactiveHistoryGroupActive = false
     private let historyLimit = 100
+    public private(set) var isAuthoringEnabled = true
 
     public var onRevisionChanged: ((UInt64) -> Void)?
     public var onTransactionError: ((String) -> Void)?
+
+    public func setAuthoringEnabled(_ isEnabled: Bool) {
+        isAuthoringEnabled = isEnabled
+        if !isEnabled {
+            endInteractiveEditHistoryGroup()
+        }
+    }
 
     public init() {
         scene.bootstrapEditorPreviewScene()
@@ -2825,6 +2834,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     }
 
     public func setEntityLocked(_ isLocked: Bool, entityIDs: Set<UInt64>) {
+        guard isAuthoringEnabled else {
+            onTransactionError?("Stop simulation before changing hierarchy locks")
+            return
+        }
         var changed = false
         for rawID in entityIDs.sorted() {
             guard let entity = entity(from: rawID), scene.contains(entity) else { continue }
@@ -5819,6 +5832,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                           mutations: [.setRenderMaterialComponent(
                                             entityID: entity.rawValue,
                                             baseColorFactor: mat.baseColorFactor,
+                                            baseColorTextureIndex: mat.baseColorTextureIndex,
+                                            normalTextureIndex: mat.normalTextureIndex,
                                             metallicFactor: mat.metallicFactor,
                                             roughnessFactor: mat.roughnessFactor,
                                             emissiveFactor: mat.emissiveFactor)])
@@ -5841,6 +5856,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                           mutations: [.setRenderMaterialComponent(
                                             entityID: entity.rawValue,
                                             baseColorFactor: mat.baseColorFactor,
+                                            baseColorTextureIndex: mat.baseColorTextureIndex,
+                                            normalTextureIndex: mat.normalTextureIndex,
                                             metallicFactor: mat.metallicFactor,
                                             roughnessFactor: mat.roughnessFactor,
                                             emissiveFactor: mat.emissiveFactor)])
@@ -5863,6 +5880,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                           mutations: [.setRenderMaterialComponent(
                                             entityID: entity.rawValue,
                                             baseColorFactor: mat.baseColorFactor,
+                                            baseColorTextureIndex: mat.baseColorTextureIndex,
+                                            normalTextureIndex: mat.normalTextureIndex,
                                             metallicFactor: mat.metallicFactor,
                                             roughnessFactor: mat.roughnessFactor,
                                             emissiveFactor: mat.emissiveFactor)])
@@ -5887,6 +5906,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                           mutations: [.setRenderMaterialComponent(
                                             entityID: entity.rawValue,
                                             baseColorFactor: mat.baseColorFactor,
+                                            baseColorTextureIndex: mat.baseColorTextureIndex,
+                                            normalTextureIndex: mat.normalTextureIndex,
                                             metallicFactor: mat.metallicFactor,
                                             roughnessFactor: mat.roughnessFactor,
                                             emissiveFactor: mat.emissiveFactor)])
@@ -7669,22 +7690,44 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         onRevisionChanged?(scene.snapshot.revision)
     }
 
-    func withEditHistoryGroup<Result>(_ body: () -> Result) -> Result {
+    private func beginEditHistoryGroup() {
         if historyGroupDepth == 0 {
             historyGroupStartScene = historyCurrentScene ?? scene
         }
         historyGroupDepth += 1
-        defer {
-            historyGroupDepth -= 1
-            if historyGroupDepth == 0 {
-                if let previous = historyGroupStartScene {
-                    recordHistoryEntry(previous)
-                }
-                historyGroupStartScene = nil
-                historyCurrentScene = scene
+    }
+
+    private func endEditHistoryGroup() {
+        guard historyGroupDepth > 0 else { return }
+        historyGroupDepth -= 1
+        if historyGroupDepth == 0 {
+            if let previous = historyGroupStartScene {
+                recordHistoryEntry(previous)
             }
+            historyGroupStartScene = nil
+            historyCurrentScene = scene
         }
+    }
+
+    func withEditHistoryGroup<Result>(_ body: () -> Result) -> Result {
+        beginEditHistoryGroup()
+        defer { endEditHistoryGroup() }
         return body()
+    }
+
+    /// Coalesces the live mutations produced by one pointer drag into a single
+    /// undo entry. Calls are idempotent so focus loss and an eventual mouse-up
+    /// can both terminate the same interaction safely.
+    public func beginInteractiveEditHistoryGroup() {
+        guard !interactiveHistoryGroupActive else { return }
+        interactiveHistoryGroupActive = true
+        beginEditHistoryGroup()
+    }
+
+    public func endInteractiveEditHistoryGroup() {
+        guard interactiveHistoryGroupActive else { return }
+        interactiveHistoryGroupActive = false
+        endEditHistoryGroup()
     }
 
     public var canUndoEdit: Bool { !undoScenes.isEmpty }
@@ -7717,6 +7760,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         redoScenes.removeAll(keepingCapacity: true)
         historyGroupDepth = 0
         historyGroupStartScene = nil
+        interactiveHistoryGroupActive = false
         historyCurrentScene = scene
     }
 
@@ -7891,6 +7935,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                summary: String,
                                targetRawIDs: [UInt64] = [],
                                mutations: [SceneMutation]) -> TransactionApplyResult? {
+        guard isAuthoringEnabled else {
+            onTransactionError?("\(summary): stop simulation before editing the scene")
+            return nil
+        }
         let lockedTargets = targetRawIDs.filter { isEntityLocked($0) }
         guard lockedTargets.isEmpty else {
             onTransactionError?("\(summary): entity is locked (\(lockedTargets.map(String.init).joined(separator: ", ")))")

@@ -46,7 +46,7 @@ struct ShaderCatalog: Sendable {
     private let rootURL: URL
     let manifest: ShaderCatalogManifest
 
-    init(bundle: Bundle = .module) throws {
+    init(bundle: Bundle = RenderBackendResourceBundle.bundle) throws {
         let rootURL = bundle.bundleURL.appending(path: "Shaders", directoryHint: .isDirectory)
         let manifestURL = rootURL.appending(path: "manifest.json", directoryHint: .notDirectory)
         guard FileManager.default.fileExists(atPath: manifestURL.path) else {

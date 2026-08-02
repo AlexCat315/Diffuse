@@ -115,6 +115,25 @@ public struct EditorCapabilitySettings: Codable, Sendable, Equatable {
 
 // MARK: - Key store
 
+public enum AIKeychainError: Error, Sendable, Equatable, LocalizedError {
+    case unavailable
+    case operationFailed(Int32)
+
+    public var errorDescription: String? {
+        switch self {
+        case .unavailable:
+            return "The operating-system credential store is unavailable."
+        case let .operationFailed(status):
+            return "The credential store operation failed with status \(status)."
+        }
+    }
+}
+
+public enum AICredentialSource: Sendable, Equatable {
+    case operatingSystemStore
+    case environment(variable: String)
+}
+
 /// Stores provider API keys in the operating-system credential store. Keys are
 /// never written to project files, settings JSON, prompts, logs, or plugins.
 public enum AIKeychain {
@@ -161,27 +180,86 @@ public enum AIKeychain {
 #endif
     }
 
-    public static func save(key: String, provider: EditorAIProvider) {
+    public static func save(key: String, provider: EditorAIProvider) throws {
         migrateLegacyPlaintextStoreIfNeeded()
         guard !key.isEmpty else {
-            delete(provider: provider)
+            try delete(provider: provider)
             return
         }
 #if canImport(Security)
-        delete(provider: provider)
-        let query: [String: Any] = [
+        let identity: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: provider.rawValue,
+        ]
+        let values: [String: Any] = [
             kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
             kSecValueData as String: Data(key.utf8),
         ]
-        _ = SecItemAdd(query as CFDictionary, nil)
+        let updateStatus = SecItemUpdate(identity as CFDictionary, values as CFDictionary)
+        if updateStatus == errSecSuccess { return }
+        guard updateStatus == errSecItemNotFound else {
+            throw AIKeychainError.operationFailed(updateStatus)
+        }
+        var insertion = identity
+        for (key, value) in values { insertion[key] = value }
+        let addStatus = SecItemAdd(insertion as CFDictionary, nil)
+        guard addStatus == errSecSuccess else {
+            throw AIKeychainError.operationFailed(addStatus)
+        }
+#else
+        throw AIKeychainError.unavailable
 #endif
     }
 
     public static func load(provider: EditorAIProvider) -> String? {
         migrateLegacyPlaintextStoreIfNeeded()
+        if let stored = loadFromOperatingSystemStore(provider: provider) {
+            return stored
+        }
+        return environmentCredential(
+            provider: provider,
+            environment: ProcessInfo.processInfo.environment
+        )?.key
+    }
+
+    public static func credentialSource(for provider: EditorAIProvider) -> AICredentialSource? {
+        migrateLegacyPlaintextStoreIfNeeded()
+        if loadFromOperatingSystemStore(provider: provider) != nil {
+            return .operatingSystemStore
+        }
+        guard let environment = environmentCredential(
+            provider: provider,
+            environment: ProcessInfo.processInfo.environment
+        ) else { return nil }
+        return .environment(variable: environment.variable)
+    }
+
+    static func environmentCredential(
+        provider: EditorAIProvider,
+        environment: [String: String]
+    ) -> (variable: String, key: String)? {
+        let candidates: [String]
+        switch provider {
+        case .none:
+            return nil
+        case .anthropic:
+            candidates = ["GUAVA_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"]
+        case .openai:
+            candidates = ["GUAVA_OPENAI_API_KEY", "OPENAI_API_KEY"]
+        case .deepseek:
+            candidates = ["GUAVA_DEEPSEEK_API_KEY", "DEEPSEEK_API_KEY"]
+        }
+        for variable in candidates {
+            guard let value = environment[variable]?.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            ), !value.isEmpty else { continue }
+            return (variable, value)
+        }
+        return nil
+    }
+
+    private static func loadFromOperatingSystemStore(provider: EditorAIProvider) -> String? {
 #if canImport(Security)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -201,7 +279,7 @@ public enum AIKeychain {
 #endif
     }
 
-    public static func delete(provider: EditorAIProvider) {
+    public static func delete(provider: EditorAIProvider) throws {
         migrateLegacyPlaintextStoreIfNeeded()
 #if canImport(Security)
         let query: [String: Any] = [
@@ -209,11 +287,16 @@ public enum AIKeychain {
             kSecAttrService as String: service,
             kSecAttrAccount as String: provider.rawValue,
         ]
-        _ = SecItemDelete(query as CFDictionary)
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw AIKeychainError.operationFailed(status)
+        }
+#else
+        throw AIKeychainError.unavailable
 #endif
     }
 
     public static func hasKey(for provider: EditorAIProvider) -> Bool {
-        load(provider: provider) != nil
+        credentialSource(for: provider) != nil
     }
 }

@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.release.outputs.tag }}
-      target: ${{ steps.release.outputs.target }}
+      target: ${{ steps.pin.outputs.target }}
     steps:
       - name: Resolve release tag
         id: release
@@ -34,7 +34,9 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "release" ]; then
             tag="${{ github.event.release.tag_name }}"
-            target="${{ github.event.release.target_commitish }}"
+            # The release tag is the immutable source of truth. target_commitish
+            # is commonly a branch name and may advance before runners start.
+            target="$tag"
           else
             tag="${{ inputs.tag }}"
             target="${{ inputs.target }}"
@@ -57,6 +59,11 @@ jobs:
         with:
           ref: ${{ steps.release.outputs.target }}
           fetch-depth: 0
+
+      - name: Pin release source commit
+        id: pin
+        shell: bash
+        run: echo "target=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Ensure GitHub Release exists
         shell: bash
@@ -152,16 +159,58 @@ jobs:
 
           dist_root="$PWD/dist"
           package_dir="$dist_root/GuavaEditor-macos-$arch"
+          app_dir="$package_dir/GuavaEditor.app"
           rm -rf "$dist_root"
-          mkdir -p "$package_dir/Tools"
+          mkdir -p "$app_dir/Contents/MacOS" \
+            "$app_dir/Contents/Helpers" \
+            "$app_dir/Contents/Resources"
 
-          cp "$editor_bin/EditorApp" "$package_dir/"
-          cp "$player_bin/GuavaPlayer" "$package_dir/"
-          cp "$plugin_host_bin/GuavaPluginHost" "$package_dir/Tools/"
-          cp "$mcp_bin/GuavaMCP" "$package_dir/Tools/"
+          cp "$editor_bin/EditorApp" "$app_dir/Contents/MacOS/"
+          cp "$player_bin/GuavaPlayer" "$app_dir/Contents/MacOS/"
+          cp "$plugin_host_bin/GuavaPluginHost" "$app_dir/Contents/Helpers/"
+          cp "$mcp_bin/GuavaMCP" "$app_dir/Contents/Helpers/"
+          cp "$plugin_host_bin/libwasmtime.dylib" "$app_dir/Contents/Helpers/"
 
           find "$editor_bin" -maxdepth 1 -type d \( -name "*.bundle" -o -name "*.resources" \) \
-            -exec cp -R {} "$package_dir/" \;
+            -exec cp -R {} "$app_dir/Contents/Resources/" \;
+
+          cat > "$app_dir/Contents/Info.plist" <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleDisplayName</key><string>Guava Editor</string>
+            <key>CFBundleExecutable</key><string>EditorApp</string>
+            <key>CFBundleIdentifier</key><string>com.guava.editor</string>
+            <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+            <key>CFBundleName</key><string>Guava Editor</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleShortVersionString</key><string>0.0.1</string>
+            <key>CFBundleVersion</key><string>1</string>
+            <key>LSMinimumSystemVersion</key><string>13.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict>
+          </plist>
+          EOF
+
+          bundle_version="${{ needs.prepare-release.outputs.tag }}"
+          bundle_version="${bundle_version#v}"
+          if [[ "$bundle_version" =~ ^([0-9]+\.[0-9]+(\.[0-9]+)?)([-+].*)?$ ]]; then
+            bundle_version="${BASH_REMATCH[1]}"
+          else
+            echo "Release tag must be vMAJOR.MINOR or vMAJOR.MINOR.PATCH for macOS packaging: $bundle_version" >&2
+            exit 1
+          fi
+          plutil -replace CFBundleShortVersionString -string "$bundle_version" "$app_dir/Contents/Info.plist"
+          plutil -replace CFBundleVersion -string "${{ github.run_number }}" "$app_dir/Contents/Info.plist"
+          plutil -lint "$app_dir/Contents/Info.plist"
+
+          "$app_dir/Contents/MacOS/EditorApp" --validate-install
+          "$app_dir/Contents/MacOS/GuavaPlayer" --validate-install
+          "$app_dir/Contents/Helpers/GuavaPluginHost" </dev/null
+          "$app_dir/Contents/Helpers/GuavaMCP" </dev/null
+          codesign --force --deep --sign - --timestamp=none "$app_dir"
+          codesign --verify --deep --strict "$app_dir"
 
           zip_path="$dist_root/guava-editor-macos-$arch.zip"
           ditto -c -k --sequesterRsrc --keepParent "$package_dir" "$zip_path"
@@ -245,13 +294,39 @@ jobs:
             Where-Object { $_.Name -like "*.bundle" -or $_.Name -like "*.resources" } |
             ForEach-Object { Copy-Item $_.FullName $packageDir -Recurse }
 
-          Get-ChildItem $editorBin -File -Filter "*.dll" |
-            ForEach-Object { Copy-Item $_.FullName $packageDir }
+          foreach ($bin in @($editorBin, $playerBin, $pluginHostBin, $mcpBin)) {
+            Get-ChildItem $bin -File -Filter "*.dll" |
+              ForEach-Object { Copy-Item $_.FullName $packageDir -Force }
+          }
 
           $swiftBin = Split-Path (Get-Command swift.exe).Source
           Get-ChildItem $swiftBin -File -Filter "*.dll" |
             Where-Object { $_.Name -match "^(swift|BlocksRuntime|dispatch|Foundation|FoundationXML|XCTest|icu|libxml2|curl|zlib)" } |
-            ForEach-Object { Copy-Item $_.FullName $packageDir -ErrorAction SilentlyContinue }
+            ForEach-Object { Copy-Item $_.FullName $packageDir -Force -ErrorAction SilentlyContinue }
+
+          # Windows resolves DLLs beside each executable. Helpers live one
+          # directory below the main runtime, so give them the same dependency
+          # closure instead of relying on the build runner's PATH.
+          Get-ChildItem $packageDir -File -Filter "*.dll" |
+            ForEach-Object { Copy-Item $_.FullName (Join-Path $packageDir "Tools") -Force }
+
+          & (Join-Path $packageDir "EditorApp.exe") --validate-install
+          if ($LASTEXITCODE -ne 0) { throw "Packaged EditorApp validation failed" }
+          & (Join-Path $packageDir "GuavaPlayer.exe") --validate-install
+          if ($LASTEXITCODE -ne 0) { throw "Packaged GuavaPlayer validation failed" }
+
+          $emptyInput = New-TemporaryFile
+          try {
+            foreach ($helper in @("GuavaPluginHost.exe", "GuavaMCP.exe")) {
+              $helperPath = Join-Path (Join-Path $packageDir "Tools") $helper
+              $process = Start-Process -FilePath $helperPath -RedirectStandardInput $emptyInput.FullName -NoNewWindow -Wait -PassThru
+              if ($process.ExitCode -ne 0) {
+                throw "Packaged $helper startup failed with exit code $($process.ExitCode)"
+              }
+            }
+          } finally {
+            Remove-Item $emptyInput -Force
+          }
 
           $zipPath = Join-Path $distRoot "guava-editor-windows-x86_64.zip"
           Compress-Archive -Path $packageDir -DestinationPath $zipPath -Force
@@ -390,6 +465,19 @@ jobs:
           exec ./EditorApp "$@"
           EOF
           chmod +x "$package_dir/run-editor.sh"
+
+          if ldd "$package_dir/EditorApp" "$package_dir/GuavaPlayer" \
+            "$package_dir/Tools/GuavaPluginHost" "$package_dir/Tools/GuavaMCP" \
+            | grep -q 'not found'; then
+            echo "Packaged binaries contain unresolved shared libraries" >&2
+            ldd "$package_dir/EditorApp" "$package_dir/GuavaPlayer" \
+              "$package_dir/Tools/GuavaPluginHost" "$package_dir/Tools/GuavaMCP" >&2
+            exit 1
+          fi
+          "$package_dir/EditorApp" --validate-install
+          "$package_dir/GuavaPlayer" --validate-install
+          "$package_dir/Tools/GuavaPluginHost" </dev/null
+          "$package_dir/Tools/GuavaMCP" </dev/null
 
           tar_path="$dist_root/guava-editor-linux-x86_64.tar.gz"
           tar -C "$dist_root" -czf "$tar_path" "$(basename "$package_dir")"

@@ -2207,7 +2207,7 @@ public struct RuntimeWorldSchedule {
             physicsTransform.translation,
             SIMD3<Float>(repeating: t)
         )
-        let rotation = simd_slerp(
+        let rotation = guavaSlerp(
             animationTransform.rotation,
             physicsTransform.rotation,
             t
