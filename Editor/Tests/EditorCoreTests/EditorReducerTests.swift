@@ -99,4 +99,23 @@ struct EditorReducerTests {
 
         #expect(state.physicsDebugOverlayOptions == .all)
     }
+
+    @Test("Inspector section batches collapse and expand in one reducer action")
+    func inspectorSectionBatchCollapse() {
+        var state = EditorState(inspectorCollapsedSectionIDs: ["existing"])
+
+        EditorReducer.reduce(state: &state,
+                             action: .setInspectorSectionsCollapsed(
+                                ids: ["general", "transform"],
+                                isCollapsed: true
+                             ))
+        #expect(state.inspectorCollapsedSectionIDs == ["existing", "general", "transform"])
+
+        EditorReducer.reduce(state: &state,
+                             action: .setInspectorSectionsCollapsed(
+                                ids: ["existing", "transform"],
+                                isCollapsed: false
+                             ))
+        #expect(state.inspectorCollapsedSectionIDs == ["general"])
+    }
 }

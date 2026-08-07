@@ -42,7 +42,6 @@ public final class EditorViewportInputController: @unchecked Sendable {
     public var marqueeCurrent: (x: Float, y: Float)?
     public var modifiers: KeyModifiers = []
     public var pressedScancodes: Set<UInt32> = []
-    public var boxSelectArmed: Bool = false
     public var gizmoGroupTargets: [GizmoGroupTarget] = []
 
     public var hasActivePointerSession: Bool {
@@ -101,7 +100,6 @@ public final class EditorViewportInputController: @unchecked Sendable {
         if !keepingKeyboardState {
             modifiers = []
             pressedScancodes.removeAll(keepingCapacity: false)
-            boxSelectArmed = false
         }
     }
 
@@ -110,7 +108,6 @@ public final class EditorViewportInputController: @unchecked Sendable {
         activeInteraction = nil
         modifiers = []
         pressedScancodes.removeAll(keepingCapacity: false)
-        boxSelectArmed = false
         gizmoGroupTargets.removeAll(keepingCapacity: false)
     }
 }

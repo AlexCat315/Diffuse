@@ -86,7 +86,8 @@ public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
 }
 
 public enum EditorGizmoMode: String, Codable, Sendable, Hashable {
-case none
+    case none
+    case boxSelect
     case translate
     case rotate
     case scale

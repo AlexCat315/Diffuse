@@ -1397,6 +1397,102 @@ struct EditorSceneEditHistoryTests {
         #expect(!adapter.canUndoEdit)
     }
 
+    @Test("deleting an ancestor and its selected descendant is a single valid transaction")
+    func multiEntityDeletionCollapsesSelectedDescendants() throws {
+        let adapter = EditorSceneAdapter()
+        let parentID = try #require(adapter.spawnEntity(template: .empty))
+        let childID = try #require(adapter.spawnEntity(template: .empty,
+                                                       parentID: parentID))
+        let populatedCount = adapter.entityCount
+
+        #expect(adapter.deleteEntities([parentID, childID]))
+        #expect(adapter.entityCount == populatedCount - 2)
+        #expect(adapter.entitySummary(id: parentID) == nil)
+        #expect(adapter.entitySummary(id: childID) == nil)
+
+        #expect(adapter.undoEdit())
+        #expect(adapter.entitySummary(id: parentID) != nil)
+        #expect(adapter.entitySummary(id: childID) != nil)
+        #expect(adapter.entityHasAncestor(childID, in: [parentID]))
+    }
+
+    @Test("hierarchy rename trims input, rejects empty names, and is undoable")
+    func hierarchyRenameIsValidatedAndUndoable() throws {
+        let adapter = EditorSceneAdapter()
+        let entityID = try #require(adapter.defaultSelectionID)
+        let originalName = try #require(adapter.entitySummary(id: entityID)?.name)
+
+        #expect(!adapter.renameEntity(entityID, to: "   \n"))
+        #expect(adapter.entitySummary(id: entityID)?.name == originalName)
+        #expect(!adapter.canUndoEdit)
+
+        #expect(adapter.renameEntity(entityID, to: "  Production Camera  "))
+        #expect(adapter.entitySummary(id: entityID)?.name == "Production Camera")
+        #expect(adapter.undoEdit())
+        #expect(adapter.entitySummary(id: entityID)?.name == originalName)
+        #expect(!adapter.canUndoEdit)
+    }
+
+    @Test("multi-entity duplication is atomic and uses one undo step")
+    func multiEntityDuplicationIsAtomic() throws {
+        let adapter = EditorSceneAdapter()
+        let sourceIDs = Set(adapter.roots.prefix(2).map(\.id))
+        let originalCount = adapter.entityCount
+        #expect(sourceIDs.count == 2)
+
+        let duplicatedIDs = try #require(adapter.duplicateEntities(sourceIDs))
+        #expect(duplicatedIDs.count == 2)
+        #expect(adapter.entityCount == originalCount + 2)
+        #expect(duplicatedIDs.allSatisfy { adapter.entitySummary(id: $0) != nil })
+
+        #expect(adapter.undoEdit())
+        #expect(adapter.entityCount == originalCount)
+        #expect(duplicatedIDs.allSatisfy { adapter.entitySummary(id: $0) == nil })
+        #expect(!adapter.canUndoEdit)
+    }
+
+    @Test("multi-entity duplication rejects a locked member as a unit")
+    func multiEntityDuplicationHonorsLocksAtomically() throws {
+        let adapter = EditorSceneAdapter()
+        let sourceIDs = Set(adapter.roots.prefix(2).map(\.id))
+        let lockedID = try #require(sourceIDs.first)
+        let originalCount = adapter.entityCount
+        adapter.setEntityLocked(true, entityIDs: [lockedID])
+
+        #expect(adapter.duplicateEntities(sourceIDs) == nil)
+        #expect(adapter.entityCount == originalCount)
+    }
+
+    @Test("moving a nested multi-selection to root preserves descendants and is one undo step")
+    func multiEntityMoveToRootIsAtomic() throws {
+        let adapter = EditorSceneAdapter()
+        let grandparentID = try #require(adapter.spawnEntity(template: .empty))
+        let parentID = try #require(adapter.spawnEntity(template: .empty,
+                                                        parentID: grandparentID))
+        let childID = try #require(adapter.spawnEntity(template: .empty,
+                                                       parentID: parentID))
+
+        #expect(adapter.moveEntitiesToRoot([parentID, childID]))
+        #expect(adapter.roots.contains { $0.id == parentID })
+        #expect(!adapter.roots.contains { $0.id == childID })
+        #expect(adapter.entityHasAncestor(childID, in: [parentID]))
+
+        #expect(adapter.undoEdit())
+        #expect(adapter.entityHasAncestor(parentID, in: [grandparentID]))
+        #expect(adapter.entityHasAncestor(childID, in: [parentID]))
+    }
+
+    @Test("moving a root selected with its descendant does not detach the descendant")
+    func moveToRootCollapsesSelectedDescendantsBeforeFiltering() throws {
+        let adapter = EditorSceneAdapter()
+        let rootID = try #require(adapter.spawnEntity(template: .empty))
+        let childID = try #require(adapter.spawnEntity(template: .empty,
+                                                       parentID: rootID))
+
+        #expect(!adapter.moveEntitiesToRoot([rootID, childID]))
+        #expect(adapter.entityHasAncestor(childID, in: [rootID]))
+    }
+
     @Test("hierarchy locks round-trip and remap entity identifiers")
     func lockedEntityRoundTrip() throws {
         let adapter = EditorSceneAdapter()
@@ -1432,6 +1528,27 @@ struct EditorSceneEditHistoryTests {
         #expect(adapter.undoEdit())
         #expect(adapter.entityLocalTranslation(entityID) == original)
         #expect(!adapter.canUndoEdit)
+    }
+
+    @Test("cancelling an interactive transform restores its starting scene without history")
+    func interactiveTransformCancellationRestoresStart() throws {
+        let adapter = EditorSceneAdapter()
+        let entityID = try #require(adapter.defaultSelectionID)
+        let original = try #require(adapter.entityLocalTranslation(entityID))
+        var revisionNotifications = 0
+        adapter.onRevisionChanged = { _ in revisionNotifications += 1 }
+
+        adapter.beginInteractiveEditHistoryGroup()
+        var matrix = try #require(adapter.entityLocalMatrix(entityID))
+        matrix.columns.3.x = original.x + 12
+        #expect(adapter.setEntityLocalMatrices([entityID: matrix]))
+
+        adapter.cancelInteractiveEditHistoryGroup()
+        adapter.endInteractiveEditHistoryGroup() // late pointer-up is harmless
+
+        #expect(adapter.entityLocalTranslation(entityID) == original)
+        #expect(!adapter.canUndoEdit)
+        #expect(revisionNotifications >= 2) // live edit plus restored scene
     }
 
     @Test("multi-entity transforms reject locked members atomically")
