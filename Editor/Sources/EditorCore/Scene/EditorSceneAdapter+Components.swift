@@ -86,10 +86,30 @@ extension EditorSceneAdapter {
     /// Kinds that can still be added to the entity (those not already present).
     public func addableComponentKinds(on rawID: UInt64) -> [EditorComponentKind] {
         EditorComponentKind.allCases.filter { kind in
-            guard !hasComponent(kind, on: rawID) else { return false }
-            if kind == .cloth, hasComponent(.softBodyMesh, on: rawID) { return false }
-            if kind == .softBodyMesh, hasComponent(.cloth, on: rawID) { return false }
-            return true
+            canAddComponent(kind, to: rawID)
+        }
+    }
+
+    /// Component kinds that can be added to every entity in a selection. This
+    /// is the safe set presented by a production multi-selection inspector.
+    public func addableComponentKinds(on rawIDs: Set<UInt64>) -> [EditorComponentKind] {
+        guard !rawIDs.isEmpty else { return [] }
+        return EditorComponentKind.allCases.filter { kind in
+            rawIDs.contains { canAddComponent(kind, to: $0) }
+                && rawIDs.allSatisfy { rawID in
+                    !isEntityLocked(rawID)
+                        && (hasComponent(kind, on: rawID)
+                            || canAddComponent(kind, to: rawID))
+                }
+        }
+    }
+
+    /// Component kinds shared by every entity in a selection, in stable menu
+    /// order. Removing from a multi-selection never partially succeeds.
+    public func commonComponentKinds(on rawIDs: Set<UInt64>) -> [EditorComponentKind] {
+        guard !rawIDs.isEmpty else { return [] }
+        return EditorComponentKind.allCases.filter { kind in
+            rawIDs.allSatisfy { hasComponent(kind, on: $0) }
         }
     }
 
@@ -97,11 +117,45 @@ extension EditorSceneAdapter {
     /// entity is unknown or already has that component (existing data is never overwritten).
     @discardableResult
     public func addComponent(_ kind: EditorComponentKind, to rawID: UInt64) -> Bool {
+        addComponent(kind, to: [rawID])
+    }
+
+    /// Adds the same default component to a complete selection as one history
+    /// operation. Validation happens before mutation, so a stale, locked, or
+    /// incompatible member rejects the whole request.
+    @discardableResult
+    public func addComponent(_ kind: EditorComponentKind,
+                             to rawIDs: Set<UInt64>) -> Bool {
+        let orderedIDs = rawIDs.sorted()
+        let missingIDs = orderedIDs.filter { !hasComponent(kind, on: $0) }
         guard isAuthoringEnabled,
-              !isEntityLocked(rawID),
-              let entity = resolveEntity(rawID), !hasComponent(kind, on: rawID) else { return false }
+              !orderedIDs.isEmpty,
+              !missingIDs.isEmpty,
+              orderedIDs.allSatisfy({ rawID in
+                  !isEntityLocked(rawID)
+                    && (hasComponent(kind, on: rawID)
+                        || canAddComponent(kind, to: rawID))
+              }) else { return false }
+
+        for rawID in missingIDs {
+            guard let entity = resolveEntity(rawID) else { return false }
+            addComponentUnchecked(kind, to: entity)
+        }
+        notifyRevisionChanged()
+        return true
+    }
+
+    private func canAddComponent(_ kind: EditorComponentKind,
+                                 to rawID: UInt64) -> Bool {
+        guard resolveEntity(rawID) != nil,
+              !hasComponent(kind, on: rawID) else { return false }
         if kind == .cloth, hasComponent(.softBodyMesh, on: rawID) { return false }
         if kind == .softBodyMesh, hasComponent(.cloth, on: rawID) { return false }
+        return true
+    }
+
+    private func addComponentUnchecked(_ kind: EditorComponentKind,
+                                       to entity: EntityID) {
         switch kind {
         case .rigidBody:       _ = scene.setComponent(RigidBody(), for: entity)
         case .collider:        _ = scene.setComponent(Collider(shape: .box(halfExtents: SIMD3<Float>(repeating: 0.5), center: .zero)), for: entity)
@@ -130,17 +184,68 @@ extension EditorSceneAdapter {
                 for: entity
             )
         }
-        notifyRevisionChanged()
-        return true
     }
 
     /// Removes `kind` from the entity. Returns false if the entity is unknown or did not
     /// carry that component.
     @discardableResult
     public func removeComponent(_ kind: EditorComponentKind, from rawID: UInt64) -> Bool {
+        removeComponent(kind, from: [rawID])
+    }
+
+    /// Removes a component from every selected entity as a single undo step.
+    /// Every target must contain the component and be editable before any
+    /// mutation is applied.
+    @discardableResult
+    public func removeComponent(_ kind: EditorComponentKind,
+                                from rawIDs: Set<UInt64>) -> Bool {
+        let orderedIDs = rawIDs.sorted()
         guard isAuthoringEnabled,
-              !isEntityLocked(rawID),
-              let entity = resolveEntity(rawID), hasComponent(kind, on: rawID) else { return false }
+              !orderedIDs.isEmpty,
+              orderedIDs.allSatisfy({ rawID in
+                  !isEntityLocked(rawID)
+                    && resolveEntity(rawID) != nil
+                    && hasComponent(kind, on: rawID)
+              }) else { return false }
+        for rawID in orderedIDs {
+            guard let entity = resolveEntity(rawID) else { return false }
+            removeComponentUnchecked(kind, from: entity)
+        }
+        notifyRevisionChanged()
+        return true
+    }
+
+    /// Restores the selected component to its engine default on every target.
+    /// Reset is deliberately atomic and undoable because it can discard many
+    /// authored fields at once.
+    @discardableResult
+    public func resetComponent(_ kind: EditorComponentKind,
+                               on rawIDs: Set<UInt64>) -> Bool {
+        let orderedIDs = rawIDs.sorted()
+        guard isAuthoringEnabled,
+              !orderedIDs.isEmpty,
+              orderedIDs.allSatisfy({ rawID in
+                  !isEntityLocked(rawID)
+                    && resolveEntity(rawID) != nil
+                    && hasComponent(kind, on: rawID)
+              }) else { return false }
+        for rawID in orderedIDs {
+            guard let entity = resolveEntity(rawID) else { return false }
+            removeComponentUnchecked(kind, from: entity)
+            addComponentUnchecked(kind, to: entity)
+        }
+        notifyRevisionChanged()
+        return true
+    }
+
+    @discardableResult
+    public func resetComponent(_ kind: EditorComponentKind,
+                               on rawID: UInt64) -> Bool {
+        resetComponent(kind, on: [rawID])
+    }
+
+    private func removeComponentUnchecked(_ kind: EditorComponentKind,
+                                          from entity: EntityID) {
         switch kind {
         case .rigidBody:       _ = scene.removeComponent(RigidBody.self, from: entity)
         case .collider:        _ = scene.removeComponent(Collider.self, from: entity)
@@ -162,8 +267,6 @@ extension EditorSceneAdapter {
         case .particleEmitter: _ = scene.removeComponent(ParticleEmitter.self, from: entity)
         case .script:          _ = scene.removeComponent(ScriptComponent.self, from: entity)
         }
-        notifyRevisionChanged()
-        return true
     }
 
     private func resolveEntity(_ rawID: UInt64) -> EntityID? {

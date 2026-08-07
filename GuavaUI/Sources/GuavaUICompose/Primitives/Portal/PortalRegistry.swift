@@ -131,6 +131,13 @@ public enum PortalStoreHolder {
     nonisolated(unsafe) public static var current: PortalStore = shared
 }
 
+/// Tree-scoped portal ownership. AppRuntime provides one store at each window
+/// root, allowing portal presenters and the matching host to resolve the same
+/// store from their node ancestry without depending on global ambient timing.
+public enum PortalStoreEnvironment {
+    public static let key = CompositionLocal<PortalStore?>(defaultValue: nil)
+}
+
 /// Adapts a per-window `PortalStore` to the runtime's `ScopedAmbient` hook so it
 /// is swapped in lockstep with that window's input registries. Attach one to a
 /// window's `PlatformInputContext` via `addScopedAmbient`.
@@ -175,8 +182,11 @@ final class PortalResource: NodeResource {
     /// was reused after a close), so the overlay reliably reappears. The store
     /// is the scoped ambient at present time (recompose runs inside the owning
     /// window's `withCurrent`).
-    func present(position: CGPoint, width: Float?, content: AnyView) {
-        let current = PortalStoreHolder.current
+    func present(in resolvedStore: PortalStore? = nil,
+                 position: CGPoint,
+                 width: Float?,
+                 content: AnyView) {
+        let current = resolvedStore ?? PortalStoreHolder.current
         if let previous = store, previous !== current, let id = entryID {
             // The owning node moved to a different window's tree (e.g. a panel
             // re-hosted): release the entry from the old store first.

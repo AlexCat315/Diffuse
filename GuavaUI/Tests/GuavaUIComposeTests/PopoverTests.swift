@@ -310,6 +310,28 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
         }
     }
 
+    private struct TreeScopedPortalHarness: View {
+        let box: ActionBox
+        @State var isPresented: Bool = true
+
+        var body: some View {
+            LayerRoot {
+                Popover(isPresented: $isPresented,
+                        width: 140) {
+                    _PopoverProbe(id: "tree-scoped-trigger", width: 80, height: 24)
+                } content: {
+                    Menu([
+                        .item(MenuItem(id: "tree-scoped-item", title: "Item") {
+                            box.fired += 1
+                        })
+                    ], width: 140)
+                }
+            } portals: {
+                PortalHost()
+            }
+        }
+    }
+
     private struct NestedMenuHarness: View {
         let box: ActionBox
         @State var isPresented: Bool = false
@@ -527,6 +549,38 @@ struct PopoverTests: GuavaUIComposeSerializedSuite {
               y: Float(menuItem.origin.y + menuItem.node.frame.height * 0.5))
 
         #expect(box.fired == 1)
+    } }
+
+    @Test("Tree-scoped store keeps a Popover and PortalHost in the same window")
+    func treeScopedStoreOwnsPresenterAndHost() { GlobalTestLock.locked {
+        let previousStore = PortalStoreHolder.current
+        let windowStore = PortalStore()
+        let unrelatedAmbientStore = PortalStore()
+        PortalStoreHolder.current = unrelatedAmbientStore
+        defer {
+            windowStore.clear()
+            unrelatedAmbientStore.clear()
+            PortalStoreHolder.current = previousStore
+        }
+
+        let tree = NodeTree()
+        let recomposer = Recomposer()
+        let graph = ViewGraph(tree: tree, recomposer: recomposer)
+        let box = ActionBox()
+        graph.install(root:
+            TreeScopedPortalHarness(box: box)
+                .compositionLocal(PortalStoreEnvironment.key, windowStore)
+        )
+        while recomposer.commitAll() {}
+        graph.computeLayout(width: 240, height: 180)
+
+        // Regression: the presenter once registered against the tree store
+        // while the host observed the unrelated ambient store. The registry
+        // looked correct, but no menu was painted into the window.
+        #expect(windowStore.entries.count == 1)
+        #expect(unrelatedAmbientStore.entries.isEmpty)
+        #expect(!menuItemRows(in: tree.root,
+                             id: AnyHashable("tree-scoped-item")).isEmpty)
     } }
 
     private func click(_ dispatcher: EventDispatcher, x: Float, y: Float) {

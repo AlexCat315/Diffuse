@@ -39,6 +39,7 @@ public enum EditorAction: Sendable {
     case updateAssetDragCursor(x: Float, y: Float)
     case endAssetDrag
     case setInspectorSectionCollapsed(id: String, isCollapsed: Bool)
+    case setInspectorSectionsCollapsed(ids: Set<String>, isCollapsed: Bool)
     case setPendingConfirmationRequest(ConfirmationRequestBatch?)
     case setAISettings(EditorAISettings)
     case setCapabilitySettings(EditorCapabilitySettings)
@@ -177,6 +178,12 @@ public enum EditorReducer {
                 state.inspectorCollapsedSectionIDs.insert(id)
             } else {
                 state.inspectorCollapsedSectionIDs.remove(id)
+            }
+        case let .setInspectorSectionsCollapsed(ids, isCollapsed):
+            if isCollapsed {
+                state.inspectorCollapsedSectionIDs.formUnion(ids)
+            } else {
+                state.inspectorCollapsedSectionIDs.subtract(ids)
             }
         case let .setPendingConfirmationRequest(request):
             state.pendingConfirmationRequest = request
