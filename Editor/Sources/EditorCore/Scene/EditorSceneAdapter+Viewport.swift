@@ -935,22 +935,33 @@ extension EditorSceneAdapter {
 
     // MARK: - Selection helpers
 
-    /// 让活动相机绕选中实体世界坐标重新构图：保持 eye-target 方向 / 距离不变，
-    /// 把 target 放到实体上、平移 eye 同距离。距离过近时按合理范围回退。
-    public func frameEntity(_ rawID: UInt64) {
-        guard let target = entityWorldPosition(rawID) else { return }
+    /// Fits the selected entity and all of its rendered descendants while
+    /// preserving the current viewing direction. Non-rendered entities fall
+    /// back to a small world-space box around their transform origin.
+    public func frameEntity(_ rawID: UInt64, viewportAspectRatio: Float? = nil) {
+        guard let fallbackCenter = entityWorldPosition(rawID) else { return }
         guard let camID = activeCameraEntityRaw() else { return }
         let cam = currentRenderCamera()
-        var offset = cam.eye - cam.target
-        let dist = simd_length(offset)
-        let safeDist = dist < 0.5 ? 4.0 : dist
-        if dist < 1e-4 {
-            offset = SIMD3<Float>(0, 1.5, 4)
-        } else {
-            offset = simd_normalize(offset) * Float(safeDist)
+
+        let ancestorIDs: Set<UInt64> = [rawID]
+        let relevantBounds = viewportWorldBounds().filter { bounds in
+            bounds.entityID == rawID || entityHasAncestor(bounds.entityID, in: ancestorIDs)
         }
-        let newEye = target + offset
-        setCameraEye(camID, eye: newEye, target: target)
+        var lower = fallbackCenter - SIMD3<Float>(repeating: 0.25)
+        var upper = fallbackCenter + SIMD3<Float>(repeating: 0.25)
+        if let first = relevantBounds.first {
+            lower = first.min
+            upper = first.max
+            for bounds in relevantBounds.dropFirst() {
+                lower = simd_min(lower, bounds.min)
+                upper = simd_max(upper, bounds.max)
+            }
+        }
+        let pose = EditorViewportFraming.pose(camera: cam,
+                                              boundsMin: lower,
+                                              boundsMax: upper,
+                                              viewportAspectRatio: viewportAspectRatio)
+        setCameraEye(camID, eye: pose.eye, target: pose.target)
     }
 
     // MARK: - Entity ops
@@ -970,22 +981,48 @@ extension EditorSceneAdapter {
         guard entityIDs.allSatisfy({ rawID in
             makeEntityID(rawID).map(scene.contains) == true
         }) else { return false }
+        // RuntimeWorld intentionally promotes children to roots when their
+        // parent is destroyed. Every explicitly selected entity must therefore
+        // receive its own delete mutation. Delete descendants first so the
+        // transaction never depends on that promotion side effect and remains
+        // deterministic for mixed ancestor/descendant selections.
+        let deletionOrder = entityIDs.sorted { lhs, rhs in
+            if entityHasAncestor(lhs, in: [rhs]) { return true }
+            if entityHasAncestor(rhs, in: [lhs]) { return false }
+            return lhs < rhs
+        }
         return applySceneTransaction(intentVerb: "scene.delete_entities",
                                      summary: entityIDs.count == 1 ? "Delete entity" : "Delete entities",
                                      targetRawIDs: entityIDs,
-                                     mutations: entityIDs.map(SceneMutation.deleteEntity)) != nil
+                                     mutations: deletionOrder.map(SceneMutation.deleteEntity)) != nil
     }
 
     /// 浅复制：复制名字 / kind / 本地矩阵 / 渲染网格 / collider / rigid body / camera。
     /// 不复制子节点；新实体附在原父节点下。返回新实体 raw ID。
     @discardableResult
     public func duplicateEntity(_ rawID: UInt64) -> UInt64? {
-        guard let src = makeEntityID(rawID), scene.contains(src) else { return nil }
+        duplicateEntities([rawID])?.first
+    }
+
+    /// Duplicates a hierarchy selection atomically. The returned identifiers
+    /// follow the deterministic source-ID order and can replace the selection
+    /// immediately after the transaction commits.
+    @discardableResult
+    public func duplicateEntities(_ rawIDs: Set<UInt64>) -> [UInt64]? {
+        let entityIDs = rawIDs.sorted()
+        guard !entityIDs.isEmpty,
+              entityIDs.allSatisfy({ makeEntityID($0).map(scene.contains) == true }) else {
+            return nil
+        }
         let result = applySceneTransaction(intentVerb: "scene.duplicate_entity",
-                                           summary: "Duplicate entity",
-                                           targetRawIDs: [rawID],
-                                           mutations: [.duplicateEntity(entityID: rawID)])
-        return result?.createdEntityIDs.first
+                                           summary: entityIDs.count == 1
+                                            ? "Duplicate entity"
+                                            : "Duplicate entities",
+                                           targetRawIDs: entityIDs,
+                                           mutations: entityIDs.map {
+                                               .duplicateEntity(entityID: $0)
+                                           })
+        return result?.createdEntityIDs
     }
 
     // MARK: - Camera control

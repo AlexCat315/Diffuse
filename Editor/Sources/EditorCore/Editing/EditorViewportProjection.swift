@@ -69,3 +69,54 @@ public struct EditorViewportProjection {
         return (camera.eye, direction)
     }
 }
+
+/// Production framing policy shared by every "Frame Selected" entry point.
+///
+/// The policy fits a conservative bounding sphere around the complete world
+/// AABB. A sphere keeps the result stable as the camera rotates and lets the
+/// narrower of the horizontal and vertical fields of view drive the distance.
+public enum EditorViewportFraming {
+    public struct Pose: Sendable, Equatable {
+        public var eye: SIMD3<Float>
+        public var target: SIMD3<Float>
+
+        public init(eye: SIMD3<Float>, target: SIMD3<Float>) {
+            self.eye = eye
+            self.target = target
+        }
+    }
+
+    public static func pose(camera: RenderCamera,
+                            boundsMin: SIMD3<Float>,
+                            boundsMax: SIMD3<Float>,
+                            viewportAspectRatio: Float? = nil,
+                            padding: Float = 1.3) -> Pose {
+        let lower = simd_min(boundsMin, boundsMax)
+        let upper = simd_max(boundsMin, boundsMax)
+        let target = (lower + upper) * 0.5
+        let halfExtents = (upper - lower) * 0.5
+        let radius = max(0.25, simd_length(halfExtents))
+
+        let requestedAspect = viewportAspectRatio ?? camera.aspectRatio
+        let aspect = requestedAspect.isFinite ? max(0.05, requestedAspect) : 1
+        let requestedHalfFOV = camera.fovYRadians * 0.5
+        let verticalHalfFOV = min(Float.pi * 0.49,
+                                  max(Float.pi / 180 * 2.5, requestedHalfFOV))
+        let horizontalHalfFOV = atanf(tanf(verticalHalfFOV) * aspect)
+        let limitingHalfFOV = max(Float.pi / 180 * 2.5,
+                                  min(verticalHalfFOV, horizontalHalfFOV))
+        let safePadding = padding.isFinite ? max(1, padding) : 1.3
+        let fittedDistance = radius / max(0.04, sinf(limitingHalfFOV)) * safePadding
+        let distance = max(0.5,
+                           radius + max(0.05, camera.near * 2),
+                           fittedDistance)
+
+        var backward = camera.eye - camera.target
+        if !backward.x.isFinite || !backward.y.isFinite || !backward.z.isFinite
+            || simd_length(backward) < 1e-5 {
+            backward = SIMD3<Float>(0, 0.25, 1)
+        }
+        backward = simd_normalize(backward)
+        return Pose(eye: target + backward * distance, target: target)
+    }
+}

@@ -18,6 +18,8 @@ struct AssetBrowserPanel: View {
 
     @State private var searchText: String = ""
     @AppStorage("assetBrowser.viewMode") private var viewMode: AssetViewMode = .grid
+    @AppStorage("assetBrowser.sortMode") private var sortMode: AssetSortMode = .nameAscending
+    @AppStorage("assetBrowser.categoryFilter") private var categoryFilter: AssetCategoryFilter = .all
     @State private var selectedAssetID: String? = nil
     @State private var reloadStatusMessage: String? = nil
     @State private var reloadStatusIsError: Bool = false
@@ -65,11 +67,13 @@ struct AssetBrowserPanel: View {
             let _ = store.presentationRevision
             let allAssets = EditorAssetCatalog.entries()
             let isSearching = !trimmedQuery.isEmpty
+            let categoryAssets = AssetBrowserOrdering.filter(allAssets, category: categoryFilter)
             // While searching, ignore folder structure and show flat matches
             // across the whole project (Unreal's search behaviour).
-            let listing = isSearching
-                ? AssetFolderListing(folders: [], assets: searchMatches(allAssets))
-                : AssetFolderListing.make(folder: currentFolder, from: allAssets)
+            let unsortedListing = isSearching
+                ? AssetFolderListing(folders: [], assets: searchMatches(categoryAssets))
+                : AssetFolderListing.make(folder: currentFolder, from: categoryAssets)
+            let listing = unsortedListing.sorted(by: sortMode)
             let itemCount = listing.folders.count + listing.assets.count
 
             Box(direction: .column, alignItems: .stretch) {
@@ -79,7 +83,6 @@ struct AssetBrowserPanel: View {
                                     isFiltering: isSearching,
                                     onImport: { importAssets() },
                                     onReload: { reloadAssets() })
-                    .padding(horizontal: 10, vertical: 7)
 
                 Divider()
 
@@ -87,6 +90,8 @@ struct AssetBrowserPanel: View {
                                    currentFolder: currentFolder,
                                    isSearching: isSearching,
                                    viewMode: $viewMode,
+                                   sortMode: $sortMode,
+                                   categoryFilter: $categoryFilter,
                                    onNavigate: { navigate(to: $0) })
                     .padding(horizontal: 10, vertical: 5)
 
@@ -103,7 +108,7 @@ struct AssetBrowserPanel: View {
                 content(allAssets: allAssets, listing: listing, isSearching: isSearching)
 
                 if let selectedAssetID,
-                   let selectedAsset = allAssets.first(where: { $0.id == selectedAssetID }) {
+                   let selectedAsset = listing.assets.first(where: { $0.id == selectedAssetID }) {
                     Divider()
                     AssetSelectionBar(
                         asset: selectedAsset,
@@ -138,6 +143,12 @@ struct AssetBrowserPanel: View {
             if isSearching {
                 AssetBrowserPlaceholder(title: L("No matching assets"),
                                         subtitle: "\"\(trimmedQuery)\"")
+                    .flex()
+            } else if categoryFilter != .all {
+                AssetBrowserPlaceholder(
+                    title: L("No matching assets"),
+                    subtitle: categoryFilter == .meshes ? L("Meshes") : L("Textures")
+                )
                     .flex()
             } else {
                 AssetBrowserPlaceholder(title: L("This folder is empty"),
@@ -199,6 +210,61 @@ private enum AssetViewMode: String, Sendable, AppStorageConvertible {
     case grid, list
 }
 
+enum AssetSortMode: String, Sendable, CaseIterable, AppStorageConvertible {
+    case nameAscending
+    case nameDescending
+    case type
+}
+
+enum AssetCategoryFilter: String, Sendable, CaseIterable, AppStorageConvertible {
+    case all
+    case meshes
+    case textures
+}
+
+enum AssetBrowserOrdering {
+    static func filter(_ assets: [EditorAsset], category: AssetCategoryFilter) -> [EditorAsset] {
+        switch category {
+        case .all:
+            return assets
+        case .meshes:
+            return assets.filter { $0.kind.isMesh }
+        case .textures:
+            return assets.filter { $0.kind.isTexture }
+        }
+    }
+
+    static func sort(_ assets: [EditorAsset], mode: AssetSortMode) -> [EditorAsset] {
+        assets.sorted { lhs, rhs in
+            switch mode {
+            case .nameAscending:
+                return compare(lhs.name, rhs.name,
+                               fallbackLHS: lhs.relativePath,
+                               fallbackRHS: rhs.relativePath) == .orderedAscending
+            case .nameDescending:
+                return compare(lhs.name, rhs.name,
+                               fallbackLHS: lhs.relativePath,
+                               fallbackRHS: rhs.relativePath) == .orderedDescending
+            case .type:
+                let kindOrder = lhs.kind.rawValue.localizedCaseInsensitiveCompare(rhs.kind.rawValue)
+                if kindOrder != .orderedSame { return kindOrder == .orderedAscending }
+                return compare(lhs.name, rhs.name,
+                               fallbackLHS: lhs.relativePath,
+                               fallbackRHS: rhs.relativePath) == .orderedAscending
+            }
+        }
+    }
+
+    private static func compare(_ lhs: String,
+                                _ rhs: String,
+                                fallbackLHS: String,
+                                fallbackRHS: String) -> ComparisonResult {
+        let primary = lhs.localizedCaseInsensitiveCompare(rhs)
+        guard primary == .orderedSame else { return primary }
+        return fallbackLHS.localizedCaseInsensitiveCompare(fallbackRHS)
+    }
+}
+
 // MARK: - Folder listing derivation
 
 private struct AssetFolderRef: Equatable {
@@ -236,6 +302,11 @@ private struct AssetFolderListing {
         let sortedAssets = assets.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         return AssetFolderListing(folders: folders, assets: sortedAssets)
     }
+
+    func sorted(by mode: AssetSortMode) -> AssetFolderListing {
+        AssetFolderListing(folders: folders,
+                           assets: AssetBrowserOrdering.sort(assets, mode: mode))
+    }
 }
 
 // MARK: - Toolbar
@@ -249,7 +320,7 @@ private struct AssetBrowserToolbar: View {
     let onReload: () -> Void
 
     var body: some View {
-        Row(alignment: .center, spacing: 8) {
+        EditorPanelToolbar {
             Button(L("Import…")) { onImport() }
                 .buttonStyle(.secondary)
 
@@ -263,9 +334,7 @@ private struct AssetBrowserToolbar: View {
                 .font(.caption)
                 .flex()
 
-            Text(isFiltering ? "\(visibleCount)/\(totalCount)" : "\(visibleCount) items")
-                .font(.caption)
-                .foregroundColor(.onSurfaceMuted)
+            EditorPanelBadge(isFiltering ? "\(visibleCount) / \(totalCount)" : "\(visibleCount)")
         }
     }
 }
@@ -277,6 +346,8 @@ private struct AssetBreadcrumbBar: View {
     let currentFolder: String
     let isSearching: Bool
     let viewMode: Binding<AssetViewMode>
+    let sortMode: Binding<AssetSortMode>
+    let categoryFilter: Binding<AssetCategoryFilter>
     let onNavigate: (String) -> Void
 
     private var segments: [(label: String, path: String)] {
@@ -314,12 +385,73 @@ private struct AssetBreadcrumbBar: View {
 
             Spacer(minLength: 0)
 
+            AssetCategoryFilterButton(title: L("All"),
+                                      isActive: categoryFilter.wrappedValue == .all,
+                                      action: { categoryFilter.wrappedValue = .all })
+            AssetCategoryFilterButton(title: L("Meshes"),
+                                      isActive: categoryFilter.wrappedValue == .meshes,
+                                      action: { categoryFilter.wrappedValue = .meshes })
+            AssetCategoryFilterButton(title: L("Textures"),
+                                      isActive: categoryFilter.wrappedValue == .textures,
+                                      action: { categoryFilter.wrappedValue = .textures })
+
+            AssetSortSelector(sortMode: sortMode)
+
             AssetViewModeButton(title: L("Grid"),
                                 isActive: viewMode.wrappedValue == .grid,
                                 action: { viewMode.wrappedValue = .grid })
             AssetViewModeButton(title: L("List"),
                                 isActive: viewMode.wrappedValue == .list,
                                 action: { viewMode.wrappedValue = .list })
+        }
+    }
+}
+
+private struct AssetCategoryFilterButton: View {
+    let title: String
+    let isActive: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(isSelected: isActive, action: action) {
+            Text(title, lineLimit: 1)
+        }
+        .buttonStyle(ToggleButtonStyle(height: 22))
+    }
+}
+
+private struct AssetSortSelector: View {
+    let sortMode: Binding<AssetSortMode>
+    @State private var isPresented: Bool = false
+
+    var body: some View {
+        Popover(isPresented: $isPresented, width: 150) {
+            Row(alignment: .center, spacing: 5) {
+                Text(label(for: sortMode.wrappedValue), lineLimit: 1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceVariant)
+                Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
+            }
+            .padding(horizontal: 7, vertical: 4)
+            .background(.surfaceSunken)
+            .cornerRadius(4)
+        } content: {
+            Menu(AssetSortMode.allCases.map { mode in
+                .item(MenuItem(id: "asset-sort-\(mode.rawValue)",
+                               title: label(for: mode),
+                               isSelected: sortMode.wrappedValue == mode,
+                               action: { sortMode.wrappedValue = mode }))
+            }, width: 150, maxVisibleRows: 4, onItemActivated: {
+                isPresented = false
+            })
+        }
+    }
+
+    private func label(for mode: AssetSortMode) -> String {
+        switch mode {
+        case .nameAscending: return L("Name A–Z")
+        case .nameDescending: return L("Name Z–A")
+        case .type: return L("Type")
         }
     }
 }

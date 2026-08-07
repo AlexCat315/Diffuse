@@ -50,6 +50,17 @@ struct EditorEntityCreationTests {
         #expect(adapter.entitySummary(id: second) == nil)
         #expect(adapter.entitySummary(id: first)?.name == "Cube")
     }
+
+    @Test("locked parents reject child creation without creating an orphan")
+    func lockedParentRejectsChildCreation() throws {
+        let adapter = EditorSceneAdapter()
+        let parentID = try #require(adapter.spawnEntity(template: .empty))
+        adapter.setEntityLocked(true, entityIDs: [parentID])
+        let originalCount = adapter.entityCount
+
+        #expect(adapter.spawnEntity(template: .cube, parentID: parentID) == nil)
+        #expect(adapter.entityCount == originalCount)
+    }
 }
 
 private extension EntityID {

@@ -2789,6 +2789,56 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                                       index: index)])
     }
 
+    /// Moves the top-level members of a hierarchy selection to the scene root
+    /// as one undoable transaction. Selected descendants are intentionally
+    /// omitted because moving their selected ancestor already preserves them.
+    @discardableResult
+    public func moveEntitiesToRoot(_ entityIDs: Set<UInt64>) -> Bool {
+        let existingIDs = entityIDs.filter { rawID in
+            entity(from: rawID).map(scene.contains) == true
+        }
+        guard existingIDs.count == entityIDs.count, !existingIDs.isEmpty else { return false }
+        let topLevelIDs = existingIDs.filter {
+            !entityHasAncestor($0, in: existingIDs)
+        }
+        let nestedIDs = topLevelIDs.filter { rawID in
+            guard let entity = entity(from: rawID) else { return false }
+            return scene.parent(of: entity) != nil
+        }
+        let roots = nestedIDs.sorted()
+        guard !roots.isEmpty else { return false }
+        let startIndex = scene.roots().count
+        let mutations = roots.enumerated().map { offset, rawID in
+            SceneMutation.moveEntity(entityID: rawID,
+                                     parentID: nil,
+                                     index: startIndex + offset)
+        }
+        return applySceneTransaction(intentVerb: "scene.move_entities_to_root",
+                                     summary: roots.count == 1
+                                        ? "Move entity to root"
+                                        : "Move entities to root",
+                                     targetRawIDs: roots,
+                                     mutations: mutations) != nil
+    }
+
+    /// Renames one entity through the same transactional path used by the
+    /// Inspector. Empty names are rejected so inline rename can keep the draft
+    /// visible and explain the error instead of silently substituting a name.
+    @discardableResult
+    public func renameEntity(_ rawID: UInt64, to proposedName: String) -> Bool {
+        let trimmed = proposedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let entity = entity(from: rawID),
+              scene.contains(entity) else { return false }
+        let current = scene.component(SceneNameComponent.self, for: entity)?.value
+            ?? fallbackName(for: entity)
+        guard current != trimmed else { return true }
+        return applySceneTransaction(intentVerb: "scene.set_name",
+                                     summary: "Rename entity",
+                                     targetRawIDs: [rawID],
+                                     mutations: [.setSceneName(entityID: rawID, value: trimmed)]) != nil
+    }
+
     @discardableResult
     public func setHierarchyVisibility(_ isVisible: Bool,
                                        for entityIDs: Set<UInt64>) -> Bool {
@@ -2831,6 +2881,15 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         }
         collect(root)
         return visibility.allSatisfy { $0 }
+    }
+
+    public func hierarchyHasRenderableContent(_ rawID: UInt64) -> Bool {
+        guard let root = entity(from: rawID), scene.contains(root) else { return false }
+        func containsRenderable(_ entity: EntityID) -> Bool {
+            if scene.hasComponent(RenderMeshComponent.self, for: entity) { return true }
+            return scene.children(of: entity).contains(where: containsRenderable)
+        }
+        return containsRenderable(root)
     }
 
     public func setEntityLocked(_ isLocked: Bool, entityIDs: Set<UInt64>) {
@@ -7728,6 +7787,26 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         guard interactiveHistoryGroupActive else { return }
         interactiveHistoryGroupActive = false
         endEditHistoryGroup()
+    }
+
+    /// Abandons the live mutations from the current pointer interaction.
+    /// Viewport Escape uses this to provide the same cancel semantics as
+    /// mature DCC tools: the pre-drag scene is restored and no undo entry is
+    /// consumed. Calls are idempotent for a late mouse-up/focus-loss event.
+    public func cancelInteractiveEditHistoryGroup() {
+        guard interactiveHistoryGroupActive else { return }
+        interactiveHistoryGroupActive = false
+        guard historyGroupDepth > 0 else { return }
+        historyGroupDepth -= 1
+        guard historyGroupDepth == 0 else { return }
+
+        if let previous = historyGroupStartScene {
+            scene = previous
+            historyCurrentScene = previous
+            invalidateParticleFeedback()
+            onRevisionChanged?(scene.snapshot.revision)
+        }
+        historyGroupStartScene = nil
     }
 
     public var canUndoEdit: Bool { !undoScenes.isEmpty }

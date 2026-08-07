@@ -81,6 +81,7 @@ extension EditorSceneAdapter {
 
         let result = applySceneTransaction(intentVerb: "scene.create_entity",
                                            summary: "Create \(template.displayName.lowercased())",
+                                           targetRawIDs: parentID.map { [$0] } ?? [],
                                            mutations: [mutation])
         return result?.createdEntityIDs.first
     }
