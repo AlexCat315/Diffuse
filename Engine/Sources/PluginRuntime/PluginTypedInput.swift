@@ -204,9 +204,25 @@ public enum PluginTypedInputEncoder {
     }
 
     private static func booleanValue(_ value: Any) -> Bool? {
-        guard let number = value as? NSNumber,
-              CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
-        return number.boolValue
+        // Distinguish JSON true/false from JSON numbers without
+        // CFGetTypeID/CFBooleanGetTypeID, which are not exposed by
+        // swift-corelibs-foundation (Linux/Windows). See
+        // JSONSchema.booleanValue for the full rationale.
+        #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
+        if let number = value as? NSNumber,
+           CFGetTypeID(number) == CFBooleanGetTypeID() {
+            return number.boolValue
+        }
+        #else
+        if let number = value as? NSNumber,
+           String(cString: number.objCType) == "c" {
+            return number.boolValue
+        }
+        if let bool = value as? Bool {
+            return bool
+        }
+        #endif
+        return nil
     }
 
     private static func appendFixed<T: FixedWidthInteger>(_ value: T,
