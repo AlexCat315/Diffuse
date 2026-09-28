@@ -65,9 +65,10 @@ struct HierarchyPanel: View {
             let allSelectionLocked = !selectedIDs.isEmpty && selectedIDs.allSatisfy {
                 scene.isEntityLocked($0)
             }
-            let canMoveSelectionToRoot = selectedIDs.contains {
-                !HierarchyPanelModel.ancestorIDs(of: $0, in: hierarchyRoots).isEmpty
-            }
+            let canMoveSelectionToRoot = HierarchyPanelModel.canMoveSelectionToRoot(
+                selectedIDs,
+                in: hierarchyRoots
+            )
             let searchTextBinding = Binding<String>(
                 get: { searchQuery },
                 set: updateSearchQuery
@@ -570,9 +571,11 @@ struct HierarchyPanel: View {
                                      roots: [EditorSceneNode]) {
         guard !scene.isEntityLocked(entityID),
               !scene.isEntityLocked(targetID) else { return }
-        guard let destination = hierarchyDropDestination(for: targetID,
-                                                         position: position,
-                                                         roots: roots) else {
+        guard let destination = HierarchyPanelModel.dropDestination(
+            for: targetID,
+            position: position.hierarchyPosition,
+            in: roots
+        ) else {
             return
         }
         guard scene.moveEntity(entityID, to: destination.parentID, at: destination.index) != nil else {
@@ -592,59 +595,13 @@ struct HierarchyPanel: View {
                          position: TreeDropPosition,
                          in roots: [EditorSceneNode]) -> Bool {
         guard !scene.isEntityLocked(sourceID),
-              !scene.isEntityLocked(targetID),
-              sourceID != targetID,
-              let destination = hierarchyDropDestination(for: targetID,
-                                                         position: position,
-                                                         roots: roots),
-              let source = locateNode(sourceID, in: roots) else {
+              !scene.isEntityLocked(targetID) else {
             return false
         }
-        guard let parentID = destination.parentID else {
-            return true
-        }
-        return !subtreeContains(parentID, in: source.node)
-    }
-
-    private func hierarchyDropDestination(for targetID: UInt64,
-                                          position: TreeDropPosition,
-                                          roots: [EditorSceneNode]) -> HierarchyDropDestination? {
-        guard let target = locateNode(targetID, in: roots) else { return nil }
-        switch position {
-        case .before:
-            return HierarchyDropDestination(parentID: target.parentID,
-                                            index: target.index)
-        case .inside:
-            return HierarchyDropDestination(parentID: target.node.id,
-                                            index: target.node.children.count)
-        case .after:
-            return HierarchyDropDestination(parentID: target.parentID,
-                                            index: target.index + 1)
-        }
-    }
-
-    private func locateNode(_ id: UInt64,
-                            in nodes: [EditorSceneNode],
-                            parentID: UInt64? = nil) -> HierarchyNodeLocation? {
-        for (index, node) in nodes.enumerated() {
-            if node.id == id {
-                return HierarchyNodeLocation(node: node,
-                                             parentID: parentID,
-                                             index: index)
-            }
-            if let child = locateNode(id, in: node.children, parentID: node.id) {
-                return child
-            }
-        }
-        return nil
-    }
-
-    private func subtreeContains(_ id: UInt64,
-                                 in node: EditorSceneNode) -> Bool {
-        if node.id == id {
-            return true
-        }
-        return node.children.contains { subtreeContains(id, in: $0) }
+        return HierarchyPanelModel.canDrop(entityID: sourceID,
+                                           on: targetID,
+                                           position: position.hierarchyPosition,
+                                           in: roots)
     }
 
     private static func keyIndex(in roots: [EditorSceneNode]) -> [UInt64: [TreeNodeKey<UInt64>]] {
@@ -727,15 +684,14 @@ private enum HierarchyPanelSessionRegistry {
     }
 }
 
-private struct HierarchyNodeLocation {
-    let node: EditorSceneNode
-    let parentID: UInt64?
-    let index: Int
-}
-
-private struct HierarchyDropDestination {
-    let parentID: UInt64?
-    let index: Int
+private extension TreeDropPosition {
+    var hierarchyPosition: HierarchyDropPosition {
+        switch self {
+        case .before: return .before
+        case .inside: return .inside
+        case .after: return .after
+        }
+    }
 }
 
 private struct HierarchyTreeRowStyle: TreeRowStyle {
@@ -772,50 +728,66 @@ private struct HierarchyPanelHeader: View {
     @State private var isActionsPresented: Bool = false
 
     var body: some View {
-        EditorPanelToolbar {
-            if selectionCount > 0 {
-                EditorPanelBadge("\(selectionCount) \(L("selected"))", foreground: .accent)
-            } else {
-                EditorPanelBadge("\(entityCount) \(L(entityCount == 1 ? "entity" : "entities"))")
-            }
-
-            Spacer(minLength: 0)
-
-            if selectionCount > 0 {
-                Popover(isPresented: $isActionsPresented, width: 220) {
-                    actionLabel()
-                } content: {
-                    Menu(selectionActions,
-                         width: 220,
-                         maxVisibleRows: 11,
-                         onItemActivated: {
-                             isActionsPresented = false
-                         })
+        EditorPanelToolbar(spacing: 0) {
+            Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                if selectionCount > 0 {
+                    actionsControl()
                 }
             }
+            .frame(width: 68)
 
-            if isAuthoringEnabled {
-                Popover(isPresented: $isCreatePresented,
-                        width: 240,
-                        placement: .end) {
-                    createLabel()
-                } content: {
-                    Menu(createEntries(),
-                         width: 240,
-                         maxVisibleRows: 14,
-                         onItemActivated: {
-                        isCreatePresented = false
-                    })
+            Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                if selectionCount > 0 {
+                    EditorPanelBadge("\(selectionCount) \(L("selected"))", foreground: .accent)
+                } else {
+                    EditorPanelBadge("\(entityCount) \(L(entityCount == 1 ? "entity" : "entities"))")
                 }
-            } else {
-                Button(isEnabled: false,
-                       tooltip: L("Stop simulation to edit the scene"),
-                       action: {}) {
-                    createLabel()
-                }
-                .buttonStyle(.plain)
             }
+            .flex(1, shrink: 1, basis: 0)
 
+            Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                createControl()
+            }
+            .frame(width: 68)
+        }
+    }
+
+    @ViewBuilder
+    private func actionsControl() -> some View {
+        Popover(isPresented: $isActionsPresented, width: 220) {
+            actionLabel()
+        } content: {
+            Menu(selectionActions,
+                 width: 220,
+                 maxVisibleRows: 11,
+                 onItemActivated: {
+                     isActionsPresented = false
+                 })
+        }
+    }
+
+    @ViewBuilder
+    private func createControl() -> some View {
+        if isAuthoringEnabled {
+            Popover(isPresented: $isCreatePresented,
+                    width: 240,
+                    placement: .end) {
+                createLabel()
+            } content: {
+                Menu(createEntries(),
+                     width: 240,
+                     maxVisibleRows: 14,
+                     onItemActivated: {
+                    isCreatePresented = false
+                })
+            }
+        } else {
+            Button(isEnabled: false,
+                   tooltip: L("Stop simulation to edit the scene"),
+                   action: {}) {
+                createLabel()
+            }
+            .buttonStyle(.plain)
         }
     }
 
