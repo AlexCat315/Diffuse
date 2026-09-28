@@ -79,10 +79,12 @@ public enum EditorViewportFraming {
     public struct Pose: Sendable, Equatable {
         public var eye: SIMD3<Float>
         public var target: SIMD3<Float>
+        public var up: SIMD3<Float>
 
-        public init(eye: SIMD3<Float>, target: SIMD3<Float>) {
+        public init(eye: SIMD3<Float>, target: SIMD3<Float>, up: SIMD3<Float>) {
             self.eye = eye
             self.target = target
+            self.up = up
         }
     }
 
@@ -91,8 +93,12 @@ public enum EditorViewportFraming {
                             boundsMax: SIMD3<Float>,
                             viewportAspectRatio: Float? = nil,
                             padding: Float = 1.3) -> Pose {
-        let lower = simd_min(boundsMin, boundsMax)
-        let upper = simd_max(boundsMin, boundsMax)
+        let boundsAreFinite = [boundsMin.x, boundsMin.y, boundsMin.z,
+                               boundsMax.x, boundsMax.y, boundsMax.z].allSatisfy(\.isFinite)
+        let safeMin = boundsAreFinite ? boundsMin : SIMD3<Float>(repeating: -0.25)
+        let safeMax = boundsAreFinite ? boundsMax : SIMD3<Float>(repeating: 0.25)
+        let lower = simd_min(safeMin, safeMax)
+        let upper = simd_max(safeMin, safeMax)
         let target = (lower + upper) * 0.5
         let halfExtents = (upper - lower) * 0.5
         let radius = max(0.25, simd_length(halfExtents))
@@ -117,6 +123,18 @@ public enum EditorViewportFraming {
             backward = SIMD3<Float>(0, 0.25, 1)
         }
         backward = simd_normalize(backward)
-        return Pose(eye: target + backward * distance, target: target)
+        let forward = -backward
+        var safeUp = camera.up
+        if !safeUp.x.isFinite || !safeUp.y.isFinite || !safeUp.z.isFinite
+            || simd_length(safeUp) < 1e-5
+            || simd_length(simd_cross(forward, safeUp)) < 1e-4 {
+            safeUp = abs(simd_dot(forward, SIMD3<Float>(0, 1, 0))) < 0.92
+                ? SIMD3<Float>(0, 1, 0)
+                : SIMD3<Float>(0, 0, 1)
+        }
+        safeUp = simd_normalize(safeUp)
+        return Pose(eye: target + backward * distance,
+                    target: target,
+                    up: safeUp)
     }
 }

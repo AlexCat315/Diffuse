@@ -10,6 +10,9 @@ struct ConsolePanel: View {
     let store: EditorStore
     @State private var searchText: String = ""
     @State private var enabledSeverities: Set<EditorConsoleSeverity> = Set(EditorConsoleSeverity.allCases)
+    @State private var selectedEntryID: UInt64? = nil
+    @State private var followsLatest: Bool = true
+    @State private var copyStatus: String? = nil
 
     init(store: EditorStore) {
         self.store = store
@@ -23,6 +26,8 @@ struct ConsolePanel: View {
                                                        severities: enabledSeverities,
                                                        query: searchText)
         let counts = Dictionary(grouping: entries, by: \.severity).mapValues(\.count)
+        let selectedEntry = visibleEntries.first { $0.id == selectedEntryID }
+        let entriesToCopy = selectedEntry.map { [$0] } ?? visibleEntries
 
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             EditorPanelToolbar {
@@ -41,8 +46,28 @@ struct ConsolePanel: View {
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
 
+                Button(isSelected: followsLatest,
+                       tooltip: followsLatest ? L("Pause following new messages") : L("Follow newest message"),
+                       action: { followsLatest.toggle() }) {
+                    Text(followsLatest ? L("Following") : L("Follow Latest"), lineLimit: 1)
+                }
+                .buttonStyle(ToggleButtonStyle(height: 22))
+
+                Button(isEnabled: !entriesToCopy.isEmpty,
+                       tooltip: selectedEntry == nil
+                           ? L("Copy visible messages")
+                           : L("Copy selected message"),
+                       action: { copy(entriesToCopy) }) {
+                    Text(L("Copy"))
+                }
+                .buttonStyle(GhostButtonStyle())
+
                 Button(isEnabled: !entries.isEmpty,
-                       action: { store.dispatch(.clearConsole) }) {
+                       action: {
+                           store.dispatch(.clearConsole)
+                           selectedEntryID = nil
+                           copyStatus = nil
+                       }) {
                     Text(L("Clear"))
                 }
                 .buttonStyle(GhostButtonStyle())
@@ -75,6 +100,13 @@ struct ConsolePanel: View {
                 )
             }
 
+            if let copyStatus {
+                Text(copyStatus)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                    .padding(horizontal: 10, vertical: 3)
+            }
+
             Divider()
 
             if entries.isEmpty {
@@ -95,8 +127,15 @@ struct ConsolePanel: View {
                 ScrollView(.vertical, scrollbarGutter: .stable) {
                     Column(alignment: .leading, spacing: 1) {
                         for entry in visibleEntries.suffix(200) {
-                            ConsoleEntryRow(entry: entry)
+                            ConsoleEntryRow(entry: entry,
+                                            isSelected: selectedEntryID == entry.id,
+                                            onSelect: {
+                                                selectedEntryID = entry.id
+                                                copyStatus = nil
+                                            })
                         }
+                        ConsoleTailAnchor(entryID: visibleEntries.last?.id,
+                                          followsLatest: followsLatest)
                     }
                     .padding(horizontal: 10, vertical: 6)
                 }
@@ -113,6 +152,16 @@ struct ConsolePanel: View {
         } else {
             enabledSeverities.insert(severity)
         }
+        selectedEntryID = nil
+    }
+
+    private func copy(_ entries: [EditorConsoleEntry]) {
+        guard let writeClipboard = ClipboardHolder.write else {
+            copyStatus = L("Clipboard is unavailable")
+            return
+        }
+        writeClipboard(ConsoleEntryExport.formatted(entries))
+        copyStatus = String(format: L("Copied %lld messages"), Int64(entries.count))
     }
 }
 
@@ -127,6 +176,28 @@ enum ConsoleEntryFilter {
             return entry.message.range(of: needle, options: .caseInsensitive) != nil
                 || entry.detail?.range(of: needle, options: .caseInsensitive) != nil
         }
+    }
+}
+
+enum ConsoleEntryExport {
+    static func formatted(_ entries: [EditorConsoleEntry]) -> String {
+        entries.map { entry in
+            let severity = entry.severity.rawValue.uppercased()
+            guard let detail = entry.detail?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !detail.isEmpty else {
+                return "[\(severity)] \(entry.message)"
+            }
+            return "[\(severity)] \(entry.message)\n\(detail)"
+        }
+        .joined(separator: "\n")
+    }
+}
+
+enum ConsoleScrollGeometry {
+    static func bottomOffset(currentOffset: CGFloat,
+                             anchorMaxY: CGFloat,
+                             viewportMaxY: CGFloat) -> CGFloat {
+        currentOffset + max(0, anchorMaxY - viewportMaxY)
     }
 }
 
@@ -175,33 +246,37 @@ private struct ConsoleSeverityFilterButton: View {
 
 private struct ConsoleEntryRow: View {
     let entry: EditorConsoleEntry
+    let isSelected: Bool
+    let onSelect: () -> Void
 
     var body: some View {
-        Row(alignment: .top, spacing: 8) {
-            Text(severityLabel)
-                .font(.caption)
-                .foregroundColor(severityColor)
-                .frame(width: 44)
-
-            Column(alignment: .leading, spacing: 2) {
-                Text(entry.message)
-                    .lineLimit(1)
+        Button(action: onSelect) {
+            Row(alignment: .top, spacing: 8) {
+                Text(severityLabel)
                     .font(.caption)
-                    .foregroundColor(messageColor)
-                if let detail = entry.detail, !detail.isEmpty {
-                    Text(detail)
-                        .lineLimit(2)
+                    .foregroundColor(severityColor)
+                    .frame(width: 44)
+
+                Column(alignment: .leading, spacing: 2) {
+                    Text(entry.message)
+                        .lineLimit(isSelected ? nil : 1)
                         .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
+                        .foregroundColor(messageColor)
+                    if let detail = entry.detail, !detail.isEmpty {
+                        Text(detail)
+                            .lineLimit(isSelected ? nil : 2)
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                    }
                 }
+                .flex(1, shrink: 1)
             }
-            .flex(1, shrink: 1)
+            .padding(horizontal: 4, vertical: 3)
+            .background(rowBackground)
+            .cornerRadius(3)
+            .border(selectionBorder, width: 1)
         }
-        .padding(horizontal: 4, vertical: 3)
-        .background(entry.severity == .error
-            ? SemanticColorRef.error.opacity(0.08)
-            : SemanticColorRef { _ in .clear })
-        .cornerRadius(3)
+        .buttonStyle(.plain)
     }
 
     private var severityLabel: String {
@@ -226,5 +301,73 @@ private struct ConsoleEntryRow: View {
         case .warning: return .warning
         case .error: return .error
         }
+    }
+
+    private var rowBackground: SemanticColorRef {
+        if isSelected { return .accent.opacity(0.12) }
+        if entry.severity == .error { return .error.opacity(0.08) }
+        return SemanticColorRef { _ in .clear }
+    }
+
+    private var selectionBorder: SemanticColorRef {
+        isSelected ? .accent : SemanticColorRef { _ in .clear }
+    }
+}
+
+/// A one-pixel tail marker scrolls the console only when a new last entry
+/// arrives or the user explicitly resumes follow mode. Layout timing matters:
+/// the marker runs after its new frame has been assigned, so the scroll
+/// viewport's offset lands on the actual bottom rather than the stale row size.
+private struct ConsoleTailAnchor: _PrimitiveView {
+    let entryID: UInt64?
+    let followsLatest: Bool
+
+    private static let entryIDKey = "console.tail.entryID"
+    private static let followKey = "console.tail.followsLatest"
+
+    func _makeNode() -> Node {
+        let node = Node()
+        node.isHitTestable = false
+        return node
+    }
+
+    func _updateNode(_ node: Node) {
+        let previousEntryID = node.attachments[Self.entryIDKey] as? UInt64
+        let wasFollowing = node.attachments[Self.followKey] as? Bool ?? false
+        let shouldScroll = followsLatest && (previousEntryID != entryID || !wasFollowing)
+        if followsLatest, !wasFollowing, previousEntryID == entryID {
+            // Resuming follow mode does not necessarily cause a layout pass,
+            // and the existing tail geometry is already current in that case.
+            Self.scrollToBottom(from: node)
+        }
+        node.attachments[Self.entryIDKey] = entryID
+        node.attachments[Self.followKey] = followsLatest
+        node.layoutDidUpdate = { anchor in
+            guard shouldScroll else { return }
+            Self.scrollToBottom(from: anchor)
+        }
+    }
+
+    func _makeLayoutNode() -> LayoutNode? {
+        let layout = LayoutNode()
+        layout.width = 1
+        layout.height = 1
+        return layout
+    }
+
+    private static func scrollToBottom(from anchor: Node) {
+        guard var scrollView = anchor.parent else { return }
+        while !scrollView.clipsToBounds {
+            guard let parent = scrollView.parent else { return }
+            scrollView = parent
+        }
+
+        let viewport = scrollView.absoluteFrame
+        let tail = anchor.absoluteFrame
+        let nextY = ConsoleScrollGeometry.bottomOffset(currentOffset: scrollView.contentOffset.y,
+                                                       anchorMaxY: tail.maxY,
+                                                       viewportMaxY: viewport.maxY)
+        guard nextY != scrollView.contentOffset.y else { return }
+        scrollView.contentOffset = CGPoint(x: scrollView.contentOffset.x, y: nextY)
     }
 }

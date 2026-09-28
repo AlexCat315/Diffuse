@@ -1,4 +1,5 @@
 import EditorCore
+import EngineKernel
 import Testing
 @testable import EditorApp
 
@@ -61,6 +62,33 @@ struct EditorPanelWorkflowTests {
                                                     severities: [.warning, .error],
                                                     query: "")
         #expect(diagnostics.map(\.id) == [2, 3])
+
+        let detailMatch = ConsoleEntryFilter.filter(entries,
+                                                    severities: Set(EditorConsoleSeverity.allCases),
+                                                    query: "roof uses")
+        #expect(detailMatch.map(\.id) == [2])
+    }
+
+    @Test("console copy keeps severity, message, multiline detail, and ordering")
+    func consoleExport() {
+        let entries = [
+            EditorConsoleEntry(id: 1, severity: .warning, message: "Missing material",
+                               detail: "surface 2\nusing fallback"),
+            EditorConsoleEntry(id: 2, severity: .error, message: "Build failed"),
+        ]
+
+        #expect(ConsoleEntryExport.formatted(entries)
+                == "[WARNING] Missing material\nsurface 2\nusing fallback\n[ERROR] Build failed")
+    }
+
+    @Test("console follow offset moves to the tail without scrolling past it")
+    func consoleFollowGeometry() {
+        #expect(ConsoleScrollGeometry.bottomOffset(currentOffset: 15,
+                                                   anchorMaxY: 260,
+                                                   viewportMaxY: 200) == 75)
+        #expect(ConsoleScrollGeometry.bottomOffset(currentOffset: 15,
+                                                   anchorMaxY: 190,
+                                                   viewportMaxY: 200) == 15)
     }
 
     @Test("inspector search matches section titles, field labels, and current values")
@@ -115,6 +143,31 @@ struct EditorPanelWorkflowTests {
         #expect(rendering.contains(.particleEmitter))
     }
 
+    @Test("AI settings drafts use provider defaults and never carry a secret across providers")
+    func aiSettingsDraftProviderSwitching() {
+        var draft = EditorAISettingsDraft(settings: .default)
+        #expect(draft.provider == .none)
+        #expect(draft.model.isEmpty)
+
+        draft.apiKey = "secret-for-openai"
+        draft.select(.openai)
+        #expect(draft.model == EditorAIProvider.openai.defaultModel)
+        #expect(draft.apiKey.isEmpty)
+
+        draft.apiKey = "openai-secret"
+        draft.select(.openai)
+        #expect(draft.apiKey == "openai-secret")
+
+        draft.model = "custom-compatible-model"
+        draft.select(.deepseek)
+        #expect(draft.model == "custom-compatible-model")
+        #expect(draft.apiKey.isEmpty)
+
+        draft.model = EditorAIProvider.deepseek.defaultModel
+        draft.select(.anthropic)
+        #expect(draft.model == EditorAIProvider.anthropic.defaultModel)
+    }
+
     @Test("asset browser ordering keeps filters and sort modes deterministic")
     func assetBrowserOrdering() {
         let assets = [
@@ -134,5 +187,98 @@ struct EditorPanelWorkflowTests {
                 == ["z-mesh", "a-texture", "a-mesh"])
         #expect(AssetBrowserOrdering.sort(assets, mode: .type).map(\.id)
                 == ["z-mesh", "a-mesh", "a-texture"])
+    }
+
+    @Test("asset browser ordering breaks case-only ties consistently")
+    func assetBrowserAssetTieOrdering() {
+        let assets = [
+            EditorAsset(id: "lower", name: "tree", relativePath: "Models/tree.obj",
+                        absolutePath: "/tmp/tree.obj", kind: .obj, meshIndex: 1),
+            EditorAsset(id: "upper", name: "Tree", relativePath: "Models/Tree.obj",
+                        absolutePath: "/tmp/Tree.obj", kind: .obj, meshIndex: 2),
+        ]
+
+        #expect(AssetBrowserOrdering.sort(assets, mode: .nameAscending).map(\.id)
+                == ["upper", "lower"])
+        #expect(AssetBrowserOrdering.sort(assets, mode: .nameDescending).map(\.id)
+                == ["lower", "upper"])
+        #expect(AssetBrowserOrdering.sort(Array(assets.reversed()), mode: .nameAscending).map(\.id)
+                == ["upper", "lower"])
+    }
+
+    @Test("asset browser selection supports range and modifier toggles")
+    func assetBrowserSelection() {
+        let visibleIDs = ["a", "b", "c", "d", "e"]
+        var selection = AssetBrowserSelectionModel()
+
+        selection.select("b", in: visibleIDs)
+        selection.select("d", in: visibleIDs, modifiers: .shift)
+        #expect(selection.selectedIDs == ["b", "c", "d"])
+
+        selection.select("c", in: visibleIDs, modifiers: .gui)
+        #expect(selection.selectedIDs == ["b", "d"])
+
+        selection.select("e", in: visibleIDs, modifiers: [.gui, .shift])
+        #expect(selection.selectedIDs == ["b", "c", "d", "e"])
+        selection.selectAll(in: ["a", "e"])
+        #expect(selection.selectedIDs == ["a", "e"])
+        selection.clear()
+        #expect(selection.selectedIDs.isEmpty)
+    }
+
+    @Test("asset browser keyboard navigation stays within visible results")
+    func assetBrowserKeyboardNavigation() {
+        let visibleIDs = ["a", "b", "c"]
+        #expect(AssetBrowserSelectionModel.adjacentAssetID(from: nil,
+                                                            in: visibleIDs,
+                                                            direction: 1) == "a")
+        #expect(AssetBrowserSelectionModel.adjacentAssetID(from: "b",
+                                                            in: visibleIDs,
+                                                            direction: -1) == "a")
+        #expect(AssetBrowserSelectionModel.adjacentAssetID(from: "c",
+                                                            in: visibleIDs,
+                                                            direction: 1) == nil)
+        #expect(AssetBrowserSelectionModel.adjacentAssetID(from: nil,
+                                                            in: visibleIDs,
+                                                            direction: -1) == "c")
+    }
+
+    @Test("asset browser folders show only immediate children and direct assets")
+    func assetBrowserFolderListing() {
+        let assets = [
+            EditorAsset(id: "hero", name: "Hero", relativePath: "Models/Characters/Hero.glb",
+                        absolutePath: "/tmp/Hero.glb", kind: .glb, meshIndex: 1),
+            EditorAsset(id: "crate", name: "Crate", relativePath: "Models/Props/Crate.obj",
+                        absolutePath: "/tmp/Crate.obj", kind: .obj, meshIndex: 2),
+            EditorAsset(id: "wood", name: "Wood", relativePath: "Textures/Wood.png",
+                        absolutePath: "/tmp/Wood.png", kind: .png, meshIndex: 0),
+            EditorAsset(id: "root", name: "Backdrop", relativePath: "Backdrop.png",
+                        absolutePath: "/tmp/Backdrop.png", kind: .png, meshIndex: 0),
+        ]
+
+        let root = AssetFolderListing.make(folder: "", from: assets)
+        #expect(root.folders.map(\.name) == ["Models", "Textures"])
+        #expect(root.assets.map(\.id) == ["root"])
+
+        let models = AssetFolderListing.make(folder: "Models", from: assets)
+        #expect(models.folders.map(\.name) == ["Characters", "Props"])
+        #expect(models.assets.isEmpty)
+
+        let props = AssetFolderListing.make(folder: "Models/Props", from: assets)
+        #expect(props.folders.isEmpty)
+        #expect(props.assets.map(\.id) == ["crate"])
+    }
+
+    @Test("asset browser folder ordering resolves case-only ties deterministically")
+    func assetBrowserFolderTieOrdering() {
+        let assets = [
+            EditorAsset(id: "lower", name: "b", relativePath: "models/b.obj",
+                        absolutePath: "/tmp/b.obj", kind: .obj, meshIndex: 1),
+            EditorAsset(id: "upper", name: "a", relativePath: "Models/a.obj",
+                        absolutePath: "/tmp/a.obj", kind: .obj, meshIndex: 2),
+        ]
+
+        #expect(AssetFolderListing.make(folder: "", from: assets).folders.map(\.name)
+                == ["Models", "models"])
     }
 }
