@@ -162,25 +162,38 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
                 )
                 var instance = activeInstances[key]
                 if instance?.registrationGeneration != registered.generation {
-                    instance?.script.onDestroyHandler?(scriptContext)
+                    invoke(\.onDestroyHandler, script: instance?.script, context: scriptContext)
                     let replacement = ActiveScriptInstance(
                         registrationGeneration: registered.generation,
                         script: registered.makeScript()
                     )
-                    replacement.script.onStartHandler?(scriptContext)
+                    invoke(\.onStartHandler, script: replacement.script, context: scriptContext)
                     activeInstances[key] = replacement
                     instance = replacement
                 }
                 guard let script = instance?.script else { continue }
                 switch phase {
                 case .prePhysics:
-                    script.onPrePhysicsHandler?(scriptContext)
+                    invoke(\.onPrePhysicsHandler, script: script, context: scriptContext)
                 case .postPhysics:
-                    script.onTickHandler?(scriptContext)
+                    invoke(\.onTickHandler, script: script, context: scriptContext)
                 }
             }
         }
         return liveInstances
+    }
+
+    /// Invokes a script lifecycle callback with the C bridge context slot set
+    /// for the duration of the call, then clears it. Dynamically loaded script
+    /// libraries reach the active `ScriptContext` through the C ABI functions
+    /// declared in `ScriptCBridge.swift`.
+    private func invoke(_ keyPath: KeyPath<Script, ScriptCallback?>,
+                        script: Script?,
+                        context: ScriptContext) {
+        guard let script, let handler = script[keyPath: keyPath] else { return }
+        guavaSetCurrentScriptContext(context)
+        handler(context)
+        guavaSetCurrentScriptContext(nil)
     }
 
     private func resolve(_ binding: ScriptBinding) -> (ScriptHandle, RegisteredScript)? {

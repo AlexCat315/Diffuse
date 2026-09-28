@@ -55,4 +55,4 @@ Guava 场景中的脚本绑定使用稳定字符串 ID，而不是仅在当前�
 
 角色与相机 preset 会自动获得标准输入映射：WASD/方向键移动、Space 跳跃、Control 蹲伏、按住鼠标右键移动视角、滚轮缩放；手柄十字键、南键/东键与右摇杆也有对应映射。原生项目可以用自己的 `InputActionMap` 资源覆盖这些默认值。
 
-当前项目目录是声明式脚本 preset 目录，不会在运行时编译任意 Swift 源码。需要原生自定义行为时，可在 Swift 代码中通过 `ScriptRuntime.register(named:_:)` 注册工厂，并在绑定中使用同一个稳定 ID。
+`Scripts/*.swift` 可以在 Editor 的 Scripts 面板中编辑和编译。Editor 启动及场景重载时会重新编译这些源文件，并将其加入 Inspector 的脚本选择列表；动态 Swift 脚本目前只在 Editor 进程内运行，不会随项目导出到 GuavaPlayer。`Scripts/scripts.json` 仍用于声明式 preset 和默认参数。需要 Player 支持动态 Swift 脚本时，还需增加对应的构建与打包流程。
