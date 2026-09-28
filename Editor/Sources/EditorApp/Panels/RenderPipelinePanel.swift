@@ -21,6 +21,7 @@ struct RenderPipelinePanel: View, @unchecked Sendable {
     @AppStorage("renderPipeline.samples") var samples: String = "64"
 
     var body: some View {
+        let estimate = estimateRenderPipelineInputs(width: width, height: height, samples: samples)
         Column(alignment: .leading, spacing: 8) {
             Row(alignment: .center, spacing: 8) {
                 Text("W").font(.caption).foregroundColor(.onSurfaceMuted)
@@ -29,6 +30,29 @@ struct RenderPipelinePanel: View, @unchecked Sendable {
                 TextField("480", text: $height).frame(width: 56)
                 Text("SPP").font(.caption).foregroundColor(.onSurfaceMuted)
                 TextField("64", text: $samples).frame(width: 56)
+            }
+
+            Row(alignment: .center, spacing: 5) {
+                Text(L("Presets"))
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                presetButton(.preview)
+                presetButton(.hd)
+                presetButton(.fullHD)
+            }
+
+            if let estimate {
+                Text(String(format: L("%lld path samples · about %lld MiB image buffers"),
+                            Int64(estimate.pathSampleCount),
+                            Int64(estimate.imageBufferMiB)))
+                    .font(.caption)
+                    .foregroundColor(estimate.pathSampleCount > RenderPipelineRequest.maximumPathSamples
+                        ? .warning : .onSurfaceMuted)
+                if estimate.pathSampleCount > RenderPipelineRequest.maximumPathSamples {
+                    Text(L("Reduce resolution or SPP to stay within the render budget."))
+                        .font(.caption)
+                        .foregroundColor(.warning)
+                }
             }
 
             Row(alignment: .center, spacing: 8) {
@@ -49,14 +73,17 @@ struct RenderPipelinePanel: View, @unchecked Sendable {
                 Column(alignment: .leading, spacing: 4) {
                     Row(alignment: .center, spacing: 0) {
                         Box { EmptyView() }
-                            .frame(width: 240 * progressFraction, height: 4)
+                            .frame(width: 240 * min(1, max(0, progressFraction)), height: 4)
                             .background(.accent)
                         Box { EmptyView() }
-                            .frame(width: 240 * (1 - progressFraction), height: 4)
+                            .frame(width: 240 * (1 - min(1, max(0, progressFraction))), height: 4)
                             .background(.surfaceVariant)
                     }
                     .cornerRadius(2)
-                    Text("\(completeSamples) / \(totalSamples) spp")
+                    Text(String(format: L("%lld / %lld sample passes · %lld%%"),
+                                Int64(completeSamples),
+                                Int64(totalSamples),
+                                Int64((min(1, max(0, progressFraction)) * 100).rounded())))
                         .font(.caption).foregroundColor(.onSurfaceMuted)
                 }
             }
@@ -152,6 +179,11 @@ struct RenderPipelinePanel: View, @unchecked Sendable {
                     case .failure(let error):
                         statusMessage = error.localizedDescription
                         statusIsError = !(error is RenderPipelineRunnerError)
+                        if error is RenderPipelineRunnerError {
+                            progressFraction = 0
+                            completeSamples = 0
+                            totalSamples = 0
+                        }
                     }
                 }
             }
@@ -160,6 +192,11 @@ struct RenderPipelinePanel: View, @unchecked Sendable {
 
     private func revealOutput() {
         guard !lastOutputPath.isEmpty else { return }
+        guard FileManager.default.fileExists(atPath: lastOutputPath) else {
+            statusMessage = L("The render output no longer exists.")
+            statusIsError = true
+            return
+        }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
         process.arguments = ["-R", lastOutputPath]
@@ -170,18 +207,88 @@ struct RenderPipelinePanel: View, @unchecked Sendable {
             statusIsError = true
         }
     }
+
+    private func apply(_ preset: RenderPipelinePreset) {
+        width = String(preset.width)
+        height = String(preset.height)
+        samples = String(preset.samples)
+        statusMessage = ""
+        statusIsError = false
+    }
+
+    private func presetButton(_ preset: RenderPipelinePreset) -> some View {
+        Button(isSelected: preset.matches(width: width,
+                                          height: height,
+                                          samples: samples),
+               action: { apply(preset) }) {
+            Text(preset.title, lineLimit: 1)
+        }
+        .buttonStyle(ToggleButtonStyle(height: 22))
+    }
 }
 
 struct RenderPipelineRequest: Equatable {
+    static let maximumPathSamples = 64_000_000
+
     var width: Int
     var height: Int
     var samples: Int
+
+    var pathSampleCount: Int { width * height * samples }
+    var estimatedImageBufferMiB: Int {
+        let imageBufferBytes = width * height * MemoryLayout<Float>.size * 7
+        return (imageBufferBytes + 1_048_575) / 1_048_576
+    }
+}
+
+struct RenderPipelineEstimate: Equatable {
+    let pathSampleCount: Int
+    let imageBufferMiB: Int
+}
+
+enum RenderPipelinePreset: String, CaseIterable {
+    case preview
+    case hd
+    case fullHD
+
+    var title: String {
+        switch self {
+        case .preview: return L("Preview")
+        case .hd: return "720p"
+        case .fullHD: return "1080p"
+        }
+    }
+
+    var width: Int {
+        switch self {
+        case .preview: return 320
+        case .hd: return 1280
+        case .fullHD: return 1920
+        }
+    }
+
+    var height: Int {
+        switch self {
+        case .preview: return 240
+        case .hd: return 720
+        case .fullHD: return 1080
+        }
+    }
+
+    var samples: Int { self == .preview ? 16 : 8 }
+
+    func matches(width: String, height: String, samples: String) -> Bool {
+        width == String(self.width)
+            && height == String(self.height)
+            && samples == String(self.samples)
+    }
 }
 
 enum RenderPipelineInputError: LocalizedError, Equatable {
     case invalidInteger
     case dimensionsOutOfRange
     case samplesOutOfRange
+    case workloadTooLarge
 
     var errorDescription: String? {
         switch self {
@@ -191,8 +298,24 @@ enum RenderPipelineInputError: LocalizedError, Equatable {
             return L("Width and height must be between 16 and 2048 pixels.")
         case .samplesOutOfRange:
             return L("SPP must be between 1 and 1024.")
+        case .workloadTooLarge:
+            return L("The render exceeds the 64 million path-sample budget. Reduce resolution or SPP.")
         }
     }
+}
+
+func estimateRenderPipelineInputs(width: String,
+                                  height: String,
+                                  samples: String) -> RenderPipelineEstimate? {
+    guard let width = Int(width.trimmingCharacters(in: .whitespacesAndNewlines)),
+          let height = Int(height.trimmingCharacters(in: .whitespacesAndNewlines)),
+          let samples = Int(samples.trimmingCharacters(in: .whitespacesAndNewlines)),
+          (16...2048).contains(width),
+          (16...2048).contains(height),
+          (1...1024).contains(samples) else { return nil }
+    let request = RenderPipelineRequest(width: width, height: height, samples: samples)
+    return RenderPipelineEstimate(pathSampleCount: request.pathSampleCount,
+                                  imageBufferMiB: request.estimatedImageBufferMiB)
 }
 
 func validateRenderPipelineRequest(width: String,
@@ -209,7 +332,9 @@ func validateRenderPipelineRequest(width: String,
     guard (1...1024).contains(samples) else {
         return .failure(.samplesOutOfRange)
     }
-    return .success(RenderPipelineRequest(width: width,
-                                          height: height,
-                                          samples: samples))
+    let request = RenderPipelineRequest(width: width, height: height, samples: samples)
+    guard request.pathSampleCount <= RenderPipelineRequest.maximumPathSamples else {
+        return .failure(.workloadTooLarge)
+    }
+    return .success(request)
 }

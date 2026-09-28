@@ -451,8 +451,9 @@ struct HierarchyPanel: View {
     }
 
     private func framePrimarySelection() {
-        guard let primaryID = store.state.selectedEntityID else { return }
-        scene.frameEntity(primaryID)
+        let selectedIDs = store.state.selectedEntityIDs
+        guard !selectedIDs.isEmpty else { return }
+        scene.frameEntities(selectedIDs)
     }
 
     private func selectDescendants(of selectedIDs: Set<UInt64>,
