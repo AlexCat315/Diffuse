@@ -643,6 +643,31 @@ public final class EditorApplication: @unchecked Sendable {
         return id
     }
 
+    /// Adds a mesh selection to the scene as one grouped operation and selects
+    /// every created entity. Invalid batches are rejected before any mutation.
+    @discardableResult
+    public func spawnAssets(_ assets: [EditorAsset], at position: SIMD3<Float> = .zero) -> [UInt64]? {
+        guard store.state.playbackState == .stopped else {
+            logConsole("Stop simulation before adding assets to the scene", severity: .warning)
+            return nil
+        }
+        guard !assets.isEmpty, assets.allSatisfy({ $0.kind.isMesh }) else {
+            logConsole("Select only mesh assets to add them to the scene", severity: .warning)
+            return nil
+        }
+        guard let entityIDs = scene.spawnEntities(from: assets, at: position) else {
+            logConsole("Failed to add selected assets to the scene", severity: .error)
+            return nil
+        }
+
+        store.dispatch(.setSelectedEntities(Set(entityIDs)))
+        for (entityID, asset) in zip(entityIDs, assets) {
+            logConsole("Spawned \(asset.name)", detail: "entity \(entityID)")
+            runSemanticAnnotation(entityID: entityID, asset: asset)
+        }
+        return entityIDs
+    }
+
     private func runSemanticAnnotation(entityID: UInt64, asset: EditorAsset) {
         guard let mesh = AssetRegistry.shared.meshAsset(for: asset.meshIndex) else { return }
         let entityRef = "scene:\(entityID)"

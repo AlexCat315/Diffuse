@@ -60,6 +60,7 @@ public final class AppRuntime {
     private let devToolsLogSink: LogTap.Sink?
 
     private let tree = NodeTree()
+    private let mainPortalStore: PortalStore
     private let host: SDL3PlatformHost
     private let graph: ViewGraph
     private let backend: WGPUBackend
@@ -158,8 +159,10 @@ public final class AppRuntime {
         // Each window gets its own portal store (规则 3): an open overlay in one
         // window can never paint into or swallow clicks for another. The store is
         // swapped in lockstep with the window's input registries via withCurrent.
+        let mainPortalStore = PortalStore()
+        self.mainPortalStore = mainPortalStore
         let mainInputContext = PlatformInputContext()
-        mainInputContext.addScopedAmbient(PortalStoreAmbient(PortalStore()))
+        mainInputContext.addScopedAmbient(PortalStoreAmbient(mainPortalStore))
         self.host = SDL3PlatformHost(
             title: config.title,
             mainWindowOptions: WindowOptions(titleBarStyle: config.titleBarStyle.platformStyle),
@@ -460,7 +463,10 @@ public final class AppRuntime {
 
         if !didInstallRoot {
             withWindowChromeContext(host.mainSession?.id) {
-                graph.install(root: rootView)
+                graph.install(root: rootView.compositionLocal(
+                    PortalStoreEnvironment.key,
+                    mainPortalStore
+                ))
             }
             graph.computeLayout(width: Float(logicalW), height: Float(logicalH))
             syncMainWindowChromeHitTest()
@@ -904,8 +910,9 @@ public final class AppRuntime {
         do {
             let tree = NodeTree()
             let recomposer = Recomposer()
+            let portalStore = PortalStore()
             let inputContext = PlatformInputContext()
-            inputContext.addScopedAmbient(PortalStoreAmbient(PortalStore()))
+            inputContext.addScopedAmbient(PortalStoreAmbient(portalStore))
             let session = try host.openWindow(
                 title: request.title,
                 tree: tree,
@@ -917,6 +924,7 @@ public final class AppRuntime {
             )
             let window = AuxiliaryAppWindow(session: session,
                                             rootView: request.rootView,
+                                            portalStore: portalStore,
                                             backend: backend,
                                             renderer: renderer,
                                             config: config,
@@ -1036,6 +1044,7 @@ private final class AuxiliaryAppWindow {
     private let session: PlatformWindowSession
     private let graph: ViewGraph
     private let rootView: AnyView
+    private let portalStore: PortalStore
     private let backend: WGPUBackend
     private let renderer: DrawListRenderer
     private let config: AppConfig
@@ -1063,6 +1072,7 @@ private final class AuxiliaryAppWindow {
 
     init(session: PlatformWindowSession,
          rootView: AnyView,
+         portalStore: PortalStore,
          backend: WGPUBackend,
          renderer: DrawListRenderer,
          config: AppConfig,
@@ -1071,6 +1081,7 @@ private final class AuxiliaryAppWindow {
          setWindowChromeHitTest: @escaping (WindowID, WindowChromeHitTest?) -> Void) {
         self.session = session
         self.rootView = rootView
+        self.portalStore = portalStore
         self.backend = backend
         self.renderer = renderer
         self.config = config
@@ -1107,7 +1118,10 @@ private final class AuxiliaryAppWindow {
             configureTextEnvironment(session.contentScaleFactor)
             if !didInstallRoot {
                 withWindowChromeContext(session.id) {
-                    graph.install(root: rootView)
+                    graph.install(root: rootView.compositionLocal(
+                        PortalStoreEnvironment.key,
+                        portalStore
+                    ))
                 }
                 graph.computeLayout(width: Float(logicalW), height: Float(logicalH))
                 syncWindowChromeHitTest()

@@ -87,6 +87,95 @@ struct EditorComponentEditingTests {
         #expect(adapter.hasComponent(.light, on: bogus) == false)
         #expect(adapter.componentKinds(on: bogus).isEmpty)
     }
+
+    @Test("multi-selection component add is atomic and one undo step")
+    func multiSelectionAddIsAtomicAndUndoable() throws {
+        let adapter = EditorSceneAdapter()
+        let first = try #require(adapter.spawnEntity(template: .empty))
+        let second = try #require(adapter.spawnEntity(template: .empty))
+        let selection: Set<UInt64> = [first, second]
+
+        #expect(adapter.addableComponentKinds(on: selection).contains(.audioSource))
+        #expect(adapter.addComponent(.audioSource, to: selection))
+        #expect(selection.allSatisfy { adapter.hasComponent(.audioSource, on: $0) })
+
+        #expect(adapter.undoEdit())
+        #expect(selection.allSatisfy { !adapter.hasComponent(.audioSource, on: $0) })
+        #expect(adapter.redoEdit())
+        #expect(selection.allSatisfy { adapter.hasComponent(.audioSource, on: $0) })
+    }
+
+    @Test("multi-selection add fills missing members without resetting existing data")
+    func multiSelectionAddFillsMissingMembers() throws {
+        let adapter = EditorSceneAdapter()
+        let first = try #require(adapter.spawnEntity(template: .empty))
+        let second = try #require(adapter.spawnEntity(template: .empty))
+        #expect(adapter.addComponent(.light, to: first))
+        let firstEntity = try #require(EntityID(rawValue: first))
+        adapter.scene.updateComponent(LightComponent.self, for: firstEntity) {
+            $0.intensity = 42
+        }
+        adapter.notifyRevisionChanged()
+        let selection: Set<UInt64> = [first, second]
+
+        #expect(adapter.addableComponentKinds(on: selection).contains(.light))
+        #expect(adapter.addComponent(.light, to: selection))
+        #expect(adapter.scene.component(LightComponent.self, for: firstEntity)?.intensity == 42)
+        #expect(adapter.hasComponent(.light, on: second))
+
+        #expect(adapter.undoEdit())
+        #expect(adapter.scene.component(LightComponent.self, for: firstEntity)?.intensity == 42)
+        #expect(!adapter.hasComponent(.light, on: second))
+    }
+
+    @Test("multi-selection add rejects a locked member without partial mutation")
+    func multiSelectionAddRejectsLockedMember() throws {
+        let adapter = EditorSceneAdapter()
+        let first = try #require(adapter.spawnEntity(template: .empty))
+        let second = try #require(adapter.spawnEntity(template: .empty))
+        let selection: Set<UInt64> = [first, second]
+        adapter.setEntityLocked(true, entityIDs: [second])
+        var revisionCount = 0
+        adapter.onRevisionChanged = { _ in revisionCount += 1 }
+
+        #expect(!adapter.addComponent(.light, to: selection))
+        #expect(selection.allSatisfy { !adapter.hasComponent(.light, on: $0) })
+        #expect(revisionCount == 0)
+    }
+
+    @Test("multi-selection remove and reset are atomic undoable operations")
+    func multiSelectionRemoveAndResetAreUndoable() throws {
+        let adapter = EditorSceneAdapter()
+        let first = try #require(adapter.spawnEntity(template: .empty))
+        let second = try #require(adapter.spawnEntity(template: .empty))
+        let selection: Set<UInt64> = [first, second]
+        #expect(adapter.addComponent(.light, to: selection))
+
+        for rawID in selection {
+            let entity = try #require(EntityID(rawValue: rawID))
+            adapter.scene.updateComponent(LightComponent.self, for: entity) {
+                $0.intensity = 42
+            }
+        }
+        adapter.notifyRevisionChanged()
+
+        #expect(adapter.resetComponent(.light, on: selection))
+        #expect(selection.allSatisfy { rawID in
+            guard let entity = EntityID(rawValue: rawID) else { return false }
+            return adapter.scene.component(LightComponent.self, for: entity)?.intensity
+                == LightComponent().intensity
+        })
+        #expect(adapter.undoEdit())
+        #expect(selection.allSatisfy { rawID in
+            guard let entity = EntityID(rawValue: rawID) else { return false }
+            return adapter.scene.component(LightComponent.self, for: entity)?.intensity == 42
+        })
+
+        #expect(adapter.removeComponent(.light, from: selection))
+        #expect(selection.allSatisfy { !adapter.hasComponent(.light, on: $0) })
+        #expect(adapter.undoEdit())
+        #expect(selection.allSatisfy { adapter.hasComponent(.light, on: $0) })
+    }
 }
 
 private extension EntityID {

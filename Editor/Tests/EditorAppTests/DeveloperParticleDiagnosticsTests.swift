@@ -606,6 +606,33 @@ struct DeveloperParticleDiagnosticsTests {
         #expect(trace.samples.last?.issueIDs.contains("frame.2") == true)
     }
 
+    @Test("trace pause and capture modes preserve an immutable sample window")
+    func traceModesPreserveCapturedWindow() {
+        let stats = EditorFrameStats(frameSeconds: 0.040,
+                                     simulationSeconds: 0.020,
+                                     renderSubmitSeconds: 0.010)
+        let trace = makeDeveloperTrace(
+            frameStats: stats,
+            frameHistory: [EditorFrameStatsHistorySample(sampleIndex: 9,
+                                                         frameIndex: 90,
+                                                         stats: stats)],
+            particleHistory: [],
+            renderStats: .init(),
+            issues: [],
+            consoleEntries: []
+        )
+
+        let paused = trace.withMode(.paused)
+        let captured = paused.withMode(.captured)
+
+        #expect(trace.mode == .live)
+        #expect(paused.mode == .paused)
+        #expect(captured.mode == .captured)
+        #expect(paused.samples == trace.samples)
+        #expect(captured.events == trace.events)
+        #expect(captured.samples.map(\.sampleIndex) == [9])
+    }
+
     @Test("trace promotes console errors above warnings")
     func tracePromotesConsoleErrorsAboveWarnings() {
         let stats = EditorFrameStats(frameSeconds: 1.0 / 60.0,

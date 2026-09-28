@@ -147,6 +147,29 @@ struct CinematicRendererTests {
         }
     }
 
+    @Test("Path tracer checks cancellation between image rows and does not advance progress")
+    func pathTracerCancellationBetweenRows() {
+        let tracer = PathTracer(config: PathTracerConfig(maxBounces: 0,
+                                                         samplesPerPixel: 1,
+                                                         environmentColor: SIMD3<Float>(0.2, 0.35, 0.5)))
+        let probe = RowCancellationProbe(cancelOnCheck: 2)
+        var framebuffer = [Float](repeating: 0, count: 2 * 2 * 3)
+
+        let completed = tracer.accumulatePass(into: &framebuffer,
+                                              width: 2,
+                                              height: 2,
+                                              cameraOrigin: .zero,
+                                              cameraForward: SIMD3<Float>(0, 0, -1),
+                                              cameraUp: SIMD3<Float>(0, 1, 0),
+                                              geometry: EmptyPathTraceGeometry(),
+                                              shouldCancel: { probe.shouldCancel() })
+
+        #expect(!completed)
+        #expect(tracer.state.completedSamples == 0)
+        #expect(framebuffer[0] > 0)
+        #expect(framebuffer[6] == 0)
+    }
+
     @Test("renderPass projects pixel coordinates instead of reusing one ray")
     func renderPassProjectsPixelCoordinates() {
         let tracer = PathTracer(config: PathTracerConfig(maxBounces: 0,
@@ -174,6 +197,23 @@ struct CinematicRendererTests {
 
         #expect(abs(left.x - right.x) > 0.01)
         #expect(left.x.isFinite && right.x.isFinite)
+    }
+}
+
+private final class RowCancellationProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private let cancelOnCheck: Int
+    private var checks = 0
+
+    init(cancelOnCheck: Int) {
+        self.cancelOnCheck = cancelOnCheck
+    }
+
+    func shouldCancel() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        checks += 1
+        return checks >= cancelOnCheck
     }
 }
 

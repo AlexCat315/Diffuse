@@ -33,6 +33,76 @@ struct EditorSceneAdapterTests {
         #expect(scene.hasActiveParticles())
     }
 
+    @Test("Viewport framing centers and fits a complete multi-selection")
+    func viewportFramingFitsMultiSelection() throws {
+        let adapter = EditorSceneAdapter()
+        let left = adapter.scene.createEntity()
+        let right = adapter.scene.createEntity()
+        _ = adapter.scene.setLocalTransform(
+            LocalTransform(translation: SIMD3<Float>(-2, 0, 0)), for: left
+        )
+        _ = adapter.scene.setLocalTransform(
+            LocalTransform(translation: SIMD3<Float>(3, 4, 1)), for: right
+        )
+        adapter.scene.propagateTransforms()
+        adapter.tickScene()
+
+        let selectedIDs: Set<UInt64> = [left.rawValue, right.rawValue]
+        let expectedMin = SIMD3<Float>(-2.25, -0.25, -0.25)
+        let expectedMax = SIMD3<Float>(3.25, 4.25, 1.25)
+        let expectedCenter = (expectedMin + expectedMax) * 0.5
+
+        adapter.frameEntities(selectedIDs, viewportAspectRatio: 16.0 / 9.0)
+
+        let activeCamera = try #require(adapter.scene.extractedRenderScene?.activeCameraEntity)
+        let camera = try #require(adapter.scene.component(CameraComponent.self, for: activeCamera))
+        #expect(simd_distance(camera.target, expectedCenter) < 1e-4)
+    }
+
+    @Test("Viewport framing writes the correct world pose for a parented camera")
+    func viewportFramingHandlesParentedCamera() throws {
+        let adapter = EditorSceneAdapter()
+        let nodes = flatten(adapter.roots)
+        let cameraNode = try #require(nodes.first { $0.name == "Main Camera" })
+        let selectedEntity = adapter.scene.createEntity()
+        _ = adapter.scene.setLocalTransform(
+            LocalTransform(translation: SIMD3<Float>(11, -2, 3)), for: selectedEntity
+        )
+        let parent = adapter.scene.createEntity()
+        _ = adapter.scene.setLocalTransform(
+            LocalTransform(translation: SIMD3<Float>(7, -3, 2)), for: parent
+        )
+        var runtimeScene = adapter.scene
+        let didParentCamera = runtimeScene.setParent(parent, for: entityID(cameraNode.id))
+        adapter.scene = runtimeScene
+        #expect(didParentCamera)
+        adapter.scene.propagateTransforms()
+        adapter.tickScene()
+
+        let cameraBefore = adapter.currentRenderCamera()
+        let expectedMin = SIMD3<Float>(10.75, -2.25, 2.75)
+        let expectedMax = SIMD3<Float>(11.25, -1.75, 3.25)
+        let expected = EditorViewportFraming.pose(camera: cameraBefore,
+                                                  boundsMin: expectedMin,
+                                                  boundsMax: expectedMax)
+
+        adapter.frameEntity(selectedEntity.rawValue)
+
+        let cameraEntity = entityID(cameraNode.id)
+        let camera = try #require(adapter.scene.component(CameraComponent.self, for: cameraEntity))
+        #expect(simd_distance(camera.target, expected.target) < 1e-4)
+        let cameraLocal = try #require(adapter.entityLocalTranslation(cameraNode.id))
+        let parentWorld = adapter.entityParentWorldMatrix(cameraNode.id)
+        let expectedLocal4 = simd_inverse(parentWorld) * SIMD4<Float>(expected.eye, 1)
+        let expectedLocal = SIMD3<Float>(expectedLocal4.x / expectedLocal4.w,
+                                         expectedLocal4.y / expectedLocal4.w,
+                                         expectedLocal4.z / expectedLocal4.w)
+        #expect(simd_distance(cameraLocal, expectedLocal) < 1e-4)
+        adapter.scene.propagateTransforms()
+        let cameraWorld = try #require(adapter.scene.worldTransform(for: cameraEntity))
+        #expect(simd_distance(cameraWorld.translation, expected.eye) < 1e-3)
+    }
+
     @Test("Non-looping particles stop driving preview frames after they expire")
     func nonLoopingParticlesStopDrivingPreviewFramesAfterExpiry() {
         let adapter = EditorSceneAdapter()
@@ -1334,6 +1404,47 @@ struct EditorSceneEditHistoryTests {
         #expect(!adapter.canUndoEdit)
     }
 
+    @Test("grouped multi-asset spawn arranges and undoes the selection as one step")
+    func groupedMultiAssetSpawnUndo() throws {
+        let adapter = EditorSceneAdapter()
+        let originalCount = adapter.entityCount
+        let assets = [
+            EditorAsset(id: "models/crate.glb", name: "Crate",
+                        relativePath: "models/crate.glb",
+                        absolutePath: "/tmp/crate.glb", kind: .glb, meshIndex: 2),
+            EditorAsset(id: "models/barrel.obj", name: "Barrel",
+                        relativePath: "models/barrel.obj",
+                        absolutePath: "/tmp/barrel.obj", kind: .obj, meshIndex: 3),
+            EditorAsset(id: "models/rock.glb", name: "Rock",
+                        relativePath: "models/rock.glb",
+                        absolutePath: "/tmp/rock.glb", kind: .glb, meshIndex: 4),
+        ]
+
+        let entityIDs = try #require(adapter.spawnEntities(from: assets))
+        #expect(entityIDs.count == assets.count)
+        #expect(adapter.entityCount == originalCount + assets.count)
+        let positions = entityIDs.compactMap { adapter.entityLocalTranslation($0) }
+        #expect(positions.count == assets.count)
+        #expect(simd_distance(positions[0], positions[1]) > 0.5)
+        #expect(simd_distance(positions[1], positions[2]) > 0.5)
+        #expect(adapter.canUndoEdit)
+
+        #expect(adapter.undoEdit())
+        #expect(adapter.entityCount == originalCount)
+        #expect(!adapter.canUndoEdit)
+
+        #expect(adapter.spawnEntities(from: [assets[0], EditorAsset(
+            id: "textures/wood.png", name: "Wood",
+            relativePath: "textures/wood.png", absolutePath: "/tmp/wood.png",
+            kind: .png, meshIndex: 0
+        )]) == nil)
+        #expect(adapter.entityCount == originalCount)
+        adapter.setAuthoringEnabled(false)
+        #expect(adapter.spawnEntities(from: assets) == nil)
+        #expect(adapter.entityCount == originalCount)
+        #expect(!adapter.canUndoEdit)
+    }
+
     @Test("locked entities reject authored edits")
     func lockedEntityRejectsEdit() throws {
         let adapter = EditorSceneAdapter()
@@ -1397,6 +1508,102 @@ struct EditorSceneEditHistoryTests {
         #expect(!adapter.canUndoEdit)
     }
 
+    @Test("deleting an ancestor and its selected descendant is a single valid transaction")
+    func multiEntityDeletionCollapsesSelectedDescendants() throws {
+        let adapter = EditorSceneAdapter()
+        let parentID = try #require(adapter.spawnEntity(template: .empty))
+        let childID = try #require(adapter.spawnEntity(template: .empty,
+                                                       parentID: parentID))
+        let populatedCount = adapter.entityCount
+
+        #expect(adapter.deleteEntities([parentID, childID]))
+        #expect(adapter.entityCount == populatedCount - 2)
+        #expect(adapter.entitySummary(id: parentID) == nil)
+        #expect(adapter.entitySummary(id: childID) == nil)
+
+        #expect(adapter.undoEdit())
+        #expect(adapter.entitySummary(id: parentID) != nil)
+        #expect(adapter.entitySummary(id: childID) != nil)
+        #expect(adapter.entityHasAncestor(childID, in: [parentID]))
+    }
+
+    @Test("hierarchy rename trims input, rejects empty names, and is undoable")
+    func hierarchyRenameIsValidatedAndUndoable() throws {
+        let adapter = EditorSceneAdapter()
+        let entityID = try #require(adapter.defaultSelectionID)
+        let originalName = try #require(adapter.entitySummary(id: entityID)?.name)
+
+        #expect(!adapter.renameEntity(entityID, to: "   \n"))
+        #expect(adapter.entitySummary(id: entityID)?.name == originalName)
+        #expect(!adapter.canUndoEdit)
+
+        #expect(adapter.renameEntity(entityID, to: "  Production Camera  "))
+        #expect(adapter.entitySummary(id: entityID)?.name == "Production Camera")
+        #expect(adapter.undoEdit())
+        #expect(adapter.entitySummary(id: entityID)?.name == originalName)
+        #expect(!adapter.canUndoEdit)
+    }
+
+    @Test("multi-entity duplication is atomic and uses one undo step")
+    func multiEntityDuplicationIsAtomic() throws {
+        let adapter = EditorSceneAdapter()
+        let sourceIDs = Set(adapter.roots.prefix(2).map(\.id))
+        let originalCount = adapter.entityCount
+        #expect(sourceIDs.count == 2)
+
+        let duplicatedIDs = try #require(adapter.duplicateEntities(sourceIDs))
+        #expect(duplicatedIDs.count == 2)
+        #expect(adapter.entityCount == originalCount + 2)
+        #expect(duplicatedIDs.allSatisfy { adapter.entitySummary(id: $0) != nil })
+
+        #expect(adapter.undoEdit())
+        #expect(adapter.entityCount == originalCount)
+        #expect(duplicatedIDs.allSatisfy { adapter.entitySummary(id: $0) == nil })
+        #expect(!adapter.canUndoEdit)
+    }
+
+    @Test("multi-entity duplication rejects a locked member as a unit")
+    func multiEntityDuplicationHonorsLocksAtomically() throws {
+        let adapter = EditorSceneAdapter()
+        let sourceIDs = Set(adapter.roots.prefix(2).map(\.id))
+        let lockedID = try #require(sourceIDs.first)
+        let originalCount = adapter.entityCount
+        adapter.setEntityLocked(true, entityIDs: [lockedID])
+
+        #expect(adapter.duplicateEntities(sourceIDs) == nil)
+        #expect(adapter.entityCount == originalCount)
+    }
+
+    @Test("moving a nested multi-selection to root preserves descendants and is one undo step")
+    func multiEntityMoveToRootIsAtomic() throws {
+        let adapter = EditorSceneAdapter()
+        let grandparentID = try #require(adapter.spawnEntity(template: .empty))
+        let parentID = try #require(adapter.spawnEntity(template: .empty,
+                                                        parentID: grandparentID))
+        let childID = try #require(adapter.spawnEntity(template: .empty,
+                                                       parentID: parentID))
+
+        #expect(adapter.moveEntitiesToRoot([parentID, childID]))
+        #expect(adapter.roots.contains { $0.id == parentID })
+        #expect(!adapter.roots.contains { $0.id == childID })
+        #expect(adapter.entityHasAncestor(childID, in: [parentID]))
+
+        #expect(adapter.undoEdit())
+        #expect(adapter.entityHasAncestor(parentID, in: [grandparentID]))
+        #expect(adapter.entityHasAncestor(childID, in: [parentID]))
+    }
+
+    @Test("moving a root selected with its descendant does not detach the descendant")
+    func moveToRootCollapsesSelectedDescendantsBeforeFiltering() throws {
+        let adapter = EditorSceneAdapter()
+        let rootID = try #require(adapter.spawnEntity(template: .empty))
+        let childID = try #require(adapter.spawnEntity(template: .empty,
+                                                       parentID: rootID))
+
+        #expect(!adapter.moveEntitiesToRoot([rootID, childID]))
+        #expect(adapter.entityHasAncestor(childID, in: [rootID]))
+    }
+
     @Test("hierarchy locks round-trip and remap entity identifiers")
     func lockedEntityRoundTrip() throws {
         let adapter = EditorSceneAdapter()
@@ -1432,6 +1639,27 @@ struct EditorSceneEditHistoryTests {
         #expect(adapter.undoEdit())
         #expect(adapter.entityLocalTranslation(entityID) == original)
         #expect(!adapter.canUndoEdit)
+    }
+
+    @Test("cancelling an interactive transform restores its starting scene without history")
+    func interactiveTransformCancellationRestoresStart() throws {
+        let adapter = EditorSceneAdapter()
+        let entityID = try #require(adapter.defaultSelectionID)
+        let original = try #require(adapter.entityLocalTranslation(entityID))
+        var revisionNotifications = 0
+        adapter.onRevisionChanged = { _ in revisionNotifications += 1 }
+
+        adapter.beginInteractiveEditHistoryGroup()
+        var matrix = try #require(adapter.entityLocalMatrix(entityID))
+        matrix.columns.3.x = original.x + 12
+        #expect(adapter.setEntityLocalMatrices([entityID: matrix]))
+
+        adapter.cancelInteractiveEditHistoryGroup()
+        adapter.endInteractiveEditHistoryGroup() // late pointer-up is harmless
+
+        #expect(adapter.entityLocalTranslation(entityID) == original)
+        #expect(!adapter.canUndoEdit)
+        #expect(revisionNotifications >= 2) // live edit plus restored scene
     }
 
     @Test("multi-entity transforms reject locked members atomically")

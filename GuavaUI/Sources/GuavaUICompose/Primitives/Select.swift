@@ -605,8 +605,15 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
         // Register / update the overlay entry through the node-owned resource.
         // `present` re-registers if a prior entry was cleaned up, so a reused
         // node reliably re-shows the menu.
+        let portalStore = node.compositionValue(of: PortalStoreEnvironment.key)
+            ?? PortalStoreHolder.current
         node.firstResource(PortalResource.self)?
-            .present(position: position, width: width, content: AnyView(content))
+            .present(in: portalStore,
+                     position: position,
+                     width: width,
+                     content: AnyView(content))
+        node.attachments[LayoutDebugAttachmentKey.debugName] =
+            "popover-store-\(ObjectIdentifier(portalStore))-entries-\(portalStore.entries.count)"
         node.updateOverlayDraw(identity: PositionIdentity(width: width,
                                                           placement: placement)) { [weak node] _, _ in
             guard let node else { return }
@@ -625,7 +632,7 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
         // Keyboard handler
         node.isFocusable = keyHandler != nil
         if let keyHandler, let registry = InteractionRegistryHolder.current {
-            registry.setKey(node, keyHandler)
+            registry.setKey(node, route: .overlay, keyHandler)
             if node.attachments["__popover_autofocused"] == nil {
                 node.attachments["__popover_autofocused"] = true
                 FocusChainHolder.current?.focus(node)
