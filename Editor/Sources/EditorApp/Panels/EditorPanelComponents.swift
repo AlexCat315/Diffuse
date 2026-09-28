@@ -93,13 +93,15 @@ struct EditorPanelBadge: View {
     }
 
     var body: some View {
-        Text(text, lineLimit: 1)
-            .font(.caption)
-            .foregroundColor(foreground)
-            .padding(horizontal: 6, vertical: 2)
-            .background(.surfaceSunken)
-            .cornerRadius(4)
-            .border(.divider, width: 1)
+        Box(direction: .row, alignItems: .center, justifyContent: .center) {
+            Text(text, lineLimit: 1)
+                .font(.caption)
+                .foregroundColor(foreground)
+        }
+        .padding(horizontal: 6, vertical: 2)
+        .background(.surfaceSunken)
+        .cornerRadius(4)
+        .border(.divider, width: 1)
     }
 }
 
