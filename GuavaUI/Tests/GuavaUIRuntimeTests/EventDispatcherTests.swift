@@ -441,4 +441,53 @@ struct EventDispatcherTests {
 
         #expect(calls == ["focused"])
     }
+
+    @Test("Mounted overlay handles keys before pointer capture and viewport focus")
+    func overlayKeyRouteHasFirstRefusal() {
+        let tree = NodeTree()
+        let interactions = InteractionRegistry()
+        let focus = FocusChain()
+        let capture = PointerCapture()
+
+        let root = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 200, height: 200)
+        let focusedViewport = Node()
+        focusedViewport.frame = CGRect(x: 0, y: 0, width: 100, height: 100)
+        focusedViewport.isFocusable = true
+        let capturedDrag = Node()
+        capturedDrag.frame = CGRect(x: 0, y: 0, width: 100, height: 100)
+        let overlay = Node()
+        overlay.frame = CGRect(x: 20, y: 20, width: 80, height: 80)
+        root.addChild(focusedViewport)
+        root.addChild(capturedDrag)
+        root.addChild(overlay)
+        tree.root = root
+        focus.focus(focusedViewport)
+        capture.acquire(capturedDrag)
+
+        var calls: [String] = []
+        interactions.setKey(focusedViewport, route: .viewport) { _, _ in
+            calls.append("viewport")
+            return .handled
+        }
+        interactions.setKey(capturedDrag, route: .workspaceDrag) { _, _ in
+            calls.append("capture")
+            return .handled
+        }
+        interactions.setKey(overlay, route: .overlay) { _, phase in
+            calls.append("overlay:\(phase)")
+            return .handled
+        }
+
+        let dispatcher = EventDispatcher(tree: tree,
+                                         interactions: interactions,
+                                         capture: capture,
+                                         focusChain: focus)
+        dispatcher.dispatch(.keyDown(KeyEvent(scancode: 41,
+                                              keycode: 0,
+                                              modifiers: [],
+                                              isRepeat: false)))
+
+        #expect(calls == ["overlay:target"])
+    }
 }

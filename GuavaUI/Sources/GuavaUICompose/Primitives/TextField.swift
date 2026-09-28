@@ -51,7 +51,12 @@ public struct TextField: View {
     /// hit-testing stays unchanged.
     public let prepend: String?
     public let append: String?
+    /// Changes to this identity request focus and select the entire value.
+    /// This is intended for transient inline editors (for example, F2 rename)
+    /// where the input must be immediately keyboard-ready after insertion.
+    public let focusRequestID: AnyHashable?
     public let onSubmit: (() -> Void)?
+    public let onCancel: (() -> Void)?
     public let onChange: ((String) -> Void)?
     public let onFocus: (() -> Void)?
     public let onBlur: (() -> Void)?
@@ -75,7 +80,9 @@ public struct TextField: View {
                 suffix: String? = nil,
                 prepend: String? = nil,
                 append: String? = nil,
+                focusRequestID: AnyHashable? = nil,
                 onSubmit: (() -> Void)? = nil,
+                onCancel: (() -> Void)? = nil,
                 onChange: ((String) -> Void)? = nil,
                 onFocus: (() -> Void)? = nil,
                 onBlur: (() -> Void)? = nil,
@@ -98,7 +105,9 @@ public struct TextField: View {
         self.suffix = suffix
         self.prepend = prepend
         self.append = append
+        self.focusRequestID = focusRequestID
         self.onSubmit = onSubmit
+        self.onCancel = onCancel
         self.onChange = onChange
         self.onFocus = onFocus
         self.onBlur = onBlur
@@ -170,6 +179,7 @@ public struct TextField: View {
     static let scrollbarHoveredKey = "__textfield_scrollbar_hovered"
     static let scrollbarChromeOpacityKey = "__textfield_scrollbar_chrome_opacity"
     static let surfaceMarkerKey = "__textfield_surface"
+    private static let focusRequestIDKey = "__textfield_focus_request_id"
     private var layoutEngine: LayoutEngine { LayoutEngine(textField: self) }
 
     func _makeNode() -> Node {
@@ -275,6 +285,15 @@ public struct TextField: View {
                                             state: state,
                                             absoluteOrigin: absoluteOrigin,
                                             isFocused: interactionState.isFocused)
+        }
+
+        if let focusRequestID,
+           node.attachments[Self.focusRequestIDKey] as? AnyHashable != focusRequestID {
+            node.attachments[Self.focusRequestIDKey] = focusRequestID
+            state.selectionAnchor = 0
+            state.cursorIndex = text.wrappedValue.count
+            recordCaretActivity(state)
+            FocusChainHolder.current?.focus(node)
         }
 
         node.updateDraw(identity: paintIdentity) { list, origin in
@@ -411,6 +430,10 @@ public struct TextField: View {
         }
 
         switch event.scancode {
+        case Scancode.escape:
+            guard let onCancel else { return false }
+            onCancel()
+            return true
         case Scancode.backspace:
             guard !blockMutations else { return true }
             if !deleteSelection(state: state) {

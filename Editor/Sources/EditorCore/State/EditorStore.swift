@@ -211,7 +211,7 @@ public final class EditorStore: @unchecked Sendable {
             mark(.activeAssetDrag, old.activeAssetDrag, new.activeAssetDrag)
         case .updateAssetDragCursor:
             break
-        case .setInspectorSectionCollapsed:
+        case .setInspectorSectionCollapsed, .setInspectorSectionsCollapsed:
             mark(.inspectorCollapsedSectionIDs,
                  old.inspectorCollapsedSectionIDs,
                  new.inspectorCollapsedSectionIDs)

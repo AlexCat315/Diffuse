@@ -151,6 +151,7 @@ public final class PathTracer: @unchecked Sendable {
         return trace(ray: ray, geometry: geometry, depth: 0)
     }
 
+    @discardableResult
     public func accumulatePass(
         into framebuffer: inout [Float],
         width: Int,
@@ -160,9 +161,10 @@ public final class PathTracer: @unchecked Sendable {
         cameraUp: SIMD3<Float>,
         cameraFOVYRadians: Float = .pi / 4,
         cameraAspectRatio: Float? = nil,
-        geometry: any SceneGeometry
-    ) {
-        guard width > 0, height > 0 else { return }
+        geometry: any SceneGeometry,
+        shouldCancel: (@Sendable () -> Bool)? = nil
+    ) -> Bool {
+        guard width > 0, height > 0 else { return false }
         let camera = SimpleCamera(
             origin: cameraOrigin,
             forward: cameraForward,
@@ -173,9 +175,10 @@ public final class PathTracer: @unchecked Sendable {
         let sampler = config.samplingStrategy
         let s = state.completedSamples
         let pixelCount = width * height
-        guard framebuffer.count >= pixelCount * 3 else { return }
+        guard framebuffer.count >= pixelCount * 3 else { return false }
 
         for y in 0..<height {
+            if shouldCancel?() == true { return false }
             for x in 0..<width {
                 let jitter = sampler.sample2D(x + y * width, sample: s)
                 let u = (Float(x) + jitter.x) / Float(width)
@@ -190,6 +193,7 @@ public final class PathTracer: @unchecked Sendable {
             }
         }
         state.completedSamples += 1
+        return true
     }
 
     // MARK: - Core path trace

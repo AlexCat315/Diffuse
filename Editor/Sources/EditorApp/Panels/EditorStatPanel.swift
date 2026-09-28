@@ -22,9 +22,12 @@ struct DeveloperToolsPanel: View {
                 || selectedTab == .monitors
                 || selectedTab == .render
                 || selectedTab == .particles
+                || selectedTab == .debugger
+                || selectedTab == .trace
             let needsParticleSnapshot = selectedTab == .profiler
                 || selectedTab == .monitors
                 || selectedTab == .particles
+                || selectedTab == .trace
             let renderStats: RenderFrameStats = needsRenderSnapshot
                 ? app.currentRenderStats()
                 : .init()
@@ -83,6 +86,19 @@ struct DeveloperToolsPanel: View {
                     maxSamples: 180
                 )
                 : []
+            let trace = selectedTab == .trace
+                ? makeDeveloperTrace(frameStats: frameStats,
+                                     frameHistory: frameStatsHistory,
+                                     particleHistory: store.particleDiagnosticsHistory,
+                                     renderStats: renderStats,
+                                     issues: diagnostics,
+                                     consoleEntries: store.consoleEntries,
+                                     maxSamples: 120)
+                : DeveloperTraceSnapshot(mode: .live,
+                                         samples: [],
+                                         events: [],
+                                         renderPasses: [],
+                                         issues: [])
 
             TabView(selection: $selectedTab, tabs: [
                 TabItem("Profiler", id: DeveloperToolTab.profiler) {
@@ -113,7 +129,13 @@ struct DeveloperToolsPanel: View {
                 },
                 TabItem("Debugger", id: DeveloperToolTab.debugger) {
                     DeveloperDebuggerWorkbenchView(store: store,
-                                                   timingRevision: timingRevision)
+                                                   timingRevision: timingRevision,
+                                                   frameStats: frameStats,
+                                                   renderStats: renderStats)
+                },
+                TabItem("Trace", id: DeveloperToolTab.trace) {
+                    DeveloperTraceWorkbenchView(liveTrace: trace,
+                                                onOpenTarget: openDiagnosticTarget)
                 },
             ])
             .frame(minHeight: 160)
@@ -137,6 +159,7 @@ enum DeveloperToolTab: Hashable {
     case particles
     case console
     case debugger
+    case trace
 }
 
 func developerToolTabDestination(for target: DeveloperToolTab) -> DeveloperToolTab {
@@ -153,18 +176,24 @@ func developerToolTabDestination(for target: DeveloperToolTab) -> DeveloperToolT
 private struct DeveloperDebuggerWorkbenchView: View {
     let store: EditorStore
     let timingRevision: UInt64
+    let frameStats: EditorFrameStats
+    let renderStats: RenderFrameStats
 
     var body: some View {
         Row(alignment: .top, spacing: 0) {
             RuntimeDiagnosticsView(store: store,
-                                   timingRevision: timingRevision)
-                .flex(1, shrink: 1)
+                                   timingRevision: timingRevision,
+                                   frameStats: frameStats,
+                                   renderStats: renderStats)
+                .frame(minWidth: 420, maxWidth: 640)
+                .flex(1, shrink: 1, basis: 620)
 
             Divider(axis: .vertical)
                 .frame(width: 1)
 
             ConsoleDiagnosticsView(store: store)
-                .flex(1.2, shrink: 1)
+                .frame(minWidth: 320, maxWidth: 460)
+                .flex(0.8, shrink: 1, basis: 360)
         }
         .background(.surface)
     }
@@ -1912,36 +1941,55 @@ private struct RenderPassInspectionRow: View {
 private struct RuntimeDiagnosticsView: View {
     let store: EditorStore
     let timingRevision: UInt64
+    let frameStats: EditorFrameStats
+    let renderStats: RenderFrameStats
 
     var body: some View {
         ScrollView(.vertical) {
-            Row(alignment: .top, spacing: 12) {
+            Box(direction: .row, alignItems: .stretch, wrap: .wrap, spacing: 8) {
                 StatGroup(title: L("Editor")) {
                     StatRow(label: L("Status"), value: store.connected ? L("Connected") : L("Offline"))
                     StatRow(label: L("Revision"), value: "\(store.sceneRevision)")
-                    StatRow(label: "Frame Index", value: "\(store.frameIndex)")
-                    StatRow(label: "Timing Sample", value: "#\(timingRevision)")
+                    StatRow(label: L("Frame Index"), value: "\(store.frameIndex)")
+                    StatRow(label: L("Timing Sample"), value: "#\(timingRevision)")
                 }
-                .flex(1, shrink: 1)
+                .frame(minWidth: 200, maxWidth: 280)
+
+                StatGroup(title: L("Performance")) {
+                    StatRow(label: L("Frame Work"), value: formatMs(frameStats.workMs))
+                    StatRow(label: L("Observed FPS"), value: formatFPS(frameStats.fps))
+                    StatRow(label: L("CPU Total"), value: formatMs(frameStats.cpuWorkSeconds * 1000))
+                    StatRow(label: L("GPU / Present"), value: formatMs(frameStats.gpuPresentSeconds * 1000))
+                    StatRow(label: L("Pacing Gap"), value: formatMs(frameStats.pacingGapMs))
+                }
+                .frame(minWidth: 200, maxWidth: 280)
+
+                StatGroup(title: L("Render")) {
+                    StatRow(label: L("Draw Calls"), value: "\(renderStats.drawCallCount)")
+                    StatRow(label: L("Passes"), value: "\(renderStats.passCount)")
+                    StatRow(label: L("Render Bundles"), value: "\(renderStats.renderBundleCount)")
+                    StatRow(label: L("CPU Encode"), value: formatNs(renderStats.cpuEncodeNS))
+                }
+                .frame(minWidth: 200, maxWidth: 280)
 
                 StatGroup(title: L("Viewport")) {
-                    StatRow(label: "Realtime", value: store.viewportRealtimeEnabled ? L("On") : L("Off"))
-                    StatRow(label: "Render Scale", value: "\(store.viewportRenderScalePercent)%")
-                    StatRow(label: "Shading", value: String(describing: store.viewportShadingMode))
-                    StatRow(label: "Shadows", value: store.viewportShadowsEnabled ? L("On") : L("Off"))
+                    StatRow(label: L("Realtime"), value: store.viewportRealtimeEnabled ? L("On") : L("Off"))
+                    StatRow(label: L("Render Scale"), value: "\(store.viewportRenderScalePercent)%")
+                    StatRow(label: L("Shading"), value: L(String(describing: store.viewportShadingMode).capitalized))
+                    StatRow(label: L("Shadows"), value: store.viewportShadowsEnabled ? L("On") : L("Off"))
                 }
-                .flex(1, shrink: 1)
+                .frame(minWidth: 200, maxWidth: 280)
 
                 StatGroup(title: L("Selection")) {
                     if let selected = store.selectedEntityID {
-                        StatRow(label: "Primary", value: "\(selected)")
+                        StatRow(label: L("Primary"), value: "\(selected)")
                     } else {
-                        StatRow(label: "Primary", value: "--")
+                        StatRow(label: L("Primary"), value: "--")
                     }
-                    StatRow(label: "Count", value: "\(store.selectedEntityIDs.count)")
-                    StatRow(label: "Playback", value: String(describing: store.playbackState))
+                    StatRow(label: L("Count"), value: "\(store.selectedEntityIDs.count)")
+                    StatRow(label: L("Playback"), value: L(String(describing: store.playbackState).capitalized))
                 }
-                .flex(1, shrink: 1, basis: 220)
+                .frame(minWidth: 200, maxWidth: 280)
             }
             .framePercent(width: 100, minWidth: 0)
             .padding(horizontal: 12, vertical: 10)
@@ -3094,72 +3142,144 @@ private struct ParticleSeverityRow: View {
 
 private struct ConsoleDiagnosticsView: View {
     let store: EditorStore
+    @State private var searchText = ""
+    @State private var enabledSeverities = Set(EditorConsoleSeverity.allCases)
+    @State private var selectedEntryID: UInt64?
 
     var body: some View {
+        let entries = store.consoleEntries
+        let visibleEntries = developerDebuggerConsoleEntries(entries: entries,
+                                                             severities: enabledSeverities,
+                                                             query: searchText)
+        let counts = Dictionary(grouping: entries, by: \.severity).mapValues(\.count)
         Column(alignment: .leading, spacing: 6) {
             Row(alignment: .center, spacing: 8) {
                 Text(L("Console"))
                     .font(.bodyStrong)
                     .foregroundColor(.onSurface)
-                Text("\(store.consoleEntries.count)")
+                Text("\(visibleEntries.count) / \(entries.count)")
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
 
                 Spacer(minLength: 0)
 
-                Button(action: { store.dispatch(.clearConsole) }) {
+                Button(isEnabled: !entries.isEmpty, action: {
+                    store.dispatch(.clearConsole)
+                    selectedEntryID = nil
+                }) {
                     Text(L("Clear"))
                 }
                 .buttonStyle(GhostButtonStyle())
             }
             .padding(horizontal: 12, vertical: 8)
 
+            TextField(L("Filter console messages"), text: $searchText, size: .small, clearable: true)
+                .padding(horizontal: 8, vertical: 3)
+
+            Row(alignment: .center, spacing: 4) {
+                DeveloperDebuggerSeverityChip(label: L("All"),
+                                              count: entries.count,
+                                              isSelected: enabledSeverities.count == EditorConsoleSeverity.allCases.count,
+                                              action: { enabledSeverities = Set(EditorConsoleSeverity.allCases); selectedEntryID = nil })
+                for severity in EditorConsoleSeverity.allCases {
+                    DeveloperDebuggerSeverityChip(label: developerDebuggerSeverityLabel(severity),
+                                                  count: counts[severity, default: 0],
+                                                  isSelected: enabledSeverities.contains(severity),
+                                                  action: { toggle(severity) })
+                }
+            }
+            .padding(horizontal: 8, vertical: 2)
+
             Divider()
 
-            ScrollView(.vertical) {
-                Column(alignment: .leading, spacing: 4) {
-                    if store.consoleEntries.isEmpty {
-                        DeveloperConsoleRow(entry: EditorConsoleEntry(id: 0,
-                                                                       severity: .info,
-                                                                       message: L("No console messages")))
-                    } else {
-                        for entry in store.consoleEntries.suffix(120) {
-                            DeveloperConsoleRow(entry: entry)
+            if entries.isEmpty {
+                EditorPanelEmptyState(L("No console messages"),
+                                      detail: L("Runtime, import, build, and editor diagnostics appear here."))
+                    .flex(1, shrink: 1)
+            } else if visibleEntries.isEmpty {
+                EditorPanelEmptyState(L("No matching console messages"),
+                                      detail: searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                        ? L("Enable a severity filter to show messages.")
+                                        : "\(L("Search")): \(searchText.trimmingCharacters(in: .whitespacesAndNewlines))")
+                    .flex(1, shrink: 1)
+            } else {
+                ScrollView(.vertical, scrollbarGutter: .stable) {
+                    Column(alignment: .leading, spacing: 4) {
+                        for entry in visibleEntries {
+                            DeveloperConsoleRow(entry: entry,
+                                                isSelected: selectedEntryID == entry.id,
+                                                onSelect: {
+                                                    selectedEntryID = selectedEntryID == entry.id ? nil : entry.id
+                                                })
                         }
                     }
+                    .padding(horizontal: 12, vertical: 8)
                 }
-                .padding(horizontal: 12, vertical: 8)
+                .flex(1, shrink: 1)
             }
-            .flex(1, shrink: 1)
         }
+    }
+
+    private func toggle(_ severity: EditorConsoleSeverity) {
+        if enabledSeverities.contains(severity) {
+            enabledSeverities.remove(severity)
+        } else {
+            enabledSeverities.insert(severity)
+        }
+        selectedEntryID = nil
+    }
+}
+
+private struct DeveloperDebuggerSeverityChip: View {
+    let label: String
+    let count: Int
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(isSelected: isSelected, action: action) {
+            Row(alignment: .center, spacing: 3) {
+                Text(label, lineLimit: 1)
+                Text("\(count)").font(.mono)
+            }
+        }
+        .buttonStyle(ToggleButtonStyle(minWidth: 40, height: 22))
     }
 }
 
 private struct DeveloperConsoleRow: View {
     let entry: EditorConsoleEntry
+    let isSelected: Bool
+    let onSelect: () -> Void
 
     var body: some View {
-        Row(alignment: .top, spacing: 8) {
-            Text(severityLabel)
-                .lineLimit(1)
-                .font(.caption)
-                .foregroundColor(severityColor)
-                .frame(width: 44)
-
-            Column(alignment: .leading, spacing: 2) {
-                Text(entry.message)
+        Button(action: onSelect) {
+            Row(alignment: .top, spacing: 8) {
+                Text(severityLabel)
                     .lineLimit(1)
                     .font(.caption)
-                    .foregroundColor(messageColor)
-                if let detail = entry.detail, !detail.isEmpty {
-                    Text(detail)
-                        .lineLimit(2)
+                    .foregroundColor(severityColor)
+                    .frame(width: 44)
+
+                Column(alignment: .leading, spacing: 2) {
+                    Text(entry.message)
+                        .lineLimit(isSelected ? 8 : 1)
                         .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
+                        .foregroundColor(messageColor)
+                    if isSelected, let detail = entry.detail, !detail.isEmpty {
+                        Text(detail)
+                            .lineLimit(8)
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                    }
                 }
+                .flex(1, shrink: 1)
             }
-            .flex(1, shrink: 1)
+            .padding(horizontal: 6, vertical: 4)
+            .background(isSelected ? .accent.opacity(0.12) : .surface)
+            .border(isSelected ? .accent : .divider, width: isSelected ? 1 : 0)
         }
+        .buttonStyle(.plain)
     }
 
     private var severityLabel: String {
@@ -3178,12 +3298,21 @@ private struct DeveloperConsoleRow: View {
         }
     }
 
-    private var messageColor: SemanticColorRef {
-        switch entry.severity {
-        case .info: return .onSurfaceMuted
-        case .warning: return .warning
-        case .error: return .error
-        }
+    private var messageColor: SemanticColorRef { severityColor }
+}
+
+func developerDebuggerConsoleEntries(entries: [EditorConsoleEntry],
+                                      severities: Set<EditorConsoleSeverity>,
+                                      query: String) -> [EditorConsoleEntry] {
+    ConsoleEntryFilter.filter(entries, severities: severities, query: query)
+        .sorted { $0.id > $1.id }
+}
+
+private func developerDebuggerSeverityLabel(_ severity: EditorConsoleSeverity) -> String {
+    switch severity {
+    case .info: L("Info")
+    case .warning: L("Warnings")
+    case .error: L("Errors")
     }
 }
 

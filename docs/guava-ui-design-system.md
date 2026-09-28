@@ -26,6 +26,8 @@ GuavaUI 是 SwiftUI 风格的声明式界面系统。设计系统不只定义视
 - hover、press、selected 和 focused 使用状态层合成。
 - Box、Row 与 Column 默认不参与命中测试。
 
+编辑器面板还遵循以下工作台约定：工具条使用 34pt 最小高度和统一水平 inset；搜索行必须提供清除能力与结果计数；图标按钮必须提供 tooltip；无数据、无选择和无搜索结果必须使用解释原因的空状态，而不是留下空白区域。
+
 ## 组件参考
 
 完整的结构、尺寸、Token、状态矩阵、键盘行为和 Authoring rules 见[组件索引](components/README.md)。
