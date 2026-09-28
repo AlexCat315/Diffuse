@@ -43,6 +43,48 @@ struct EditorPanelWorkflowTests {
                                                  includesSelection: true) == [1, 2, 3, 4])
     }
 
+    @Test("move-to-root is disabled when selection is already covered by a selected ancestor")
+    func hierarchyMoveToRootAvailability() {
+        #expect(!HierarchyPanelModel.canMoveSelectionToRoot([], in: hierarchy))
+        #expect(!HierarchyPanelModel.canMoveSelectionToRoot([1], in: hierarchy))
+        #expect(HierarchyPanelModel.canMoveSelectionToRoot([3], in: hierarchy))
+        #expect(!HierarchyPanelModel.canMoveSelectionToRoot([1, 3], in: hierarchy))
+        #expect(HierarchyPanelModel.canMoveSelectionToRoot([3, 4], in: hierarchy))
+        #expect(HierarchyPanelModel.canMoveSelectionToRoot([2, 3], in: hierarchy))
+    }
+
+    @Test("hierarchy drag destinations preserve sibling order and reject cycles")
+    func hierarchyDropDestinations() throws {
+        #expect(HierarchyPanelModel.dropDestination(for: 3,
+                                                     position: .before,
+                                                     in: hierarchy)
+                == HierarchyDropDestination(parentID: 1, index: 1))
+        #expect(HierarchyPanelModel.dropDestination(for: 3,
+                                                     position: .inside,
+                                                     in: hierarchy)
+                == HierarchyDropDestination(parentID: 3, index: 1))
+        #expect(HierarchyPanelModel.dropDestination(for: 3,
+                                                     position: .after,
+                                                     in: hierarchy)
+                == HierarchyDropDestination(parentID: 1, index: 2))
+        #expect(HierarchyPanelModel.dropDestination(for: 999,
+                                                     position: .inside,
+                                                     in: hierarchy) == nil)
+
+        #expect(!HierarchyPanelModel.canDrop(entityID: 3,
+                                             on: 4,
+                                             position: .inside,
+                                             in: hierarchy))
+        #expect(!HierarchyPanelModel.canDrop(entityID: 1,
+                                             on: 1,
+                                             position: .after,
+                                             in: hierarchy))
+        #expect(HierarchyPanelModel.canDrop(entityID: 4,
+                                            on: 2,
+                                            position: .before,
+                                            in: hierarchy))
+    }
+
     @Test("console filtering combines severity and case-insensitive text search")
     func consoleFiltering() {
         let entries = [

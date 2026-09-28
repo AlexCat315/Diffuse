@@ -6,13 +6,15 @@ import GuavaUIRuntime
 /// collection of unrelated tools.
 struct EditorPanelToolbar<Content: View>: View {
     let content: Content
+    let spacing: Float
 
-    init(@ViewBuilder content: () -> Content) {
+    init(spacing: Float = 8, @ViewBuilder content: () -> Content) {
         self.content = content()
+        self.spacing = spacing
     }
 
     var body: some View {
-        Row(alignment: .center, spacing: 8) {
+        Row(alignment: .center, spacing: spacing) {
             content
         }
         .padding(horizontal: 10, vertical: 6)
@@ -93,13 +95,15 @@ struct EditorPanelBadge: View {
     }
 
     var body: some View {
-        Text(text, lineLimit: 1)
-            .font(.caption)
-            .foregroundColor(foreground)
-            .padding(horizontal: 6, vertical: 2)
-            .background(.surfaceSunken)
-            .cornerRadius(4)
-            .border(.divider, width: 1)
+        Box(direction: .row, alignItems: .center, justifyContent: .center) {
+            Text(text, lineLimit: 1)
+                .font(.caption)
+                .foregroundColor(foreground)
+        }
+        .padding(horizontal: 6, vertical: 2)
+        .background(.surfaceSunken)
+        .cornerRadius(4)
+        .border(.divider, width: 1)
     }
 }
 
