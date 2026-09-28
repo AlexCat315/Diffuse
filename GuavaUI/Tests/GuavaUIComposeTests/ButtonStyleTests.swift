@@ -296,6 +296,22 @@ struct ButtonStyleTests: GuavaUIComposeSerializedSuite {
         }
     }
 
+    private struct ToggleIconContrastHarness: View {
+        let isSelected: Bool
+        let isLight: Bool
+
+        var body: some View {
+            Button(icon: .texture(7), isSelected: isSelected, action: {})
+                .buttonStyle(.toggle)
+                .appearance(isLight ? .light : .dark)
+        }
+    }
+
+    private func containsForeground(_ color: Color, in node: Node) -> Bool {
+        if node.foregroundColor == color { return true }
+        return node.children.contains { containsForeground(color, in: $0) }
+    }
+
     @Test("ToggleButtonStyle pairs accent background with onAccent foreground when selected")
     func toggleStyleSelectedContrast() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
@@ -315,6 +331,26 @@ struct ButtonStyleTests: GuavaUIComposeSerializedSuite {
         // against it). Unselected at rest: no fill at all.
         #expect(filledColor(selected: true) == theme.colors.accent)
         #expect(filledColor(selected: false) == nil)
+    } }
+
+    @Test("Toggle icon labels keep readable contrast in both appearances")
+    func toggleIconContrastFollowsAppearance() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        defer { InteractionRegistryHolder.current = nil }
+
+        for isLight in [true, false] {
+            let theme = isLight ? Theme.defaultLight : Theme.defaultDark
+            for isSelected in [false, true] {
+                let tree = NodeTree()
+                let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+                graph.install(root: ToggleIconContrastHarness(isSelected: isSelected,
+                                                               isLight: isLight))
+                graph.computeLayout(width: 60, height: 40)
+                let expected = isSelected ? theme.colors.onAccent : theme.colors.onSurface
+                #expect(tree.root.map { containsForeground(expected, in: $0) } == true)
+            }
+        }
     } }
 
 }
