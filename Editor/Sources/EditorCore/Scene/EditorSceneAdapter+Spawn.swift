@@ -81,6 +81,7 @@ extension EditorSceneAdapter {
 
         let result = applySceneTransaction(intentVerb: "scene.create_entity",
                                            summary: "Create \(template.displayName.lowercased())",
+                                           targetRawIDs: parentID.map { [$0] } ?? [],
                                            mutations: [mutation])
         return result?.createdEntityIDs.first
     }
@@ -119,6 +120,47 @@ extension EditorSceneAdapter {
             attachAnimationPlayerIfAvailable(entityID: entityID, meshIndex: asset.meshIndex)
             return entityID
         }
+    }
+
+    /// Adds a group of mesh assets in a compact grid and records the whole
+    /// operation as one undo step. If any member fails, the partial group is
+    /// rolled back before returning.
+    @discardableResult
+    public func spawnEntities(from assets: [EditorAsset],
+                              at position: SIMD3<Float> = .zero) -> [UInt64]? {
+        guard !assets.isEmpty, assets.allSatisfy({ $0.kind.isMesh }) else { return nil }
+
+        let startRevision = revision
+        let columnCount = max(1, Int(ceil(sqrt(Double(assets.count)))))
+        let rowCount = (assets.count + columnCount - 1) / columnCount
+        let spacing: Float = 1.5
+        let spawnedIDs = withEditHistoryGroup {
+            var result: [UInt64] = []
+            result.reserveCapacity(assets.count)
+            for (index, asset) in assets.enumerated() {
+                let row = index / columnCount
+                let column = index % columnCount
+                let columnsInRow = min(columnCount, assets.count - row * columnCount)
+                let offset = SIMD3<Float>(
+                    (Float(column) - Float(columnsInRow - 1) * 0.5) * spacing,
+                    0,
+                    (Float(row) - Float(rowCount - 1) * 0.5) * spacing
+                )
+                guard let entityID = spawnEntity(from: asset, at: position + offset) else {
+                    break
+                }
+                result.append(entityID)
+            }
+            return result
+        }
+
+        guard spawnedIDs.count == assets.count else {
+            if revision != startRevision {
+                _ = undoEdit()
+            }
+            return nil
+        }
+        return spawnedIDs
     }
 
     private func uniqueDisplayName(base: String) -> String {

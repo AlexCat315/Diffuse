@@ -142,6 +142,43 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         #expect(submitted == true)
     } }
 
+    @Test("Escape invokes onCancel and is consumed only when cancellation is available")
+    func escapeCancels() { GlobalTestLock.locked {
+        let rig = makeRig()
+        var canceled = false
+        rig.graph.install(root:
+            TextField(text: makeBinding(rig.store), onCancel: { canceled = true })
+        )
+
+        let node = fieldNode(in: rig.tree.root)
+        let escape = KeyEvent(scancode: Scancode.escape,
+                              keycode: 0,
+                              modifiers: [],
+                              isRepeat: false)
+        #expect(rig.registry.handlers(for: node).key!(escape, .target) == .handled)
+        #expect(canceled)
+
+        let plainRig = makeRig()
+        plainRig.graph.install(root: TextField(text: makeBinding(plainRig.store)))
+        let plainNode = fieldNode(in: plainRig.tree.root)
+        #expect(plainRig.registry.handlers(for: plainNode).key!(escape, .target) == .ignored)
+    } }
+
+    @Test("A focus request focuses an inserted field and selects its complete value")
+    func focusRequestSelectsAll() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = "Entity Name"
+        rig.graph.install(root:
+            TextField(text: makeBinding(rig.store), focusRequestID: "inline-rename-1")
+        )
+
+        let node = fieldNode(in: rig.tree.root)
+        let state = node.attachments["__textfield_state"] as? TextField.FieldState
+        #expect(rig.focus.focused === node)
+        #expect(state?.selectionAnchor == 0)
+        #expect(state?.cursorIndex == rig.store.value.count)
+    } }
+
     @Test("Focus callbacks and style state update without draw")
     func focusStateUpdatesWithoutDraw() { GlobalTestLock.locked {
         let rig = makeRig()

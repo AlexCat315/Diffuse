@@ -198,6 +198,14 @@ public final class EventDispatcher {
 
     private func dispatchKey(_ event: KeyEvent, phase: KeyPhase) {
         let kind = EventKind.key(event, phase)
+        // A mounted transient overlay is visually and semantically above the
+        // focused control. Give it first refusal so Escape/menu navigation is
+        // reliable even if a viewport or drag capture retained keyboard focus.
+        if deliverGlobalRoutes(kind: kind,
+                               role: .overlay,
+                               minPriority: .modal) == .handled {
+            return
+        }
         // Pointer-capture intercept: while a node owns capture (typically a
         // drag in progress), give its key handler the first opportunity to
         // consume the event. Lets drags implement Esc-to-cancel without

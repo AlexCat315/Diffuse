@@ -43,6 +43,9 @@ public enum InputHandlerRole: Sendable, Equatable, Hashable {
     case viewport
     case workspace
     case drag
+    /// Transient UI presented above normal content (popover/menu/dialog chrome).
+    /// Its keyboard handler gets first refusal while the overlay is mounted.
+    case overlay
     case shortcut
     case custom(String)
 }
@@ -102,6 +105,9 @@ public struct InputHandlerRoute: Sendable, Equatable {
     public static let workspaceDrag = InputHandlerRoute(role: .workspace,
                                                         priority: .capture,
                                                         debugName: "workspace.drag")
+    public static let overlay = InputHandlerRoute(role: .overlay,
+                                                  priority: .modal,
+                                                  debugName: "overlay")
     public static let shortcut = InputHandlerRoute(role: .shortcut,
                                                    priority: .system,
                                                    debugName: "shortcut")
