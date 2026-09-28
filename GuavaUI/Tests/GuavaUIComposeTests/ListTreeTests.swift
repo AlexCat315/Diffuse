@@ -137,6 +137,35 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         }
     }
 
+    struct FilteredKeyedTreeHarness: View {
+        let selectionKeyProbe: Probe<TreeNodeKey<String>?>
+        let multiSelectionKeyProbe: Probe<Set<TreeNodeKey<String>>>
+        let roots: [TreeItem]
+
+        @State var selectionKey: TreeNodeKey<String>? = nil
+        @State var multiSelectionKeys: Set<TreeNodeKey<String>> = []
+
+        var body: some View {
+            Tree(roots,
+                 children: \.children,
+                 selectionKey: Binding(get: { selectionKey },
+                                       set: { next in
+                                           selectionKey = next
+                                           selectionKeyProbe.value = next
+                                       }),
+                 multiSelectionKeys: Binding(get: { multiSelectionKeys },
+                                             set: { next in
+                                                 multiSelectionKeys = next
+                                                 multiSelectionKeyProbe.value = next
+                                             }),
+                 searchQuery: "Second",
+                 searchText: \.title,
+                 searchFilterPolicy: .filterAndAutoExpand) { item, _, _, depth in
+                Text("\(depth): \(item.title)")
+            }
+        }
+    }
+
     struct DragTreeHarness: View {
         let dropProbe: Probe<DropEvent?>
         let roots: [TreeItem]
@@ -505,6 +534,38 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         tap(rows[0], modifiers: .gui, registry: registry)
         #expect(multiSelectionKeyProbe.value == [TreeNodeKey(id: "dup", path: [0]),
                                                 TreeNodeKey(id: "dup", path: [1])])
+    } }
+
+    @Test("TreeNodeKey paths remain stable when search filters siblings")
+    func filteredTreeNodeKeyPathsRemainStable() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        let roots = [
+            TreeItem(id: "unmatched-root", title: "Other", children: []),
+            TreeItem(id: "group", title: "Group", children: [
+                TreeItem(id: "first", title: "First", children: []),
+                TreeItem(id: "second", title: "Second", children: [])
+            ])
+        ]
+        let selectionKeyProbe = Probe<TreeNodeKey<String>?>(nil)
+        let multiSelectionKeyProbe = Probe<Set<TreeNodeKey<String>>>([])
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: FilteredKeyedTreeHarness(
+            selectionKeyProbe: selectionKeyProbe,
+            multiSelectionKeyProbe: multiSelectionKeyProbe,
+            roots: roots
+        ))
+        graph.computeLayout(width: 280, height: 160)
+
+        let rows = orderedPointerNodes(in: tree.root!, registry: registry)
+        #expect(rows.count == 3)
+        tap(rows.last!, registry: registry)
+
+        let expected = TreeNodeKey(id: "second", path: [1, 1])
+        #expect(selectionKeyProbe.value == expected)
+        #expect(multiSelectionKeyProbe.value == [expected])
     } }
 
     @Test("Tree guide lines use pixel-aligned 1pt strokes")

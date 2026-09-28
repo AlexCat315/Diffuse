@@ -6,13 +6,15 @@ import GuavaUIRuntime
 /// collection of unrelated tools.
 struct EditorPanelToolbar<Content: View>: View {
     let content: Content
+    let spacing: Float
 
-    init(@ViewBuilder content: () -> Content) {
+    init(spacing: Float = 8, @ViewBuilder content: () -> Content) {
         self.content = content()
+        self.spacing = spacing
     }
 
     var body: some View {
-        Row(alignment: .center, spacing: 8) {
+        Row(alignment: .center, spacing: spacing) {
             content
         }
         .padding(horizontal: 10, vertical: 6)
