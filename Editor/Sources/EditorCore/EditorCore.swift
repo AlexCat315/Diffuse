@@ -116,6 +116,8 @@ public final class EditorApplication: @unchecked Sendable {
     public let store: EditorStore
     public let inputState: InputState
     public let scene: EditorSceneAdapter
+    /// Manages dynamically compiled Swift scripts in the project.
+    public let dynamicScriptManager: DynamicScriptManager
 
     private let observationBus: ObservationBus
     private let intentCoordinator: IntentRuntimeCoordinator
@@ -184,6 +186,35 @@ public final class EditorApplication: @unchecked Sendable {
         store.state.sceneDirty
     }
 
+    // MARK: - Engine module path resolution
+
+    /// Resolves the directories containing engine `.swiftmodule` files so that
+    /// dynamically compiled scripts can `import SceneRuntime`, `import
+    /// SIMDCompat`, etc.
+    ///
+    /// Resolution order:
+    /// 1. `GUAVA_ENGINE_MODULE_PATHS` environment variable (comma-separated).
+    /// 2. Derived from the executable's build directory:
+    ///    `<build>/<platform>/<configuration>/Modules`.
+    private static func resolveEngineModulePaths() -> [String] {
+        if let env = ProcessInfo.processInfo.environment["GUAVA_ENGINE_MODULE_PATHS"],
+           !env.isEmpty {
+            return env.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
+        }
+
+        // In development the editor runs from `.build/<platform>/<config>/EditorApp`.
+        // The Modules directory sits next to the executable.
+        let executablePath = ProcessInfo.processInfo.arguments[0]
+        let executableURL = URL(fileURLWithPath: executablePath)
+        let buildDir = executableURL.deletingLastPathComponent()
+        let modulesDir = buildDir.appendingPathComponent("Modules")
+        if FileManager.default.fileExists(atPath: modulesDir.path) {
+            return [modulesDir.path]
+        }
+
+        return []
+    }
+
     public init(projectDirectory: String,
                 backendConfig: WGPUDeviceConfig? = nil,
                 backend: WGPUBackend? = nil,
@@ -239,6 +270,11 @@ public final class EditorApplication: @unchecked Sendable {
         self.store = store
         self.inputState = InputState()
         self.scene = scene
+        self.dynamicScriptManager = DynamicScriptManager(
+            projectDirectory: projectDirectory,
+            scriptRuntime: scene.scriptRuntime,
+            engineModulePaths: Self.resolveEngineModulePaths()
+        )
         self.observationBus = observationBus
         self.intentCoordinator = intentCoordinator
         self.aiWorldContext = AIWorldContext(worldView: initialWorldView)
@@ -282,7 +318,8 @@ public final class EditorApplication: @unchecked Sendable {
         if let selection = initialSelectedEntityID {
             store.dispatch(.setSelectedEntity(selection))
         }
-        reloadProjectScripts(force: true)
+        reloadProjectScripts(force: true, reportUnresolvedBindings: false)
+        reloadDynamicScripts()
 
         startMCPBridge()
 
@@ -1019,7 +1056,7 @@ public final class EditorApplication: @unchecked Sendable {
             }
             let result = scene.load(manifest: doc.manifest)
             guard result.error == nil else { throw result.error! }
-            reportUnresolvedScriptBindings()
+            reloadScriptsAfterSceneReplacement()
             store.dispatch(.setSelectedEntity(result.selectedEntityID))
             store.dispatch(.setSceneRevision(scene.revision))
             logConsole("Game state loaded",
@@ -1100,6 +1137,7 @@ public final class EditorApplication: @unchecked Sendable {
     public func resetPreviewScene() {
         removeEditorAutosave()
         scene.resetToPreviewScene()
+        reloadScriptsAfterSceneReplacement()
         if let selection = scene.defaultSelectionID {
             store.dispatch(.setSelectedEntity(selection))
         } else {
@@ -1385,7 +1423,7 @@ public final class EditorApplication: @unchecked Sendable {
             guard result.error == nil else {
                 throw result.error!
             }
-            reportUnresolvedScriptBindings()
+            reloadScriptsAfterSceneReplacement()
             store.dispatch(.setSelectedEntity(result.selectedEntityID))
             store.dispatch(.setSceneRecoveryPending(true))
             recoverySuppressedRevision = nil
@@ -1410,7 +1448,7 @@ public final class EditorApplication: @unchecked Sendable {
             let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
             let result = scene.load(manifest: manifest)
             guard result.error == nil else { throw result.error! }
-            reportUnresolvedScriptBindings()
+            reloadScriptsAfterSceneReplacement()
             store.dispatch(.setSelectedEntity(result.selectedEntityID))
             store.dispatch(.setSceneRecoveryPending(true))
             recoverySuppressedRevision = nil
@@ -1484,7 +1522,7 @@ public final class EditorApplication: @unchecked Sendable {
             let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
             let result = scene.load(manifest: manifest)
             guard result.error == nil else { throw result.error! }
-            reportUnresolvedScriptBindings()
+            reloadScriptsAfterSceneReplacement()
             store.dispatch(.setSelectedEntity(result.selectedEntityID))
             store.dispatch(.markSceneSaved(store.state.sceneRevision))
             store.dispatch(.setSceneRecoveryPending(false))
@@ -1596,7 +1634,45 @@ public final class EditorApplication: @unchecked Sendable {
         }
     }
 
-    public func reloadProjectScripts(force: Bool = false) {
+    private func reloadScriptsAfterSceneReplacement() {
+        reloadProjectScripts(force: true, reportUnresolvedBindings: false)
+        reloadDynamicScripts()
+    }
+
+    private func reloadDynamicScripts() {
+        do {
+            let files = try dynamicScriptManager.scanScriptFiles()
+            var options: [String: String] = [:]
+            for file in files {
+                options[file.identifier] = file.displayName
+            }
+            scene.setDynamicScriptOptions(options)
+            store.dispatch(.forceUIRefresh)
+
+            try dynamicScriptManager.compileAllScripts(
+                onScriptCompletion: { [weak self] file, status in
+                    guard let self else { return }
+                    if case let .failed(message) = status {
+                        self.logConsole("Failed to compile dynamic script",
+                                        severity: .error,
+                                        detail: "\(file.displayName): \(message)")
+                    }
+                },
+                completion: { [weak self] in
+                    guard let self else { return }
+                    self.store.dispatch(.forceUIRefresh)
+                    self.reportUnresolvedScriptBindings()
+                }
+            )
+        } catch {
+            logConsole("Failed to scan dynamic scripts",
+                       severity: .error,
+                       detail: String(describing: error))
+        }
+    }
+
+    public func reloadProjectScripts(force: Bool = false,
+                                     reportUnresolvedBindings: Bool = true) {
         do {
             guard let catalog = try projectScriptCatalogMonitor.loadIfChanged(force: force) else {
                 return
@@ -1619,10 +1695,12 @@ public final class EditorApplication: @unchecked Sendable {
                 logConsole("Script catalog: \(diagnostic.message)",
                            severity: diagnostic.severity == .error ? .error : .warning)
             }
-            for unresolved in report.unresolvedBindings {
-                logConsole("Unresolved script binding",
-                           severity: .error,
-                           detail: unresolved)
+            if reportUnresolvedBindings {
+                for unresolved in report.unresolvedBindings {
+                    logConsole("Unresolved script binding",
+                               severity: .error,
+                               detail: unresolved)
+                }
             }
         } catch {
             if scene.scriptCatalogEntries.isEmpty {
