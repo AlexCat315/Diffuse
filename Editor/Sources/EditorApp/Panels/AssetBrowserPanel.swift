@@ -8,11 +8,9 @@ import AssetPipeline
 
 /// Content Browser — the editor's asset panel, modeled after Unreal's. A
 /// toolbar (import + live search + item count), a breadcrumb bar with a
-/// grid/list toggle, and a scrollable, reflowing grid that navigates the
-/// project's folder hierarchy (folders first, then assets). Every asset tile is
-/// a drag source: click to select, drag past a threshold to drop a Static Mesh
-/// into the viewport. Import works on every platform via the native file
-/// dialog, into the folder currently being viewed.
+/// grid/list toggle, and a scrollable, reflowing folder hierarchy. Asset tiles
+/// support modifier-based multi-selection, keyboard navigation, drag-to-drop,
+/// and grouped scene insertion. Imports target the folder currently being viewed.
 struct AssetBrowserPanel: View {
     let app: EditorApplication
 
@@ -20,7 +18,7 @@ struct AssetBrowserPanel: View {
     @AppStorage("assetBrowser.viewMode") private var viewMode: AssetViewMode = .grid
     @AppStorage("assetBrowser.sortMode") private var sortMode: AssetSortMode = .nameAscending
     @AppStorage("assetBrowser.categoryFilter") private var categoryFilter: AssetCategoryFilter = .all
-    @State private var selectedAssetID: String? = nil
+    @State private var selection = AssetBrowserSelectionModel()
     @State private var reloadStatusMessage: String? = nil
     @State private var reloadStatusIsError: Bool = false
     /// Relative folder path currently shown ("" == project root). Uses "/" as
@@ -59,7 +57,7 @@ struct AssetBrowserPanel: View {
 
     private func navigate(to folder: String) {
         currentFolder = folder
-        selectedAssetID = nil
+        selection.clear()
     }
 
     var body: some View {
@@ -68,6 +66,7 @@ struct AssetBrowserPanel: View {
             let allAssets = EditorAssetCatalog.entries()
             let isSearching = !trimmedQuery.isEmpty
             let categoryAssets = AssetBrowserOrdering.filter(allAssets, category: categoryFilter)
+            let unfilteredListing = AssetFolderListing.make(folder: currentFolder, from: allAssets)
             // While searching, ignore folder structure and show flat matches
             // across the whole project (Unreal's search behaviour).
             let unsortedListing = isSearching
@@ -75,12 +74,18 @@ struct AssetBrowserPanel: View {
                 : AssetFolderListing.make(folder: currentFolder, from: categoryAssets)
             let listing = unsortedListing.sorted(by: sortMode)
             let itemCount = listing.folders.count + listing.assets.count
+            let countTotal = isSearching
+                ? categoryAssets.count
+                : unfilteredListing.folders.count + unfilteredListing.assets.count
+            let isFiltering = isSearching || categoryFilter != .all
+            let visibleAssetIDs = listing.assets.map(\.id)
+            let selectedAssets = listing.assets.filter { selection.selectedIDs.contains($0.id) }
 
             Box(direction: .column, alignItems: .stretch) {
                 AssetBrowserToolbar(searchText: $searchText,
-                                    totalCount: allAssets.count,
+                                    totalCount: countTotal,
                                     visibleCount: itemCount,
-                                    isFiltering: isSearching,
+                                    isFiltering: isFiltering,
                                     onImport: { importAssets() },
                                     onReload: { reloadAssets() })
 
@@ -105,19 +110,21 @@ struct AssetBrowserPanel: View {
                     Divider()
                 }
 
-                content(allAssets: allAssets, listing: listing, isSearching: isSearching)
+                content(allAssets: allAssets,
+                        listing: listing,
+                        isSearching: isSearching,
+                        visibleAssetIDs: visibleAssetIDs)
 
-                if let selectedAssetID,
-                   let selectedAsset = listing.assets.first(where: { $0.id == selectedAssetID }) {
+                if !selectedAssets.isEmpty {
                     Divider()
                     AssetSelectionBar(
-                        asset: selectedAsset,
+                        assets: selectedAssets,
                         isAddEnabled: store.playbackState == .stopped,
                         onAddToScene: {
-                            _ = app.spawnAsset(selectedAsset)
+                            _ = app.spawnAssets(selectedAssets)
                         },
                         onReveal: {
-                            revealAsset(selectedAsset)
+                            revealAssets(selectedAssets)
                         }
                     )
                 }
@@ -134,7 +141,8 @@ struct AssetBrowserPanel: View {
     @ViewBuilder
     private func content(allAssets: [EditorAsset],
                          listing: AssetFolderListing,
-                         isSearching: Bool) -> some View {
+                         isSearching: Bool,
+                         visibleAssetIDs: [String]) -> some View {
         if allAssets.isEmpty {
             AssetBrowserEmptyState(projectDirectory: app.projectDirectory,
                                    onImport: { importAssets() })
@@ -167,8 +175,17 @@ struct AssetBrowserPanel: View {
                         for asset in listing.assets {
                             AssetTile(asset: asset,
                                       app: app,
-                                      isSelected: selectedAssetID == asset.id,
-                                      onSelect: { selectedAssetID = asset.id })
+                                      isSelected: selection.selectedIDs.contains(asset.id),
+                                      onSelect: { selectAsset(asset.id,
+                                                              modifiers: $0,
+                                                              visibleIDs: visibleAssetIDs) },
+                                      onNavigate: { navigateSelection(from: asset.id,
+                                                                      direction: $0,
+                                                                      modifiers: $1,
+                                                                      visibleIDs: visibleAssetIDs) },
+                                      onSelectAll: { selection.selectAll(in: visibleAssetIDs) },
+                                      onClearSelection: { selection.clear() },
+                                      onActivate: { activateAsset(asset) })
                         }
                     }
                     .padding(horizontal: 10, vertical: 10)
@@ -181,8 +198,17 @@ struct AssetBrowserPanel: View {
                         for asset in listing.assets {
                             AssetListRow(asset: asset,
                                          app: app,
-                                         isSelected: selectedAssetID == asset.id,
-                                         onSelect: { selectedAssetID = asset.id })
+                                         isSelected: selection.selectedIDs.contains(asset.id),
+                                         onSelect: { selectAsset(asset.id,
+                                                                 modifiers: $0,
+                                                                 visibleIDs: visibleAssetIDs) },
+                                         onNavigate: { navigateSelection(from: asset.id,
+                                                                         direction: $0,
+                                                                         modifiers: $1,
+                                                                         visibleIDs: visibleAssetIDs) },
+                                         onSelectAll: { selection.selectAll(in: visibleAssetIDs) },
+                                         onClearSelection: { selection.clear() },
+                                         onActivate: { activateAsset(asset) })
                         }
                     }
                     .padding(horizontal: 6, vertical: 6)
@@ -192,14 +218,49 @@ struct AssetBrowserPanel: View {
         }
     }
 
-    private func revealAsset(_ asset: EditorAsset) {
+    private func selectAsset(_ assetID: String,
+                             modifiers: KeyModifiers,
+                             visibleIDs: [String]) {
+        var next = selection
+        next.select(assetID, in: visibleIDs, modifiers: modifiers)
+        selection = next
+    }
+
+    private func navigateSelection(from assetID: String,
+                                   direction: Int,
+                                   modifiers: KeyModifiers,
+                                   visibleIDs: [String]) {
+        guard let nextID = AssetBrowserSelectionModel.adjacentAssetID(
+            from: assetID,
+            in: visibleIDs,
+            direction: direction
+        ) else { return }
+        AssetBrowserFocusRegistry.focus(nextID)
+        selectAsset(nextID, modifiers: modifiers, visibleIDs: visibleIDs)
+    }
+
+    private func activateAsset(_ asset: EditorAsset) {
+        guard asset.kind.isMesh, app.store.state.playbackState == .stopped else { return }
+        _ = app.spawnAsset(asset)
+    }
+
+    private func revealAssets(_ assets: [EditorAsset]) {
+        let validPaths = assets.map(\.absolutePath).filter {
+            FileManager.default.fileExists(atPath: $0)
+        }
+        guard !validPaths.isEmpty else {
+            app.logConsole("Could not reveal selected assets",
+                           severity: .error,
+                           detail: "The source files no longer exist. Reload the Asset Browser.")
+            return
+        }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        process.arguments = ["-R", asset.absolutePath]
+        process.arguments = ["-R"] + validPaths
         do {
             try process.run()
         } catch {
-            app.logConsole("Could not reveal asset",
+            app.logConsole("Could not reveal selected assets",
                            severity: .error,
                            detail: error.localizedDescription)
         }
@@ -261,20 +322,26 @@ enum AssetBrowserOrdering {
                                 fallbackRHS: String) -> ComparisonResult {
         let primary = lhs.localizedCaseInsensitiveCompare(rhs)
         guard primary == .orderedSame else { return primary }
-        return fallbackLHS.localizedCaseInsensitiveCompare(fallbackRHS)
+        let fallback = fallbackLHS.localizedCaseInsensitiveCompare(fallbackRHS)
+        guard fallback == .orderedSame else { return fallback }
+        // Locale-aware comparison intentionally treats case-only differences
+        // as equal. Keep the final order stable across reloads/platforms.
+        if fallbackLHS != fallbackRHS { return fallbackLHS < fallbackRHS ? .orderedAscending : .orderedDescending }
+        if lhs != rhs { return lhs < rhs ? .orderedAscending : .orderedDescending }
+        return .orderedSame
     }
 }
 
 // MARK: - Folder listing derivation
 
-private struct AssetFolderRef: Equatable {
+struct AssetFolderRef: Equatable {
     let name: String   // immediate folder name
     let path: String   // full relative path to navigate into
 }
 
 /// The immediate contents of one folder: subfolder names plus the assets that
 /// live directly in it. Derived purely from the flat `relativePath` list.
-private struct AssetFolderListing {
+struct AssetFolderListing {
     let folders: [AssetFolderRef]
     let assets: [EditorAsset]
 
@@ -297,7 +364,10 @@ private struct AssetFolderListing {
                 assets.append(asset)
             }
         }
-        let folders = folderNames.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        let folders = folderNames.sorted {
+            let comparison = $0.localizedCaseInsensitiveCompare($1)
+            return comparison == .orderedSame ? $0 < $1 : comparison == .orderedAscending
+        }
             .map { AssetFolderRef(name: $0, path: prefix + $0) }
         let sortedAssets = assets.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         return AssetFolderListing(folders: folders, assets: sortedAssets)
@@ -491,28 +561,42 @@ private struct AssetViewModeButton: View {
 }
 
 private struct AssetSelectionBar: View {
-    let asset: EditorAsset
+    let assets: [EditorAsset]
     let isAddEnabled: Bool
     let onAddToScene: () -> Void
     let onReveal: () -> Void
 
+    private var containsOnlyMeshes: Bool {
+        !assets.isEmpty && assets.allSatisfy { $0.kind.isMesh }
+    }
+
     var body: some View {
         Row(alignment: .center, spacing: 8) {
             Column(alignment: .leading, spacing: 1) {
-                Text(asset.name, lineLimit: 1)
+                Text(assets.count == 1
+                    ? assets[0].name
+                    : String(format: L("%lld assets selected"), Int64(assets.count)),
+                     lineLimit: 1)
                     .font(.caption)
                     .foregroundColor(.onSurface)
-                Text(asset.relativePath, lineLimit: 1)
+                Text(assets.count == 1
+                    ? assets[0].relativePath
+                    : String(format: L("%lld meshes selected"), Int64(assets.filter { $0.kind.isMesh }.count)),
+                     lineLimit: 1)
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
             }
             .flex(1, shrink: 1)
 
-            Text(asset.kind.sceneKindLabel)
-                .font(.caption)
-                .foregroundColor(.onSurfaceMuted)
-            if asset.kind.isMesh {
-                Button(L("Add to Scene"),
+            if assets.count == 1 {
+                Text(assets[0].kind.sceneKindLabel)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
+            if containsOnlyMeshes {
+                Button(assets.count == 1
+                    ? L("Add to Scene")
+                    : String(format: L("Add %lld to Scene"), Int64(assets.count)),
                        isEnabled: isAddEnabled,
                        tooltip: isAddEnabled ? nil : L("Stop simulation to edit the scene"),
                        action: onAddToScene)
@@ -599,10 +683,20 @@ private struct AssetTile: View {
     let asset: EditorAsset
     let app: EditorApplication
     let isSelected: Bool
-    let onSelect: () -> Void
+    let onSelect: (KeyModifiers) -> Void
+    let onNavigate: (Int, KeyModifiers) -> Void
+    let onSelectAll: () -> Void
+    let onClearSelection: () -> Void
+    let onActivate: () -> Void
 
     var body: some View {
-        AssetDragSource(asset: asset, app: app, onSelect: onSelect) {
+        AssetDragSource(asset: asset,
+                        app: app,
+                        onSelect: onSelect,
+                        onNavigate: onNavigate,
+                        onSelectAll: onSelectAll,
+                        onClearSelection: onClearSelection,
+                        onActivate: onActivate) {
             Box(direction: .column, alignItems: .center, spacing: 6) {
                 AssetThumbnail(asset: asset)
 
@@ -690,10 +784,20 @@ private struct AssetListRow: View {
     let asset: EditorAsset
     let app: EditorApplication
     let isSelected: Bool
-    let onSelect: () -> Void
+    let onSelect: (KeyModifiers) -> Void
+    let onNavigate: (Int, KeyModifiers) -> Void
+    let onSelectAll: () -> Void
+    let onClearSelection: () -> Void
+    let onActivate: () -> Void
 
     var body: some View {
-        AssetDragSource(asset: asset, app: app, onSelect: onSelect) {
+        AssetDragSource(asset: asset,
+                        app: app,
+                        onSelect: onSelect,
+                        onNavigate: onNavigate,
+                        onSelectAll: onSelectAll,
+                        onClearSelection: onClearSelection,
+                        onActivate: onActivate) {
             Row(alignment: .center, spacing: 9) {
                 Box(direction: .column, alignItems: .center, justifyContent: .center) {
                     if asset.kind.isTexture {
@@ -827,22 +931,35 @@ private extension ImportableAssetKind {
 private struct AssetDragSource<Content: View>: _PrimitiveView {
     let asset: EditorAsset
     let app: EditorApplication
-    let onSelect: () -> Void
+    let onSelect: (KeyModifiers) -> Void
+    let onNavigate: (Int, KeyModifiers) -> Void
+    let onSelectAll: () -> Void
+    let onClearSelection: () -> Void
+    let onActivate: () -> Void
     let content: Content
 
     init(asset: EditorAsset,
          app: EditorApplication,
-         onSelect: @escaping () -> Void,
+         onSelect: @escaping (KeyModifiers) -> Void,
+         onNavigate: @escaping (Int, KeyModifiers) -> Void,
+         onSelectAll: @escaping () -> Void,
+         onClearSelection: @escaping () -> Void,
+         onActivate: @escaping () -> Void,
          @ViewBuilder content: () -> Content) {
         self.asset = asset
         self.app = app
         self.onSelect = onSelect
+        self.onNavigate = onNavigate
+        self.onSelectAll = onSelectAll
+        self.onClearSelection = onClearSelection
+        self.onActivate = onActivate
         self.content = content()
     }
 
     func _makeNode() -> Node {
         let n = Node()
         n.isHitTestable = true
+        n.isFocusable = true
         n.cursor = .pointer
         return n
     }
@@ -852,9 +969,14 @@ private struct AssetDragSource<Content: View>: _PrimitiveView {
         let asset = self.asset
         let app = self.app
         let onSelect = self.onSelect
+        let onNavigate = self.onNavigate
+        let onSelectAll = self.onSelectAll
+        let onClearSelection = self.onClearSelection
+        let onActivate = self.onActivate
         let capture = PointerCaptureHolder.current
         let isDragEnabled = asset.kind.isMesh
             && app.store.state.playbackState == .stopped
+        AssetBrowserFocusRegistry.register(assetID: asset.id, node: node)
 
         registry.setPointer(node, route: InputHandlerRoute(role: .drag,
                                                            priority: .capture,
@@ -862,7 +984,7 @@ private struct AssetDragSource<Content: View>: _PrimitiveView {
             guard event.button == .left else { return .ignored }
             switch phase {
             case .down:
-                onSelect()
+                onSelect(event.modifiers)
                 guard isDragEnabled else { return .handled }
                 AssetDragGesture.pending = AssetDragGesture.Pending(assetID: asset.id,
                                                                     startX: event.x,
@@ -908,13 +1030,32 @@ private struct AssetDragSource<Content: View>: _PrimitiveView {
                                                        debugName: "asset.drag")) { event, _ in
             // Esc cancels an in-progress drag without spawning.
             if app.store.state.activeAssetDrag != nil,
-               event.keycode == 0x1B /* SDLK_ESCAPE */ {
+               event.scancode == ComposeScancode.escape {
                 app.store.dispatch(.endAssetDrag)
                 AssetDragGesture.pending = nil
                 PointerCaptureHolder.current?.release()
                 return .handled
             }
-            return .ignored
+            switch event.scancode {
+            case ComposeScancode.arrowLeft, ComposeScancode.arrowUp:
+                onNavigate(-1, event.modifiers)
+                return .handled
+            case ComposeScancode.arrowRight, ComposeScancode.arrowDown:
+                onNavigate(1, event.modifiers)
+                return .handled
+            case ComposeScancode.a where event.modifiers.hasGui || event.modifiers.hasCtrl:
+                onSelectAll()
+                return .handled
+            case ComposeScancode.return, ComposeScancode.keypadEnter:
+                guard !event.isRepeat else { return .handled }
+                onActivate()
+                return .handled
+            case ComposeScancode.escape:
+                onClearSelection()
+                return .handled
+            default:
+                return .ignored
+            }
         }
     }
 
@@ -946,4 +1087,51 @@ private enum AssetDragGesture {
     static var thresholdSquared: Float { dragThreshold * dragThreshold }
 
     nonisolated(unsafe) static var pending: Pending?
+}
+
+private final class AssetBrowserWeakFocusNode {
+    weak var node: Node?
+    init(_ node: Node) { self.node = node }
+}
+
+private enum AssetBrowserFocusRegistry {
+    nonisolated(unsafe) private static var nodes: [String: AssetBrowserWeakFocusNode] = [:]
+
+    static func register(assetID: String, node: Node) {
+        nodes[assetID] = AssetBrowserWeakFocusNode(node)
+        if nodes.count > 512 && nodes.count.isMultiple(of: 128) {
+            nodes = nodes.filter { $0.value.node != nil }
+        }
+    }
+
+    static func focus(_ assetID: String) {
+        guard let node = nodes[assetID]?.node else { return }
+        scrollIntoView(node)
+        FocusChainHolder.current?.focus(node)
+    }
+
+    private static func scrollIntoView(_ node: Node) {
+        guard var scrollView = node.parent else { return }
+        while !scrollView.clipsToBounds {
+            guard let parent = scrollView.parent else { return }
+            scrollView = parent
+        }
+
+        let viewport = scrollView.absoluteFrame
+        let item = node.absoluteFrame
+        var offset = scrollView.contentOffset
+        if item.minY < viewport.minY {
+            offset.y = max(0, offset.y - (viewport.minY - item.minY))
+        } else if item.maxY > viewport.maxY {
+            offset.y += item.maxY - viewport.maxY
+        }
+        if item.minX < viewport.minX {
+            offset.x = max(0, offset.x - (viewport.minX - item.minX))
+        } else if item.maxX > viewport.maxX {
+            offset.x += item.maxX - viewport.maxX
+        }
+        if offset != scrollView.contentOffset {
+            scrollView.contentOffset = offset
+        }
+    }
 }

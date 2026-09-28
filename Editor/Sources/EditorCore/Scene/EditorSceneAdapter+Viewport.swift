@@ -939,29 +939,47 @@ extension EditorSceneAdapter {
     /// preserving the current viewing direction. Non-rendered entities fall
     /// back to a small world-space box around their transform origin.
     public func frameEntity(_ rawID: UInt64, viewportAspectRatio: Float? = nil) {
-        guard let fallbackCenter = entityWorldPosition(rawID) else { return }
+        frameEntities([rawID], viewportAspectRatio: viewportAspectRatio)
+    }
+
+    /// Fits a complete selection, including each selected entity's rendered
+    /// descendants, in one camera transaction.
+    public func frameEntities(_ rawIDs: Set<UInt64>, viewportAspectRatio: Float? = nil) {
+        let centersByID = Dictionary(uniqueKeysWithValues: rawIDs.compactMap { rawID in
+            entityWorldPosition(rawID).map { (rawID, $0) }
+        })
+        guard !centersByID.isEmpty else { return }
         guard let camID = activeCameraEntityRaw() else { return }
         let cam = currentRenderCamera()
 
-        let ancestorIDs: Set<UInt64> = [rawID]
+        let selectionIDs = Set(centersByID.keys)
         let relevantBounds = viewportWorldBounds().filter { bounds in
-            bounds.entityID == rawID || entityHasAncestor(bounds.entityID, in: ancestorIDs)
+            selectionIDs.contains(bounds.entityID)
+                || entityHasAncestor(bounds.entityID, in: selectionIDs)
         }
-        var lower = fallbackCenter - SIMD3<Float>(repeating: 0.25)
-        var upper = fallbackCenter + SIMD3<Float>(repeating: 0.25)
-        if let first = relevantBounds.first {
-            lower = first.min
-            upper = first.max
-            for bounds in relevantBounds.dropFirst() {
-                lower = simd_min(lower, bounds.min)
-                upper = simd_max(upper, bounds.max)
-            }
+        var lower = SIMD3<Float>(repeating: .greatestFiniteMagnitude)
+        var upper = SIMD3<Float>(repeating: -.greatestFiniteMagnitude)
+        var includedIDs = Set<UInt64>()
+        for bounds in relevantBounds {
+            guard Self.isFinite(bounds.min), Self.isFinite(bounds.max) else { continue }
+            lower = simd_min(lower, simd_min(bounds.min, bounds.max))
+            upper = simd_max(upper, simd_max(bounds.min, bounds.max))
+            includedIDs.insert(bounds.entityID)
+        }
+        for (rawID, center) in centersByID where !includedIDs.contains(rawID) {
+            let halfSize = SIMD3<Float>(repeating: 0.25)
+            lower = simd_min(lower, center - halfSize)
+            upper = simd_max(upper, center + halfSize)
         }
         let pose = EditorViewportFraming.pose(camera: cam,
                                               boundsMin: lower,
                                               boundsMax: upper,
                                               viewportAspectRatio: viewportAspectRatio)
-        setCameraEye(camID, eye: pose.eye, target: pose.target)
+        setCameraEye(camID, eye: pose.eye, target: pose.target, up: pose.up)
+    }
+
+    private static func isFinite(_ vector: SIMD3<Float>) -> Bool {
+        vector.x.isFinite && vector.y.isFinite && vector.z.isFinite
     }
 
     // MARK: - Entity ops
@@ -1167,7 +1185,16 @@ extension EditorSceneAdapter {
                               target: SIMD3<Float>,
                               up: SIMD3<Float>? = nil) {
         var local = scene.localTransform(for: entity) ?? LocalTransform()
-        local.matrix.columns.3 = SIMD4<Float>(eye.x, eye.y, eye.z, 1)
+        let parentWorld = entityParentWorldMatrix(entity.rawValue)
+        let parentDeterminant = simd_determinant(parentWorld)
+        guard parentDeterminant.isFinite, abs(parentDeterminant) > 1e-8 else { return }
+        let localEye = simd_inverse(parentWorld) * SIMD4<Float>(eye, 1)
+        guard localEye.x.isFinite, localEye.y.isFinite, localEye.z.isFinite,
+              localEye.w.isFinite, abs(localEye.w) > 1e-8 else { return }
+        local.matrix.columns.3 = SIMD4<Float>(localEye.x / localEye.w,
+                                              localEye.y / localEye.w,
+                                              localEye.z / localEye.w,
+                                              1)
         _ = applySceneTransaction(intentVerb: "scene.set_camera_pose",
                                   summary: "Update camera pose",
                                   targetRawIDs: [entity.rawValue],

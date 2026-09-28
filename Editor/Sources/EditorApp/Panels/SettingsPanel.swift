@@ -8,22 +8,18 @@ import GuavaUIRuntime
 struct SettingsPanel: View {
     let store: EditorStore
     let app: EditorApplication
-    @State private var aiProviderDraft: EditorAIProvider
-    @State private var aiModelDraft: String
-    @State private var aiKeyDraft: String
-    @State private var aiAutoApproveDraft: Bool
+    @State private var aiDraft: EditorAISettingsDraft
     @State private var aiStatusMessage: String?
     @State private var aiStatusIsError: Bool
+    @State private var isConfirmingAIKeyRemoval: Bool
 
     init(app: EditorApplication) {
         self.app = app
         self.store = app.store
-        _aiProviderDraft = State(wrappedValue: app.store.aiSettings.provider)
-        _aiModelDraft = State(wrappedValue: app.store.aiSettings.model)
-        _aiKeyDraft = State(wrappedValue: "")
-        _aiAutoApproveDraft = State(wrappedValue: app.store.aiSettings.autoApprove)
+        _aiDraft = State(wrappedValue: EditorAISettingsDraft(settings: app.store.aiSettings))
         _aiStatusMessage = State(wrappedValue: nil)
         _aiStatusIsError = State(wrappedValue: false)
+        _isConfirmingAIKeyRemoval = State(wrappedValue: false)
     }
 
     var body: some View {
@@ -157,14 +153,15 @@ struct SettingsPanel: View {
                 aiProviderButton(.deepseek)
             }
 
-            if aiProviderDraft != .none {
-                let credentialSource = app.aiCredentialSource(for: aiProviderDraft)
-                TextField(L("Model"), text: $aiModelDraft, clearable: true)
+            if aiDraft.provider != .none {
+                let credentialSource = app.aiCredentialSource(for: aiDraft.provider)
+                TextField(L("Model"), text: aiModelBinding, clearable: true,
+                          onSubmit: applyAIProviderSettings)
                 TextField(
                     credentialSource != nil
                         ? L("API key (leave blank to use the available credential)")
                         : L("API key"),
-                    text: $aiKeyDraft,
+                    text: aiKeyBinding,
                     secure: true,
                     clearable: true,
                     onSubmit: applyAIProviderSettings
@@ -174,7 +171,7 @@ struct SettingsPanel: View {
                     .foregroundColor(.onSurfaceMuted)
 
                 Row(alignment: .center, spacing: 8) {
-                    Toggle(isOn: $aiAutoApproveDraft)
+                    Toggle(isOn: aiAutoApproveBinding)
                     Column(alignment: .leading, spacing: 2) {
                         Text(L("Automatically apply safe AI changes"))
                             .font(.caption)
@@ -192,15 +189,32 @@ struct SettingsPanel: View {
                 if store.aiSettings.provider != .none,
                    app.aiCredentialSource(for: store.aiSettings.provider)
                     == .operatingSystemStore {
-                    Button(L("Remove Stored Key"), action: removeStoredAIKey)
-                        .buttonStyle(.secondary)
+                    if isConfirmingAIKeyRemoval {
+                        Button(L("Confirm Remove Key"),
+                               role: .destructive,
+                               action: removeStoredAIKey)
+                            .buttonStyle(.destructive)
+                        Button(L("Keep Key"),
+                               action: { isConfirmingAIKeyRemoval = false })
+                            .buttonStyle(.secondary)
+                    } else {
+                        Button(L("Remove Stored Key"),
+                               action: { isConfirmingAIKeyRemoval = true })
+                            .buttonStyle(.secondary)
+                    }
                 }
+            }
+
+            if isConfirmingAIKeyRemoval {
+                Text(L("Removing the stored key disables this provider until you add a credential again."))
+                    .font(.caption)
+                    .foregroundColor(.warning)
             }
 
             if let aiStatusMessage {
                 Text(aiStatusMessage)
                     .font(.caption)
-                    .foregroundColor(aiStatusIsError ? .warning : .success)
+                    .foregroundColor(aiStatusIsError ? .error : .success)
             }
         }
     }
@@ -216,42 +230,53 @@ struct SettingsPanel: View {
         }
     }
 
+    private var aiModelBinding: Binding<String> {
+        Binding(get: { aiDraft.model }, set: { aiDraft.model = $0 })
+    }
+
+    private var aiKeyBinding: Binding<String> {
+        Binding(get: { aiDraft.apiKey }, set: { aiDraft.apiKey = $0 })
+    }
+
+    private var aiAutoApproveBinding: Binding<Bool> {
+        Binding(get: { aiDraft.autoApprove }, set: { aiDraft.autoApprove = $0 })
+    }
+
     private func aiProviderButton(_ provider: EditorAIProvider) -> some View {
         SettingsChoiceButton(
             title: L(provider.displayName),
-            isActive: aiProviderDraft == provider
+            isActive: aiDraft.provider == provider
         ) {
-            let previousDefault = aiProviderDraft.defaultModel
-            aiProviderDraft = provider
-            if aiModelDraft.isEmpty || aiModelDraft == previousDefault {
-                aiModelDraft = provider.defaultModel
-            }
+            aiDraft.select(provider)
             aiStatusMessage = nil
+            aiStatusIsError = false
+            isConfirmingAIKeyRemoval = false
         }
         .flex(1, shrink: 1)
     }
 
     private func applyAIProviderSettings() {
-        let model = aiModelDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard aiProviderDraft == .none || !model.isEmpty else {
+        let model = aiDraft.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard aiDraft.provider == .none || !model.isEmpty else {
             aiStatusMessage = L("Enter a model name.")
             aiStatusIsError = true
             return
         }
         let settings = EditorAISettings(
-            provider: aiProviderDraft,
-            model: model.isEmpty ? aiProviderDraft.defaultModel : model,
-            autoApprove: aiAutoApproveDraft
+            provider: aiDraft.provider,
+            model: model.isEmpty ? aiDraft.provider.defaultModel : model,
+            autoApprove: aiDraft.autoApprove
         )
         if app.applyAISettings(
             settings,
-            apiKey: aiKeyDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+            apiKey: aiDraft.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         ) {
-            aiKeyDraft = ""
+            aiDraft.clearCredential()
             aiStatusMessage = settings.provider == .none
                 ? L("AI Assistant disabled.")
                 : L("AI settings applied.")
             aiStatusIsError = false
+            isConfirmingAIKeyRemoval = false
             persistShell()
             app.requestDisplayRefresh()
         } else {
@@ -262,10 +287,8 @@ struct SettingsPanel: View {
 
     private func removeStoredAIKey() {
         if app.clearAIKey() {
-            aiProviderDraft = .none
-            aiModelDraft = EditorAIProvider.none.defaultModel
-            aiAutoApproveDraft = EditorAISettings.default.autoApprove
-            aiKeyDraft = ""
+            aiDraft = EditorAISettingsDraft(settings: .default)
+            isConfirmingAIKeyRemoval = false
             aiStatusMessage = L("Stored credential removed and AI Assistant disabled.")
             aiStatusIsError = false
             persistShell()
@@ -364,6 +387,38 @@ struct SettingsPanel: View {
                 }
             }
         }
+    }
+}
+
+struct EditorAISettingsDraft: Equatable {
+    private(set) var provider: EditorAIProvider
+    var model: String
+    var apiKey: String
+    var autoApprove: Bool
+
+    init(settings: EditorAISettings) {
+        provider = settings.provider
+        // A model has no meaning while disabled; start blank so selecting a
+        // provider reliably adopts that provider's default model.
+        model = settings.provider == .none ? "" : settings.model
+        apiKey = ""
+        autoApprove = settings.autoApprove
+    }
+
+    mutating func select(_ nextProvider: EditorAIProvider) {
+        guard provider != nextProvider else { return }
+        let previousDefaultModel = provider.defaultModel
+        if model.isEmpty || model == previousDefaultModel {
+            model = nextProvider.defaultModel
+        }
+        // Never carry an uncommitted secret across providers: otherwise a key
+        // typed for one service could silently be stored under another.
+        apiKey = ""
+        provider = nextProvider
+    }
+
+    mutating func clearCredential() {
+        apiKey = ""
     }
 }
 

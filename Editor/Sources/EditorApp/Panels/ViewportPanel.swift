@@ -36,12 +36,22 @@ struct ViewportPanel: View {
             let selectionContainsLockedEntity = selectedEntityIDs.contains {
                 scene.isEntityLocked($0)
             }
+            let selectionCanTransform = selectedEntityID.map { primaryID in
+                EditorGizmoSelectionPolicy.permitsAtomicTransform(
+                    primary: primaryID,
+                    selectedEntityIDs: selectedEntityIDs.isEmpty
+                        ? [primaryID]
+                        : selectedEntityIDs,
+                    isLocked: scene.isEntityLocked
+                )
+            } ?? false
 
             // 推送 gizmo 控制器所需的快照（摄像机 / 视口矩形 / 实体世界坐标）。
             let _: Void = updateGizmoSnapshot(selectedID: selectedEntityID,
                                               gizmoMode: gizmoMode,
                                               gizmoSpace: gizmoSpace,
-                                              isSceneEditable: playbackState == .stopped)
+                                              isSceneEditable: playbackState == .stopped,
+                                              isSelectionEditable: selectionCanTransform)
 
             ViewportHost(surface: surface,
                          onInputEvent: { event in
@@ -119,12 +129,12 @@ struct ViewportPanel: View {
                                                 store.dispatch(.setPhysicsDebugOverlayScope(scope))
                                             },
                                             onFrameSelection: {
-                                                if let selectedEntityID {
-                                                    scene.frameEntity(
-                                                        selectedEntityID,
-                                                        viewportAspectRatio: viewportAspectRatio(for: surface)
-                                                    )
-                                                }
+                                                scene.frameEntities(
+                                                    selectedEntityIDs.isEmpty
+                                                        ? Set(selectedEntityID.map { [$0] } ?? [])
+                                                        : selectedEntityIDs,
+                                                    viewportAspectRatio: viewportAspectRatio(for: surface)
+                                                )
                                             },
                                             onPlay: { app.applyPlaybackState(.playing) },
                                             onPause: { app.applyPlaybackState(.paused) },
@@ -451,9 +461,11 @@ struct ViewportPanel: View {
     private func handleEditingShortcut(_ key: KeyEvent) -> Bool {
         switch EditorViewportEditingShortcutPolicy.command(for: key) {
         case .frameSelection:
-            guard let id = app.store.state.selectedEntityID else { return false }
+            let selectedIDs = app.store.state.selectedEntityIDs
+            guard !selectedIDs.isEmpty else { return false }
             let surface = app.currentViewportSurfaceState()
-            scene.frameEntity(id, viewportAspectRatio: viewportAspectRatio(for: surface))
+            scene.frameEntities(selectedIDs,
+                                viewportAspectRatio: viewportAspectRatio(for: surface))
             return true
         case .deleteSelection:
             guard EditorSceneAuthoringPolicy.canEditScene(
@@ -494,11 +506,12 @@ struct ViewportPanel: View {
     private func updateGizmoSnapshot(selectedID: UInt64?,
                                      gizmoMode: EditorGizmoMode,
                                      gizmoSpace: EditorGizmoSpace,
-                                     isSceneEditable: Bool) {
+                                     isSceneEditable: Bool,
+                                     isSelectionEditable: Bool) {
         guard let mode = controllerMode(for: gizmoMode),
               isSceneEditable,
+              isSelectionEditable,
               let id = selectedID,
-              !scene.isEntityLocked(id),
               let world = scene.entityWorldPosition(id),
               let worldMatrix = scene.entityWorldMatrix(id),
               let local = scene.entityLocalMatrix(id),
@@ -1409,6 +1422,9 @@ private struct ViewCubeControl: _PrimitiveView {
                 PointerCaptureHolder.current?.acquire(node)
                 return .handled
             case .up:
+                guard node.attachments[Self.dragStartKey] != nil else {
+                    return .ignored
+                }
                 let wasDragging = node.attachments[Self.draggingKey] as? Bool ?? false
                 if !wasDragging,
                    let axis = Self.hitAxis(eventX: event.x,

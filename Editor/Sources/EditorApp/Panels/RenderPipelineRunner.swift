@@ -76,13 +76,20 @@ final class RenderPipelineRunner: @unchecked Sendable {
                     DispatchQueue.main.async { onComplete(.failure(RenderPipelineRunnerError.cancelled)) }
                     return
                 }
-                tracer.accumulatePass(into: &fb, width: cfg.width, height: cfg.height,
-                                     cameraOrigin: camera.eye,
-                                     cameraForward: fwd,
-                                     cameraUp: camera.up,
-                                     cameraFOVYRadians: camera.fovYRadians,
-                                     cameraAspectRatio: Float(cfg.width) / Float(cfg.height),
-                                     geometry: geo)
+                let completedPass = tracer.accumulatePass(into: &fb,
+                                                          width: cfg.width,
+                                                          height: cfg.height,
+                                                          cameraOrigin: camera.eye,
+                                                          cameraForward: fwd,
+                                                          cameraUp: camera.up,
+                                                          cameraFOVYRadians: camera.fovYRadians,
+                                                          cameraAspectRatio: Float(cfg.width) / Float(cfg.height),
+                                                          geometry: geo,
+                                                          shouldCancel: { self.cancelledSnapshot() })
+                guard completedPass, !self.cancelledSnapshot() else {
+                    DispatchQueue.main.async { onComplete(.failure(RenderPipelineRunnerError.cancelled)) }
+                    return
+                }
                 DispatchQueue.main.async {
                     onProgress(Progress(completed: s + 1, total: cfg.samplesPerPixel))
                 }
