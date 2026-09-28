@@ -54,11 +54,11 @@ public struct SetCameraPoseCapability: GuavaCapability {
         let entityID = try preparedEntityID(input.entity_id, requiring: .camera, context: context)
         let position = try capabilityVector(input.position, field: "position")
         let target = try capabilityVector(input.camera_target, field: "camera_target")
-        guard length_squared(target - position) > 1e-12 else {
+        guard simd_length_squared(target - position) > 1e-12 else {
             throw CameraMaterialCapabilityPreparationError.coincidentCameraPositionAndTarget
         }
         let up = try input.camera_up.map { try capabilityVector($0, field: "camera_up") }
-        if let up, length_squared(up) <= 1e-12 {
+        if let up, simd_length_squared(up) <= 1e-12 {
             throw CameraMaterialCapabilityPreparationError.invalidCameraUp
         }
         return PreparedCapability(
