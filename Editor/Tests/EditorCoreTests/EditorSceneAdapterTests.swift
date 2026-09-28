@@ -1604,6 +1604,30 @@ struct EditorSceneEditHistoryTests {
         #expect(adapter.entityHasAncestor(childID, in: [rootID]))
     }
 
+    @Test("moving a multi-selection to root preserves the hierarchy's visible order")
+    func moveToRootPreservesSiblingOrder() throws {
+        let adapter = EditorSceneAdapter()
+        let parentID = try #require(adapter.spawnEntity(template: .empty))
+        let firstID = try #require(adapter.spawnEntity(template: .empty,
+                                                       parentID: parentID))
+        let secondID = try #require(adapter.spawnEntity(template: .empty,
+                                                        parentID: parentID))
+
+        #expect(adapter.moveEntity(secondID, to: parentID, at: 0) != nil)
+        let siblingOrder = try #require(adapter.roots.first(where: { $0.id == parentID }))
+            .children.map(\.id)
+        #expect(siblingOrder == [secondID, firstID])
+
+        #expect(adapter.moveEntitiesToRoot([firstID, secondID]))
+        let rootOrder = adapter.roots.map(\.id)
+        #expect(Array(rootOrder.suffix(2)) == [secondID, firstID])
+
+        #expect(adapter.undoEdit())
+        let restoredChildren = try #require(adapter.roots.first(where: { $0.id == parentID }))
+            .children.map(\.id)
+        #expect(restoredChildren == [secondID, firstID])
+    }
+
     @Test("hierarchy locks round-trip and remap entity identifiers")
     func lockedEntityRoundTrip() throws {
         let adapter = EditorSceneAdapter()
@@ -1618,6 +1642,21 @@ struct EditorSceneEditHistoryTests {
         let result = restored.load(manifest: manifest, notify: false)
         let remappedID = try #require(result.selectedEntityID)
         #expect(restored.isEntityLocked(remappedID))
+    }
+
+    @Test("hierarchy lock changes participate in one-step undo and redo")
+    func hierarchyLockUndoRedo() throws {
+        let adapter = EditorSceneAdapter()
+        let entityID = try #require(adapter.defaultSelectionID)
+
+        adapter.setEntityLocked(true, entityIDs: [entityID])
+        #expect(adapter.isEntityLocked(entityID))
+        #expect(adapter.canUndoEdit)
+        #expect(adapter.undoEdit())
+        #expect(!adapter.isEntityLocked(entityID))
+        #expect(adapter.canRedoEdit)
+        #expect(adapter.redoEdit())
+        #expect(adapter.isEntityLocked(entityID))
     }
 
     @Test("interactive transform updates coalesce into one undo entry")

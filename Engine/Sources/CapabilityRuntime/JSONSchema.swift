@@ -1,5 +1,4 @@
 import Foundation
-import CoreFoundation
 
 /// The JSON types supported by Guava capability inputs.
 public enum JSONSchemaType: String, Codable, Sendable, Equatable {
@@ -434,7 +433,7 @@ public enum JSONSchemaValidator {
 
     private static func numericValue(_ value: Any) -> Double? {
         if let number = value as? NSNumber {
-            if CFGetTypeID(number) == CFBooleanGetTypeID() { return nil }
+            if booleanValue(value) != nil { return nil }
             return number.doubleValue
         }
         switch value {
@@ -455,9 +454,27 @@ public enum JSONSchemaValidator {
     }
 
     private static func booleanValue(_ value: Any) -> Bool? {
-        guard let number = value as? NSNumber,
-              CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
-        return number.boolValue
+        // Distinguish JSON true/false from JSON numbers. On Darwin,
+        // JSONSerialization produces __NSCFBoolean (a NSNumber subclass)
+        // and CFGetTypeID distinguishes it from a regular NSNumber. The
+        // CFGetTypeID/CFBooleanGetTypeID symbols are not part of
+        // swift-corelibs-foundation (Linux/Windows), so fall back to
+        // NSNumber.objCType ("c" for boolean) and Bool bridging there.
+        #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
+        if let number = value as? NSNumber,
+           CFGetTypeID(number) == CFBooleanGetTypeID() {
+            return number.boolValue
+        }
+        #else
+        if let number = value as? NSNumber,
+           String(cString: number.objCType) == "c" {
+            return number.boolValue
+        }
+        if let bool = value as? Bool {
+            return bool
+        }
+        #endif
+        return nil
     }
 }
 
