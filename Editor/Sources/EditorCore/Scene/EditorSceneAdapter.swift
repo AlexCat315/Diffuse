@@ -2509,6 +2509,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     let scriptRuntime = ScriptRuntime()
     var scriptCatalogEntries: [ProjectScriptCatalogEntry] = []
     var managedScriptIdentifiers: Set<String> = []
+    var dynamicScriptDisplayNames: [String: String] = [:]
     let particleFeedbackLock = NSLock()
     var pendingParticleFeedback: [GPUParticleSimulationEventSnapshot] = []
     var particleFeedbackGeneration: UInt64 = 0

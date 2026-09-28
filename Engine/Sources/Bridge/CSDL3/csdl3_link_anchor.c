@@ -1,0 +1,1 @@
+void guava_sdl3_link_anchor(void) {}
