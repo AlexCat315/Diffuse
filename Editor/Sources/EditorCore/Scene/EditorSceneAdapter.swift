@@ -2794,30 +2794,40 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     /// omitted because moving their selected ancestor already preserves them.
     @discardableResult
     public func moveEntitiesToRoot(_ entityIDs: Set<UInt64>) -> Bool {
-        let existingIDs = entityIDs.filter { rawID in
+        let existingIDs = Set(entityIDs.filter { rawID in
             entity(from: rawID).map(scene.contains) == true
-        }
+        })
         guard existingIDs.count == entityIDs.count, !existingIDs.isEmpty else { return false }
-        let topLevelIDs = existingIDs.filter {
-            !entityHasAncestor($0, in: existingIDs)
+
+        // Preserve the hierarchy's visible depth-first order. Sorting entity
+        // IDs is not a stable proxy for scene order after the user has
+        // reordered siblings or moved entities between parents.
+        var nestedIDs: [UInt64] = []
+        func collect(_ entity: EntityID, hasSelectedAncestor: Bool) {
+            let rawID = entity.rawValue
+            let isSelected = existingIDs.contains(rawID)
+            if isSelected, !hasSelectedAncestor, scene.parent(of: entity) != nil {
+                nestedIDs.append(rawID)
+            }
+            for child in scene.children(of: entity) {
+                collect(child, hasSelectedAncestor: hasSelectedAncestor || isSelected)
+            }
         }
-        let nestedIDs = topLevelIDs.filter { rawID in
-            guard let entity = entity(from: rawID) else { return false }
-            return scene.parent(of: entity) != nil
+        for root in scene.roots() {
+            collect(root, hasSelectedAncestor: false)
         }
-        let roots = nestedIDs.sorted()
-        guard !roots.isEmpty else { return false }
+        guard !nestedIDs.isEmpty else { return false }
         let startIndex = scene.roots().count
-        let mutations = roots.enumerated().map { offset, rawID in
+        let mutations = nestedIDs.enumerated().map { offset, rawID in
             SceneMutation.moveEntity(entityID: rawID,
                                      parentID: nil,
                                      index: startIndex + offset)
         }
         return applySceneTransaction(intentVerb: "scene.move_entities_to_root",
-                                     summary: roots.count == 1
+                                     summary: nestedIDs.count == 1
                                         ? "Move entity to root"
                                         : "Move entities to root",
-                                     targetRawIDs: roots,
+                                     targetRawIDs: nestedIDs,
                                      mutations: mutations) != nil
     }
 

@@ -328,19 +328,24 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                                parentKey: TreeNodeKey<ID>?,
                                state: DerivedState,
                                into out: inout [VisibleEntry]) {
-        let visibleNodes: [Element]
-        if state.filterActive {
-            visibleNodes = nodes.filter {
-                let nodeID = $0[keyPath: id]
-                return state.searchMetadata?.subtreeMatches[nodeID] ?? false
+        let visibleNodes = nodes.enumerated().compactMap {
+            indexedNode -> (originalIndex: Int, element: Element)? in
+            let node = indexedNode.element
+            guard !state.filterActive
+                    || state.searchMetadata?.subtreeMatches[node[keyPath: id]] == true else {
+                return nil
             }
-        } else {
-            visibleNodes = nodes
+            return (originalIndex: indexedNode.offset, element: node)
         }
 
-        for (index, node) in visibleNodes.enumerated() {
+        for (visibleIndex, indexedNode) in visibleNodes.enumerated() {
+            let node = indexedNode.element
             let nodeID = node[keyPath: id]
-            let path = pathPrefix + [index]
+            // Paths are identity tokens for selection, expansion and drag
+            // state. Filtering must not renumber them: callers build keys from
+            // the unfiltered scene and expect those keys to remain valid while
+            // search merely hides non-matching siblings.
+            let path = pathPrefix + [indexedNode.originalIndex]
             let nodeKey = TreeNodeKey(id: nodeID, path: path)
             let childNodes = children(node)
 
@@ -357,7 +362,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
             let isExpanded = state.expandedIDs.contains(nodeID)
                 || state.expandedNodeKeys.contains(nodeKey)
                 || (state.autoExpand && childSubtreeMatches)
-            let hasNextSibling = index < visibleNodes.count - 1
+            let hasNextSibling = visibleIndex < visibleNodes.count - 1
             out.append(VisibleEntry(id: nodeID,
                                     nodeKey: nodeKey,
                                     element: node,

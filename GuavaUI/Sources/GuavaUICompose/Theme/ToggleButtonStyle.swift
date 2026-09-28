@@ -19,7 +19,10 @@ public struct ToggleButtonStyle: ButtonStyle, Hashable {
     }
 
     public func makeBody(configuration: ButtonStyleConfiguration) -> some View {
-        let foreground: SemanticColorRef = configuration.isSelected ? .onAccent : .onSurfaceVariant
+        // Toolbar toggles often contain icon-only labels. Keep their resting
+        // state at primary text contrast so white SVG masks remain legible on
+        // light surfaces; selected controls use the paired onAccent token.
+        let foreground: SemanticColorRef = configuration.isSelected ? .onAccent : .onSurface
 
         return BuiltinButtonChrome(kind: .toggle(minWidth: minWidth, height: height),
                                    configuration: configuration,
