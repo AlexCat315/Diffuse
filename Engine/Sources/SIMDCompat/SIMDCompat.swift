@@ -238,6 +238,19 @@ public func simd_inverse(_ m: simd_float4x4) -> simd_float4x4 {
     ))
 }
 
+public func simd_determinant(_ m: simd_float4x4) -> Float {
+    // Cofactors for the first row — matches simd_inverse's computation.
+    let m0 = m.columns.0.x, m1 = m.columns.0.y, m2 = m.columns.0.z, m3 = m.columns.0.w
+    let m4 = m.columns.1.x, m5 = m.columns.1.y, m6 = m.columns.1.z, m7 = m.columns.1.w
+    let m8 = m.columns.2.x, m9 = m.columns.2.y, m10 = m.columns.2.z, m11 = m.columns.2.w
+    let m12 = m.columns.3.x, m13 = m.columns.3.y, m14 = m.columns.3.z, m15 = m.columns.3.w
+    let i0  =  m5*m10*m15 - m5*m11*m14 - m9*m6*m15 + m9*m7*m14 + m13*m6*m11 - m13*m7*m10
+    let i4  = -m4*m10*m15 + m4*m11*m14 + m8*m6*m15 - m8*m7*m14 - m12*m6*m11 + m12*m7*m10
+    let i8  =  m4*m9*m15  - m4*m11*m13 - m8*m5*m15 + m8*m7*m13 + m12*m5*m11 - m12*m7*m9
+    let i12 = -m4*m9*m14  + m4*m10*m13 + m8*m5*m14 - m8*m6*m13 - m12*m5*m10 + m12*m6*m9
+    return m0 * i0 + m1 * i4 + m2 * i8 + m3 * i12
+}
+
 // MARK: - simd_float3x3
 
 public struct simd_float3x3: Sendable {
@@ -345,6 +358,13 @@ public func simd_inverse(_ m: simd_float3x3) -> simd_float3x3 {
         SIMD3<Float>(cof0.y*d, cof1.y*d, cof2.y*d),
         SIMD3<Float>(cof0.z*d, cof1.z*d, cof2.z*d)
     ))
+}
+
+public func simd_determinant(_ m: simd_float3x3) -> Float {
+    let c0 = m.columns.0, c1 = m.columns.1, c2 = m.columns.2
+    return c0.x * (c1.y*c2.z - c1.z*c2.y)
+         - c0.y * (c1.x*c2.z - c1.z*c2.x)
+         + c0.z * (c1.x*c2.y - c1.y*c2.x)
 }
 
 // MARK: - simd_quatf
