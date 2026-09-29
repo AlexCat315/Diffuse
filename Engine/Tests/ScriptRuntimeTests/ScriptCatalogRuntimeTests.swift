@@ -122,8 +122,10 @@ struct ScriptCatalogRuntimeTests {
     func fullSceneSerializationPreservesIdentifiers() throws {
         var source = SceneRuntime()
         let entity = source.createEntity()
+        let bindingID = ScriptBindingID()
         _ = source.setComponent(
             ScriptComponent(ScriptBinding(identifier: "project.persisted",
+                                          id: bindingID,
                                           isEnabled: false,
                                           parametersJSON: #"{"speed":4}"#)),
             for: entity
@@ -141,6 +143,7 @@ struct ScriptCatalogRuntimeTests {
         #expect(!binding.isEnabled)
         #expect(binding.parametersJSON == #"{"speed":4}"#)
         #expect(binding.script.rawValue == 0)
+        #expect(binding.id == bindingID)
     }
 
     @Test("full scene serialization keeps scripts aligned when derived fragments are omitted")

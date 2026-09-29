@@ -46,9 +46,7 @@ public final class DynamicScriptManager: @unchecked Sendable {
     // MARK: - Dependencies
 
     private let projectDirectory: String
-    private let scriptRuntime: ScriptRuntime
-    private let compiler: SwiftScriptCompiler
-    private let loader: SwiftScriptLoader
+    private let buildCoordinator: DynamicScriptBuildCoordinator
     private let languageSupport: ScriptLanguageSupport?
     private let languageSupportUnavailableMessage: String?
 
@@ -69,24 +67,28 @@ public final class DynamicScriptManager: @unchecked Sendable {
                 scriptRuntime: ScriptRuntime,
                 engineModulePaths: [String],
                 clangModuleMapPaths: [String] = [],
-            clangIncludePaths: [String] = [],
-            enginePackageDirectory: String? = nil) {
+                clangIncludePaths: [String] = []) {
         self.projectDirectory = projectDirectory
-        self.scriptRuntime = scriptRuntime
-        self.compiler = SwiftScriptCompiler(
+        let compiler = SwiftScriptCompiler(
             includePaths: engineModulePaths,
             clangModuleMapPaths: clangModuleMapPaths,
             clangIncludePaths: clangIncludePaths,
             outputDirectory: Self.scriptsBuildDirectory(projectDirectory: projectDirectory)
         )
-        self.loader = SwiftScriptLoader()
+        self.buildCoordinator = DynamicScriptBuildCoordinator(
+            compiler: SwiftScriptCompilerDriver(compiler: compiler),
+            loader: SwiftScriptLoader(),
+            scriptRuntime: scriptRuntime
+        )
 
-        if let enginePackageDirectory {
+        if !engineModulePaths.isEmpty {
             do {
                 let executable = try SourceKitLSPExecutableLocator.resolveExecutableURL()
                 self.languageSupport = ScriptLanguageSupport(
                     scriptsDirectoryURL: Self.scriptsDirectory(projectDirectory: projectDirectory),
-                    enginePackageURL: URL(fileURLWithPath: enginePackageDirectory, isDirectory: true),
+                    engineModulePaths: engineModulePaths,
+                    clangModuleMapPaths: clangModuleMapPaths,
+                    clangIncludePaths: clangIncludePaths,
                     executableURL: executable
                 )
                 self.languageSupportUnavailableMessage = nil
@@ -96,7 +98,7 @@ public final class DynamicScriptManager: @unchecked Sendable {
             }
         } else {
             self.languageSupport = nil
-            self.languageSupportUnavailableMessage = "Could not locate the Engine Swift package for script analysis."
+            self.languageSupportUnavailableMessage = "Could not locate built Engine Swift modules for script analysis."
         }
     }
 
@@ -161,6 +163,10 @@ public final class DynamicScriptManager: @unchecked Sendable {
             ScriptLanguageSource(file: file, text: try readSource(at: file.url))
         }
         try await languageSupport.restart(sources: sources)
+    }
+
+    public func stopLanguageService() async {
+        await languageSupport?.stop()
     }
 
     /// True when a SourceKit-LSP session can answer semantic queries. The UI
@@ -266,24 +272,19 @@ public final class DynamicScriptManager: @unchecked Sendable {
             self.statusByScriptID[scriptID] = .compiling
         }
 
-        let compiler = self.compiler
-        let loader = self.loader
-        let scriptRuntime = self.scriptRuntime
-
-        Task.detached(priority: .userInitiated) { [weak self] in
+        let coordinator = buildCoordinator
+        Task { [weak self] in
+            let outcome = await coordinator.build(scriptID: scriptID, sourceURL: sourceURL)
             let status: CompilationStatus
-            do {
-                let result = try compiler.compile(sourcePath: sourceURL.path, scriptID: scriptID)
-                let makeScript = try loader.loadFactory(scriptID: scriptID, libraryPath: result.outputPath)
-                // Register on the main actor — the runtime mutates shared state.
-                _ = await MainActor.run { scriptRuntime.register(named: scriptID, makeScript) }
-                await self?.updateStatus(.succeeded, for: scriptID)
+            switch outcome {
+            case .succeeded:
                 status = .succeeded
-            } catch {
-                status = .failed(message: error.localizedDescription)
-                await self?.updateStatus(status, for: scriptID)
+            case .failed(let message):
+                status = .failed(message: message)
+            case .superseded:
+                return
             }
-
+            await self?.updateStatus(status, for: scriptID)
             await MainActor.run {
                 completion(status)
             }
@@ -325,10 +326,11 @@ public final class DynamicScriptManager: @unchecked Sendable {
         }
     }
 
-    /// Unregisters a script from the runtime and unloads its library.
+    /// Unregisters a script and retires its mapped artifact once active runtime
+    /// instances release their generation lease.
     public func unload(scriptID: String) {
-        scriptRuntime.unregister(named: scriptID)
-        loader.unload(scriptID: scriptID)
+        let coordinator = buildCoordinator
+        Task { await coordinator.unload(scriptID: scriptID) }
         Task { @MainActor in
             self.statusByScriptID[scriptID] = .idle
         }

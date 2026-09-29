@@ -11,11 +11,11 @@ private struct RegisteredScript: Sendable {
 
 private struct ScriptInstanceKey: Hashable, Sendable {
     var entity: EntityID
-    var script: ScriptHandle
-    var ordinal: Int
+    var binding: ScriptBindingID
 }
 
 private struct ActiveScriptInstance: Sendable {
+    var registrationHandle: ScriptHandle
     var registrationGeneration: UInt64
     var script: Script
 }
@@ -146,12 +146,9 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
             guard let scriptComponent = context.component(ScriptComponent.self, for: entity) else {
                 continue
             }
-            var ordinals: [ScriptHandle: Int] = [:]
             for binding in scriptComponent.bindings where binding.isEnabled {
                 guard let (handle, registered) = resolve(binding) else { continue }
-                let ordinal = ordinals[handle, default: 0]
-                ordinals[handle] = ordinal + 1
-                let key = ScriptInstanceKey(entity: entity, script: handle, ordinal: ordinal)
+                let key = ScriptInstanceKey(entity: entity, binding: binding.id)
                 liveInstances.insert(key)
                 let scriptContext = ScriptContext(
                     phaseContext: context,
@@ -161,9 +158,11 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
                     defaultParametersJSON: registered.defaultParametersJSON
                 )
                 var instance = activeInstances[key]
-                if instance?.registrationGeneration != registered.generation {
+                if instance?.registrationHandle != handle
+                    || instance?.registrationGeneration != registered.generation {
                     invoke(\.onDestroyHandler, script: instance?.script, context: scriptContext)
                     let replacement = ActiveScriptInstance(
+                        registrationHandle: handle,
                         registrationGeneration: registered.generation,
                         script: registered.makeScript()
                     )

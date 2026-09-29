@@ -55,6 +55,10 @@ extension EditorSceneAdapter {
         dynamicScriptDisplayNames[identifier] = displayName
     }
 
+    public func unregisterDynamicScriptOption(identifier: String) {
+        dynamicScriptDisplayNames.removeValue(forKey: identifier)
+    }
+
     public func setDynamicScriptOptions(_ options: [String: String]) {
         dynamicScriptDisplayNames = options
     }
