@@ -365,36 +365,19 @@ private struct ScriptDetailView: View {
 
 enum ScriptTemplate {
     static let `default` = #"""
-import SceneRuntime
-import SIMDCompat
-
-// C ABI declarations (imported from the host engine)
-@_silgen_name("guava_input_axis")
-func guavaInputAxis(_ name: UnsafePointer<CChar>) -> Float
-@_silgen_name("guava_input_just_pressed")
-func guavaInputJustPressed(_ name: UnsafePointer<CChar>) -> Bool
-@_silgen_name("guava_submit_character_command")
-func guavaSubmitCharacterCommand(_ vx: Float, _ vy: Float, _ vz: Float,
-                                  _ jump: Bool, _ jumpSpeed: Float, _ stance: UInt8)
-
-func axis(_ name: String) -> Float {
-    name.withCString { guavaInputAxis($0) }
-}
-func justPressed(_ name: String) -> Bool {
-    name.withCString { guavaInputJustPressed($0) }
-}
+import ScriptRuntime
 
 @_cdecl("guavaCreateScript")
-public func guavaCreateScript(_ out: UnsafeMutableRawPointer) {
-    let script = Script().onPrePhysics { _ in
-        let speed: Float = 5
-        let jumpSpeed: Float = 8
-        var dir = SIMD3<Float>(axis("move_x"), 0, -axis("move_y"))
-        if simd_length_squared(dir) > 0 { dir = simd_normalize(dir) }
-        let wantsJump = justPressed("jump")
-        guavaSubmitCharacterCommand(dir.x * speed, 0, dir.z * speed, wantsJump, jumpSpeed, 0)
-    }
-    out.assumingMemoryBound(to: Script.self).pointee = script
+public func guavaCreateScript(_ output: UnsafeMutableRawPointer) {
+    let script = Script()
+        .onStart { _ in
+            // Runs once when this script is attached to an entity.
+        }
+        .onUpdate { context in
+            // Runs once per frame. Delta time is measured in seconds.
+            _ = context.deltaTime
+        }
+    output.assumingMemoryBound(to: Script.self).pointee = script
 }
 """#
 }
