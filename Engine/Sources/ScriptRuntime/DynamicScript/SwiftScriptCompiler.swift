@@ -128,6 +128,10 @@ public final class SwiftScriptCompiler {
     ///   - scriptID: Stable identifier used as the output file name.
     public func compile(sourcePath: String, scriptID: String) throws -> CompilationResult {
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        let shimURL = outputDirectory.appendingPathComponent(".guava-entrypoint-\(UUID().uuidString).swift")
+        try Self.generatedEntryPointSource.write(to: shimURL, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: shimURL) }
+
         let outputPath = outputDirectory
             .appendingPathComponent("\(scriptID).\(Self.dylibExtension)")
             .path
@@ -137,7 +141,8 @@ public final class SwiftScriptCompiler {
         let importLibPath = try ensureImportLibrary()
         #endif
 
-        let args = buildArguments(sourcePath: sourcePath, outputPath: outputPath)
+        let sourcePaths = [sourcePath, shimURL.path]
+        let args = buildArguments(sourcePaths: sourcePaths, outputPath: outputPath)
 
         let process = Process()
         process.executableURL = try Self.resolveExecutableURL(for: swiftcPath)
@@ -208,9 +213,18 @@ public final class SwiftScriptCompiler {
         throw ScriptCompileError.executableNotFound(executable)
     }
 
+    private static let generatedEntryPointSource = """
+    import ScriptRuntime
+
+    @_cdecl("guavaCreateScript")
+    public func guavaCreateScript(_ output: UnsafeMutableRawPointer) {
+        output.assumingMemoryBound(to: Script.self).pointee = Script(behavior: GameScript.self)
+    }
+    """
+
     // MARK: - Argument construction
 
-    private func buildArguments(sourcePath: String, outputPath: String) -> [String] {
+    private func buildArguments(sourcePaths: [String], outputPath: String) -> [String] {
         var args: [String] = []
 
         args.append("-O")
@@ -243,7 +257,8 @@ public final class SwiftScriptCompiler {
         args.append("-l\(importLibraryName)")
         #endif
 
-        args.append(contentsOf: ["-emit-library", "-o", outputPath, sourcePath])
+        args.append(contentsOf: ["-emit-library", "-o", outputPath])
+        args.append(contentsOf: sourcePaths)
 
         return args
     }

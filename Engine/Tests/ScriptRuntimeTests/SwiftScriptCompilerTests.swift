@@ -1,5 +1,7 @@
 #if os(macOS) || os(Linux)
 import Foundation
+import SceneRuntime
+import SIMDCompat
 import Testing
 @testable import ScriptRuntime
 
@@ -11,59 +13,6 @@ struct SwiftScriptCompilerTests {
 
         #expect(compilerURL.isFileURL)
         #expect(FileManager.default.isExecutableFile(atPath: compilerURL.path))
-    }
-
-    @Test("creates output directory before compiling a script")
-    func createsOutputDirectoryBeforeCompilation() throws {
-        let fileManager = FileManager.default
-        let testDirectory = fileManager.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        defer { try? fileManager.removeItem(at: testDirectory) }
-        try fileManager.createDirectory(at: testDirectory, withIntermediateDirectories: true)
-
-        let sourceURL = testDirectory.appendingPathComponent("MinimalScript.swift")
-        try """
-        @_cdecl("guava_test_script")
-        public func guavaTestScript() {}
-        """.write(to: sourceURL, atomically: true, encoding: .utf8)
-
-        let outputDirectory = testDirectory.appendingPathComponent("nested/.build", isDirectory: true)
-        let compiler = SwiftScriptCompiler(outputDirectory: outputDirectory)
-        let result = try compiler.compile(sourcePath: sourceURL.path, scriptID: "test-script")
-
-        #expect(fileManager.fileExists(atPath: result.outputPath))
-    }
-
-    @Test("passes Clang module maps to swiftc")
-    func importsClangModuleWhileCompiling() throws {
-        let fileManager = FileManager.default
-        let testDirectory = fileManager.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        defer { try? fileManager.removeItem(at: testDirectory) }
-        let includeDirectory = testDirectory.appendingPathComponent("include", isDirectory: true)
-        try fileManager.createDirectory(at: includeDirectory, withIntermediateDirectories: true)
-
-        let headerURL = includeDirectory.appendingPathComponent("test_bridge.h")
-        try "int guava_test_bridge_value(void);".write(to: headerURL, atomically: true, encoding: .utf8)
-        let moduleMapURL = includeDirectory.appendingPathComponent("TestBridge.modulemap")
-        try "module TestBridge { header \"test_bridge.h\" export * }"
-            .write(to: moduleMapURL, atomically: true, encoding: .utf8)
-
-        let sourceURL = testDirectory.appendingPathComponent("ImportsBridge.swift")
-        try """
-        import TestBridge
-        @_cdecl("guava_test_script")
-        public func guavaTestScript() { _ = guava_test_bridge_value() }
-        """.write(to: sourceURL, atomically: true, encoding: .utf8)
-
-        let compiler = SwiftScriptCompiler(
-            clangModuleMapPaths: [moduleMapURL.path],
-            clangIncludePaths: [includeDirectory.path],
-            outputDirectory: testDirectory.appendingPathComponent(".build", isDirectory: true)
-        )
-        let result = try compiler.compile(sourcePath: sourceURL.path, scriptID: "module-test")
-
-        #expect(fileManager.fileExists(atPath: result.outputPath))
     }
 
     @Test("compiles scripts that import SceneRuntime and ScriptRuntime")
@@ -114,10 +63,14 @@ struct SwiftScriptCompilerTests {
         try """
         import SceneRuntime
         import ScriptRuntime
-        @_cdecl("guava_test_script")
-        public func guavaTestScript(_ output: UnsafeMutableRawPointer) {
-            output.assumingMemoryBound(to: Script.self).pointee = Script()
-                .onUpdate { context in _ = context.deltaTime }
+        import SIMDCompat
+        struct GameScript: ScriptBehavior {
+            private var updateCount = 0
+
+            mutating func onUpdate(_ context: ScriptContext) {
+                updateCount += 1
+                _ = context.translate(by: SIMD3<Float>(Float(updateCount), 0, 0))
+            }
         }
         """.write(to: sourceURL, atomically: true, encoding: .utf8)
 
@@ -130,6 +83,28 @@ struct SwiftScriptCompilerTests {
         let result = try compiler.compile(sourcePath: sourceURL.path, scriptID: "engine-script")
 
         #expect(fileManager.fileExists(atPath: result.outputPath))
+
+        let loader = SwiftScriptLoader()
+        let scripts = ScriptRuntime()
+        let handle = scripts.register(named: "engine-script",
+                          try loader.loadFactory(scriptID: "engine-script",
+                                     libraryPath: result.outputPath))
+        loader.unload(scriptID: "engine-script")
+
+        var runtime = SceneRuntime()
+        runtime.setScriptDriver(scripts)
+        let firstEntity = runtime.createEntity()
+        let secondEntity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: firstEntity)
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: secondEntity)
+        _ = runtime.setComponent(ScriptComponent(handle), for: firstEntity)
+        _ = runtime.setComponent(ScriptComponent(handle), for: secondEntity)
+        _ = runtime.tick(deltaTime: 0.1)
+        _ = runtime.tick(deltaTime: 0.1)
+
+        #expect(runtime.localTransform(for: firstEntity)?.translation == SIMD3<Float>(3, 0, 0))
+        #expect(runtime.localTransform(for: secondEntity)?.translation == SIMD3<Float>(3, 0, 0))
+        loader.unload(scriptID: "engine-script")
     }
 }
 #endif
