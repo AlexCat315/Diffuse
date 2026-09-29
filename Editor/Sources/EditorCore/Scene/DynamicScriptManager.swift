@@ -65,11 +65,15 @@ public final class DynamicScriptManager: @unchecked Sendable {
     ///     etc.
     public init(projectDirectory: String,
                 scriptRuntime: ScriptRuntime,
-                engineModulePaths: [String]) {
+                engineModulePaths: [String],
+                clangModuleMapPaths: [String] = [],
+                clangIncludePaths: [String] = []) {
         self.projectDirectory = projectDirectory
         self.scriptRuntime = scriptRuntime
         self.compiler = SwiftScriptCompiler(
             includePaths: engineModulePaths,
+            clangModuleMapPaths: clangModuleMapPaths,
+            clangIncludePaths: clangIncludePaths,
             outputDirectory: Self.scriptsBuildDirectory(projectDirectory: projectDirectory)
         )
         self.loader = SwiftScriptLoader()

@@ -202,17 +202,91 @@ public final class EditorApplication: @unchecked Sendable {
             return env.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
         }
 
-        // In development the editor runs from `.build/<platform>/<config>/EditorApp`.
-        // The Modules directory sits next to the executable.
+        // SwiftPM places the executable and importable module artifacts in the
+        // same products directory. Some packaged builds use a Modules subdirectory.
         let executablePath = ProcessInfo.processInfo.arguments[0]
         let executableURL = URL(fileURLWithPath: executablePath)
         let buildDir = executableURL.deletingLastPathComponent()
-        let modulesDir = buildDir.appendingPathComponent("Modules")
-        if FileManager.default.fileExists(atPath: modulesDir.path) {
-            return [modulesDir.path]
+        let candidates = [buildDir, buildDir.appendingPathComponent("Modules", isDirectory: true)]
+        for directory in candidates {
+            let sceneModule = directory.appendingPathComponent("SceneRuntime.swiftmodule")
+            let scriptModule = directory.appendingPathComponent("ScriptRuntime.swiftmodule")
+            if FileManager.default.fileExists(atPath: sceneModule.path),
+               FileManager.default.fileExists(atPath: scriptModule.path) {
+                return [directory.path]
+            }
         }
 
         return []
+    }
+
+    private static func resolveEngineClangModuleMapPaths() -> [String] {
+        if let env = ProcessInfo.processInfo.environment["GUAVA_ENGINE_CLANG_MODULE_MAP_PATHS"],
+           !env.isEmpty {
+            return env.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
+        }
+
+        let executableURL = URL(fileURLWithPath: ProcessInfo.processInfo.arguments[0])
+        let buildDir = executableURL.deletingLastPathComponent()
+        let outputDir = buildDir.deletingLastPathComponent().deletingLastPathComponent()
+        let moduleMapDirectory = outputDir
+            .appendingPathComponent("Intermediates.noindex", isDirectory: true)
+            .appendingPathComponent("GeneratedModuleMaps", isDirectory: true)
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: moduleMapDirectory,
+            includingPropertiesForKeys: nil
+        ) else {
+            return []
+        }
+
+        var moduleMapPaths = files
+            .filter { $0.pathExtension == "modulemap" && $0.lastPathComponent.hasPrefix("C") }
+            .map(\.path)
+
+        let workspaceRoot = buildDir
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        for bridgeRoot in ["Engine/Sources/Bridge", "GuavaUI/Sources/Bridge"] {
+            let directory = workspaceRoot.appendingPathComponent(bridgeRoot, isDirectory: true)
+            guard let enumerator = FileManager.default.enumerator(
+                at: directory,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            ) else {
+                continue
+            }
+            for case let url as URL in enumerator where url.lastPathComponent == "module.modulemap" {
+                moduleMapPaths.append(url.path)
+            }
+        }
+
+        return Array(Set(moduleMapPaths)).sorted()
+    }
+
+    private static func resolveEngineClangIncludePaths() -> [String] {
+        let moduleMapPaths = resolveEngineClangModuleMapPaths()
+        let pattern = #"umbrella\s+"([^"]+)""#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
+
+        var paths = Set(moduleMapPaths.map {
+            URL(fileURLWithPath: $0).deletingLastPathComponent().path
+        })
+        for path in moduleMapPaths {
+            guard let contents = try? String(contentsOfFile: path, encoding: .utf8),
+                  let match = regex.firstMatch(in: contents, range: NSRange(contents.startIndex..., in: contents)),
+                  let range = Range(match.range(at: 1), in: contents) else {
+                continue
+            }
+            let umbrellaPath = URL(
+                fileURLWithPath: String(contents[range]),
+                relativeTo: URL(fileURLWithPath: path).deletingLastPathComponent()
+            ).standardizedFileURL.path
+            paths.insert(umbrellaPath)
+        }
+        return paths.sorted()
     }
 
     public init(projectDirectory: String,
@@ -273,7 +347,9 @@ public final class EditorApplication: @unchecked Sendable {
         self.dynamicScriptManager = DynamicScriptManager(
             projectDirectory: projectDirectory,
             scriptRuntime: scene.scriptRuntime,
-            engineModulePaths: Self.resolveEngineModulePaths()
+            engineModulePaths: Self.resolveEngineModulePaths(),
+            clangModuleMapPaths: Self.resolveEngineClangModuleMapPaths(),
+            clangIncludePaths: Self.resolveEngineClangIncludePaths()
         )
         self.observationBus = observationBus
         self.intentCoordinator = intentCoordinator
