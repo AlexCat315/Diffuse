@@ -60,20 +60,18 @@ Guava 场景中的脚本绑定使用稳定字符串 ID，而不是仅在当前�
 ```swift
 import ScriptRuntime
 
-@_cdecl("guavaCreateScript")
-public func guavaCreateScript(_ output: UnsafeMutableRawPointer) {
-  let script = Script()
-    .onStart { _ in
-      // 初始化实体相关状态。
-    }
-    .onUpdate { context in
-      // context.deltaTime 是本帧经过的秒数。
-      _ = context.deltaTime
-    }
-  output.assumingMemoryBound(to: Script.self).pointee = script
+struct GameScript: ScriptBehavior {
+  mutating func onStart(_ context: ScriptContext) {
+    // 初始化实体相关状态。
+  }
+
+  mutating func onUpdate(_ context: ScriptContext) {
+    // context.deltaTime 是本帧经过的秒数。
+    _ = context.deltaTime
+  }
 }
 ```
 
 Editor 启动及场景重载时会重新编译这些源文件，并将其加入 Inspector 的脚本选择列表；动态 Swift 脚本目前只在 Editor 进程内运行，不会随项目导出到 GuavaPlayer。`Scripts/scripts.json` 仍用于声明式 preset 和默认参数。需要 Player 支持动态 Swift 脚本时，还需增加对应的构建与打包流程。
 
-脚本以动态库加载，因此仍需要 `guavaCreateScript` 这个 C ABI 工厂函数；函数内部使用普通的 `Script` 生命周期 API。Editor 需要能在 `PATH` 中找到 Swift 编译器 `swiftc`。
+每个文件定义一个 `GameScript: ScriptBehavior` 类型即可。Editor 会生成动态库入口并为每个实体绑定创建独立实例。Editor 需要能在 `PATH` 中找到 Swift 编译器 `swiftc`。
