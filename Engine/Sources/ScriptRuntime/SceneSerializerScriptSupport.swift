@@ -24,6 +24,7 @@ extension SceneSerializer {
             var comps = entities[i]["components"] as? [String: Any] ?? [:]
             comps["script"] = ["bindings": sc.bindings.map { binding -> [String: Any] in
                 var encoded: [String: Any] = [
+                    "bindingID": binding.id.uuidString,
                     "parametersJSON": binding.parametersJSON,
                     "isEnabled": binding.isEnabled,
                 ]
@@ -59,6 +60,8 @@ extension SceneSerializer {
             let scriptBindings: [ScriptBinding] = bindings.map { b in
                 ScriptBinding(
                     ScriptHandle(rawValue: 0),
+                    id: (b["bindingID"] as? String).flatMap(ScriptBindingID.init(uuidString:))
+                        ?? ScriptBindingID(),
                     identifier: b["identifier"] as? String,
                     isEnabled: b["isEnabled"] as? Bool ?? true,
                     parametersJSON: b["parametersJSON"] as? String ?? "{}"

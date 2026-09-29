@@ -85,8 +85,10 @@ struct ProjectScriptCatalogTests {
         let source = EditorSceneAdapter()
         _ = source.applyProjectScriptCatalog(.builtIn)
         let entity = try #require(source.scene.roots().first)
+        let bindingID = ScriptBindingID()
         _ = source.scene.setComponent(
             ScriptComponent(ScriptBinding(identifier: "guava.mover",
+                                          id: bindingID,
                                           parametersJSON: #"{"velocity":[2,0,0]}"#)),
             for: entity
         )
@@ -101,6 +103,7 @@ struct ProjectScriptCatalogTests {
             restored.scene.component(ScriptComponent.self, for: restoredEntity)?.bindings.first
         )
         #expect(binding.identifier == "guava.mover")
+        #expect(binding.id == bindingID)
         #expect(restored.scene.resource(InputActionMap.self)?.bindings["jump"]?
             .contains(.key(Scancode.space)) == true)
         let before = restored.scene.localTransform(for: restoredEntity)?.translation.x
