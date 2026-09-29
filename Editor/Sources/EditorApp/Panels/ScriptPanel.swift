@@ -6,16 +6,19 @@ import GuavaUIRuntime
 import AppKit
 #endif
 
-/// A panel for creating, editing, compiling, and hot-reloading Swift scripts.
+/// A panel for managing, compiling, and hot-reloading Swift scripts.
+///
+/// Editing itself happens in the user's external editor (VS Code, Xcode, etc.);
+/// this panel is responsible for listing scripts, kicking off compilation,
+/// showing diagnostics, and registering hot-reloaded scripts with the runtime.
 ///
 /// Layout:
 /// ```
 /// ┌──────────────────────────────────────────────────┐
-/// │ Toolbar: [New] [Save] [Compile]  status indicator │
+/// │ Toolbar: [New] [Edit] [Reveal] [Compile]  status  │
 /// ├──────────┬───────────────────────────────────────┤
-/// │ Scripts  │  Code editor (NSTextView)             │
+/// │ Scripts  │  Script detail (name / path / status)  │
 /// │ list     │                                       │
-/// │          │                                       │
 /// ├──────────┴───────────────────────────────────────┤
 /// │ Compilation output / errors                      │
 /// └──────────────────────────────────────────────────┘
@@ -25,8 +28,6 @@ struct ScriptPanel: View {
 
     @State private var scriptFiles: [DynamicScriptManager.ScriptFile] = []
     @State private var selectedScriptID: String? = nil
-    @State private var sourceText: String = ""
-    @State private var isDirty: Bool = false
     @State private var status: DynamicScriptManager.CompilationStatus = .idle
     @State private var outputText: String = ""
     @State private var isCompiling: Bool = false
@@ -57,9 +58,15 @@ struct ScriptPanel: View {
             }
             .buttonStyle(GhostButtonStyle())
 
-            Button(isEnabled: selectedScript != nil && isDirty,
-                   action: save) {
-                Text(L("Save"))
+            Button(isEnabled: selectedScript != nil,
+                   action: editInExternalEditor) {
+                Text(L("Edit"))
+            }
+            .buttonStyle(GhostButtonStyle())
+
+            Button(isEnabled: selectedScript != nil,
+                   action: revealInFinder) {
+                Text(L("Reveal"))
             }
             .buttonStyle(GhostButtonStyle())
 
@@ -100,7 +107,7 @@ struct ScriptPanel: View {
             scriptList
                 .frame(width: 200)
             Divider()
-            codeEditor
+            detailPane
         }
         .flex(1, shrink: 1)
     }
@@ -138,15 +145,22 @@ struct ScriptPanel: View {
         }
     }
 
-    private var codeEditor: some View {
+    private var detailPane: some View {
         Box {
             if let selectedScript {
-                CodeEditor(text: $sourceText)
-                    .flex(1, shrink: 1)
+                ScriptDetailView(
+                    file: selectedScript,
+                    status: status,
+                    isCompiling: isCompiling,
+                    onEdit: editInExternalEditor,
+                    onReveal: revealInFinder,
+                    onCompile: compile
+                )
+                .flex(1, shrink: 1)
             } else {
                 EditorPanelEmptyState(
                     L("No script selected"),
-                    detail: L("Select or create a Swift script to edit.")
+                    detail: L("Select or create a Swift script to manage.")
                 )
                 .flex()
             }
@@ -180,58 +194,50 @@ struct ScriptPanel: View {
     }
 
     private func select(_ file: DynamicScriptManager.ScriptFile) {
-        // Save current if dirty
-        if isDirty, let current = selectedScript {
-            try? app.dynamicScriptManager.writeSource(sourceText, at: current.url)
-        }
         selectedScriptID = file.identifier
-        do {
-            sourceText = try app.dynamicScriptManager.readSource(at: file.url)
-            isDirty = false
-            status = .idle
-            outputText = status.message ?? ""
-        } catch {
-            outputText = L("Failed to read script: \(error.localizedDescription)")
-        }
+        status = .idle
+        outputText = ""
     }
 
     private func newScript() {
-        let name = "NewScript"
+        let baseName = "NewScript"
         let source = ScriptTemplate.default
         do {
-            let url = try app.dynamicScriptManager.createScript(name: name, source: source)
+            let url = try app.dynamicScriptManager.createScript(name: baseName, source: source)
             refresh()
             if let file = scriptFiles.first(where: { $0.url == url }) {
                 select(file)
+                openInExternalEditor(url: url)
             }
         } catch {
             outputText = L("Failed to create script: \(error.localizedDescription)")
         }
     }
 
-    private func save() {
+    private func editInExternalEditor() {
         guard let file = selectedScript else { return }
-        do {
-            try app.dynamicScriptManager.writeSource(sourceText, at: file.url)
-            isDirty = false
-            outputText = L("Saved \(file.displayName).swift")
-        } catch {
-            outputText = L("Failed to save: \(error.localizedDescription)")
-        }
+        openInExternalEditor(url: file.url)
+    }
+
+    private func openInExternalEditor(url: URL) {
+        #if canImport(AppKit)
+        NSWorkspace.shared.open(url)
+        #else
+        outputText = L("Open this file in your editor: \(url.path)")
+        #endif
+    }
+
+    private func revealInFinder() {
+        guard let file = selectedScript else { return }
+        #if canImport(AppKit)
+        NSWorkspace.shared.activateFileViewerSelecting([file.url])
+        #else
+        outputText = L("Script path: \(file.url.path)")
+        #endif
     }
 
     private func compile() {
         guard let file = selectedScript else { return }
-        // Auto-save before compiling
-        if isDirty {
-            do {
-                try app.dynamicScriptManager.writeSource(sourceText, at: file.url)
-                isDirty = false
-            } catch {
-                outputText = L("Failed to save before compile: \(error.localizedDescription)")
-                return
-            }
-        }
         isCompiling = true
         status = .compiling
         outputText = L("Compiling \(file.displayName).swift…")
@@ -270,7 +276,7 @@ private struct ScriptFileRow: View {
                     .frame(width: 6, height: 6)
                     .background(statusColor)
                     .cornerRadius(3)
-                Text(file.displayName, lineLimit: 1)
+                Text(file.displayName)
                     .font(.caption)
                 Spacer(minLength: 0)
             }
@@ -282,77 +288,78 @@ private struct ScriptFileRow: View {
     }
 }
 
-// MARK: - Code editor (NSTextView wrapper)
+// MARK: - Script detail
 
-#if canImport(AppKit)
-private struct CodeEditor: View {
-    let text: Binding<String>
+private struct ScriptDetailView: View {
+    let file: DynamicScriptManager.ScriptFile
+    let status: DynamicScriptManager.CompilationStatus
+    let isCompiling: Bool
+    let onEdit: () -> Void
+    let onReveal: () -> Void
+    let onCompile: () -> Void
 
     var body: some View {
-        CodeEditorRepresentable(text: text)
-    }
-}
-
-private struct CodeEditorRepresentable: _PrimitiveView {
-    let text: Binding<String>
-
-    func _makeNode() -> Node {
-        let node = Node()
-        let textView = NSTextView()
-        textView.isRichText = false
-        textView.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-        textView.isAutomaticQuoteSubstitutionEnabled = false
-        textView.isAutomaticDashSubstitutionEnabled = false
-        textView.isAutomaticTextReplacementEnabled = false
-        textView.string = text.wrappedValue
-        let delegate = CodeEditorDelegate()
-        delegate.onChange = { [weak node] newValue in
-            // Store the pending change; _updateNode will flush it to the binding.
-            node?.attachments["pendingText"] = newValue
-        }
-        textView.delegate = delegate
-        node.attachments["textView"] = textView
-        node.attachments["delegate"] = delegate
-        return node
-    }
-
-    func _updateNode(_ node: Node) {
-        guard let textView = node.attachments["textView"] as? NSTextView else { return }
-        // Push external changes into the text view only when they differ from
-        // the current contents, so we don't clobber what the user is typing.
-        if let pending = node.attachments["pendingText"] as? String {
-            text.wrappedValue = pending
-            node.attachments["pendingText"] = nil
-        } else if textView.string != text.wrappedValue {
-            textView.string = text.wrappedValue
+        ScrollView(.vertical) {
+            Column(alignment: .leading, spacing: 14) {
+                infoSection
+                actionSection
+                Spacer(minLength: 0)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity)
         }
     }
 
-    func _makeLayoutNode() -> LayoutNode? {
-        LayoutNode()
+    private var infoSection: some View {
+        Column(alignment: .leading, spacing: 8) {
+            Text(file.displayName)
+                .font(.headline)
+            infoRow(label: L("Identifier"), value: file.identifier)
+            infoRow(label: L("Path"), value: file.url.path)
+            infoRow(label: L("Status"), value: statusText)
+        }
     }
-}
 
-private final class CodeEditorDelegate: NSObject, NSTextViewDelegate {
-    var onChange: ((String) -> Void)?
-    func textDidChange(_ notification: Notification) {
-        guard let textView = notification.object as? NSTextView else { return }
-        onChange?(textView.string)
-    }
-}
-#else
-private struct CodeEditor: View {
-    let text: Binding<String>
-    var body: some View {
-        ScrollView {
-            Text(text.wrappedValue)
+    private func infoRow(label: String, value: String) -> some View {
+        Row(alignment: .center, spacing: 8) {
+            Text(label)
                 .font(.caption)
-                .padding(10)
+                .foregroundColor(.onSurfaceMuted)
+                .frame(width: 80)
+            Text(value)
+                .font(.caption)
                 .frame(maxWidth: .infinity)
         }
     }
+
+    private var statusText: String {
+        switch status {
+        case .idle: return L("Ready")
+        case .compiling: return L("Compiling…")
+        case .succeeded: return L("Compiled and registered")
+        case .failed(let message): return L("Failed: \(message)")
+        }
+    }
+
+    private var actionSection: some View {
+        Row(alignment: .center, spacing: 8) {
+            Button(action: onEdit) {
+                Text(L("Edit in External Editor"))
+            }
+            .buttonStyle(GhostButtonStyle())
+
+            Button(action: onReveal) {
+                Text(L("Reveal in Finder"))
+            }
+            .buttonStyle(GhostButtonStyle())
+
+            Button(isEnabled: !isCompiling, action: onCompile) {
+                Text(isCompiling ? L("Compiling…") : L("Compile & Reload"))
+            }
+            .buttonStyle(GhostButtonStyle())
+        }
+    }
 }
-#endif
 
 // MARK: - Script templates
 
