@@ -83,7 +83,7 @@ public final class DynamicScriptManager: @unchecked Sendable {
 
         if let enginePackageDirectory {
             do {
-                let executable = try SourceKitLSPClient.resolveExecutableURL()
+                let executable = try SourceKitLSPExecutableLocator.resolveExecutableURL()
                 self.languageSupport = ScriptLanguageSupport(
                     scriptsDirectoryURL: Self.scriptsDirectory(projectDirectory: projectDirectory),
                     enginePackageURL: URL(fileURLWithPath: enginePackageDirectory, isDirectory: true),
@@ -161,6 +161,44 @@ public final class DynamicScriptManager: @unchecked Sendable {
             ScriptLanguageSource(file: file, text: try readSource(at: file.url))
         }
         try await languageSupport.restart(sources: sources)
+    }
+
+    /// True when a SourceKit-LSP session can answer semantic queries. The UI
+    /// uses this to hide hover affordances rather than reporting failures for
+    /// every mouse pause on machines without a Swift toolchain.
+    public var isLanguageServiceAvailable: Bool { languageSupport != nil }
+
+    public var languageServiceUnavailableReason: String? { languageSupportUnavailableMessage }
+
+    // MARK: - Semantic queries
+
+    public func hover(scriptID: String,
+                      at position: ScriptLanguagePosition) async throws -> ScriptHoverResult? {
+        try await performOnLanguageService { try await $0.hover(scriptID: scriptID, at: position) }
+    }
+
+    public func completion(scriptID: String,
+                           at position: ScriptLanguagePosition,
+                           triggerCharacter: String? = nil) async throws -> ScriptCompletionResult {
+        try await performOnLanguageService {
+            try await $0.completion(scriptID: scriptID,
+                                    at: position,
+                                    triggerCharacter: triggerCharacter)
+        }
+    }
+
+    public func definition(scriptID: String,
+                           at position: ScriptLanguagePosition) async throws -> [ScriptDefinitionLocation] {
+        try await performOnLanguageService { try await $0.definition(scriptID: scriptID, at: position) }
+    }
+
+    private func performOnLanguageService<T: Sendable>(
+        _ body: (ScriptLanguageSupport) async throws -> T
+    ) async throws -> T {
+        guard let languageSupport else {
+            throw ScriptLanguageSupportError.unavailable(languageSupportUnavailableMessage ?? "Unknown setup error.")
+        }
+        return try await body(languageSupport)
     }
 
     /// Reads the UTF-8 source of a script file.

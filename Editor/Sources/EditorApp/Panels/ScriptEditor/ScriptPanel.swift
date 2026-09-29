@@ -19,6 +19,9 @@ struct ScriptPanel: View {
     @State private var isCompiling = false
     @State private var diagnosticsByScriptID: [String: [ScriptLanguageDiagnostic]] = [:]
     @State private var languageServiceMessage = L("Starting Swift language service…")
+    @State private var hoverPresentation: ScriptEditorHoverPresentation = .hidden
+    @State private var hoverSequence = ScriptEditorHoverSequence()
+    @State private var caretLabel = ""
 
     init(app: EditorApplication) {
         self.app = app
@@ -149,13 +152,18 @@ struct ScriptPanel: View {
             if let selectedScript {
                 editorHeader(selectedScript)
                 Divider()
-                ScriptCodeEditor(source: $sourceText) { text in
-                    guard let scriptID = selectedScriptID else { return }
-                    Task {
-                        try? await app.dynamicScriptManager.updateLanguageSource(scriptID: scriptID,
-                                                                                  text: text)
-                    }
-                }
+                ScriptCodeEditor(source: $sourceText,
+                                 hover: $hoverPresentation,
+                                 caretLabel: $caretLabel,
+                                 onChange: { text in
+                                     guard let scriptID = selectedScriptID else { return }
+                                     Task {
+                                         try? await app.dynamicScriptManager
+                                             .updateLanguageSource(scriptID: scriptID, text: text)
+                                     }
+                                 },
+                                 onHover: requestHover,
+                                 onHoverEnd: cancelHover)
                     .flex(1, shrink: 1)
                 if !languageServiceMessage.isEmpty {
                     Text(languageServiceMessage)
@@ -163,9 +171,9 @@ struct ScriptPanel: View {
                         .foregroundColor(.warning)
                         .padding(horizontal: 10, vertical: 4)
                 }
-                     if let diagnostics = diagnosticsByScriptID[selectedScript.identifier],
+                if let diagnostics = diagnosticsByScriptID[selectedScript.identifier],
                    !diagnostics.isEmpty {
-                    languageDiagnostics(diagnostics)
+                    ScriptEditorDiagnostics(diagnostics: diagnostics)
                 }
                 if !outputText.isEmpty {
                     Divider()
@@ -180,27 +188,6 @@ struct ScriptPanel: View {
             }
         }
         .frame(minWidth: 260)
-    }
-
-    private func languageDiagnostics(_ diagnostics: [ScriptLanguageDiagnostic]) -> some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 0) {
-            Row(alignment: .center, spacing: 8) {
-                Text(L("Swift Diagnostics")).font(.caption)
-                EditorPanelBadge("\(diagnostics.count)")
-                Spacer(minLength: 0)
-            }
-            .padding(horizontal: 10, vertical: 5)
-            ScrollView(.vertical, scrollbarGutter: .stable) {
-                Column(alignment: .leading, spacing: 2) {
-                    for diagnostic in diagnostics {
-                        ScriptDiagnosticRow(diagnostic: diagnostic)
-                    }
-                }
-                .padding(horizontal: 8, vertical: 5)
-            }
-            .frame(maxHeight: 144)
-            .background(.surfaceSunken)
-        }
     }
 
     private func editorHeader(_ file: DynamicScriptManager.ScriptFile) -> some View {
@@ -288,6 +275,8 @@ struct ScriptPanel: View {
             selectedScriptID = file.identifier
             status = .idle
             outputText = ""
+            // A pending reply belongs to the previous file's positions.
+            cancelHover()
         } catch {
             outputText = L("Failed to read script: \(error.localizedDescription)")
             status = .failed(message: error.localizedDescription)
@@ -387,6 +376,56 @@ struct ScriptPanel: View {
         }
     }
 
+    // MARK: - Hover
+
+    /// Pointer settled on something that may have documentation.
+    private func requestHover(_ anchor: TextFieldHoverAnchor) {
+        guard app.dynamicScriptManager.isLanguageServiceAvailable,
+              let scriptID = selectedScriptID else {
+            cancelHover()
+            return
+        }
+        let source = sourceText
+        // Asking about punctuation or whitespace would waste a round-trip per
+        // mouse move and return nothing printable.
+        guard ScriptEditorHoverResolver.queryPosition(in: source,
+                                                      characterIndex: anchor.characterIndex) != nil else {
+            cancelHover()
+            return
+        }
+
+        let windowAnchor = ScriptEditorHoverAnchor(windowX: anchor.windowX,
+                                                   windowY: anchor.windowY)
+        hoverPresentation = ScriptEditorHoverPresentation(anchor: windowAnchor,
+                                                          content: nil,
+                                                          isPending: true,
+                                                          message: nil)
+        let characterIndex = anchor.characterIndex
+        let sequence = hoverSequence
+        Task { @MainActor in
+            guard let presentation = await ScriptEditorHoverResolver.resolve(
+                scriptID: scriptID,
+                source: source,
+                characterIndex: characterIndex,
+                anchor: windowAnchor,
+                sequence: sequence,
+                request: { position in
+                    try await app.dynamicScriptManager.hover(scriptID: scriptID, at: position)
+                }
+            ) else { return }
+            hoverPresentation = presentation
+        }
+    }
+
+    /// Pointer left the field or landed somewhere without a symbol: drop any
+    /// popup now and make in-flight replies irrelevant.
+    private func cancelHover() {
+        hoverSequence.invalidateAll()
+        if hoverPresentation.isVisible || hoverPresentation.isPending {
+            hoverPresentation = .hidden
+        }
+    }
+
     private func compile() {
         guard let file = selectedScript, persistSource() else { return }
         isCompiling = true
@@ -433,43 +472,4 @@ private struct ScriptFileRow: View {
         }
         .buttonStyle(.plain)
     }
-}
-
-private struct ScriptDiagnosticRow: View {
-    let diagnostic: ScriptLanguageDiagnostic
-
-    var body: some View {
-        let color: SemanticColorRef = switch diagnostic.severity {
-        case .error: .error
-        case .warning: .warning
-        case .information, .hint: .onSurfaceMuted
-        }
-        Row(alignment: .center, spacing: 8) {
-            Text("\(diagnostic.startLine + 1):\(diagnostic.startCharacter + 1)")
-                .font(.mono)
-                .foregroundColor(color)
-            Text(diagnostic.message, lineLimit: 2)
-                .font(.caption)
-                .foregroundColor(.onSurface)
-            Spacer(minLength: 0)
-        }
-        .padding(horizontal: 5, vertical: 3)
-    }
-}
-
-enum ScriptTemplate {
-    static let `default` = #"""
-import ScriptRuntime
-
-struct GameScript: ScriptBehavior {
-    mutating func onStart(_ context: ScriptContext) {
-        // Runs once when this script is attached to an entity.
-    }
-
-    mutating func onUpdate(_ context: ScriptContext) {
-        // Runs once per frame. Delta time is measured in seconds.
-        _ = context.deltaTime
-    }
-}
-"""#
 }

@@ -62,6 +62,13 @@ public struct TextField: View {
     public let onSubmit: (() -> Void)?
     public let onCancel: (() -> Void)?
     public let onChange: ((String) -> Void)?
+    /// Pointer resting position inside the field, reported as the pointer moves
+    /// whether or not a drag selection is active. Receives `nil` when the
+    /// pointer leaves. Used to anchor editor affordances such as hover popups.
+    public let onHoverChange: ((TextFieldHoverAnchor?) -> Void)?
+    /// Caret and selection movement. Reported through the same funnel as cursor
+    /// blinking, so it fires per keystroke as well as per arrow key.
+    public let onCaretChange: ((TextFieldCaretState) -> Void)?
     public let onFocus: (() -> Void)?
     public let onBlur: (() -> Void)?
     public let onClear: (() -> Void)?
@@ -92,6 +99,8 @@ public struct TextField: View {
                 onSubmit: (() -> Void)? = nil,
                 onCancel: (() -> Void)? = nil,
                 onChange: ((String) -> Void)? = nil,
+                onHoverChange: ((TextFieldHoverAnchor?) -> Void)? = nil,
+                onCaretChange: ((TextFieldCaretState) -> Void)? = nil,
                 onFocus: (() -> Void)? = nil,
                 onBlur: (() -> Void)? = nil,
                 onClear: (() -> Void)? = nil,
@@ -121,6 +130,8 @@ public struct TextField: View {
         self.onSubmit = onSubmit
         self.onCancel = onCancel
         self.onChange = onChange
+        self.onHoverChange = onHoverChange
+        self.onCaretChange = onCaretChange
         self.onFocus = onFocus
         self.onBlur = onBlur
         self.onClear = onClear

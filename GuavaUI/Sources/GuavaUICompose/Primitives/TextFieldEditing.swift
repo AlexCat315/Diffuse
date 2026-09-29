@@ -185,5 +185,6 @@ extension TextField {
     func recordCaretActivity(_ state: FieldState) {
         state.lastCaretActivity = TimingTrace.now()
         state.hostNode?.markRenderDirty(reason: .styleSet(field: "textFieldCaret"))
+        notifyCaretChange(state)
     }
 }

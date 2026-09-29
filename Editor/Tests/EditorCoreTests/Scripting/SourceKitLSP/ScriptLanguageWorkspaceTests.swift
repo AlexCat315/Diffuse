@@ -83,7 +83,9 @@ struct ScriptLanguageWorkspaceTests {
         process.waitUntilExit()
         let dumped = String(decoding: output, as: UTF8.self)
 
-        #expect(process.terminationStatus == 0, dumped)
+        // `#expect`'s second parameter is `Comment`, not `String`, so a runtime
+        // message has to be boxed explicitly.
+        #expect(process.terminationStatus == 0, Comment(rawValue: dumped))
         #expect(dumped.contains(first.targetName))
         #expect(dumped.contains(second.targetName))
     }
