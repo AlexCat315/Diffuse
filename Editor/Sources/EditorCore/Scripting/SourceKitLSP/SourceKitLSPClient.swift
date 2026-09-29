@@ -28,6 +28,8 @@ public actor SourceKitLSPClient {
     private var notificationHandler: NotificationHandler?
     private var stderrTail = Data()
     private var isStopping = false
+    /// Probed once per client so restarting never re-pays the `--help` call.
+    private var capabilities: SourceKitLSPCapabilities?
 
     public init(executableURL: URL,
                 workspaceURL: URL,
@@ -57,11 +59,12 @@ public actor SourceKitLSPClient {
         let stdout = Pipe()
         let stderr = Pipe()
         process.executableURL = executableURL
-        process.arguments = [
-            "--default-workspace-type", "swiftPM",
-            "--scratch-path", scratchURL.path,
-            "--bypass-workspace-trust",
-        ]
+        let capabilities = self.capabilities
+            ?? SourceKitLSPExecutableLocator.probeCapabilities(executableURL: executableURL)
+        self.capabilities = capabilities
+        process.arguments = SourceKitLSPCommandLine.arguments(for: workspaceURL,
+                                                             scratchURL: scratchURL,
+                                                             capabilities: capabilities)
         process.currentDirectoryURL = workspaceURL
         process.environment = ProcessInfo.processInfo.environment.merging(environmentOverrides) { _, new in new }
         process.standardInput = stdin
