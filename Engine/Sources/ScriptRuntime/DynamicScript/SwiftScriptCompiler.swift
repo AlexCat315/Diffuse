@@ -29,6 +29,10 @@ public final class SwiftScriptCompiler {
     /// `import SceneRuntime`, `import SIMDCompat`, etc.).
     public var includePaths: [String]
 
+    /// Clang module maps and include directories needed by imported Swift modules.
+    public var clangModuleMapPaths: [String]
+    public var clangIncludePaths: [String]
+
     /// Directories searched for import libraries.
     public var libraryPaths: [String]
 
@@ -90,6 +94,8 @@ public final class SwiftScriptCompiler {
         swiftcPath: String = "swiftc",
         dlltoolPath: String = "llvm-dlltool",
         includePaths: [String] = [],
+        clangModuleMapPaths: [String] = [],
+        clangIncludePaths: [String] = [],
         libraryPaths: [String] = [],
         outputDirectory: URL,
         hostModuleName: String = "GuavaEditor",
@@ -98,6 +104,8 @@ public final class SwiftScriptCompiler {
         self.swiftcPath = swiftcPath
         self.dlltoolPath = dlltoolPath
         self.includePaths = includePaths
+        self.clangModuleMapPaths = clangModuleMapPaths
+        self.clangIncludePaths = clangIncludePaths
         self.libraryPaths = libraryPaths
         self.outputDirectory = outputDirectory
         self.hostModuleName = hostModuleName
@@ -119,6 +127,7 @@ public final class SwiftScriptCompiler {
     ///   - sourcePath: Absolute path to the `.swift` script file.
     ///   - scriptID: Stable identifier used as the output file name.
     public func compile(sourcePath: String, scriptID: String) throws -> CompilationResult {
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         let outputPath = outputDirectory
             .appendingPathComponent("\(scriptID).\(Self.dylibExtension)")
             .path
@@ -131,7 +140,7 @@ public final class SwiftScriptCompiler {
         let args = buildArguments(sourcePath: sourcePath, outputPath: outputPath)
 
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: swiftcPath)
+        process.executableURL = try Self.resolveExecutableURL(for: swiftcPath)
         process.arguments = args
 
         let stdoutPipe = Pipe()
@@ -162,6 +171,43 @@ public final class SwiftScriptCompiler {
         return CompilationResult(outputPath: outputPath, stdout: stdout, stderr: stderr)
     }
 
+    static func resolveExecutableURL(for executable: String) throws -> URL {
+        let fileManager = FileManager.default
+        let hasDirectory = executable.contains("/") || executable.contains("\\")
+        if hasDirectory {
+            let url = URL(fileURLWithPath: executable)
+            guard fileManager.isExecutableFile(atPath: url.path) else {
+                throw ScriptCompileError.executableNotFound(executable)
+            }
+            return url
+        }
+
+        let path = ProcessInfo.processInfo.environment["PATH"] ?? ""
+        #if os(Windows)
+        let pathSeparator: Character = ";"
+        let extensions = (ProcessInfo.processInfo.environment["PATHEXT"] ?? ".EXE;.CMD;.BAT")
+            .split(separator: ";")
+            .map { executable + $0 }
+        let candidates = [executable] + (URL(fileURLWithPath: executable).pathExtension.isEmpty ? extensions : [])
+        #else
+        let pathSeparator: Character = ":"
+        let candidates = [executable]
+        #endif
+
+        for directory in path.split(separator: pathSeparator, omittingEmptySubsequences: false) {
+            let directoryPath = directory.isEmpty ? "." : String(directory)
+            for candidate in candidates {
+                let url = URL(fileURLWithPath: directoryPath, isDirectory: true)
+                    .appendingPathComponent(candidate)
+                if fileManager.isExecutableFile(atPath: url.path) {
+                    return url
+                }
+            }
+        }
+
+        throw ScriptCompileError.executableNotFound(executable)
+    }
+
     // MARK: - Argument construction
 
     private func buildArguments(sourcePath: String, outputPath: String) -> [String] {
@@ -171,6 +217,14 @@ public final class SwiftScriptCompiler {
 
         for path in includePaths {
             args.append(contentsOf: ["-I", path])
+        }
+
+        for path in clangIncludePaths {
+            args.append(contentsOf: ["-Xcc", "-I\(path)"])
+        }
+
+        for path in clangModuleMapPaths {
+            args.append(contentsOf: ["-Xcc", "-fmodule-map-file=\(path)"])
         }
 
         for path in libraryPaths {
@@ -216,7 +270,7 @@ public final class SwiftScriptCompiler {
         try defContent.write(toFile: defPath, atomically: true, encoding: .utf8)
 
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: dlltoolPath)
+        process.executableURL = try Self.resolveExecutableURL(for: dlltoolPath)
         process.arguments = ["-d", defPath, "-l", libPath]
 
         let stderrPipe = Pipe()
@@ -275,7 +329,22 @@ public final class SwiftScriptCompiler {
     }
 }
 
-public enum ScriptCompileError: Error {
+public enum ScriptCompileError: Error, LocalizedError {
     case compilationFailed(exitCode: Int, stderr: String, stdout: String)
     case importLibraryFailed(exitCode: Int, stderr: String)
+    case executableNotFound(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case let .compilationFailed(exitCode, stderr, stdout):
+            let output = [stderr, stdout].filter { !$0.isEmpty }.joined(separator: "\n")
+            return output.isEmpty
+                ? "Swift compilation failed with exit code \(exitCode)."
+                : "Swift compilation failed with exit code \(exitCode):\n\(output)"
+        case let .importLibraryFailed(exitCode, stderr):
+            return "Swift script import library generation failed with exit code \(exitCode):\n\(stderr)"
+        case let .executableNotFound(name):
+            return "Could not find executable '\(name)' on PATH."
+        }
+    }
 }
