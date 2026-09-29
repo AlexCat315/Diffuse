@@ -10,39 +10,10 @@ struct ScriptLanguageWorkspaceTests {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: root) }
         let scriptsDirectory = root.appendingPathComponent("Scripts", isDirectory: true)
-        let engineDirectory = root.appendingPathComponent("Engine", isDirectory: true)
         try FileManager.default.createDirectory(at: scriptsDirectory, withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: engineDirectory, withIntermediateDirectories: true)
-        let engineManifest = """
-        // swift-tools-version: 6.1
-        import PackageDescription
-        let package = Package(
-            name: "GuavaEngine",
-            products: [
-                .library(name: "ScriptRuntime", targets: ["ScriptRuntime"]),
-                .library(name: "SceneRuntime", targets: ["SceneRuntime"]),
-                .library(name: "SIMDCompat", targets: ["SIMDCompat"]),
-            ],
-            targets: [
-                .target(name: "ScriptRuntime"),
-                .target(name: "SceneRuntime"),
-                .target(name: "SIMDCompat"),
-            ]
-        )
-        """
-        try engineManifest.write(to: engineDirectory.appendingPathComponent("Package.swift"),
-                                 atomically: true,
-                                 encoding: .utf8)
-        for module in ["ScriptRuntime", "SceneRuntime", "SIMDCompat"] {
-            let moduleDirectory = engineDirectory
-                .appendingPathComponent("Sources/\(module)", isDirectory: true)
-            try FileManager.default.createDirectory(at: moduleDirectory, withIntermediateDirectories: true)
-            try "public enum \(module)Fixture {}".write(
-                to: moduleDirectory.appendingPathComponent("\(module).swift"),
-                atomically: true,
-                encoding: .utf8
-            )
-        }
+        let modulePath = root.appendingPathComponent("EngineModules", isDirectory: true).path
+        let moduleMapPath = root.appendingPathComponent("CEngineBridge.modulemap").path
+        let includePath = root.appendingPathComponent("EngineIncludes", isDirectory: true).path
 
         let source = "import ScriptRuntime\nstruct GameScript: ScriptBehavior {}\n"
         let firstURL = scriptsDirectory.appendingPathComponent("Player.swift")
@@ -54,7 +25,9 @@ struct ScriptLanguageWorkspaceTests {
             (DynamicScriptManager.ScriptFile(url: secondURL), source),
         ]
         let workspace = ScriptLanguageWorkspace(scriptsDirectoryURL: scriptsDirectory,
-                                                enginePackageURL: engineDirectory)
+                                                engineModulePaths: [modulePath],
+                                                clangModuleMapPaths: [moduleMapPath],
+                                                clangIncludePaths: [includePath])
         let documents = try workspace.synchronize(scripts)
         let first = try #require(documents[scripts[0].0.identifier])
         let second = try #require(documents[scripts[1].0.identifier])
@@ -66,9 +39,10 @@ struct ScriptLanguageWorkspaceTests {
         #expect(second.sourceURL == secondURL)
         #expect(try String(contentsOf: first.analysisURL, encoding: .utf8) == source)
         #expect(try String(contentsOf: second.analysisURL, encoding: .utf8) == source)
-        #expect(manifest.contains(".product(name: \"ScriptRuntime\", package: \"GuavaEngine\")"))
-        #expect(manifest.contains(".product(name: \"SceneRuntime\", package: \"GuavaEngine\")"))
-        #expect(manifest.contains(".product(name: \"SIMDCompat\", package: \"GuavaEngine\")"))
+        #expect(manifest.contains(".unsafeFlags"))
+        #expect(manifest.contains(modulePath))
+        #expect(manifest.contains("-fmodule-map-file=\(moduleMapPath)"))
+        #expect(manifest.contains("-I\(includePath)"))
         #expect(manifest.contains(first.targetName))
         #expect(manifest.contains(second.targetName))
 
@@ -101,7 +75,9 @@ struct ScriptLanguageWorkspaceTests {
         let source = "import ScriptRuntime\nstruct GameScript: ScriptBehavior {}\n"
         try source.write(to: scriptURL, atomically: true, encoding: .utf8)
         let workspace = ScriptLanguageWorkspace(scriptsDirectoryURL: scriptsDirectory,
-                                                enginePackageURL: URL(fileURLWithPath: "/engine/Engine"))
+                                                engineModulePaths: [],
+                                                clangModuleMapPaths: [],
+                                                clangIncludePaths: [])
         let script = DynamicScriptManager.ScriptFile(url: scriptURL)
         let documents = try workspace.synchronize([(script, source)])
         let document = try #require(documents[script.identifier])

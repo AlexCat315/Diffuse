@@ -118,6 +118,8 @@ public final class EditorApplication: @unchecked Sendable {
     public let scene: EditorSceneAdapter
     /// Manages dynamically compiled Swift scripts in the project.
     public let dynamicScriptManager: DynamicScriptManager
+    /// Canonical editor-facing state for script documents, diagnostics, and builds.
+    public let scriptWorkspace: ScriptWorkspaceModel
 
     private let observationBus: ObservationBus
     private let intentCoordinator: IntentRuntimeCoordinator
@@ -218,30 +220,6 @@ public final class EditorApplication: @unchecked Sendable {
         }
 
         return []
-    }
-
-    private static func resolveEnginePackageDirectory() -> URL? {
-        if let environmentPath = ProcessInfo.processInfo.environment["GUAVA_ENGINE_PACKAGE_PATH"],
-           !environmentPath.isEmpty {
-            let url = URL(fileURLWithPath: environmentPath, isDirectory: true)
-            if FileManager.default.fileExists(atPath: url.appendingPathComponent("Package.swift").path) {
-                return url
-            }
-        }
-
-        let executableURL = URL(fileURLWithPath: ProcessInfo.processInfo.arguments[0])
-        let buildDir = executableURL.deletingLastPathComponent()
-        let workspaceRoot = buildDir
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let engineURL = workspaceRoot.appendingPathComponent("Engine", isDirectory: true)
-        guard FileManager.default.fileExists(atPath: engineURL.appendingPathComponent("Package.swift").path) else {
-            return nil
-        }
-        return engineURL
     }
 
     private static func resolveEngineClangModuleMapPaths() -> [String] {
@@ -368,13 +346,25 @@ public final class EditorApplication: @unchecked Sendable {
         self.store = store
         self.inputState = InputState()
         self.scene = scene
-        self.dynamicScriptManager = DynamicScriptManager(
+        let dynamicScriptManager = DynamicScriptManager(
             projectDirectory: projectDirectory,
             scriptRuntime: scene.scriptRuntime,
             engineModulePaths: Self.resolveEngineModulePaths(),
             clangModuleMapPaths: Self.resolveEngineClangModuleMapPaths(),
-            clangIncludePaths: Self.resolveEngineClangIncludePaths(),
-            enginePackageDirectory: Self.resolveEnginePackageDirectory()?.path
+            clangIncludePaths: Self.resolveEngineClangIncludePaths()
+        )
+        self.dynamicScriptManager = dynamicScriptManager
+        self.scriptWorkspace = try ScriptWorkspaceModel(
+            manager: dynamicScriptManager,
+            onScriptLoaded: { file in
+                scene.registerDynamicScriptOption(identifier: file.identifier,
+                                                  displayName: file.displayName)
+                store.dispatch(.forceUIRefresh)
+            },
+            onScriptDeleted: { file in
+                scene.unregisterDynamicScriptOption(identifier: file.identifier)
+                store.dispatch(.forceUIRefresh)
+            }
         )
         self.observationBus = observationBus
         self.intentCoordinator = intentCoordinator
@@ -421,6 +411,7 @@ public final class EditorApplication: @unchecked Sendable {
         }
         reloadProjectScripts(force: true, reportUnresolvedBindings: false)
         reloadDynamicScripts()
+        scriptWorkspace.startLanguageService()
 
         startMCPBridge()
 
@@ -1749,10 +1740,13 @@ public final class EditorApplication: @unchecked Sendable {
             }
             scene.setDynamicScriptOptions(options)
             store.dispatch(.forceUIRefresh)
+            scriptWorkspace.markAllBuildsStarted()
 
             try dynamicScriptManager.compileAllScripts(
                 onScriptCompletion: { [weak self] file, status in
                     guard let self else { return }
+                    self.scriptWorkspace.recordBuildResult(scriptID: file.identifier,
+                                                           status: status)
                     if case let .failed(message) = status {
                         self.logConsole("Failed to compile dynamic script",
                                         severity: .error,

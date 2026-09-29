@@ -35,6 +35,11 @@ public struct TextField: View {
     public let maxVisibleLines: Int
     public let showsLineNumbers: Bool
     public let lineNumberColor: Color?
+    /// Gutter background behind the line numbers. `nil` falls back to the
+    /// theme's `surfaceVariant`, which suits light inputs; code editors on a
+    /// dark surface pass their own tint so the gutter reads as part of the
+    /// code panel rather than a separate light strip.
+    public let lineNumberGutterColor: Color?
     public let syntaxColorAtUTF8Offset: ((String, Int) -> Color?)?
     public let size: Size
     public let disabled: Bool
@@ -83,6 +88,7 @@ public struct TextField: View {
                 maxVisibleLines: Int = 6,
                 showsLineNumbers: Bool = false,
                 lineNumberColor: Color? = nil,
+                lineNumberGutterColor: Color? = nil,
                 syntaxColorAtUTF8Offset: ((String, Int) -> Color?)? = nil,
                 size: Size = .regular,
                 disabled: Bool = false,
@@ -114,6 +120,7 @@ public struct TextField: View {
         self.maxVisibleLines = max(1, maxVisibleLines)
         self.showsLineNumbers = showsLineNumbers
         self.lineNumberColor = lineNumberColor
+        self.lineNumberGutterColor = lineNumberGutterColor
         self.syntaxColorAtUTF8Offset = syntaxColorAtUTF8Offset
         self.size = size
         self.disabled = disabled
@@ -162,6 +169,7 @@ public struct TextField: View {
         let maxVisibleLines: Int
         let showsLineNumbers: Bool
         let lineNumberColor: Color?
+        let lineNumberGutterColor: Color?
         let syntaxColoringEnabled: Bool
         let disabled: Bool
         let readOnly: Bool
@@ -273,6 +281,7 @@ public struct TextField: View {
                                           maxVisibleLines: maxVisibleLines,
                                           showsLineNumbers: showsLineNumbers,
                                           lineNumberColor: lineNumberColor,
+                                          lineNumberGutterColor: lineNumberGutterColor,
                                           syntaxColoringEnabled: syntaxColorAtUTF8Offset != nil,
                                           disabled: disabled,
                                           readOnly: readOnly,
@@ -1113,7 +1122,8 @@ public struct TextField: View {
                             y: Float(origin.y),
                             width: gutterWidth,
                             height: frameHeight),
-                     color: theme.colors.surfaceVariant.multipliedAlpha(node.opacity))
+                     color: (lineNumberGutterColor ?? theme.colors.surfaceVariant)
+                        .multipliedAlpha(node.opacity))
         list.addRect(UIRect(x: textOriginX - 1,
                             y: Float(origin.y),
                             width: 1,
