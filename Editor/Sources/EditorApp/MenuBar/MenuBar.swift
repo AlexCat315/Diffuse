@@ -13,6 +13,7 @@ enum EditorMenuCommand {
     case setLayoutPreset(EditorLayoutPreset)
     case resetLayout
     case reopenClosedPanel
+    case showScripts
     case setPlaybackState(PlaybackState)
     case openSettings
     case toggleTheme
