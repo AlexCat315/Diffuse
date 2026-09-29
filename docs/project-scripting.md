@@ -55,4 +55,25 @@ Guava 场景中的脚本绑定使用稳定字符串 ID，而不是仅在当前�
 
 角色与相机 preset 会自动获得标准输入映射：WASD/方向键移动、Space 跳跃、Control 蹲伏、按住鼠标右键移动视角、滚轮缩放；手柄十字键、南键/东键与右摇杆也有对应映射。原生项目可以用自己的 `InputActionMap` 资源覆盖这些默认值。
 
-`Scripts/*.swift` 可以在 Editor 的 Scripts 面板中编辑和编译。Editor 启动及场景重载时会重新编译这些源文件，并将其加入 Inspector 的脚本选择列表；动态 Swift 脚本目前只在 Editor 进程内运行，不会随项目导出到 GuavaPlayer。`Scripts/scripts.json` 仍用于声明式 preset 和默认参数。需要 Player 支持动态 Swift 脚本时，还需增加对应的构建与打包流程。
+`Scripts/*.swift` 可以在 Editor 的 Scripts 面板中编辑和编译。脚本通过 `ScriptRuntime` 的生命周期 API 定义行为：
+
+```swift
+import ScriptRuntime
+
+@_cdecl("guavaCreateScript")
+public func guavaCreateScript(_ output: UnsafeMutableRawPointer) {
+  let script = Script()
+    .onStart { _ in
+      // 初始化实体相关状态。
+    }
+    .onUpdate { context in
+      // context.deltaTime 是本帧经过的秒数。
+      _ = context.deltaTime
+    }
+  output.assumingMemoryBound(to: Script.self).pointee = script
+}
+```
+
+Editor 启动及场景重载时会重新编译这些源文件，并将其加入 Inspector 的脚本选择列表；动态 Swift 脚本目前只在 Editor 进程内运行，不会随项目导出到 GuavaPlayer。`Scripts/scripts.json` 仍用于声明式 preset 和默认参数。需要 Player 支持动态 Swift 脚本时，还需增加对应的构建与打包流程。
+
+脚本以动态库加载，因此仍需要 `guavaCreateScript` 这个 C ABI 工厂函数；函数内部使用普通的 `Script` 生命周期 API。Editor 需要能在 `PATH` 中找到 Swift 编译器 `swiftc`。
