@@ -509,6 +509,53 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         #expect(Float(node.frame.height) > 32)
     } }
 
+    @Test("Multiline visible-line limit can expand for code editors")
+    func multilineVisibleLineLimitCanExpand() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = Array(repeating: "let value = 42", count: 24).joined(separator: "\n")
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+        rig.graph.install(root:
+            TextField(text: makeBinding(rig.store), axis: .vertical, maxVisibleLines: 24)
+        )
+        rig.graph.computeLayout(width: 420, height: 1_000)
+
+        let node = fieldNode(in: rig.tree.root)
+        #expect(Float(node.frame.height) > 250)
+    } }
+
+    @Test("Line-number gutters and token colors render with multiline editing")
+    func lineNumbersAndSyntaxColorsRender() { GlobalTestLock.locked {
+        let rig = makeRig()
+        let source = "let answer = 42\nlet total = 7"
+        rig.store.value = source
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+        let keywordColor = Color(r: 0.8, g: 0.2, b: 0.9)
+        let numberColor = Color(r: 0.9, g: 0.6, b: 0.2)
+        let gutterColor = Color(r: 0.2, g: 0.9, b: 0.6)
+        rig.graph.install(root:
+            TextField(text: makeBinding(rig.store),
+                      axis: .vertical,
+                      maxVisibleLines: 24,
+                      showsLineNumbers: true,
+                      lineNumberColor: gutterColor,
+                      syntaxColorAtUTF8Offset: { _, offset in
+                          if offset < 3 { return keywordColor }
+                          if (13..<15).contains(offset) { return numberColor }
+                          return nil
+                      })
+        )
+        rig.graph.computeLayout(width: 360, height: 480)
+
+        let node = fieldNode(in: rig.tree.root)
+        let list = DrawList()
+        node.draw?(list, CGPoint.zero)
+        let colors = Set(list.vertices.map(\.color))
+
+        #expect(colors.contains(keywordColor.rgba8))
+        #expect(colors.contains(numberColor.rgba8))
+        #expect(colors.contains(gutterColor.rgba8))
+    } }
+
     @Test("Down arrow traverses soft-wrapped visual lines")
     func downArrowTraversesSoftWrappedLines() { GlobalTestLock.locked {
         let rig = makeRig()

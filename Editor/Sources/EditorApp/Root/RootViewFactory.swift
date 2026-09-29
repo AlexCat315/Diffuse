@@ -205,7 +205,7 @@ enum EditorRootViewFactory {
             },
             PanelDescriptor(id: "scripts",
                             title: localizedPanelTitle(for: "scripts"),
-                            preferredSlot: .bottom,
+                            preferredSlot: .center,
                             iconAssetKey: "panel.developer-tools") {
                 ScriptPanel(app: app)
             },
@@ -359,6 +359,8 @@ enum EditorRootViewFactory {
             !registeredIDs.contains(closed.panelID)
         }
 
+        moveScriptsPanelToCenter(in: &next)
+
         for descriptor in registry.descriptors {
             next.panels[descriptor.id] = workspacePanel(for: descriptor)
             guard next.groupContaining(panelID: descriptor.id) == nil else { continue }
@@ -392,6 +394,47 @@ enum EditorRootViewFactory {
                                  floatingWindows: next.floatingWindows,
                                  splitFractions: next.splitFractions,
                                  closedHistory: next.closedHistory)
+    }
+
+    private static func moveScriptsPanelToCenter(in document: inout WorkspaceDocument) {
+        guard document.panels["scripts"] != nil,
+              var sourceGroup = document.groupContaining(panelID: "scripts") else {
+            return
+        }
+
+        let centerGroupID = defaultGroupID(for: .center)
+        if sourceGroup.id != centerGroupID {
+            sourceGroup.panels.removeAll { $0 == "scripts" }
+            sourceGroup.pinnedPanelIDs.removeAll { $0 == "scripts" }
+            if sourceGroup.activePanelID == "scripts" {
+                sourceGroup.activePanelID = sourceGroup.panels.first
+            }
+
+            if sourceGroup.panels.isEmpty {
+                document.groups.removeValue(forKey: sourceGroup.id)
+                for slotID in Array(document.slots.keys) {
+                    document.slots[slotID]?.removeGroup(sourceGroup.id)
+                }
+                document.floatingWindows.removeAll { $0.groupID == sourceGroup.id }
+                document.collapsed.removeAll { $0.groupID == sourceGroup.id }
+            } else {
+                document.groups[sourceGroup.id] = sourceGroup
+            }
+        }
+
+        var centerGroup = document.groups[centerGroupID]
+            ?? WorkspaceTabGroup(id: centerGroupID, panels: [])
+        if !centerGroup.panels.contains("scripts") {
+            centerGroup.panels.append("scripts")
+        }
+        if centerGroup.activePanelID == nil {
+            centerGroup.activePanelID = centerGroup.panels.first
+        }
+        document.groups[centerGroupID] = centerGroup
+
+        var centerSlot = document.slot(.center)
+        centerSlot.appendGroup(centerGroupID)
+        document.setSlot(centerSlot)
     }
 
     private static func workspacePanel(for descriptor: PanelDescriptor) -> WorkspacePanel {
@@ -526,7 +569,9 @@ enum EditorWorkspaceDefaults {
         let fractions = defaultFractions(for: preset)
         let groups: [WorkspaceTabGroupID: WorkspaceTabGroup] = [
             "leading": WorkspaceTabGroup(id: "leading", panels: ["hierarchy"], activePanelID: "hierarchy"),
-            "center": WorkspaceTabGroup(id: "center", panels: ["viewport"], activePanelID: "viewport"),
+            "center": WorkspaceTabGroup(id: "center",
+                                         panels: ["viewport", "scripts"],
+                                         activePanelID: "viewport"),
             "trailing": WorkspaceTabGroup(id: "trailing",
                                          panels: ["intent-input", "inspector"],
                                          activePanelID: "intent-input"),
@@ -535,8 +580,7 @@ enum EditorWorkspaceDefaults {
                                                  "console",
                                                  "confirmation-host",
                                                  "render-pipeline",
-                                                 "developer-tools",
-                                                 "scripts"],
+                                                 "developer-tools"],
                                         activePanelID: defaultBottomPanelID(for: preset))
         ]
         return WorkspaceDocument(

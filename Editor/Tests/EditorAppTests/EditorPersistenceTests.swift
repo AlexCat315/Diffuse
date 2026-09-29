@@ -81,4 +81,40 @@ struct EditorPersistenceTests {
         #expect(reconciled.closedHistory.map(\.panelID) == ["assets"])
         #expect(reconciled.groupContaining(panelID: "new-tool")?.panels.contains("new-tool") == true)
     }
+
+    @Test("workspace reconciliation moves Scripts to center and preserves bottom tools")
+    func scriptsPanelMovesToCenter() {
+        let registry = PanelRegistry([
+            PanelDescriptor(id: "viewport", title: "Viewport", preferredSlot: .center) {
+                EmptyView()
+            },
+            PanelDescriptor(id: "scripts", title: "Scripts", preferredSlot: .center) {
+                EmptyView()
+            },
+            PanelDescriptor(id: "assets", title: "Assets", preferredSlot: .bottom) {
+                EmptyView()
+            },
+        ])
+        let panels: [WorkspacePanelID: WorkspacePanel] = [
+            "viewport": WorkspacePanel(id: "viewport", title: "Viewport"),
+            "scripts": WorkspacePanel(id: "scripts", title: "Scripts"),
+            "assets": WorkspacePanel(id: "assets", title: "Assets"),
+        ]
+        let document = WorkspaceDocument(
+            panels: panels,
+            groups: [
+                "center": WorkspaceTabGroup(id: "center", panels: ["viewport"], activePanelID: "viewport"),
+                "bottom": WorkspaceTabGroup(id: "bottom", panels: ["assets", "scripts"], activePanelID: "scripts"),
+            ],
+            slots: WorkspaceSlot.standardEditorSlots(center: .group("center"), bottom: .group("bottom")),
+            layoutTree: .group("center")
+        )
+
+        let reconciled = EditorRootViewFactory.reconciledWorkspaceDocument(document, registry: registry)
+
+        #expect(reconciled.group("center")?.panels == ["viewport", "scripts"])
+        #expect(reconciled.group("center")?.activePanelID == "viewport")
+        #expect(reconciled.group("bottom")?.panels == ["assets"])
+        #expect(reconciled.slotContaining(groupID: "center") == .center)
+    }
 }
