@@ -69,11 +69,8 @@ struct ScriptPanel: View {
             Text(L("Swift Scripts")).font(.bodyStrong)
             EditorPanelBadge("\(scriptFiles.count)")
             Spacer(minLength: 0)
-            if isDirty {
-                Text(L("Unsaved changes"))
-                    .font(.caption)
-                    .foregroundColor(.warning)
-            }
+            // The dirty state already lives in the status indicator next to the
+            // buttons, so a second "Unsaved changes" label only added noise.
             Button(action: newScript) { Text(L("New Script")) }
                 .buttonStyle(GhostButtonStyle())
             Button(isEnabled: selectedScript != nil && isDirty && !isCompiling,
@@ -85,7 +82,24 @@ struct ScriptPanel: View {
             }
             .buttonStyle(GhostButtonStyle())
             statusIndicator
+            languageServiceIndicator
         }
+    }
+
+    /// Traffic light for the SourceKit-LSP session next to the build state.
+    /// Empty when the service is healthy — absence is the normal case, not a
+    /// placeholder waiting to be filled.
+    private var languageServiceIndicator: some View {
+        guard !languageServiceMessage.isEmpty else {
+            return AnyView(EmptyView())
+        }
+        return AnyView(Row(alignment: .center, spacing: 4) {
+            Box { EmptyView() }
+                .frame(width: 6, height: 6)
+                .background(.warning)
+                .cornerRadius(3)
+            Text(L("LSP")).font(.caption).foregroundColor(.warning)
+        })
     }
 
     private var statusIndicator: some View {
@@ -166,10 +180,16 @@ struct ScriptPanel: View {
                                  onHoverEnd: cancelHover)
                     .flex(1, shrink: 1)
                 if !languageServiceMessage.isEmpty {
-                    Text(languageServiceMessage)
-                        .font(.caption)
-                        .foregroundColor(.warning)
-                        .padding(horizontal: 10, vertical: 4)
+                    Row(alignment: .center, spacing: 8) {
+                        Text(languageServiceMessage, lineLimit: 1)
+                            .font(.caption)
+                            .foregroundColor(.warning)
+                        Spacer(minLength: 0)
+                        Button(action: { languageServiceMessage = "" }) { Text(L("Dismiss")) }
+                            .buttonStyle(GhostButtonStyle())
+                    }
+                    .padding(horizontal: 10, vertical: 4)
+                    .background(.surfaceSunken)
                 }
                 if let diagnostics = diagnosticsByScriptID[selectedScript.identifier],
                    !diagnostics.isEmpty {
@@ -191,23 +211,23 @@ struct ScriptPanel: View {
     }
 
     private func editorHeader(_ file: DynamicScriptManager.ScriptFile) -> some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 6) {
-            Row(alignment: .center, spacing: 8) {
-                Text(file.displayName).font(.headline)
-                Text(".swift").font(.caption).foregroundColor(.onSurfaceMuted)
-                Spacer(minLength: 0)
-                Button(action: editInExternalEditor) { Text(L("Open Externally")) }
-                    .buttonStyle(GhostButtonStyle())
-                Button(action: revealInFinder) { Text(L("Reveal")) }
-                    .buttonStyle(GhostButtonStyle())
-                Button(action: deleteSelectedScript) { Text(L("Delete")) }
-                    .buttonStyle(GhostButtonStyle())
-            }
+        // Single row: the identifier rides next to the file name instead of
+        // claiming a second line, and the destructive action is pushed right.
+        Row(alignment: .center, spacing: 8) {
+            Text(file.displayName).font(.headline)
+            Text(".swift").font(.caption).foregroundColor(.onSurfaceMuted)
             Text(file.identifier, lineLimit: 1)
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
+            Spacer(minLength: 0)
+            Button(action: editInExternalEditor) { Text(L("Open Externally")) }
+                .buttonStyle(GhostButtonStyle())
+            Button(action: revealInFinder) { Text(L("Reveal")) }
+                .buttonStyle(GhostButtonStyle())
+            Button(action: deleteSelectedScript) { Text(L("Delete")) }
+                .buttonStyle(GhostButtonStyle())
         }
-        .padding(horizontal: 12, vertical: 8)
+        .padding(horizontal: 12, vertical: 7)
         .background(.surface)
     }
 
