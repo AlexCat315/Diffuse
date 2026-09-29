@@ -9,7 +9,11 @@ struct ScriptLanguageWorkspace {
     }
 
     let scriptsDirectoryURL: URL
-    let enginePackageURL: URL
+    /// `-I` paths to already-built `.swiftmodule` files, matching exactly what
+    /// `SwiftScriptCompiler` passes for script compilation.
+    let engineModulePaths: [String]
+    let clangModuleMapPaths: [String]
+    let clangIncludePaths: [String]
 
     var rootURL: URL {
         scriptsDirectoryURL
@@ -69,18 +73,27 @@ struct ScriptLanguageWorkspace {
         return "Script_\(base)_\(String(stableHash, radix: 16))"
     }
 
+    /// `-I` / `-Xcc` flags each analysis target needs to resolve engine modules
+    /// without building them. This is the same include set ``SwiftScriptCompiler``
+    /// uses, so the language server sees *exactly* the same modules as the
+    /// dynamic-script compiler — instead of trying to build the whole engine
+    /// package (which pulls wgpu/SDL3/Jolt and never finishes).
+    private var includeFlags: [String] {
+        var flags: [String] = []
+        for path in engineModulePaths { flags.append(contentsOf: ["-I", path]) }
+        for path in clangIncludePaths { flags.append(contentsOf: ["-Xcc", "-I\(path)"]) }
+        for path in clangModuleMapPaths { flags.append(contentsOf: ["-Xcc", "-fmodule-map-file=\(path)"]) }
+        return flags
+    }
+
     private func manifest(for documents: [Document]) -> String {
-        let dependencies = [
-            ".product(name: \"ScriptRuntime\", package: \"GuavaEngine\")",
-            ".product(name: \"SceneRuntime\", package: \"GuavaEngine\")",
-            ".product(name: \"SIMDCompat\", package: \"GuavaEngine\")",
-        ].joined(separator: ",\n                ")
+        let settings = ".unsafeFlags([\(includeFlags.map(String.init(reflecting:)).joined(separator: ", "))])"
         let targets = documents.map { document in
             """
                     .target(
                         name: \(String(reflecting: document.targetName)),
-                        dependencies: [\(dependencies)],
-                        path: \(String(reflecting: "Sources/\(document.targetName)"))
+                        path: \(String(reflecting: "Sources/\(document.targetName)")),
+                        swiftSettings: [\(settings)]
                     )
             """
         }.joined(separator: ",\n")
@@ -92,9 +105,6 @@ struct ScriptLanguageWorkspace {
         let package = Package(
             name: "GuavaScriptAnalysis",
             platforms: [.macOS(.v13)],
-            dependencies: [
-                .package(name: "GuavaEngine", path: \(String(reflecting: enginePackageURL.path)))
-            ],
             targets: [
         \(targets)
             ]

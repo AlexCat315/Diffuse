@@ -132,8 +132,12 @@ public final class SwiftScriptCompiler {
         try Self.generatedEntryPointSource.write(to: shimURL, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: shimURL) }
 
+        // Emit to a unique path on every compilation. The previous generation
+        // is typically still mapped by `dlopen`, and re-emitting over a mapped
+        // image makes the linker fail with `EEXIST`. The caller records the
+        // returned path and removes the previous file after the loader swaps.
         let outputPath = outputDirectory
-            .appendingPathComponent("\(scriptID).\(Self.dylibExtension)")
+            .appendingPathComponent("\(scriptID)-\(UUID().uuidString).\(Self.dylibExtension)")
             .path
 
         // On Windows, ensure the import library exists before linking.
