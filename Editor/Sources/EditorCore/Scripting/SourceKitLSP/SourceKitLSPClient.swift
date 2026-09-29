@@ -1,117 +1,28 @@
 import Foundation
 
-public enum SourceKitLSPClientError: Error, LocalizedError, Sendable, Equatable {
-    case executableNotFound(String)
-    case launchFailed(String)
-    case protocolViolation(String)
-    case serverError(code: Int, message: String)
-    case requestTimedOut(String)
-    case processTerminated(Int32)
-    case notRunning
-
-    public var errorDescription: String? {
-        switch self {
-        case let .executableNotFound(path):
-            return "Could not locate sourcekit-lsp at '\(path)'. Set GUAVA_SOURCEKIT_LSP_PATH to the toolchain executable."
-        case let .launchFailed(message):
-            return "Could not start sourcekit-lsp: \(message)"
-        case let .protocolViolation(message):
-            return "Invalid SourceKit-LSP message: \(message)"
-        case let .serverError(code, message):
-            return "SourceKit-LSP request failed (\(code)): \(message)"
-        case let .requestTimedOut(method):
-            return "SourceKit-LSP request '\(method)' timed out."
-        case let .processTerminated(status):
-            return "sourcekit-lsp exited with status \(status)."
-        case .notRunning:
-            return "SourceKit-LSP is not running."
-        }
-    }
-}
-
-public struct SourceKitLSPNotification: Sendable {
-    public let method: String
-    public let params: Data
-
-    public init(method: String, params: Data) {
-        self.method = method
-        self.params = params
-    }
-}
-
-struct LSPContentLengthDecoder {
-    static let maximumHeaderBytes = 16 * 1_024
-    static let maximumBodyBytes = 32 * 1_024 * 1_024
-    private static let headerTerminator = Data([13, 10, 13, 10])
-    private(set) var buffer = Data()
-
-    mutating func append(_ data: Data) throws -> [Data] {
-        buffer.append(data)
-        var messages: [Data] = []
-
-        while true {
-            guard let separator = buffer.range(of: Self.headerTerminator) else {
-                guard buffer.count <= Self.maximumHeaderBytes else {
-                    throw SourceKitLSPClientError.protocolViolation("header exceeds size limit")
-                }
-                break
-            }
-
-            let headerData = buffer[..<separator.lowerBound]
-            guard headerData.count <= Self.maximumHeaderBytes,
-                  let header = String(data: headerData, encoding: .ascii) else {
-                throw SourceKitLSPClientError.protocolViolation("invalid header encoding")
-            }
-            guard let contentLength = Self.contentLength(in: header) else {
-                throw SourceKitLSPClientError.protocolViolation("missing Content-Length header")
-            }
-            guard contentLength <= Self.maximumBodyBytes else {
-                throw SourceKitLSPClientError.protocolViolation("message exceeds size limit")
-            }
-
-            let bodyStart = separator.upperBound
-            guard buffer.count - bodyStart >= contentLength else { break }
-            let bodyEnd = bodyStart + contentLength
-            messages.append(Data(buffer[bodyStart..<bodyEnd]))
-            buffer.removeSubrange(..<bodyEnd)
-        }
-
-        return messages
-    }
-
-    static func frame(_ body: Data) -> Data {
-        var result = Data("Content-Length: \(body.count)\r\n\r\n".utf8)
-        result.append(body)
-        return result
-    }
-
-    private static func contentLength(in header: String) -> Int? {
-        for line in header.split(separator: "\r\n") {
-            let parts = line.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
-            guard parts.count == 2,
-                  parts[0].trimmingCharacters(in: .whitespaces).caseInsensitiveCompare("Content-Length") == .orderedSame,
-                  let length = Int(parts[1].trimmingCharacters(in: .whitespaces)),
-                  length >= 0 else {
-                continue
-            }
-            return length
-        }
-        return nil
-    }
-}
-
+/// Owns one `sourcekit-lsp` child process and speaks JSON-RPC over its pipes.
+///
+/// Responsibilities are deliberately narrow: process lifecycle, request/response
+/// correlation, and turning server requests we do not implement into a clean
+/// error reply. What the messages *mean* lives in
+/// ``ScriptLanguageRequest``/``ScriptLanguageResponse``.
 public actor SourceKitLSPClient {
     public typealias NotificationHandler = @Sendable (SourceKitLSPNotification) -> Void
+
+    private static let shutdownTimeout: Duration = .seconds(2)
+    /// Tail of stderr retained so it can be attached to a mid-flight failure.
+    private static let stderrTailCapacity = 8_192
 
     private let executableURL: URL
     private let workspaceURL: URL
     private let scratchURL: URL
     private let environmentOverrides: [String: String]
+
     private var process: Process?
     private var inputHandle: FileHandle?
     private var outputPipe: Pipe?
     private var errorPipe: Pipe?
-    private var decoder = LSPContentLengthDecoder()
+    private var decoder = LSPMessageFramer.Decoder()
     private var pending: [Int: CheckedContinuation<Data?, Error>] = [:]
     private var nextRequestID = 1
     private var notificationHandler: NotificationHandler?
@@ -128,40 +39,11 @@ public actor SourceKitLSPClient {
         self.environmentOverrides = environment
     }
 
-    public static func resolveExecutableURL(environment: [String: String] = ProcessInfo.processInfo.environment) throws -> URL {
-        if let override = environment["GUAVA_SOURCEKIT_LSP_PATH"], !override.isEmpty {
-            let url = URL(fileURLWithPath: override)
-            guard FileManager.default.isExecutableFile(atPath: url.path) else {
-                throw SourceKitLSPClientError.executableNotFound(override)
-            }
-            return url
-        }
-
-        if let pathURL = executable(named: "sourcekit-lsp", path: environment["PATH"] ?? "") {
-            return pathURL
-        }
-
-        if let xcrunURL = executable(named: "xcrun", path: environment["PATH"] ?? "") {
-            let process = Process()
-            let output = Pipe()
-            process.executableURL = xcrunURL
-            process.arguments = ["--find", "sourcekit-lsp"]
-            process.standardOutput = output
-            process.standardError = FileHandle.nullDevice
-            do { try process.run() } catch {
-                throw SourceKitLSPClientError.executableNotFound("sourcekit-lsp")
-            }
-            process.waitUntilExit()
-            let path = String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if process.terminationStatus == 0, !path.isEmpty {
-                let url = URL(fileURLWithPath: path)
-                if FileManager.default.isExecutableFile(atPath: url.path) { return url }
-            }
-        }
-
-        throw SourceKitLSPClientError.executableNotFound("sourcekit-lsp")
+    deinit {
+        process?.terminate()
     }
+
+    // MARK: - Lifecycle
 
     public func start(notificationHandler: NotificationHandler? = nil) throws {
         guard process?.isRunning != true else { return }
@@ -219,18 +101,12 @@ public actor SourceKitLSPClient {
 
     public func initialize() async throws {
         guard process?.isRunning == true else { throw SourceKitLSPClientError.notRunning }
-        let rootURI = workspaceURL.standardizedFileURL.absoluteString
-        let params: [String: Any] = [
-            "processId": ProcessInfo.processInfo.processIdentifier,
-            "clientInfo": ["name": "GuavaEditor", "version": "0.0.1"],
-            "rootUri": rootURI,
-            "workspaceFolders": [["uri": rootURI, "name": workspaceURL.lastPathComponent]],
-            "capabilities": Self.clientCapabilities,
-            "trace": "off",
-        ]
-        _ = try await request("initialize", params: Self.jsonData(params))
-        try notify("initialized", params: Self.jsonData([String: String]()))
+        _ = try await request("initialize",
+                              params: try LSPJSON.data(Self.initializeParams(workspaceURL: workspaceURL)))
+        try notify("initialized", params: try LSPJSON.data([String: String]()))
     }
+
+    // MARK: - Messaging
 
     public func request(_ method: String,
                         params: Data? = nil,
@@ -257,7 +133,7 @@ public actor SourceKitLSPClient {
 
     public func notify(_ method: String, params: Data? = nil) throws {
         guard process?.isRunning == true else { throw SourceKitLSPClientError.notRunning }
-        try write(Self.notificationBody(method: method, params: params))
+        try write(try Self.notificationBody(method: method, params: params))
     }
 
     public func stop() {
@@ -278,10 +154,24 @@ public actor SourceKitLSPClient {
 
     public func shutdown() async {
         if process?.isRunning == true {
-            _ = try? await request("shutdown", timeout: .seconds(2))
+            _ = try? await request("shutdown", timeout: Self.shutdownTimeout)
             try? notify("exit")
         }
         stop()
+    }
+
+    // MARK: - Client capabilities
+
+    private static func initializeParams(workspaceURL: URL) -> [String: Any] {
+        let rootURI = workspaceURL.standardizedFileURL.absoluteString
+        return [
+            "processId": ProcessInfo.processInfo.processIdentifier,
+            "clientInfo": ["name": "GuavaEditor", "version": "0.0.1"],
+            "rootUri": rootURI,
+            "workspaceFolders": [["uri": rootURI, "name": workspaceURL.lastPathComponent]],
+            "capabilities": Self.clientCapabilities,
+            "trace": "off",
+        ]
     }
 
     private static var clientCapabilities: [String: Any] {
@@ -294,35 +184,45 @@ public actor SourceKitLSPClient {
             ],
             "textDocument": [
                 "synchronization": ["dynamicRegistration": false, "willSave": false, "didSave": true],
-                "completion": ["completionItem": ["snippetSupport": true, "documentationFormat": ["markdown", "plaintext"]]],
+                "completion": [
+                    "completionItem": [
+                        "snippetSupport": true,
+                        "documentationFormat": ["markdown", "plaintext"],
+                    ],
+                ],
                 "hover": ["contentFormat": ["markdown", "plaintext"]],
                 "definition": ["dynamicRegistration": false],
                 "publishDiagnostics": ["relatedInformation": true],
-                "semanticTokens": ["requests": ["full": true], "tokenTypes": [], "tokenModifiers": [], "formats": ["relative"]],
+                "semanticTokens": [
+                    "requests": ["full": true],
+                    "tokenTypes": [],
+                    "tokenModifiers": [],
+                    "formats": ["relative"],
+                ],
             ],
         ]
     }
 
+    // MARK: - Encoding
+
     private static func requestBody(id: Int, method: String, params: Data?) throws -> Data {
         var body: [String: Any] = ["jsonrpc": "2.0", "id": id, "method": method]
         if let params { body["params"] = try JSONSerialization.jsonObject(with: params, options: [.fragmentsAllowed]) }
-        return try jsonData(body)
+        return try LSPJSON.data(body)
     }
 
     private static func notificationBody(method: String, params: Data?) throws -> Data {
         var body: [String: Any] = ["jsonrpc": "2.0", "method": method]
         if let params { body["params"] = try JSONSerialization.jsonObject(with: params, options: [.fragmentsAllowed]) }
-        return try jsonData(body)
-    }
-
-    static func jsonData(_ value: Any) throws -> Data {
-        try JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed, .sortedKeys])
+        return try LSPJSON.data(body)
     }
 
     private func write(_ body: Data) throws {
         guard let inputHandle else { throw SourceKitLSPClientError.notRunning }
-        try inputHandle.write(contentsOf: LSPContentLengthDecoder.frame(body))
+        try inputHandle.write(contentsOf: LSPMessageFramer.frame(body))
     }
+
+    // MARK: - Decoding
 
     private func consume(_ data: Data) {
         do {
@@ -346,7 +246,7 @@ public actor SourceKitLSPClient {
                 let message = errorObject["message"] as? String ?? "Unknown server error"
                 continuation.resume(throwing: SourceKitLSPClientError.serverError(code: code, message: message))
             } else if let result = object["result"] {
-                continuation.resume(returning: try Self.jsonData(result))
+                continuation.resume(returning: try LSPJSON.data(result))
             } else {
                 continuation.resume(returning: Data("null".utf8))
             }
@@ -358,10 +258,13 @@ public actor SourceKitLSPClient {
             try respondToServerRequest(id: requestID, method: method, params: object["params"])
             return
         }
-        let params = try object["params"].map { try Self.jsonData($0) } ?? Data("null".utf8)
+        let params = try LSPJSON.object(object["params"])
         notificationHandler?(SourceKitLSPNotification(method: method, params: params))
     }
 
+    /// Answers the handful of server-initiated requests SourceKit-LSP issues
+    /// during startup. Everything else is rejected with `-32601` so the server
+    /// stops waiting for a reply instead of blocking the RPC channel.
     private func respondToServerRequest(id: Any, method: String, params: Any?) throws {
         let result: Any
         switch method {
@@ -382,11 +285,13 @@ public actor SourceKitLSPClient {
                 "id": id,
                 "error": ["code": -32601, "message": "Method not supported by GuavaEditor"],
             ]
-            try write(Self.jsonData(response))
+            try write(try LSPJSON.data(response))
             return
         }
-        try write(Self.jsonData(["jsonrpc": "2.0", "id": id, "result": result]))
+        try write(try LSPJSON.data(["jsonrpc": "2.0", "id": id, "result": result]))
     }
+
+    // MARK: - Failure paths
 
     private func expireRequest(_ id: Int, method: String) {
         pending.removeValue(forKey: id)?.resume(throwing: SourceKitLSPClientError.requestTimedOut(method))
@@ -409,8 +314,8 @@ public actor SourceKitLSPClient {
 
     private func consumeStderr(_ data: Data) {
         stderrTail.append(data)
-        if stderrTail.count > 8_192 {
-            stderrTail.removeSubrange(..<(stderrTail.count - 8_192))
+        if stderrTail.count > Self.stderrTailCapacity {
+            stderrTail.removeSubrange(..<(stderrTail.count - Self.stderrTailCapacity))
         }
     }
 
@@ -420,14 +325,5 @@ public actor SourceKitLSPClient {
         for continuation in continuations {
             continuation.resume(throwing: error)
         }
-    }
-
-    private static func executable(named name: String, path: String) -> URL? {
-        for directory in path.split(separator: ":", omittingEmptySubsequences: false) {
-            let base = directory.isEmpty ? "/usr/bin" : String(directory)
-            let candidate = URL(fileURLWithPath: base, isDirectory: true).appendingPathComponent(name)
-            if FileManager.default.isExecutableFile(atPath: candidate.path) { return candidate }
-        }
-        return nil
     }
 }

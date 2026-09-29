@@ -55,17 +55,30 @@ extension TextField {
                 }
             }
             registry.setMotion(node, route: .textInput) { event, _ in
-                guard state.isDragging else { return .ignored }
-                let target = textField.characterIndex(atWindowPoint: CGPoint(x: CGFloat(event.x),
-                                                                             y: CGFloat(event.y)),
-                                                      state: state,
-                                                      node: node)
-                if state.selectionAnchor == nil {
-                    state.selectionAnchor = state.cursorIndex
+                let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
+                if state.isDragging {
+                    let target = textField.characterIndex(atWindowPoint: point,
+                                                          state: state,
+                                                          node: node)
+                    if state.selectionAnchor == nil {
+                        state.selectionAnchor = state.cursorIndex
+                    }
+                    state.cursorIndex = target
+                    textField.recordCaretActivity(state)
+                    return .handled
                 }
-                state.cursorIndex = target
-                textField.recordCaretActivity(state)
-                return .handled
+                // Without a subscriber this stays free — resolving the pointer
+                // to a character index costs a layout pass, which pointer motion
+                // would otherwise charge to every frame.
+                guard textField.onHoverChange != nil,
+                      TextEnvironmentHolder.current != nil else { return .ignored }
+                let target = textField.characterIndex(atWindowPoint: point,
+                                                     state: state,
+                                                     node: node)
+                textField.reportHover(TextFieldHoverAnchor(characterIndex: target,
+                                                           windowX: event.x,
+                                                           windowY: event.y))
+                return .ignored
             }
             registry.setHover(node) { phase in
                 switch phase {
@@ -75,6 +88,7 @@ extension TextField {
                 case .leave:
                     node.attachments[TextField.scrollbarHoveredKey] = false
                     textField.setScrollbarChromeVisible(false, on: node)
+                    textField.reportHover(nil)
                 }
             }
             registry.setWheel(node, route: .textInput) { event, _ in
