@@ -32,6 +32,10 @@ public struct TextField: View {
     public let text: Binding<String>
     public let placeholder: String
     public let axis: Axis
+    public let maxVisibleLines: Int
+    public let showsLineNumbers: Bool
+    public let lineNumberColor: Color?
+    public let syntaxColorAtUTF8Offset: ((String, Int) -> Color?)?
     public let size: Size
     public let disabled: Bool
     public let readOnly: Bool
@@ -58,6 +62,13 @@ public struct TextField: View {
     public let onSubmit: (() -> Void)?
     public let onCancel: (() -> Void)?
     public let onChange: ((String) -> Void)?
+    /// Pointer resting position inside the field, reported as the pointer moves
+    /// whether or not a drag selection is active. Receives `nil` when the
+    /// pointer leaves. Used to anchor editor affordances such as hover popups.
+    public let onHoverChange: ((TextFieldHoverAnchor?) -> Void)?
+    /// Caret and selection movement. Reported through the same funnel as cursor
+    /// blinking, so it fires per keystroke as well as per arrow key.
+    public let onCaretChange: ((TextFieldCaretState) -> Void)?
     public let onFocus: (() -> Void)?
     public let onBlur: (() -> Void)?
     public let onClear: (() -> Void)?
@@ -69,6 +80,10 @@ public struct TextField: View {
     public init(_ placeholder: String = "",
                 text: Binding<String>,
                 axis: Axis = .horizontal,
+                maxVisibleLines: Int = 6,
+                showsLineNumbers: Bool = false,
+                lineNumberColor: Color? = nil,
+                syntaxColorAtUTF8Offset: ((String, Int) -> Color?)? = nil,
                 size: Size = .regular,
                 disabled: Bool = false,
                 readOnly: Bool = false,
@@ -84,6 +99,8 @@ public struct TextField: View {
                 onSubmit: (() -> Void)? = nil,
                 onCancel: (() -> Void)? = nil,
                 onChange: ((String) -> Void)? = nil,
+                onHoverChange: ((TextFieldHoverAnchor?) -> Void)? = nil,
+                onCaretChange: ((TextFieldCaretState) -> Void)? = nil,
                 onFocus: (() -> Void)? = nil,
                 onBlur: (() -> Void)? = nil,
                 onClear: (() -> Void)? = nil,
@@ -94,6 +111,10 @@ public struct TextField: View {
         self.text = text
         self.placeholder = placeholder
         self.axis = axis
+        self.maxVisibleLines = max(1, maxVisibleLines)
+        self.showsLineNumbers = showsLineNumbers
+        self.lineNumberColor = lineNumberColor
+        self.syntaxColorAtUTF8Offset = syntaxColorAtUTF8Offset
         self.size = size
         self.disabled = disabled
         self.readOnly = readOnly
@@ -109,6 +130,8 @@ public struct TextField: View {
         self.onSubmit = onSubmit
         self.onCancel = onCancel
         self.onChange = onChange
+        self.onHoverChange = onHoverChange
+        self.onCaretChange = onCaretChange
         self.onFocus = onFocus
         self.onBlur = onBlur
         self.onClear = onClear
@@ -126,6 +149,8 @@ public struct TextField: View {
         let text: String
         let placeholder: String
         let axis: Axis
+        let maxVisibleLines: Int
+        let showsLineNumbers: Bool
         let secure: Bool
     }
 
@@ -134,6 +159,10 @@ public struct TextField: View {
         let placeholder: String
         let axis: Axis
         let size: Size
+        let maxVisibleLines: Int
+        let showsLineNumbers: Bool
+        let lineNumberColor: Color?
+        let syntaxColoringEnabled: Bool
         let disabled: Bool
         let readOnly: Bool
         let secure: Bool
@@ -152,7 +181,6 @@ public struct TextField: View {
     }
 
     private static let minimumFieldHeightDefault: Float = 32
-    private static let multilineMaxVisibleLines: Float = 6
     static let multilineWheelStep: Float = 30
     static let scrollbarTrackThickness: Float = 6
     static let scrollbarInset: Float = 3
@@ -242,6 +270,10 @@ public struct TextField: View {
                                           placeholder: placeholder,
                                           axis: axis,
                                           size: size,
+                                          maxVisibleLines: maxVisibleLines,
+                                          showsLineNumbers: showsLineNumbers,
+                                          lineNumberColor: lineNumberColor,
+                                          syntaxColoringEnabled: syntaxColorAtUTF8Offset != nil,
                                           disabled: disabled,
                                           readOnly: readOnly,
                                           secure: secure,
@@ -341,6 +373,8 @@ public struct TextField: View {
         let inputs = MeasureInputs(text: text.wrappedValue,
                                    placeholder: placeholder,
                                    axis: axis,
+                                   maxVisibleLines: maxVisibleLines,
+                                   showsLineNumbers: showsLineNumbers,
                                    secure: secure)
         layout.attachments[Self.measureInputsKey] = inputs
         if axis == .vertical {
@@ -358,6 +392,8 @@ public struct TextField: View {
         let next = MeasureInputs(text: text.wrappedValue,
                                  placeholder: placeholder,
                                  axis: axis,
+                                 maxVisibleLines: maxVisibleLines,
+                                 showsLineNumbers: showsLineNumbers,
                                  secure: secure)
         let previous = layout.attachments[Self.measureInputsKey] as? MeasureInputs
         layout.attachments[Self.measureInputsKey] = next
@@ -699,14 +735,37 @@ public struct TextField: View {
                                  color: resolvedSelectionColor.multipliedAlpha(node.opacity))
         }
 
-        list.addText(engine.visibleLayout(from: renderCache.layout,
-                                          scrollOffsetY: state.scrollOffsetY,
-                                          visibleHeight: state.visibleTextHeight,
-                                          lineHeight: resolvedLineHeight),
+        let visibleLayout = engine.visibleLayout(from: renderCache.layout,
+                                                 scrollOffsetY: state.scrollOffsetY,
+                                                 visibleHeight: state.visibleTextHeight,
+                                                 lineHeight: resolvedLineHeight)
+        if showsLineNumbers && axis == .vertical {
+            drawLineNumbers(visibleLayout,
+                            source: current,
+                            origin: origin,
+                            textOriginX: textOriginX,
+                            textOriginY: textOriginY,
+                            frameHeight: frameHeight,
+                            lineHeight: resolvedLineHeight,
+                            node: node,
+                            env: env,
+                            font: resolvedFont,
+                            list: list)
+        }
+
+        list.addText(visibleLayout,
                      origin: (textOriginX, textOriginY),
                      color: renderColor,
                      textureID: env.atlasTextureID,
-                     atlas: env.atlas)
+                     atlas: env.atlas,
+                     colorForGlyph: { glyph in
+            guard !renderState.showsPlaceholder,
+                  !renderState.isComposing,
+                  let syntaxColor = syntaxColorAtUTF8Offset?(current, Int(glyph.cluster)) else {
+                return nil
+            }
+            return syntaxColor.multipliedAlpha(node.opacity)
+        })
 
         // Draw counter and clear icon at the trailing edge.
         // Push the clear/counter affordances inside the append slab so they
@@ -1008,7 +1067,83 @@ public struct TextField: View {
                                           maxWidth: .infinity, alignment: .leading)
             width += layout.totalWidth + theme.spacing.xs
         }
+        width += lineNumberGutterWidth(env: env,
+                                       font: font,
+                                       lineHeight: lineHeight,
+                                       theme: theme)
         return width
+    }
+
+    private func lineNumberGutterWidth(env: TextEnvironment,
+                                       font: Font,
+                                       lineHeight: Float,
+                                       theme: Theme) -> Float {
+        guard showsLineNumbers, axis == .vertical else { return 0 }
+        let lineCount = max(1, text.wrappedValue.reduce(into: 1) { count, character in
+            if character == "\n" { count += 1 }
+        })
+        let numberFont = Font.system(size: max(9, font.size - 2))
+        let numberLayout = env.cachedLayout(text: String(repeating: "8", count: String(lineCount).count),
+                                            font: numberFont,
+                                            lineHeight: lineHeight,
+                                            maxWidth: .infinity,
+                                            alignment: .trailing)
+        return numberLayout.totalWidth + theme.spacing.md
+    }
+
+    private func drawLineNumbers(_ layout: TextLayoutResult,
+                                 source: String,
+                                 origin: CGPoint,
+                                 textOriginX: Float,
+                                 textOriginY: Float,
+                                 frameHeight: Float,
+                                 lineHeight: Float,
+                                 node: Node,
+                                 env: TextEnvironment,
+                                 font: Font,
+                                 list: DrawList) {
+        let theme = node.theme
+        let gutterWidth = lineNumberGutterWidth(env: env,
+                                                font: font,
+                                                lineHeight: lineHeight,
+                                                theme: theme)
+        guard gutterWidth > 0 else { return }
+        let gutterX = textOriginX - gutterWidth
+        list.addRect(UIRect(x: gutterX,
+                            y: Float(origin.y),
+                            width: gutterWidth,
+                            height: frameHeight),
+                     color: theme.colors.surfaceVariant.multipliedAlpha(node.opacity))
+        list.addRect(UIRect(x: textOriginX - 1,
+                            y: Float(origin.y),
+                            width: 1,
+                            height: frameHeight),
+                     color: theme.colors.onSurfaceMuted.multipliedAlpha(node.opacity * 0.22))
+
+        let numberFont = Font.system(size: max(9, font.size - 2))
+        let utf8 = Array(source.utf8)
+        var lastLineNumber = 0
+        for line in layout.lines {
+            let byteOffset = min(utf8.count, Int(line.startCluster))
+            let lineNumber = 1 + utf8[..<byteOffset].reduce(into: 0) { count, byte in
+                if byte == 10 { count += 1 }
+            }
+            guard lineNumber != lastLineNumber else { continue }
+            lastLineNumber = lineNumber
+            let numberLayout = env.cachedLayout(text: String(lineNumber),
+                                                font: numberFont,
+                                                lineHeight: lineHeight,
+                                                maxWidth: .infinity,
+                                                alignment: .trailing)
+            let numberBaseline = numberLayout.lines.first?.baselineY ?? lineHeight
+            list.addText(numberLayout,
+                         origin: (gutterX + gutterWidth - theme.spacing.xs - numberLayout.totalWidth,
+                                  textOriginY + line.baselineY - numberBaseline),
+                         color: (lineNumberColor ?? theme.colors.onSurfaceMuted)
+                            .multipliedAlpha(node.opacity),
+                         textureID: env.atlasTextureID,
+                         atlas: env.atlas)
+        }
     }
 
     /// Width consumed by `suffix` glyph + `append` slab at the trailing edge.
@@ -1126,7 +1261,7 @@ public struct TextField: View {
             }
 
             let maxHeight = max(snapshot.minimumFieldHeight,
-                                resolvedLineHeight * Self.multilineMaxVisibleLines + insetY * 2)
+                                resolvedLineHeight * Float(snapshot.maxVisibleLines) + insetY * 2)
 
             return CGSize(width: CGFloat(resolvedWidth),
                           height: CGFloat(min(max(snapshot.minimumFieldHeight,
@@ -1158,7 +1293,7 @@ public struct TextField: View {
         let insetY = Self.verticalInset(for: resolvedLineHeight)
         let contentHeight = Float(lineCount) * resolvedLineHeight
         let maxHeight = max(minimumFieldHeight,
-                            resolvedLineHeight * Self.multilineMaxVisibleLines + insetY * 2)
+                            resolvedLineHeight * Float(maxVisibleLines) + insetY * 2)
         return min(max(minimumFieldHeight, contentHeight + insetY * 2), maxHeight)
     }
 

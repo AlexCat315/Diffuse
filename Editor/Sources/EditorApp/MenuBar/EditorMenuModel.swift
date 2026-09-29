@@ -62,6 +62,7 @@ struct EditorMenuModel {
                 action(presetTitle(.animationSequencer), key: "", selected: activeLayoutPreset == .animationSequencer,
                        command: .setLayoutPreset(.animationSequencer)),
                 .separator,
+                  action(L("Scripts"), key: "5", command: .showScripts),
                 action(L("Reopen Closed Panel"), key: "t", modifiers: [.primary, .shift],
                        command: .reopenClosedPanel),
                 action(L("Reset Layout"), key: "", command: .resetLayout),

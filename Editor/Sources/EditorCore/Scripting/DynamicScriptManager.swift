@@ -49,6 +49,8 @@ public final class DynamicScriptManager: @unchecked Sendable {
     private let scriptRuntime: ScriptRuntime
     private let compiler: SwiftScriptCompiler
     private let loader: SwiftScriptLoader
+    private let languageSupport: ScriptLanguageSupport?
+    private let languageSupportUnavailableMessage: String?
 
     @MainActor private var statusByScriptID: [String: CompilationStatus] = [:]
 
@@ -67,7 +69,8 @@ public final class DynamicScriptManager: @unchecked Sendable {
                 scriptRuntime: ScriptRuntime,
                 engineModulePaths: [String],
                 clangModuleMapPaths: [String] = [],
-                clangIncludePaths: [String] = []) {
+            clangIncludePaths: [String] = [],
+            enginePackageDirectory: String? = nil) {
         self.projectDirectory = projectDirectory
         self.scriptRuntime = scriptRuntime
         self.compiler = SwiftScriptCompiler(
@@ -77,12 +80,34 @@ public final class DynamicScriptManager: @unchecked Sendable {
             outputDirectory: Self.scriptsBuildDirectory(projectDirectory: projectDirectory)
         )
         self.loader = SwiftScriptLoader()
+
+        if let enginePackageDirectory {
+            do {
+                let executable = try SourceKitLSPExecutableLocator.resolveExecutableURL()
+                self.languageSupport = ScriptLanguageSupport(
+                    scriptsDirectoryURL: Self.scriptsDirectory(projectDirectory: projectDirectory),
+                    enginePackageURL: URL(fileURLWithPath: enginePackageDirectory, isDirectory: true),
+                    executableURL: executable
+                )
+                self.languageSupportUnavailableMessage = nil
+            } catch {
+                self.languageSupport = nil
+                self.languageSupportUnavailableMessage = error.localizedDescription
+            }
+        } else {
+            self.languageSupport = nil
+            self.languageSupportUnavailableMessage = "Could not locate the Engine Swift package for script analysis."
+        }
     }
 
     // MARK: - Directory layout
 
     /// `<projectDirectory>/Scripts/`
     public var scriptsDirectoryURL: URL {
+        Self.scriptsDirectory(projectDirectory: projectDirectory)
+    }
+
+    private static func scriptsDirectory(projectDirectory: String) -> URL {
         URL(fileURLWithPath: projectDirectory, isDirectory: true)
             .appendingPathComponent("Scripts", isDirectory: true)
     }
@@ -109,6 +134,73 @@ public final class DynamicScriptManager: @unchecked Sendable {
             .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
     }
 
+    public func startLanguageService(
+        onDiagnostics: @escaping ScriptLanguageSupport.DiagnosticsHandler
+    ) async throws {
+        guard let languageSupport else {
+            throw ScriptLanguageSupportError.unavailable(languageSupportUnavailableMessage ?? "Unknown setup error.")
+        }
+        let sources = try scanScriptFiles().map { file in
+            ScriptLanguageSource(file: file, text: try readSource(at: file.url))
+        }
+        try await languageSupport.start(sources: sources, onDiagnostics: onDiagnostics)
+    }
+
+    public func updateLanguageSource(scriptID: String, text: String) async throws {
+        guard let languageSupport else {
+            throw ScriptLanguageSupportError.unavailable(languageSupportUnavailableMessage ?? "Unknown setup error.")
+        }
+        try await languageSupport.update(scriptID: scriptID, text: text)
+    }
+
+    public func refreshLanguageWorkspace() async throws {
+        guard let languageSupport else {
+            throw ScriptLanguageSupportError.unavailable(languageSupportUnavailableMessage ?? "Unknown setup error.")
+        }
+        let sources = try scanScriptFiles().map { file in
+            ScriptLanguageSource(file: file, text: try readSource(at: file.url))
+        }
+        try await languageSupport.restart(sources: sources)
+    }
+
+    /// True when a SourceKit-LSP session can answer semantic queries. The UI
+    /// uses this to hide hover affordances rather than reporting failures for
+    /// every mouse pause on machines without a Swift toolchain.
+    public var isLanguageServiceAvailable: Bool { languageSupport != nil }
+
+    public var languageServiceUnavailableReason: String? { languageSupportUnavailableMessage }
+
+    // MARK: - Semantic queries
+
+    public func hover(scriptID: String,
+                      at position: ScriptLanguagePosition) async throws -> ScriptHoverResult? {
+        try await performOnLanguageService { try await $0.hover(scriptID: scriptID, at: position) }
+    }
+
+    public func completion(scriptID: String,
+                           at position: ScriptLanguagePosition,
+                           triggerCharacter: String? = nil) async throws -> ScriptCompletionResult {
+        try await performOnLanguageService {
+            try await $0.completion(scriptID: scriptID,
+                                    at: position,
+                                    triggerCharacter: triggerCharacter)
+        }
+    }
+
+    public func definition(scriptID: String,
+                           at position: ScriptLanguagePosition) async throws -> [ScriptDefinitionLocation] {
+        try await performOnLanguageService { try await $0.definition(scriptID: scriptID, at: position) }
+    }
+
+    private func performOnLanguageService<T: Sendable>(
+        _ body: (ScriptLanguageSupport) async throws -> T
+    ) async throws -> T {
+        guard let languageSupport else {
+            throw ScriptLanguageSupportError.unavailable(languageSupportUnavailableMessage ?? "Unknown setup error.")
+        }
+        return try await body(languageSupport)
+    }
+
     /// Reads the UTF-8 source of a script file.
     public func readSource(at url: URL) throws -> String {
         try String(contentsOf: url, encoding: .utf8)
@@ -128,8 +220,27 @@ public final class DynamicScriptManager: @unchecked Sendable {
         let fm = FileManager.default
         let dir = scriptsDirectoryURL
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        let url = dir.appendingPathComponent("\(name).swift")
-        try source.write(to: url, atomically: true, encoding: .utf8)
+        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedName.isEmpty,
+              normalizedName != ".",
+              normalizedName != "..",
+              normalizedName.rangeOfCharacter(from: CharacterSet(charactersIn: "/\\:")) == nil else {
+            throw ScriptFileError.invalidName(name)
+        }
+
+        let url = dir.appendingPathComponent("\(normalizedName).swift")
+        guard !fm.fileExists(atPath: url.path) else {
+            throw ScriptFileError.alreadyExists(normalizedName)
+        }
+        guard fm.createFile(atPath: url.path, contents: nil) else {
+            throw ScriptFileError.alreadyExists(normalizedName)
+        }
+        do {
+            try Data(source.utf8).write(to: url, options: .atomic)
+        } catch {
+            try? fm.removeItem(at: url)
+            throw error
+        }
         return url
     }
 
@@ -230,6 +341,20 @@ public final class DynamicScriptManager: @unchecked Sendable {
     @MainActor
     public func status(for scriptID: String) -> CompilationStatus {
         statusByScriptID[scriptID] ?? .idle
+    }
+}
+
+public enum ScriptFileError: Error, LocalizedError, Equatable {
+    case invalidName(String)
+    case alreadyExists(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case let .invalidName(name):
+            return "Invalid script name '\(name)'. Use a file name without path separators."
+        case let .alreadyExists(name):
+            return "A script named '\(name)' already exists."
+        }
     }
 }
 
