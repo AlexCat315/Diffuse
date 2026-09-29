@@ -33,7 +33,7 @@ struct ScriptPanel: View {
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             toolbar
             Divider()
-            Row(alignment: .center, spacing: 0) {
+            Box(direction: .row, alignItems: .stretch, spacing: 0) {
                 sidebar.frame(width: 224)
                 Divider(axis: .vertical)
                 editorPane.flex(1, shrink: 1)
@@ -130,11 +130,7 @@ struct ScriptPanel: View {
             if let selectedScript {
                 editorHeader(selectedScript)
                 Divider()
-                TextField(L("Write Swift behavior…"), text: $sourceText, axis: .vertical)
-                    .font(.mono)
-                    .frame(minHeight: 280, maxHeight: .infinity)
-                    .padding(horizontal: 12, vertical: 10)
-                    .background(.surfaceSunken)
+                ScriptCodeEditor(source: $sourceText)
                     .flex(1, shrink: 1)
                 if !outputText.isEmpty {
                     Divider()
