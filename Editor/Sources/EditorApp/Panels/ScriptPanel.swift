@@ -367,17 +367,15 @@ enum ScriptTemplate {
     static let `default` = #"""
 import ScriptRuntime
 
-@_cdecl("guavaCreateScript")
-public func guavaCreateScript(_ output: UnsafeMutableRawPointer) {
-    let script = Script()
-        .onStart { _ in
-            // Runs once when this script is attached to an entity.
-        }
-        .onUpdate { context in
-            // Runs once per frame. Delta time is measured in seconds.
-            _ = context.deltaTime
-        }
-    output.assumingMemoryBound(to: Script.self).pointee = script
+struct GameScript: ScriptBehavior {
+    mutating func onStart(_ context: ScriptContext) {
+        // Runs once when this script is attached to an entity.
+    }
+
+    mutating func onUpdate(_ context: ScriptContext) {
+        // Runs once per frame. Delta time is measured in seconds.
+        _ = context.deltaTime
+    }
 }
 """#
 }

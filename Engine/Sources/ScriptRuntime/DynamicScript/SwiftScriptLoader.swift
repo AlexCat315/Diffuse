@@ -3,7 +3,7 @@ import Foundation
 /// Loads compiled Swift script dynamic libraries (`.dylib`/`.so`/`.dll`)
 /// into the engine process and extracts the `Script` they produce.
 ///
-/// Each script library must export a single C function:
+/// The compiler-generated shim exports a single C function:
 ///
 /// ```
 /// @_cdecl("guavaCreateScript")
@@ -24,23 +24,34 @@ public final class SwiftScriptLoader {
     private typealias LibraryHandle = UnsafeMutableRawPointer // HMODULE
     #endif
 
-    private var loadedHandles: [String: LibraryHandle] = [:]
+    private final class LoadedLibrary: @unchecked Sendable {
+        let handle: LibraryHandle
+
+        init(handle: LibraryHandle) {
+            self.handle = handle
+        }
+
+        deinit {
+            SwiftScriptLoader.closeLibrary(handle)
+        }
+    }
+
+    private var loadedLibraries: [String: LoadedLibrary] = [:]
 
     public init() {}
 
     // MARK: - Loading
 
-    /// Loads a compiled script library and returns the `Script` it produces.
-    /// If a library with the same `scriptID` was loaded before, it is unloaded
-    /// first (enabling hot-reload).
-    @discardableResult
-    public func load(scriptID: String, libraryPath: String) throws -> Script {
+    /// Loads a dynamic library and returns a factory that creates an isolated
+    /// `Script` instance each time it is called.
+    public func loadFactory(scriptID: String,
+                            libraryPath: String) throws -> @Sendable () -> Script {
         unload(scriptID: scriptID)
 
         let handle = try openLibrary(path: libraryPath)
 
         guard let symbol = lookupSymbol(handle: handle, name: "guavaCreateScript") else {
-            closeLibrary(handle)
+            Self.closeLibrary(handle)
             throw ScriptLoadError.symbolNotFound("guavaCreateScript")
         }
 
@@ -49,29 +60,26 @@ public final class SwiftScriptLoader {
         // reference UnsafeMutablePointer<Script> (Script is not C-representable).
         typealias CreateScriptFn = @convention(c) (UnsafeMutableRawPointer) -> Void
         let createScript = unsafeBitCast(symbol, to: CreateScriptFn.self)
+        let library = LoadedLibrary(handle: handle)
+        loadedLibraries[scriptID] = library
 
-        var script = Script()
-        withUnsafeMutablePointer(to: &script) { ptr in
-            createScript(UnsafeMutableRawPointer(ptr))
+        return { [library] in
+            var script = Script()
+            withUnsafeMutablePointer(to: &script) { ptr in
+                createScript(UnsafeMutableRawPointer(ptr))
+            }
+            return script.retaining(library)
         }
-
-        loadedHandles[scriptID] = handle
-        return script
     }
 
     /// Unloads a previously loaded script library by its ID.
     public func unload(scriptID: String) {
-        if let handle = loadedHandles.removeValue(forKey: scriptID) {
-            closeLibrary(handle)
-        }
+        loadedLibraries.removeValue(forKey: scriptID)
     }
 
     /// Unloads every loaded library.
     public func unloadAll() {
-        for handle in loadedHandles.values {
-            closeLibrary(handle)
-        }
-        loadedHandles.removeAll()
+        loadedLibraries.removeAll()
     }
 
     deinit {
@@ -109,7 +117,7 @@ public final class SwiftScriptLoader {
         #endif
     }
 
-    private func closeLibrary(_ handle: LibraryHandle) {
+    private static func closeLibrary(_ handle: LibraryHandle) {
         #if canImport(Darwin) || canImport(Glibc)
         dlclose(handle)
         #elseif os(Windows)
