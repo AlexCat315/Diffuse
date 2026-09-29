@@ -128,8 +128,27 @@ public final class DynamicScriptManager: @unchecked Sendable {
         let fm = FileManager.default
         let dir = scriptsDirectoryURL
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        let url = dir.appendingPathComponent("\(name).swift")
-        try source.write(to: url, atomically: true, encoding: .utf8)
+        let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedName.isEmpty,
+              normalizedName != ".",
+              normalizedName != "..",
+              normalizedName.rangeOfCharacter(from: CharacterSet(charactersIn: "/\\:")) == nil else {
+            throw ScriptFileError.invalidName(name)
+        }
+
+        let url = dir.appendingPathComponent("\(normalizedName).swift")
+        guard !fm.fileExists(atPath: url.path) else {
+            throw ScriptFileError.alreadyExists(normalizedName)
+        }
+        guard fm.createFile(atPath: url.path, contents: nil) else {
+            throw ScriptFileError.alreadyExists(normalizedName)
+        }
+        do {
+            try Data(source.utf8).write(to: url, options: .atomic)
+        } catch {
+            try? fm.removeItem(at: url)
+            throw error
+        }
         return url
     }
 
@@ -230,6 +249,20 @@ public final class DynamicScriptManager: @unchecked Sendable {
     @MainActor
     public func status(for scriptID: String) -> CompilationStatus {
         statusByScriptID[scriptID] ?? .idle
+    }
+}
+
+public enum ScriptFileError: Error, LocalizedError, Equatable {
+    case invalidName(String)
+    case alreadyExists(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case let .invalidName(name):
+            return "Invalid script name '\(name)'. Use a file name without path separators."
+        case let .alreadyExists(name):
+            return "A script named '\(name)' already exists."
+        }
     }
 }
 
