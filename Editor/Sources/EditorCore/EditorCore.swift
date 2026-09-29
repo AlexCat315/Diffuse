@@ -220,6 +220,30 @@ public final class EditorApplication: @unchecked Sendable {
         return []
     }
 
+    private static func resolveEnginePackageDirectory() -> URL? {
+        if let environmentPath = ProcessInfo.processInfo.environment["GUAVA_ENGINE_PACKAGE_PATH"],
+           !environmentPath.isEmpty {
+            let url = URL(fileURLWithPath: environmentPath, isDirectory: true)
+            if FileManager.default.fileExists(atPath: url.appendingPathComponent("Package.swift").path) {
+                return url
+            }
+        }
+
+        let executableURL = URL(fileURLWithPath: ProcessInfo.processInfo.arguments[0])
+        let buildDir = executableURL.deletingLastPathComponent()
+        let workspaceRoot = buildDir
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let engineURL = workspaceRoot.appendingPathComponent("Engine", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: engineURL.appendingPathComponent("Package.swift").path) else {
+            return nil
+        }
+        return engineURL
+    }
+
     private static func resolveEngineClangModuleMapPaths() -> [String] {
         if let env = ProcessInfo.processInfo.environment["GUAVA_ENGINE_CLANG_MODULE_MAP_PATHS"],
            !env.isEmpty {
@@ -349,7 +373,8 @@ public final class EditorApplication: @unchecked Sendable {
             scriptRuntime: scene.scriptRuntime,
             engineModulePaths: Self.resolveEngineModulePaths(),
             clangModuleMapPaths: Self.resolveEngineClangModuleMapPaths(),
-            clangIncludePaths: Self.resolveEngineClangIncludePaths()
+            clangIncludePaths: Self.resolveEngineClangIncludePaths(),
+            enginePackageDirectory: Self.resolveEnginePackageDirectory()?.path
         )
         self.observationBus = observationBus
         self.intentCoordinator = intentCoordinator
