@@ -35,11 +35,28 @@ extension EditorSceneAdapter {
     }
 
     public var availableScriptOptions: [EditorInspectorStringOption] {
-        scriptCatalogEntries.map {
+        let catalogOptions = scriptCatalogEntries.map {
             let suffix = $0.isBuiltIn ? "" : " · Project"
             return EditorInspectorStringOption(value: $0.identifier,
                                                label: $0.displayName + suffix)
         }
+        let catalogIdentifiers = Set(catalogOptions.map(\.value))
+        let dynamicOptions = dynamicScriptDisplayNames
+            .filter { !catalogIdentifiers.contains($0.key) }
+            .map {
+                EditorInspectorStringOption(value: $0.key,
+                                            label: $0.value + " · Swift")
+            }
+            .sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
+        return catalogOptions + dynamicOptions
+    }
+
+    public func registerDynamicScriptOption(identifier: String, displayName: String) {
+        dynamicScriptDisplayNames[identifier] = displayName
+    }
+
+    public func setDynamicScriptOptions(_ options: [String: String]) {
+        dynamicScriptDisplayNames = options
     }
 
     public func isScriptIdentifierAvailable(_ identifier: String) -> Bool {
