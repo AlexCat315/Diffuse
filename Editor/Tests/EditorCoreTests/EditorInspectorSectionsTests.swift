@@ -25,6 +25,16 @@ struct EditorInspectorSectionsTests {
         #expect(identifier.wrappedValue == "guava.rotator")
         #expect(options.contains { $0.value == "guava.character-controller" })
 
+        adapter.registerDynamicScriptOption(identifier: "scripts.player-movement",
+                                            displayName: "PlayerMovement")
+        guard case let .stringOptions(_, updatedOptions) =
+                field(adapter, id, section: "scripts", field: "script-0-identifier") else {
+            Issue.record("expected script catalog selector after dynamic registration"); return
+        }
+        #expect(updatedOptions.contains {
+            $0.value == "scripts.player-movement" && $0.label == "PlayerMovement · Swift"
+        })
+
         identifier.wrappedValue = "guava.mover"
         #expect(adapter.scene.component(ScriptComponent.self, for: entity)?.bindings.first?.identifier
                 == "guava.mover")

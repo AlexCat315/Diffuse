@@ -203,6 +203,12 @@ enum EditorRootViewFactory {
                             iconAssetKey: "panel.developer-tools") {
                 DeveloperToolsPanel(app: app)
             },
+            PanelDescriptor(id: "scripts",
+                            title: localizedPanelTitle(for: "scripts"),
+                            preferredSlot: .bottom,
+                            iconAssetKey: "panel.developer-tools") {
+                ScriptPanel(app: app)
+            },
         ])
     }
 
@@ -312,6 +318,8 @@ enum EditorRootViewFactory {
             return L("Render Pipeline")
         case "developer-tools":
             return L("Developer Tools")
+        case "scripts":
+            return L("Scripts")
         default:
             return id
         }
@@ -527,7 +535,8 @@ enum EditorWorkspaceDefaults {
                                                  "console",
                                                  "confirmation-host",
                                                  "render-pipeline",
-                                                 "developer-tools"],
+                                                 "developer-tools",
+                                                 "scripts"],
                                         activePanelID: defaultBottomPanelID(for: preset))
         ]
         return WorkspaceDocument(
