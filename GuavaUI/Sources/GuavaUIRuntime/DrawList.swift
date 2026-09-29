@@ -330,7 +330,8 @@ public final class DrawList {
         origin: (x: Float, y: Float),
         color: Color,
         textureID: TextureID,
-        atlas: FontAtlas? = nil
+        atlas: FontAtlas? = nil,
+        colorForGlyph: ((PositionedGlyph) -> Color?)? = nil
     ) {
         for line in layout.lines {
             for glyph in line.glyphs {
@@ -346,7 +347,7 @@ public final class DrawList {
                     width: info.width, height: info.height,
                     uvMinX: info.uvMinX, uvMinY: info.uvMinY,
                     uvMaxX: info.uvMaxX, uvMaxY: info.uvMaxY,
-                    color: color, textureID: textureID
+                    color: colorForGlyph?(glyph) ?? color, textureID: textureID
                 )
             }
         }
