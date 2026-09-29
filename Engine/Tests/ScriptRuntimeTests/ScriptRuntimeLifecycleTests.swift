@@ -7,6 +7,13 @@ private final class ScriptLifecycleRecorder: @unchecked Sendable {
     var starts = 0
     var ticks = 0
     var destroys = 0
+    var tickedInstanceIDs: [Int] = []
+    var createdInstances = 0
+
+    func makeInstanceID() -> Int {
+        createdInstances += 1
+        return createdInstances
+    }
 }
 
 private struct ScriptHitLog: Sendable, Equatable {
@@ -147,5 +154,39 @@ struct ScriptRuntimeLifecycleTests {
 
         #expect(runtime.localTransform(for: firstEntity)?.translation == SIMD3<Float>(3, 0, 0))
         #expect(runtime.localTransform(for: secondEntity)?.translation == SIMD3<Float>(3, 0, 0))
+    }
+
+    @Test("duplicate script bindings keep their own state when an earlier binding is disabled")
+    func duplicateBindingsKeepStableInstances() {
+        let recorder = ScriptLifecycleRecorder()
+        let scripts = ScriptRuntime()
+        let handle = scripts.register(named: "duplicate") {
+            let instanceID = recorder.makeInstanceID()
+            return Script().onTick { _ in
+                recorder.tickedInstanceIDs.append(instanceID)
+            }
+        }
+
+        var runtime = SceneRuntime()
+        runtime.setScriptDriver(scripts)
+        let entity = runtime.createEntity()
+        let first = ScriptBinding(handle)
+        let second = ScriptBinding(handle)
+        _ = runtime.setComponent(ScriptComponent(bindings: [first, second]), for: entity)
+
+        _ = runtime.tick(deltaTime: 0.1)
+        #expect(recorder.tickedInstanceIDs == [1, 2])
+
+        recorder.tickedInstanceIDs.removeAll()
+        var disabledFirst = first
+        disabledFirst.isEnabled = false
+        _ = runtime.setComponent(
+            ScriptComponent(bindings: [disabledFirst, second]),
+            for: entity
+        )
+        _ = runtime.tick(deltaTime: 0.1)
+
+        #expect(recorder.tickedInstanceIDs == [2])
+        #expect(recorder.createdInstances == 2)
     }
 }
