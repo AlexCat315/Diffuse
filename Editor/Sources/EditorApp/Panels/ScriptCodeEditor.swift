@@ -3,6 +3,7 @@ import GuavaUIRuntime
 
 struct ScriptCodeEditor: View {
     let source: Binding<String>
+    let onChange: (String) -> Void
 
     var body: some View {
         let highlighter = SwiftSyntaxHighlighter(source.wrappedValue)
@@ -15,6 +16,7 @@ struct ScriptCodeEditor: View {
                 showsLineNumbers: true,
                 lineNumberColor: Color(r: 0.45, g: 0.49, b: 0.55),
                 syntaxColorAtUTF8Offset: { _, offset in highlighter.color(atUTF8Offset: offset) },
+                onChange: onChange,
                 textColor: Color(r: 0.86, g: 0.89, b: 0.92)
             )
             .font(.mono)

@@ -17,6 +17,8 @@ struct ScriptPanel: View {
     @State private var status: DynamicScriptManager.CompilationStatus = .idle
     @State private var outputText = ""
     @State private var isCompiling = false
+    @State private var diagnosticsByScriptID: [String: [ScriptLanguageDiagnostic]] = [:]
+    @State private var languageServiceMessage = L("Starting Swift language service…")
 
     init(app: EditorApplication) {
         self.app = app
@@ -27,6 +29,23 @@ struct ScriptPanel: View {
         _selectedScriptID = State(wrappedValue: firstFile?.identifier)
         _sourceText = State(wrappedValue: initialSource)
         _savedSource = State(wrappedValue: initialSource)
+
+        let diagnosticsState = _diagnosticsByScriptID
+        let serviceMessageState = _languageServiceMessage
+        Task { @MainActor in
+            do {
+                try await app.dynamicScriptManager.startLanguageService { update in
+                    Task { @MainActor in
+                        var current = diagnosticsState.wrappedValue
+                        current[update.scriptID] = update.diagnostics
+                        diagnosticsState.wrappedValue = current
+                    }
+                }
+                serviceMessageState.wrappedValue = ""
+            } catch {
+                serviceMessageState.wrappedValue = error.localizedDescription
+            }
+        }
     }
 
     var body: some View {
@@ -130,8 +149,24 @@ struct ScriptPanel: View {
             if let selectedScript {
                 editorHeader(selectedScript)
                 Divider()
-                ScriptCodeEditor(source: $sourceText)
+                ScriptCodeEditor(source: $sourceText) { text in
+                    guard let scriptID = selectedScriptID else { return }
+                    Task {
+                        try? await app.dynamicScriptManager.updateLanguageSource(scriptID: scriptID,
+                                                                                  text: text)
+                    }
+                }
                     .flex(1, shrink: 1)
+                if !languageServiceMessage.isEmpty {
+                    Text(languageServiceMessage)
+                        .font(.caption)
+                        .foregroundColor(.warning)
+                        .padding(horizontal: 10, vertical: 4)
+                }
+                     if let diagnostics = diagnosticsByScriptID[selectedScript.identifier],
+                   !diagnostics.isEmpty {
+                    languageDiagnostics(diagnostics)
+                }
                 if !outputText.isEmpty {
                     Divider()
                     buildOutput
@@ -145,6 +180,27 @@ struct ScriptPanel: View {
             }
         }
         .frame(minWidth: 260)
+    }
+
+    private func languageDiagnostics(_ diagnostics: [ScriptLanguageDiagnostic]) -> some View {
+        Box(direction: .column, alignItems: .stretch, spacing: 0) {
+            Row(alignment: .center, spacing: 8) {
+                Text(L("Swift Diagnostics")).font(.caption)
+                EditorPanelBadge("\(diagnostics.count)")
+                Spacer(minLength: 0)
+            }
+            .padding(horizontal: 10, vertical: 5)
+            ScrollView(.vertical, scrollbarGutter: .stable) {
+                Column(alignment: .leading, spacing: 2) {
+                    for diagnostic in diagnostics {
+                        ScriptDiagnosticRow(diagnostic: diagnostic)
+                    }
+                }
+                .padding(horizontal: 8, vertical: 5)
+            }
+            .frame(maxHeight: 144)
+            .background(.surfaceSunken)
+        }
     }
 
     private func editorHeader(_ file: DynamicScriptManager.ScriptFile) -> some View {
@@ -250,6 +306,7 @@ struct ScriptPanel: View {
         do {
             let url = try app.dynamicScriptManager.createScript(name: name, source: ScriptTemplate.default)
             refresh()
+            Task { try? await app.dynamicScriptManager.refreshLanguageWorkspace() }
             if let file = scriptFiles.first(where: { $0.url == url }) {
                 selectedScriptID = nil
                 select(file)
@@ -316,6 +373,7 @@ struct ScriptPanel: View {
             #endif
             do {
                 try app.dynamicScriptManager.deleteScript(file)
+                Task { try? await app.dynamicScriptManager.refreshLanguageWorkspace() }
                 selectedScriptID = nil
                 sourceText = ""
                 savedSource = ""
@@ -374,6 +432,28 @@ private struct ScriptFileRow: View {
             .cornerRadius(3)
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct ScriptDiagnosticRow: View {
+    let diagnostic: ScriptLanguageDiagnostic
+
+    var body: some View {
+        let color: SemanticColorRef = switch diagnostic.severity {
+        case .error: .error
+        case .warning: .warning
+        case .information, .hint: .onSurfaceMuted
+        }
+        Row(alignment: .center, spacing: 8) {
+            Text("\(diagnostic.startLine + 1):\(diagnostic.startCharacter + 1)")
+                .font(.mono)
+                .foregroundColor(color)
+            Text(diagnostic.message, lineLimit: 2)
+                .font(.caption)
+                .foregroundColor(.onSurface)
+            Spacer(minLength: 0)
+        }
+        .padding(horizontal: 5, vertical: 3)
     }
 }
 
