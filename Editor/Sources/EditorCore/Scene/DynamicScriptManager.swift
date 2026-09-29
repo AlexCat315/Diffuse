@@ -49,6 +49,8 @@ public final class DynamicScriptManager: @unchecked Sendable {
     private let scriptRuntime: ScriptRuntime
     private let compiler: SwiftScriptCompiler
     private let loader: SwiftScriptLoader
+    private let languageSupport: ScriptLanguageSupport?
+    private let languageSupportUnavailableMessage: String?
 
     @MainActor private var statusByScriptID: [String: CompilationStatus] = [:]
 
@@ -67,7 +69,8 @@ public final class DynamicScriptManager: @unchecked Sendable {
                 scriptRuntime: ScriptRuntime,
                 engineModulePaths: [String],
                 clangModuleMapPaths: [String] = [],
-                clangIncludePaths: [String] = []) {
+            clangIncludePaths: [String] = [],
+            enginePackageDirectory: String? = nil) {
         self.projectDirectory = projectDirectory
         self.scriptRuntime = scriptRuntime
         self.compiler = SwiftScriptCompiler(
@@ -77,12 +80,34 @@ public final class DynamicScriptManager: @unchecked Sendable {
             outputDirectory: Self.scriptsBuildDirectory(projectDirectory: projectDirectory)
         )
         self.loader = SwiftScriptLoader()
+
+        if let enginePackageDirectory {
+            do {
+                let executable = try SourceKitLSPClient.resolveExecutableURL()
+                self.languageSupport = ScriptLanguageSupport(
+                    scriptsDirectoryURL: Self.scriptsDirectory(projectDirectory: projectDirectory),
+                    enginePackageURL: URL(fileURLWithPath: enginePackageDirectory, isDirectory: true),
+                    executableURL: executable
+                )
+                self.languageSupportUnavailableMessage = nil
+            } catch {
+                self.languageSupport = nil
+                self.languageSupportUnavailableMessage = error.localizedDescription
+            }
+        } else {
+            self.languageSupport = nil
+            self.languageSupportUnavailableMessage = "Could not locate the Engine Swift package for script analysis."
+        }
     }
 
     // MARK: - Directory layout
 
     /// `<projectDirectory>/Scripts/`
     public var scriptsDirectoryURL: URL {
+        Self.scriptsDirectory(projectDirectory: projectDirectory)
+    }
+
+    private static func scriptsDirectory(projectDirectory: String) -> URL {
         URL(fileURLWithPath: projectDirectory, isDirectory: true)
             .appendingPathComponent("Scripts", isDirectory: true)
     }
@@ -107,6 +132,35 @@ public final class DynamicScriptManager: @unchecked Sendable {
             .filter { $0.pathExtension == "swift" }
             .map { ScriptFile(url: $0) }
             .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+    }
+
+    public func startLanguageService(
+        onDiagnostics: @escaping ScriptLanguageSupport.DiagnosticsHandler
+    ) async throws {
+        guard let languageSupport else {
+            throw ScriptLanguageSupportError.unavailable(languageSupportUnavailableMessage ?? "Unknown setup error.")
+        }
+        let sources = try scanScriptFiles().map { file in
+            ScriptLanguageSource(file: file, text: try readSource(at: file.url))
+        }
+        try await languageSupport.start(sources: sources, onDiagnostics: onDiagnostics)
+    }
+
+    public func updateLanguageSource(scriptID: String, text: String) async throws {
+        guard let languageSupport else {
+            throw ScriptLanguageSupportError.unavailable(languageSupportUnavailableMessage ?? "Unknown setup error.")
+        }
+        try await languageSupport.update(scriptID: scriptID, text: text)
+    }
+
+    public func refreshLanguageWorkspace() async throws {
+        guard let languageSupport else {
+            throw ScriptLanguageSupportError.unavailable(languageSupportUnavailableMessage ?? "Unknown setup error.")
+        }
+        let sources = try scanScriptFiles().map { file in
+            ScriptLanguageSource(file: file, text: try readSource(at: file.url))
+        }
+        try await languageSupport.restart(sources: sources)
     }
 
     /// Reads the UTF-8 source of a script file.
