@@ -14,7 +14,7 @@ import Foundation
 /// Returning the `Script` by value is avoided because the C calling convention
 /// does not guarantee Swift struct layout across a dylib boundary on all
 /// platforms; writing through a pointer is portable.
-public final class SwiftScriptLoader {
+public final class SwiftScriptLoader: @unchecked Sendable {
 
     // MARK: - Platform handle
 
@@ -46,8 +46,9 @@ public final class SwiftScriptLoader {
     /// `Script` instance each time it is called.
     public func loadFactory(scriptID: String,
                             libraryPath: String) throws -> @Sendable () -> Script {
-        unload(scriptID: scriptID)
-
+        // Keep the current generation mapped until the replacement has been
+        // opened and validated. A failed dlopen/dlsym must never take the last
+        // known-good script offline.
         let handle = try openLibrary(path: libraryPath)
 
         guard let symbol = lookupSymbol(handle: handle, name: "guavaCreateScript") else {

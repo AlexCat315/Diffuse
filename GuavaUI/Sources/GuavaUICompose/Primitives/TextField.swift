@@ -169,6 +169,7 @@ public struct TextField: View {
         let maxVisibleLines: Int
         let showsLineNumbers: Bool
         let lineNumberColor: Color?
+        let lineNumberGutterColor: Color?
         let syntaxColoringEnabled: Bool
         let disabled: Bool
         let readOnly: Bool
@@ -280,6 +281,7 @@ public struct TextField: View {
                                           maxVisibleLines: maxVisibleLines,
                                           showsLineNumbers: showsLineNumbers,
                                           lineNumberColor: lineNumberColor,
+                                          lineNumberGutterColor: lineNumberGutterColor,
                                           syntaxColoringEnabled: syntaxColorAtUTF8Offset != nil,
                                           disabled: disabled,
                                           readOnly: readOnly,
@@ -1120,7 +1122,8 @@ public struct TextField: View {
                             y: Float(origin.y),
                             width: gutterWidth,
                             height: frameHeight),
-                     color: theme.colors.surfaceVariant.multipliedAlpha(node.opacity))
+                     color: (lineNumberGutterColor ?? theme.colors.surfaceVariant)
+                        .multipliedAlpha(node.opacity))
         list.addRect(UIRect(x: textOriginX - 1,
                             y: Float(origin.y),
                             width: 1,

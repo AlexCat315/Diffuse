@@ -46,16 +46,10 @@ public final class DynamicScriptManager: @unchecked Sendable {
     // MARK: - Dependencies
 
     private let projectDirectory: String
-    private let scriptRuntime: ScriptRuntime
-    private let compiler: SwiftScriptCompiler
-    private let loader: SwiftScriptLoader
+    private let buildCoordinator: DynamicScriptBuildCoordinator
     private let languageSupport: ScriptLanguageSupport?
     private let languageSupportUnavailableMessage: String?
 
-    /// Tracks the file the loader currently has mapped per script, so the next
-    /// compilation can remove the previous generation instead of accumulating
-    /// one uniquely-named dylib per hot reload.
-    @MainActor private var previousDylibPaths: [String: String] = [:]
     @MainActor private var statusByScriptID: [String: CompilationStatus] = [:]
 
     // MARK: - Init
@@ -73,19 +67,21 @@ public final class DynamicScriptManager: @unchecked Sendable {
                 scriptRuntime: ScriptRuntime,
                 engineModulePaths: [String],
                 clangModuleMapPaths: [String] = [],
-            clangIncludePaths: [String] = [],
-            enginePackageDirectory: String? = nil) {
+                clangIncludePaths: [String] = []) {
         self.projectDirectory = projectDirectory
-        self.scriptRuntime = scriptRuntime
-        self.compiler = SwiftScriptCompiler(
+        let compiler = SwiftScriptCompiler(
             includePaths: engineModulePaths,
             clangModuleMapPaths: clangModuleMapPaths,
             clangIncludePaths: clangIncludePaths,
             outputDirectory: Self.scriptsBuildDirectory(projectDirectory: projectDirectory)
         )
-        self.loader = SwiftScriptLoader()
+        self.buildCoordinator = DynamicScriptBuildCoordinator(
+            compiler: SwiftScriptCompilerDriver(compiler: compiler),
+            loader: SwiftScriptLoader(),
+            scriptRuntime: scriptRuntime
+        )
 
-        if let enginePackageDirectory {
+        if !engineModulePaths.isEmpty {
             do {
                 let executable = try SourceKitLSPExecutableLocator.resolveExecutableURL()
                 self.languageSupport = ScriptLanguageSupport(
@@ -102,7 +98,7 @@ public final class DynamicScriptManager: @unchecked Sendable {
             }
         } else {
             self.languageSupport = nil
-            self.languageSupportUnavailableMessage = "Could not locate the Engine Swift package for script analysis."
+            self.languageSupportUnavailableMessage = "Could not locate built Engine Swift modules for script analysis."
         }
     }
 
@@ -167,6 +163,10 @@ public final class DynamicScriptManager: @unchecked Sendable {
             ScriptLanguageSource(file: file, text: try readSource(at: file.url))
         }
         try await languageSupport.restart(sources: sources)
+    }
+
+    public func stopLanguageService() async {
+        await languageSupport?.stop()
     }
 
     /// True when a SourceKit-LSP session can answer semantic queries. The UI
@@ -272,33 +272,19 @@ public final class DynamicScriptManager: @unchecked Sendable {
             self.statusByScriptID[scriptID] = .compiling
         }
 
-        let compiler = self.compiler
-        let loader = self.loader
-        let scriptRuntime = self.scriptRuntime
-
-        Task.detached(priority: .userInitiated) { [weak self] in
+        let coordinator = buildCoordinator
+        Task { [weak self] in
+            let outcome = await coordinator.build(scriptID: scriptID, sourceURL: sourceURL)
             let status: CompilationStatus
-            do {
-                let result = try compiler.compile(sourcePath: sourceURL.path, scriptID: scriptID)
-                // The previous generation is still mapped by `dlopen`. Unload
-                // it so its inode is released, drop the stale file, then map
-                // the fresh one (the compiler emitted a unique path).
-                loader.unload(scriptID: scriptID)
-                let previousPath = await MainActor.run { self?.previousDylibPaths[scriptID] }
-                if let previousPath, previousPath != result.outputPath {
-                    try? FileManager.default.removeItem(atPath: previousPath)
-                }
-                let makeScript = try loader.loadFactory(scriptID: scriptID, libraryPath: result.outputPath)
-                await MainActor.run { self?.previousDylibPaths[scriptID] = result.outputPath }
-                // Register on the main actor — the runtime mutates shared state.
-                _ = await MainActor.run { scriptRuntime.register(named: scriptID, makeScript) }
-                await self?.updateStatus(.succeeded, for: scriptID)
+            switch outcome {
+            case .succeeded:
                 status = .succeeded
-            } catch {
-                status = .failed(message: error.localizedDescription)
-                await self?.updateStatus(status, for: scriptID)
+            case .failed(let message):
+                status = .failed(message: message)
+            case .superseded:
+                return
             }
-
+            await self?.updateStatus(status, for: scriptID)
             await MainActor.run {
                 completion(status)
             }
@@ -340,16 +326,13 @@ public final class DynamicScriptManager: @unchecked Sendable {
         }
     }
 
-    /// Unregisters a script from the runtime, unloads its library, and removes
-    /// the on-disk dylib the loader was mapping.
+    /// Unregisters a script and retires its mapped artifact once active runtime
+    /// instances release their generation lease.
     public func unload(scriptID: String) {
-        scriptRuntime.unregister(named: scriptID)
-        loader.unload(scriptID: scriptID)
+        let coordinator = buildCoordinator
+        Task { await coordinator.unload(scriptID: scriptID) }
         Task { @MainActor in
             self.statusByScriptID[scriptID] = .idle
-            if let previous = self.previousDylibPaths.removeValue(forKey: scriptID) {
-                try? FileManager.default.removeItem(atPath: previous)
-            }
         }
     }
 

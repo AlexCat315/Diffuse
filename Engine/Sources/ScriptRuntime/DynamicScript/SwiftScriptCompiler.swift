@@ -1,5 +1,22 @@
 import Foundation
 
+private final class ScriptCompilerOutputBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data = Data()
+
+    func store(_ value: Data) {
+        lock.lock()
+        data = value
+        lock.unlock()
+    }
+
+    func load() -> Data {
+        lock.lock()
+        defer { lock.unlock() }
+        return data
+    }
+}
+
 /// Invokes the system `swiftc` compiler to turn a Swift script source file
 /// into a dynamic library that `SwiftScriptLoader` can load.
 ///
@@ -16,7 +33,7 @@ import Foundation
 /// import library (`.lib`) via `llvm-dlltool`. Scripts then link against that
 /// import library; at load time the symbols are resolved from the host
 /// executable.
-public final class SwiftScriptCompiler {
+public final class SwiftScriptCompiler: @unchecked Sendable {
 
     /// Path to the `swiftc` executable. Defaults to `swiftc` on `PATH`.
     public var swiftcPath: String
@@ -158,18 +175,37 @@ public final class SwiftScriptCompiler {
         process.standardError = stderrPipe
 
         try process.run()
+
+        // Drain both pipes while swiftc is running. Waiting first can deadlock
+        // once either pipe fills its kernel buffer (large diagnostics are common
+        // for generated or generic-heavy scripts).
+        let stdoutBox = ScriptCompilerOutputBox()
+        let stderrBox = ScriptCompilerOutputBox()
+        let outputReaders = DispatchGroup()
+        outputReaders.enter()
+        DispatchQueue.global(qos: .userInitiated).async {
+            stdoutBox.store(stdoutPipe.fileHandleForReading.readDataToEndOfFile())
+            outputReaders.leave()
+        }
+        outputReaders.enter()
+        DispatchQueue.global(qos: .userInitiated).async {
+            stderrBox.store(stderrPipe.fileHandleForReading.readDataToEndOfFile())
+            outputReaders.leave()
+        }
         process.waitUntilExit()
+        outputReaders.wait()
 
         let stdout = String(
-            data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(),
+            data: stdoutBox.load(),
             encoding: .utf8
         ) ?? ""
         let stderr = String(
-            data: stderrPipe.fileHandleForReading.readDataToEndOfFile(),
+            data: stderrBox.load(),
             encoding: .utf8
         ) ?? ""
 
         guard process.terminationStatus == 0 else {
+            try? FileManager.default.removeItem(atPath: outputPath)
             throw ScriptCompileError.compilationFailed(
                 exitCode: Int(process.terminationStatus),
                 stderr: stderr,
