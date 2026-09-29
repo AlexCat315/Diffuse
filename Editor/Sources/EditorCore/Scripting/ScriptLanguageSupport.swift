@@ -32,11 +32,15 @@ public actor ScriptLanguageSupport {
     private var didInitialize = false
 
     public init(scriptsDirectoryURL: URL,
-                enginePackageURL: URL,
+                engineModulePaths: [String],
+                clangModuleMapPaths: [String] = [],
+                clangIncludePaths: [String] = [],
                 executableURL: URL,
                 environment: [String: String] = [:]) {
         self.workspace = ScriptLanguageWorkspace(scriptsDirectoryURL: scriptsDirectoryURL,
-                                                 enginePackageURL: enginePackageURL)
+                                                 engineModulePaths: engineModulePaths,
+                                                 clangModuleMapPaths: clangModuleMapPaths,
+                                                 clangIncludePaths: clangIncludePaths)
         self.executableURL = executableURL
         self.environment = environment
     }

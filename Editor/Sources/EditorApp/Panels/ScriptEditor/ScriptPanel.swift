@@ -9,46 +9,15 @@ import AppKit
 struct ScriptPanel: View {
     let app: EditorApplication
 
-    @State private var scriptFiles: [DynamicScriptManager.ScriptFile]
-    @State private var selectedScriptID: String?
+    private var _workspace: Observed<ScriptWorkspaceModel, ScriptWorkspaceSnapshot>
     @State private var searchText = ""
-    @State private var sourceText: String
-    @State private var savedSource: String
-    @State private var status: DynamicScriptManager.CompilationStatus = .idle
-    @State private var outputText = ""
-    @State private var isCompiling = false
-    @State private var diagnosticsByScriptID: [String: [ScriptLanguageDiagnostic]] = [:]
-    @State private var languageServiceMessage = L("Starting Swift language service…")
     @State private var hoverPresentation: ScriptEditorHoverPresentation = .hidden
     @State private var hoverSequence = ScriptEditorHoverSequence()
     @State private var caretLabel = ""
 
     init(app: EditorApplication) {
         self.app = app
-        let files = (try? app.dynamicScriptManager.scanScriptFiles()) ?? []
-        let firstFile = files.first
-        let initialSource = firstFile.flatMap { try? app.dynamicScriptManager.readSource(at: $0.url) } ?? ""
-        _scriptFiles = State(wrappedValue: files)
-        _selectedScriptID = State(wrappedValue: firstFile?.identifier)
-        _sourceText = State(wrappedValue: initialSource)
-        _savedSource = State(wrappedValue: initialSource)
-
-        let diagnosticsState = _diagnosticsByScriptID
-        let serviceMessageState = _languageServiceMessage
-        Task { @MainActor in
-            do {
-                try await app.dynamicScriptManager.startLanguageService { update in
-                    Task { @MainActor in
-                        var current = diagnosticsState.wrappedValue
-                        current[update.scriptID] = update.diagnostics
-                        diagnosticsState.wrappedValue = current
-                    }
-                }
-                serviceMessageState.wrappedValue = ""
-            } catch {
-                serviceMessageState.wrappedValue = error.localizedDescription
-            }
-        }
+        self._workspace = Observed(\.snapshot, on: app.scriptWorkspace)
     }
 
     var body: some View {
@@ -90,7 +59,7 @@ struct ScriptPanel: View {
     /// Empty when the service is healthy — absence is the normal case, not a
     /// placeholder waiting to be filled.
     private var languageServiceIndicator: some View {
-        guard !languageServiceMessage.isEmpty else {
+        guard languageServiceMessage != nil else {
             return AnyView(EmptyView())
         }
         return AnyView(Row(alignment: .center, spacing: 4) {
@@ -105,9 +74,9 @@ struct ScriptPanel: View {
     private var statusIndicator: some View {
         let (label, color): (String, SemanticColorRef) = {
             if isDirty { return (L("Modified"), .warning) }
-            switch status {
+            switch selectedDocument?.buildState ?? .idle {
             case .idle: return (L("Ready"), .onSurfaceMuted)
-            case .compiling: return (L("Building"), .accent)
+            case .building: return (L("Building"), .accent)
             case .succeeded: return (L("Built"), .success)
             case .failed: return (L("Build failed"), .error)
             }
@@ -142,7 +111,7 @@ struct ScriptPanel: View {
                     Column(alignment: .leading, spacing: 2) {
                         for file in visibleScriptFiles {
                             ScriptFileRow(file: file,
-                                          isSelected: file.identifier == selectedScriptID,
+                                          isSelected: file.identifier == workspace.selectedScriptID,
                                           statusColor: statusColor(for: file.identifier),
                                           action: { select(file) })
                         }
@@ -166,36 +135,33 @@ struct ScriptPanel: View {
             if let selectedScript {
                 editorHeader(selectedScript)
                 Divider()
-                ScriptCodeEditor(source: $sourceText,
+                ScriptCodeEditor(source: sourceText,
                                  hover: $hoverPresentation,
                                  caretLabel: $caretLabel,
                                  onChange: { text in
-                                     guard let scriptID = selectedScriptID else { return }
-                                     Task {
-                                         try? await app.dynamicScriptManager
-                                             .updateLanguageSource(scriptID: scriptID, text: text)
-                                     }
+                                     app.scriptWorkspace.updateSelectedSource(text)
                                  },
                                  onHover: requestHover,
                                  onHoverEnd: cancelHover)
                     .flex(1, shrink: 1)
-                if !languageServiceMessage.isEmpty {
+                if let languageServiceMessage {
                     Row(alignment: .center, spacing: 8) {
                         Text(languageServiceMessage, lineLimit: 1)
                             .font(.caption)
                             .foregroundColor(.warning)
                         Spacer(minLength: 0)
-                        Button(action: { languageServiceMessage = "" }) { Text(L("Dismiss")) }
+                        Button(action: app.scriptWorkspace.dismissLanguageServiceMessage) {
+                            Text(L("Dismiss"))
+                        }
                             .buttonStyle(GhostButtonStyle())
                     }
                     .padding(horizontal: 10, vertical: 4)
                     .background(.surfaceSunken)
                 }
-                if let diagnostics = diagnosticsByScriptID[selectedScript.identifier],
-                   !diagnostics.isEmpty {
+                if let diagnostics = selectedDocument?.diagnostics, !diagnostics.isEmpty {
                     ScriptEditorDiagnostics(diagnostics: diagnostics)
                 }
-                if !outputText.isEmpty {
+                if !(selectedDocument?.output ?? "").isEmpty {
                     Divider()
                     buildOutput
                 }
@@ -234,18 +200,18 @@ struct ScriptPanel: View {
     private var buildOutput: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             Row(alignment: .center, spacing: 8) {
-                Text(status.isFailed ? L("Build Diagnostics") : L("Build Output"))
+                Text(isBuildFailed ? L("Build Diagnostics") : L("Build Output"))
                     .font(.caption)
-                    .foregroundColor(status.isFailed ? .error : .onSurfaceMuted)
+                    .foregroundColor(isBuildFailed ? .error : .onSurfaceMuted)
                 Spacer(minLength: 0)
-                Button(action: { outputText = "" }) { Text(L("Clear")) }
+                Button(action: app.scriptWorkspace.clearSelectedOutput) { Text(L("Clear")) }
                     .buttonStyle(GhostButtonStyle())
             }
             .padding(horizontal: 10, vertical: 5)
             ScrollView(.vertical, scrollbarGutter: .stable) {
-                Text(outputText)
+                Text(selectedDocument?.output ?? "")
                     .font(.mono)
-                    .foregroundColor(status.isFailed ? .error : .onSurfaceMuted)
+                    .foregroundColor(isBuildFailed ? .error : .onSurfaceMuted)
                     .padding(horizontal: 10, vertical: 6)
                     .frame(maxWidth: .infinity)
             }
@@ -264,47 +230,59 @@ struct ScriptPanel: View {
     }
 
     private var selectedScript: DynamicScriptManager.ScriptFile? {
-        scriptFiles.first { $0.identifier == selectedScriptID }
+        selectedDocument?.file
     }
 
-    private var isDirty: Bool { selectedScript != nil && sourceText != savedSource }
+    private var workspace: ScriptWorkspaceSnapshot { _workspace.wrappedValue }
+
+    private var scriptFiles: [DynamicScriptManager.ScriptFile] {
+        workspace.documents.map(\.file)
+    }
+
+    private var selectedDocument: ScriptWorkspaceDocument? { workspace.selectedDocument }
+
+    private var sourceText: Binding<String> {
+        Binding(
+            get: { app.scriptWorkspace.snapshot.selectedDocument?.source ?? "" },
+            set: app.scriptWorkspace.updateSelectedSource
+        )
+    }
+
+    private var isDirty: Bool { selectedDocument?.isDirty ?? false }
+
+    private var isCompiling: Bool { selectedDocument?.buildState.isBuilding ?? false }
+
+    private var isBuildFailed: Bool { selectedDocument?.buildState.isFailed ?? false }
+
+    private var languageServiceMessage: String? {
+        switch workspace.languageServiceState {
+        case .inactive, .ready: return nil
+        case .starting: return L("Starting Swift language service…")
+        case .unavailable(let message): return message
+        }
+    }
 
     private func statusColor(for scriptID: String) -> SemanticColorRef {
-        let itemStatus = scriptID == selectedScriptID ? status : .idle
-        switch itemStatus {
+        guard let document = workspace.documents.first(where: { $0.file.identifier == scriptID }) else {
+            return .onSurfaceMuted
+        }
+        if document.isDirty { return .warning }
+        switch document.buildState {
         case .succeeded: return .success
         case .failed: return .error
-        case .compiling: return .accent
+        case .building: return .accent
         case .idle: return .onSurfaceMuted
         }
     }
 
-    private func refresh() {
-        do {
-            scriptFiles = try app.dynamicScriptManager.scanScriptFiles()
-        } catch {
-            outputText = L("Failed to scan scripts: \(error.localizedDescription)")
-        }
-    }
-
     private func select(_ file: DynamicScriptManager.ScriptFile) {
-        guard file.identifier != selectedScriptID, persistSource() else { return }
-        do {
-            sourceText = try app.dynamicScriptManager.readSource(at: file.url)
-            savedSource = sourceText
-            selectedScriptID = file.identifier
-            status = .idle
-            outputText = ""
-            // A pending reply belongs to the previous file's positions.
+        guard file.identifier != workspace.selectedScriptID else { return }
+        if app.scriptWorkspace.select(scriptID: file.identifier) {
             cancelHover()
-        } catch {
-            outputText = L("Failed to read script: \(error.localizedDescription)")
-            status = .failed(message: error.localizedDescription)
         }
     }
 
     private func newScript() {
-        guard persistSource() else { return }
         let existingNames = Set(scriptFiles.map { $0.displayName.lowercased() })
         var name = "NewScript"
         var suffix = 2
@@ -312,41 +290,13 @@ struct ScriptPanel: View {
             name = "NewScript\(suffix)"
             suffix += 1
         }
-        do {
-            let url = try app.dynamicScriptManager.createScript(name: name, source: ScriptTemplate.default)
-            refresh()
-            Task { try? await app.dynamicScriptManager.refreshLanguageWorkspace() }
-            if let file = scriptFiles.first(where: { $0.url == url }) {
-                selectedScriptID = nil
-                select(file)
-            }
-        } catch {
-            outputText = L("Failed to create script: \(error.localizedDescription)")
-            status = .failed(message: error.localizedDescription)
-        }
+        _ = app.scriptWorkspace.createScript(name: name, source: ScriptTemplate.default)
     }
 
-    private func saveSource() { _ = persistSource(reportSuccess: true) }
-
-    private func persistSource(reportSuccess: Bool = false) -> Bool {
-        guard isDirty, let selectedScript else { return true }
-        do {
-            try app.dynamicScriptManager.writeSource(sourceText, at: selectedScript.url)
-            savedSource = sourceText
-            if reportSuccess {
-                outputText = L("Saved \(selectedScript.displayName).swift")
-                status = .idle
-            }
-            return true
-        } catch {
-            outputText = L("Failed to save script: \(error.localizedDescription)")
-            status = .failed(message: error.localizedDescription)
-            return false
-        }
-    }
+    private func saveSource() { _ = app.scriptWorkspace.persistSelected(reportSuccess: true) }
 
     private func editInExternalEditor() {
-        guard let file = selectedScript, persistSource() else { return }
+        guard let file = selectedScript, app.scriptWorkspace.persistSelected() else { return }
         openInExternalEditor(url: file.url)
     }
 
@@ -354,7 +304,7 @@ struct ScriptPanel: View {
         #if canImport(AppKit)
         NSWorkspace.shared.open(url)
         #else
-        outputText = L("Open this file in your editor: \(url.path)")
+        app.scriptWorkspace.setSelectedOutput(L("Open this file in your editor: \(url.path)"))
         #endif
     }
 
@@ -363,14 +313,14 @@ struct ScriptPanel: View {
         #if canImport(AppKit)
         NSWorkspace.shared.activateFileViewerSelecting([file.url])
         #else
-        outputText = L("Script path: \(file.url.path)")
+        app.scriptWorkspace.setSelectedOutput(L("Script path: \(file.url.path)"))
         #endif
     }
 
     private func deleteSelectedScript() {
         guard let file = selectedScript else { return }
+        let workspaceModel = app.scriptWorkspace
         Task { @MainActor in
-            guard persistSource() else { return }
             #if canImport(AppKit)
             let alert = NSAlert()
             alert.messageText = L("Delete \(file.displayName).swift?")
@@ -380,19 +330,7 @@ struct ScriptPanel: View {
             alert.addButton(withTitle: L("Cancel"))
             guard alert.runModal() == .alertFirstButtonReturn else { return }
             #endif
-            do {
-                try app.dynamicScriptManager.deleteScript(file)
-                Task { try? await app.dynamicScriptManager.refreshLanguageWorkspace() }
-                selectedScriptID = nil
-                sourceText = ""
-                savedSource = ""
-                status = .idle
-                outputText = ""
-                refresh()
-            } catch {
-                outputText = L("Failed to delete script: \(error.localizedDescription)")
-                status = .failed(message: error.localizedDescription)
-            }
+            _ = workspaceModel.deleteSelectedScript()
         }
     }
 
@@ -401,11 +339,11 @@ struct ScriptPanel: View {
     /// Pointer settled on something that may have documentation.
     private func requestHover(_ anchor: TextFieldHoverAnchor) {
         guard app.dynamicScriptManager.isLanguageServiceAvailable,
-              let scriptID = selectedScriptID else {
+              let scriptID = workspace.selectedScriptID else {
             cancelHover()
             return
         }
-        let source = sourceText
+        let source = sourceText.wrappedValue
         // Asking about punctuation or whitespace would waste a round-trip per
         // mouse move and return nothing printable.
         guard ScriptEditorHoverResolver.queryPosition(in: source,
@@ -422,6 +360,8 @@ struct ScriptPanel: View {
                                                           message: nil)
         let characterIndex = anchor.characterIndex
         let sequence = hoverSequence
+        let manager = app.dynamicScriptManager
+        let presentationBinding = $hoverPresentation
         Task { @MainActor in
             guard let presentation = await ScriptEditorHoverResolver.resolve(
                 scriptID: scriptID,
@@ -430,10 +370,10 @@ struct ScriptPanel: View {
                 anchor: windowAnchor,
                 sequence: sequence,
                 request: { position in
-                    try await app.dynamicScriptManager.hover(scriptID: scriptID, at: position)
+                    try await manager.hover(scriptID: scriptID, at: position)
                 }
             ) else { return }
-            hoverPresentation = presentation
+            presentationBinding.wrappedValue = presentation
         }
     }
 
@@ -447,25 +387,7 @@ struct ScriptPanel: View {
     }
 
     private func compile() {
-        guard let file = selectedScript, persistSource() else { return }
-        isCompiling = true
-        status = .compiling
-        outputText = L("Compiling \(file.displayName).swift…")
-        app.dynamicScriptManager.compileAndLoad(scriptID: file.identifier, sourceURL: file.url) { result in
-            isCompiling = false
-            status = result
-            switch result {
-            case .succeeded:
-                app.scene.registerDynamicScriptOption(identifier: file.identifier,
-                                                      displayName: file.displayName)
-                app.store.dispatch(.forceUIRefresh)
-                outputText = L("Compiled and reloaded \(file.displayName).swift")
-            case .failed(let message):
-                outputText = message
-            case .compiling, .idle:
-                break
-            }
-        }
+        app.scriptWorkspace.compileSelected()
     }
 }
 
