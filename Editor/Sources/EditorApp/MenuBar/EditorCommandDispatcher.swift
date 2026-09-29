@@ -103,6 +103,8 @@ enum EditorCommandDispatcher {
             EditorRootViewFactory.saveWorkspaceLayout(controller,
                                                        for: store.state.workspaceMode,
                                                        preset: store.state.activeLayoutPreset)
+        case .showScripts:
+            EditorRootViewFactory.activatePanel("scripts", in: controller)
         case let .setPlaybackState(next):
             guard EditorPlaybackCommandPolicy.canTransition(from: store.state.playbackState,
                                                             to: next) else { return }
