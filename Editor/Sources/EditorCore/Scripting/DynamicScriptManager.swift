@@ -52,6 +52,10 @@ public final class DynamicScriptManager: @unchecked Sendable {
     private let languageSupport: ScriptLanguageSupport?
     private let languageSupportUnavailableMessage: String?
 
+    /// Tracks the file the loader currently has mapped per script, so the next
+    /// compilation can remove the previous generation instead of accumulating
+    /// one uniquely-named dylib per hot reload.
+    @MainActor private var previousDylibPaths: [String: String] = [:]
     @MainActor private var statusByScriptID: [String: CompilationStatus] = [:]
 
     // MARK: - Init
@@ -86,7 +90,9 @@ public final class DynamicScriptManager: @unchecked Sendable {
                 let executable = try SourceKitLSPExecutableLocator.resolveExecutableURL()
                 self.languageSupport = ScriptLanguageSupport(
                     scriptsDirectoryURL: Self.scriptsDirectory(projectDirectory: projectDirectory),
-                    enginePackageURL: URL(fileURLWithPath: enginePackageDirectory, isDirectory: true),
+                    engineModulePaths: engineModulePaths,
+                    clangModuleMapPaths: clangModuleMapPaths,
+                    clangIncludePaths: clangIncludePaths,
                     executableURL: executable
                 )
                 self.languageSupportUnavailableMessage = nil
@@ -274,7 +280,16 @@ public final class DynamicScriptManager: @unchecked Sendable {
             let status: CompilationStatus
             do {
                 let result = try compiler.compile(sourcePath: sourceURL.path, scriptID: scriptID)
+                // The previous generation is still mapped by `dlopen`. Unload
+                // it so its inode is released, drop the stale file, then map
+                // the fresh one (the compiler emitted a unique path).
+                loader.unload(scriptID: scriptID)
+                let previousPath = await MainActor.run { self?.previousDylibPaths[scriptID] }
+                if let previousPath, previousPath != result.outputPath {
+                    try? FileManager.default.removeItem(atPath: previousPath)
+                }
                 let makeScript = try loader.loadFactory(scriptID: scriptID, libraryPath: result.outputPath)
+                await MainActor.run { self?.previousDylibPaths[scriptID] = result.outputPath }
                 // Register on the main actor — the runtime mutates shared state.
                 _ = await MainActor.run { scriptRuntime.register(named: scriptID, makeScript) }
                 await self?.updateStatus(.succeeded, for: scriptID)
@@ -325,12 +340,16 @@ public final class DynamicScriptManager: @unchecked Sendable {
         }
     }
 
-    /// Unregisters a script from the runtime and unloads its library.
+    /// Unregisters a script from the runtime, unloads its library, and removes
+    /// the on-disk dylib the loader was mapping.
     public func unload(scriptID: String) {
         scriptRuntime.unregister(named: scriptID)
         loader.unload(scriptID: scriptID)
         Task { @MainActor in
             self.statusByScriptID[scriptID] = .idle
+            if let previous = self.previousDylibPaths.removeValue(forKey: scriptID) {
+                try? FileManager.default.removeItem(atPath: previous)
+            }
         }
     }
 
