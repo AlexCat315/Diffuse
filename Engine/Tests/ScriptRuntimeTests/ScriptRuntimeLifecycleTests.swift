@@ -13,6 +13,15 @@ private struct ScriptHitLog: Sendable, Equatable {
     var entities: [EntityID] = []
 }
 
+private struct StatefulScriptBehavior: ScriptBehavior {
+    private var updateCount = 0
+
+    mutating func onUpdate(_ context: ScriptContext) {
+        updateCount += 1
+        _ = context.translate(by: SIMD3<Float>(Float(updateCount), 0, 0))
+    }
+}
+
 @Suite("ScriptRuntimeLifecycle")
 struct ScriptRuntimeLifecycleTests {
     @Test("registered scripts run start once and drive same-frame world updates")
@@ -115,5 +124,28 @@ struct ScriptRuntimeLifecycleTests {
         _ = runtime.tick(deltaTime: 0.1)
 
         #expect(runtime.resource(ScriptHitLog.self)?.entities == [target])
+    }
+
+    @Test("typed script behaviors keep independent state per binding")
+    func typedBehaviorsKeepStatePerBinding() {
+        let scripts = ScriptRuntime()
+        let handle = scripts.register(named: "typed-counter") {
+            Script(behavior: StatefulScriptBehavior.self)
+        }
+
+        var runtime = SceneRuntime()
+        runtime.setScriptDriver(scripts)
+        let firstEntity = runtime.createEntity()
+        let secondEntity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: firstEntity)
+        _ = runtime.setLocalTransform(LocalTransform(translation: .zero), for: secondEntity)
+        _ = runtime.setComponent(ScriptComponent(handle), for: firstEntity)
+        _ = runtime.setComponent(ScriptComponent(handle), for: secondEntity)
+
+        _ = runtime.tick(deltaTime: 0.1)
+        _ = runtime.tick(deltaTime: 0.1)
+
+        #expect(runtime.localTransform(for: firstEntity)?.translation == SIMD3<Float>(3, 0, 0))
+        #expect(runtime.localTransform(for: secondEntity)?.translation == SIMD3<Float>(3, 0, 0))
     }
 }

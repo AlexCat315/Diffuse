@@ -163,9 +163,9 @@ public final class DynamicScriptManager: @unchecked Sendable {
             let status: CompilationStatus
             do {
                 let result = try compiler.compile(sourcePath: sourceURL.path, scriptID: scriptID)
-                let script = try loader.load(scriptID: scriptID, libraryPath: result.outputPath)
+                let makeScript = try loader.loadFactory(scriptID: scriptID, libraryPath: result.outputPath)
                 // Register on the main actor — the runtime mutates shared state.
-                await MainActor.run { scriptRuntime.register(named: scriptID) { script } }
+                _ = await MainActor.run { scriptRuntime.register(named: scriptID, makeScript) }
                 await self?.updateStatus(.succeeded, for: scriptID)
                 status = .succeeded
             } catch {
