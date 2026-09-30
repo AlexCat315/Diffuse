@@ -99,6 +99,7 @@ extension TextField {
                                        0,
                                        state.maxScrollY)
                 state.scrollOffsetY = nextOffset
+                state.needsCaretReveal = false
                 node.contentOffset = CGPoint(x: 0, y: CGFloat(nextOffset))
                 return ScrollConsumePolicy.whenOffsetChanged
                     .result(didScroll: nextOffset != previousOffset)

@@ -92,6 +92,36 @@ struct JsonFieldTests: GuavaUIComposeSerializedSuite {
         return node
     }
 
+    @Test("an invalid draft survives blur and refocusing")
+    func invalidDraftSurvivesBlur() { GlobalTestLock.locked {
+        let context = PlatformInputContext()
+        context.withCurrent {
+            let store = Store()
+            store.value = "{\"ok\":true}"
+            let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+            graph.install(root: JsonField(text: Binding(get: { store.value }, set: { store.value = $0 })))
+            let node = fieldNode(in: graph.tree.root)
+            context.focusChain.focus(node)
+            graph.recomposer.commitAll()
+            let handlers = context.interactions.handlers(for: node)
+            _ = handlers.key?(key(4, primary: true), .target)
+            _ = handlers.text?("{ unfinished", .target)
+            context.focusChain.clear()
+            graph.recomposer.commitAll()
+            #expect(store.value == "{\"ok\":true}")
+            context.focusChain.focus(node)
+            graph.recomposer.commitAll()
+            var copied = ""
+            let previousClipboard = ClipboardHolder.write
+            ClipboardHolder.write = { copied = $0 }
+            defer { ClipboardHolder.write = previousClipboard }
+            let refreshed = context.interactions.handlers(for: node)
+            _ = refreshed.key?(key(4, primary: true), .target)
+            _ = refreshed.key?(key(6, primary: true), .target)
+            #expect(copied == "{ unfinished")
+        }
+    } }
+
     private func firstNode(in root: Node?, where predicate: (Node) -> Bool) -> Node? {
         guard let root else { return nil }
         if predicate(root) { return root }

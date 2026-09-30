@@ -111,6 +111,7 @@ public struct NodeRenderer {
         // 6. Children — translated by -contentOffset for scrollable containers.
         let childOriginX = absX - Float(node.contentOffset.x)
         let childOriginY = absY - Float(node.contentOffset.y)
+        let descendantStart = list.vertices.count
         if node.childrenMayNeedZSort {
             for child in renderOrderedChildren(of: node) {
                 renderNode(child, list: list, originX: childOriginX, originY: childOriginY)
@@ -122,6 +123,7 @@ public struct NodeRenderer {
         }
 
         // 7. Overlay (scrollbars, focus rings drawn above content).
+        list.multiplyOpacity(fromVertexIndex: descendantStart, by: node.opacity)
         if let overlay = node.overlayDraw {
             overlay(list, CGPoint(x: Double(absX), y: Double(absY)))
         }

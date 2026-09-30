@@ -554,6 +554,7 @@ public struct Popover<Label: View, Content: View>: View {
             if isPresented.wrappedValue {
                 _PopoverOverlayHost(width: width,
                                     placement: placement,
+                                    onDismiss: { isPresented.wrappedValue = false },
                                     keyHandler: onKey) {
                     Box(direction: .column, alignItems: .stretch, spacing: 0) {
                         content
@@ -571,6 +572,7 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
     let placement: PopoverPlacement
     let content: Content
     let keyHandler: ((KeyEvent, EventPhase) -> EventResult)?
+    let onDismiss: () -> Void
 
     private struct PositionIdentity: Equatable {
         let width: Float?
@@ -579,11 +581,13 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
 
     init(width: Float?,
          placement: PopoverPlacement,
+         onDismiss: @escaping () -> Void,
          keyHandler: ((KeyEvent, EventPhase) -> EventResult)? = nil,
          @ViewBuilder content: () -> Content) {
         self.width = width
         self.placement = placement
         self.keyHandler = keyHandler
+        self.onDismiss = onDismiss
         self.content = content()
     }
 
@@ -612,6 +616,10 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
                      position: position,
                      width: width,
                      content: AnyView(content))
+        node.firstResource(PortalResource.self)?.setDismissal(
+            anchor: { [weak node] in node.map { Self.anchorFrame(for: $0) ?? .zero } ?? .zero },
+            dismiss: onDismiss
+        )
         node.attachments[LayoutDebugAttachmentKey.debugName] =
             "popover-store-\(ObjectIdentifier(portalStore))-entries-\(portalStore.entries.count)"
         node.updateOverlayDraw(identity: PositionIdentity(width: width,
@@ -630,9 +638,15 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
         }
 
         // Keyboard handler
-        node.isFocusable = keyHandler != nil
-        if let keyHandler, let registry = InteractionRegistryHolder.current {
-            registry.setKey(node, route: .overlay, keyHandler)
+        node.isFocusable = true
+        if let registry = InteractionRegistryHolder.current {
+            registry.setKey(node, route: .overlay) { event, phase in
+                if event.scancode == Scancode.escape {
+                    onDismiss()
+                    return .handled
+                }
+                return keyHandler?(event, phase) ?? .ignored
+            }
             if node.attachments["__popover_autofocused"] == nil {
                 node.attachments["__popover_autofocused"] = true
                 FocusChainHolder.current?.focus(node)

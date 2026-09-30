@@ -642,3 +642,5 @@
 "Revert" = "还原";
 "Valid JSON" = "有效 JSON";
 "Empty saves as {}" = "空值保存为 {}";
+
+"Logs" = "日志";

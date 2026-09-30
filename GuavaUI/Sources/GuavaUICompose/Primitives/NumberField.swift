@@ -1,4 +1,5 @@
 import Foundation
+import EngineKernel
 import GuavaUIRuntime
 
 /// Numeric text field that keeps an editable draft and commits parsed floats on submit or blur.
@@ -37,7 +38,7 @@ public struct NumberField: View {
     static func format(_ value: Float, decimals: Int) -> String {
         let clamped = max(0, min(decimals, 6))
         let formatted = String(format: "%.*f", clamped, value)
-        guard clamped > 0 else { return formatted }
+        guard clamped > 0 else { return formatted == "-0" ? "0" : formatted }
 
         var trimmed = formatted
         while trimmed.last == "0" {
@@ -46,7 +47,7 @@ public struct NumberField: View {
         if trimmed.last == "." {
             trimmed.removeLast()
         }
-        return trimmed.isEmpty ? "0" : trimmed
+        return trimmed.isEmpty || trimmed == "-0" ? "0" : trimmed
     }
 
     static func parse(_ text: String) -> Float? {
@@ -79,6 +80,13 @@ private struct _StatefulNumberField: View {
             onSubmit: {
                 commitDraft()
             },
+            onKeyDown: { event in
+                guard event.scancode == Scancode.arrowUp || event.scancode == Scancode.arrowDown else { return false }
+                let multiplier: Float = !event.modifiers.isDisjoint(with: .shift) ? 10
+                    : (!event.modifiers.isDisjoint(with: .alt) ? 0.1 : 1)
+                adjust(by: event.scancode == Scancode.arrowUp ? multiplier : -multiplier)
+                return true
+            },
             onFocus: {
                 if !isEditing {
                     draft = committed
@@ -95,8 +103,7 @@ private struct _StatefulNumberField: View {
             return AnyView(input)
         }
 
-        // Stacked chevron spinner flush against the field — the modern
-        // inspector idiom — instead of detached "-" / "+" text buttons.
+        // Optional compact spinner. Inspector fields use keyboard stepping.
         return AnyView(
             Row(alignment: .center, spacing: 2) {
                 input
@@ -116,8 +123,8 @@ private struct _StatefulNumberField: View {
                action: action) {
             Icon(icon, size: 7, color: .onSurfaceMuted)
         }
-        .buttonStyle(.ghost)
-        .frame(width: 16, height: 11)
+        .buttonStyle(.plain)
+        .frame(width: 20, height: 14)
     }
 
     private func commitDraft() {
@@ -135,17 +142,16 @@ private struct _StatefulNumberField: View {
     }
 
     private func increment() {
-        let step = resolvedStep
-        let next = normalized(field.value.wrappedValue + step)
-        if field.value.wrappedValue != next {
-            field.value.wrappedValue = next
-        }
-        draft = NumberField.format(next, decimals: field.decimals)
+        adjust(by: 1)
     }
 
     private func decrement() {
-        let step = resolvedStep
-        let next = normalized(field.value.wrappedValue - step)
+        adjust(by: -1)
+    }
+
+    private func adjust(by multiplier: Float) {
+        let current = isEditing ? NumberField.parse(draft) ?? field.value.wrappedValue : field.value.wrappedValue
+        let next = normalized(current + resolvedStep * multiplier)
         if field.value.wrappedValue != next {
             field.value.wrappedValue = next
         }
@@ -153,19 +159,12 @@ private struct _StatefulNumberField: View {
     }
 
     private var resolvedStep: Float {
-        guard let step = field.step, step > 0 else { return 1 }
+        guard let step = field.step, step.isFinite, step > 0 else { return 1 }
         return step
     }
 
     private func normalized(_ value: Float) -> Float {
-        let clamped = clamped(value)
-        guard let step = field.step, step > 0 else { return clamped }
-        let base = field.minValue ?? 0
-        let snapped = ((clamped - base) / step).rounded() * step + base
-        return clampedValue(snapped)
-    }
-
-    private func clamped(_ value: Float) -> Float {
+        // Step is an increment, not a quantization rule for typed values.
         clampedValue(value)
     }
 

@@ -81,21 +81,32 @@ public final class EventDispatcher {
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
         lastCursor = point
         if deliverGlobalRoutes(kind: .pointer(event, .down),
+                               role: .overlay,
+                               minPriority: .modal) == .handled {
+            return
+        }
+        if deliverGlobalRoutes(kind: .pointer(event, .down),
                                role: .scrollChrome,
                                minPriority: .chrome) == .handled {
             return
         }
-        guard let hit = hitTest(point: point) else { return }
+        guard let hit = hitTest(point: point) else {
+            if event.button == .left { focusChain.focus(nil, visible: false) }
+            return
+        }
         if deliverPriority(path: hit.path,
                            kind: .pointer(event, .down),
                            minPriority: .chrome,
                            phase: .capture) == .handled {
             return
         }
+        let previousFocus = focusChain.focused
         _ = deliver(path: hit.path, kind: .pointer(event, .down))
-        // Auto-focus on click for focusable targets.
-        if hit.node.isFocusable {
-            focusChain.focus(hit.node)
+        // Give explicit handler focus changes priority; otherwise focus the
+        // clicked control or blur an editor when clicking the canvas.
+        if event.button == .left, focusChain.focused === previousFocus {
+            let target = hit.path.reversed().first { $0.isFocusable && $0.acceptsSubtreeInput }
+            focusChain.focus(target, visible: false)
         }
     }
 
@@ -219,6 +230,14 @@ public final class EventDispatcher {
            deliverKeyPath(focusedPath, event: event, phase: phase) == .handled {
             return
         }
+        // Editable code surfaces can consume Tab above. Other controls use
+        // the framework's keyboard traversal rather than requiring a host hook.
+        if phase == .down, event.scancode == 43,
+           event.modifiers.isDisjoint(with: [.ctrl, .gui, .alt]), let root = tree.root {
+            if event.modifiers.isDisjoint(with: .shift) { focusChain.focusNext(in: root) }
+            else { focusChain.focusPrevious(in: root) }
+            return
+        }
         let excluded = Set((focusedPath ?? []).map(ObjectIdentifier.init))
         _ = deliverGlobalRoutes(kind: kind,
                                 role: .shortcut,
@@ -319,6 +338,7 @@ public final class EventDispatcher {
         var candidates: [RouteCandidate] = []
         candidates.reserveCapacity(routed.count)
         for item in routed where !excludedNodes.contains(ObjectIdentifier(item.node)) {
+            guard item.node.acceptsSubtreeInput else { continue }
             guard let depth = depth(of: item.node, under: root) else { continue }
             candidates.append(RouteCandidate(node: item.node,
                                              route: item.route,

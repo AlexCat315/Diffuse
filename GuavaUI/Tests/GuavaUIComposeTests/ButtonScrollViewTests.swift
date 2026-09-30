@@ -737,7 +737,8 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         graph.install(root:
             ScrollView(.vertical) {
                 Column {
-                    Text("header").frame(height: 240)
+                    // Put the field inside the parent's visible hit region.
+                    Text("header").frame(height: 20)
                     TextField(text: makeBinding(store)).frame(width: 180)
                     Text("footer").frame(height: 240)
                 }
@@ -978,6 +979,9 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         #expect((fieldState?.maxScrollY ?? 0) > 0)
 
         focus.focus(field)
+        graph.recomposer.commitAll()
+        graph.computeLayout(width: 220, height: 240)
+        field.draw?(DrawList(), field.absoluteFrame.origin)
         #expect(field.attachments[WheelRoutingAttachmentKey.priority] as? WheelRoutingPriority
                     == .preferFocused)
 
