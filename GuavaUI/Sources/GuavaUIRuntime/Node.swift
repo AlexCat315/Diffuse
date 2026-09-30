@@ -521,6 +521,10 @@ public final class Node: @unchecked Sendable {
             if isLayerClassificationInvalidation(reason) {
                 renderObject?.refreshLayerClassification()
             }
+            // A composed pass can validate retained caches before the host
+            // successfully presents and flushes dirty flags. A later mutation
+            // must invalidate those caches even while renderDirty is still set.
+            renderObject?.invalidateLayerChain()
             return
         }
         // Phase 4b: a style mutation may have promoted/demoted this node to a

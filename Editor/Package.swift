@@ -170,6 +170,8 @@ let package = Package(
             dependencies: [
                 "EditorApp",
                 "EditorCore",
+                .product(name: "EngineKernel", package: "Engine"),
+                .product(name: "SceneRuntime", package: "Engine"),
                 .product(name: "GuavaUIApp", package: "GuavaUI"),
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
                 .product(name: "GuavaUIRuntime", package: "GuavaUI"),

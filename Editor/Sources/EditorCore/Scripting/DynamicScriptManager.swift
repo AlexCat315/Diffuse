@@ -11,6 +11,8 @@ import ScriptRuntime
 /// - Register scripts with the `ScriptRuntime` (hot-reload via generation bump)
 /// - Track compilation status and diagnostics
 public final class DynamicScriptManager: @unchecked Sendable {
+    /// Host/operator configuration only; project files cannot select an executable.
+    public static let compilerOverrideEnvironmentKey = "GUAVA_SWIFTC_PATH"
 
     // MARK: - Public types
 
@@ -77,11 +79,13 @@ public final class DynamicScriptManager: @unchecked Sendable {
                 engineModulePaths: [String],
                 clangModuleMapPaths: [String] = [],
                 clangIncludePaths: [String] = [],
-                scriptTrustStorageURL: URL? = nil) {
+                scriptTrustStorageURL: URL? = nil,
+                swiftCompilerPath: String? = nil) {
         self.projectDirectory = projectDirectory
         self.assetRegistry = ScriptAssetRegistry(projectDirectory: projectDirectory)
         self.trustStore = ScriptProjectTrustStore(storageURL: scriptTrustStorageURL)
         let compiler = SwiftScriptCompiler(
+            swiftcPath: Self.resolvedCompilerPath(override: swiftCompilerPath),
             includePaths: engineModulePaths,
             clangModuleMapPaths: clangModuleMapPaths,
             clangIncludePaths: clangIncludePaths,
@@ -112,6 +116,20 @@ public final class DynamicScriptManager: @unchecked Sendable {
             self.languageSupport = nil
             self.languageSupportUnavailableMessage = "Could not locate built Engine Swift modules for script analysis."
         }
+    }
+
+    static func resolvedCompilerPath(
+        override: String? = nil,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> String {
+        if let override, !override.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return override
+        }
+        if let configured = environment[compilerOverrideEnvironmentKey],
+           !configured.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return configured
+        }
+        return "swiftc"
     }
 
     // MARK: - Directory layout
