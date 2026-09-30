@@ -13,6 +13,7 @@ struct InspectorPanel: View {
     let scene: EditorSceneAdapter
     private let sessionState: InspectorPanelSessionState
     @State private var searchText: String
+    @State private var expandedAdvancedFieldIDs: Set<String>
     @State private var showsSceneSettings = false
 
     init(store: EditorStore, scene: EditorSceneAdapter) {
@@ -21,6 +22,7 @@ struct InspectorPanel: View {
         let sessionState = InspectorPanelSessionRegistry.state(for: store)
         self.sessionState = sessionState
         _searchText = State(wrappedValue: sessionState.searchText)
+        _expandedAdvancedFieldIDs = State(wrappedValue: sessionState.expandedAdvancedFieldIDs)
     }
 
     var body: some View {
@@ -34,7 +36,7 @@ struct InspectorPanel: View {
             let globalIDs: Set<String> = ["physics-settings", "particle-scalability"]
             let sections = allSections.filter {
                 globalIDs.contains($0.id) == showsSceneSettings
-            }.sorted {
+            }.map(InspectorSectionPresentation.presentedSection).sorted {
                 Self.sectionPriority($0.id) < Self.sectionPriority($1.id)
             }
             let collapsedIDs = store.inspectorCollapsedSectionIDs
@@ -114,6 +116,7 @@ struct InspectorPanel: View {
                                      contentPadding: 6,
                                      scrollAxes: .vertical,
                                      emptyText: L("No properties"),
+                                     collapsedSectionIDs: trimmedSearchText.isEmpty ? collapsedIDs : [],
                                      onSectionCollapseChanged: { id, isCollapsed in
                             store.dispatch(.setInspectorSectionCollapsed(id: id, isCollapsed: isCollapsed))
                         })
@@ -154,6 +157,13 @@ struct InspectorPanel: View {
     }
 
     private func setSections(_ sections: [EditorInspectorSection], collapsed: Bool) {
+        let advancedIDs = Set(sections.flatMap { section in
+            section.fields.filter { $0.presentation == .advanced }.map { "\(section.id)/\($0.id)" }
+        })
+        var next = expandedAdvancedFieldIDs
+        if collapsed { next.subtract(advancedIDs) } else { next.formUnion(advancedIDs) }
+        sessionState.expandedAdvancedFieldIDs = next
+        expandedAdvancedFieldIDs = next
         store.dispatch(.setInspectorSectionsCollapsed(
             ids: Set(sections.map(\.id)),
             isCollapsed: collapsed
@@ -351,7 +361,8 @@ struct InspectorPanel: View {
         var body: some View {
             ColorField(color: binding,
                        showAlpha: false,
-                       showsInlineValues: true)
+                       showsInlineValues: true,
+                       showsInlineChannels: false)
                 .flex()
                 .clipped()
         }
@@ -510,15 +521,32 @@ struct InspectorPanel: View {
                                   entityID: UInt64?,
                                   isEditable: Bool) -> [PropertyGridSection] {
         func row(for field: EditorInspectorField, sectionID: String) -> PropertyGridRow {
-            PropertyGridRow(id: field.id,
-                            label: field.label,
+            let isAdvanced = field.presentation == .advanced
+            let fieldID = "\(sectionID)/\(field.id)"
+            let value = isEditable
+                ? AnyView(fieldView(field.value,
+                                    identity: "\(entityID.map(String.init) ?? "none")/\(fieldID)"))
+                : AnyView(InspectorReadOnlyValue(text: field.value.readOnlyDescription))
+            let expansion = Binding<Bool>(
+                get: { !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || expandedAdvancedFieldIDs.contains(fieldID) },
+                set: { expanded in
+                    var next = expandedAdvancedFieldIDs
+                    if expanded { next.insert(fieldID) } else { next.remove(fieldID) }
+                    sessionState.expandedAdvancedFieldIDs = next
+                    expandedAdvancedFieldIDs = next
+                }
+            )
+            return PropertyGridRow(id: field.id,
+                            label: isAdvanced ? "" : field.label,
                             rowHeight: field.value.preferredRowHeight(defaultHeight: 28),
-                            layout: field.value.preferredRowLayout) {
-                if isEditable {
-                    fieldView(field.value,
-                              identity: "\(entityID.map(String.init) ?? "none")/\(sectionID)/\(field.id)")
+                            layout: isAdvanced ? .fullWidth : field.value.preferredRowLayout,
+                            sizing: isAdvanced ? .intrinsic : field.value.preferredRowSizing) {
+                if isAdvanced {
+                    DisclosureGroup(field.label, isExpanded: expansion) { value }
+                        .debugName("inspector-advanced-\(fieldID)")
                 } else {
-                    InspectorReadOnlyValue(text: field.value.readOnlyDescription)
+                    value
                 }
             }
         }
@@ -578,7 +606,9 @@ struct InspectorPanel: View {
         case let .color(binding):
             return AnyView(InspectorColorValue(binding: binding))
         case let .json(binding, minHeight):
-            return AnyView(JsonField(text: binding, minHeight: minHeight))
+            return AnyView(JsonField(text: binding, minHeight: minHeight,
+                                     labels: JsonFieldLabels(format: L("Format"), revert: L("Revert"),
+                                                             valid: L("Valid JSON"), empty: L("Empty saves as {}"))))
         case let .lightType(binding):
             return AnyView(InspectorLightTypeValue(binding: binding))
         case let .physicsSimulationMode(binding):
@@ -590,7 +620,8 @@ struct InspectorPanel: View {
         case let .colliderShapeKind(binding):
             return AnyView(InspectorColliderShapeKindValue(binding: binding))
         case let .colliderShapeInstances(binding):
-            return AnyView(InspectorColliderShapeInstancesValue(binding: binding))
+            return AnyView(InspectorColliderShapeInstancesValue(
+                binding: binding, session: sessionState.colliderState(for: identity)))
         case let .entityReference(binding, options):
             return AnyView(InspectorEntityReferenceValue(binding: binding, options: options))
         case let .physicsJointKind(binding):
@@ -707,12 +738,39 @@ enum InspectorSectionFilter {
     }
 }
 
+enum InspectorSectionPresentation {
+    /// Keep the legacy single-shape bindings in the scene adapter for existing
+    /// clients. The typed compound editor already exposes them, so presenting
+    /// them again would edit shape #1 twice and duplicate the shape count.
+    static func presentedSection(_ section: EditorInspectorSection) -> EditorInspectorSection {
+        guard section.id == "collider",
+              section.fields.contains(where: { $0.id == "shape-instances" }) else { return section }
+        let redundantIDs: Set<String> = [
+            "shape-kind", "shape-box-extents", "shape-sphere-radius",
+            "shape-capsule-radius", "shape-capsule-half-height", "shape-cylinder-radius",
+            "shape-cylinder-half-height", "shape-heightfield-resource", "shape-mesh-resource",
+            "shape-convex-resource", "shape-center", "shape-instance-count",
+        ]
+        return EditorInspectorSection(id: section.id, title: section.title,
+                                      fields: section.fields.filter { !redundantIDs.contains($0.id) })
+    }
+}
+
 /// Dock reconciliation can reconstruct the Inspector view after every scene
 /// revision. Keep the user's active property query attached to the editor
 /// session so editing a value or changing the primary selection does not erase
 /// the investigation context.
 private final class InspectorPanelSessionState {
     var searchText: String = ""
+    var expandedAdvancedFieldIDs: Set<String> = []
+    private var colliderStates: [String: InspectorColliderShapeEditorState] = [:]
+
+    func colliderState(for identity: String) -> InspectorColliderShapeEditorState {
+        if let state = colliderStates[identity] { return state }
+        let state = InspectorColliderShapeEditorState()
+        colliderStates[identity] = state
+        return state
+    }
 }
 
 private enum InspectorPanelSessionRegistry {
@@ -828,10 +886,17 @@ private extension EditorInspectorFieldValue {
 
     var preferredRowLayout: PropertyGridRowLayout {
         switch self {
-        case .colliderShapeInstances, .particleCurve, .particleSubEmitters, .particleModuleStack:
+        case .json, .colliderShapeInstances, .particleCurve, .particleSubEmitters, .particleModuleStack:
             return .fullWidth
         default:
             return .twoColumn
+        }
+    }
+
+    var preferredRowSizing: PropertyGridRowSizing {
+        switch self {
+        case .colliderShapeInstances, .json: return .intrinsic
+        default: return .fixed
         }
     }
 
@@ -841,11 +906,7 @@ private extension EditorInspectorFieldValue {
             return max(defaultHeight, 30)
         case .asset:
             return max(defaultHeight, 34)
-        case let .colliderShapeInstances(binding):
-            return max(
-                defaultHeight,
-                ColliderShapeInstanceEditorLayout.rowHeight(shapeCount: binding.wrappedValue.count)
-            )
+        case .colliderShapeInstances: return nil
         case let .particleCurve(binding):
             if case .keyframes(let keyframes) = binding.wrappedValue {
                 return max(defaultHeight, ParticleCurveEditorLayout.rowHeight(keyframeCount: keyframes.count))
@@ -856,8 +917,7 @@ private extension EditorInspectorFieldValue {
         case let .particleModuleStack(binding):
             return max(defaultHeight,
                        ParticleModuleStackEditorLayout.rowHeight(stack: binding.wrappedValue))
-        case let .json(_, minHeight):
-            return max(defaultHeight, minHeight + 34)
+        case .json: return nil
         default:
             return nil
         }

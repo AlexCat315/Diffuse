@@ -77,11 +77,45 @@ The gap is not limited to docking and density. Review these independently:
 - The full Compose suite (354 tests), workbench layout/persistence tests and script
   identity/trust/external-change/build-coordination tests were exercised.
 
-Remaining visual work includes complex component editors, advanced-field disclosure,
-complete icon/state consistency, and interaction-level verification of the whole
-workbench in both themes. The mirror showed stale/black frames around a native
-window resize; first-frame palette inspection is not sufficient evidence that
-the resize/live-refresh path is correct. Reproduce this against the native window
-and separate mirror readback problems from retained-render/input invalidation.
-The supplied concept image remains a direction, not a
-claim that the current engine or UI already matches its finished quality.
+## Foundation and inspector refinement, 2026-09-30
+
+- Two failing renderer tests reproduced paint/cache divergence when a pass
+  composed successfully but the host had not yet flushed dirty flags. Mutations
+  now invalidate retained layer ancestors even while `renderDirty` is already
+  set. Retained-painter reuse and scrolling tests still pass.
+- An actual disclosure header exposed another foundation defect: a 220-point hit
+  region contained only 18 points of button chrome. Built-in chrome now fills the
+  host's width, so label layout, hover/focus paint and hit regions agree. Disabled
+  buttons no longer participate in keyboard traversal.
+- GuavaUI now has a controlled `DisclosureGroup`, controlled property-section
+  collapse, and opt-in intrinsic property rows. Intrinsic sizing does not erase
+  a value's own frame. Expand/Collapse All and search can override prior local
+  disclosure state; fixed-height rows retain their existing behavior.
+- Collider authoring uses a flat shape list with one active shape and an optional
+  local-transform disclosure. There is no nested scroll view or calculated
+  264-point card height. Shape selection and expanded transforms follow reorder,
+  delete and append operations and survive Inspector reconstruction.
+- The typed editor replaces duplicate single-shape/count fields in presentation,
+  while their adapter bindings remain available to existing clients. Raw JSON is
+  explicitly marked advanced, closed by default, searchable, and full-width when
+  opened. Inspector JSON controls and physics labels support the chosen locale.
+- Narrow color fields retain a swatch and hex value; channel editing remains in
+  the color popover. Border colors come from the active theme.
+- A custom build toolchain can be selected with host-only `GUAVA_SWIFTC_PATH` or
+  the manager initializer. Project files cannot select a compiler. When building
+  the Editor with a custom `SWIFT_EXEC`, use the same compiler for runtime scripts;
+  on macOS configure its SDK with `SDKROOT` (the path reported by
+  `xcrun --show-sdk-path`). Matching Swift 6.4 and SDK configuration was exercised
+  in the running test project: compilation and native hot reload succeeded.
+- Live hierarchy selection, Inspector updates and ongoing chart changes were
+  observed in the real draw-list mirror. A 1280 × 720 → 1440 × 870 window-size
+  change continued to produce valid updated frames. This establishes that path,
+  not a blanket guarantee against every mirror/readback failure.
+- The full Compose suite (360 tests), Runtime suite (186 tests), workbench suite
+  (11 tests) and script-system suite (6 tests) passed after these refinements.
+
+Remaining work includes other complex component editors (particles and assets),
+consistent icon/hover/focus states across all panels and popovers, complete
+workbench interaction coverage in both themes, and representative empty/error/
+loading states. The supplied concept remains the visual direction, not a claim
+that the current engine scene or the entire UI matches its finished quality.

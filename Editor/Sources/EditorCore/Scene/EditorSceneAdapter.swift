@@ -3824,7 +3824,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         fields.append(EditorInspectorField(
             id: "shape-instances-json",
             label: L("Advanced JSON"),
-            value: .json(colliderShapeInstancesBinding(for: entity), minHeight: 120)
+            value: .json(colliderShapeInstancesBinding(for: entity), minHeight: 120),
+            presentation: .advanced
         ))
 
         fields.append(

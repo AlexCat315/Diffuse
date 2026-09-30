@@ -5,6 +5,22 @@ import GuavaUIRuntime
 
 @Suite("Control density", .serialized)
 struct ControlDensityTests {
+    @Test("compact color fields retain the hex value without duplicate channel text")
+    func compactColorField() throws { try GlobalTestLock.locked {
+        let previous = TextEnvironmentHolder.current
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make(size: 12, lineHeight: 16)
+        defer { TextEnvironmentHolder.current = previous }
+        let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())
+        graph.install(root: Row {
+            ColorField(color: Binding(get: { .white }, set: { _ in }), showAlpha: false,
+                       showsInlineValues: true, showsInlineChannels: false)
+        })
+        graph.computeLayout(width: 150, height: 30)
+        let hex = try #require(graph.layoutSnapshot().first { $0.debugName == "color-field-hex" }?.absoluteFrame)
+        #expect(hex.width >= 42)
+        #expect(hex.maxX <= 150)
+    } }
+
     @Test("flat tab underlines span the full tab, not a zero-width empty view")
     func tabIndicatorFillsWidth() { GlobalTestLock.locked {
         let previous = TextEnvironmentHolder.current
