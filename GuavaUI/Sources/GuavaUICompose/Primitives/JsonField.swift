@@ -16,23 +16,41 @@ public enum JsonFieldValidation: Equatable, Sendable {
     }
 }
 
+public struct JsonFieldLabels: Sendable {
+    public var format: String
+    public var revert: String
+    public var valid: String
+    public var empty: String
+
+    public init(format: String = "Format", revert: String = "Revert",
+                valid: String = "Valid JSON", empty: String = "Empty saves as {}") {
+        self.format = format
+        self.revert = revert
+        self.valid = valid
+        self.empty = empty
+    }
+}
+
 public struct JsonField: View {
     public let text: Binding<String>
     public let placeholder: String
     public let minHeight: Float
     public let isEnabled: Bool
     public let onCommit: ((String) -> Void)?
+    public let labels: JsonFieldLabels
 
     public init(text: Binding<String>,
                 placeholder: String = "{}",
                 minHeight: Float = 96,
                 isEnabled: Bool = true,
+                labels: JsonFieldLabels = JsonFieldLabels(),
                 onCommit: ((String) -> Void)? = nil) {
         self.text = text
         self.placeholder = placeholder
         self.minHeight = minHeight
         self.isEnabled = isEnabled
         self.onCommit = onCommit
+        self.labels = labels
     }
 
     public var body: some View {
@@ -123,7 +141,7 @@ private struct _StatefulJsonField: View {
                        action: {
                     formatDraft()
                 }) {
-                    Text("Format")
+                    Text(field.labels.format)
                         .font(.caption)
                         .foregroundColor(.onSurfaceVariant)
                 }
@@ -136,7 +154,7 @@ private struct _StatefulJsonField: View {
                     validation = JsonField.validate(draft)
                     isEditing = false
                 }) {
-                    Text("Revert")
+                    Text(field.labels.revert)
                         .font(.caption)
                         .foregroundColor(.onSurfaceVariant)
                 }
@@ -149,13 +167,13 @@ private struct _StatefulJsonField: View {
         switch validation {
         case .valid:
             return AnyView(
-                Text("Valid JSON")
+                Text(field.labels.valid)
                     .font(.caption)
                     .foregroundColor(.success)
             )
         case .empty:
             return AnyView(
-                Text("Empty saves as {}")
+                Text(field.labels.empty)
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
             )
@@ -169,12 +187,12 @@ private struct _StatefulJsonField: View {
         }
     }
 
-    private func borderColor(for validation: JsonFieldValidation) -> Color {
+    private func borderColor(for validation: JsonFieldValidation) -> SemanticColorRef {
         switch validation {
         case .valid, .empty:
-            return Color(red: 58, green: 64, blue: 78)
+            return .border
         case .invalid:
-            return Color(red: 233, green: 89, blue: 89)
+            return .error
         }
     }
 

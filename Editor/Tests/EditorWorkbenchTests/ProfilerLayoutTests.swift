@@ -24,25 +24,7 @@ struct ProfilerLayoutTests {
 
     @Test("live chart and summary fit a compact bottom dock",
           arguments: [(Float(640), Float(136)), (Float(960), Float(176))])
-    func overviewFitsDock(size: (Float, Float)) throws {
-        let fontPath = [
-            "/System/Library/Fonts/Helvetica.ttc",
-            "C:\\Windows\\Fonts\\segoeui.ttf",
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        ].first { FileManager.default.fileExists(atPath: $0) }
-        let atlas = FontAtlas(width: 512, height: 512)
-        atlas.loadFont(path: try #require(fontPath), size: 12)
-        let shaper = TextShaper()
-        if let face = atlas.freetypeFace { shaper.setFont(ftFace: face, size: 12) }
-        let previous = TextEnvironmentHolder.current
-        TextEnvironmentHolder.current = TextEnvironment(
-            atlas: atlas, shaper: shaper, atlasTextureID: 1,
-            defaultLineHeight: 16, defaultColor: .black,
-            defaultFont: .system(size: 12),
-            fontResolver: TextFontResolver(primaryFontName: "Arial", atlas: atlas)
-        )
-        defer { TextEnvironmentHolder.current = previous }
-
+    func overviewFitsDock(size: (Float, Float)) throws { try WorkbenchUITestSupport.withEnvironment { _, _ in
         let stats = EditorFrameStats(frameSeconds: 0.018, inputSeconds: 0.001,
                                      simulationSeconds: 0.002, renderPrepareSeconds: 0.003,
                                      renderSubmitSeconds: 0.001, gpuPresentSeconds: 0.004,
@@ -69,5 +51,5 @@ struct ProfilerLayoutTests {
             #expect(metric.absoluteFrame.width > 40)
             #expect(metric.absoluteFrame.maxY <= CGFloat(size.1))
         }
-    }
+    } }
 }

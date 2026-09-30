@@ -13,15 +13,24 @@ public struct EditorInspectorSection {
     }
 }
 
+public enum EditorInspectorFieldPresentation: Sendable {
+    case standard
+    /// Expert/raw-data access is available, but not part of the default form.
+    case advanced
+}
+
 public struct EditorInspectorField {
     public let id: String
     public let label: String
     public let value: EditorInspectorFieldValue
+    public let presentation: EditorInspectorFieldPresentation
 
-    public init(id: String, label: String, value: EditorInspectorFieldValue) {
+    public init(id: String, label: String, value: EditorInspectorFieldValue,
+                presentation: EditorInspectorFieldPresentation = .standard) {
         self.id = id
         self.label = label
         self.value = value
+        self.presentation = presentation
     }
 }
 

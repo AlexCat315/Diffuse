@@ -19,15 +19,18 @@ public struct ColorField: View {
     public let isEnabled: Bool
     public let showAlpha: Bool
     public let showsInlineValues: Bool
+    public let showsInlineChannels: Bool
 
     public init(color: Binding<Color>,
                 isEnabled: Bool = true,
                 showAlpha: Bool = true,
-                showsInlineValues: Bool = false) {
+                showsInlineValues: Bool = false,
+                showsInlineChannels: Bool = true) {
         self.color = color
         self.isEnabled = isEnabled
         self.showAlpha = showAlpha
         self.showsInlineValues = showsInlineValues
+        self.showsInlineChannels = showsInlineChannels
     }
 
     public var body: some View {
@@ -49,7 +52,8 @@ private struct _StatefulColorField: View {
             ColorSwatch(color: field.color.wrappedValue,
                         isEnabled: field.isEnabled,
                         showAlpha: field.showAlpha,
-                        showsInlineValues: field.showsInlineValues)
+                        showsInlineValues: field.showsInlineValues,
+                        showsInlineChannels: field.showsInlineChannels)
         }, content: {
             ColorPickerPanel(color: field.color, showAlpha: field.showAlpha)
                 .padding(10)
@@ -67,6 +71,7 @@ private struct ColorSwatch: View {
     let isEnabled: Bool
     let showAlpha: Bool
     let showsInlineValues: Bool
+    let showsInlineChannels: Bool
 
     var body: some View {
         Row(alignment: .center, spacing: 8) {
@@ -74,16 +79,19 @@ private struct ColorSwatch: View {
                 .frame(width: 52, height: 22)
                 .background(isEnabled ? color : color.multipliedAlpha(0.4))
                 .cornerRadius(3)
-                .border(Color(red: 58, green: 64, blue: 78), width: 1)
+                .border(.border, width: 1)
 
             if showsInlineValues {
                 Text(hexString(from: color, showAlpha: showAlpha))
                     .font(.mono)
                     .foregroundColor(isEnabled ? .onSurfaceVariant : .onSurfaceMuted)
-                Text(rgbString(from: color, showAlpha: showAlpha))
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
-                    .flex()
+                    .debugName("color-field-hex")
+                if showsInlineChannels {
+                    Text(rgbString(from: color, showAlpha: showAlpha))
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                        .flex()
+                }
             }
         }
     }
