@@ -254,6 +254,35 @@ func makeDeveloperPerformanceMonitors(
     }
 }
 
+/// Profiler is a first-class dock panel rather than buried in a second tool tab bar.
+struct EditorProfilerPanel: View {
+    let app: EditorApplication
+    @State private var selectedSampleIndex: UInt64?
+
+    var body: some View {
+        StoreScope(app.store) { store in
+            let stats = store.frameStats
+            let history = store.frameStatsHistory
+            let renderStats = app.currentRenderStats()
+            let issues = makeDeveloperWorkbenchIssues(
+                frameStats: stats, frameHistory: history, renderStats: renderStats,
+                particleSummary: nil, particleAuthoringSummary: nil,
+                particleHotspots: [], selectedEntityID: nil, consoleEntries: []
+            ).filter { $0.target.tab == .frame }
+            DeveloperProfilerWorkbenchView(frameStats: stats,
+                                           history: history,
+                                           renderStats: renderStats,
+                                           particleHistory: store.particleDiagnosticsHistory,
+                                           issues: issues,
+                                           selectedSampleIndex: $selectedSampleIndex,
+                                           onOpenTarget: { target in
+                selectedSampleIndex = target.frameSampleIndex
+            })
+            .frame(minWidth: 0, minHeight: 0)
+        }
+    }
+}
+
 struct DeveloperProfilerWorkbenchView: View {
     let frameStats: EditorFrameStats
     let history: [EditorFrameStatsHistorySample]
@@ -287,7 +316,7 @@ struct DeveloperProfilerWorkbenchView: View {
                     .padding(horizontal: 10)
             }
             if !showsFrameDetails {
-                DeveloperProfilerOverview(samples: samples, stats: selectedStats)
+                DeveloperProfilerOverview(samples: samples, stats: frameStats)
                     .flex(1, shrink: 1, basis: 0)
             } else {
             DeveloperProfilerToolbar(sampleCount: samples.count,
@@ -339,24 +368,27 @@ struct DeveloperProfilerWorkbenchView: View {
 
 /// First-screen telemetry, sized for the bottom dock. Deep inspection is a
 /// separate view so diagnostic cards cannot push the live graph out of sight.
-private struct DeveloperProfilerOverview: View {
+struct DeveloperProfilerOverview: View {
     let samples: [EditorFrameStatsHistorySample]
     let stats: EditorFrameStats
 
     var body: some View {
         let recent = Array(samples.suffix(120))
-        let health = developerProfilerFrameHealth(samples: recent)
+        let health = developerProfilerFrameHealth(samples: recent, measuresWork: true)
         let cpu = recent.map { Float($0.stats.cpuWorkSeconds * 1000) }
         let present = recent.map { Float($0.stats.gpuPresentSeconds * 1000) }
         let simulation = recent.map { Float($0.stats.simulationSeconds * 1000) }
         let work = recent.map { Float($0.stats.workMs) }
         let domainMax = max(20, (work.max() ?? 20) * 1.08)
-        return Row(alignment: .top, spacing: 12) {
-            Column(alignment: .leading, spacing: 6) {
+        let healthColor: SemanticColorRef = health.sampleCount == 0 ? .onSurfaceMuted
+            : health.budgetHitRate >= 95 ? .success
+            : health.budgetHitRate >= 80 ? .warning : .error
+        return Box(direction: .row, alignItems: .stretch, spacing: 12) {
+            Box(direction: .column, alignItems: .stretch, spacing: 6) {
                 Row(alignment: .center, spacing: 8) {
                     Box { EmptyView() }.frame(width: 6, height: 6)
                         .background(.success).cornerRadius(3)
-                    Text("LIVE").font(.caption).foregroundColor(.success)
+                    Text(L("LIVE")).font(.caption).foregroundColor(.success)
                     Text("\(developerProfilerFormatMs(stats.workMs)) · \(developerProfilerFormatFPS(stats.fps)) FPS")
                         .font(.label)
                     Spacer(minLength: 0)
@@ -364,7 +396,7 @@ private struct DeveloperProfilerOverview: View {
                 }
                 Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 10) {
                     DeveloperProfilerLegend(label: "CPU", color: .accent)
-                    DeveloperProfilerLegend(label: "Present", color: .success)
+                    DeveloperProfilerLegend(label: L("Present"), color: .success)
                     DeveloperProfilerLegend(label: L("Simulation"), color: .accentSecondary)
                     DeveloperProfilerLegend(label: "16.7 ms", color: .warning)
                 }
@@ -375,7 +407,8 @@ private struct DeveloperProfilerOverview: View {
                              style: ChartStyle(minValue: 0, maxValue: domainMax,
                                                gridLineCount: 4, lineWidth: 1.4,
                                                contentInset: 4, background: .surfaceSunken))
-                    .frame(height: 98, minWidth: 0)
+                    .flex(1, shrink: 1, basis: 0)
+                    .frame(minWidth: 0, minHeight: 24)
                     .debugName("profiler-overview-chart")
                 Row(alignment: .center, spacing: 0) {
                     Text(L("Recent Frames")).font(.caption).foregroundColor(.onSurfaceMuted)
@@ -386,16 +419,16 @@ private struct DeveloperProfilerOverview: View {
             .flex(1, shrink: 1, basis: 0)
             .frame(minWidth: 0)
 
-            Column(alignment: .leading, spacing: 8) {
+            Box(direction: .column, alignItems: .stretch, spacing: 5) {
                 Row(alignment: .center, spacing: 8) {
                     Text(L("Frame Health")).font(.label)
                     Spacer(minLength: 0)
                     Text("\(Int(health.budgetHitRate.rounded()))%")
-                        .font(.mono).foregroundColor(.success)
+                        .font(.mono).foregroundColor(healthColor)
                 }
                 Row(alignment: .center, spacing: 0) {
                     Box { EmptyView() }
-                        .background(.success)
+                        .background(healthColor)
                         .flex(max(0.001, Float(health.budgetHitRate)), shrink: 1, basis: 0)
                     Box { EmptyView() }
                         .background(.surfaceVariant)
@@ -404,7 +437,7 @@ private struct DeveloperProfilerOverview: View {
                 .frame(height: 6).cornerRadius(3).clipped()
                 Row(alignment: .top, spacing: 6) {
                     metric("CPU", developerProfilerFormatMs(stats.cpuWorkSeconds * 1000))
-                    metric("Present", developerProfilerFormatMs(stats.gpuPresentSeconds * 1000))
+                    metric(L("Present"), developerProfilerFormatMs(stats.gpuPresentSeconds * 1000))
                     metric(L("Draws"), "\(stats.drawCallCount)")
                 }
                 Divider()
@@ -431,12 +464,14 @@ private struct DeveloperProfilerOverview: View {
     private func metric(_ label: String, _ value: String) -> some View {
         Column(alignment: .leading, spacing: 3) {
             Text(label).font(.caption).foregroundColor(.onSurfaceMuted)
-            Text(value).font(.label).foregroundColor(.onSurface)
+            Text(value, lineLimit: 1).font(.label).foregroundColor(.onSurface)
         }
-        .padding(horizontal: 6, vertical: 6)
+        .padding(horizontal: 6, vertical: 4)
         .background(.surface)
         .cornerRadius(4)
         .flex(1, shrink: 1, basis: 0)
+        .clipped()
+        .debugName("profiler-metric-\(label)")
     }
 }
 
@@ -1670,7 +1705,7 @@ private struct DeveloperProfilerEvidenceItem {
     var status: DeveloperPerformanceMonitorStatus
 }
 
-private struct DeveloperProfilerFrameHealth {
+struct DeveloperProfilerFrameHealth {
     var sampleCount: Int
     var overBudgetCount: Int
     var criticalCount: Int
@@ -1972,7 +2007,8 @@ private func developerProfilerParticleDropCount(_ sample: EditorParticleDiagnost
         + sample.eventDroppedSpawnCount
 }
 
-private func developerProfilerFrameHealth(samples: [EditorFrameStatsHistorySample]) -> DeveloperProfilerFrameHealth {
+func developerProfilerFrameHealth(samples: [EditorFrameStatsHistorySample],
+                                  measuresWork: Bool = false) -> DeveloperProfilerFrameHealth {
     guard !samples.isEmpty else {
         return DeveloperProfilerFrameHealth(sampleCount: 0,
                                             overBudgetCount: 0,
@@ -1983,13 +2019,19 @@ private func developerProfilerFrameHealth(samples: [EditorFrameStatsHistorySampl
                                             maxWorkMs: 0)
     }
 
-    let overBudgetCount = samples.filter { developerProfilerFrameStatus($0.stats.frameMs) != .nominal }.count
-    let criticalCount = samples.filter { developerProfilerFrameStatus($0.stats.frameMs) == .critical }.count
+    // The overview's work graph must use the same metric for its budget and
+    // average. An idle event-driven editor can have a 1-second wall-clock frame
+    // without spending a second doing CPU/present work.
+    let timeMs: (EditorFrameStatsHistorySample) -> Double = {
+        measuresWork ? $0.stats.workMs : $0.stats.frameMs
+    }
+    let overBudgetCount = samples.filter { developerProfilerFrameStatus(timeMs($0)) != .nominal }.count
+    let criticalCount = samples.filter { developerProfilerFrameStatus(timeMs($0)) == .critical }.count
     let pacingCount = samples.filter {
         $0.stats.isFramePacingDominated || developerProfilerPacingStatus($0.stats.pacingGapMs) != .nominal
     }.count
-    let totalFrameMs = samples.reduce(0) { $0 + $1.stats.frameMs }
-    let maxFrameMs = samples.map(\.stats.frameMs).max() ?? 0
+    let totalFrameMs = samples.reduce(0) { $0 + timeMs($1) }
+    let maxFrameMs = samples.map(timeMs).max() ?? 0
     let budgetHitRate = Double(max(samples.count - overBudgetCount, 0)) / Double(samples.count) * 100
 
     return DeveloperProfilerFrameHealth(sampleCount: samples.count,

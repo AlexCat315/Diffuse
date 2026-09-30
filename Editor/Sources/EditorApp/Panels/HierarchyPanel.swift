@@ -100,41 +100,25 @@ struct HierarchyPanel: View {
                     }
                 }
             )
+            let headerActions: [MenuEntry] = [
+                .item(MenuItem(id: "expand-all", title: L("Expand All"),
+                               isEnabled: !parentKeys.isEmpty,
+                               action: { replaceExpandedKeys(parentKeys) })),
+                .item(MenuItem(id: "collapse-all", title: L("Collapse All"),
+                               isEnabled: !currentExpandedKeys.isEmpty,
+                               action: { replaceExpandedKeys([]) })),
+                .separator("tree-navigation"),
+            ] + hierarchyActionEntries(
+                selectedIDs: selectedIDs, roots: hierarchyRoots,
+                isAuthoringEnabled: isAuthoringEnabled,
+                containsLockedSelection: containsLockedSelection,
+                containsRenderableSelection: containsRenderableSelection,
+                allSelectionHidden: allSelectionHidden,
+                allSelectionLocked: allSelectionLocked,
+                canMoveSelectionToRoot: canMoveSelectionToRoot
+            )
 
             Box(direction: .column, alignItems: .stretch) {
-                HierarchyPanelHeader(entityCount: scene.entityCount,
-                                     selectionCount: store.selectedEntityIDsCount,
-                                     isAuthoringEnabled: isAuthoringEnabled,
-                                     selectedParent: primaryEntity.flatMap { entity in
-                                        scene.isEntityLocked(entity.id) ? nil : entity
-                                     },
-                                     selectionActions: hierarchyActionEntries(
-                                        selectedIDs: selectedIDs,
-                                        roots: hierarchyRoots,
-                                        isAuthoringEnabled: isAuthoringEnabled,
-                                        containsLockedSelection: containsLockedSelection,
-                                        containsRenderableSelection: containsRenderableSelection,
-                                        allSelectionHidden: allSelectionHidden,
-                                        allSelectionLocked: allSelectionLocked,
-                                        canMoveSelectionToRoot: canMoveSelectionToRoot
-                                     ),
-                                     onCreateEntity: { template, parentID in
-                        guard isAuthoringEnabled else { return }
-                        guard let newID = scene.spawnEntity(template: template,
-                                                            parentID: parentID) else {
-                            log("Could not create entity", severity: .error,
-                                detail: template.displayName)
-                            return
-                        }
-                        store.dispatch(.setSelectedEntity(newID))
-                        if let parentID,
-                           let parentKey = keysByID[parentID]?.first {
-                            insertExpandedKey(parentKey)
-                        }
-                    })
-
-                Divider()
-
                 EditorPanelSearchBar(
                     L("Search Hierarchy"),
                     text: searchTextBinding,
@@ -150,6 +134,22 @@ struct HierarchyPanel: View {
                         updateSearchQuery("")
                     }
                 ) {
+                    HierarchyPanelHeader(isAuthoringEnabled: isAuthoringEnabled,
+                                         selectedParent: primaryEntity.flatMap {
+                                            scene.isEntityLocked($0.id) ? nil : $0
+                                         },
+                                         selectionActions: headerActions,
+                                         onCreateEntity: { template, parentID in
+                        guard isAuthoringEnabled else { return }
+                        guard let newID = scene.spawnEntity(template: template, parentID: parentID) else {
+                            log("Could not create entity", severity: .error, detail: template.displayName)
+                            return
+                        }
+                        store.dispatch(.setSelectedEntity(newID))
+                        if let parentID, let parentKey = keysByID[parentID]?.first {
+                            insertExpandedKey(parentKey)
+                        }
+                    })
                     if !trimmedSearchQuery.isEmpty {
                         EditorPanelIconButton(UICommonIcons.chevronUp,
                                               tooltip: L("Previous Match"),
@@ -164,17 +164,6 @@ struct HierarchyPanel: View {
                             selectSearchMatch(.next,
                                               matchingIDs: matchingEntityIDs,
                                               roots: hierarchyRoots)
-                        }
-                    } else {
-                        EditorPanelIconButton(UICommonIcons.chevronDown,
-                                              tooltip: L("Expand All"),
-                                              isEnabled: !parentKeys.isEmpty) {
-                            replaceExpandedKeys(parentKeys)
-                        }
-                        EditorPanelIconButton(UICommonIcons.chevronRight,
-                                              tooltip: L("Collapse All"),
-                                              isEnabled: !currentExpandedKeys.isEmpty) {
-                            replaceExpandedKeys([])
                         }
                     }
                 }
@@ -266,7 +255,7 @@ struct HierarchyPanel: View {
                     .treeRowStyle(HierarchyTreeRowStyle())
                 }
             }
-            .frame(minWidth: 220)
+            .frame(minWidth: 0, minHeight: 0)
         }
     }
 
@@ -718,8 +707,6 @@ private struct HierarchyTreeRowStyle: TreeRowStyle {
 }
 
 private struct HierarchyPanelHeader: View {
-    let entityCount: Int
-    let selectionCount: Int
     let isAuthoringEnabled: Bool
     let selectedParent: EditorSceneEntitySummary?
     let selectionActions: [MenuEntry]
@@ -728,27 +715,9 @@ private struct HierarchyPanelHeader: View {
     @State private var isActionsPresented: Bool = false
 
     var body: some View {
-        EditorPanelToolbar(spacing: 0) {
-            Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                if selectionCount > 0 {
-                    actionsControl()
-                }
-            }
-            .frame(width: 68)
-
-            Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                if selectionCount > 0 {
-                    EditorPanelBadge("\(selectionCount) \(L("selected"))", foreground: .accent)
-                } else {
-                    EditorPanelBadge("\(entityCount) \(L(entityCount == 1 ? "entity" : "entities"))")
-                }
-            }
-            .flex(1, shrink: 1, basis: 0)
-
-            Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                createControl()
-            }
-            .frame(width: 68)
+        Row(alignment: .center, spacing: 2) {
+            createControl()
+            actionsControl()
         }
     }
 
@@ -811,29 +780,19 @@ private struct HierarchyPanelHeader: View {
     }
 
     private func actionLabel() -> some View {
-        Row(alignment: .center, spacing: 4) {
-            Text(L("Actions"))
-                .font(.caption)
-                .foregroundColor(.onSurface)
-            Icon(isActionsPresented ? UICommonIcons.chevronUp : UICommonIcons.chevronDown,
-                 size: 8,
-                 color: .onSurfaceMuted)
-        }
-        .padding(horizontal: 7, vertical: 4)
-        .background(.surfaceSunken)
+        Text("···")
+        .font(.bodyStrong)
+        .foregroundColor(.onSurfaceMuted)
+        .frame(width: 24, height: 24)
+        .background(isActionsPresented ? .surfaceVariant : .surface)
         .cornerRadius(4)
     }
 
     private func createLabel() -> some View {
-        Row(alignment: .center, spacing: 5) {
-            Text("+")
-                .font(.bodyStrong)
-                .foregroundColor(isAuthoringEnabled ? .accent : .onSurfaceMuted)
-            Text(L("Create"))
-                .font(.caption)
-                .foregroundColor(isAuthoringEnabled ? .onSurface : .onSurfaceMuted)
-        }
-        .padding(horizontal: 8, vertical: 4)
+        Text("+")
+        .font(.bodyStrong)
+        .foregroundColor(isAuthoringEnabled ? .accent : .onSurfaceMuted)
+        .frame(width: 24, height: 24)
         .background(.surfaceSunken)
         .cornerRadius(4)
     }

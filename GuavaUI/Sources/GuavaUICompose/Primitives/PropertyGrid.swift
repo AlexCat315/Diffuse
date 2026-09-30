@@ -262,6 +262,7 @@ private struct _StatefulPropertyGrid: View {
             }
             .padding(horizontal: 7)
             .frame(width: grid.labelWidth, height: rowHeight)
+            .clipped()
 
             Box(direction: .row, alignItems: .center, justifyContent: .flexStart) {
                 row.value
