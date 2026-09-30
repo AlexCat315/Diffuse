@@ -1,16 +1,35 @@
 import EditorCore
 import Foundation
 import GuavaUIApp
+import GuavaUIRuntime
 import GuavaUIWorkspace
 #if canImport(AppKit)
 import AppKit
 #endif
 
 enum EditorCommandDispatcher {
+    static func isEnabled(_ command: EditorMenuCommand,
+                          sceneCommandEnabled: Bool,
+                          focusChain: FocusChain? = FocusChainHolder.current) -> Bool {
+        switch command {
+        case .undo:
+            if let available = focusChain?.textEditAvailability(.undo) { return available }
+        case .redo:
+            if let available = focusChain?.textEditAvailability(.redo) { return available }
+        default: break
+        }
+        guard focusChain?.modalRoot == nil else { return false }
+        return sceneCommandEnabled
+    }
+
     static func handle(_ command: EditorMenuCommand,
                        app: EditorApplication,
                        controller: WorkspaceController,
                        registry: PanelRegistry) {
+        let focus = FocusChainHolder.current
+        if case .undo = command, focus?.performTextEdit(.undo) == true { return }
+        if case .redo = command, focus?.performTextEdit(.redo) == true { return }
+        guard focus?.modalRoot == nil else { return }
         let store = app.store
 
         switch command {

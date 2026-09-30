@@ -20,6 +20,10 @@ public enum UICommonIcons {
     public static let close = BundleImageResource.svg(named: "close",
                                                       in: GuavaUIComposeResourceBundle.bundle,
                                                       subdirectory: "UIIcons")
+    public static let format = BundleImageResource.svg(named: "format", in: GuavaUIComposeResourceBundle.bundle, subdirectory: "UIIcons")
+    public static let reset = BundleImageResource.svg(named: "reset", in: GuavaUIComposeResourceBundle.bundle, subdirectory: "UIIcons")
+    public static let expand = BundleImageResource.svg(named: "expand", in: GuavaUIComposeResourceBundle.bundle, subdirectory: "UIIcons")
+
 }
 
 public enum KeyboardShortcutPlatform: Sendable, Equatable {
@@ -208,21 +212,13 @@ public struct Menu: View {
 
     public var body: some View {
         let rowHeight: Float = 28
-        let shouldScroll = entries.count > maxVisibleRows
         let listHeight = Float(maxVisibleRows) * rowHeight
-        Box(direction: .column, alignItems: .stretch, spacing: 1) {
-            if shouldScroll {
-                ScrollView(.vertical,
-                           consumePolicy: .always,
-                           scrollbarGutter: .stable) {
-                    Box(direction: .column, alignItems: .stretch, spacing: 1) {
-                        rows()
-                    }
-                }
-                .frame(height: listHeight)
-            } else {
-                rows()
+        Box(direction: .column, alignItems: .stretch, spacing: 0) {
+            ScrollView(.vertical, consumePolicy: .always, scrollbarGutter: .stable) {
+                Box(direction: .column, alignItems: .stretch, spacing: 1) { rows() }
             }
+            .frame(maxHeight: listHeight)
+            .modifier(_MenuWindowBounds())
         }
         .background(.surfaceFloating)
         .cornerRadius(7)
@@ -554,7 +550,8 @@ public struct Popover<Label: View, Content: View>: View {
             if isPresented.wrappedValue {
                 _PopoverOverlayHost(width: width,
                                     placement: placement,
-                                    keyHandler: onKey) {
+                                    keyHandler: onKey,
+                                    onDismiss: { isPresented.wrappedValue = false }) {
                     Box(direction: .column, alignItems: .stretch, spacing: 0) {
                         content
                     }
@@ -571,6 +568,7 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
     let placement: PopoverPlacement
     let content: Content
     let keyHandler: ((KeyEvent, EventPhase) -> EventResult)?
+    let onDismiss: () -> Void
 
     private struct PositionIdentity: Equatable {
         let width: Float?
@@ -580,10 +578,12 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
     init(width: Float?,
          placement: PopoverPlacement,
          keyHandler: ((KeyEvent, EventPhase) -> EventResult)? = nil,
+         onDismiss: @escaping () -> Void,
          @ViewBuilder content: () -> Content) {
         self.width = width
         self.placement = placement
         self.keyHandler = keyHandler
+        self.onDismiss = onDismiss
         self.content = content()
     }
 
@@ -620,25 +620,30 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
             node.firstResource(PortalResource.self)?
                 .updatePosition(Self.popoverPosition(for: node,
                                                      width: width,
-                                                     placement: placement))
+                                                     placement: placement),
+                                anchorFrame: Self.anchorFrame(for: node))
         }
         node.layoutDidUpdate = { [width, placement] node in
             node.firstResource(PortalResource.self)?
                 .updatePosition(Self.popoverPosition(for: node,
                                                      width: width,
-                                                     placement: placement))
+                                                     placement: placement),
+                                anchorFrame: Self.anchorFrame(for: node))
         }
 
-        // Keyboard handler
-        node.isFocusable = keyHandler != nil
-        if let keyHandler, let registry = InteractionRegistryHolder.current {
-            registry.setKey(node, route: .overlay, keyHandler)
-            if node.attachments["__popover_autofocused"] == nil {
-                node.attachments["__popover_autofocused"] = true
-                FocusChainHolder.current?.focus(node)
+        if let registry = InteractionRegistryHolder.current {
+            registry.setKey(node, route: .overlay) { event, phase in
+                if event.scancode == Scancode.escape { onDismiss(); return .handled }
+                return keyHandler?(event, phase) ?? .ignored
             }
-        } else {
-            InteractionRegistryHolder.current?.remove(node)
+            registry.setPointer(node, route: .overlay) { event, pointerPhase, _ in
+                guard pointerPhase == .down else { return .ignored }
+                let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
+                if node.firstResource(PortalResource.self)?.frame?.contains(point) == true { return .ignored }
+                if Self.anchorFrame(for: node)?.contains(point) == true { return .ignored }
+                onDismiss()
+                return .handled
+            }
         }
     }
 
@@ -892,5 +897,21 @@ private extension View {
         } else {
             self
         }
+    }
+}
+
+private struct _MenuWindowBounds: ViewModifier {
+    func apply(node: Node) {
+        let preferredHeight = node.layoutNode?.maxHeight ?? .greatestFiniteMagnitude
+        func constrain(_ node: Node) {
+            var root = node
+            while let parent = root.parent { root = parent }
+            if root.frame.height > 0 {
+                let height = min(preferredHeight, max(0, Float(root.frame.height) - 8))
+                if node.layoutNode?.maxHeight != height { node.layoutNode?.maxHeight = height }
+            }
+        }
+        constrain(node)
+        node.layoutDidUpdate = constrain
     }
 }
