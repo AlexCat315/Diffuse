@@ -49,6 +49,10 @@ struct LayoutPresetSelector: View {
         switch workspaceMode {
         case .level:
             return [
+                .item(MenuItem(id: "level-workbench",
+                               title: L("Workbench"),
+                               isSelected: activePreset == .levelWorkbench,
+                               action: { onSelectPreset(.levelWorkbench) })),
                 .item(MenuItem(id: "level-default",
                                title: L("Default"),
                                isSelected: activePreset == .levelDefault,
@@ -85,6 +89,8 @@ struct LayoutPresetSelector: View {
 
     private func shortLabel(for preset: EditorLayoutPreset) -> String {
         switch preset {
+        case .levelWorkbench:
+            return L("Workbench")
         case .levelDefault, .modelingDefault, .animationDefault:
             return L("Default")
         case .levelCinematics:

@@ -32,6 +32,11 @@ struct EditorRootView: View {
                                     onCommand: cb.handleMenuCommand
                                 )
 
+                                Spacer(minLength: 12)
+                                EditorPlaybackToolbar(state: store.playbackState,
+                                                      onCommand: cb.handleMenuCommand)
+                                Spacer(minLength: 12)
+
                                 LayoutPresetSelector(
                                     workspaceMode: store.workspaceMode,
                                     activePreset: store.activeLayoutPreset,
@@ -50,7 +55,8 @@ struct EditorRootView: View {
                                        registry: registry)
                             .flex()
                             .frame(minWidth: 0, minHeight: 0)
-                            .padding(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
+                            .workspaceTheme(WorkspaceTheme(splitDividerThickness: 5))
+                            .padding(EdgeInsets(top: 3, leading: 6, bottom: 3, trailing: 6))
                             .layoutRole("editor-workspace")
                             .debugName("editor-workspace")
 

@@ -14,6 +14,7 @@ struct EditorPresentationBoundary<Content: View>: View {
     var body: some View {
         content
             .id(presentation.revision)
-            .appearance(presentation.themeMode == .dark ? .dark : .light)
+            .theme(EditorVisualTheme.make(dark: presentation.themeMode == .dark))
+            .controlSize(.small)
     }
 }

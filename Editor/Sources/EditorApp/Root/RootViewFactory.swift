@@ -516,6 +516,17 @@ enum EditorRootViewFactory {
     }
 
     private static func getLayoutPersistenceDirectory() -> URL? {
+        // Isolate visual QA and automated runs from a developer's saved docks.
+        if let override = ProcessInfo.processInfo.environment["GUAVA_EDITOR_STATE_DIRECTORY"],
+           !override.isEmpty {
+            let directory = URL(fileURLWithPath: override, isDirectory: true)
+            do {
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                return directory
+            } catch {
+                return nil
+            }
+        }
         guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory,
                                                          in: .userDomainMask).first else {
             return nil
@@ -567,14 +578,14 @@ enum EditorWorkspaceDefaults {
                             iconAssetKey: descriptor.iconAssetKey))
         })
         let fractions = defaultFractions(for: preset)
-        let groups: [WorkspaceTabGroupID: WorkspaceTabGroup] = [
+        var groups: [WorkspaceTabGroupID: WorkspaceTabGroup] = [
             "leading": WorkspaceTabGroup(id: "leading", panels: ["hierarchy"], activePanelID: "hierarchy"),
             "center": WorkspaceTabGroup(id: "center",
                                          panels: ["viewport", "scripts"],
                                          activePanelID: "viewport"),
             "trailing": WorkspaceTabGroup(id: "trailing",
                                          panels: ["intent-input", "inspector"],
-                                         activePanelID: "intent-input"),
+                                         activePanelID: "inspector"),
             "bottom": WorkspaceTabGroup(id: "bottom",
                                         panels: ["assets",
                                                  "console",
@@ -583,22 +594,33 @@ enum EditorWorkspaceDefaults {
                                                  "developer-tools"],
                                         activePanelID: defaultBottomPanelID(for: preset))
         ]
+        let centerLayout: WorkspaceLayoutNode
+        if preset == .levelWorkbench {
+            groups["center"] = WorkspaceTabGroup(id: "center", panels: ["viewport"], activePanelID: "viewport")
+            groups["script-editor"] = WorkspaceTabGroup(id: "script-editor", panels: ["scripts"], activePanelID: "scripts")
+            centerLayout = .split(axis: .vertical, fraction: 0.54,
+                                  first: .group("center"), second: .group("script-editor"))
+        } else {
+            centerLayout = .group("center")
+        }
         return WorkspaceDocument(
             panels: panels,
             groups: groups,
             slots: WorkspaceSlot.standardEditorSlots(leading: .group("leading"),
-                                                     center: .group("center"),
+                                                     center: centerLayout,
                                                      trailing: .group("trailing"),
                                                      bottom: .group("bottom")),
-            layoutTree: .group("center"),
+            layoutTree: centerLayout,
             splitFractions: fractions
         )
     }
 
     private static func defaultFractions(for preset: EditorLayoutPreset) -> WorkspaceSplitFractions {
         switch preset {
+        case .levelWorkbench:
+            return WorkspaceSplitFractions(leading: 0.16, centerTrailing: 0.75, topBottom: 0.73)
         case .levelDefault:
-            return WorkspaceSplitFractions(leading: 0.22, centerTrailing: 0.78, topBottom: 0.74)
+            return WorkspaceSplitFractions(leading: 0.17, centerTrailing: 0.75, topBottom: 0.74)
         case .levelCinematics:
             return WorkspaceSplitFractions(leading: 0.18, centerTrailing: 0.80, topBottom: 0.68)
         case .modelingDefault:
@@ -614,6 +636,8 @@ enum EditorWorkspaceDefaults {
 
     private static func defaultBottomPanelID(for preset: EditorLayoutPreset) -> WorkspacePanelID {
         switch preset {
+        case .levelWorkbench:
+            return "developer-tools"
         case .levelDefault, .levelCinematics:
             return "assets"
         case .modelingDefault, .modelingSculpt:

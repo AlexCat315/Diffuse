@@ -17,6 +17,47 @@ private final class ScriptCompilerOutputBox: @unchecked Sendable {
     }
 }
 
+/// Cooperative cancellation bridge for a blocking `Process` compilation.
+/// Cancelling terminates the currently registered swift driver process instead
+/// of merely ignoring its eventual result.
+public final class ScriptCompilationCancellationToken: @unchecked Sendable {
+    private let lock = NSLock()
+    private var process: Process?
+    private var cancelled = false
+
+    public init() {}
+
+    public var isCancelled: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return cancelled
+    }
+
+    public func cancel() {
+        lock.lock()
+        cancelled = true
+        let runningProcess = process
+        lock.unlock()
+        if runningProcess?.isRunning == true {
+            runningProcess?.terminate()
+        }
+    }
+
+    fileprivate func register(_ process: Process) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !cancelled else { return false }
+        self.process = process
+        return true
+    }
+
+    fileprivate func unregister(_ process: Process) {
+        lock.lock()
+        if self.process === process { self.process = nil }
+        lock.unlock()
+    }
+}
+
 /// Invokes the system `swiftc` compiler to turn a Swift script source file
 /// into a dynamic library that `SwiftScriptLoader` can load.
 ///
@@ -143,7 +184,10 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
     /// - Parameters:
     ///   - sourcePath: Absolute path to the `.swift` script file.
     ///   - scriptID: Stable identifier used as the output file name.
-    public func compile(sourcePath: String, scriptID: String) throws -> CompilationResult {
+    public func compile(sourcePath: String,
+                        scriptID: String,
+                        cancellation: ScriptCompilationCancellationToken? = nil) throws -> CompilationResult {
+        if cancellation?.isCancelled == true { throw ScriptCompileError.cancelled }
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         let shimURL = outputDirectory.appendingPathComponent(".guava-entrypoint-\(UUID().uuidString).swift")
         try Self.generatedEntryPointSource.write(to: shimURL, atomically: true, encoding: .utf8)
@@ -175,6 +219,9 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
         process.standardError = stderrPipe
 
         try process.run()
+        let mayContinue = cancellation?.register(process) ?? true
+        defer { cancellation?.unregister(process) }
+        if !mayContinue, process.isRunning { process.terminate() }
 
         // Drain both pipes while swiftc is running. Waiting first can deadlock
         // once either pipe fills its kernel buffer (large diagnostics are common
@@ -194,6 +241,11 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
         }
         process.waitUntilExit()
         outputReaders.wait()
+
+        if cancellation?.isCancelled == true {
+            try? FileManager.default.removeItem(atPath: outputPath)
+            throw ScriptCompileError.cancelled
+        }
 
         let stdout = String(
             data: stdoutBox.load(),
@@ -384,13 +436,16 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
     }
 }
 
-public enum ScriptCompileError: Error, LocalizedError {
+public enum ScriptCompileError: Error, LocalizedError, Equatable {
+    case cancelled
     case compilationFailed(exitCode: Int, stderr: String, stdout: String)
     case importLibraryFailed(exitCode: Int, stderr: String)
     case executableNotFound(String)
 
     public var errorDescription: String? {
         switch self {
+        case .cancelled:
+            return "Swift script compilation was cancelled."
         case let .compilationFailed(exitCode, stderr, stdout):
             let output = [stderr, stdout].filter { !$0.isEmpty }.joined(separator: "\n")
             return output.isEmpty

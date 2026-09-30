@@ -9,15 +9,19 @@ struct DynamicScriptCompilationArtifact: Sendable, Equatable {
 
 protocol DynamicScriptCompiling: Sendable {
     func compile(sourcePath: String,
-                 scriptID: String) throws -> DynamicScriptCompilationArtifact
+                 scriptID: String,
+                 cancellation: ScriptCompilationCancellationToken) throws -> DynamicScriptCompilationArtifact
 }
 
 struct SwiftScriptCompilerDriver: DynamicScriptCompiling {
     let compiler: SwiftScriptCompiler
 
     func compile(sourcePath: String,
-                 scriptID: String) throws -> DynamicScriptCompilationArtifact {
-        let result = try compiler.compile(sourcePath: sourcePath, scriptID: scriptID)
+                 scriptID: String,
+                 cancellation: ScriptCompilationCancellationToken) throws -> DynamicScriptCompilationArtifact {
+        let result = try compiler.compile(sourcePath: sourcePath,
+                                          scriptID: scriptID,
+                                          cancellation: cancellation)
         return DynamicScriptCompilationArtifact(outputPath: result.outputPath,
                                                 stdout: result.stdout,
                                                 stderr: result.stderr)
@@ -35,6 +39,7 @@ extension SwiftScriptLoader: DynamicScriptLibraryLoading {}
 enum DynamicScriptBuildOutcome: Sendable, Equatable {
     case succeeded(stdout: String, stderr: String)
     case failed(message: String)
+    case cancelled
     case superseded
 }
 
@@ -46,13 +51,21 @@ enum DynamicScriptBuildOutcome: Sendable, Equatable {
 /// register an artifact; an older result is discarded without touching the
 /// last known-good runtime generation.
 actor DynamicScriptBuildCoordinator {
+    private struct ActiveCompilation: Sendable {
+        let requestID: UInt64
+        let cancellation: ScriptCompilationCancellationToken
+    }
+
     private let compiler: any DynamicScriptCompiling
     private let loader: any DynamicScriptLibraryLoading
     private let scriptRuntime: ScriptRuntime
 
     private var nextRequestID: UInt64 = 0
     private var newestRequestByScriptID: [String: UInt64] = [:]
+    private var activeCompilations: [String: ActiveCompilation] = [:]
+    private var explicitlyCancelledRequestIDs: Set<UInt64> = []
     private var loadedArtifactPaths: [String: String] = [:]
+    private var registeredIdentifiers: [String: Set<String>] = [:]
     private var retiredArtifactPaths: Set<String> = []
     private var cleanupTask: Task<Void, Never>?
 
@@ -64,17 +77,30 @@ actor DynamicScriptBuildCoordinator {
         self.scriptRuntime = scriptRuntime
     }
 
-    func build(scriptID: String, sourceURL: URL) async -> DynamicScriptBuildOutcome {
+    func build(scriptID: String,
+               legacyIdentifiers: [String],
+               sourceURL: URL) async -> DynamicScriptBuildOutcome {
+        activeCompilations[scriptID]?.cancellation.cancel()
         nextRequestID &+= 1
         let requestID = nextRequestID
         newestRequestByScriptID[scriptID] = requestID
+        let cancellation = ScriptCompilationCancellationToken()
+        activeCompilations[scriptID] = ActiveCompilation(requestID: requestID,
+                                                         cancellation: cancellation)
         let compiler = self.compiler
 
         let compilation = await Task.detached(priority: .userInitiated) {
             Result {
-                try compiler.compile(sourcePath: sourceURL.path, scriptID: scriptID)
+                try compiler.compile(sourcePath: sourceURL.path,
+                                     scriptID: scriptID,
+                                     cancellation: cancellation)
             }
         }.value
+
+        if activeCompilations[scriptID]?.requestID == requestID {
+            activeCompilations.removeValue(forKey: scriptID)
+        }
+        let wasExplicitlyCancelled = explicitlyCancelledRequestIDs.remove(requestID) != nil
 
         guard newestRequestByScriptID[scriptID] == requestID else {
             if case let .success(artifact) = compilation {
@@ -82,9 +108,18 @@ actor DynamicScriptBuildCoordinator {
             }
             return .superseded
         }
+        if wasExplicitlyCancelled {
+            if case let .success(artifact) = compilation {
+                try? FileManager.default.removeItem(atPath: artifact.outputPath)
+            }
+            return .cancelled
+        }
 
         switch compilation {
         case .failure(let error):
+            if wasExplicitlyCancelled || (error as? ScriptCompileError) == .cancelled {
+                return .cancelled
+            }
             return .failed(message: error.localizedDescription)
         case .success(let artifact):
             do {
@@ -96,9 +131,17 @@ actor DynamicScriptBuildCoordinator {
                     return .superseded
                 }
 
+                let nextIdentifiers = Set([scriptID] + legacyIdentifiers)
+                let previousIdentifiers = registeredIdentifiers[scriptID] ?? []
                 _ = await MainActor.run {
-                    scriptRuntime.register(named: scriptID, factory)
+                    for identifier in previousIdentifiers.subtracting(nextIdentifiers) {
+                        scriptRuntime.unregister(named: identifier)
+                    }
+                    for identifier in nextIdentifiers {
+                        scriptRuntime.register(named: identifier, factory)
+                    }
                 }
+                registeredIdentifiers[scriptID] = nextIdentifiers
                 if let previous = loadedArtifactPaths.updateValue(artifact.outputPath,
                                                                   forKey: scriptID),
                    previous != artifact.outputPath {
@@ -120,11 +163,22 @@ actor DynamicScriptBuildCoordinator {
         }
     }
 
+    func cancel(scriptID: String) {
+        guard let active = activeCompilations[scriptID] else { return }
+        explicitlyCancelledRequestIDs.insert(active.requestID)
+        active.cancellation.cancel()
+    }
+
     func unload(scriptID: String) async {
+        activeCompilations[scriptID]?.cancellation.cancel()
+        activeCompilations.removeValue(forKey: scriptID)
         nextRequestID &+= 1
         newestRequestByScriptID[scriptID] = nextRequestID
+        let identifiers = registeredIdentifiers.removeValue(forKey: scriptID) ?? Set([scriptID])
         await MainActor.run {
-            scriptRuntime.unregister(named: scriptID)
+            for identifier in identifiers {
+                scriptRuntime.unregister(named: identifier)
+            }
         }
         loader.unload(scriptID: scriptID)
         if let path = loadedArtifactPaths.removeValue(forKey: scriptID) {

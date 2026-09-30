@@ -17,8 +17,8 @@ struct EditorPanelToolbar<Content: View>: View {
         Row(alignment: .center, spacing: spacing) {
             content
         }
-        .padding(horizontal: 10, vertical: 6)
-        .frame(minHeight: 34)
+        .padding(horizontal: 8, vertical: 3)
+        .frame(minHeight: 30)
         .background(.surface)
     }
 }
@@ -100,10 +100,9 @@ struct EditorPanelBadge: View {
                 .font(.caption)
                 .foregroundColor(foreground)
         }
-        .padding(horizontal: 6, vertical: 2)
-        .background(.surfaceSunken)
+        .padding(horizontal: 5, vertical: 1)
+        .background(.surfaceVariant)
         .cornerRadius(4)
-        .border(.divider, width: 1)
     }
 }
 

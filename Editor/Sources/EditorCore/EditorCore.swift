@@ -1742,6 +1742,11 @@ public final class EditorApplication: @unchecked Sendable {
             store.dispatch(.forceUIRefresh)
             scriptWorkspace.markAllBuildsStarted()
 
+            // Swift scripts are native code in the editor process. Project
+            // discovery and language analysis remain available while
+            // untrusted, but startup must never execute project code.
+            guard dynamicScriptManager.projectTrustState.allowsExecution else { return }
+
             try dynamicScriptManager.compileAllScripts(
                 onScriptCompletion: { [weak self] file, status in
                     guard let self else { return }

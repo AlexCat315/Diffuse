@@ -91,10 +91,10 @@ private struct Vec3AxisField: View {
             Box(direction: .row, alignItems: .center, justifyContent: .center) {
                 Text(label)
                     .font(.label)
-                    .foregroundColor(.onSurface)
+                    .foregroundColor(color)
             }
             .frame(width: 16, height: fieldHeight)
-            .background(color.multipliedAlpha(isEnabled ? 0.85 : 0.35))
+            .background(color.multipliedAlpha(isEnabled ? 0.13 : 0.06))
 
             NumberField(value: value,
                         decimals: decimals,
@@ -117,7 +117,7 @@ private struct Vec3AxisField: View {
         switch size {
         case .large:
             return 40
-        case .regular:
+        case .automatic, .regular:
             return 32
         case .small:
             return 24

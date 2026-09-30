@@ -207,12 +207,12 @@ public final class LayerAwareNodeRenderer {
               w > 0, h > 0 else { return }
         let blur = max(0, node.shadowBlur)
         let radius = max(node.cornerRadius, 0)
-                let steps = blur > 0 ? 6 : 1
+        let steps = blur > 0 ? 6 : 1
         for i in 0..<steps {
-                        let t = Float(i) / Float(max(1, steps - 1))
+            let t = Float(i) / Float(max(1, steps - 1))
             let inset = -blur * (1 - t)
-                        let weight = (1 - t) * (1 - t)
-                        let alpha = shadowColor.a * weight / Float(steps) * 2.4
+            let weight = blur > 0 ? (t + 0.15) * (t + 0.15) : 1
+            let alpha = shadowColor.a * weight / Float(steps)
             let rect = UIRect(
                 x: x + node.shadowOffsetX + inset,
                 y: y + node.shadowOffsetY + inset,
@@ -240,11 +240,8 @@ public final class LayerAwareNodeRenderer {
               w > 0, h > 0 else { return }
         let rect = UIRect(x: x, y: y, width: w, height: h)
         let color = applyOpacity(bc, node.opacity)
-        if node.cornerRadius > 0 {
-            list.addRoundedRect(rect, radius: node.cornerRadius, color: color)
-        } else {
-            list.addRect(rect, color: color)
-        }
+        list.addRoundedRectStroke(rect, radius: node.cornerRadius,
+                                  width: node.borderWidth, color: color)
     }
 
     private func emitBackground(_ node: Node, into list: DrawList,

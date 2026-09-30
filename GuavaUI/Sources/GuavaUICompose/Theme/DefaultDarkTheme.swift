@@ -55,7 +55,7 @@ public enum DefaultDarkTheme {
             bodyStrong: TextStyleToken(font: .system(size: 13, weight: .semibold), lineHeight: 18),
             caption:    TextStyleToken(font: .system(size: 11, weight: .regular),  lineHeight: 15),
             label:      TextStyleToken(font: .system(size: 12, weight: .medium),   lineHeight: 16),
-            mono:       TextStyleToken(font: .system(size: 12, weight: .regular),  lineHeight: 16)
+            mono:       TextStyleToken(font: .monospaced(size: 12), lineHeight: 18)
         ),
         spacing:   SpacingScale(xs: 4, sm: 6, md: 8, lg: 12, xl: 16, xxl: 24),
         // Radii: rows 5, controls 7, grouped chrome 10, panels 12.
