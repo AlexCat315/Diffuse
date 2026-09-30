@@ -150,6 +150,14 @@ let package = Package(
         ),
 
         .testTarget(
+            name: "ScriptSystemTests",
+            dependencies: [
+                "EditorCore",
+                .product(name: "ScriptRuntime", package: "Engine"),
+            ]
+        ),
+
+        .testTarget(
             name: "EditorAppTests",
             dependencies: [
                 "EditorApp",

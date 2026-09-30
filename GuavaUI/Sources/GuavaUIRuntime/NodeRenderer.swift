@@ -50,10 +50,10 @@ public struct NodeRenderer {
             for i in 0..<steps {
                 let t = Float(i) / Float(max(1, steps - 1))
                 let inset = -blur * (1 - t)
-                // Quadratic falloff: concentrated near the element, trails to
-                // near-zero at the outer edge (t = 1 → weight = 0).
-                let weight = (1 - t) * (1 - t)
-                let alpha = shadowColor.a * weight / Float(steps) * 2.4
+                // Largest rect is the faint outer edge; smaller rects build
+                // density towards the surface, not the other way around.
+                let weight = blur > 0 ? (t + 0.15) * (t + 0.15) : 1
+                let alpha = shadowColor.a * weight / Float(steps)
                 let rect = UIRect(
                     x: absX + node.shadowOffsetX + inset,
                     y: absY + node.shadowOffsetY + inset,
@@ -75,17 +75,13 @@ public struct NodeRenderer {
             }
         }
 
-        // 3. Border (painted before background; background inset covers the
-        //    interior so only a `borderWidth`-wide ring shows through).
+        // 3. Border ring, including when the background is transparent.
         if let bc = node.borderColor, node.borderWidth > 0,
            width > 0, height > 0 {
             let rect = UIRect(x: absX, y: absY, width: width, height: height)
             let color = applyOpacity(bc, node.opacity)
-            if node.cornerRadius > 0 {
-                list.addRoundedRect(rect, radius: node.cornerRadius, color: color)
-            } else {
-                list.addRect(rect, color: color)
-            }
+            list.addRoundedRectStroke(rect, radius: node.cornerRadius,
+                                      width: node.borderWidth, color: color)
         }
 
         // 4. Background fill (inset by border width so it does not overdraw

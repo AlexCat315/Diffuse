@@ -13,6 +13,7 @@ struct InspectorPanel: View {
     let scene: EditorSceneAdapter
     private let sessionState: InspectorPanelSessionState
     @State private var searchText: String
+    @State private var showsSceneSettings = false
 
     init(store: EditorStore, scene: EditorSceneAdapter) {
         self.store = store
@@ -29,7 +30,13 @@ struct InspectorPanel: View {
             let selectedEntityID = store.selectedEntityID
             let selectedEntityIDs = store.selectedEntityIDs
             let entity = scene.entitySummary(id: selectedEntityID)
-            let sections = scene.inspectorSections(for: selectedEntityID)
+            let allSections = scene.inspectorSections(for: selectedEntityID)
+            let globalIDs: Set<String> = ["physics-settings", "particle-scalability"]
+            let sections = allSections.filter {
+                globalIDs.contains($0.id) == showsSceneSettings
+            }.sorted {
+                Self.sectionPriority($0.id) < Self.sectionPriority($1.id)
+            }
             let collapsedIDs = store.inspectorCollapsedSectionIDs
             let trimmedSearchText = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
             let filteredSections = InspectorSectionFilter.filter(sections, query: trimmedSearchText)
@@ -54,12 +61,13 @@ struct InspectorPanel: View {
                                               isLocked: scene.isEntityLocked(entity.id),
                                               isAuthoringEnabled: isAuthoringEnabled)
 
-                    ComponentActionsBar(store: store,
-                                        scene: scene,
-                                        entityIDs: selectedEntityIDs.isEmpty
-                                            ? [entity.id]
-                                            : selectedEntityIDs,
-                                        isAuthoringEnabled: isAuthoringEnabled)
+                    Row(alignment: .center, spacing: 0) {
+                        Button(L("Entity"), isSelected: !showsSceneSettings) { showsSceneSettings = false }
+                            .buttonStyle(.tab)
+                        Button(L("Scene Settings"), isSelected: showsSceneSettings) { showsSceneSettings = true }
+                            .buttonStyle(.tab)
+                        Spacer(minLength: 0)
+                    }
 
                     Divider()
 
@@ -98,7 +106,7 @@ struct InspectorPanel: View {
                                                         : [],
                                                       entityID: selectedEntityID,
                                                       isEditable: canEditSelection),
-                                     labelWidth: 108,
+                                     labelWidth: 84,
                                      minValueWidth: 132,
                                      rowHeight: 26,
                                      rowSpacing: 1,
@@ -111,6 +119,11 @@ struct InspectorPanel: View {
                         })
                             .flex()
                     }
+                    Divider()
+                    ComponentActionsBar(store: store,
+                                        scene: scene,
+                                        entityIDs: selectedEntityIDs.isEmpty ? [entity.id] : selectedEntityIDs,
+                                        isAuthoringEnabled: isAuthoringEnabled && !showsSceneSettings)
                 } else {
                     EditorPanelEmptyState(
                         L("No selection"),
@@ -120,6 +133,18 @@ struct InspectorPanel: View {
                 }
             }
             .frame(minWidth: 300)
+        }
+    }
+
+    private static func sectionPriority(_ id: String) -> Int {
+        switch id {
+        case "transform": 0
+        case "render-mesh": 1
+        case "render-material": 2
+        case "script": 3
+        case "general": 90
+        case "hierarchy": 91
+        default: 10
         }
     }
 
@@ -188,7 +213,7 @@ struct InspectorPanel: View {
                         .foregroundColor(.onSurfaceMuted)
                 }
             }
-            .padding(horizontal: 9, vertical: 8)
+            .padding(horizontal: 9, vertical: 6)
             .background(.surface)
         }
     }
@@ -204,10 +229,7 @@ struct InspectorPanel: View {
                     .foregroundColor(.onSurfaceVariant)
                     .flex()
             }
-            .padding(horizontal: 8, vertical: 5)
-            .background(.surfaceSunken)
-            .cornerRadius(7)
-            .border(.border, width: 1)
+            .padding(horizontal: 4, vertical: 3)
             .clipped()
         }
     }

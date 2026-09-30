@@ -39,7 +39,7 @@ public struct TabView<ID: Hashable>: View {
                 }
                 Spacer()
             }
-            .background(.surfaceVariant)
+            .background(.surface)
 
             Divider()
 
@@ -56,23 +56,7 @@ struct _TabBarItem: View {
     let onSelect: () -> Void
 
     var body: some View {
-        Button(action: onSelect) {
-            Box(direction: .column, alignItems: .stretch, spacing: 0) {
-                Text(label)
-                    .font(.bodyStrong)
-                    .foregroundColor(isSelected ? .accent : .onSurfaceMuted)
-                    .padding(horizontal: 12, vertical: 8)
-                if isSelected {
-                    Box { EmptyView() }
-                        .frame(height: 2)
-                        .background(.accent)
-                } else {
-                    Box { EmptyView() }
-                        .frame(height: 2)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .animation(.semantic(.bouncy), value: _TabItemInteractionKey(isSelected: isSelected))
+        Button(label, isSelected: isSelected, action: onSelect)
+            .buttonStyle(.tab)
     }
 }

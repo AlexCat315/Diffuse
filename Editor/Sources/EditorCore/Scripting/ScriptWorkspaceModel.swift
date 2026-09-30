@@ -5,6 +5,8 @@ public enum ScriptDocumentBuildState: Sendable, Equatable {
     case idle
     case building(revision: UInt64)
     case succeeded(revision: UInt64)
+    case cancelled(revision: UInt64)
+    case blocked(revision: UInt64, message: String)
     case failed(revision: UInt64, message: String)
 
     public var isBuilding: Bool {
@@ -18,6 +20,14 @@ public enum ScriptDocumentBuildState: Sendable, Equatable {
     }
 }
 
+public enum ScriptExternalChangeState: Sendable, Equatable {
+    case none
+    case modifiedOnDisk(source: String)
+    case deletedOnDisk
+
+    public var requiresResolution: Bool { self != .none }
+}
+
 public enum ScriptLanguageServiceState: Sendable, Equatable {
     case inactive
     case starting
@@ -26,7 +36,7 @@ public enum ScriptLanguageServiceState: Sendable, Equatable {
 }
 
 public struct ScriptWorkspaceDocument: Sendable, Equatable {
-    public let file: DynamicScriptManager.ScriptFile
+    public var file: DynamicScriptManager.ScriptFile
     public var source: String
     public var savedSource: String
     public var editRevision: UInt64
@@ -35,6 +45,7 @@ public struct ScriptWorkspaceDocument: Sendable, Equatable {
     public var loadedRevision: UInt64?
     public var output: String
     public var diagnostics: [ScriptLanguageDiagnostic]
+    public var externalChange: ScriptExternalChangeState
 
     public var isDirty: Bool { source != savedSource }
 }
@@ -43,6 +54,8 @@ public struct ScriptWorkspaceSnapshot: Sendable, Equatable {
     public var documents: [ScriptWorkspaceDocument]
     public var selectedScriptID: String?
     public var languageServiceState: ScriptLanguageServiceState
+    public var trustState: ScriptProjectTrustState
+    public var trustWarning: String?
 
     public var selectedDocument: ScriptWorkspaceDocument? {
         guard let selectedScriptID else { return nil }
@@ -66,6 +79,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
     private let onScriptLoaded: ScriptLoadedHandler?
     private let onScriptDeleted: ScriptDeletedHandler?
     private let onBuildFailed: BuildFailedHandler?
+    private let directoryMonitor: ScriptDirectoryMonitor
     private var didStartLanguageService = false
     private var languageServiceTask: Task<Void, Never>?
 
@@ -79,6 +93,7 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
         self.onScriptLoaded = onScriptLoaded
         self.onScriptDeleted = onScriptDeleted
         self.onBuildFailed = onBuildFailed
+        self.directoryMonitor = ScriptDirectoryMonitor(directoryURL: manager.scriptsDirectoryURL)
         let documents = try manager.scanScriptFiles().map { file in
             let source = try manager.readSource(at: file.url)
             return ScriptWorkspaceDocument(file: file,
@@ -89,14 +104,23 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
                                            buildState: .idle,
                                            loadedRevision: nil,
                                            output: "",
-                                           diagnostics: [])
+                                           diagnostics: [],
+                                           externalChange: .none)
         }
         self.snapshot = ScriptWorkspaceSnapshot(
             documents: documents,
             selectedScriptID: documents.first?.file.identifier,
-            languageServiceState: documents.isEmpty ? .inactive : .starting
+            languageServiceState: documents.isEmpty ? .inactive : .starting,
+            trustState: manager.projectTrustState,
+            trustWarning: manager.trustStoreWarning
         )
+        let weakModel = WeakScriptWorkspaceModel(self)
+        directoryMonitor.start {
+            Task { @MainActor in weakModel.value?.refreshFromDisk() }
+        }
     }
+
+    deinit { directoryMonitor.stop() }
 
     public func startLanguageService() {
         guard !didStartLanguageService, !snapshot.documents.isEmpty else { return }
@@ -176,7 +200,9 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
         guard persistSelected() else { return false }
         do {
             let url = try manager.createScript(name: name, source: source)
-            let file = DynamicScriptManager.ScriptFile(url: url)
+            guard let file = try manager.scriptFile(at: url) else {
+                throw ScriptWorkspaceError.createdScriptMissing(url.path)
+            }
             let document = ScriptWorkspaceDocument(file: file,
                                                    source: source,
                                                    savedSource: source,
@@ -185,7 +211,8 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
                                                    buildState: .idle,
                                                    loadedRevision: nil,
                                                    output: "",
-                                                   diagnostics: [])
+                                                   diagnostics: [],
+                                                   externalChange: .none)
             snapshot.documents.append(document)
             sortDocuments()
             snapshot.selectedScriptID = file.identifier
@@ -221,6 +248,35 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
         compile(scriptID: scriptID)
     }
 
+    public func cancelSelectedBuild() {
+        guard let index = selectedDocumentIndex,
+              snapshot.documents[index].buildState.isBuilding else { return }
+        manager.cancelBuild(scriptID: snapshot.documents[index].file.identifier)
+        snapshot.documents[index].output = "Cancelling \(snapshot.documents[index].file.displayName).swift…"
+        publish()
+    }
+
+    public func setProjectTrusted(_ trusted: Bool) {
+        do {
+            try manager.setProjectTrusted(trusted)
+            snapshot.trustState = manager.projectTrustState
+            snapshot.trustWarning = nil
+            if !trusted {
+                for index in snapshot.documents.indices {
+                    let revision = snapshot.documents[index].editRevision
+                    snapshot.documents[index].buildState = .blocked(
+                        revision: revision,
+                        message: ScriptProjectTrustError.executionBlocked.localizedDescription
+                    )
+                }
+            }
+            publish()
+        } catch {
+            snapshot.trustWarning = error.localizedDescription
+            publish()
+        }
+    }
+
     public func compile(scriptID: String) {
         guard let index = documentIndex(scriptID: scriptID), persist(scriptAt: index) else { return }
         let document = snapshot.documents[index]
@@ -238,6 +294,13 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
                 self.snapshot.documents[currentIndex].output =
                     "Compiled and reloaded \(document.file.displayName).swift"
                 self.onScriptLoaded?(document.file)
+            case .cancelled:
+                self.snapshot.documents[currentIndex].buildState = .cancelled(revision: revision)
+                self.snapshot.documents[currentIndex].output = "Build cancelled."
+            case .blocked(let message):
+                self.snapshot.documents[currentIndex].buildState = .blocked(revision: revision,
+                                                                            message: message)
+                self.snapshot.documents[currentIndex].output = message
             case .failed(let message):
                 self.snapshot.documents[currentIndex].buildState = .failed(
                     revision: revision,
@@ -255,7 +318,14 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
     public func markAllBuildsStarted() {
         for index in snapshot.documents.indices {
             let revision = snapshot.documents[index].savedRevision
-            snapshot.documents[index].buildState = .building(revision: revision)
+            if snapshot.trustState.allowsExecution {
+                snapshot.documents[index].buildState = .building(revision: revision)
+            } else {
+                snapshot.documents[index].buildState = .blocked(
+                    revision: revision,
+                    message: ScriptProjectTrustError.executionBlocked.localizedDescription
+                )
+            }
         }
         publish()
     }
@@ -275,6 +345,12 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
             snapshot.documents[index].loadedRevision = revision
             snapshot.documents[index].output =
                 "Compiled and reloaded \(snapshot.documents[index].file.displayName).swift"
+        case .cancelled:
+            snapshot.documents[index].buildState = .cancelled(revision: revision)
+            snapshot.documents[index].output = "Build cancelled."
+        case .blocked(let message):
+            snapshot.documents[index].buildState = .blocked(revision: revision, message: message)
+            snapshot.documents[index].output = message
         case .failed(let message):
             snapshot.documents[index].buildState = .failed(revision: revision, message: message)
             snapshot.documents[index].output = message
@@ -308,6 +384,46 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
         publish()
     }
 
+    public func resolveSelectedExternalChange(useDiskVersion: Bool) {
+        guard let index = selectedDocumentIndex else { return }
+        let document = snapshot.documents[index]
+        do {
+            switch document.externalChange {
+            case .none:
+                return
+            case .modifiedOnDisk(let diskSource):
+                if useDiskVersion {
+                    adoptDiskSource(diskSource, at: index)
+                } else {
+                    try manager.writeSource(document.source, at: document.file.url)
+                    snapshot.documents[index].savedSource = document.source
+                    snapshot.documents[index].savedRevision = document.editRevision
+                    snapshot.documents[index].externalChange = .none
+                }
+            case .deletedOnDisk:
+                if useDiskVersion {
+                    manager.unload(scriptID: document.file.identifier)
+                    snapshot.documents.remove(at: index)
+                    snapshot.selectedScriptID = snapshot.documents.first?.file.identifier
+                    onScriptDeleted?(document.file)
+                } else {
+                    try FileManager.default.createDirectory(
+                        at: document.file.url.deletingLastPathComponent(),
+                        withIntermediateDirectories: true
+                    )
+                    try manager.writeSource(document.source, at: document.file.url)
+                    snapshot.documents[index].savedSource = document.source
+                    snapshot.documents[index].savedRevision = document.editRevision
+                    snapshot.documents[index].externalChange = .none
+                }
+            }
+            publish()
+            synchronizeLanguageService()
+        } catch {
+            recordFailure(error.localizedDescription, at: index)
+        }
+    }
+
     private var selectedDocumentIndex: Int? {
         guard let selectedScriptID = snapshot.selectedScriptID else { return nil }
         return documentIndex(scriptID: selectedScriptID)
@@ -331,6 +447,101 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
             recordFailure(error.localizedDescription, at: index)
             return false
         }
+    }
+
+    func refreshFromDisk() {
+        do {
+            let diskFiles = try manager.scanScriptFiles()
+            let filesByID = Dictionary(uniqueKeysWithValues: diskFiles.map { ($0.identifier, $0) })
+            let existingIDs = Set(snapshot.documents.map { $0.file.identifier })
+            var didChange = false
+            var needsLanguageRefresh = false
+
+            for index in snapshot.documents.indices.reversed() {
+                let document = snapshot.documents[index]
+                guard let diskFile = filesByID[document.file.identifier] else {
+                    if document.isDirty {
+                        if snapshot.documents[index].externalChange != .deletedOnDisk {
+                            snapshot.documents[index].externalChange = .deletedOnDisk
+                            didChange = true
+                        }
+                    } else {
+                        manager.unload(scriptID: document.file.identifier)
+                        snapshot.documents.remove(at: index)
+                        onScriptDeleted?(document.file)
+                        didChange = true
+                        needsLanguageRefresh = true
+                    }
+                    continue
+                }
+
+                if diskFile != document.file {
+                    snapshot.documents[index].file = diskFile
+                    didChange = true
+                    needsLanguageRefresh = true
+                }
+                let diskSource = try manager.readSource(at: diskFile.url)
+                if diskSource != document.savedSource {
+                    if document.isDirty {
+                        let change = ScriptExternalChangeState.modifiedOnDisk(source: diskSource)
+                        if snapshot.documents[index].externalChange != change {
+                            snapshot.documents[index].externalChange = change
+                            didChange = true
+                        }
+                    } else {
+                        adoptDiskSource(diskSource, at: index)
+                        didChange = true
+                        needsLanguageRefresh = true
+                    }
+                } else if snapshot.documents[index].externalChange != .none {
+                    snapshot.documents[index].externalChange = .none
+                    didChange = true
+                }
+            }
+
+            for file in diskFiles where !existingIDs.contains(file.identifier) {
+                let source = try manager.readSource(at: file.url)
+                snapshot.documents.append(
+                    ScriptWorkspaceDocument(file: file,
+                                            source: source,
+                                            savedSource: source,
+                                            editRevision: 0,
+                                            savedRevision: 0,
+                                            buildState: .idle,
+                                            loadedRevision: nil,
+                                            output: "Discovered external script \(file.displayName).swift",
+                                            diagnostics: [],
+                                            externalChange: .none)
+                )
+                didChange = true
+                needsLanguageRefresh = true
+            }
+
+            guard didChange else { return }
+            sortDocuments()
+            if snapshot.selectedScriptID.flatMap({ id in
+                snapshot.documents.first(where: { $0.file.identifier == id })
+            }) == nil {
+                snapshot.selectedScriptID = snapshot.documents.first?.file.identifier
+            }
+            publish()
+            if needsLanguageRefresh { synchronizeLanguageService() }
+        } catch {
+            snapshot.trustWarning = "Could not refresh external script changes: \(error.localizedDescription)"
+            publish()
+        }
+    }
+
+    private func adoptDiskSource(_ source: String, at index: Int) {
+        guard snapshot.documents.indices.contains(index) else { return }
+        snapshot.documents[index].source = source
+        snapshot.documents[index].savedSource = source
+        snapshot.documents[index].editRevision &+= 1
+        snapshot.documents[index].savedRevision = snapshot.documents[index].editRevision
+        snapshot.documents[index].buildState = .idle
+        snapshot.documents[index].externalChange = .none
+        snapshot.documents[index].output =
+            "Reloaded external changes in \(snapshot.documents[index].file.displayName).swift"
     }
 
     private func synchronizeLanguageService() {
@@ -416,5 +627,24 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
 
     public func _unregisterObserver(_ token: AnyHashable) {
         publisher.unregister(token)
+    }
+}
+
+private final class WeakScriptWorkspaceModel: @unchecked Sendable {
+    weak var value: ScriptWorkspaceModel?
+
+    init(_ value: ScriptWorkspaceModel) {
+        self.value = value
+    }
+}
+
+private enum ScriptWorkspaceError: Error, LocalizedError {
+    case createdScriptMissing(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .createdScriptMissing(let path):
+            return "The created script could not be registered as an asset: \(path)"
+        }
     }
 }
