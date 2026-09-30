@@ -15,22 +15,33 @@ public enum PropertyGridRowLayout: Sendable {
     case fullWidth
 }
 
+public enum PropertyGridRowSizing: Sendable {
+    /// Keep the row at `rowHeight` (or the grid's default row height).
+    case fixed
+    /// Measure the value's content. `rowHeight` becomes a minimum, allowing
+    /// disclosure editors to grow/shrink without an external height formula.
+    case intrinsic
+}
+
 public struct PropertyGridRow: Identifiable {
     public let id: String
     public let label: String
     public let rowHeight: Float?
     public let layout: PropertyGridRowLayout
+    public let sizing: PropertyGridRowSizing
     public let value: AnyView
 
     public init<ValueContent: View>(id: String,
                                     label: String,
                                     rowHeight: Float? = nil,
                                     layout: PropertyGridRowLayout = .twoColumn,
+                                    sizing: PropertyGridRowSizing = .fixed,
                                     @ViewBuilder value: () -> ValueContent) {
         self.id = id
         self.label = label
         self.rowHeight = rowHeight
         self.layout = layout
+        self.sizing = sizing
         self.value = AnyView(value())
     }
 }
@@ -76,6 +87,9 @@ public struct PropertyGrid: View {
     public let contentPadding: Float
     public let scrollAxes: PropertyGridScrollAxes
     public let emptyText: String
+    /// When provided, expansion is controlled by the caller rather than the
+    /// grid's local state (useful for search and Expand/Collapse All commands).
+    public let collapsedSectionIDs: Set<String>?
     public let onSectionCollapseChanged: ((String, Bool) -> Void)?
 
     public init(_ sections: [PropertyGridSection],
@@ -87,6 +101,7 @@ public struct PropertyGrid: View {
                 contentPadding: Float = 8,
                 scrollAxes: PropertyGridScrollAxes = .both,
                 emptyText: String = "No properties",
+                collapsedSectionIDs: Set<String>? = nil,
                 onSectionCollapseChanged: ((String, Bool) -> Void)? = nil) {
         self.sections = sections
         self.labelWidth = labelWidth
@@ -97,6 +112,7 @@ public struct PropertyGrid: View {
         self.contentPadding = contentPadding
         self.scrollAxes = scrollAxes
         self.emptyText = emptyText
+        self.collapsedSectionIDs = collapsedSectionIDs
         self.onSectionCollapseChanged = onSectionCollapseChanged
     }
 
@@ -158,7 +174,7 @@ private struct _StatefulPropertyGrid: View {
 
     private func sectionViews() -> [AnyView] {
         grid.sections.map { section in
-            let isCollapsed = collapsed[section.id] ?? section.startsCollapsed
+            let isCollapsed = isSectionCollapsed(section)
             return AnyView(
                 sectionView(section, isCollapsed: isCollapsed)
                     .id(section.id)
@@ -179,7 +195,7 @@ private struct _StatefulPropertyGrid: View {
             Button(role: .normal,
                    isEnabled: section.isCollapsible,
                    action: {
-                let current = collapsed[section.id] ?? section.startsCollapsed
+                let current = isSectionCollapsed(section)
                 let next = !current
                 collapsed[section.id] = next
                 grid.onSectionCollapseChanged?(section.id, next)
@@ -227,6 +243,12 @@ private struct _StatefulPropertyGrid: View {
         .cornerRadius(4)
     }
 
+    private func isSectionCollapsed(_ section: PropertyGridSection) -> Bool {
+        grid.collapsedSectionIDs?.contains(section.id)
+            ?? collapsed[section.id]
+            ?? section.startsCollapsed
+    }
+
     private func rowView(_ row: PropertyGridRow, sectionID: String, index: Int) -> some View {
         let rowHeight = row.rowHeight ?? grid.rowHeight
         let rowKey = "\(sectionID)/\(row.id)"
@@ -253,6 +275,8 @@ private struct _StatefulPropertyGrid: View {
 
     private func twoColumnRowView(_ row: PropertyGridRow, rowHeight: Float) -> some View {
         let alignment: VerticalAlignment = rowHeight > grid.rowHeight ? .top : .center
+        let fixedHeight = row.sizing == .fixed ? rowHeight : nil
+        let minimumHeight = row.sizing == .intrinsic ? rowHeight : nil
         return Row(alignment: alignment, spacing: 4) {
             Box(direction: .row, alignItems: .center, justifyContent: .flexStart) {
                 Text(row.label)
@@ -261,44 +285,53 @@ private struct _StatefulPropertyGrid: View {
                     .foregroundColor(.onSurfaceMuted)
             }
             .padding(horizontal: 7)
-            .frame(width: grid.labelWidth, height: rowHeight)
+            .frame(width: grid.labelWidth, height: fixedHeight, minHeight: minimumHeight)
             .clipped()
 
             Box(direction: .row, alignItems: .center, justifyContent: .flexStart) {
-                row.value
-                    .frame(height: rowHeight)
+                sizedValue(for: row, height: fixedHeight)
                     .flex(1, shrink: 1, basis: 0)
             }
-            .frame(height: rowHeight)
+            .frame(height: fixedHeight, minHeight: minimumHeight)
             .padding(horizontal: 0, vertical: 2)
             .flex(1, shrink: 1, basis: 0)
         }
-        .frame(height: rowHeight, minWidth: 0)
+        .frame(height: fixedHeight, minWidth: 0, minHeight: minimumHeight)
     }
 
     private func fullWidthRowView(_ row: PropertyGridRow, rowHeight: Float) -> some View {
-        let labelHeight: Float = 18
+        let labelHeight: Float = row.label.isEmpty ? 0 : 18
         let verticalPadding: Float = 6
-        let labelValueSpacing: Float = 6
-        let valueHeight = max(grid.rowHeight, rowHeight - labelHeight - labelValueSpacing - verticalPadding * 2)
+        let labelValueSpacing: Float = row.label.isEmpty ? 0 : 6
+        let valueHeight: Float? = row.sizing == .fixed
+            ? max(grid.rowHeight, rowHeight - labelHeight - labelValueSpacing - verticalPadding * 2)
+            : nil
         return Box(direction: .column, alignItems: .stretch, spacing: labelValueSpacing) {
-            Text(row.label)
-                .lineLimit(1)
-                .font(.caption)
-                .foregroundColor(.onSurfaceMuted)
-                .padding(horizontal: 7)
-                .frame(height: labelHeight)
+            if !row.label.isEmpty {
+                Text(row.label)
+                    .lineLimit(1)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                    .padding(horizontal: 7)
+                    .frame(height: labelHeight)
+            }
             Box(direction: .row, alignItems: .stretch, justifyContent: .flexStart) {
-                row.value
-                    .frame(height: valueHeight)
+                sizedValue(for: row, height: valueHeight)
                     .flex(1, shrink: 1, basis: 0)
             }
             .frame(height: valueHeight)
             .padding(horizontal: 7, vertical: 0)
         }
         .padding(vertical: verticalPadding)
-        .frame(height: rowHeight)
-        .flex()
+        .frame(height: row.sizing == .fixed ? rowHeight : nil,
+               minHeight: row.sizing == .intrinsic ? rowHeight : nil)
+    }
+
+    private func sizedValue(for row: PropertyGridRow, height: Float?) -> AnyView {
+        // frame(height: nil) clears an existing content frame in GuavaUI.
+        // Intrinsic rows must leave their value's own sizing untouched.
+        if let height { return AnyView(row.value.frame(height: height)) }
+        return row.value
     }
 }
 

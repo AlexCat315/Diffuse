@@ -218,6 +218,7 @@ struct ButtonHost: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
+        node.isFocusable = isEnabled
         node.attachments[ButtonHost.markerKey] = true
         let style = node.compositionValue(of: ButtonStyleEnvironment.key)
         let requiresInteractionRecompose = style.requiresInteractionRecompose
@@ -552,6 +553,11 @@ struct BuiltinButtonChrome: _PrimitiveView {
         layout.flexDirection = .row
         layout.alignItems = .center
         layout.justifyContent = .center
+        // The host owns the hit region. Built-in chrome should occupy that
+        // same region when a form/toolbar gives the button extra width, while
+        // retaining its intrinsic label width when the host is unconstrained.
+        layout.flexGrow = 1
+        layout.flexShrink = 1
         layout.height = metrics.height
         layout.minWidth = metrics.minWidth
         layout.setPadding(0, edge: .top)
