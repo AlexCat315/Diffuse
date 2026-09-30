@@ -203,10 +203,16 @@ enum EditorRootViewFactory {
                             iconAssetKey: "panel.developer-tools") {
                 DeveloperToolsPanel(app: app)
             },
+            PanelDescriptor(id: "profiler",
+                            title: localizedPanelTitle(for: "profiler"),
+                            preferredSlot: .bottom,
+                            iconAssetKey: "panel.profiler") {
+                EditorProfilerPanel(app: app)
+            },
             PanelDescriptor(id: "scripts",
                             title: localizedPanelTitle(for: "scripts"),
                             preferredSlot: .center,
-                            iconAssetKey: "panel.developer-tools") {
+                            iconAssetKey: "panel.scripts") {
                 ScriptPanel(app: app)
             },
         ])
@@ -227,6 +233,8 @@ enum EditorRootViewFactory {
         WorkspacePanelIconCatalog.register("panel.confirmation-host", panelIcon("confirmations"))
         WorkspacePanelIconCatalog.register("panel.render-pipeline", panelIcon("render"))
         WorkspacePanelIconCatalog.register("panel.developer-tools", panelIcon("warning"))
+        WorkspacePanelIconCatalog.register("panel.profiler", panelIcon("profiler"))
+        WorkspacePanelIconCatalog.register("panel.scripts", panelIcon("script"))
     }
 
     static func saveWorkspaceLayout(_ controller: WorkspaceController,
@@ -318,6 +326,8 @@ enum EditorRootViewFactory {
             return L("Render Pipeline")
         case "developer-tools":
             return L("Developer Tools")
+        case "profiler":
+            return L("Profiler")
         case "scripts":
             return L("Scripts")
         default:
@@ -359,8 +369,6 @@ enum EditorRootViewFactory {
             !registeredIDs.contains(closed.panelID)
         }
 
-        moveScriptsPanelToCenter(in: &next)
-
         for descriptor in registry.descriptors {
             next.panels[descriptor.id] = workspacePanel(for: descriptor)
             guard next.groupContaining(panelID: descriptor.id) == nil else { continue }
@@ -394,47 +402,6 @@ enum EditorRootViewFactory {
                                  floatingWindows: next.floatingWindows,
                                  splitFractions: next.splitFractions,
                                  closedHistory: next.closedHistory)
-    }
-
-    private static func moveScriptsPanelToCenter(in document: inout WorkspaceDocument) {
-        guard document.panels["scripts"] != nil,
-              var sourceGroup = document.groupContaining(panelID: "scripts") else {
-            return
-        }
-
-        let centerGroupID = defaultGroupID(for: .center)
-        if sourceGroup.id != centerGroupID {
-            sourceGroup.panels.removeAll { $0 == "scripts" }
-            sourceGroup.pinnedPanelIDs.removeAll { $0 == "scripts" }
-            if sourceGroup.activePanelID == "scripts" {
-                sourceGroup.activePanelID = sourceGroup.panels.first
-            }
-
-            if sourceGroup.panels.isEmpty {
-                document.groups.removeValue(forKey: sourceGroup.id)
-                for slotID in Array(document.slots.keys) {
-                    document.slots[slotID]?.removeGroup(sourceGroup.id)
-                }
-                document.floatingWindows.removeAll { $0.groupID == sourceGroup.id }
-                document.collapsed.removeAll { $0.groupID == sourceGroup.id }
-            } else {
-                document.groups[sourceGroup.id] = sourceGroup
-            }
-        }
-
-        var centerGroup = document.groups[centerGroupID]
-            ?? WorkspaceTabGroup(id: centerGroupID, panels: [])
-        if !centerGroup.panels.contains("scripts") {
-            centerGroup.panels.append("scripts")
-        }
-        if centerGroup.activePanelID == nil {
-            centerGroup.activePanelID = centerGroup.panels.first
-        }
-        document.groups[centerGroupID] = centerGroup
-
-        var centerSlot = document.slot(.center)
-        centerSlot.appendGroup(centerGroupID)
-        document.setSlot(centerSlot)
     }
 
     private static func workspacePanel(for descriptor: PanelDescriptor) -> WorkspacePanel {
@@ -589,6 +556,7 @@ enum EditorWorkspaceDefaults {
             "bottom": WorkspaceTabGroup(id: "bottom",
                                         panels: ["assets",
                                                  "console",
+                                                 "profiler",
                                                  "confirmation-host",
                                                  "render-pipeline",
                                                  "developer-tools"],
@@ -598,7 +566,7 @@ enum EditorWorkspaceDefaults {
         if preset == .levelWorkbench {
             groups["center"] = WorkspaceTabGroup(id: "center", panels: ["viewport"], activePanelID: "viewport")
             groups["script-editor"] = WorkspaceTabGroup(id: "script-editor", panels: ["scripts"], activePanelID: "scripts")
-            centerLayout = .split(axis: .vertical, fraction: 0.54,
+            centerLayout = .split(axis: .horizontal, fraction: 0.54,
                                   first: .group("center"), second: .group("script-editor"))
         } else {
             centerLayout = .group("center")
@@ -618,7 +586,7 @@ enum EditorWorkspaceDefaults {
     private static func defaultFractions(for preset: EditorLayoutPreset) -> WorkspaceSplitFractions {
         switch preset {
         case .levelWorkbench:
-            return WorkspaceSplitFractions(leading: 0.16, centerTrailing: 0.75, topBottom: 0.73)
+            return WorkspaceSplitFractions(leading: 0.16, centerTrailing: 0.75, topBottom: 0.68)
         case .levelDefault:
             return WorkspaceSplitFractions(leading: 0.17, centerTrailing: 0.75, topBottom: 0.74)
         case .levelCinematics:
@@ -637,7 +605,7 @@ enum EditorWorkspaceDefaults {
     private static func defaultBottomPanelID(for preset: EditorLayoutPreset) -> WorkspacePanelID {
         switch preset {
         case .levelWorkbench:
-            return "developer-tools"
+            return "profiler"
         case .levelDefault, .levelCinematics:
             return "assets"
         case .modelingDefault, .modelingSculpt:

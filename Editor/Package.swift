@@ -166,6 +166,18 @@ let package = Package(
         ),
 
         .testTarget(
+            name: "EditorWorkbenchTests",
+            dependencies: [
+                "EditorApp",
+                "EditorCore",
+                .product(name: "GuavaUIApp", package: "GuavaUI"),
+                .product(name: "GuavaUICompose", package: "GuavaUI"),
+                .product(name: "GuavaUIRuntime", package: "GuavaUI"),
+                .product(name: "GuavaUIWorkspace", package: "GuavaUI"),
+            ]
+        ),
+
+        .testTarget(
             name: "GameRuntimeTests",
             dependencies: ["GameRuntime"]
         ),

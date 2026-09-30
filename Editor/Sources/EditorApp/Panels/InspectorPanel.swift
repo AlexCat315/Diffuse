@@ -132,7 +132,7 @@ struct InspectorPanel: View {
                     .flex()
                 }
             }
-            .frame(minWidth: 300)
+            .frame(minWidth: 0, minHeight: 0)
         }
     }
 
@@ -141,7 +141,7 @@ struct InspectorPanel: View {
         case "transform": 0
         case "render-mesh": 1
         case "render-material": 2
-        case "script": 3
+        case "scripts": 3
         case "general": 90
         case "hierarchy": 91
         default: 10
