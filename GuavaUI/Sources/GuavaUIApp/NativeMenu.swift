@@ -32,6 +32,8 @@ public struct NativeMenuAction {
     public var keyModifiers: NativeMenuKeyModifiers
     public var isEnabled: Bool
     public var isSelected: Bool
+    /// Re-evaluated when the native menu opens or a key equivalent runs.
+    public var isEnabledProvider: (@MainActor () -> Bool)?
     public var action: @MainActor () -> Void
 
     public init(title: String,
@@ -39,14 +41,18 @@ public struct NativeMenuAction {
                 keyModifiers: NativeMenuKeyModifiers = [.primary],
                 isEnabled: Bool = true,
                 isSelected: Bool = false,
+                isEnabledProvider: (@MainActor () -> Bool)? = nil,
                 action: @escaping @MainActor () -> Void) {
         self.title = title
         self.keyEquivalent = keyEquivalent
         self.keyModifiers = keyModifiers
         self.isEnabled = isEnabled
         self.isSelected = isSelected
+        self.isEnabledProvider = isEnabledProvider
         self.action = action
     }
+
+    @MainActor public var resolvedIsEnabled: Bool { isEnabledProvider?() ?? isEnabled }
 }
 
 public struct NativeMenuKeyModifiers: OptionSet, Sendable {
@@ -90,13 +96,13 @@ enum NativeMenuInstaller {
                 case .separator:
                     submenu.addItem(.separator())
                 case .action(let action):
-                    let target = NativeMenuActionTarget(action: action.action)
+                    let target = NativeMenuActionTarget(action: action)
                     targets.append(target)
                     let item = NSMenuItem(title: action.title,
                                           action: #selector(NativeMenuActionTarget.invoke),
                                           keyEquivalent: action.keyEquivalent)
                     item.target = target
-                    item.isEnabled = action.isEnabled
+                    item.isEnabled = action.resolvedIsEnabled
                     item.state = action.isSelected ? .on : .off
                     item.keyEquivalentModifierMask = action.keyModifiers.eventModifiers
                     submenu.addItem(item)
@@ -121,15 +127,20 @@ enum NativeMenuInstaller {
 }
 
 @MainActor
-private final class NativeMenuActionTarget: NSObject {
-    let action: @MainActor () -> Void
+private final class NativeMenuActionTarget: NSObject, NSMenuItemValidation {
+    let action: NativeMenuAction
 
-    init(action: @escaping @MainActor () -> Void) {
+    init(action: NativeMenuAction) {
         self.action = action
     }
 
     @objc func invoke() {
-        action()
+        guard action.resolvedIsEnabled else { return }
+        action.action()
+    }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        action.resolvedIsEnabled
     }
 }
 

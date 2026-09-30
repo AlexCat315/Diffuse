@@ -38,6 +38,19 @@ struct ScriptPanel: View {
                 editorPane.flex(1, shrink: 1, basis: 0)
             }
             .flex(1, shrink: 1)
+            if selectedScript != nil {
+                Divider()
+                Row(alignment: .center, spacing: 12) {
+                    Text("Swift").font(.caption)
+                    Text("UTF-8").font(.caption)
+                    Spacer(minLength: 0)
+                    Text(caretLabel).font(.caption)
+                }
+                .foregroundColor(EditorCodePalette.muted)
+                .padding(horizontal: 10, vertical: 5)
+                .background(EditorCodePalette.gutter)
+                .debugName("script-panel-status-bar")
+            }
         }
     }
 
@@ -191,15 +204,11 @@ struct ScriptPanel: View {
             } else if visibleDocuments.isEmpty {
                 EditorPanelEmptyState(L("No matching scripts")).flex(1, shrink: 1)
             } else {
-                ScrollView(.vertical, scrollbarGutter: .stable) {
-                    Column(alignment: .leading, spacing: 1) {
-                        for document in visibleDocuments {
-                            ScriptFileRow(document: document,
-                                          isSelected: document.file.identifier == workspace.selectedScriptID,
-                                          action: { select(document.file) })
-                        }
-                    }
-                    .padding(horizontal: 5, vertical: 6)
+                VirtualList(visibleDocuments, id: \.file.identifier, rowHeight: 48, rowSpacing: 1) { document in
+                    ScriptFileRow(document: document,
+                                  isSelected: document.file.identifier == workspace.selectedScriptID,
+                                  action: { select(document.file) })
+                        .contextMenu(onOpen: { select(document.file) }, entries: { actionEntries })
                 }
                 .background(.surfaceSunken)
                 .flex(1, shrink: 1)
@@ -232,6 +241,7 @@ struct ScriptPanel: View {
                                  },
                                  onHover: requestHover,
                                  onHoverEnd: cancelHover)
+                    .id(selectedScript.identifier)
                     .flex(1, shrink: 1)
                 if let languageServiceMessage {
                     Row(alignment: .center, spacing: 8) {

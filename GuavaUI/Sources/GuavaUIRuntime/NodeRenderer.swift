@@ -25,6 +25,7 @@ public struct NodeRenderer {
 
     private func renderNode(_ node: Node, list: DrawList,
                             originX: Float, originY: Float) {
+        let firstVertex = list.vertices.count
         let f = node.frame
         let absX = originX + Float(f.origin.x)
         let absY = originY + Float(f.origin.y)
@@ -126,6 +127,7 @@ public struct NodeRenderer {
             overlay(list, CGPoint(x: Double(absX), y: Double(absY)))
         }
 
+        list.multiplyOpacity(node.subtreeOpacity, fromVertex: firstVertex)
         // 8. Pop clip.
         if clipped {
             list.popClip()
