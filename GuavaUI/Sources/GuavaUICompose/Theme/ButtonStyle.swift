@@ -27,6 +27,7 @@ public struct ButtonStyleConfiguration {
     /// instead of every call site hand-mixing accent tokens around the label.
     public let isSelected: Bool
     public let theme: Theme
+    public let controlSize: ControlSize
 
     public init(label: any View,
                 role: ButtonRole,
@@ -35,7 +36,8 @@ public struct ButtonStyleConfiguration {
                 isFocused: Bool,
                 isEnabled: Bool,
                 isSelected: Bool = false,
-                theme: Theme) {
+                theme: Theme,
+                controlSize: ControlSize = .regular) {
         self.label = label
         self.role = role
         self.isPressed = isPressed
@@ -44,6 +46,7 @@ public struct ButtonStyleConfiguration {
         self.isEnabled = isEnabled
         self.isSelected = isSelected
         self.theme = theme
+        self.controlSize = controlSize
     }
 }
 

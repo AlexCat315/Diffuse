@@ -258,6 +258,8 @@ public final class FontProvider {
             let systemDirs = [
                 "C:\\Windows\\Fonts\\",
                 "/usr/share/fonts/",
+                "/usr/share/fonts/truetype/dejavu/",
+                "/usr/share/fonts/TTF/",
                 "/usr/local/share/fonts/",
             ]
             for dir in systemDirs {

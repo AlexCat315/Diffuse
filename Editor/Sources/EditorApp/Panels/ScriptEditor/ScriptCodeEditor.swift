@@ -38,8 +38,8 @@ struct ScriptCodeEditor: View {
             )
             .textFieldStyle(ScriptCodeEditorTextFieldStyle())
             .font(.mono)
-            .frame(minHeight: 360, maxHeight: .infinity)
-            .padding(horizontal: 8, vertical: 8)
+            .frame(minHeight: 0)
+            .padding(horizontal: 4, vertical: 4)
             .background(Color(r: 0.105, g: 0.12, b: 0.145))
             .flex(1, shrink: 1)
 
@@ -50,25 +50,22 @@ struct ScriptCodeEditor: View {
             Divider()
             editorFooter(lineCount: Self.countLines(in: text))
         }
-        .cornerRadius(4)
-        .border(.divider, width: 1)
         .clipped()
     }
 
     private func editorFooter(lineCount: Int) -> some View {
         Row(alignment: .center, spacing: 12) {
-            Text("Swift")
-            Text("UTF-8")
-            Text(L("\(lineCount) lines"))
+            Text("Swift").font(.caption)
+            Text("UTF-8").font(.caption)
             Text(caretLabel.wrappedValue)
+                .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
             Spacer(minLength: 0)
-            Text("GameScript")
         }
         .font(.caption)
         .foregroundColor(.onSurfaceMuted)
         .padding(horizontal: 10, vertical: 5)
-        .background(.surface)
+        .background(Color(r: 0.075, g: 0.09, b: 0.11))
     }
 
     private func handleHover(_ anchor: TextFieldHoverAnchor?) {

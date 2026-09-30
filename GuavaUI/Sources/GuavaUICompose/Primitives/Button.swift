@@ -466,7 +466,8 @@ struct ButtonHost: _PrimitiveView {
             isFocused:  isFocused,
             isEnabled:  isEnabled,
             isSelected: isSelected,
-            theme:      theme
+            theme:      theme,
+            controlSize: node.compositionValue(of: ControlSizeEnvironment.key)
         )
         return [style.makeBody(config)]
     }
@@ -524,7 +525,7 @@ struct BuiltinButtonChrome: _PrimitiveView {
         self.isSelected = configuration.isSelected
         self.foreground = foreground
         self.label = configuration.label
-        self.metrics = kind.metrics(in: configuration.theme)
+        self.metrics = kind.metrics(in: configuration.theme, size: configuration.controlSize)
     }
 
     func _makeNode() -> Node {
@@ -593,12 +594,12 @@ private struct BuiltinButtonChromeValues {
 }
 
 private extension BuiltinButtonChromeKind {
-    func metrics(in theme: Theme) -> BuiltinButtonChromeMetrics {
+    func metrics(in theme: Theme, size: ControlSize) -> BuiltinButtonChromeMetrics {
         switch self {
         case .primary, .secondary, .ghost, .destructive:
-            return BuiltinButtonChromeMetrics(height: 28,
+            return BuiltinButtonChromeMetrics(height: size.buttonHeight,
                                               minWidth: nil,
-                                              horizontalPadding: theme.spacing.md,
+                                              horizontalPadding: size.horizontalPadding,
                                               radius: theme.radius.md)
         case .toggle(let minWidth, let height):
             return BuiltinButtonChromeMetrics(height: height,

@@ -17,21 +17,26 @@ public final class DynamicScriptManager: @unchecked Sendable {
     /// A script source file in the project's `Scripts/` directory.
     public struct ScriptFile: Sendable, Equatable {
         public let url: URL
-        /// Stable identifier used to register the script with the runtime,
-        /// e.g. `scripts.player-movement`.
+        public let assetID: ScriptAssetID
+        /// Stable UUID-backed identifier used to register the script with the runtime.
         public let identifier: String
+        /// Pre-registry identifiers retained as runtime aliases so existing
+        /// scenes continue to resolve after the identity migration or a rename.
+        public let legacyIdentifiers: [String]
         /// Display name derived from the file name, e.g. `PlayerMovement`.
         public let displayName: String
 
         public init(url: URL) {
-            self.url = url
-            let stem = url.deletingPathExtension().lastPathComponent
-            self.displayName = stem
-            self.identifier = "scripts.\(Self.sanitize(stem))"
+            self.init(url: url, assetID: ScriptAssetID(), legacyIdentifiers: [])
         }
 
-        private static func sanitize(_ name: String) -> String {
-            name.lowercased().replacingOccurrences(of: " ", with: "-")
+        init(url: URL, assetID: ScriptAssetID, legacyIdentifiers: [String]) {
+            self.url = url
+            self.assetID = assetID
+            let stem = url.deletingPathExtension().lastPathComponent
+            self.displayName = stem
+            self.identifier = assetID.runtimeIdentifier
+            self.legacyIdentifiers = legacyIdentifiers
         }
     }
 
@@ -40,12 +45,16 @@ public final class DynamicScriptManager: @unchecked Sendable {
         case idle
         case compiling
         case succeeded
+        case cancelled
+        case blocked(message: String)
         case failed(message: String)
     }
 
     // MARK: - Dependencies
 
     private let projectDirectory: String
+    private let assetRegistry: ScriptAssetRegistry
+    private let trustStore: ScriptProjectTrustStore
     private let buildCoordinator: DynamicScriptBuildCoordinator
     private let languageSupport: ScriptLanguageSupport?
     private let languageSupportUnavailableMessage: String?
@@ -67,8 +76,11 @@ public final class DynamicScriptManager: @unchecked Sendable {
                 scriptRuntime: ScriptRuntime,
                 engineModulePaths: [String],
                 clangModuleMapPaths: [String] = [],
-                clangIncludePaths: [String] = []) {
+                clangIncludePaths: [String] = [],
+                scriptTrustStorageURL: URL? = nil) {
         self.projectDirectory = projectDirectory
+        self.assetRegistry = ScriptAssetRegistry(projectDirectory: projectDirectory)
+        self.trustStore = ScriptProjectTrustStore(storageURL: scriptTrustStorageURL)
         let compiler = SwiftScriptCompiler(
             includePaths: engineModulePaths,
             clangModuleMapPaths: clangModuleMapPaths,
@@ -121,6 +133,10 @@ public final class DynamicScriptManager: @unchecked Sendable {
             .appendingPathComponent(".build", isDirectory: true)
     }
 
+    static func legacyIdentifier(forFileStem stem: String) -> String {
+        "scripts.\(stem.lowercased().replacingOccurrences(of: " ", with: "-"))"
+    }
+
     // MARK: - File operations
 
     /// Returns all `.swift` files in the project's `Scripts/` directory,
@@ -130,10 +146,25 @@ public final class DynamicScriptManager: @unchecked Sendable {
         let dir = scriptsDirectoryURL
         guard fm.fileExists(atPath: dir.path) else { return [] }
         let contents = try fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
-        return contents
-            .filter { $0.pathExtension == "swift" }
-            .map { ScriptFile(url: $0) }
-            .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+            .filter { $0.pathExtension.lowercased() == "swift" }
+        let files = try assetRegistry.resolve(contents)
+            .map { ScriptFile(url: $0.url,
+                              assetID: $0.id,
+                              legacyIdentifiers: $0.legacyIdentifiers) }
+        let aliasCounts = files.flatMap(\.legacyIdentifiers).reduce(into: [String: Int]()) {
+            $0[$1, default: 0] += 1
+        }
+        return files.map { file in
+            ScriptFile(url: file.url,
+                       assetID: file.assetID,
+                       legacyIdentifiers: file.legacyIdentifiers.filter { aliasCounts[$0] == 1 })
+        }.sorted {
+            $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+        }
+    }
+
+    public func scriptFile(at url: URL) throws -> ScriptFile? {
+        try scanScriptFiles().first { $0.url.standardizedFileURL == url.standardizedFileURL }
     }
 
     public func startLanguageService(
@@ -175,6 +206,22 @@ public final class DynamicScriptManager: @unchecked Sendable {
     public var isLanguageServiceAvailable: Bool { languageSupport != nil }
 
     public var languageServiceUnavailableReason: String? { languageSupportUnavailableMessage }
+
+    // MARK: - Native-code trust boundary
+
+    public var projectTrustState: ScriptProjectTrustState {
+        trustStore.state(for: projectDirectory)
+    }
+
+    public var trustStoreWarning: String? { trustStore.loadWarning }
+
+    public func setProjectTrusted(_ trusted: Bool) throws {
+        try trustStore.setTrusted(trusted, projectDirectory: projectDirectory)
+        guard !trusted else { return }
+        for file in (try? scanScriptFiles()) ?? [] {
+            unload(scriptID: file.identifier)
+        }
+    }
 
     // MARK: - Semantic queries
 
@@ -254,6 +301,7 @@ public final class DynamicScriptManager: @unchecked Sendable {
     public func deleteScript(_ file: ScriptFile) throws {
         unload(scriptID: file.identifier)
         try FileManager.default.removeItem(at: file.url)
+        try assetRegistry.remove(assetID: file.assetID)
     }
 
     // MARK: - Compile & load
@@ -268,17 +316,41 @@ public final class DynamicScriptManager: @unchecked Sendable {
     public func compileAndLoad(scriptID: String,
                                sourceURL: URL,
                                completion: @escaping @Sendable (CompilationStatus) -> Void) {
+        guard projectTrustState.allowsExecution else {
+            let status = CompilationStatus.blocked(
+                message: ScriptProjectTrustError.executionBlocked.localizedDescription
+            )
+            Task { @MainActor in
+                self.statusByScriptID[scriptID] = status
+                completion(status)
+            }
+            return
+        }
         Task { @MainActor in
             self.statusByScriptID[scriptID] = .compiling
         }
 
         let coordinator = buildCoordinator
         Task { [weak self] in
-            let outcome = await coordinator.build(scriptID: scriptID, sourceURL: sourceURL)
+            let aliases: [String]
+            do {
+                aliases = try self?.scanScriptFiles()
+                    .first(where: { $0.identifier == scriptID })?.legacyIdentifiers ?? []
+            } catch {
+                let status = CompilationStatus.failed(message: error.localizedDescription)
+                await self?.updateStatus(status, for: scriptID)
+                await MainActor.run { completion(status) }
+                return
+            }
+            let outcome = await coordinator.build(scriptID: scriptID,
+                                                  legacyIdentifiers: aliases,
+                                                  sourceURL: sourceURL)
             let status: CompilationStatus
             switch outcome {
             case .succeeded:
                 status = .succeeded
+            case .cancelled:
+                status = .cancelled
             case .failed(let message):
                 status = .failed(message: message)
             case .superseded:
@@ -289,6 +361,11 @@ public final class DynamicScriptManager: @unchecked Sendable {
                 completion(status)
             }
         }
+    }
+
+    public func cancelBuild(scriptID: String) {
+        let coordinator = buildCoordinator
+        Task { await coordinator.cancel(scriptID: scriptID) }
     }
 
     @MainActor
@@ -366,8 +443,15 @@ extension DynamicScriptManager.CompilationStatus {
         return false
     }
 
+    public var isBlocked: Bool {
+        if case .blocked = self { return true }
+        return false
+    }
+
     public var message: String? {
-        if case let .failed(message) = self { return message }
-        return nil
+        switch self {
+        case .failed(let message), .blocked(let message): return message
+        case .idle, .compiling, .succeeded, .cancelled: return nil
+        }
     }
 }

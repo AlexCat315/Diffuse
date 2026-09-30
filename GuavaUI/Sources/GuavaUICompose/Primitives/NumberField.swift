@@ -14,7 +14,7 @@ public struct NumberField: View {
 
     public init(value: Binding<Float>,
                 decimals: Int = 2,
-                size: TextField.Size = .regular,
+                size: TextField.Size = .automatic,
                 isEnabled: Bool = true,
                 minValue: Float? = nil,
                 maxValue: Float? = nil,
