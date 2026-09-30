@@ -665,6 +665,9 @@ public final class EditorApplication: @unchecked Sendable {
     public func setViewportDrawableSize(_ size: RenderDrawableSize) {
         guard _viewportDrawableSize != size else { return }
         _viewportDrawableSize = size
+        // Layout can report a new size after the engine tick has already run.
+        // In event-driven mode there may be no further input to wake it again.
+        displayInvalidationHandler?()
     }
 
     private func effectiveViewportDrawableSize() -> RenderDrawableSize {

@@ -264,9 +264,9 @@ struct ScriptPanel: View {
         Row(alignment: .center, spacing: 0) {
             Popover(isPresented: $isFileMenuPresented, width: 240) {
                 Row(alignment: .center, spacing: 6) {
-                    Text("S").font(.label).foregroundColor(Color(red: 0x77, green: 0xA8, blue: 0xFF))
+                    Text("S").font(.label).foregroundColor(EditorCodePalette.accent)
                     Text("\(file.displayName).swift", lineLimit: 1)
-                        .font(.label).foregroundColor(Color(red: 0xDA, green: 0xE2, blue: 0xF2))
+                        .font(.label).foregroundColor(EditorCodePalette.foreground)
                     if isDirty {
                         Box { EmptyView() }
                             .frame(width: 5, height: 5)
@@ -274,10 +274,10 @@ struct ScriptPanel: View {
                             .cornerRadius(3)
                     }
                     Icon(UICommonIcons.chevronDown, size: 8,
-                         color: Color(red: 0x95, green: 0xA3, blue: 0xBE))
+                         color: EditorCodePalette.muted)
                 }
                 .padding(horizontal: 10, vertical: 6)
-                .background(Color(red: 0x28, green: 0x32, blue: 0x47))
+                .background(EditorCodePalette.selectedTab)
             } content: {
                 Menu(scriptFiles.map { candidate in
                     .item(MenuItem(id: candidate.identifier,
@@ -288,7 +288,7 @@ struct ScriptPanel: View {
             }
             Spacer(minLength: 0)
         }
-        .background(Color(red: 0x1D, green: 0x25, blue: 0x35))
+        .background(EditorCodePalette.header)
     }
 
     private var externalChangeBanner: some View {

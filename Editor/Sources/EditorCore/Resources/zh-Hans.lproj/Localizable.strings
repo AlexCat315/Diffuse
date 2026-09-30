@@ -9,6 +9,8 @@
 "Constraint" = "约束";
 "Light" = "灯光";
 "Scripts" = "脚本";
+"Render Mesh" = "渲染网格";
+"Render Material" = "渲染材质";
 
 /* Entity properties */
 "Name" = "名称";
@@ -41,6 +43,10 @@
 "Continuous Collision" = "连续碰撞检测";
 "Allow Sleep" = "允许休眠";
 "Sleeping" = "休眠中";
+"Mass Mode" = "质量模式";
+"Max Linear Velocity" = "最大线速度";
+"Max Angular Velocity" = "最大角速度";
+"Axis Locks" = "轴锁定";
 "Yes" = "是";
 "No" = "否";
 
@@ -72,3 +78,7 @@
 "Parameters" = "参数";
 "Bindings" = "绑定";
 "No scripts" = "无脚本";
+
+/* Rendering fields */
+"Visible" = "可见";
+"Color Tint" = "颜色叠加";

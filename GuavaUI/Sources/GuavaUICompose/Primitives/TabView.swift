@@ -45,6 +45,8 @@ public struct TabView<ID: Hashable>: View {
 
             if let active = tabs.first(where: { $0.id == selection.wrappedValue }) {
                 active.content
+                    .flex(1, shrink: 1, basis: 0)
+                    .frame(minWidth: 0, minHeight: 0)
             }
         }
     }

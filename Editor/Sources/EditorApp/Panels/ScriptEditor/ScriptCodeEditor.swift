@@ -28,19 +28,19 @@ struct ScriptCodeEditor: View {
                 axis: .vertical,
                 maxVisibleLines: 48,
                 showsLineNumbers: true,
-                lineNumberColor: Color(r: 0.45, g: 0.49, b: 0.55),
-                lineNumberGutterColor: Color(r: 0.075, g: 0.09, b: 0.11),
+                lineNumberColor: EditorCodePalette.lineNumber,
+                lineNumberGutterColor: EditorCodePalette.gutter,
                 syntaxColorAtUTF8Offset: { _, offset in highlighter.color(atUTF8Offset: offset) },
                 onChange: onChange,
                 onHoverChange: { anchor in handleHover(anchor) },
                 onCaretChange: { state in handleCaret(state, in: text) },
-                textColor: Color(r: 0.86, g: 0.89, b: 0.92)
+                textColor: EditorCodePalette.foreground
             )
             .textFieldStyle(ScriptCodeEditorTextFieldStyle())
             .font(.mono)
             .frame(minHeight: 0)
             .padding(horizontal: 4, vertical: 4)
-            .background(Color(r: 0.105, g: 0.12, b: 0.145))
+            .background(EditorCodePalette.background)
             .flex(1, shrink: 1)
 
             // Contributes no layout; the popup is painted through the tooltip
@@ -55,17 +55,17 @@ struct ScriptCodeEditor: View {
 
     private func editorFooter(lineCount: Int) -> some View {
         Row(alignment: .center, spacing: 12) {
-            Text("Swift").font(.caption)
-            Text("UTF-8").font(.caption)
+            Text("Swift").font(.caption).foregroundColor(EditorCodePalette.muted)
+            Text("UTF-8").font(.caption).foregroundColor(EditorCodePalette.muted)
             Text(caretLabel.wrappedValue)
                 .font(.caption)
-                .foregroundColor(.onSurfaceMuted)
+                .foregroundColor(EditorCodePalette.muted)
             Spacer(minLength: 0)
         }
         .font(.caption)
-        .foregroundColor(.onSurfaceMuted)
+        .foregroundColor(EditorCodePalette.muted)
         .padding(horizontal: 10, vertical: 5)
-        .background(Color(r: 0.075, g: 0.09, b: 0.11))
+        .background(EditorCodePalette.gutter)
     }
 
     private func handleHover(_ anchor: TextFieldHoverAnchor?) {
@@ -92,6 +92,6 @@ struct ScriptCodeEditor: View {
 private struct ScriptCodeEditorTextFieldStyle: TextFieldStyle {
     func makeBody(configuration: TextFieldStyleConfiguration) -> some View {
         configuration.content
-            .background(Color(r: 0.105, g: 0.12, b: 0.145))
+            .background(EditorCodePalette.background)
     }
 }
