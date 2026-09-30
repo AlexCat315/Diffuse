@@ -15,6 +15,59 @@ struct SwiftScriptCompilerTests {
         #expect(FileManager.default.isExecutableFile(atPath: compilerURL.path))
     }
 
+    @Test("honors cancellation before launching swiftc")
+    func honorsPreflightCancellation() throws {
+        let token = ScriptCompilationCancellationToken()
+        token.cancel()
+        let compiler = SwiftScriptCompiler(
+            outputDirectory: FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        )
+
+        #expect(throws: ScriptCompileError.cancelled) {
+            try compiler.compile(sourcePath: "/unused.swift",
+                                 scriptID: "cancelled",
+                                 cancellation: token)
+        }
+    }
+
+    @Test("cancellation terminates an in-flight compiler process")
+    func terminatesRunningCompiler() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let fakeCompiler = directory.appendingPathComponent("slow-swiftc")
+        try "#!/bin/sh\nexec /bin/sleep 10\n".write(to: fakeCompiler,
+                                                        atomically: true,
+                                                        encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755],
+                                              ofItemAtPath: fakeCompiler.path)
+        let source = directory.appendingPathComponent("GameScript.swift")
+        try "struct GameScript {}\n".write(to: source, atomically: true, encoding: .utf8)
+        let compiler = SwiftScriptCompiler(swiftcPath: fakeCompiler.path,
+                                           outputDirectory: directory.appendingPathComponent("out"))
+        let token = ScriptCompilationCancellationToken()
+        let started = ContinuousClock.now
+        let compilation = Task.detached {
+            Result {
+                try compiler.compile(sourcePath: source.path,
+                                     scriptID: "slow",
+                                     cancellation: token)
+            }
+        }
+        try? await Task.sleep(for: .milliseconds(100))
+        token.cancel()
+
+        switch await compilation.value {
+        case .failure(let error as ScriptCompileError):
+            #expect(error == .cancelled)
+        default:
+            Issue.record("Expected the running compiler to be cancelled")
+        }
+        #expect(started.duration(to: .now) < .seconds(3))
+    }
+
     @Test("compiles scripts that import SceneRuntime and ScriptRuntime")
     func compilesEngineModulesWithTheirClangDependencies() throws {
         let fileManager = FileManager.default

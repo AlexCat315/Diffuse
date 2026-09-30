@@ -49,6 +49,8 @@ struct EditorMenuModel {
                 action(L("Workspace: Animation"), key: "", selected: workspaceMode == .animation,
                        command: .setWorkspaceMode(.animation)),
                 .separator,
+                action(presetTitle(.levelWorkbench), key: "", selected: activeLayoutPreset == .levelWorkbench,
+                       command: .setLayoutPreset(.levelWorkbench)),
                 action(presetTitle(.levelDefault), key: "", selected: activeLayoutPreset == .levelDefault,
                        command: .setLayoutPreset(.levelDefault)),
                 action(presetTitle(.levelCinematics), key: "", selected: activeLayoutPreset == .levelCinematics,
@@ -114,6 +116,8 @@ struct EditorMenuModel {
 
     private static func presetTitle(_ preset: EditorLayoutPreset) -> String {
         switch preset {
+        case .levelWorkbench:
+            return L("Level: Workbench")
         case .levelDefault:
             return L("Level: Default")
         case .levelCinematics:
