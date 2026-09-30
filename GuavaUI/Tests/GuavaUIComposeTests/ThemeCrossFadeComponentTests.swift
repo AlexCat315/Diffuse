@@ -188,23 +188,25 @@ struct ThemeCrossFadeComponentTests: GuavaUIComposeSerializedSuite {
             let h = TabHarness()
             graph.install(root: h)
 
-            let darkSurfaceVariant = Theme.defaultDark.colors.surfaceVariant
-            let lightSurfaceVariant = Theme.defaultLight.colors.surfaceVariant
-            let node = findFirst(tree.root!) { $0.backgroundColor == darkSurfaceVariant }
+            // Flat tabs use the shared panel surface, not a raised segmented
+            // control background. It must still participate in theme animation.
+            let darkSurface = Theme.defaultDark.colors.surface
+            let lightSurface = Theme.defaultLight.colors.surface
+            let node = findFirst(tree.root!) { $0.backgroundColor == darkSurface }
             #expect(node != nil)
 
             h.$appearance.wrappedValue = .light
             recomp.commitAll()
             #expect(scheduler.activeCount >= 1)
-            #expect(node?.backgroundColor == darkSurfaceVariant)
+            #expect(node?.backgroundColor == darkSurface)
 
             scheduler.tick(deltaTime: 0.15)
             let mid = node?.backgroundColor
-            #expect(mid != darkSurfaceVariant)
-            #expect(mid != lightSurfaceVariant)
+            #expect(mid != darkSurface)
+            #expect(mid != lightSurface)
 
             scheduler.tick(deltaTime: 0.15)
-            #expect(node?.backgroundColor == lightSurfaceVariant)
+            #expect(node?.backgroundColor == lightSurface)
             #expect(scheduler.activeCount == 0)
         }
     } }
