@@ -38,7 +38,7 @@ public struct DisclosureGroup<Label: View, Content: View>: View {
             .frame(height: 24)
             .debugName("disclosure-header")
 
-            if isExpanded.wrappedValue {
+            AnimatedVisibility(isVisible: isExpanded.wrappedValue) {
                 content
             }
         }

@@ -34,11 +34,13 @@ public final class PortalStore {
     private var slotNodes: [String: WeakPortalSlotNode] = [:]
     private var observers: [UUID: (Int) -> Void] = [:]
     private var currentRevision: Int = 0
+    private var presentationOrder: [String] = []
+    private var dismissals: [String: (anchor: () -> CGRect, dismiss: () -> Void)] = [:]
 
     public init() {}
 
     public var entries: [PortalEntry] {
-        storage.values.sorted { $0.id < $1.id }
+        presentationOrder.compactMap { storage[$0] }
     }
 
     public var revision: Int { currentRevision }
@@ -48,6 +50,7 @@ public final class PortalStore {
                          position: CGPoint,
                          width: Float? = nil,
                          content: AnyView) -> String {
+        if storage[id] == nil { presentationOrder.append(id) }
         storage[id] = PortalEntry(id: id, position: position, width: width, content: content)
         notifyChanged()
         return id
@@ -79,13 +82,36 @@ public final class PortalStore {
 
     public func unregister(_ id: String) {
         guard storage.removeValue(forKey: id) != nil else { return }
+        presentationOrder.removeAll { $0 == id }
+        dismissals.removeValue(forKey: id)
+        slotNodes.removeValue(forKey: id)
         notifyChanged()
     }
 
     public func clear() {
         guard !storage.isEmpty else { return }
         storage.removeAll()
+        presentationOrder.removeAll()
+        dismissals.removeAll()
+        slotNodes.removeAll()
         notifyChanged()
+    }
+
+    func setDismissal(_ id: String, anchor: @escaping () -> CGRect,
+                      dismiss: @escaping () -> Void) {
+        dismissals[id] = (anchor, dismiss)
+    }
+
+    /// Observe the click before normal routing; leave it available to the
+    /// underlying control so switching menus works in one click.
+    func dismissOutside(_ point: CGPoint) {
+        let openIDs = presentationOrder.filter { dismissals[$0] != nil }
+        guard !openIDs.contains(where: { id in
+            dismissals[id]?.anchor().contains(point) == true
+                || slotNodes[id]?.node?.absoluteFrame.contains(point) == true
+        }) else { return }
+        let callbacks = openIDs.reversed().compactMap { dismissals[$0]?.dismiss }
+        for dismiss in callbacks { dismiss() }
     }
 
     @discardableResult
@@ -106,7 +132,7 @@ public final class PortalStore {
     private func notifyChanged() {
         currentRevision &+= 1
         let revision = currentRevision
-        for observer in observers.values {
+        for observer in Array(observers.values) {
             observer(revision)
         }
     }
@@ -207,5 +233,10 @@ final class PortalResource: NodeResource {
     func updatePosition(_ position: CGPoint) {
         guard let id = entryID else { return }
         store?.updatePosition(id, position: position)
+    }
+
+    func setDismissal(anchor: @escaping () -> CGRect, dismiss: @escaping () -> Void) {
+        guard let id = entryID else { return }
+        store?.setDismissal(id, anchor: anchor, dismiss: dismiss)
     }
 }

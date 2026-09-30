@@ -8,11 +8,18 @@ import Foundation
 public final class FocusChain {
 
     public private(set) weak var focused: Node?
+    /// Pointer focus keeps keyboard routing without leaving a persistent ring.
+    public private(set) var isFocusVisible = true
 
     public init() {}
 
-    public func focus(_ node: Node?) {
-        guard focused !== node else { return }
+    public func focus(_ node: Node?, visible: Bool = true) {
+        let visibilityChanged = isFocusVisible != visible
+        isFocusVisible = visible
+        guard focused !== node else {
+            if visibilityChanged { notifyFocusChange(for: node, isFocused: true) }
+            return
+        }
         let previous = focused
         focused = node
         notifyFocusChange(for: previous, isFocused: false)
@@ -70,6 +77,7 @@ public final class FocusChain {
     }
 
     private func collect(node: Node, into out: inout [Node]) {
+        guard node.allowsHitTesting else { return }
         if node.isFocusable { out.append(node) }
         for c in node.children { collect(node: c, into: &out) }
     }

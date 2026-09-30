@@ -103,5 +103,11 @@ struct _TextFieldSurface: _PrimitiveView {
 
     func _updateLayout(_ layout: LayoutNode) {
         textField._updateLayout(layout)
+        // Multiline fields fill an allocated editor/JSON viewport while
+        // retaining their intrinsic height when unconstrained.
+        if textField.axis == .vertical {
+            layout.flexGrow = 1
+            layout.flexShrink = 1
+        }
     }
 }

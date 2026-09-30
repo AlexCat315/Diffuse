@@ -95,39 +95,41 @@ private struct _StatefulJsonField: View {
     let field: JsonField
 
     @State var draft: String = ""
-    @State var isEditing: Bool = false
+    @State var hasDraft: Bool = false
     @State var validation: JsonFieldValidation = .valid
 
     var body: some View {
-        let currentValidation = isEditing ? validation : JsonField.validate(field.text.wrappedValue)
+        let currentValidation = hasDraft ? validation : JsonField.validate(field.text.wrappedValue)
 
         Box(direction: .column, alignItems: .stretch, spacing: 6) {
             TextField(field.placeholder,
                       text: Binding(
-                        get: { isEditing ? draft : field.text.wrappedValue },
+                        get: { hasDraft ? draft : field.text.wrappedValue },
                         set: { next in
                             draft = next
+                            hasDraft = true
                             validation = JsonField.validate(next)
                         }
                       ),
                       axis: .vertical,
+                      showsLineNumbers: true,
+                      indentationWidth: 2,
                       disabled: !field.isEnabled,
                       onSubmit: {
                         commitDraft()
                       },
                       onFocus: {
-                        if !isEditing {
+                        if !hasDraft {
                             draft = field.text.wrappedValue.isEmpty ? "{}" : field.text.wrappedValue
                             validation = JsonField.validate(draft)
-                            isEditing = true
+                            hasDraft = true
                         }
                       },
                       onBlur: {
                         commitDraft()
-                        isEditing = false
                       })
                 .font(.mono)
-                .frame(minHeight: field.minHeight)
+                .frame(height: max(96, field.minHeight))
                 .border(borderColor(for: currentValidation), width: 1)
                 .cornerRadius(4)
                 .clipped()
@@ -152,7 +154,7 @@ private struct _StatefulJsonField: View {
                        action: {
                     draft = field.text.wrappedValue
                     validation = JsonField.validate(draft)
-                    isEditing = false
+                    hasDraft = false
                 }) {
                     Text(field.labels.revert)
                         .font(.caption)
@@ -179,7 +181,7 @@ private struct _StatefulJsonField: View {
             )
         case let .invalid(message):
             return AnyView(
-                Text(message)
+                Text(message, lineLimit: 2)
                     .font(.caption)
                     .foregroundColor(.error)
                     .clipped()
@@ -197,7 +199,7 @@ private struct _StatefulJsonField: View {
     }
 
     private func commitDraft() {
-        let candidate = isEditing ? draft : field.text.wrappedValue
+        let candidate = hasDraft ? draft : field.text.wrappedValue
         let result = JsonField.validate(candidate)
         validation = result
         guard result.isAcceptable else { return }
@@ -207,16 +209,17 @@ private struct _StatefulJsonField: View {
         }
         field.onCommit?(normalized)
         draft = normalized
+        hasDraft = false
     }
 
     private func formatDraft() {
-        let candidate = isEditing ? draft : field.text.wrappedValue
+        let candidate = hasDraft ? draft : field.text.wrappedValue
         guard let pretty = JsonField.prettyPrinted(candidate) else {
             validation = JsonField.validate(candidate)
             return
         }
         draft = pretty
         validation = .valid
-        isEditing = true
+        hasDraft = true
     }
 }

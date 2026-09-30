@@ -35,6 +35,8 @@ public struct TextField: View {
     public let axis: Axis
     public let maxVisibleLines: Int
     public let showsLineNumbers: Bool
+    /// Opt-in code editing: Tab/Shift-Tab indent lines and Return preserves indentation.
+    public let indentationWidth: Int?
     public let lineNumberColor: Color?
     /// Gutter background behind the line numbers. `nil` falls back to the
     /// theme's `surfaceVariant`, which suits light inputs; code editors on a
@@ -66,6 +68,8 @@ public struct TextField: View {
     /// where the input must be immediately keyboard-ready after insertion.
     public let focusRequestID: AnyHashable?
     public let onSubmit: (() -> Void)?
+    /// Gives composite controls first refusal for domain-specific keys.
+    public let onKeyDown: ((KeyEvent) -> Bool)?
     public let onCancel: (() -> Void)?
     public let onChange: ((String) -> Void)?
     /// Pointer resting position inside the field, reported as the pointer moves
@@ -88,6 +92,7 @@ public struct TextField: View {
                 axis: Axis = .horizontal,
                 maxVisibleLines: Int = 6,
                 showsLineNumbers: Bool = false,
+                indentationWidth: Int? = nil,
                 lineNumberColor: Color? = nil,
                 lineNumberGutterColor: Color? = nil,
                 syntaxColorAtUTF8Offset: ((String, Int) -> Color?)? = nil,
@@ -104,6 +109,7 @@ public struct TextField: View {
                 append: String? = nil,
                 focusRequestID: AnyHashable? = nil,
                 onSubmit: (() -> Void)? = nil,
+                onKeyDown: ((KeyEvent) -> Bool)? = nil,
                 onCancel: (() -> Void)? = nil,
                 onChange: ((String) -> Void)? = nil,
                 onHoverChange: ((TextFieldHoverAnchor?) -> Void)? = nil,
@@ -120,6 +126,7 @@ public struct TextField: View {
         self.axis = axis
         self.maxVisibleLines = max(1, maxVisibleLines)
         self.showsLineNumbers = showsLineNumbers
+        self.indentationWidth = indentationWidth.map { max(1, min(8, $0)) }
         self.lineNumberColor = lineNumberColor
         self.lineNumberGutterColor = lineNumberGutterColor
         self.syntaxColorAtUTF8Offset = syntaxColorAtUTF8Offset
@@ -136,6 +143,7 @@ public struct TextField: View {
         self.append = append
         self.focusRequestID = focusRequestID
         self.onSubmit = onSubmit
+        self.onKeyDown = onKeyDown
         self.onCancel = onCancel
         self.onChange = onChange
         self.onHoverChange = onHoverChange
@@ -254,13 +262,6 @@ public struct TextField: View {
         if node.attachments[Self.scrollbarChromeOpacityKey] == nil {
             node.attachments[Self.scrollbarChromeOpacityKey] = Float(0)
         }
-        if let sizeFontSize {
-            // Seed a sensible default font for size variants when no
-            // explicit `.font(...)` modifier was applied.
-            if node.attachments[StyleAttachmentKey.font] == nil {
-                node.attachments[StyleAttachmentKey.font] = Font.system(size: sizeFontSize)
-            }
-        }
 
         // Reuse FieldState if this node is being recycled by reconcile;
         // otherwise create one and seed cursor at the end of the current text.
@@ -314,6 +315,7 @@ public struct TextField: View {
             }
             onFocusChange(focused)
             if focused {
+                snapshot.recordCaretActivity(state)
                 snapshot.onFocus?()
             } else {
                 snapshot.onBlur?()
@@ -427,6 +429,7 @@ public struct TextField: View {
         // The bound text may have been rewritten since the last interaction;
         // re-anchor stale indices before any String.index arithmetic.
         normalizeIndices(state)
+        if onKeyDown?(event) == true { return true }
         let mods = event.modifiers
         let shift = !mods.isDisjoint(with: .shift)
         let primaryModifier = !mods.isDisjoint(with: .gui) || !mods.isDisjoint(with: .ctrl)
@@ -476,6 +479,10 @@ public struct TextField: View {
         }
 
         switch event.scancode {
+        case 43: // USB HID Tab; code fields consume it before focus traversal.
+            guard axis == .vertical, let indentationWidth, !primaryModifier else { return false }
+            if !blockMutations { indentLines(width: indentationWidth, removing: shift, state: state) }
+            return true
         case Scancode.escape:
             guard let onCancel else { return false }
             onCancel()
@@ -558,7 +565,7 @@ public struct TextField: View {
             return true
         case Scancode.return, Scancode.keypadEnter:
             if !primaryModifier, !blockMutations, (axis == .vertical || shift) {
-                insertReplacingSelection("\n", state: state)
+                insertReplacingSelection(indentedNewline(state: state), state: state)
             } else {
                 onSubmit?()
             }
@@ -1222,9 +1229,9 @@ public struct TextField: View {
             guard let env = TextEnvironmentHolder.current else {
                 return CGSize(width: 0, height: CGFloat(snapshot.minimumFieldHeight))
             }
-            let fontOverride = layout?.attachments[StyleAttachmentKey.font] as? Font
-            let lineHeightOverride = layout?.attachments[StyleAttachmentKey.lineHeight] as? Float
-            let resolvedFont = env.resolvedFont(fontOverride)
+            let fontOverride = layout?.textStyleValue(StyleAttachmentKey.font) as Font?
+            let lineHeightOverride = layout?.textStyleValue(StyleAttachmentKey.lineHeight) as Float?
+            let resolvedFont = env.resolvedFont(fontOverride ?? snapshot.sizeFontSize.map { Font.system(size: $0) })
             let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
                                                             override: lineHeightOverride)
             let measureText = snapshot.text.wrappedValue.isEmpty
@@ -1296,9 +1303,9 @@ public struct TextField: View {
             return minimumFieldHeight
         }
 
-        let fontOverride = layout?.attachments[StyleAttachmentKey.font] as? Font
-        let lineHeightOverride = layout?.attachments[StyleAttachmentKey.lineHeight] as? Float
-        let resolvedFont = env.resolvedFont(fontOverride)
+        let fontOverride = layout?.textStyleValue(StyleAttachmentKey.font) as Font?
+        let lineHeightOverride = layout?.textStyleValue(StyleAttachmentKey.lineHeight) as Float?
+        let resolvedFont = env.resolvedFont(fontOverride ?? sizeFontSize.map { Font.system(size: $0) })
         let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
                                                         override: lineHeightOverride)
         let insetY = Self.verticalInset(for: resolvedLineHeight)
@@ -1309,13 +1316,14 @@ public struct TextField: View {
     }
 
     func resolvedFont(node: Node, env: TextEnvironment) -> Font {
-        env.resolvedFont(node.attachments[StyleAttachmentKey.font] as? Font)
+        env.resolvedFont((node.textStyleValue(StyleAttachmentKey.font) as Font?)
+            ?? sizeFontSize.map { Font.system(size: $0) })
     }
 
     func resolvedLineHeight(node: Node, env: TextEnvironment) -> Float {
         env.resolvedLineHeight(
             font: resolvedFont(node: node, env: env),
-            override: node.attachments[StyleAttachmentKey.lineHeight] as? Float
+            override: node.textStyleValue(StyleAttachmentKey.lineHeight) as Float?
         )
     }
 

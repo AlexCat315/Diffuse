@@ -69,6 +69,12 @@ private struct _PortalHostPrimitive: _PrimitiveView {
             onStoreResolved(ambientStore)
         }
         let resolvedStore = store ?? treeStore ?? ambientStore
+        InteractionRegistryHolder.current?.setPointer(node, route: .overlay) { event, phase, _ in
+            if phase == .down {
+                resolvedStore.dismissOutside(CGPoint(x: CGFloat(event.x), y: CGFloat(event.y)))
+            }
+            return .ignored
+        }
         node.attachments[LayoutDebugAttachmentKey.debugName] =
             "portal-host-\(ObjectIdentifier(resolvedStore))-entries-\(resolvedStore.entries.count)"
         if let observer = node.attachments[PortalHostObserver.attachmentKey] as? PortalHostObserver {

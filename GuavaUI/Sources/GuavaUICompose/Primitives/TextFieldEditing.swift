@@ -43,6 +43,8 @@ extension TextField {
         var visibleTextHeight: Float = 0
         /// Total laid-out content height from the last render.
         var contentHeight: Float = 0
+        /// Manual scrolling stays put until a caret interaction requests reveal.
+        var needsCaretReveal = false
 
         func clearComposition() {
             compositionText = ""
@@ -183,6 +185,7 @@ extension TextField {
     /// phase and invalidate the field's cached render layer so the change is
     /// visible on the very next frame (frames may be event-driven).
     func recordCaretActivity(_ state: FieldState) {
+        state.needsCaretReveal = true
         state.lastCaretActivity = TimingTrace.now()
         state.hostNode?.markRenderDirty(reason: .styleSet(field: "textFieldCaret"))
         notifyCaretChange(state)

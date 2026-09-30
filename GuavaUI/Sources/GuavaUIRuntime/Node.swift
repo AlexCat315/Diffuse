@@ -92,6 +92,12 @@ public final class Node: @unchecked Sendable {
             }
         }
     }
+    /// Disable interaction for an entire subtree during a removal transition.
+    public var allowsHitTesting: Bool = true
+
+    public var acceptsSubtreeInput: Bool {
+        allowsHitTesting && (parent?.acceptsSubtreeInput ?? true)
+    }
 
     /// When true, this node may receive keyboard focus (FocusChain consideration).
     public var isFocusable: Bool = false
@@ -189,12 +195,24 @@ public final class Node: @unchecked Sendable {
         didSet {
             if oldValue != foregroundColor {
                 markRenderDirty(reason: .styleSet(field: "foregroundColor"))
+                invalidateInheritedForeground()
             }
         }
     }
 
-    /// Alpha multiplier in 0..1 applied to this node's draws (and inherited
-    /// transitively in later phases). Default 1.
+    /// The nearest explicit tint, shared by text and monochrome icons.
+    public var inheritedForegroundColor: Color? {
+        foregroundColor ?? parent?.inheritedForegroundColor
+    }
+
+    private func invalidateInheritedForeground() {
+        for child in children where child.foregroundColor == nil {
+            child.markRenderDirty(reason: .styleSet(field: "inheritedForegroundColor"))
+            child.invalidateInheritedForeground()
+        }
+    }
+
+    /// Alpha multiplier in 0..1 applied to this node and its descendants.
     public var opacity: Float = 1 {
         didSet {
             if oldValue != opacity {

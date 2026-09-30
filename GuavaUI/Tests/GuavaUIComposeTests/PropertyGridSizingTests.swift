@@ -54,6 +54,8 @@ struct PropertyGridSizingTests {
                                                        modifiers: [], isRepeat: false), .target)
         graph.recomposer.commitAll()
         #expect(harness.collapsedIDs == ["component"])
+        AnimatorScheduler.current.tick(deltaTime: 1)
+        graph.recomposer.commitAll()
         #expect(!graph.layoutSnapshot().contains { $0.debugName == "controlled-grid-value" })
         harness.$collapsedIDs.wrappedValue = []
         graph.recomposer.commitAll()
