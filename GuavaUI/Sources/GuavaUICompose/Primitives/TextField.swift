@@ -24,6 +24,7 @@ public struct TextField: View {
     /// Visual size variants matching Element Plus Input semantics.
     /// Drives field height, horizontal padding, and font metrics.
     public enum Size: Sendable, Equatable {
+        case automatic
         case large
         case regular
         case small
@@ -41,7 +42,7 @@ public struct TextField: View {
     /// code panel rather than a separate light strip.
     public let lineNumberGutterColor: Color?
     public let syntaxColorAtUTF8Offset: ((String, Int) -> Color?)?
-    public let size: Size
+    public var size: Size
     public let disabled: Bool
     public let readOnly: Bool
     public let secure: Bool
@@ -90,7 +91,7 @@ public struct TextField: View {
                 lineNumberColor: Color? = nil,
                 lineNumberGutterColor: Color? = nil,
                 syntaxColorAtUTF8Offset: ((String, Int) -> Color?)? = nil,
-                size: Size = .regular,
+                size: Size = .automatic,
                 disabled: Bool = false,
                 readOnly: Bool = false,
                 secure: Bool = false,
@@ -195,7 +196,7 @@ public struct TextField: View {
     private var minimumFieldHeight: Float {
         switch size {
         case .large:   return 40
-        case .regular: return 32
+        case .automatic, .regular: return 32
         case .small:   return 24
         }
     }
@@ -205,7 +206,7 @@ public struct TextField: View {
     private var sizeFontSize: Float? {
         switch size {
         case .large:   return 14
-        case .regular: return 14
+        case .automatic, .regular: return 14
         case .small:   return 12
         }
     }

@@ -60,8 +60,12 @@ struct _TextFieldStyleHost: _PrimitiveView {
 
     func _children(for node: Node) -> [any View] {
         let style = node.compositionValue(of: TextFieldStyleEnvironment.key)
+        var resolvedField = textField
+        if resolvedField.size == .automatic {
+            resolvedField.size = node.compositionValue(of: ControlSizeEnvironment.key).textFieldSize
+        }
         let configuration = TextFieldStyleConfiguration(
-            content: AnyView(_TextFieldSurface(textField: textField,
+            content: AnyView(_TextFieldSurface(textField: resolvedField,
                                                interactionState: interactionState,
                                                onFocusChange: onFocusChange,
                                                onEditingChange: onEditingChange)),

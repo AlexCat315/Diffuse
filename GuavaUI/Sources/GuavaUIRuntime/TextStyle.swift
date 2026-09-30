@@ -20,16 +20,23 @@ public enum FontWeight: Hashable, Sendable {
 }
 
 public struct Font: Hashable, Sendable {
+    public enum Design: Hashable, Sendable { case standard, monospaced }
     public let size: Float
     public let weight: FontWeight
+    public let design: Design
 
-    public init(size: Float, weight: FontWeight = .regular) {
+    public init(size: Float, weight: FontWeight = .regular, design: Design = .standard) {
         self.size = max(1, size)
         self.weight = weight
+        self.design = design
     }
 
     public static func system(size: Float, weight: FontWeight = .regular) -> Font {
         Font(size: size, weight: weight)
+    }
+
+    public static func monospaced(size: Float, weight: FontWeight = .regular) -> Font {
+        Font(size: size, weight: weight, design: .monospaced)
     }
 }
 
@@ -48,6 +55,15 @@ public enum SystemFontDefaults {
     ]
 
     public static let primaryFontName: String = resolvePrimaryFontName()
+    public static var monospacedFontName: String {
+        #if canImport(CoreText)
+        return "Menlo"
+        #elseif os(Windows)
+        return "consola"
+        #else
+        return "DejaVuSansMono"
+        #endif
+    }
 
 #if canImport(CoreText)
     private static func resolvePrimaryFontName() -> String {
@@ -142,7 +158,9 @@ public final class TextFontResolver: @unchecked Sendable {
                         rasterScale: rasterScale,
                         idBase: nextProviderIDBase)
         nextProviderIDBase += providerIDBlockSize
-        _ = provider.loadPrimaryFont(name: primaryFontName, weight: font.weight)
+        _ = provider.loadPrimaryFont(name: font.design == .monospaced
+                                    ? SystemFontDefaults.monospacedFontName : primaryFontName,
+                                     weight: font.weight)
         provider.registerAllFonts(in: atlas)
         providers[font] = provider
         return provider
