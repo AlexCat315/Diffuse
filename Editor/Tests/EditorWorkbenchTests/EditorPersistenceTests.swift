@@ -82,8 +82,8 @@ struct EditorPersistenceTests {
         #expect(reconciled.groupContaining(panelID: "new-tool")?.panels.contains("new-tool") == true)
     }
 
-    @Test("workspace reconciliation moves Scripts to center and preserves bottom tools")
-    func scriptsPanelMovesToCenter() {
+    @Test("workspace reconciliation preserves the user's Scripts docking position")
+    func scriptsPanelPlacementIsPreserved() {
         let registry = PanelRegistry([
             PanelDescriptor(id: "viewport", title: "Viewport", preferredSlot: .center) {
                 EmptyView()
@@ -112,9 +112,33 @@ struct EditorPersistenceTests {
 
         let reconciled = EditorRootViewFactory.reconciledWorkspaceDocument(document, registry: registry)
 
-        #expect(reconciled.group("center")?.panels == ["viewport", "scripts"])
+        #expect(reconciled.group("center")?.panels == ["viewport"])
         #expect(reconciled.group("center")?.activePanelID == "viewport")
-        #expect(reconciled.group("bottom")?.panels == ["assets"])
+        #expect(reconciled.group("bottom")?.panels == ["assets", "scripts"])
+        #expect(reconciled.group("bottom")?.activePanelID == "scripts")
         #expect(reconciled.slotContaining(groupID: "center") == .center)
+    }
+
+    @Test("the workbench's side-by-side scene and script survive save/reload reconciliation")
+    func workbenchSplitSurvivesReload() throws {
+        let registry = PanelRegistry([
+            PanelDescriptor(id: "viewport", title: "Viewport", preferredSlot: .center) { EmptyView() },
+            PanelDescriptor(id: "scripts", title: "Scripts", preferredSlot: .center) { EmptyView() },
+            PanelDescriptor(id: "hierarchy", title: "Hierarchy", preferredSlot: .leading) { EmptyView() },
+            PanelDescriptor(id: "inspector", title: "Inspector", preferredSlot: .trailing) { EmptyView() },
+            PanelDescriptor(id: "profiler", title: "Profiler", preferredSlot: .bottom) { EmptyView() },
+        ])
+        let document = EditorWorkspaceDefaults.makeDocument(mode: .level, preset: .levelWorkbench,
+                                                            registry: registry)
+        let saved = try JSONDecoder().decode(WorkspaceDocument.self,
+                                            from: JSONEncoder().encode(document))
+        let reconciled = EditorRootViewFactory.reconciledWorkspaceDocument(saved, registry: registry)
+        let expected = WorkspaceLayoutNode.split(axis: .horizontal, fraction: 0.54,
+                                                  first: .group("center"), second: .group("script-editor"))
+        #expect(reconciled.slot(.center).layout == expected)
+        #expect(reconciled.group("center")?.panels == ["viewport"])
+        #expect(reconciled.group("script-editor")?.panels == ["scripts"])
+        #expect(reconciled.group("bottom")?.activePanelID == "profiler")
+        #expect(reconciled.hasValidLayoutReferences)
     }
 }

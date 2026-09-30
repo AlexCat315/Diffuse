@@ -12,7 +12,7 @@ public struct TabButtonStyle: ButtonStyle, Hashable {
         let fill = configuration.isSelected ? colors.surfaceSunken
             : configuration.isPressed ? colors.stateLayerPressed
             : configuration.isHovered ? colors.stateLayerHover : .clear
-        return Column(alignment: .leading, spacing: 0) {
+        return Box(direction: .column, alignItems: .stretch, spacing: 0) {
             Box(direction: .row, alignItems: .center, justifyContent: .center) {
                 AnyView(configuration.label)
                     .font(.label)
@@ -23,6 +23,7 @@ public struct TabButtonStyle: ButtonStyle, Hashable {
             Box { EmptyView() }
                 .frame(height: 2)
                 .background(configuration.isSelected ? colors.accent : .clear)
+                .debugName("tab-selection-indicator")
         }
         .background(fill)
         .border(configuration.isFocused ? colors.focusRing : .clear, width: 1)
