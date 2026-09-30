@@ -76,6 +76,50 @@ struct LayerAwareNodeRendererTests {
         #expect(second.indices.count == first.indices.count)
     }
 
+    @Test("paint changes invalidate retained caches even before dirty flags are flushed")
+    func changesBetweenUnflushedPasses() {
+        let t = Tree()
+        let renderer = LayerAwareNodeRenderer()
+        // A failed surface acquisition can leave Node dirty flags set even
+        // though composing the frame has already made the layer caches valid.
+        renderer.render(tree: t.render, into: DrawList())
+        renderer.render(tree: t.render, into: DrawList())
+        #expect(t.b.renderDirty)
+        #expect(t.render.root?.cachedLayerList != nil)
+        #expect(t.render.root?.cacheInvalid == false)
+
+        t.b.backgroundColor = Color(r: 0, g: 0, b: 1, a: 1)
+        #expect(t.render.root?.cacheInvalid == true)
+        #expect(t.render.renderObject(for: t.b)?.cacheInvalid == true)
+
+        let actual = DrawList()
+        let expected = DrawList()
+        renderer.render(tree: t.render, into: actual)
+        NodeRenderer().render(root: t.root, into: expected)
+        #expect(actual.vertices.map(\.color) == expected.vertices.map(\.color))
+    }
+
+    @Test("a new painter identity is visible on retry without a successful flush")
+    func painterChangesBetweenUnflushedPasses() {
+        let t = Tree()
+        t.b.updateDraw(identity: 1) { list, origin in
+            list.addRect(UIRect(x: Float(origin.x), y: Float(origin.y), width: 8, height: 8), color: .white)
+        }
+        let renderer = LayerAwareNodeRenderer()
+        renderer.render(tree: t.render, into: DrawList())
+        renderer.render(tree: t.render, into: DrawList())
+        t.b.updateDraw(identity: 2) { list, origin in
+            list.addRect(UIRect(x: Float(origin.x), y: Float(origin.y), width: 12, height: 12), color: .black)
+        }
+        #expect(t.render.root?.cacheInvalid == true)
+        let actual = DrawList()
+        let expected = DrawList()
+        renderer.render(tree: t.render, into: actual)
+        NodeRenderer().render(root: t.root, into: expected)
+        #expect(actual.vertices.map(\.posX) == expected.vertices.map(\.posX))
+        #expect(actual.vertices.map(\.color) == expected.vertices.map(\.color))
+    }
+
     @Test("Changed containers render directly before caching a stable frame")
     func containerCacheIsDeferredUntilStable() {
         let t = Tree()
