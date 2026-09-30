@@ -49,6 +49,7 @@
 - **Enter**：单行模式触发 `onSubmit?()`；垂直轴模式插入换行。垂直轴若绑定了 `onSubmit`，使用 Cmd/Ctrl + Enter 提交。
 - **显式多行内容**：字段高度会随换行数自动增加，最多 6 行；超出后内容留在字段内部滚动，滚轮可滚动，右侧显示细滚动条。
 - **TextInputArea**（候选窗定位）：发布到 `node.attachments[TextInputAttachmentKey.area]`，y 位于文本基线行（不是 chrome 顶部）。
+- **撤销 / 重做**：Primary-Z 撤销，Primary-Shift-Z / Ctrl-Y 重做；恢复文本及光标、选区。连续输入合并，粘贴与替换选区作为单次操作。外部替换文本会清除旧历史，避免跨文档撤销。编辑器原生菜单跟随当前文本历史更新；文本获得焦点时，空历史不会回退到场景撤销。
 - **State 持久化**：`FieldState`（光标 / 选区 / IME）挂在 `node.attachments`，跨 recompose 存活。
 
 ## Authoring rules

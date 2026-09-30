@@ -21,13 +21,20 @@ public struct JsonFieldLabels: Sendable {
     public var revert: String
     public var valid: String
     public var empty: String
+    public var expand: String
+    public var apply: String
+    public var cancel: String
 
     public init(format: String = "Format", revert: String = "Revert",
-                valid: String = "Valid JSON", empty: String = "Empty saves as {}") {
+                valid: String = "Valid JSON", empty: String = "Empty saves as {}",
+                expand: String = "Expand JSON Editor", apply: String = "Apply", cancel: String = "Cancel") {
         self.format = format
         self.revert = revert
         self.valid = valid
         self.empty = empty
+        self.expand = expand
+        self.apply = apply
+        self.cancel = cancel
     }
 }
 
@@ -93,130 +100,143 @@ public struct JsonField: View {
 
 private struct _StatefulJsonField: View {
     let field: JsonField
+    @State private var draft = ""
+    @State private var hasDraft = false
+    @State private var baseline = ""
+    @State private var isExpanded = false
+    @State private var expandedDraft = ""
 
-    @State var draft: String = ""
-    @State var isEditing: Bool = false
-    @State var validation: JsonFieldValidation = .valid
+    init(field: JsonField) {
+        self.field = field
+        _baseline = State(wrappedValue: field.text.wrappedValue)
+    }
+
+    private var currentText: String { hasDraft ? draft : field.text.wrappedValue }
+    private var validation: JsonFieldValidation { JsonField.validate(currentText) }
+    private var draftBinding: Binding<String> {
+        Binding(get: { currentText }, set: { value in
+            if !hasDraft { baseline = field.text.wrappedValue }
+            draft = value
+            hasDraft = true
+        })
+    }
 
     var body: some View {
-        let currentValidation = isEditing ? validation : JsonField.validate(field.text.wrappedValue)
-
-        Box(direction: .column, alignItems: .stretch, spacing: 6) {
-            TextField(field.placeholder,
-                      text: Binding(
-                        get: { isEditing ? draft : field.text.wrappedValue },
-                        set: { next in
-                            draft = next
-                            validation = JsonField.validate(next)
-                        }
-                      ),
-                      axis: .vertical,
-                      disabled: !field.isEnabled,
-                      onSubmit: {
-                        commitDraft()
-                      },
-                      onFocus: {
-                        if !isEditing {
-                            draft = field.text.wrappedValue.isEmpty ? "{}" : field.text.wrappedValue
-                            validation = JsonField.validate(draft)
-                            isEditing = true
-                        }
-                      },
-                      onBlur: {
-                        commitDraft()
-                        isEditing = false
-                      })
-                .font(.mono)
-                .frame(minHeight: field.minHeight)
-                .border(borderColor(for: currentValidation), width: 1)
+        Box(direction: .column, alignItems: .stretch, spacing: 4) {
+            Row(alignment: .center, spacing: 2) {
+                Text("JSON").font(.caption).foregroundColor(.onSurfaceMuted)
+                if validation.isAcceptable {
+                    Icon(UICommonIcons.checkmark, size: 9, color: .success)
+                }
+                Spacer(minLength: 0)
+                Button(icon: .resource(UICommonIcons.format), size: 12,
+                       isEnabled: field.isEnabled && validation.isAcceptable,
+                       tooltip: field.labels.format, action: formatDraft)
+                    .buttonStyle(.ghost).controlSize(.small)
+                Button(icon: .resource(UICommonIcons.reset), size: 12,
+                       isEnabled: field.isEnabled && currentText != baseline,
+                       tooltip: field.labels.revert, action: revertDraft)
+                    .buttonStyle(.ghost).controlSize(.small)
+                Button(icon: .resource(UICommonIcons.expand), size: 12,
+                       isEnabled: field.isEnabled, tooltip: field.labels.expand, action: {
+                    expandedDraft = currentText
+                    isExpanded = true
+                })
+                    .buttonStyle(.ghost).controlSize(.small)
+                    .debugName("json-expand")
+            }
+            ResizableTextArea(field.placeholder, text: draftBinding, minHeight: field.minHeight,
+                              disabled: !field.isEnabled, onSubmit: { _ = commitDraft() },
+                              onFocus: beginEditing,
+                              onBlur: { if !isExpanded { _ = commitDraft() } })
+                .border(validation.isAcceptable ? .border : .error, width: 1)
                 .cornerRadius(4)
                 .clipped()
-
-            Row(alignment: .center, spacing: 6) {
-                validationStatus(currentValidation)
-                    .flex(1, shrink: 1, basis: 0)
-
-                Button(role: .normal,
-                       isEnabled: field.isEnabled && currentValidation.isAcceptable,
-                       action: {
-                    formatDraft()
-                }) {
-                    Text(field.labels.format)
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceVariant)
-                }
-                .buttonStyle(.ghost)
-
-                Button(role: .normal,
-                       isEnabled: field.isEnabled,
-                       action: {
-                    draft = field.text.wrappedValue
-                    validation = JsonField.validate(draft)
-                    isEditing = false
-                }) {
-                    Text(field.labels.revert)
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceVariant)
-                }
-                .buttonStyle(.ghost)
+                .debugName("json-inline-editor")
+            if case let .invalid(message) = validation {
+                Text(message, lineLimit: 2).font(.caption).foregroundColor(.error)
+            }
+            Modal(isPresented: $isExpanded) {
+                expandedEditor
             }
         }
+        .frame(minWidth: 0)
     }
 
-    private func validationStatus(_ validation: JsonFieldValidation) -> some View {
-        switch validation {
-        case .valid:
-            return AnyView(
-                Text(field.labels.valid)
-                    .font(.caption)
-                    .foregroundColor(.success)
-            )
-        case .empty:
-            return AnyView(
-                Text(field.labels.empty)
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
-            )
-        case let .invalid(message):
-            return AnyView(
-                Text(message)
-                    .font(.caption)
-                    .foregroundColor(.error)
-                    .clipped()
-            )
+    private var expandedEditor: some View {
+        let result = JsonField.validate(expandedDraft)
+        return Box(direction: .column, alignItems: .stretch, spacing: 0) {
+            Row(alignment: .center, spacing: 6) {
+                Text(field.labels.expand).font(.bodyStrong)
+                Spacer(minLength: 0)
+                Button(icon: .resource(UICommonIcons.format), size: 14,
+                       isEnabled: result.isAcceptable, tooltip: field.labels.format, action: {
+                    if let pretty = JsonField.prettyPrinted(expandedDraft) { expandedDraft = pretty }
+                }).buttonStyle(.ghost)
+                Button(icon: .resource(UICommonIcons.close), size: 12,
+                       tooltip: field.labels.cancel, action: { isExpanded = false }).buttonStyle(.ghost)
+            }
+            .padding(horizontal: 14, vertical: 8)
+            Divider()
+            TextField(field.placeholder, text: $expandedDraft, axis: .vertical,
+                      maxVisibleLines: 128, showsLineNumbers: true,
+                      onSubmit: applyExpandedDraft, onCancel: { isExpanded = false })
+                .font(.mono)
+                .frame(minHeight: 0)
+                .padding(8)
+                .flex(1, shrink: 1, basis: 0)
+            Divider()
+            Row(alignment: .center, spacing: 8) {
+                if case let .invalid(message) = result {
+                    Text(message, lineLimit: 2).font(.caption).foregroundColor(.error).flex(1, shrink: 1, basis: 0)
+                } else {
+                    Icon(UICommonIcons.checkmark, size: 11, color: .success)
+                    Text(field.labels.valid).font(.caption).foregroundColor(.onSurfaceMuted)
+                }
+                Spacer(minLength: 0)
+                Button(field.labels.cancel, action: { isExpanded = false }).buttonStyle(.ghost)
+                Button(field.labels.apply, isEnabled: result.isAcceptable, action: applyExpandedDraft)
+                    .buttonStyle(.primary).debugName("json-apply")
+            }
+            .padding(horizontal: 14, vertical: 10)
         }
+        .background(.surfaceFloating).border(.border, width: 1).cornerRadius(10).clipped()
+        .flex(1, shrink: 1, basis: 0)
+        .debugName("json-expanded-editor")
     }
 
-    private func borderColor(for validation: JsonFieldValidation) -> SemanticColorRef {
-        switch validation {
-        case .valid, .empty:
-            return .border
-        case .invalid:
-            return .error
-        }
+    private func beginEditing() {
+        guard !hasDraft else { return }
+        baseline = field.text.wrappedValue
+        draft = field.text.wrappedValue.isEmpty ? "{}" : field.text.wrappedValue
+        hasDraft = true
     }
 
-    private func commitDraft() {
-        let candidate = isEditing ? draft : field.text.wrappedValue
-        let result = JsonField.validate(candidate)
-        validation = result
-        guard result.isAcceptable else { return }
-        let normalized = JsonField.normalizedCommitText(candidate)
+    @discardableResult
+    private func commitDraft() -> Bool {
+        guard JsonField.validate(currentText).isAcceptable else { return false }
+        let normalized = JsonField.normalizedCommitText(currentText)
         if field.text.wrappedValue != normalized {
             field.text.wrappedValue = normalized
+            field.onCommit?(normalized)
         }
-        field.onCommit?(normalized)
         draft = normalized
+        // Keep the edit baseline available to the revert toolbar action.
+        hasDraft = false
+        return true
     }
 
+    private func applyExpandedDraft() {
+        guard JsonField.validate(expandedDraft).isAcceptable else { return }
+        draftBinding.wrappedValue = expandedDraft
+        if commitDraft() { isExpanded = false }
+    }
+    private func revertDraft() {
+        draft = baseline
+        hasDraft = true
+        _ = commitDraft()
+    }
     private func formatDraft() {
-        let candidate = isEditing ? draft : field.text.wrappedValue
-        guard let pretty = JsonField.prettyPrinted(candidate) else {
-            validation = JsonField.validate(candidate)
-            return
-        }
-        draft = pretty
-        validation = .valid
-        isEditing = true
+        if let pretty = JsonField.prettyPrinted(currentText) { draftBinding.wrappedValue = pretty }
     }
 }
