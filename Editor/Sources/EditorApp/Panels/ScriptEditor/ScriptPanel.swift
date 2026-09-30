@@ -14,8 +14,6 @@ struct ScriptPanel: View {
     @State private var hoverPresentation: ScriptEditorHoverPresentation = .hidden
     @State private var hoverSequence = ScriptEditorHoverSequence()
     @State private var caretLabel = ""
-    @State private var bottomPanel = ScriptBottomPanel.problems
-    @State private var isBottomPanelExpanded = false
     @State private var isNavigatorVisible = false
     @State private var isActionsMenuPresented = false
     @State private var isFileMenuPresented = false
@@ -65,7 +63,7 @@ struct ScriptPanel: View {
                        tooltip: L("Build & Reload"),
                        action: compile) {
                     Row(alignment: .center, spacing: 4) {
-                        Icon(toolbarIcon("play"), size: 10, color: .onAccent)
+                        Icon(toolbarIcon("play"), size: 10)
                         Text(L("Build")).font(.label)
                     }
                 }
@@ -247,8 +245,6 @@ struct ScriptPanel: View {
                     .padding(horizontal: 10, vertical: 4)
                     .background(.surfaceSunken)
                 }
-                Divider()
-                bottomPanelView
             } else {
                 EditorPanelEmptyState(
                     L("Select a script"),
@@ -264,9 +260,9 @@ struct ScriptPanel: View {
         Row(alignment: .center, spacing: 0) {
             Popover(isPresented: $isFileMenuPresented, width: 240) {
                 Row(alignment: .center, spacing: 6) {
-                    Text("S").font(.label).foregroundColor(EditorCodePalette.accent)
+                    Text("S").font(.label).foregroundColor(.accent)
                     Text("\(file.displayName).swift", lineLimit: 1)
-                        .font(.label).foregroundColor(EditorCodePalette.foreground)
+                        .font(.label).foregroundColor(.onSurface)
                     if isDirty {
                         Box { EmptyView() }
                             .frame(width: 5, height: 5)
@@ -274,10 +270,10 @@ struct ScriptPanel: View {
                             .cornerRadius(3)
                     }
                     Icon(UICommonIcons.chevronDown, size: 8,
-                         color: EditorCodePalette.muted)
+                         color: .onSurfaceVariant)
                 }
                 .padding(horizontal: 10, vertical: 6)
-                .background(EditorCodePalette.selectedTab)
+                .background(.surfaceSunken)
             } content: {
                 Menu(scriptFiles.map { candidate in
                     .item(MenuItem(id: candidate.identifier,
@@ -288,7 +284,7 @@ struct ScriptPanel: View {
             }
             Spacer(minLength: 0)
         }
-        .background(EditorCodePalette.header)
+        .background(.surface)
     }
 
     private var externalChangeBanner: some View {
@@ -335,90 +331,6 @@ struct ScriptPanel: View {
         .background(.warning.opacity(0.10))
     }
 
-    private var bottomPanelView: some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 0) {
-            Row(alignment: .center, spacing: 8) {
-                Button(isSelected: bottomPanel == .problems,
-                       action: {
-                           bottomPanel = .problems
-                           isBottomPanelExpanded = true
-                       }) {
-                    Text("\(L("Problems")) \(selectedDocument?.diagnostics.count ?? 0)")
-                }
-                .buttonStyle(TabButtonStyle(height: 26))
-                Button(isSelected: bottomPanel == .output,
-                       action: {
-                           bottomPanel = .output
-                           isBottomPanelExpanded = true
-                       }) {
-                    Text(L("Build Output"))
-                }
-                .buttonStyle(TabButtonStyle(height: 26))
-                Spacer(minLength: 0)
-                if bottomPanel == .output, !(selectedDocument?.output ?? "").isEmpty {
-                    Button(action: app.scriptWorkspace.clearSelectedOutput) { Text(L("Clear")) }
-                        .buttonStyle(.ghost)
-                }
-                Button(action: { isBottomPanelExpanded.toggle() }) {
-                    Text(isBottomPanelExpanded ? L("Hide") : L("Show"))
-                }
-                .buttonStyle(.ghost)
-            }
-            .padding(horizontal: 2, vertical: 0)
-            .background(.surface)
-
-            if isBottomPanelExpanded {
-                if bottomPanel == .problems {
-                    problemsPanel
-                } else {
-                    outputPanel
-                }
-            }
-        }
-    }
-
-    private var problemsPanel: some View {
-        let diagnostics = selectedDocument?.diagnostics ?? []
-        return ScrollView(.vertical, scrollbarGutter: .stable) {
-            if diagnostics.isEmpty {
-                Row(alignment: .center, spacing: 8) {
-                    Box { EmptyView() }
-                        .frame(width: 6, height: 6)
-                        .background(.success)
-                        .cornerRadius(3)
-                    Text(L("No problems detected"))
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
-                    Spacer(minLength: 0)
-                }
-                .padding(horizontal: 10, vertical: 10)
-            } else {
-                Column(alignment: .leading, spacing: 2) {
-                    for diagnostic in diagnostics {
-                        ScriptDiagnosticRow(diagnostic: diagnostic)
-                    }
-                }
-                .padding(horizontal: 7, vertical: 6)
-            }
-        }
-        .frame(height: 120)
-        .background(.surfaceSunken)
-    }
-
-    private var outputPanel: some View {
-        ScrollView(.vertical, scrollbarGutter: .stable) {
-            Text((selectedDocument?.output ?? "").isEmpty
-                 ? L("Build output will appear here.")
-                 : selectedDocument?.output ?? "")
-                .font(.mono)
-                .foregroundColor(isBuildFailed ? .error : .onSurfaceMuted)
-                .padding(horizontal: 10, vertical: 8)
-                .frame(maxWidth: .infinity)
-        }
-        .frame(height: 120)
-        .background(.surfaceSunken)
-    }
-
     private var visibleDocuments: [ScriptWorkspaceDocument] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return workspace.documents }
@@ -452,7 +364,6 @@ struct ScriptPanel: View {
 
     private var isCompiling: Bool { selectedDocument?.buildState.isBuilding ?? false }
 
-    private var isBuildFailed: Bool { selectedDocument?.buildState.isFailed ?? false }
 
     private var languageServiceMessage: String? {
         switch workspace.languageServiceState {
@@ -596,11 +507,6 @@ struct ScriptPanel: View {
     private func cancelBuild() {
         app.scriptWorkspace.cancelSelectedBuild()
     }
-}
-
-private enum ScriptBottomPanel: Sendable, Equatable {
-    case problems
-    case output
 }
 
 private struct ScriptFileRow: View {

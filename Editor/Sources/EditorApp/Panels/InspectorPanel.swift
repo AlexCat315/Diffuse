@@ -264,7 +264,6 @@ struct InspectorPanel: View {
         let minValue: Float?
         let maxValue: Float?
         let step: Float?
-        let showsStepper: Bool
 
         var body: some View {
             NumberField(value: binding,
@@ -273,7 +272,7 @@ struct InspectorPanel: View {
                         minValue: minValue,
                         maxValue: maxValue,
                         step: step,
-                        showsStepper: showsStepper)
+                        showsStepper: false)
                 .frame(minWidth: 96)
                 .flex()
         }
@@ -593,14 +592,12 @@ struct InspectorPanel: View {
             return AnyView(InspectorNumberValue(binding: binding,
                                                 minValue: nil,
                                                 maxValue: nil,
-                                                step: nil,
-                                                showsStepper: false))
-        case let .constrainedNumber(binding, min, max, step, showsStepper):
+                                                step: nil))
+        case let .constrainedNumber(binding, min, max, step, _):
             return AnyView(InspectorNumberValue(binding: binding,
                                                 minValue: min,
                                                 maxValue: max,
-                                                step: step,
-                                                showsStepper: showsStepper))
+                                                step: step))
         case let .vector3(x, y, z):
             return AnyView(InspectorVectorValue(x: x, y: y, z: z))
         case let .color(binding):

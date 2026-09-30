@@ -70,7 +70,7 @@ struct EditorRootView: View {
                            minHeight: 0)
                 } portals: {
                     PortalHost()
-                    if store.commandPaletteVisible {
+                    AnimatedVisibility(isVisible: store.commandPaletteVisible, collapses: false) {
                         CommandPaletteOverlay(app: app)
                     }
                     if let pendingClose = store.pendingCloseRequest {

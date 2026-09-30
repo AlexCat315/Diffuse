@@ -780,20 +780,21 @@ private struct HierarchyPanelHeader: View {
     }
 
     private func actionLabel() -> some View {
-        Text("···")
-        .font(.bodyStrong)
-        .foregroundColor(.onSurfaceMuted)
+        Box(direction: .row, alignment: .center) {
+            Text("···").font(.bodyStrong).foregroundColor(.onSurfaceVariant)
+        }
         .frame(width: 24, height: 24)
         .background(isActionsPresented ? .surfaceVariant : .surface)
         .cornerRadius(4)
     }
 
     private func createLabel() -> some View {
-        Text("+")
-        .font(.bodyStrong)
-        .foregroundColor(isAuthoringEnabled ? .accent : .onSurfaceMuted)
+        Box(direction: .row, alignment: .center) {
+            Text("+").font(.bodyStrong)
+                .foregroundColor(isAuthoringEnabled ? .accent : .onSurfaceMuted)
+        }
         .frame(width: 24, height: 24)
-        .background(.surfaceSunken)
+        .background(isCreatePresented ? .stateLayerSelected : .surface)
         .cornerRadius(4)
     }
 }

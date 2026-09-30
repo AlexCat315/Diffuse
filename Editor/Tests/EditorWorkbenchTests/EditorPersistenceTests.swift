@@ -7,6 +7,26 @@ import Testing
 
 @Suite("Editor persistence")
 struct EditorPersistenceTests {
+    @Test("the active legacy profiler migrates to Developer Tools without duplicate docking")
+    func profilerMigration() {
+        let registry = PanelRegistry([
+            PanelDescriptor(id: "developer-tools", title: "Developer Tools", preferredSlot: .bottom) { EmptyView() },
+            PanelDescriptor(id: "console", title: "Console", preferredSlot: .bottom) { EmptyView() },
+        ])
+        let document = WorkspaceDocument(
+            panels: ["profiler": WorkspacePanel(id: "profiler", title: "Profiler"),
+                     "developer-tools": WorkspacePanel(id: "developer-tools", title: "Developer Tools"),
+                     "console": WorkspacePanel(id: "console", title: "Console")],
+            groups: ["a": WorkspaceTabGroup(id: "a", panels: ["developer-tools"], activePanelID: "developer-tools"),
+                     "bottom": WorkspaceTabGroup(id: "bottom", panels: ["console", "profiler"], activePanelID: "profiler")],
+            slots: WorkspaceSlot.standardEditorSlots(center: .group("a"), bottom: .group("bottom")),
+            layoutTree: .group("a"))
+        let migrated = EditorRootViewFactory.reconciledWorkspaceDocument(document, registry: registry)
+        #expect(migrated.group("bottom")?.activePanelID == "developer-tools")
+        #expect(migrated.groups.values.flatMap(\.panels).filter { $0 == "developer-tools" }.count == 1)
+        #expect(migrated.panels["profiler"] == nil)
+        #expect(migrated.hasValidLayoutReferences)
+    }
     @Test("Invalid persisted state is quarantined instead of deleted")
     func invalidStateIsQuarantined() throws {
         let directory = FileManager.default.temporaryDirectory

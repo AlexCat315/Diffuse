@@ -5,6 +5,29 @@ enum StyleAttachmentKey {
     static let lineHeight = "__line_height"
 }
 
+extension Node {
+    func textStyleValue<T>(_ key: String) -> T? {
+        (attachments[key] as? T) ?? parent?.textStyleValue(key)
+    }
+
+    func invalidateTextStyle() {
+        markRenderDirty(reason: .styleSet(field: "textStyle"))
+        if layoutNode?.hasMeasureFunc == true { layoutNode?.markDirty() }
+        for child in children { child.invalidateTextStyle() }
+    }
+}
+
+extension LayoutNode {
+    func textStyleValue<T>(_ key: String) -> T? {
+        (attachments[key] as? T) ?? parent?.textStyleValue(key)
+    }
+
+    func invalidateTextMeasurements() {
+        if hasMeasureFunc { markDirty() }
+        for child in children { child.invalidateTextMeasurements() }
+    }
+}
+
 public struct BackgroundModifier: ViewModifier {
     public let color: Color
     public init(_ color: Color) { self.color = color }
@@ -99,7 +122,9 @@ public struct FontModifier: ViewModifier {
     public init(_ font: Font) { self.font = font }
 
     public func apply(node: Node) {
+        guard node.attachments[StyleAttachmentKey.font] as? Font != font else { return }
         node.attachments[StyleAttachmentKey.font] = font
+        node.invalidateTextStyle()
     }
 
     public func apply(layout: LayoutNode) {
@@ -108,7 +133,7 @@ public struct FontModifier: ViewModifier {
             return
         }
         layout.attachments[StyleAttachmentKey.font] = font
-        if layout.hasMeasureFunc { layout.markDirty() }
+        layout.invalidateTextMeasurements()
     }
 }
 
@@ -119,7 +144,9 @@ public struct LineHeightModifier: ViewModifier {
     public init(_ lineHeight: Float) { self.lineHeight = max(0, lineHeight) }
 
     public func apply(node: Node) {
+        guard node.attachments[StyleAttachmentKey.lineHeight] as? Float != lineHeight else { return }
         node.attachments[StyleAttachmentKey.lineHeight] = lineHeight
+        node.invalidateTextStyle()
     }
 
     public func apply(layout: LayoutNode) {
@@ -128,7 +155,7 @@ public struct LineHeightModifier: ViewModifier {
             return
         }
         layout.attachments[StyleAttachmentKey.lineHeight] = lineHeight
-        if layout.hasMeasureFunc { layout.markDirty() }
+        layout.invalidateTextMeasurements()
     }
 }
 

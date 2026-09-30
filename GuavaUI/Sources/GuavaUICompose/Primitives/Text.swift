@@ -247,8 +247,8 @@ public struct Text: _PrimitiveView {
                                                 color: color,
                                                 lineLimit: lineLimit)) { list, origin in
             guard let env = TextEnvironmentHolder.current else { return }
-            let fontOverride = node.attachments[StyleAttachmentKey.font] as? Font
-            let lineHeightOverride = node.attachments[StyleAttachmentKey.lineHeight] as? Float
+            let fontOverride = node.textStyleValue(StyleAttachmentKey.font) as Font?
+            let lineHeightOverride = node.textStyleValue(StyleAttachmentKey.lineHeight) as Float?
             let resolvedFont = env.resolvedFont(fontOverride)
             let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
                                                             override: lineHeightOverride)
@@ -261,15 +261,9 @@ public struct Text: _PrimitiveView {
                 maxWidth: snapshot.resolvedMaxWidth(Float(node.frame.width)),
                 alignment: snapshot.alignment
             )
-            // Fall back to the theme's `onSurface` (resolved here at draw-time,
-            // when the node is fully parented under any `.theme(_:)` provider)
-            // rather than `env.defaultColor`, which is a theme-agnostic constant
-            // (white) and rendered near-invisible in light mode. This matters
-            // for text whose `.foregroundColor(_:)` landed on an ancestor
-            // container instead of the leaf — `foregroundColor` is not inherited,
-            // so e.g. a `Row { Text }` button label never receives it and would
-            // otherwise use the white constant.
-            let baseColor = snapshot.color ?? node.foregroundColor ?? node.theme.colors.onSurface
+            // Composite button labels and other containers supply inherited
+            // foregrounds; standalone text falls back to the active theme.
+            let baseColor = snapshot.color ?? node.inheritedForegroundColor ?? node.theme.colors.onSurface
             let drawColor = baseColor.multipliedAlpha(node.opacity)
             list.addText(result,
                          origin: (Float(origin.x), Float(origin.y)),
@@ -310,8 +304,8 @@ public struct Text: _PrimitiveView {
                 return CGSize(width: 0, height: 0)
             }
             let constraint: Float = (widthMode == .undefined) ? .infinity : width
-            let fontOverride = layout?.attachments[StyleAttachmentKey.font] as? Font
-            let lineHeightOverride = layout?.attachments[StyleAttachmentKey.lineHeight] as? Float
+            let fontOverride = layout?.textStyleValue(StyleAttachmentKey.font) as Font?
+            let lineHeightOverride = layout?.textStyleValue(StyleAttachmentKey.lineHeight) as Float?
             let resolvedFont = env.resolvedFont(fontOverride)
             let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
                                                             override: lineHeightOverride)

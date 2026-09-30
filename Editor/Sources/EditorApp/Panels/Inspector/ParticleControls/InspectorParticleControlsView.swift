@@ -557,7 +557,7 @@ extension InspectorPanel {
                                     minValue: 0,
                                     maxValue: 10_000,
                                     step: 1,
-                                    showsStepper: true)
+                                    showsStepper: false)
                     }
                     labeledCompactField(L("Chance")) {
                         NumberField(value: floatBinding(\.probability),
@@ -566,7 +566,7 @@ extension InspectorPanel {
                                     minValue: 0,
                                     maxValue: 1,
                                     step: 0.05,
-                                    showsStepper: true)
+                                    showsStepper: false)
                     }
                 }
 
@@ -578,7 +578,7 @@ extension InspectorPanel {
                                     minValue: 0,
                                     maxValue: 16,
                                     step: 1,
-                                    showsStepper: true)
+                                    showsStepper: false)
                     }
                     labeledCompactField(L("Inherit")) {
                         NumberField(value: floatBinding(\.inheritVelocity),
@@ -587,7 +587,7 @@ extension InspectorPanel {
                                     minValue: 0,
                                     maxValue: 10,
                                     step: 0.05,
-                                    showsStepper: true)
+                                    showsStepper: false)
                     }
                     labeledCompactField(L("Life")) {
                         NumberField(value: floatBinding(\.lifetime),
@@ -596,7 +596,7 @@ extension InspectorPanel {
                                     minValue: 0.0001,
                                     maxValue: 60,
                                     step: 0.05,
-                                    showsStepper: true)
+                                    showsStepper: false)
                     }
                 }
 
@@ -623,7 +623,7 @@ extension InspectorPanel {
                                     minValue: 0,
                                     maxValue: 100,
                                     step: 0.05,
-                                    showsStepper: true)
+                                    showsStepper: false)
                     }
                     labeledCompactField(L("End Size")) {
                         NumberField(value: floatBinding(\.endSize),
@@ -632,7 +632,7 @@ extension InspectorPanel {
                                     minValue: 0,
                                     maxValue: 100,
                                     step: 0.05,
-                                    showsStepper: true)
+                                    showsStepper: false)
                     }
                 }
 
@@ -985,7 +985,7 @@ private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
                                 minValue: 0,
                                 maxValue: 1,
                                 step: 0.01,
-                                showsStepper: true)
+                                showsStepper: false)
                     .frame(width: 74)
                     NumberField(value: keyValueBinding(index: index),
                                 decimals: 2,
@@ -994,7 +994,7 @@ private struct ParticleCurveKeyframeEntryList: _PrimitiveView {
                                 minValue: -4,
                                 maxValue: 4,
                                 step: 0.05,
-                                showsStepper: true)
+                                showsStepper: false)
                     .frame(width: 74)
                     Button(icon: .resource(UICommonIcons.close),
                            size: 10,

@@ -11,6 +11,7 @@ import GuavaUIRuntime
 /// ```
 public struct Icon: View {
     private enum Fill {
+        case inherited
         case semantic(SemanticColorRef)
         case concrete(Color)
     }
@@ -21,10 +22,10 @@ public struct Icon: View {
 
     public init(_ resource: BundleImageResource,
                 size: Float,
-                color: SemanticColorRef = .onSurface) {
+                color: SemanticColorRef? = nil) {
         self.resource = resource
         self.size = size
-        self.fill = .semantic(color)
+        self.fill = color.map(Fill.semantic) ?? .inherited
     }
 
     public init(_ resource: BundleImageResource,
@@ -43,6 +44,8 @@ public struct Icon: View {
                           contentMode: .fit,
                           renderingMode: .alphaMask)
         switch fill {
+        case .inherited:
+            return AnyView(image)
         case .semantic(let ref):
             return AnyView(image.foregroundColor(ref))
         case .concrete(let color):

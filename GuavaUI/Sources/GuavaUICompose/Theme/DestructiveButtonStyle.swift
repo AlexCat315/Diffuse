@@ -11,7 +11,6 @@ public struct DestructiveButtonStyle: ButtonStyle {
     public func makeBody(configuration: ButtonStyleConfiguration) -> some View {
         BuiltinButtonChrome(kind: .destructive,
                             configuration: configuration,
-                            foreground: .onAccent)
+                            foreground: configuration.isEnabled ? .onAccent : .onSurfaceMuted)
     }
 }
-

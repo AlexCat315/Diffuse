@@ -167,6 +167,7 @@ public final class LayerAwareNodeRenderer {
         let childY = originY - Float(node.contentOffset.y)
         let childClipStack: [UIRect] = clipped ? clipStack + [clipRect!] : clipStack
         let children = node.childrenMayNeedZSort ? renderOrderedChildren(of: obj) : obj.children
+        let descendantStart = list.vertices.count
         for child in children {
             // A nested layer root composites separately (cache-aware), so we
             // call `compose` rather than recording inline.
@@ -190,6 +191,7 @@ public final class LayerAwareNodeRenderer {
             }
         }
 
+        list.multiplyOpacity(fromVertexIndex: descendantStart, by: node.opacity)
         if let overlay = node.overlayDraw {
             overlay(list, CGPoint(x: Double(originX), y: Double(originY)))
         }
