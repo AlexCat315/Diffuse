@@ -135,10 +135,7 @@ struct ViewportPanel: View {
                                                         : selectedEntityIDs,
                                                     viewportAspectRatio: viewportAspectRatio(for: surface)
                                                 )
-                                            },
-                                            onPlay: { app.applyPlaybackState(.playing) },
-                                            onPause: { app.applyPlaybackState(.paused) },
-                                            onStop: { app.applyPlaybackState(.stopped) })
+                                            })
                         }
                     } cube: {
                         ViewportChromeInputBlocker {
@@ -1670,16 +1667,13 @@ private struct ViewportInfoBar: View {
     let onSetPhysicsDebugOptions: (EditorPhysicsDebugOverlayOptions) -> Void
     let onSetPhysicsDebugScope: (EditorPhysicsDebugOverlayScope) -> Void
     let onFrameSelection: () -> Void
-    let onPlay: () -> Void
-    let onPause: () -> Void
-    let onStop: () -> Void
 
     var body: some View {
         Box(direction: .row,
             alignItems: .center,
             wrap: .wrap,
-            spacing: 5) {
-            Row(alignment: .center, spacing: 5) {
+            spacing: 3) {
+            Row(alignment: .center, spacing: 2) {
                 Button(icon: .resource(ViewportToolbarIcon.cursor.resource),
                            size: 15,
                            isEnabled: isAuthoringEnabled,
@@ -1721,15 +1715,10 @@ private struct ViewportInfoBar: View {
                 }
                 .buttonStyle(.toggle)
 
-                ToggleChip(label: L("Local"),
+                ToggleChip(label: gizmoSpace == .local ? L("Local") : L("World"),
                            isActive: gizmoSpace == .local,
                            isEnabled: isAuthoringEnabled) {
-                    onSelectGizmoSpace(.local)
-                }
-                ToggleChip(label: L("World"),
-                           isActive: gizmoSpace == .world,
-                           isEnabled: isAuthoringEnabled) {
-                    onSelectGizmoSpace(.world)
+                    onSelectGizmoSpace(gizmoSpace == .local ? .world : .local)
                 }
 
                 Button(icon: .resource(ViewportToolbarIcon.frameSelected.resource),
@@ -1739,6 +1728,10 @@ private struct ViewportInfoBar: View {
                        action: onFrameSelection)
                     .buttonStyle(.plain)
             }
+            .padding(3)
+            .background(.surfaceFloating)
+            .cornerRadius(6)
+            .border(.divider, width: 1)
 
             Row(alignment: .center, spacing: 5) {
                 ViewModeSelector(shadingMode: shadingMode,
@@ -1762,47 +1755,16 @@ private struct ViewportInfoBar: View {
                     options: physicsDebugOptions,
                     scope: physicsDebugScope,
                     onSetOptions: onSetPhysicsDebugOptions,
-                    onSetScope: onSetPhysicsDebugScope
+                    onSetScope: onSetPhysicsDebugScope,
+                    compact: true
                 )
             }
-
-            Row(alignment: .center, spacing: 5) {
-                Divider()
-                    .frame(width: 1, height: 16)
-                    .foregroundColor(Color(r: 0, g: 0, b: 0, a: 0.4))
-
-                Button(icon: .resource(ViewportToolbarIcon.play.resource),
-                       size: 15,
-                       isEnabled: EditorPlaybackCommandPolicy.canTransition(from: playbackState,
-                                                                            to: .playing),
-                       isSelected: playbackState == .playing,
-                       tooltip: L("Play physics simulation"),
-                       action: onPlay)
-                .buttonStyle(.toggle)
-
-                Button(icon: .resource(ViewportToolbarIcon.pause.resource),
-                       size: 15,
-                       isEnabled: EditorPlaybackCommandPolicy.canTransition(from: playbackState,
-                                                                            to: .paused),
-                       isSelected: playbackState == .paused,
-                       tooltip: L("Pause physics simulation"),
-                       action: onPause)
-                .buttonStyle(.toggle)
-
-                Button(icon: .resource(ViewportToolbarIcon.stop.resource),
-                       size: 15,
-                       isEnabled: EditorPlaybackCommandPolicy.canTransition(from: playbackState,
-                                                                            to: .stopped),
-                       isSelected: false,
-                       tooltip: L("Stop physics simulation"),
-                       action: onStop)
-                .buttonStyle(.toggle)
-            }
+            .padding(3)
+            .background(.surfaceFloating)
+            .cornerRadius(6)
+            .border(.divider, width: 1)
         }
-        .padding(3)
-        .background(.surfaceFloating)
-        .cornerRadius(10)
-        .border(.divider, width: 1)
+        .theme(EditorVisualTheme.make(dark: true))
     }
 
     private var isAuthoringEnabled: Bool {
@@ -1829,6 +1791,7 @@ private struct PhysicsDebugSelector: View {
     let scope: EditorPhysicsDebugOverlayScope
     let onSetOptions: (EditorPhysicsDebugOverlayOptions) -> Void
     let onSetScope: (EditorPhysicsDebugOverlayScope) -> Void
+    var compact = false
     @State private var isPresented: Bool = false
 
     var body: some View {
@@ -1836,9 +1799,14 @@ private struct PhysicsDebugSelector: View {
                 width: 210,
                 onKey: viewportPopoverDismissOnEscape($isPresented)) {
             Row(alignment: .center, spacing: 5) {
-                Text("\(L("Physics Debug")) · \(scopeLabel)", lineLimit: 1)
-                    .font(.caption)
-                    .foregroundColor(options.isEmpty ? .onSurfaceMuted : .onSurface)
+                if compact {
+                    Text("DBG").font(.caption)
+                        .foregroundColor(options.isEmpty ? .onSurfaceMuted : .accent)
+                } else {
+                    Text("\(L("Physics Debug")) · \(scopeLabel)", lineLimit: 1)
+                        .font(.caption)
+                        .foregroundColor(options.isEmpty ? .onSurfaceMuted : .onSurface)
+                }
                 Icon(UICommonIcons.chevronDown, size: 8, color: .onSurfaceMuted)
             }
             .padding(horizontal: 8, vertical: 4)
@@ -1914,32 +1882,43 @@ private struct PhysicsDebugSelector: View {
 private struct PhysicsDebugLegend: View {
     let options: EditorPhysicsDebugOverlayOptions
     let scope: EditorPhysicsDebugOverlayScope
+    @State private var showsDetails = false
 
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 3) {
-            Text("\(L("Physics Debug")) · \(scope == .scene ? L("Scene") : L("Selected"))")
-                .font(.caption)
-                .foregroundColor(.onSurface)
-            if options.contains(.shapes) {
-                entry(L("Collider / Trigger"), Color(r: 0.20, g: 0.88, b: 1.0, a: 1))
+            Button(action: { showsDetails.toggle() }) {
+                Row(alignment: .center, spacing: 6) {
+                    Text("\(L("Physics Debug")) · \(scope == .scene ? L("Scene") : L("Selected"))")
+                        .font(.caption).foregroundColor(.onSurface)
+                    Icon(showsDetails ? UICommonIcons.chevronDown : UICommonIcons.chevronRight,
+                         size: 8, color: .onSurfaceMuted)
+                }
             }
-            if options.contains(.bounds) {
-                entry(L("AABB / Sleeping"), Color(r: 0.24, g: 0.62, b: 1.0, a: 1))
-            }
-            if options.contains(.contacts) {
-                entry(L("Contact / Normal"), Color(r: 1.0, g: 0.72, b: 0.12, a: 1))
-            }
-            if options.contains(.joints) {
-                entry(L("Joint / Limit"), Color(r: 1.0, g: 0.48, b: 0.16, a: 1))
-            }
-            if options.contains(.characters) {
-                entry(L("Character Ground"), Color(r: 0.22, g: 1.0, b: 0.42, a: 1))
+            .buttonStyle(.plain)
+            .controlSize(.mini)
+            if showsDetails {
+                if options.contains(.shapes) {
+                    entry(L("Collider / Trigger"), Color(r: 0.20, g: 0.88, b: 1.0, a: 1))
+                }
+                if options.contains(.bounds) {
+                    entry(L("AABB / Sleeping"), Color(r: 0.24, g: 0.62, b: 1.0, a: 1))
+                }
+                if options.contains(.contacts) {
+                    entry(L("Contact / Normal"), Color(r: 1.0, g: 0.72, b: 0.12, a: 1))
+                }
+                if options.contains(.joints) {
+                    entry(L("Joint / Limit"), Color(r: 1.0, g: 0.48, b: 0.16, a: 1))
+                }
+                if options.contains(.characters) {
+                    entry(L("Character Ground"), Color(r: 0.22, g: 1.0, b: 0.42, a: 1))
+                }
             }
         }
         .padding(horizontal: 8, vertical: 6)
         .background(.surfaceFloating)
         .cornerRadius(6)
         .border(.divider, width: 1)
+        .theme(EditorVisualTheme.make(dark: true))
     }
 
     private func entry(_ label: String, _ color: Color) -> some View {
