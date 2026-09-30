@@ -82,3 +82,9 @@
 /* Rendering fields */
 "Visible" = "可见";
 "Color Tint" = "颜色叠加";
+"Advanced JSON" = "高级 JSON";
+"Compound Shapes" = "复合形状";
+"Shape Instances" = "形状数量";
+"Friction" = "摩擦";
+"Restitution" = "弹性";
+"Density" = "密度";
