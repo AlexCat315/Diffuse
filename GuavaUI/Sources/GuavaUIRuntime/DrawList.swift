@@ -195,6 +195,51 @@ public final class DrawList {
         emitRoundedRectGeometry(rect: rect, radius: r, color: color.rgba8)
     }
 
+    /// An inset stroke whose center stays transparent. Drawing a filled shape
+    /// underneath the background is incorrect for translucent/clear controls.
+    public func addRoundedRectStroke(_ rect: UIRect, radius: Float, width: Float, color: Color) {
+        guard rect.width > 0, rect.height > 0, width > 0, color.a > 0 else { return }
+        let stroke = min(width, min(rect.width, rect.height) * 0.5)
+        let outerRadius = max(0, min(radius, min(rect.width, rect.height) * 0.5))
+        let inner = UIRect(x: rect.minX + stroke, y: rect.minY + stroke,
+                           width: rect.width - stroke * 2, height: rect.height - stroke * 2)
+        guard inner.width > 0, inner.height > 0 else {
+            addRoundedRect(rect, radius: outerRadius, color: color)
+            return
+        }
+        let innerRadius = max(0, outerRadius - stroke)
+        let segments = outerRadius > 0 ? cornerSegmentCount(for: outerRadius) : 1
+        let packed = color.rgba8
+        let baseVertex = UInt32(vertices.count)
+        let baseIndex = UInt32(indices.count)
+        // Clockwise corners, each with matching outer/inner arc samples.
+        for corner in 0..<4 {
+            let right = corner == 1 || corner == 2
+            let bottom = corner >= 2
+            let outerX = right ? rect.maxX - outerRadius : rect.minX + outerRadius
+            let outerY = bottom ? rect.maxY - outerRadius : rect.minY + outerRadius
+            let innerX = right ? inner.maxX - innerRadius : inner.minX + innerRadius
+            let innerY = bottom ? inner.maxY - innerRadius : inner.minY + innerRadius
+            let start = Float(corner) * .pi / 2 + .pi
+            for step in 0...segments {
+                let angle = start + Float(step) / Float(segments) * .pi / 2
+                vertices.append(UIVertex(posX: outerX + cos(angle) * outerRadius,
+                                         posY: outerY + sin(angle) * outerRadius,
+                                         u: -1, v: 0, color: packed))
+                vertices.append(UIVertex(posX: innerX + cos(angle) * innerRadius,
+                                         posY: innerY + sin(angle) * innerRadius,
+                                         u: -1, v: 0, color: packed))
+            }
+        }
+        let pairs = UInt32(4 * (segments + 1))
+        for pair in 0..<pairs {
+            let a = baseVertex + pair * 2
+            let b = baseVertex + ((pair + 1) % pairs) * 2
+            indices.append(contentsOf: [a, b, a + 1, a + 1, b, b + 1])
+        }
+        recordIndices(at: baseIndex, count: pairs * 6, textureID: .none)
+    }
+
     /// Append a single textured quad from a font atlas glyph.
     public func addGlyphQuad(
         x: Float, y: Float, width: Float, height: Float,

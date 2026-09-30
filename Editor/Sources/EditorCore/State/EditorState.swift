@@ -27,6 +27,7 @@ public enum EditorWorkspaceMode: String, Codable, Sendable, Hashable {
 }
 
 public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
+    case levelWorkbench
     case levelDefault
     case levelCinematics
     case modelingDefault
@@ -36,7 +37,7 @@ public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
 
     public var mode: EditorWorkspaceMode {
         switch self {
-        case .levelDefault, .levelCinematics:
+        case .levelWorkbench, .levelDefault, .levelCinematics:
             return .level
         case .modelingDefault, .modelingSculpt:
             return .modeling
@@ -47,6 +48,8 @@ public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
 
     public var title: String {
         switch self {
+        case .levelWorkbench:
+            return "Level: Workbench"
         case .levelDefault:
             return "Level: Default"
         case .levelCinematics:
@@ -65,7 +68,7 @@ public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
     public static func `default`(for mode: EditorWorkspaceMode) -> EditorLayoutPreset {
         switch mode {
         case .level:
-            return .levelDefault
+            return .levelWorkbench
         case .modeling:
             return .modelingDefault
         case .animation:
@@ -76,7 +79,7 @@ public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
     public static func presets(for mode: EditorWorkspaceMode) -> [EditorLayoutPreset] {
         switch mode {
         case .level:
-            return [.levelDefault, .levelCinematics]
+            return [.levelWorkbench, .levelDefault, .levelCinematics]
         case .modeling:
             return [.modelingDefault, .modelingSculpt]
         case .animation:

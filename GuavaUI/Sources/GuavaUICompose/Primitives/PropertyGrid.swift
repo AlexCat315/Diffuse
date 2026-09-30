@@ -141,7 +141,7 @@ private struct _StatefulPropertyGrid: View {
                 sectionViews()
             }
         }
-        .frame(minWidth: grid.labelWidth + grid.minValueWidth)
+        .frame(minWidth: grid.scrollAxes == .vertical ? 0 : grid.labelWidth + grid.minValueWidth)
         .padding(grid.contentPadding)
     }
 
@@ -206,7 +206,7 @@ private struct _StatefulPropertyGrid: View {
             }
             .buttonStyle(.plain)
             .frame(height: 26)
-            .background(.surfaceVariant)
+            .background(.surfaceVariant.opacity(0.65))
 
             if !isCollapsed {
                 Box(direction: .column, alignItems: .stretch, spacing: grid.rowSpacing) {
@@ -220,12 +220,11 @@ private struct _StatefulPropertyGrid: View {
                     }
                 }
                 .padding(horizontal: 2, vertical: 3)
-                .background(.surface)
+                .background(.surfaceSunken)
             }
         }
-        .background(.surface)
-        .cornerRadius(6)
-        .border(.divider, width: 1)
+        .background(.surfaceSunken)
+        .cornerRadius(4)
     }
 
     private func rowView(_ row: PropertyGridRow, sectionID: String, index: Int) -> some View {
@@ -246,7 +245,7 @@ private struct _StatefulPropertyGrid: View {
     private func decoratedRow<Content: View>(_ id: String,
                                              index: Int,
                                              @ViewBuilder content: () -> Content) -> some View {
-        _PropertyGridRowHost(baseBackground: index.isMultiple(of: 2) ? .surface : .surfaceOverlay,
+        _PropertyGridRowHost(baseBackground: .surfaceSunken,
                              hoverBackground: .stateLayerHover,
                              cornerRadius: 4,
                              content: AnyView(content()))
@@ -273,8 +272,7 @@ private struct _StatefulPropertyGrid: View {
             .padding(horizontal: 0, vertical: 2)
             .flex(1, shrink: 1, basis: 0)
         }
-        .frame(height: rowHeight)
-        .flex()
+        .frame(height: rowHeight, minWidth: 0)
     }
 
     private func fullWidthRowView(_ row: PropertyGridRow, rowHeight: Float) -> some View {

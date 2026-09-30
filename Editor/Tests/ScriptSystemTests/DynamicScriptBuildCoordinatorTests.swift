@@ -5,11 +5,12 @@ import Testing
 
 private final class BuildCoordinatorCompilerStub: DynamicScriptCompiling, @unchecked Sendable {
     func compile(sourcePath: String,
-                 scriptID: String) throws -> DynamicScriptCompilationArtifact {
-        if sourcePath.contains("slow") {
-            Thread.sleep(forTimeInterval: 0.15)
-        } else {
-            Thread.sleep(forTimeInterval: 0.01)
+                 scriptID: String,
+                 cancellation: ScriptCompilationCancellationToken) throws -> DynamicScriptCompilationArtifact {
+        let iterations = sourcePath.contains("slow") ? 30 : 2
+        for _ in 0..<iterations {
+            if cancellation.isCancelled { throw ScriptCompileError.cancelled }
+            Thread.sleep(forTimeInterval: 0.005)
         }
         return DynamicScriptCompilationArtifact(
             outputPath: sourcePath + ".dylib",
@@ -55,14 +56,39 @@ struct DynamicScriptBuildCoordinatorTests {
         let fast = root.appendingPathComponent("fast.swift")
 
         let first = Task {
-            await coordinator.build(scriptID: "scripts.player", sourceURL: slow)
+            await coordinator.build(scriptID: "scripts.player",
+                                    legacyIdentifiers: [],
+                                    sourceURL: slow)
         }
         try? await Task.sleep(for: .milliseconds(25))
-        let second = await coordinator.build(scriptID: "scripts.player", sourceURL: fast)
+        let second = await coordinator.build(scriptID: "scripts.player",
+                                             legacyIdentifiers: [],
+                                             sourceURL: fast)
         let firstOutcome = await first.value
 
         #expect(firstOutcome == .superseded)
         #expect(second == .succeeded(stdout: "", stderr: ""))
         #expect(loader.loadedPaths == [fast.path + ".dylib"])
+    }
+
+    @Test("explicit cancellation terminates compilation before loading")
+    func explicitCancellationStopsCompilation() async {
+        let loader = BuildCoordinatorLoaderStub()
+        let coordinator = DynamicScriptBuildCoordinator(
+            compiler: BuildCoordinatorCompilerStub(),
+            loader: loader,
+            scriptRuntime: ScriptRuntime()
+        )
+        let slow = FileManager.default.temporaryDirectory.appendingPathComponent("slow.swift")
+        let build = Task {
+            await coordinator.build(scriptID: "scripts.cancelled",
+                                    legacyIdentifiers: [],
+                                    sourceURL: slow)
+        }
+        try? await Task.sleep(for: .milliseconds(25))
+        await coordinator.cancel(scriptID: "scripts.cancelled")
+
+        #expect(await build.value == .cancelled)
+        #expect(loader.loadedPaths.isEmpty)
     }
 }

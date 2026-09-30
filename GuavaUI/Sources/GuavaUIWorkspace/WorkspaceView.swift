@@ -719,7 +719,7 @@ private struct _WorkspaceTabGroupView: View {
             }
         }
         .background(.surfaceSunken)
-        .cornerRadius(12)
+        .cornerRadius(6)
         .clipped()
         .frame(minWidth: 0, minHeight: 0)
         .layoutRole("workspace-tab-group")
@@ -765,8 +765,8 @@ private struct _WorkspaceTabBar: View {
                 .debugName("workspace-collapse-\(group.id.rawValue)")
             }
         }
-        .padding(horizontal: 4, vertical: 3)
-        .background(.surfaceSunken)
+        .padding(horizontal: 4, vertical: 0)
+        .background(.surface)
         .frame(height: 30)
         .layoutRole("workspace-tab-bar")
     }
@@ -978,6 +978,10 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
         // light mode. `node.theme` here is correct (it already drives the tab bg).
         let titleColor = node.theme.colors.onSurface
         let config = ButtonStyleConfiguration(label: AnyView(Row(alignment: .center, spacing: 4) {
+                                                  if let key = document.panels[panelID]?.iconAssetKey,
+                                                     let resource = WorkspacePanelIconCatalog.resolve(key) {
+                                                      Icon(resource, size: 12, color: titleColor)
+                                                  }
                                                   if isPinned {
                                                       Icon(WorkspaceIcons.pinDot, size: 6, color: titleColor)
                                                   }
@@ -1001,11 +1005,7 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
 /// styles around the state.
 private struct _WorkspaceTabButtonStyle: ButtonStyle {
     func makeBody(configuration: ButtonStyleConfiguration) -> some View {
-        if configuration.isSelected {
-            AnyView(SecondaryButtonStyle().makeBody(configuration: configuration))
-        } else {
-            AnyView(GhostButtonStyle().makeBody(configuration: configuration))
-        }
+        TabButtonStyle(height: 30).makeBody(configuration: configuration)
     }
 }
 

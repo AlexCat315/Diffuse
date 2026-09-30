@@ -264,6 +264,7 @@ struct DeveloperProfilerWorkbenchView: View {
     let onOpenTarget: (DeveloperDiagnosticTarget) -> Void
 
     @State private var selectedFrameFilter: DeveloperProfilerFrameFilter = .all
+    @State private var showsFrameDetails = false
 
     var body: some View {
         let samples = developerProfilerFrameSamples(frameStats: frameStats,
@@ -275,6 +276,20 @@ struct DeveloperProfilerWorkbenchView: View {
         let selectedParticleSample = developerProfilerParticleSample(particleHistory: particleHistory,
                                                                      sampleIndex: selectedSample?.sampleIndex)
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
+            Row(alignment: .center, spacing: 0) {
+                Button(L("Overview"), isSelected: !showsFrameDetails) { showsFrameDetails = false }
+                    .buttonStyle(TabButtonStyle(height: 26))
+                Button(L("Frame Details"), isSelected: showsFrameDetails) { showsFrameDetails = true }
+                    .buttonStyle(TabButtonStyle(height: 26))
+                Spacer(minLength: 0)
+                Text("\(samples.count) \(L("samples"))")
+                    .font(.caption).foregroundColor(.onSurfaceMuted)
+                    .padding(horizontal: 10)
+            }
+            if !showsFrameDetails {
+                DeveloperProfilerOverview(samples: samples, stats: selectedStats)
+                    .flex(1, shrink: 1, basis: 0)
+            } else {
             DeveloperProfilerToolbar(sampleCount: samples.count,
                                      selectedSample: selectedSample,
                                      frameStats: selectedStats)
@@ -316,8 +331,112 @@ struct DeveloperProfilerWorkbenchView: View {
                 .flex(1, shrink: 1, basis: 0)
             }
             .flex(1, shrink: 1)
+            }
         }
         .background(.surface)
+    }
+}
+
+/// First-screen telemetry, sized for the bottom dock. Deep inspection is a
+/// separate view so diagnostic cards cannot push the live graph out of sight.
+private struct DeveloperProfilerOverview: View {
+    let samples: [EditorFrameStatsHistorySample]
+    let stats: EditorFrameStats
+
+    var body: some View {
+        let recent = Array(samples.suffix(120))
+        let health = developerProfilerFrameHealth(samples: recent)
+        let cpu = recent.map { Float($0.stats.cpuWorkSeconds * 1000) }
+        let present = recent.map { Float($0.stats.gpuPresentSeconds * 1000) }
+        let simulation = recent.map { Float($0.stats.simulationSeconds * 1000) }
+        let work = recent.map { Float($0.stats.workMs) }
+        let domainMax = max(20, (work.max() ?? 20) * 1.08)
+        return Row(alignment: .top, spacing: 12) {
+            Column(alignment: .leading, spacing: 6) {
+                Row(alignment: .center, spacing: 8) {
+                    Box { EmptyView() }.frame(width: 6, height: 6)
+                        .background(.success).cornerRadius(3)
+                    Text("LIVE").font(.caption).foregroundColor(.success)
+                    Text("\(developerProfilerFormatMs(stats.workMs)) · \(developerProfilerFormatFPS(stats.fps)) FPS")
+                        .font(.label)
+                    Spacer(minLength: 0)
+                    Text(L("Frame Time")).font(.caption).foregroundColor(.onSurfaceMuted)
+                }
+                Box(direction: .row, alignItems: .center, wrap: .wrap, spacing: 10) {
+                    DeveloperProfilerLegend(label: "CPU", color: .accent)
+                    DeveloperProfilerLegend(label: "Present", color: .success)
+                    DeveloperProfilerLegend(label: L("Simulation"), color: .accentSecondary)
+                    DeveloperProfilerLegend(label: "16.7 ms", color: .warning)
+                }
+                MonitorChart(series: [.line(cpu, color: .accent),
+                                       .line(present, color: .success),
+                                       .line(simulation, color: .accentSecondary)],
+                             thresholds: [ChartThreshold(value: 16.7, color: .warning)],
+                             style: ChartStyle(minValue: 0, maxValue: domainMax,
+                                               gridLineCount: 4, lineWidth: 1.4,
+                                               contentInset: 4, background: .surfaceSunken))
+                    .frame(height: 98, minWidth: 0)
+                    .debugName("profiler-overview-chart")
+                Row(alignment: .center, spacing: 0) {
+                    Text(L("Recent Frames")).font(.caption).foregroundColor(.onSurfaceMuted)
+                    Spacer(minLength: 0)
+                    Text("0 – \(Int(domainMax)) ms").font(.caption).foregroundColor(.onSurfaceMuted)
+                }
+            }
+            .flex(1, shrink: 1, basis: 0)
+            .frame(minWidth: 0)
+
+            Column(alignment: .leading, spacing: 8) {
+                Row(alignment: .center, spacing: 8) {
+                    Text(L("Frame Health")).font(.label)
+                    Spacer(minLength: 0)
+                    Text("\(Int(health.budgetHitRate.rounded()))%")
+                        .font(.mono).foregroundColor(.success)
+                }
+                Row(alignment: .center, spacing: 0) {
+                    Box { EmptyView() }
+                        .background(.success)
+                        .flex(max(0.001, Float(health.budgetHitRate)), shrink: 1, basis: 0)
+                    Box { EmptyView() }
+                        .background(.surfaceVariant)
+                        .flex(max(0.001, 100 - Float(health.budgetHitRate)), shrink: 1, basis: 0)
+                }
+                .frame(height: 6).cornerRadius(3).clipped()
+                Row(alignment: .top, spacing: 6) {
+                    metric("CPU", developerProfilerFormatMs(stats.cpuWorkSeconds * 1000))
+                    metric("Present", developerProfilerFormatMs(stats.gpuPresentSeconds * 1000))
+                    metric(L("Draws"), "\(stats.drawCallCount)")
+                }
+                Divider()
+                Row(alignment: .center, spacing: 6) {
+                    Text(L("Average Work")).font(.caption).foregroundColor(.onSurfaceMuted)
+                    Spacer(minLength: 0)
+                    Text(developerProfilerFormatMs(health.averageWorkMs)).font(.mono)
+                }
+                Row(alignment: .center, spacing: 6) {
+                    Text(L("Over Budget")).font(.caption).foregroundColor(.onSurfaceMuted)
+                    Spacer(minLength: 0)
+                    Text("\(health.overBudgetCount) / \(health.sampleCount)").font(.mono)
+                }
+            }
+            .flex(0.65, shrink: 1, basis: 0)
+            .frame(minWidth: 0)
+            .debugName("profiler-overview-health")
+        }
+        .padding(horizontal: 12, vertical: 8)
+        .background(.surfaceSunken)
+        .clipped()
+    }
+
+    private func metric(_ label: String, _ value: String) -> some View {
+        Column(alignment: .leading, spacing: 3) {
+            Text(label).font(.caption).foregroundColor(.onSurfaceMuted)
+            Text(value).font(.label).foregroundColor(.onSurface)
+        }
+        .padding(horizontal: 6, vertical: 6)
+        .background(.surface)
+        .cornerRadius(4)
+        .flex(1, shrink: 1, basis: 0)
     }
 }
 
