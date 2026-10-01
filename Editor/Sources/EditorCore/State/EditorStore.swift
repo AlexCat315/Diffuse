@@ -38,6 +38,7 @@ public final class EditorStore: @unchecked Sendable {
         case gizmoSpace
         case viewportShadingMode
         case viewportShadowsEnabled
+        case viewportGridEnabled
         case viewportRenderScalePercent
         case viewportInteractionDownscaleEnabled
         case viewportRealtimeEnabled
@@ -181,6 +182,8 @@ public final class EditorStore: @unchecked Sendable {
             mark(.viewportShadingMode, old.viewportShadingMode, new.viewportShadingMode)
         case .setViewportShadowsEnabled:
             mark(.viewportShadowsEnabled, old.viewportShadowsEnabled, new.viewportShadowsEnabled)
+        case .setViewportGridEnabled:
+            mark(.viewportGridEnabled, old.viewportGridEnabled, new.viewportGridEnabled)
         case .setViewportRenderScalePercent:
             mark(.viewportRenderScalePercent, old.viewportRenderScalePercent, new.viewportRenderScalePercent)
         case .setViewportInteractionDownscale:
@@ -320,6 +323,7 @@ extension EditorStore {
     public var gizmoSpace: EditorGizmoSpace { read(.gizmoSpace, storage.gizmoSpace) }
     public var viewportShadingMode: EditorViewportShadingMode { read(.viewportShadingMode, storage.viewportShadingMode) }
     public var viewportShadowsEnabled: Bool { read(.viewportShadowsEnabled, storage.viewportShadowsEnabled) }
+    public var viewportGridEnabled: Bool { read(.viewportGridEnabled, storage.viewportGridEnabled) }
     public var viewportRenderScalePercent: Int { read(.viewportRenderScalePercent, storage.viewportRenderScalePercent) }
     public var viewportInteractionDownscaleEnabled: Bool {
         read(.viewportInteractionDownscaleEnabled, storage.viewportInteractionDownscaleEnabled)

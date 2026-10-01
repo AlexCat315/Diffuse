@@ -9,6 +9,127 @@ private let gpuSmokeEnabled = ProcessInfo.processInfo.environment["GUAVA_RUN_GPU
 
 @Suite("RenderBackendGPUSmoke", .serialized)
 struct RenderBackendGPUSmokeTests {
+    @Test("editor grid paints an empty viewport and survives the opaque cache",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the GPU test"),
+          arguments: [RenderSettings.ReplacementStage.r3ViewportInterop, .r4LightingPBRShadow, .r5PostProcess])
+    func editorGridPaintsEmptyViewport(stage: RenderSettings.ReplacementStage) throws {
+        let backend = WGPUBackend(config: WGPUDeviceConfig(validationEnabled: true))
+        try backend.initialize()
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer { renderer = nil; try? backend.shutdown() }
+        let activeRenderer = try #require(renderer)
+        activeRenderer.initialize()
+        let width: UInt32 = 640
+        let height: UInt32 = 384
+        var packet = RenderPacket(
+            frameIndex: 0, deltaTime: 1.0 / 60.0,
+            drawableSize: RenderDrawableSize(width: width, height: height),
+            scene: RenderScene(camera: RenderCamera(eye: SIMD3<Float>(6, 5, 8), target: .zero), instances: []),
+            sceneSnapshot: SceneRuntimeSnapshot(entityCount: 0, revision: 0),
+            renderSettings: RenderSettings(stage: stage, enableFXAA: stage == .r5PostProcess,
+                                           enableOffscreenViewport: true),
+            simulationTimeSeconds: 0
+        )
+        activeRenderer.render(packet: packet)
+        let texture = try #require(activeRenderer.offscreenColorTexture)
+        let background = try readbackBGRA8(texture: texture, width: width, height: height, backend: backend)
+        packet.frameIndex += 1
+        packet.renderSettings.enableEditorGrid = true
+        activeRenderer.render(packet: packet)
+        #expect(activeRenderer.currentViewportSurfaceState().isValid)
+        #expect(activeRenderer.currentFrameStats().passDrawCallCounts[.editorGrid] == 1)
+        let pixels = try readbackBGRA8(texture: texture, width: width, height: height, backend: backend)
+        let changed = zip(pixels, background).filter { $0.distance(from: $1) > 12 }.map { $0.0 }
+        #expect(changed.count > 500)
+        #expect(changed.count { Int($0.r) > Int($0.b) + 30 } > 10)
+        #expect(changed.count { Int($0.b) > Int($0.r) + 30 } > 10)
+        if stage == .r4LightingPBRShadow {
+            try writeDebugPPMIfRequested(pixels: pixels, width: width, height: height,
+                                         environmentKey: "GUAVA_GRID_SMOKE_OUTPUT")
+        }
+        // Empty HDR views still participate in the opaque cache. Reusing its
+        // snapshot must retain the grid without compositing it twice.
+        packet.frameIndex += 1
+        activeRenderer.render(packet: packet)
+        let cached = try readbackBGRA8(texture: texture, width: width, height: height, backend: backend)
+        #expect(cached == pixels)
+        if stage != .r3ViewportInterop {
+            #expect(activeRenderer.lastFrameUsedOpaqueCache)
+            #expect(activeRenderer.currentFrameStats().passDrawCallCounts[.editorGrid] == nil)
+        }
+        if stage == .r5PostProcess {
+            packet.renderSettings.enableTAA = true
+            for _ in 0...WGPURenderer.taaCacheWarmupFrames {
+                packet.frameIndex += 1
+                activeRenderer.render(packet: packet)
+            }
+            let converged = try readbackBGRA8(texture: texture, width: width, height: height, backend: backend)
+            // TAA must not apply another grid layer on top of grid history.
+            #expect(zip(converged, pixels).allSatisfy { $0.distance(from: $1) <= 3 })
+            packet.frameIndex += 1
+            activeRenderer.render(packet: packet)
+            #expect(activeRenderer.lastFrameUsedOpaqueCache)
+            #expect(try readbackBGRA8(texture: texture, width: width, height: height, backend: backend) == converged)
+        }
+        // A resized viewport can use a larger existing allocation. Coordinates
+        // must follow the used region rather than the texture dimensions.
+        packet.frameIndex += 1
+        packet.drawableSize = RenderDrawableSize(width: 320, height: 192)
+        activeRenderer.render(packet: packet)
+        let resized = try readbackBGRA8(texture: texture, width: 320, height: 192, backend: backend)
+        #expect(resized.count { Int($0.b) > Int($0.r) + 30 } > 10)
+        #expect(activeRenderer.currentViewportSurfaceState().width == 320)
+        // Toggling off must invalidate the cached grid image.
+        packet.frameIndex += 1
+        packet.drawableSize = RenderDrawableSize(width: width, height: height)
+        packet.renderSettings.enableEditorGrid = false
+        packet.renderSettings.enableTAA = false
+        activeRenderer.render(packet: packet)
+        let hidden = try readbackBGRA8(texture: texture, width: width, height: height, backend: backend)
+        #expect(hidden == background)
+    }
+
+    @Test("editor grid is occluded by geometry and absent when looking away from the ground",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the GPU test"))
+    func editorGridDepthAndHorizon() throws {
+        let backend = WGPUBackend(config: WGPUDeviceConfig(validationEnabled: true))
+        try backend.initialize()
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer { renderer = nil; try? backend.shutdown() }
+        let activeRenderer = try #require(renderer)
+        activeRenderer.initialize()
+        var packet = RenderPacket(
+            frameIndex: 0, deltaTime: 1.0 / 60.0,
+            drawableSize: RenderDrawableSize(width: 128, height: 128),
+            scene: RenderScene(
+                camera: RenderCamera(eye: SIMD3<Float>(0, 8, 0), target: .zero, up: SIMD3<Float>(0, 0, -1)),
+                instances: [RenderInstance(meshIndex: 0,
+                    transform: translation(SIMD3<Float>(0, 1, 0)) * scale(SIMD3<Float>(4, 0.5, 4)))]
+            ),
+            sceneSnapshot: SceneRuntimeSnapshot(entityCount: 1, revision: 1),
+            renderSettings: RenderSettings(stage: .r3ViewportInterop, enableOffscreenViewport: true),
+            simulationTimeSeconds: 0
+        )
+        activeRenderer.render(packet: packet)
+        let texture = try #require(activeRenderer.offscreenColorTexture)
+        let baseline = try readbackBGRA8(texture: texture, width: 128, height: 128, backend: backend)
+        packet.renderSettings.enableEditorGrid = true
+        activeRenderer.render(packet: packet)
+        let occluded = try readbackBGRA8(texture: texture, width: 128, height: 128, backend: backend)
+        for y in 54..<74 {
+            for x in 54..<74 { #expect(occluded[y * 128 + x] == baseline[y * 128 + x]) }
+        }
+        #expect(zip(occluded, baseline).count { $0 != $1 } > 100)
+        packet.scene.instances = []
+        packet.scene.camera = RenderCamera(eye: SIMD3<Float>(0, 5, 0),
+                                          target: SIMD3<Float>(0, 6, 0), up: SIMD3<Float>(0, 0, -1))
+        activeRenderer.render(packet: packet)
+        let sky = try readbackBGRA8(texture: texture, width: 128, height: 128, backend: backend)
+        packet.renderSettings.enableEditorGrid = false
+        activeRenderer.render(packet: packet)
+        #expect(try readbackBGRA8(texture: texture, width: 128, height: 128, backend: backend) == sky)
+    }
+
     @Test("GPU particle event records convert to runtime particle events")
     func gpuParticleEventRecordsConvertToRuntimeParticleEvents() {
         let snapshot = GPUParticleSimulationEventSnapshot(

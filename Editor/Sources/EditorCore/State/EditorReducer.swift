@@ -23,6 +23,7 @@ public enum EditorAction: Sendable {
     case setGizmoSpace(EditorGizmoSpace)
     case setViewportShadingMode(EditorViewportShadingMode)
     case setViewportShadowsEnabled(Bool)
+    case setViewportGridEnabled(Bool)
     case setViewportRenderScalePercent(Int)
     case setViewportInteractionDownscale(Bool)
     case setViewportRealtime(Bool)
@@ -134,6 +135,9 @@ public enum EditorReducer {
 
         case let .setViewportShadowsEnabled(enabled):
             state.viewportShadowsEnabled = enabled
+
+        case let .setViewportGridEnabled(enabled):
+            state.viewportGridEnabled = enabled
 
         case let .setViewportRenderScalePercent(percent):
             state.viewportRenderScalePercent = EditorState.sanitizedRenderScalePercent(percent)
