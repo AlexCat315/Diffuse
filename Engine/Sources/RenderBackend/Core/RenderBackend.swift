@@ -35,6 +35,9 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var shadowBindGroupLayout: GPUBindGroupLayout?
     private var shadowPipelineLayout: GPUPipelineLayout?
     var skyboxPipeline: GPURenderPipeline?
+    var editorGridPipelineLDR: GPURenderPipeline?
+    var editorGridPipelineHDR: GPURenderPipeline?
+    var editorGridUniformBuffer: GPUBuffer?
     var tonemapPipeline: GPURenderPipeline?
     var bloomPipeline: GPURenderPipeline?
     var inkPaperPostPipeline: GPURenderPipeline?
@@ -461,6 +464,18 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             hdr: usesHDRFrameGraph
                         )
 
+                    case .editorGrid:
+                        try encodeEditorGridPass(
+                            encoder: encoder,
+                            colorView: usesHDRFrameGraph ? hdrCurrent?.view ?? colorTarget.view : colorTarget.view,
+                            depthView: depthView,
+                            camera: packet.scene.camera,
+                            viewProjection: cameraMatrices.viewProjection,
+                            drawableSize: packet.drawableSize,
+                            hdr: usesHDRFrameGraph
+                        )
+                        passDrawCallCount = 1
+
                     case .outline:
                         let outlinePipeline = try ensureOutlinePipeline(hdr: usesHDRFrameGraph)
                         passDrawCallCount = try encodeOutlinePass(
@@ -609,7 +624,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                     cpuBaseEncodeNS &+= passElapsedNS
                 case .inkPaperPost, .ssao, .ssr, .taa, .bloom, .tonemap, .fxaa:
                     cpuPostProcessEncodeNS &+= passElapsedNS
-                case .particles, .outline, .depthPrepass, .shadowPass, .viewportResolve:
+                case .editorGrid, .particles, .outline, .depthPrepass, .shadowPass, .viewportResolve:
                     break
                 }
             }

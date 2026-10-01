@@ -27,6 +27,7 @@ struct ViewportPanel: View {
             let gizmoSpace = store.gizmoSpace
             let shadingMode = store.viewportShadingMode
             let shadowsEnabled = store.viewportShadowsEnabled
+            let gridEnabled = store.viewportGridEnabled
             let renderScalePercent = store.viewportRenderScalePercent
             let interactionDownscaleEnabled = store.viewportInteractionDownscaleEnabled
             let realtimeEnabled = store.viewportRealtimeEnabled
@@ -91,6 +92,7 @@ struct ViewportPanel: View {
                                             gizmoSpace: gizmoSpace,
                                             shadingMode: shadingMode,
                                             shadowsEnabled: shadowsEnabled,
+                                            gridEnabled: gridEnabled,
                                             renderScalePercent: renderScalePercent,
                                             interactionDownscaleEnabled: interactionDownscaleEnabled,
                                             realtimeEnabled: realtimeEnabled,
@@ -112,6 +114,9 @@ struct ViewportPanel: View {
                                             },
                                             onToggleShadows: {
                                                 app.setViewportShadowsEnabled(!shadowsEnabled)
+                                            },
+                                            onToggleGrid: {
+                                                app.setViewportGridEnabled(!gridEnabled)
                                             },
                                             onSelectRenderScale: { percent in
                                                 app.setViewportRenderScalePercent(percent)
@@ -1651,6 +1656,7 @@ private struct ViewportInfoBar: View {
     let gizmoSpace: EditorGizmoSpace
     let shadingMode: EditorViewportShadingMode
     let shadowsEnabled: Bool
+    let gridEnabled: Bool
     let renderScalePercent: Int
     let interactionDownscaleEnabled: Bool
     let realtimeEnabled: Bool
@@ -1661,6 +1667,7 @@ private struct ViewportInfoBar: View {
     let onSelectGizmoSpace: (EditorGizmoSpace) -> Void
     let onSelectShadingMode: (EditorViewportShadingMode) -> Void
     let onToggleShadows: () -> Void
+    let onToggleGrid: () -> Void
     let onSelectRenderScale: (Int) -> Void
     let onToggleInteractionDownscale: () -> Void
     let onToggleRealtime: () -> Void
@@ -1736,6 +1743,12 @@ private struct ViewportInfoBar: View {
             Row(alignment: .center, spacing: 5) {
                 ViewModeSelector(shadingMode: shadingMode,
                                  onSelect: onSelectShadingMode)
+                Button(icon: .resource(ViewportToolbarIcon.wireframe.resource),
+                       size: 15,
+                       isSelected: gridEnabled,
+                       tooltip: L("Reference Grid"),
+                       action: onToggleGrid)
+                    .buttonStyle(.toggle)
                 Button(icon: .resource(ViewportToolbarIcon.shadows.resource),
                            size: 15,
                            isSelected: shadowsEnabled,
