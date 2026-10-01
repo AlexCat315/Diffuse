@@ -1,4 +1,4 @@
-﻿#if canImport(CoreGraphics)
+#if canImport(CoreGraphics)
 import CoreGraphics
 #endif
 import EngineKernel
@@ -12,6 +12,10 @@ extension TextField {
         /// outside recompose, so they must invalidate the node's cached layer
         /// themselves (`LayerAwareNodeRenderer` replays clean layers verbatim).
         weak var hostNode: Node?
+        var history = TextEditHistory()
+        var editDepth = 0
+        var editBefore: TextEditHistory.Snapshot?
+        var editKind: TextEditHistory.Kind = .atomic
         /// Cursor index measured in `Character` units from the start of `text`.
         var cursorIndex: Int = 0
         /// Selection anchor in `Character` units; `nil` means no selection.
@@ -43,19 +47,8 @@ extension TextField {
         var visibleTextHeight: Float = 0
         /// Total laid-out content height from the last render.
         var contentHeight: Float = 0
-
-        struct EditSnapshot {
-            let text: String
-            let cursor: Int
-            let anchor: Int?
-        }
-        var undoHistory: [EditSnapshot] = []
-        var redoHistory: [EditSnapshot] = []
-        var lastKnownText: String?
-        var lastInsertionTime: Double = 0
-        var lastInsertionCursor: Int? = nil
-
-        func breakUndoGroup() { lastInsertionCursor = nil }
+        /// Manual scrolling stays put until a caret interaction requests reveal.
+        var needsCaretReveal = false
 
         func clearComposition() {
             compositionText = ""
@@ -97,100 +90,73 @@ extension TextField {
         return String(text[lower..<upper])
     }
 
-    func synchronizeHistory(_ state: FieldState) {
-        if let previous = state.lastKnownText, previous != text.wrappedValue {
-            state.undoHistory.removeAll()
-            state.redoHistory.removeAll()
-            state.breakUndoGroup()
-        }
-        state.lastKnownText = text.wrappedValue
-    }
-
-    func applyEdit(_ next: String, cursor: Int, state: FieldState, coalesceInsertion: Bool = false) {
-        synchronizeHistory(state)
-        let current = text.wrappedValue
-        guard next != current else { return }
-        let now = TimingTrace.now()
-        let merge = coalesceInsertion && state.selectionAnchor == nil
-            && state.lastInsertionCursor == state.cursorIndex
-            && now - state.lastInsertionTime < 0.75
-        if !merge {
-            state.undoHistory.append(.init(text: current, cursor: state.cursorIndex, anchor: state.selectionAnchor))
-            if state.undoHistory.count > 100 { state.undoHistory.removeFirst() }
-        }
-        state.redoHistory.removeAll()
-        text.wrappedValue = next
-        state.lastKnownText = text.wrappedValue
-        state.cursorIndex = cursor
-        state.selectionAnchor = nil
-        state.preferredCaretX = nil
-        state.clearComposition()
-        state.lastInsertionTime = now
-        state.lastInsertionCursor = coalesceInsertion ? cursor : nil
-        recordCaretActivity(state)
-        onChange?(next)
-    }
-
-    func restoreEdit(state: FieldState, redo: Bool) {
-        synchronizeHistory(state)
-        state.breakUndoGroup()
-        let snapshot = redo ? state.redoHistory.popLast() : state.undoHistory.popLast()
-        guard let snapshot else { return }
-        let current = FieldState.EditSnapshot(text: text.wrappedValue, cursor: state.cursorIndex, anchor: state.selectionAnchor)
-        if redo { state.undoHistory.append(current) } else { state.redoHistory.append(current) }
-        text.wrappedValue = snapshot.text
-        state.lastKnownText = text.wrappedValue
-        state.cursorIndex = snapshot.cursor
-        state.selectionAnchor = snapshot.anchor
-        state.preferredCaretX = nil
-        state.clearComposition()
-        normalizeIndices(state)
-        recordCaretActivity(state)
-        onChange?(snapshot.text)
-    }
-
+    /// Delete the active selection (if any). Returns true when a selection
+    /// was deleted; the caller should then skip its own delete-one logic.
     @discardableResult
     func deleteSelection(state: FieldState) -> Bool {
+        beginEdit(state, kind: .deletion)
+        defer { endEdit(state) }
         guard let range = selectionRange(state) else { return false }
-        var current = text.wrappedValue
-        let lower = current.index(current.startIndex, offsetBy: range.lowerBound)
-        let upper = current.index(current.startIndex, offsetBy: range.upperBound)
-        current.removeSubrange(lower..<upper)
-        applyEdit(current, cursor: range.lowerBound, state: state)
+        var currentText = text.wrappedValue
+        let lower = currentText.index(currentText.startIndex, offsetBy: range.lowerBound)
+        let upper = currentText.index(currentText.startIndex, offsetBy: range.upperBound)
+        currentText.removeSubrange(lower..<upper)
+        text.wrappedValue = currentText
+        state.cursorIndex = range.lowerBound
+        state.selectionAnchor = nil
+        state.preferredCaretX = nil
+        recordCaretActivity(state)
+        onChange?(currentText)
         return true
     }
 
-    /// Replacing a selection is one transaction, including paste and IME commits.
+    /// Replace the active selection with `incoming`, or insert at the cursor
+    /// when no selection exists. Both paths leave the cursor at the end of
+    /// the inserted text and clear any selection.
     func insertReplacingSelection(_ incoming: String, state: FieldState) {
+        let selection = selectionRange(state)
+        let typing = incoming.count == 1 && incoming != "\n" && selection == nil && !state.isComposing
+        beginEdit(state, kind: typing ? .typing : .atomic)
+        defer { endEdit(state) }
         guard !incoming.isEmpty else { return }
-        normalizeIndices(state)
-        var current = text.wrappedValue
-        let range = selectionRange(state)
-        let cursor = range?.lowerBound ?? state.cursorIndex
-        if let range {
-            let lower = current.index(current.startIndex, offsetBy: range.lowerBound)
-            let upper = current.index(current.startIndex, offsetBy: range.upperBound)
-            current.removeSubrange(lower..<upper)
-        }
-        let remaining = maxLength.map { max(0, $0 - current.count) } ?? incoming.count
-        let insertion = String(incoming.prefix(remaining))
+        var currentText = text.wrappedValue
+        let cursor = selection?.lowerBound ?? clamp(state.cursorIndex, 0, currentText.count)
+        let removed = selection?.count ?? 0
+        let capacity = maxLength.map { max(0, $0 - (currentText.count - removed)) }
+        let insertion = capacity.map { String(incoming.prefix($0)) } ?? incoming
         guard !insertion.isEmpty else { return }
-        current.insert(contentsOf: insertion, at: current.index(current.startIndex, offsetBy: cursor))
-        applyEdit(current, cursor: cursor + insertion.count, state: state,
-                  coalesceInsertion: range == nil && !state.isComposing && insertion.count == 1 && insertion != "\n")
+        let lower = currentText.index(currentText.startIndex, offsetBy: cursor)
+        let upper = currentText.index(lower, offsetBy: removed)
+        currentText.replaceSubrange(lower..<upper, with: insertion)
+        state.clearComposition()
+        text.wrappedValue = currentText
+        state.cursorIndex = cursor + insertion.count
+        state.selectionAnchor = nil
+        state.preferredCaretX = nil
+        recordCaretActivity(state)
+        onChange?(currentText)
     }
 
+    /// Empty the field, fire `onClear`, and reset selection/cursor state.
+    /// Invoked by both the trailing-edge clear icon and external callers.
     func performClear(state: FieldState) {
+        beginEdit(state, kind: .atomic)
+        defer { endEdit(state) }
         guard !text.wrappedValue.isEmpty else { return }
-        applyEdit("", cursor: 0, state: state)
+        text.wrappedValue = ""
+        state.cursorIndex = 0
+        state.selectionAnchor = nil
+        state.preferredCaretX = nil
+        state.clearComposition()
+        recordCaretActivity(state)
         onClear?()
+        onChange?("")
     }
 
     /// Move the cursor to `target`. When `extendSelection` is true an anchor
     /// is established (if missing) so the move grows / shrinks a selection;
     /// otherwise any existing selection is collapsed.
     func moveCursor(to target: Int, extendSelection: Bool, state: FieldState) {
-        state.breakUndoGroup()
         let count = text.wrappedValue.count
         let bounded = clamp(target, 0, count)
         if extendSelection {
@@ -209,7 +175,6 @@ extension TextField {
                     extendSelection: Bool,
                     state: FieldState,
                     preferredCaretX: Float?) {
-        state.breakUndoGroup()
         let count = text.wrappedValue.count
         let bounded = clamp(target, 0, count)
         if extendSelection {
@@ -228,6 +193,7 @@ extension TextField {
     /// phase and invalidate the field's cached render layer so the change is
     /// visible on the very next frame (frames may be event-driven).
     func recordCaretActivity(_ state: FieldState) {
+        state.needsCaretReveal = true
         state.lastCaretActivity = TimingTrace.now()
         state.hostNode?.markRenderDirty(reason: .styleSet(field: "textFieldCaret"))
         notifyCaretChange(state)

@@ -14,16 +14,19 @@ public struct ResizableTextArea: View {
     let onSubmit: (() -> Void)?
     let onFocus: (() -> Void)?
     let onBlur: (() -> Void)?
+    let editHistory: TextEditHistory?
     @State private var height: Float
 
     public init(_ placeholder: String = "", text: Binding<String>, minHeight: Float = 96,
                 maxHeight: Float = 360, disabled: Bool = false,
+                editHistory: TextEditHistory? = nil,
                 onSubmit: (() -> Void)? = nil, onFocus: (() -> Void)? = nil, onBlur: (() -> Void)? = nil) {
         self.placeholder = placeholder
         self.text = text
         self.minHeight = max(32, minHeight)
         self.maxHeight = max(self.minHeight, maxHeight)
         self.disabled = disabled
+        self.editHistory = editHistory
         self.onSubmit = onSubmit
         self.onFocus = onFocus
         self.onBlur = onBlur
@@ -32,6 +35,7 @@ public struct ResizableTextArea: View {
     public var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             TextField(placeholder, text: text, axis: .vertical, maxVisibleLines: 128,
+                      showsLineNumbers: true, indentationWidth: 2, editHistory: editHistory,
                       disabled: disabled, onSubmit: onSubmit, onFocus: onFocus, onBlur: onBlur)
                 .font(.mono)
                 .frame(height: height)

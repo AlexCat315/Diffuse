@@ -101,10 +101,12 @@ struct HierarchyPanel: View {
                 }
             )
             let headerActions: [MenuEntry] = [
-                .item(MenuItem(id: "toggle-expansion",
-                               title: currentExpandedKeys.isEmpty ? L("Expand All") : L("Collapse All"),
+                .item(MenuItem(id: "expand-all", title: L("Expand All"),
                                isEnabled: !parentKeys.isEmpty,
-                               action: { replaceExpandedKeys(currentExpandedKeys.isEmpty ? parentKeys : []) })),
+                               action: { replaceExpandedKeys(parentKeys) })),
+                .item(MenuItem(id: "collapse-all", title: L("Collapse All"),
+                               isEnabled: !currentExpandedKeys.isEmpty,
+                               action: { replaceExpandedKeys([]) })),
                 .separator("tree-navigation"),
             ] + hierarchyActionEntries(
                 selectedIDs: selectedIDs, roots: hierarchyRoots,
@@ -247,24 +249,11 @@ struct HierarchyPanel: View {
                                                commitRename(entityID: entity.id)
                                            },
                                            onCancelRename: cancelRename)
-                        .contextMenu(onOpen: {
-                            if !store.selectedEntityIDs.contains(entity.id) {
-                                store.dispatch(.setSelectedEntity(entity.id))
-                            } else {
-                                store.dispatch(.setPrimarySelectedEntity(entity.id))
-                            }
-                        }, entries: {
-                            let ids = store.selectedEntityIDs
-                            return hierarchyActionEntries(
-                                selectedIDs: ids, roots: scene.roots,
-                                isAuthoringEnabled: EditorSceneAuthoringPolicy.canEditScene(during: store.playbackState),
-                                containsLockedSelection: ids.contains { scene.isEntityLocked($0) },
-                                containsRenderableSelection: ids.contains { scene.hierarchyHasRenderableContent($0) },
-                                allSelectionHidden: ids.allSatisfy { !scene.isHierarchyVisible($0) },
-                                allSelectionLocked: ids.allSatisfy { scene.isEntityLocked($0) },
-                                canMoveSelectionToRoot: HierarchyPanelModel.canMoveSelectionToRoot(ids, in: scene.roots)
-                            )
-                        })
+                            .contextMenu(onOpen: {
+                                if store.selectedEntityIDs.contains(entity.id) {
+                                    store.dispatch(.setPrimarySelectedEntity(entity.id))
+                                } else { store.dispatch(.setSelectedEntity(entity.id)) }
+                            }, entries: { contextEntries(for: entity.id, roots: hierarchyRoots, enabled: isAuthoringEnabled) })
                     }
                     .padding(horizontal: 4, vertical: 4)
                     .flex()
@@ -273,6 +262,16 @@ struct HierarchyPanel: View {
             }
             .frame(minWidth: 0, minHeight: 0)
         }
+    }
+
+    private func contextEntries(for entityID: UInt64, roots: [EditorSceneNode], enabled: Bool) -> [MenuEntry] {
+        let ids: Set<UInt64> = store.selectedEntityIDs.contains(entityID) ? store.selectedEntityIDs : [entityID]
+        return hierarchyActionEntries(selectedIDs: ids, roots: roots, isAuthoringEnabled: enabled,
+            containsLockedSelection: ids.contains { scene.isEntityLocked($0) },
+            containsRenderableSelection: ids.contains { scene.hierarchyHasRenderableContent($0) },
+            allSelectionHidden: ids.allSatisfy { !scene.isHierarchyVisible($0) },
+            allSelectionLocked: ids.allSatisfy { scene.isEntityLocked($0) },
+            canMoveSelectionToRoot: HierarchyPanelModel.canMoveSelectionToRoot(ids, in: roots))
     }
 
     private func updateSearchQuery(_ value: String) {
@@ -796,20 +795,21 @@ private struct HierarchyPanelHeader: View {
     }
 
     private func actionLabel() -> some View {
-        Text("···")
-        .font(.bodyStrong)
-        .foregroundColor(.onSurfaceMuted)
+        Box(direction: .row, alignment: .center) {
+            Text("···").font(.bodyStrong).foregroundColor(.onSurfaceVariant)
+        }
         .frame(width: 24, height: 24)
         .background(isActionsPresented ? .surfaceVariant : .surface)
         .cornerRadius(4)
     }
 
     private func createLabel() -> some View {
-        Text("+")
-        .font(.bodyStrong)
-        .foregroundColor(isAuthoringEnabled ? .accent : .onSurfaceMuted)
+        Box(direction: .row, alignment: .center) {
+            Text("+").font(.bodyStrong)
+                .foregroundColor(isAuthoringEnabled ? .accent : .onSurfaceMuted)
+        }
         .frame(width: 24, height: 24)
-        .background(.surfaceSunken)
+        .background(isCreatePresented ? .stateLayerSelected : .surface)
         .cornerRadius(4)
     }
 }

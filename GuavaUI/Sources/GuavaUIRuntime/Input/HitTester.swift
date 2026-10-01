@@ -34,7 +34,7 @@ public struct HitTester {
     private static func walk(node: Node,
                              pointInParent: CGPoint,
                              path: inout [Node]) -> HitResult? {
-        guard node.isInteractionEnabled else { return nil }
+        guard node.allowsHitTesting, node.isInteractionEnabled else { return nil }
         // Convert into this node's local coordinate space.
         let local = CGPoint(x: pointInParent.x - node.frame.origin.x,
                             y: pointInParent.y - node.frame.origin.y)

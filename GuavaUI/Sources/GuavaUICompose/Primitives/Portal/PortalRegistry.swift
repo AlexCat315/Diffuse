@@ -1,4 +1,4 @@
-﻿#if canImport(CoreGraphics)
+#if canImport(CoreGraphics)
 import CoreGraphics
 #endif
 import Foundation
@@ -7,10 +7,9 @@ import GuavaUIRuntime
 public struct PortalEntry: Identifiable {
     public let id: String
     public var position: CGPoint
-    public var anchorFrame: CGRect? = nil
-    public var constrainToWindow: Bool = true
     public var width: Float?
     public var content: AnyView
+    public var fillsWindow: Bool = false
 
     public init(id: String,
                 position: CGPoint,
@@ -33,15 +32,16 @@ public struct PortalEntry: Identifiable {
 /// `withCurrent`) and entry owners remember their store for cleanup.
 public final class PortalStore {
     private var storage: [String: PortalEntry] = [:]
-    private var preferredPositions: [String: CGPoint] = [:]
     private var slotNodes: [String: WeakPortalSlotNode] = [:]
     private var observers: [UUID: (Int) -> Void] = [:]
     private var currentRevision: Int = 0
+    private var presentationOrder: [String] = []
+    private var dismissals: [String: (anchor: () -> CGRect, dismiss: () -> Void)] = [:]
 
     public init() {}
 
     public var entries: [PortalEntry] {
-        storage.values.sorted { $0.id < $1.id }
+        presentationOrder.compactMap { storage[$0] }
     }
 
     public var revision: Int { currentRevision }
@@ -50,34 +50,22 @@ public final class PortalStore {
     public func register(id: String = UUID().uuidString,
                          position: CGPoint,
                          width: Float? = nil,
-                         constrainToWindow: Bool = true,
                          content: AnyView) -> String {
-        preferredPositions[id] = position
-        var entry = PortalEntry(id: id, position: position, width: width, content: content)
-        entry.constrainToWindow = constrainToWindow
-        storage[id] = entry
+        if storage[id] == nil { presentationOrder.append(id) }
+        storage[id] = PortalEntry(id: id, position: position, width: width, content: content)
         notifyChanged()
         return id
     }
 
-    public func updatePosition(_ id: String, position: CGPoint, anchorFrame: CGRect? = nil) {
-        preferredPositions[id] = position
+    public func updatePosition(_ id: String, position: CGPoint) {
         guard var entry = storage[id] else { return }
-        entry.anchorFrame = anchorFrame
-        storage[id] = entry
-        fitPosition(id)
-    }
-
-    /// Fit overlays after layout using their measured size and the owning window.
-    func fitPosition(_ id: String) {
-        guard var entry = storage[id], entry.constrainToWindow, let desired = preferredPositions[id] else { return }
-        var position = desired
-        if let slot = slotNodes[id]?.node {
-            var root = slot
-            while let parent = root.parent { root = parent }
-            position = OverlayPlacement.fit(desired, size: slot.frame.size,
-                                             in: root.absoluteFrame, anchor: entry.anchorFrame)
-            if slot.frame.origin != position { slot.frame.origin = position }
+        if let slotNode = slotNodes[id]?.node {
+            if slotNode.frame.origin != position {
+                slotNode.frame = PortalPlacement.fit(position: position, size: slotNode.frame.size,
+                                                      in: portalWindowBounds(slotNode), anchor: anchor(for: id))
+            }
+        } else if slotNodes[id] != nil {
+            slotNodes.removeValue(forKey: id)
         }
         guard entry.position != position else { return }
         entry.position = position
@@ -85,19 +73,13 @@ public final class PortalStore {
         notifyChanged()
     }
 
+    func configure(_ id: String, fillsWindow: Bool) {
+        guard var entry = storage[id], entry.fillsWindow != fillsWindow else { return }
+        entry.fillsWindow = fillsWindow; storage[id] = entry; notifyChanged()
+    }
+    func anchor(for id: String) -> CGRect? { dismissals[id]?.anchor() }
     func frame(_ id: String) -> CGRect? { slotNodes[id]?.node?.absoluteFrame }
 
-    func updatePresentation(_ id: String, position: CGPoint, width: Float?,
-                            constrainToWindow: Bool, content: AnyView) {
-        guard var entry = storage[id] else { return }
-        preferredPositions[id] = position
-        entry.width = width
-        entry.constrainToWindow = constrainToWindow
-        entry.content = content
-        storage[id] = entry
-        notifyChanged()
-        fitPosition(id)
-    }
 
     public func updateContent(_ id: String, content: AnyView) {
         guard var entry = storage[id] else { return }
@@ -106,11 +88,19 @@ public final class PortalStore {
         notifyChanged()
     }
 
+    func updatePresentation(_ id: String, position: CGPoint, width: Float?, content: AnyView) {
+        guard var entry = storage[id] else { return }
+        entry.position = position; entry.width = width; entry.content = content
+        storage[id] = entry
+        notifyChanged()
+    }
+
     public func contains(_ id: String) -> Bool { storage[id] != nil }
 
     public func unregister(_ id: String) {
         guard storage.removeValue(forKey: id) != nil else { return }
-        preferredPositions.removeValue(forKey: id)
+        presentationOrder.removeAll { $0 == id }
+        dismissals.removeValue(forKey: id)
         slotNodes.removeValue(forKey: id)
         notifyChanged()
     }
@@ -118,9 +108,27 @@ public final class PortalStore {
     public func clear() {
         guard !storage.isEmpty else { return }
         storage.removeAll()
-        preferredPositions.removeAll()
+        presentationOrder.removeAll()
+        dismissals.removeAll()
         slotNodes.removeAll()
         notifyChanged()
+    }
+
+    func setDismissal(_ id: String, anchor: @escaping () -> CGRect,
+                      dismiss: @escaping () -> Void) {
+        dismissals[id] = (anchor, dismiss)
+    }
+
+    /// Observe the click before normal routing; leave it available to the
+    /// underlying control so switching menus works in one click.
+    func dismissOutside(_ point: CGPoint) {
+        let openIDs = presentationOrder.filter { dismissals[$0] != nil }
+        guard !openIDs.contains(where: { id in
+            dismissals[id]?.anchor().contains(point) == true
+                || slotNodes[id]?.node?.absoluteFrame.contains(point) == true
+        }) else { return }
+        let callbacks = openIDs.reversed().compactMap { dismissals[$0]?.dismiss }
+        for dismiss in callbacks { dismiss() }
     }
 
     @discardableResult
@@ -141,7 +149,7 @@ public final class PortalStore {
     private func notifyChanged() {
         currentRevision &+= 1
         let revision = currentRevision
-        for observer in observers.values {
+        for observer in Array(observers.values) {
             observer(revision)
         }
     }
@@ -220,8 +228,8 @@ final class PortalResource: NodeResource {
     func present(in resolvedStore: PortalStore? = nil,
                  position: CGPoint,
                  width: Float?,
-                 constrainToWindow: Bool = true,
-                 content: AnyView) {
+                 content: AnyView,
+                 fillsWindow: Bool = false) {
         let current = resolvedStore ?? PortalStoreHolder.current
         if let previous = store, previous !== current, let id = entryID {
             // The owning node moved to a different window's tree (e.g. a panel
@@ -231,20 +239,24 @@ final class PortalResource: NodeResource {
         }
         store = current
         if let id = entryID, current.contains(id) {
-            current.updatePresentation(id, position: position, width: width,
-                                       constrainToWindow: constrainToWindow, content: content)
+            current.updatePresentation(id, position: position, width: width, content: content)
         } else {
             entryID = current.register(position: position,
                                        width: width,
-                                       constrainToWindow: constrainToWindow,
                                        content: content)
         }
+        if let id = entryID { current.configure(id, fillsWindow: fillsWindow) }
+    }
+
+    func updatePosition(_ position: CGPoint) {
+        guard let id = entryID else { return }
+        store?.updatePosition(id, position: position)
     }
 
     var frame: CGRect? { entryID.flatMap { store?.frame($0) } }
 
-    func updatePosition(_ position: CGPoint, anchorFrame: CGRect? = nil) {
+    func setDismissal(anchor: @escaping () -> CGRect, dismiss: @escaping () -> Void) {
         guard let id = entryID else { return }
-        store?.updatePosition(id, position: position, anchorFrame: anchorFrame)
+        store?.setDismissal(id, anchor: anchor, dismiss: dismiss)
     }
 }

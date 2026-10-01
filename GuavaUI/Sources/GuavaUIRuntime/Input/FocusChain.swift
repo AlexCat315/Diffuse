@@ -8,71 +8,107 @@ import Foundation
 public final class FocusChain {
 
     public private(set) weak var focused: Node?
+    /// Pointer focus keeps keyboard routing without leaving a persistent ring.
+    public private(set) var isFocusVisible = true
 
     private final class Scope {
         weak var root: Node?
         weak var previous: Node?
         weak var previousTreeRoot: Node?
-        init(root: Node, previous: Node?) {
-            self.root = root
-            self.previous = previous
-            var ancestor = previous
-            while let parent = ancestor?.parent { ancestor = parent }
-            previousTreeRoot = ancestor
+        let visible: Bool
+        let restoresCommands: Bool
+        init(root: Node, previous: Node?, visible: Bool, restoresCommands: Bool) {
+            self.root = root; self.previous = previous; self.visible = visible; self.restoresCommands = restoresCommands
+            var treeRoot = previous
+            while let parent = treeRoot?.parent { treeRoot = parent }
+            previousTreeRoot = treeRoot
         }
     }
     private var scopes: [Scope] = []
-    public var modalRoot: Node? { scopes.last?.root }
+    private let registrar = ObservableStateRegistrar()
+    public var activeScopeRoot: Node? { scopes.last?.root }
+    public var hasModalScope: Bool { scopes.contains { !$0.restoresCommands && $0.root != nil } }
+    public var modalRoot: Node? { scopes.last(where: { !$0.restoresCommands })?.root }
 
     public init() {}
 
-    public func contains(_ node: Node, in root: Node) -> Bool {
-        var cursor: Node? = node
-        while let current = cursor {
-            if current === root { return true }
-            cursor = current.parent
+    /// Menus keep text editing commands directed at the control they cover.
+    public var commandTarget: Node? {
+        registrar.access("focus")
+        var target = focused
+        for scope in scopes.reversed() {
+            guard scope.restoresCommands else { break }
+            target = scope.previous
         }
+        return target
+    }
+
+    public func permitsInput(_ node: Node) -> Bool {
+        if let active = scopes.last, active.restoresCommands, let root = active.root,
+           isDescendant(node, of: root) { return true }
+        guard let root = scopes.last(where: { !$0.restoresCommands })?.root else { return true }
+        return isDescendant(node, of: root)
+    }
+
+    public func permitsKeyboardInput(_ node: Node) -> Bool {
+        guard let root = activeScopeRoot else { return true }
+        return isDescendant(node, of: root)
+    }
+
+    public func pushScope(_ root: Node, restoresCommands: Bool = false) {
+        guard !scopes.contains(where: { $0.root === root }) else { return }
+        scopes.append(Scope(root: root, previous: focused, visible: isFocusVisible, restoresCommands: restoresCommands))
+        focus(focusables(in: root).first ?? root)
+    }
+
+    public func settleScope(_ root: Node) {
+        guard activeScopeRoot === root else { return }
+        if focused == nil || focused === root {
+            let candidates = focusables(in: root).filter { $0 !== root }
+            if let first = candidates.first(where: { $0.attachments[TextInputAttachmentKey.areaResolver] != nil }) ?? candidates.first { focus(first) }
+        }
+    }
+
+    public func popScope(_ root: Node) {
+        guard let index = scopes.firstIndex(where: { $0.root === root }) else { return }
+        let shouldRestore = focused == nil || focused.map { isDescendant($0, of: root) } == true
+        let scope = scopes.remove(at: index)
+        // If an outer scope disappears first, transfer its restoration target
+        // to the next scope rather than retaining a detached modal control.
+        if index < scopes.count {
+            if let previous = scopes[index].previous, isDescendant(previous, of: root) {
+                scopes[index].previous = scope.previous
+                scopes[index].previousTreeRoot = scope.previousTreeRoot
+            }
+            return
+        }
+        if !shouldRestore, let focused, focused.parent != nil, permitsInput(focused) { return }
+        if let previous = scope.previous, let treeRoot = scope.previousTreeRoot,
+           isDescendant(previous, of: treeRoot), previous.parent != nil,
+           previous.isFocusable, previous.acceptsSubtreeInput, permitsInput(previous) {
+            focus(previous, visible: scope.visible)
+        } else if let active = activeScopeRoot {
+            focus(focusables(in: active).first ?? active)
+        } else { focus(nil) }
+    }
+
+    private func isDescendant(_ node: Node, of root: Node) -> Bool {
+        var current: Node? = node
+        while let candidate = current { if candidate === root { return true }; current = candidate.parent }
         return false
     }
 
-    public func beginModal(_ root: Node) {
-        guard !scopes.contains(where: { $0.root === root }) else { return }
-        scopes.append(Scope(root: root, previous: focused))
-        if let focused, !contains(focused, in: root) { focus(nil) }
-    }
-
-    public func endModal(_ root: Node) {
-        guard let index = scopes.firstIndex(where: { $0.root === root }) else { return }
-        let scope = scopes.remove(at: index)
-        guard index == scopes.count else { return }
-        if let previous = scope.previous, let treeRoot = scope.previousTreeRoot,
-           contains(previous, in: treeRoot), previous.isFocusable {
-            focus(previous)
-        } else {
-            focus(nil)
-            ensureModalFocus()
+    public func focus(_ node: Node?, visible: Bool = true) {
+        if let node, !permitsInput(node) || !node.acceptsSubtreeInput { return }
+        let visibilityChanged = isFocusVisible != visible
+        isFocusVisible = visible
+        guard focused !== node else {
+            if visibilityChanged { notifyFocusChange(for: node, isFocused: true) }
+            return
         }
-    }
-
-    public func ensureModalFocus() {
-        guard let root = modalRoot else { return }
-        if let focused, contains(focused, in: root), focused.isFocusable { return }
-        let candidates = focusables(in: root)
-        focus(candidates.first { $0.attachments[TextInputAttachmentKey.focusChangeHandler] != nil } ?? candidates.first)
-    }
-
-    public func focus(_ node: Node?) {
-        if let node {
-            var cursor: Node? = node
-            while let current = cursor {
-                guard current.isInteractionEnabled else { return }
-                cursor = current.parent
-            }
-        }
-        if let node, let root = modalRoot, !contains(node, in: root) { return }
-        guard focused !== node else { return }
         let previous = focused
         focused = node
+        registrar.invalidate("focus")
         notifyFocusChange(for: previous, isFocused: false)
         notifyFocusChange(for: node, isFocused: true)
     }
@@ -81,7 +117,7 @@ public final class FocusChain {
     /// Returns the node that received focus, or nil if no focusable nodes exist.
     @discardableResult
     public func focusNext(in root: Node) -> Node? {
-        let chain = focusables(in: modalRoot ?? root)
+        let chain = focusables(in: activeScopeRoot ?? root)
         guard !chain.isEmpty else {
             focus(nil)
             return nil
@@ -99,7 +135,7 @@ public final class FocusChain {
 
     @discardableResult
     public func focusPrevious(in root: Node) -> Node? {
-        let chain = focusables(in: modalRoot ?? root)
+        let chain = focusables(in: activeScopeRoot ?? root)
         guard !chain.isEmpty else {
             focus(nil)
             return nil
@@ -119,14 +155,17 @@ public final class FocusChain {
         focus(nil)
     }
 
-    /// Nil means the focused control does not own text history; false means it
-    /// owns history but cannot perform this command (including read-only input).
+    public func contains(_ node: Node, in root: Node) -> Bool { isDescendant(node, of: root) }
+    public func beginModal(_ root: Node) { pushScope(root) }
+    public func endModal(_ root: Node) { popScope(root) }
+    public func ensureModalFocus() {
+        if let root = activeScopeRoot { settleScope(root) }
+    }
+
     public func textEditAvailability(_ command: TextEditCommand) -> Bool? {
         textEditActions?.canPerform(command)
     }
 
-    /// Returns true when text input owns the command, even with empty history,
-    /// so callers do not accidentally undo unrelated scene changes.
     @discardableResult
     public func performTextEdit(_ command: TextEditCommand) -> Bool {
         guard let actions = textEditActions else { return false }
@@ -135,14 +174,8 @@ public final class FocusChain {
     }
 
     private var textEditActions: TextEditActions? {
-        guard let focused else { return nil }
-        if let root = modalRoot, !contains(focused, in: root) { return nil }
-        var cursor: Node? = focused
-        while let node = cursor {
-            guard node.isInteractionEnabled else { return nil }
-            cursor = node.parent
-        }
-        return focused.attachments[TextInputAttachmentKey.editActions] as? TextEditActions
+        guard let target = commandTarget, target.acceptsSubtreeInput, permitsInput(target) else { return nil }
+        return target.attachments[TextInputAttachmentKey.editActions] as? TextEditActions
     }
 
     // MARK: - Internal
@@ -154,7 +187,7 @@ public final class FocusChain {
     }
 
     private func collect(node: Node, into out: inout [Node]) {
-        guard node.isInteractionEnabled else { return }
+        guard node.acceptsSubtreeInput else { return }
         if node.isFocusable { out.append(node) }
         for c in node.children { collect(node: c, into: &out) }
     }

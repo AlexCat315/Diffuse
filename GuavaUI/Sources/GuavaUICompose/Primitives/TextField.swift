@@ -8,8 +8,10 @@ import GuavaUIRuntime
 /// vertical axis accepts explicit newline insertion and grows in height to fit
 /// those lines.
 ///
-/// Editing history and selection live on the retained surface node. Primary-Z
-/// and Primary-Shift-Z undo/redo text before application shortcuts run.
+/// v1 limitations:
+/// - State (cursor index, selection anchor, scroll offset) lives in a
+///   captured reference and is lost on recompose; an explicit `@State`
+///   cursor is a Phase 6.6 task.
 /// - Reads from `TextEnvironment` for shaping; without one installed the
 ///   field still accepts input but renders no glyphs.
 public struct TextField: View {
@@ -33,6 +35,9 @@ public struct TextField: View {
     public let axis: Axis
     public let maxVisibleLines: Int
     public let showsLineNumbers: Bool
+    /// Opt-in code editing: Tab/Shift-Tab indent lines and Return preserves indentation.
+    public let indentationWidth: Int?
+    public let editHistory: TextEditHistory?
     public let lineNumberColor: Color?
     /// Gutter background behind the line numbers. `nil` falls back to the
     /// theme's `surfaceVariant`, which suits light inputs; code editors on a
@@ -64,6 +69,8 @@ public struct TextField: View {
     /// where the input must be immediately keyboard-ready after insertion.
     public let focusRequestID: AnyHashable?
     public let onSubmit: (() -> Void)?
+    /// Gives composite controls first refusal for domain-specific keys.
+    public let onKeyDown: ((KeyEvent) -> Bool)?
     public let onCancel: (() -> Void)?
     public let onChange: ((String) -> Void)?
     /// Pointer resting position inside the field, reported as the pointer moves
@@ -86,6 +93,8 @@ public struct TextField: View {
                 axis: Axis = .horizontal,
                 maxVisibleLines: Int = 6,
                 showsLineNumbers: Bool = false,
+                indentationWidth: Int? = nil,
+                editHistory: TextEditHistory? = nil,
                 lineNumberColor: Color? = nil,
                 lineNumberGutterColor: Color? = nil,
                 syntaxColorAtUTF8Offset: ((String, Int) -> Color?)? = nil,
@@ -102,6 +111,7 @@ public struct TextField: View {
                 append: String? = nil,
                 focusRequestID: AnyHashable? = nil,
                 onSubmit: (() -> Void)? = nil,
+                onKeyDown: ((KeyEvent) -> Bool)? = nil,
                 onCancel: (() -> Void)? = nil,
                 onChange: ((String) -> Void)? = nil,
                 onHoverChange: ((TextFieldHoverAnchor?) -> Void)? = nil,
@@ -118,6 +128,8 @@ public struct TextField: View {
         self.axis = axis
         self.maxVisibleLines = max(1, maxVisibleLines)
         self.showsLineNumbers = showsLineNumbers
+        self.indentationWidth = indentationWidth.map { max(1, min(8, $0)) }
+        self.editHistory = editHistory
         self.lineNumberColor = lineNumberColor
         self.lineNumberGutterColor = lineNumberGutterColor
         self.syntaxColorAtUTF8Offset = syntaxColorAtUTF8Offset
@@ -134,6 +146,7 @@ public struct TextField: View {
         self.append = append
         self.focusRequestID = focusRequestID
         self.onSubmit = onSubmit
+        self.onKeyDown = onKeyDown
         self.onCancel = onCancel
         self.onChange = onChange
         self.onHoverChange = onHoverChange
@@ -252,13 +265,6 @@ public struct TextField: View {
         if node.attachments[Self.scrollbarChromeOpacityKey] == nil {
             node.attachments[Self.scrollbarChromeOpacityKey] = Float(0)
         }
-        if let sizeFontSize {
-            // Seed a sensible default font for size variants when no
-            // explicit `.font(...)` modifier was applied.
-            if node.attachments[StyleAttachmentKey.font] == nil {
-                node.attachments[StyleAttachmentKey.font] = Font.system(size: sizeFontSize)
-            }
-        }
 
         // Reuse FieldState if this node is being recycled by reconcile;
         // otherwise create one and seed cursor at the end of the current text.
@@ -271,7 +277,19 @@ public struct TextField: View {
             node.attachments["__textfield_state"] = state
         }
         state.hostNode = node
+        if let editHistory { state.history = editHistory }
         normalizeIndices(state)
+        state.history.synchronize(text.wrappedValue)
+        if !readOnly && !disabled {
+            node.attachments[TextEditingCommands.undoKey] = { restoreHistory(state, redo: false) }
+            node.attachments[TextEditingCommands.redoKey] = { restoreHistory(state, redo: true) }
+            node.attachments[TextEditingCommands.canUndoKey] = { state.history.canUndo }
+            node.attachments[TextEditingCommands.canRedoKey] = { state.history.canRedo }
+        } else {
+            for key in [TextEditingCommands.undoKey, TextEditingCommands.redoKey, TextEditingCommands.canUndoKey, TextEditingCommands.canRedoKey] {
+                node.attachments.removeValue(forKey: key)
+            }
+        }
         let snapshot = self
         let paintIdentity = PaintIdentity(text: text.wrappedValue,
                                           placeholder: placeholder,
@@ -301,17 +319,17 @@ public struct TextField: View {
         updateInteractionHandlers(for: node, state: state)
         node.attachments[TextInputAttachmentKey.editActions] = TextEditActions(
             canPerform: { command in
-                snapshot.synchronizeHistory(state)
+                state.history.synchronize(snapshot.text.wrappedValue)
                 guard !snapshot.disabled, !snapshot.readOnly else { return false }
-                return command == .undo ? !state.undoHistory.isEmpty : !state.redoHistory.isEmpty
+                return command == .undo ? state.history.canUndo : state.history.canRedo
             },
-            perform: { command in snapshot.restoreEdit(state: state, redo: command == .redo) }
+            perform: { command in snapshot.restoreHistory(state, redo: command == .redo) }
         )
         node.attachments[WheelRoutingAttachmentKey.priority] = interactionState.isFocused
             ? WheelRoutingPriority.preferFocused
             : nil
         node.attachments[TextInputAttachmentKey.focusChangeHandler] = { [weak node] focused in
-            state.breakUndoGroup()
+            state.history.breakGroup()
             node?.attachments[WheelRoutingAttachmentKey.priority] = focused
                 ? WheelRoutingPriority.preferFocused
                 : nil
@@ -321,6 +339,7 @@ public struct TextField: View {
             }
             onFocusChange(focused)
             if focused {
+                snapshot.recordCaretActivity(state)
                 snapshot.onFocus?()
             } else {
                 snapshot.onBlur?()
@@ -434,6 +453,7 @@ public struct TextField: View {
         // The bound text may have been rewritten since the last interaction;
         // re-anchor stale indices before any String.index arithmetic.
         normalizeIndices(state)
+        if onKeyDown?(event) == true { return true }
         let mods = event.modifiers
         let shift = !mods.isDisjoint(with: .shift)
         let primaryModifier = !mods.isDisjoint(with: .gui) || !mods.isDisjoint(with: .ctrl)
@@ -449,17 +469,20 @@ public struct TextField: View {
         // dropped — matching Element Plus' readonly Input behaviour.
         let blockMutations = readOnly
 
+        if primaryModifier, event.scancode == 29 || event.scancode == 28 {
+            guard !blockMutations else { return true }
+            restoreHistory(state, redo: event.scancode == 28 || shift)
+            return true
+        }
+        let editKind: TextEditHistory.Kind = !primaryModifier && (event.scancode == Scancode.backspace || event.scancode == Scancode.delete) ? .deletion : .atomic
+        beginEdit(state, kind: editKind)
+        defer { endEdit(state) }
+        if primaryModifier || [Scancode.arrowLeft, Scancode.arrowRight, Scancode.arrowUp, Scancode.arrowDown, Scancode.home, Scancode.end, Scancode.return, 43].contains(event.scancode) { state.history.breakGroup() }
+
         // Primary shortcuts take priority over plain bindings.
         if primaryModifier {
             switch event.scancode {
-            case Scancode.z:
-                if !blockMutations { restoreEdit(state: state, redo: shift) }
-                return true
-            case Scancode.y:
-                if !blockMutations { restoreEdit(state: state, redo: true) }
-                return true
             case Scancode.a:
-                state.breakUndoGroup()
                 state.selectionAnchor = 0
                 state.cursorIndex = count
                 recordCaretActivity(state)
@@ -490,6 +513,10 @@ public struct TextField: View {
         }
 
         switch event.scancode {
+        case 43: // USB HID Tab; code fields consume it before focus traversal.
+            guard axis == .vertical, let indentationWidth, !primaryModifier else { return false }
+            if !blockMutations { indentLines(width: indentationWidth, removing: shift, state: state) }
+            return true
         case Scancode.escape:
             guard let onCancel else { return false }
             onCancel()
@@ -510,7 +537,10 @@ public struct TextField: View {
                 let lo = s.index(s.startIndex, offsetBy: deleteTo)
                 let hi = s.index(s.startIndex, offsetBy: state.cursorIndex)
                 s.removeSubrange(lo..<hi)
-                applyEdit(s, cursor: deleteTo, state: state)
+                text.wrappedValue = s
+                state.cursorIndex = deleteTo
+                recordCaretActivity(state)
+                onChange?(s)
             }
             return true
         case Scancode.delete:
@@ -520,7 +550,9 @@ public struct TextField: View {
                 var s = text.wrappedValue
                 let removeAt = s.index(s.startIndex, offsetBy: state.cursorIndex)
                 s.remove(at: removeAt)
-                applyEdit(s, cursor: state.cursorIndex, state: state)
+                text.wrappedValue = s
+                recordCaretActivity(state)
+                onChange?(s)
             }
             return true
         case Scancode.arrowLeft:
@@ -567,7 +599,7 @@ public struct TextField: View {
             return true
         case Scancode.return, Scancode.keypadEnter:
             if !primaryModifier, !blockMutations, (axis == .vertical || shift) {
-                insertReplacingSelection("\n", state: state)
+                insertReplacingSelection(indentedNewline(state: state), state: state)
             } else {
                 onSubmit?()
             }
@@ -1231,9 +1263,9 @@ public struct TextField: View {
             guard let env = TextEnvironmentHolder.current else {
                 return CGSize(width: 0, height: CGFloat(snapshot.minimumFieldHeight))
             }
-            let fontOverride = layout?.attachments[StyleAttachmentKey.font] as? Font
-            let lineHeightOverride = layout?.attachments[StyleAttachmentKey.lineHeight] as? Float
-            let resolvedFont = env.resolvedFont(fontOverride)
+            let fontOverride = layout?.textStyleValue(StyleAttachmentKey.font) as Font?
+            let lineHeightOverride = layout?.textStyleValue(StyleAttachmentKey.lineHeight) as Float?
+            let resolvedFont = env.resolvedFont(fontOverride ?? snapshot.sizeFontSize.map { Font.system(size: $0) })
             let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
                                                             override: lineHeightOverride)
             let measureText = snapshot.text.wrappedValue.isEmpty
@@ -1305,9 +1337,9 @@ public struct TextField: View {
             return minimumFieldHeight
         }
 
-        let fontOverride = layout?.attachments[StyleAttachmentKey.font] as? Font
-        let lineHeightOverride = layout?.attachments[StyleAttachmentKey.lineHeight] as? Float
-        let resolvedFont = env.resolvedFont(fontOverride)
+        let fontOverride = layout?.textStyleValue(StyleAttachmentKey.font) as Font?
+        let lineHeightOverride = layout?.textStyleValue(StyleAttachmentKey.lineHeight) as Float?
+        let resolvedFont = env.resolvedFont(fontOverride ?? sizeFontSize.map { Font.system(size: $0) })
         let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
                                                         override: lineHeightOverride)
         let insetY = Self.verticalInset(for: resolvedLineHeight)
@@ -1318,13 +1350,14 @@ public struct TextField: View {
     }
 
     func resolvedFont(node: Node, env: TextEnvironment) -> Font {
-        env.resolvedFont(node.attachments[StyleAttachmentKey.font] as? Font)
+        env.resolvedFont((node.textStyleValue(StyleAttachmentKey.font) as Font?)
+            ?? sizeFontSize.map { Font.system(size: $0) })
     }
 
     func resolvedLineHeight(node: Node, env: TextEnvironment) -> Float {
         env.resolvedLineHeight(
             font: resolvedFont(node: node, env: env),
-            override: node.attachments[StyleAttachmentKey.lineHeight] as? Float
+            override: node.textStyleValue(StyleAttachmentKey.lineHeight) as Float?
         )
     }
 

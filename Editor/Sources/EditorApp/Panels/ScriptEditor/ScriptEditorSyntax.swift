@@ -40,9 +40,11 @@ struct SwiftSyntaxHighlighter {
 
     private static let directives: Set<String> = ["if", "else", "elseif", "endif", "available", "sourceLocation"]
     private let tokens: [SwiftSyntaxToken]
+    private let light: Bool
 
-    init(_ source: String) {
+    init(_ source: String, light: Bool = false) {
         tokens = Self.tokenize(Array(source.utf8))
+        self.light = light
     }
 
     func color(atUTF8Offset offset: Int) -> Color? {
@@ -56,7 +58,7 @@ struct SwiftSyntaxHighlighter {
             } else if offset >= token.range.upperBound {
                 low = middle + 1
             } else {
-                return Self.color(for: token.kind)
+                return Self.color(for: token.kind, light: light)
             }
         }
         return nil
@@ -207,8 +209,19 @@ struct SwiftSyntaxHighlighter {
         (65...90).contains(byte)
     }
 
-    private static func color(for kind: SwiftSyntaxTokenKind) -> Color {
-        switch kind {
+    private static func color(for kind: SwiftSyntaxTokenKind, light: Bool) -> Color {
+        if light {
+            return switch kind {
+            case .keyword: Color(red: 0x7B, green: 0x35, blue: 0xAE)
+            case .typeName: Color(red: 0x00, green: 0x64, blue: 0x83)
+            case .stringLiteral: Color(red: 0x2E, green: 0x70, blue: 0x3A)
+            case .comment: Color(red: 0x67, green: 0x72, blue: 0x82)
+            case .number: Color(red: 0xA5, green: 0x49, blue: 0x16)
+            case .attribute, .directive: Color(red: 0x88, green: 0x60, blue: 0x15)
+            case .functionName: Color(red: 0x22, green: 0x57, blue: 0xA0)
+            }
+        }
+        return switch kind {
         case .keyword: Color(r: 0.78, g: 0.62, b: 0.96)
         case .typeName: Color(r: 0.43, g: 0.78, b: 0.92)
         case .stringLiteral: Color(r: 0.67, g: 0.82, b: 0.57)

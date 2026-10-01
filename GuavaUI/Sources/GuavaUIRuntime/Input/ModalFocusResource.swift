@@ -3,12 +3,15 @@ public final class ModalFocusResource: NodeResource {
     private weak var chain: FocusChain?
     public init() {}
     public func mount(node: Node) {}
+    public func bind(_ node: Node, chain next: FocusChain?, restoresCommands: Bool = false) {
+        if chain !== next { chain?.popScope(node); chain = next }
+        next?.pushScope(node, restoresCommands: restoresCommands)
+        if let captured = PointerCaptureHolder.current?.target, next?.permitsInput(captured) == false {
+            PointerCaptureHolder.current?.release()
+        }
+    }
     public func activate(node: Node, chain: FocusChain?) {
-        guard self.chain == nil, let chain else { return }
-        self.chain = chain
-        if let capture = PointerCaptureHolder.current, let target = capture.target,
-           !chain.contains(target, in: node) { capture.release() }
-        chain.beginModal(node)
+        bind(node, chain: chain)
     }
     public func unmount(node: Node) {
         chain?.endModal(node)

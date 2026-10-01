@@ -81,7 +81,9 @@ public struct Image: _PrimitiveView {
             let f = node.frame
             let drawWidth  = f.width  > 0 ? Float(f.width)  : snap.width
             let drawHeight = f.height > 0 ? Float(f.height) : snap.height
-            let modifierTint = node.foregroundColor ?? .white
+            let modifierTint = snap.renderingMode == .alphaMask
+                ? (node.inheritedForegroundColor ?? node.theme.colors.onSurface)
+                : (node.foregroundColor ?? .white)
             let baseTint = Color(
                 r: snap.tint.r * modifierTint.r,
                 g: snap.tint.g * modifierTint.g,

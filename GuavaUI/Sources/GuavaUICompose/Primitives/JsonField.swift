@@ -24,16 +24,18 @@ public struct JsonFieldLabels: Sendable {
     public var expand: String
     public var apply: String
     public var cancel: String
+    public var done: String { get { apply } set { apply = newValue } }
 
     public init(format: String = "Format", revert: String = "Revert",
                 valid: String = "Valid JSON", empty: String = "Empty saves as {}",
-                expand: String = "Expand JSON Editor", apply: String = "Apply", cancel: String = "Cancel") {
+                expand: String = "Expand JSON Editor", apply: String = "Apply", cancel: String = "Cancel",
+                done: String? = nil) {
         self.format = format
         self.revert = revert
         self.valid = valid
         self.empty = empty
         self.expand = expand
-        self.apply = apply
+        self.apply = done ?? apply
         self.cancel = cancel
     }
 }
@@ -105,6 +107,8 @@ private struct _StatefulJsonField: View {
     @State private var baseline = ""
     @State private var isExpanded = false
     @State private var expandedDraft = ""
+    @State private var history = TextEditHistory()
+    @State private var expandedHistory = TextEditHistory()
 
     init(field: JsonField) {
         self.field = field
@@ -140,13 +144,14 @@ private struct _StatefulJsonField: View {
                 Button(icon: .resource(UICommonIcons.expand), size: 12,
                        isEnabled: field.isEnabled, tooltip: field.labels.expand, action: {
                     expandedDraft = currentText
+                    expandedHistory = TextEditHistory()
                     isExpanded = true
                 })
                     .buttonStyle(.ghost).controlSize(.small)
                     .debugName("json-expand")
             }
             ResizableTextArea(field.placeholder, text: draftBinding, minHeight: field.minHeight,
-                              disabled: !field.isEnabled, onSubmit: { _ = commitDraft() },
+                              disabled: !field.isEnabled, editHistory: history, onSubmit: { _ = commitDraft() },
                               onFocus: beginEditing,
                               onBlur: { if !isExpanded { _ = commitDraft() } })
                 .border(validation.isAcceptable ? .border : .error, width: 1)
@@ -171,7 +176,10 @@ private struct _StatefulJsonField: View {
                 Spacer(minLength: 0)
                 Button(icon: .resource(UICommonIcons.format), size: 14,
                        isEnabled: result.isAcceptable, tooltip: field.labels.format, action: {
-                    if let pretty = JsonField.prettyPrinted(expandedDraft) { expandedDraft = pretty }
+                    if let pretty = JsonField.prettyPrinted(expandedDraft) {
+                        recordReplacement(before: expandedDraft, after: pretty, in: expandedHistory)
+                        expandedDraft = pretty
+                    }
                 }).buttonStyle(.ghost)
                 Button(icon: .resource(UICommonIcons.close), size: 12,
                        tooltip: field.labels.cancel, action: { isExpanded = false }).buttonStyle(.ghost)
@@ -179,7 +187,7 @@ private struct _StatefulJsonField: View {
             .padding(horizontal: 14, vertical: 8)
             Divider()
             TextField(field.placeholder, text: $expandedDraft, axis: .vertical,
-                      maxVisibleLines: 128, showsLineNumbers: true,
+                      maxVisibleLines: 128, showsLineNumbers: true, indentationWidth: 2, editHistory: expandedHistory,
                       onSubmit: applyExpandedDraft, onCancel: { isExpanded = false })
                 .font(.mono)
                 .frame(minHeight: 0)
@@ -232,11 +240,21 @@ private struct _StatefulJsonField: View {
         if commitDraft() { isExpanded = false }
     }
     private func revertDraft() {
+        recordReplacement(before: currentText, after: baseline, in: history)
         draft = baseline
         hasDraft = true
         _ = commitDraft()
     }
     private func formatDraft() {
-        if let pretty = JsonField.prettyPrinted(currentText) { draftBinding.wrappedValue = pretty }
+        if let pretty = JsonField.prettyPrinted(currentText) {
+            recordReplacement(before: currentText, after: pretty, in: history)
+            draftBinding.wrappedValue = pretty
+        }
+    }
+    private func recordReplacement(before: String, after: String, in history: TextEditHistory) {
+        history.synchronize(before)
+        history.record(before: .init(text: before, cursor: before.count),
+                       after: .init(text: after, cursor: after.count), kind: .atomic,
+                       time: ProcessInfo.processInfo.systemUptime)
     }
 }

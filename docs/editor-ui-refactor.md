@@ -119,3 +119,9 @@ consistent icon/hover/focus states across all panels and popovers, complete
 workbench interaction coverage in both themes, and representative empty/error/
 loading states. The supplied concept remains the visual direction, not a claim
 that the current engine scene or the entire UI matches its finished quality.
+
+The subsequent September 30 interaction pass moves script diagnostics and build
+output into the bottom Console workbench and consolidates the standalone
+profiler into Developer Tools. Script editing now follows the active theme.
+See [the interaction and framework audit](guava-ui-interaction-audit.md) for the
+current behavior, regression results, and remaining framework gaps.

@@ -219,6 +219,10 @@ struct ButtonHost: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         node.isFocusable = isEnabled
+        node.attachments[TextInputAttachmentKey.focusChangeHandler] = { [weak node] (_: Bool) in
+            guard let node else { return }
+            updateBuiltinButtonChromeDescendants(of: node, animated: true)
+        }
         node.attachments[ButtonHost.markerKey] = true
         let style = node.compositionValue(of: ButtonStyleEnvironment.key)
         let requiresInteractionRecompose = style.requiresInteractionRecompose
@@ -659,7 +663,8 @@ private func builtinButtonChromeValues(state: BuiltinButtonChromeState,
     let theme = chromeNode.theme
     let pressed = state.isEnabled && (buttonNode?.attachments[ButtonHost.pressedKey] as? Bool == true)
     let hovered = state.isEnabled && (buttonNode?.attachments[ButtonHost.hoveredKey] as? Bool == true)
-    let focused = state.isEnabled && buttonNode.map { FocusChainHolder.current?.focused === $0 } == true
+    let focused = state.isEnabled && FocusChainHolder.current?.isFocusVisible == true
+        && buttonNode.map { FocusChainHolder.current?.focused === $0 } == true
     let metrics = state.metrics
     let clear = Color.clear
     let background: Color
@@ -718,9 +723,10 @@ private func builtinButtonChromeValues(state: BuiltinButtonChromeState,
         border = focused ? theme.colors.focusRing : clear
         borderWidth = focused ? 2 : 0
     case .toggle:
-        if !state.isEnabled {
-            background = clear
-        } else if state.isSelected {
+        // Selection still conveys the current mode when its command cannot
+        // be repeated (e.g. Play while already playing). Keep the paired
+        // accent/onAccent colors even when disabled.
+        if state.isSelected {
             if pressed {
                 background = theme.colors.accentPressed
             } else if hovered {
@@ -743,7 +749,7 @@ private func builtinButtonChromeValues(state: BuiltinButtonChromeState,
                                      border: border,
                                      borderWidth: borderWidth,
                                      radius: metrics.radius,
-                                     opacity: state.isEnabled ? 1 : 0.55)
+                                     opacity: state.isEnabled ? 1 : (state.isSelected ? 0.75 : 0.55))
 }
 
 private func nearestButtonHostAncestor(of node: Node) -> Node? {

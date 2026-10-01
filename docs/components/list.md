@@ -47,7 +47,7 @@ List(items, id: \.id, selection: $selectedID, rowHeight: 30, rowSpacing: 0) { it
 - **指针**：down + up 在同一行内 → 写 `selection.wrappedValue = id`
 - **键盘**：未实现
 - **滚动**：外层 `ScrollView(.vertical)`，wheel 自动支持；只挂载视口附近的行，用占位高度保留完整滚动范围。
-- **虚拟化**：`VirtualList(data, id: \.id, rowHeight: 30)` 可单独使用，默认额外挂载视口前后各 3 行。行内容需符合指定固定高度，视口应有明确高度。
+- **虚拟化**：`List` 内部使用 `VirtualStack`；`VirtualStack(data, id: \.id, rowHeight: 30, scrollToIndex: target)` 和 `VirtualList(data, id: \.id, rowHeight: 30)` 可单独使用，默认额外挂载视口前后各 3 行。行内容需符合指定固定高度，视口应有明确高度。
 - **多选**：v1 不支持
 
 ## Authoring rules

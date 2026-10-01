@@ -1,4 +1,4 @@
-﻿#if canImport(CoreGraphics)
+#if canImport(CoreGraphics)
 import CoreGraphics
 #endif
 import GuavaUIRuntime
@@ -37,10 +37,9 @@ extension TextField {
                 textField.handleKey(event, state: state, node: node) ? .handled : .ignored
             }
             registry.setPointer(node, route: .textInput) { event, phase, _ in
-                guard event.button == .left else { return .ignored }
                 switch phase {
                 case .down:
-                    state.breakUndoGroup()
+                    state.history.breakGroup()
                     if textField.clearable,
                        let hitX = state.clearHitX,
                        Float(event.x) >= hitX {
@@ -101,6 +100,7 @@ extension TextField {
                                        0,
                                        state.maxScrollY)
                 state.scrollOffsetY = nextOffset
+                state.needsCaretReveal = false
                 node.contentOffset = CGPoint(x: 0, y: CGFloat(nextOffset))
                 return ScrollConsumePolicy.whenOffsetChanged
                     .result(didScroll: nextOffset != previousOffset)
