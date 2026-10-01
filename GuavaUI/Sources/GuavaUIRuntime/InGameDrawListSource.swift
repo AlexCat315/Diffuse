@@ -65,11 +65,38 @@ public struct DrawListSnapshot: Sendable {
 public final class InGameDrawListSource: @unchecked Sendable {
     private let lock = NSLock()
     private var latest: DrawListSnapshot?
+    private var atlas: DrawListAtlasDirty?
+    private var atlasNeedsUpload = false
 
     public init() {}
 
     public func publish(_ snapshot: DrawListSnapshot) {
         lock.lock()
+        if let dirty = snapshot.atlasDirty,
+           dirty.textureWidth > 0, dirty.textureHeight > 0,
+           dirty.textureWidth <= 16_384, dirty.textureHeight <= 16_384,
+           UInt64(dirty.textureWidth) * UInt64(dirty.textureHeight) <= 64 * 1024 * 1024,
+           UInt64(dirty.regionX) + UInt64(dirty.regionWidth) <= UInt64(dirty.textureWidth),
+           UInt64(dirty.regionY) + UInt64(dirty.regionHeight) <= UInt64(dirty.textureHeight),
+           dirty.pixels.count == Int(UInt64(dirty.regionWidth) * UInt64(dirty.regionHeight)) {
+            // A render thread can miss several main-thread frames during GPU
+            // startup. Preserve all atlas patches rather than overwriting the
+            // only upload with a newer frame containing no dirty glyphs.
+            if atlas?.textureID != dirty.textureID || atlas?.textureWidth != dirty.textureWidth || atlas?.textureHeight != dirty.textureHeight {
+                atlas = DrawListAtlasDirty(pixels: [UInt8](repeating: 0, count: Int(dirty.textureWidth * dirty.textureHeight)),
+                    regionX: 0, regionY: 0, regionWidth: dirty.textureWidth, regionHeight: dirty.textureHeight,
+                    textureWidth: dirty.textureWidth, textureHeight: dirty.textureHeight, textureID: dirty.textureID)
+            }
+            if var merged = atlas {
+                for row in 0..<Int(dirty.regionHeight) {
+                    let src = row * Int(dirty.regionWidth)
+                    let dst = (row + Int(dirty.regionY)) * Int(dirty.textureWidth) + Int(dirty.regionX)
+                    merged.pixels.replaceSubrange(dst..<(dst + Int(dirty.regionWidth)), with: dirty.pixels[src..<(src + Int(dirty.regionWidth))])
+                }
+                atlas = merged
+                atlasNeedsUpload = true
+            }
+        }
         latest = snapshot
         lock.unlock()
     }
@@ -77,6 +104,9 @@ public final class InGameDrawListSource: @unchecked Sendable {
     public func consume() -> DrawListSnapshot? {
         lock.lock()
         defer { lock.unlock() }
-        return latest
+        guard var snapshot = latest else { return nil }
+        snapshot.atlasDirty = atlasNeedsUpload ? atlas : nil
+        atlasNeedsUpload = false
+        return snapshot
     }
 }

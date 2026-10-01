@@ -1,4 +1,5 @@
 import Foundation
+import EngineKernel
 import GuavaUIRuntime
 
 /// Main-thread owner of a GuavaUI `ViewGraph` for in-game HUD rendering.
@@ -26,6 +27,7 @@ public final class InGameViewGraphBridge {
     private var textEnv: TextEnvironment?
     private var lastScale: Float = 0
     private var didInstallRoot = false
+    private let scriptCanvas = ScriptCanvasModel()
 
     public init(source: InGameDrawListSource, atlasTextureID: TextureID = 1) {
         self.source = source
@@ -41,7 +43,13 @@ public final class InGameViewGraphBridge {
     public func setRootView<V: View>(_ view: V) {
         guard !didInstallRoot else { return }
         ensureTextEnvironment(scale: 1)
-        withTextEnvInstalled { graph.install(root: view) }
+        withTextEnvInstalled {
+            graph.install(root: Box {
+                view
+                ScriptCanvasView(model: scriptCanvas)
+                    .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
+            }.flex())
+        }
         didInstallRoot = true
     }
 
@@ -51,8 +59,11 @@ public final class InGameViewGraphBridge {
     ///
     /// Recomposes dirty scopes, runs Yoga layout, renders the node tree into a
     /// `DrawList`, snapshots the result, and publishes it to the render thread.
-    public func tick(width: Int, height: Int, contentScale: Float = 1) {
-        guard width > 0, height > 0, didInstallRoot else { return }
+    public func tick(width: Int, height: Int, contentScale: Float = 1,
+                     canvas: InGameCanvas = InGameCanvas()) {
+        guard width > 0, height > 0 else { return }
+        scriptCanvas.update(canvas)
+        if !didInstallRoot { setRootView(EmptyView()) }
         ensureTextEnvironment(scale: contentScale)
 
         withTextEnvInstalled {
