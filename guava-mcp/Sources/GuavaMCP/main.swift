@@ -11,7 +11,7 @@ import Glibc
 import WinSDK
 #endif
 
-// MARK: - IPC (TCP → Guava.app on localhost:9898)
+// MARK: - IPC (TCP → Guava.app on localhost:\(editorPort))
 
 func editorCall(_ request: [String: Any]) -> [String: Any] {
     guard var payload = try? JSONSerialization.data(withJSONObject: request) else {
@@ -35,7 +35,7 @@ func editorCall(_ request: [String: Any]) -> [String: Any] {
 
     var addr = sockaddr_in()
     addr.sin_family = ADDRESS_FAMILY(AF_INET)
-    addr.sin_port = UInt16(9898).bigEndian
+    addr.sin_port = editorPort.bigEndian
     // 127.0.0.1 (INADDR_LOOPBACK) in network byte order; avoids the
     // deprecated inet_addr() and its WSA-state dependency.
     addr.sin_addr.S_un.S_addr = UInt32(0x7f00_0001).bigEndian
@@ -45,7 +45,7 @@ func editorCall(_ request: [String: Any]) -> [String: Any] {
         }
     }
     guard connected == 0 else {
-        return ["ok": false, "error": "Guava is not running (could not connect to localhost:9898)"]
+        return ["ok": false, "error": "Guava is not running (could not connect to localhost:\(editorPort))"]
     }
 
     let sent = payload.withUnsafeBytes {
@@ -68,9 +68,17 @@ func editorCall(_ request: [String: Any]) -> [String: Any] {
     guard sock >= 0 else { return ["ok": false, "error": "socket() failed"] }
     defer { close(sock) }
 
+    var timeout = timeval(tv_sec: 180, tv_usec: 0)
+    _ = withUnsafePointer(to: &timeout) { setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, $0, socklen_t(MemoryLayout<timeval>.size)) }
+    _ = withUnsafePointer(to: &timeout) { setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, $0, socklen_t(MemoryLayout<timeval>.size)) }
+    #if canImport(Darwin)
+    var noSignal: Int32 = 1
+    _ = withUnsafePointer(to: &noSignal) { setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, $0, socklen_t(MemoryLayout<Int32>.size)) }
+    #endif
+
     var addr = sockaddr_in()
     addr.sin_family = sa_family_t(AF_INET)
-    addr.sin_port = in_port_t(9898).bigEndian
+    addr.sin_port = in_port_t(editorPort).bigEndian
     addr.sin_addr.s_addr = inet_addr("127.0.0.1")
     let connected = withUnsafePointer(to: &addr) {
         $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
@@ -78,17 +86,35 @@ func editorCall(_ request: [String: Any]) -> [String: Any] {
         }
     }
     guard connected == 0 else {
-        return ["ok": false, "error": "Guava is not running (could not connect to localhost:9898)"]
+        return ["ok": false, "error": "Guava is not running (could not connect to localhost:\(editorPort))"]
     }
 
-    let sent = payload.withUnsafeBytes { write(sock, $0.baseAddress, $0.count) }
-    guard sent == payload.count else { return ["ok": false, "error": "write error"] }
+    var sent = 0
+    while sent < payload.count {
+        let count = payload.withUnsafeBytes { bytes in
+            #if canImport(Glibc)
+            return send(sock, bytes.baseAddress!.advanced(by: sent), bytes.count - sent, Int32(MSG_NOSIGNAL))
+            #else
+            return write(sock, bytes.baseAddress!.advanced(by: sent), bytes.count - sent)
+            #endif
+        }
+        if count < 0, errno == EINTR { continue }
+        guard count > 0 else { return ["ok": false, "error": "editor connection write failed"] }
+        sent += count
+    }
 
     var responseData = Data()
-    var byte = [UInt8](repeating: 0, count: 1)
-    while read(sock, &byte, 1) == 1 {
-        if byte[0] == UInt8(ascii: "\n") { break }
-        responseData.append(byte[0])
+    var bytes = [UInt8](repeating: 0, count: 8192)
+    while true {
+        let count = read(sock, &bytes, bytes.count)
+        if count < 0, errno == EINTR { continue }
+        guard count > 0 else { return ["ok": false, "error": "editor disconnected or response timed out"] }
+        responseData.append(contentsOf: bytes.prefix(count))
+        guard responseData.count <= 2_097_152 else { return ["ok": false, "error": "editor response exceeds 2 MiB"] }
+        if let newline = responseData.firstIndex(of: 10) {
+            responseData = Data(responseData[..<newline])
+            break
+        }
     }
 #endif
 
@@ -101,6 +127,7 @@ func editorCall(_ request: [String: Any]) -> [String: Any] {
 // MARK: - Tool definitions
 
 let registry = CapabilityRegistry.aiDefault
+let editorPort = ProcessInfo.processInfo.environment["GUAVA_MCP_PORT"].flatMap(UInt16.init) ?? 9898
 let capabilitySessionID = UUID().uuidString
 var activeCapabilityTools: [String: [String: Any]] = [:]
 var currentCapabilitySnapshotID: String?
@@ -218,15 +245,20 @@ func handle(_ msg: [String: Any]) {
 
     switch method {
     case "initialize":
+        let supportedVersions = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"]
+        let requestedVersion = params["protocolVersion"] as? String ?? ""
         writeResponse([
             "jsonrpc": "2.0",
             "id": id as Any,
             "result": [
-                "protocolVersion": "2024-11-05",
+                "protocolVersion": supportedVersions.contains(requestedVersion) ? requestedVersion : supportedVersions[0],
                 "capabilities": ["tools": ["listChanged": true] as [String: Any]] as [String: Any],
-                "serverInfo": ["name": "guava", "version": "0.0.1"] as [String: Any],
+                "serverInfo": ["name": "guava", "version": "0.1.0"] as [String: Any],
             ] as [String: Any],
         ])
+
+    case "ping":
+        writeResponse(["jsonrpc": "2.0", "id": id as Any, "result": [:] as [String: Any]])
 
     case "tools/list":
         _ = openCapabilitySessionIfNeeded()
@@ -234,13 +266,21 @@ func handle(_ msg: [String: Any]) {
         writeResponse([
             "jsonrpc": "2.0",
             "id": id as Any,
-            "result": ["tools": [toolSearchCapabilities, toolSubmitPlan] + generatedTools] as [String: Any],
+            "result": ["tools": [toolSearchCapabilities, toolSubmitPlan] + ProjectToolset.tools.map(\.mcpDefinition) + generatedTools] as [String: Any],
         ])
 
     case "tools/call":
-        let name = params["name"] as? String ?? ""
+        guard let name = params["name"] as? String,
+              params["arguments"] == nil || params["arguments"] is [String: Any] else {
+            errorResponse(id: id as Any, code: -32602, message: "tools/call requires a tool name and object arguments")
+            return
+        }
         let args = params["arguments"] as? [String: Any] ?? [:]
         switch name {
+        case let projectTool where ProjectToolset.tools.contains(where: { $0.name == projectTool }):
+            let response = editorCall(["action": "project_tool", "tool_name": projectTool, "arguments": args])
+            toolResult(id: id as Any, text: jsonText(response), isError: response["ok"] as? Bool != true)
+
         case CapabilityToolset.searchToolName:
             var request = args
             request["action"] = "search_capabilities"
@@ -290,14 +330,23 @@ func handle(_ msg: [String: Any]) {
 
 // MARK: - Main loop
 
-while let line = readLine(strippingNewline: true), !line.isEmpty {
+while let line = readLine(strippingNewline: true) {
+    if line.isEmpty { continue }
+    guard line.utf8.count <= 1_048_576 else {
+        errorResponse(id: NSNull(), code: -32600, message: "request exceeds 1 MiB")
+        continue
+    }
     guard let data = line.data(using: .utf8),
           let msg = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-    else { continue }
+    else { errorResponse(id: NSNull(), code: -32700, message: "invalid JSON"); continue }
+    guard msg["jsonrpc"] as? String == "2.0", msg["method"] is String else {
+        errorResponse(id: msg["id"] ?? NSNull(), code: -32600, message: "invalid JSON-RPC request")
+        continue
+    }
     handle(msg)
 }
 
-_ = editorCall([
+if currentCapabilitySnapshotID != nil { _ = editorCall([
     "action": "close_capability_session",
     "session_id": capabilitySessionID,
-])
+]) }

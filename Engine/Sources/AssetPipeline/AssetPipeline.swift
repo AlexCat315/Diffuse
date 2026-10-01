@@ -379,7 +379,7 @@ public struct MeshTopologySlice: Sendable {
 
 public enum BuiltinMesh {
     /// Unit cube centered at origin, side length 1. 24 vertices, 36 indices, per-face color.
-    public static func cube() -> MeshAsset {
+    public static func cube(color: SIMD3<Float>? = nil) -> MeshAsset {
         let faces: [(n: (Float, Float, Float),
                      c: (Float, Float, Float),
                      verts: [(Float, Float, Float)])] = [
@@ -402,7 +402,7 @@ public enum BuiltinMesh {
                     to: &vertices,
                     position: SIMD3<Float>(v.0, v.1, v.2),
                     normal: SIMD3<Float>(face.n.0, face.n.1, face.n.2),
-                    color: SIMD3<Float>(face.c.0, face.c.1, face.c.2)
+                    color: color ?? SIMD3<Float>(face.c.0, face.c.1, face.c.2)
                 )
             }
             let base = UInt32(faceIdx * 4)

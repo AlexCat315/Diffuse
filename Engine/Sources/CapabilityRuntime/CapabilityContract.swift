@@ -136,6 +136,9 @@ public struct CapabilityContract: Codable, Sendable, Equatable {
         [
             "type": "function",
             "name": name ?? toolName,
+            // Guava validates its canonical schemas locally; optional properties
+            // must stay optional on the Responses wire format.
+            "strict": false,
             "description": description,
             "parameters": inputSchema.jsonObject(),
         ]

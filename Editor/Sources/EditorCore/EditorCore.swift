@@ -143,6 +143,7 @@ public final class EditorApplication: @unchecked Sendable {
     private var pendingWorldObservationTask: Task<Void, Never>?
     private var activeAIRequestID: UUID?
     private var activeAIRequestTask: Task<Void, Never>?
+    var projectToolBuildInProgress = false
     private var isShuttingDown = false
     private var pendingSessionProposal: Proposal?
     private var pendingAssistantMessageID: String?
@@ -352,7 +353,9 @@ public final class EditorApplication: @unchecked Sendable {
                                            scriptEntries: scene.scriptCatalogEntries)
             let bus = observationBus
             let mem = contextMemoryStore
+            let projectTools = makeProjectToolExecutor()
             pendingAISetupTask = Task {
+                await initialSession.setProjectToolExecutor(projectTools)
                 await initialSession.setObservationBus(bus)
                 await initialSession.setContextMemory(mem)
                 await initialSession.setWorkflowContext(ctx)
@@ -2353,10 +2356,12 @@ public final class EditorApplication: @unchecked Sendable {
             let bus = self.observationBus
             let mem = self.contextMemoryStore
             let previousTask = pendingAISetupTask
+            let projectTools = makeProjectToolExecutor()
             pendingAISetupTask = Task {
                 await previousTask?.value
                 await oldSession?.cancelActiveRun()
                 if let newSession {
+                    await newSession.setProjectToolExecutor(projectTools)
                     await newSession.replaceWorldView(await worldContext.snapshot())
                     await newSession.setObservationBus(bus)
                     await newSession.setContextMemory(mem)
@@ -2710,6 +2715,7 @@ public final class EditorApplication: @unchecked Sendable {
         )
         session = nextSession
         if let nextSession {
+            await nextSession.setProjectToolExecutor(makeProjectToolExecutor())
             await nextSession.setObservationBus(observationBus)
             await nextSession.setContextMemory(contextMemoryStore)
             await nextSession.setWorkflowContext(Self.workflowContext(
@@ -2827,21 +2833,21 @@ public final class EditorApplication: @unchecked Sendable {
             return nil
         case .anthropic:
             guard let key = AIKeychain.load(provider: .anthropic) else { return nil }
-            return Session(config: .anthropic(apiKey: key, model: settings.model,
+            return Session(config: .anthropic(apiKey: key, model: settings.model, maxTokens: 8192,
                                               autoApprove: settings.autoApprove),
                            initialWorldView: initialWorldView,
                            pluginCapabilityExecutor: pluginCapabilityExecutor,
                            pluginQuerySnapshotProvider: pluginQuerySnapshotProvider)
         case .openai:
             guard let key = AIKeychain.load(provider: .openai) else { return nil }
-            return Session(config: .openAIResponses(apiKey: key, model: settings.model,
+            return Session(config: .openAIResponses(apiKey: key, model: settings.model, maxTokens: 8192,
                                                     autoApprove: settings.autoApprove),
                            initialWorldView: initialWorldView,
                            pluginCapabilityExecutor: pluginCapabilityExecutor,
                            pluginQuerySnapshotProvider: pluginQuerySnapshotProvider)
         case .deepseek:
             guard let key = AIKeychain.load(provider: .deepseek) else { return nil }
-            return Session(config: .deepSeek(apiKey: key, model: settings.model,
+            return Session(config: .deepSeek(apiKey: key, model: settings.model, maxTokens: 8192,
                                              autoApprove: settings.autoApprove),
                            initialWorldView: initialWorldView,
                            pluginCapabilityExecutor: pluginCapabilityExecutor,
@@ -3103,6 +3109,19 @@ public final class EditorApplication: @unchecked Sendable {
     private func startMCPBridge() {
         mcpBridge.onCommand = { [weak self] action, params in
             guard let self else { return ["ok": false, "error": "editor unavailable"] }
+            if action == "project_tool" {
+                do {
+                    guard let name = params["tool_name"] as? String,
+                          let arguments = params["arguments"] as? [String: Any] else {
+                        return ["ok": false, "error": "missing project tool name or arguments"]
+                    }
+                    let output = try await self.executeProjectTool(
+                        name: name, input: JSONSerialization.data(withJSONObject: arguments)
+                    )
+                    return try JSONSerialization.jsonObject(with: output) as? [String: Any]
+                        ?? ["ok": false, "error": "invalid project tool response"]
+                } catch { return ["ok": false, "error": error.localizedDescription] }
+            }
             return self.handleMCPAction(action, params: params)
         }
         mcpBridge.start()

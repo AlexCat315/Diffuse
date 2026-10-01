@@ -740,7 +740,10 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     }
 
     private func uploadBuiltinMeshes() throws {
-        let cube = BuiltinMesh.cube()
+        // Gameplay and authored materials determine colour. Keep the optional
+        // per-face diagnostic cube available in AssetPipeline, but don't multiply
+        // every material by rainbow vertex colours in the default mesh table.
+        let cube = BuiltinMesh.cube(color: SIMD3<Float>(repeating: 1))
         let cubeMesh = try uploadMesh(cube)
         let cubeBounds = cube.localBounds
         var objAsset: MeshAsset?
