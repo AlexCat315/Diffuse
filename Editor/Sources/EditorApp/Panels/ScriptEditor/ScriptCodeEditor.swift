@@ -33,7 +33,7 @@ struct ScriptCodeEditor: View {
                 syntaxColorAtUTF8Offset: { _, offset in highlighter.color(atUTF8Offset: offset) },
                 onChange: onChange,
                 onHoverChange: { anchor in handleHover(anchor) },
-                onCaretChange: { state in handleCaret(state, in: text) },
+                onCaretChange: { state in handleCaret(state, in: source.wrappedValue) },
                 textColor: EditorCodePalette.foreground
             )
             .textFieldStyle(ScriptCodeEditorTextFieldStyle())
@@ -47,25 +47,8 @@ struct ScriptCodeEditor: View {
             // pass so the editor's own clipping never trims it.
             ScriptHoverOverlay(presentation: hover.wrappedValue)
 
-            Divider()
-            editorFooter(lineCount: Self.countLines(in: text))
         }
         .clipped()
-    }
-
-    private func editorFooter(lineCount: Int) -> some View {
-        Row(alignment: .center, spacing: 12) {
-            Text("Swift").font(.caption).foregroundColor(EditorCodePalette.muted)
-            Text("UTF-8").font(.caption).foregroundColor(EditorCodePalette.muted)
-            Text(caretLabel.wrappedValue)
-                .font(.caption)
-                .foregroundColor(EditorCodePalette.muted)
-            Spacer(minLength: 0)
-        }
-        .font(.caption)
-        .foregroundColor(EditorCodePalette.muted)
-        .padding(horizontal: 10, vertical: 5)
-        .background(EditorCodePalette.gutter)
     }
 
     private func handleHover(_ anchor: TextFieldHoverAnchor?) {

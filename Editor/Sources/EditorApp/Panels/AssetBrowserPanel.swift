@@ -186,6 +186,11 @@ struct AssetBrowserPanel: View {
                                       onSelectAll: { selection.selectAll(in: visibleAssetIDs) },
                                       onClearSelection: { selection.clear() },
                                       onActivate: { activateAsset(asset) })
+                                .contextMenu(onOpen: {
+                                    if !selection.selectedIDs.contains(asset.id) {
+                                        selectAsset(asset.id, modifiers: [], visibleIDs: visibleAssetIDs)
+                                    }
+                                }, entries: { assetMenuEntries(asset, visibleAssets: listing.assets) })
                         }
                     }
                     .padding(horizontal: 10, vertical: 10)
@@ -209,6 +214,11 @@ struct AssetBrowserPanel: View {
                                          onSelectAll: { selection.selectAll(in: visibleAssetIDs) },
                                          onClearSelection: { selection.clear() },
                                          onActivate: { activateAsset(asset) })
+                                .contextMenu(onOpen: {
+                                    if !selection.selectedIDs.contains(asset.id) {
+                                        selectAsset(asset.id, modifiers: [], visibleIDs: visibleAssetIDs)
+                                    }
+                                }, entries: { assetMenuEntries(asset, visibleAssets: listing.assets) })
                         }
                     }
                     .padding(horizontal: 6, vertical: 6)
@@ -216,6 +226,22 @@ struct AssetBrowserPanel: View {
             }
             .flex()
         }
+    }
+
+    private func assetMenuEntries(_ target: EditorAsset, visibleAssets: [EditorAsset]) -> [MenuEntry] {
+        let selected = visibleAssets.filter { selection.selectedIDs.contains($0.id) }
+        let assets = selected.isEmpty ? [target] : selected
+        return [
+            .item(MenuItem(id: "asset-add", title: L("Add to Scene"),
+                           isEnabled: assets.contains { $0.kind.isMesh } && app.store.state.playbackState == .stopped,
+                           action: { _ = app.spawnAssets(assets) })),
+            .item(MenuItem(id: "asset-reveal", title: L("Reveal"), action: { revealAssets(assets) })),
+            .item(MenuItem(id: "asset-copy-path", title: L("Copy Path"), action: {
+                ClipboardHolder.write?(assets.map(\.relativePath).joined(separator: "\n"))
+            })),
+            .separator("asset-refresh"),
+            .item(MenuItem(id: "asset-reload", title: L("Reload"), action: reloadAssets)),
+        ]
     }
 
     private func selectAsset(_ assetID: String,

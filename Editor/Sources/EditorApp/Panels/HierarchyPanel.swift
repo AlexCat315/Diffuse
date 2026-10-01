@@ -101,12 +101,10 @@ struct HierarchyPanel: View {
                 }
             )
             let headerActions: [MenuEntry] = [
-                .item(MenuItem(id: "expand-all", title: L("Expand All"),
+                .item(MenuItem(id: "toggle-expansion",
+                               title: currentExpandedKeys.isEmpty ? L("Expand All") : L("Collapse All"),
                                isEnabled: !parentKeys.isEmpty,
-                               action: { replaceExpandedKeys(parentKeys) })),
-                .item(MenuItem(id: "collapse-all", title: L("Collapse All"),
-                               isEnabled: !currentExpandedKeys.isEmpty,
-                               action: { replaceExpandedKeys([]) })),
+                               action: { replaceExpandedKeys(currentExpandedKeys.isEmpty ? parentKeys : []) })),
                 .separator("tree-navigation"),
             ] + hierarchyActionEntries(
                 selectedIDs: selectedIDs, roots: hierarchyRoots,
@@ -249,6 +247,24 @@ struct HierarchyPanel: View {
                                                commitRename(entityID: entity.id)
                                            },
                                            onCancelRename: cancelRename)
+                        .contextMenu(onOpen: {
+                            if !store.selectedEntityIDs.contains(entity.id) {
+                                store.dispatch(.setSelectedEntity(entity.id))
+                            } else {
+                                store.dispatch(.setPrimarySelectedEntity(entity.id))
+                            }
+                        }, entries: {
+                            let ids = store.selectedEntityIDs
+                            return hierarchyActionEntries(
+                                selectedIDs: ids, roots: scene.roots,
+                                isAuthoringEnabled: EditorSceneAuthoringPolicy.canEditScene(during: store.playbackState),
+                                containsLockedSelection: ids.contains { scene.isEntityLocked($0) },
+                                containsRenderableSelection: ids.contains { scene.hierarchyHasRenderableContent($0) },
+                                allSelectionHidden: ids.allSatisfy { !scene.isHierarchyVisible($0) },
+                                allSelectionLocked: ids.allSatisfy { scene.isEntityLocked($0) },
+                                canMoveSelectionToRoot: HierarchyPanelModel.canMoveSelectionToRoot(ids, in: scene.roots)
+                            )
+                        })
                     }
                     .padding(horizontal: 4, vertical: 4)
                     .flex()

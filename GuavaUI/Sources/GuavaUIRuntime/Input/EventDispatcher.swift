@@ -80,6 +80,9 @@ public final class EventDispatcher {
     private func dispatchPointerDown(_ event: MouseButtonEvent) {
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
         lastCursor = point
+        if deliverGlobalRoutes(kind: .pointer(event, .down), role: .overlay, minPriority: .modal) == .handled {
+            return
+        }
         if deliverGlobalRoutes(kind: .pointer(event, .down),
                                role: .scrollChrome,
                                minPriority: .chrome) == .handled {
@@ -158,16 +161,25 @@ public final class EventDispatcher {
         }
         let focusedPath = focusChain.focused.map(pathFromRoot)
         let preferredFocusedPath = preferredFocusedWheelPath(from: focusedPath)
+        let preferredHitPath = hitPath?.contains {
+            $0.attachments[WheelRoutingAttachmentKey.priority] as? WheelRoutingPriority == .preferHit
+        } == true ? hitPath : nil
 
         // Wheel delivery is target-first rather than full capture/target/bubble.
         // Nested scrollables need the deepest target to consume the gesture
         // before an ancestor ScrollView moves, otherwise inner editors can
         // never keep their own scroll context.
+        if let preferredHitPath,
+           deliverWheel(path: preferredHitPath, event: event) == .handled {
+            return
+        }
         if let preferredFocusedPath,
+           !sameWheelTarget(preferredFocusedPath, preferredHitPath),
            deliverWheel(path: preferredFocusedPath, event: event) == .handled {
             return
         }
         if let hitPath,
+           !sameWheelTarget(hitPath, preferredHitPath),
            !sameWheelTarget(hitPath, preferredFocusedPath),
            deliverWheel(path: hitPath, event: event) == .handled {
             return
@@ -178,6 +190,7 @@ public final class EventDispatcher {
            deliverWheel(path: focusedPath, event: event) == .handled {
             return
         }
+        if focusChain.modalRoot != nil { return }
         if deliverGlobalRoutes(kind: .wheel(event),
                                role: .scroll,
                                minPriority: .normal) == .handled {
@@ -197,6 +210,7 @@ public final class EventDispatcher {
     // MARK: - Key
 
     private func dispatchKey(_ event: KeyEvent, phase: KeyPhase) {
+        focusChain.ensureModalFocus()
         let kind = EventKind.key(event, phase)
         // A mounted transient overlay is visually and semantically above the
         // focused control. Give it first refusal so Escape/menu navigation is
@@ -204,6 +218,11 @@ public final class EventDispatcher {
         if deliverGlobalRoutes(kind: kind,
                                role: .overlay,
                                minPriority: .modal) == .handled {
+            return
+        }
+        if event.scancode == 43 /* SDL_SCANCODE_TAB */, phase == .down, let root = tree.root {
+            if event.modifiers.hasShift { focusChain.focusPrevious(in: root) }
+            else { focusChain.focusNext(in: root) }
             return
         }
         // Pointer-capture intercept: while a node owns capture (typically a
@@ -219,6 +238,7 @@ public final class EventDispatcher {
            deliverKeyPath(focusedPath, event: event, phase: phase) == .handled {
             return
         }
+        if focusChain.modalRoot != nil { return }
         let excluded = Set((focusedPath ?? []).map(ObjectIdentifier.init))
         _ = deliverGlobalRoutes(kind: kind,
                                 role: .shortcut,
@@ -387,6 +407,11 @@ public final class EventDispatcher {
     }
 
     private func invoke(node: Node, kind: EventKind, phase: EventPhase) -> EventResult {
+        var ancestor: Node? = node
+        while let current = ancestor {
+            if !current.isInteractionEnabled { return .ignored }
+            ancestor = current.parent
+        }
         let handlers = interactions.handlers(for: node)
         let result: EventResult = switch kind {
         case .pointer(let e, let pp): handlers.pointer?(e, pp, phase) ?? .ignored

@@ -138,11 +138,26 @@ private struct _PortalEntrySlot: _PrimitiveView {
         let node = Node()
         node.attachments[LayoutDebugAttachmentKey.layoutRole] = "portal-entry"
         node.attachments[LayoutDebugAttachmentKey.debugName] = entry.id
+        node.attachments[WheelRoutingAttachmentKey.priority] = WheelRoutingPriority.preferHit
         return node
     }
 
     func _updateNode(_ node: Node) {
         store.attachSlotNode(entry.id, node: node)
+        var root = node
+        while let parent = root.parent { root = parent }
+        if entry.constrainToWindow, root.frame.width > 0 {
+            node.layoutNode?.maxWidth = max(0, Float(root.frame.width) - 8)
+        }
+        node.layoutDidUpdate = { node in
+            var root = node
+            while let parent = root.parent { root = parent }
+            if entry.constrainToWindow, root.frame.width > 0 {
+                let width = max(0, Float(root.frame.width) - 8)
+                if node.layoutNode?.maxWidth != width { node.layoutNode?.maxWidth = width }
+            }
+            store.fitPosition(entry.id)
+        }
     }
 
     func _makeLayoutNode() -> LayoutNode? {
