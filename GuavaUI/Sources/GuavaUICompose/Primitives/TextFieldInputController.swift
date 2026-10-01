@@ -37,8 +37,10 @@ extension TextField {
                 textField.handleKey(event, state: state, node: node) ? .handled : .ignored
             }
             registry.setPointer(node, route: .textInput) { event, phase, _ in
+                guard event.button == .left else { return .ignored }
                 switch phase {
                 case .down:
+                    state.breakUndoGroup()
                     if textField.clearable,
                        let hitX = state.clearHitX,
                        Float(event.x) >= hitX {

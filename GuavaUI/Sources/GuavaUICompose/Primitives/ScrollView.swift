@@ -39,6 +39,12 @@ private struct _ScrollViewContentSizeCache {
     var structureVersion: UInt64
 }
 
+public struct ScrollGeometry: Equatable, Sendable {
+    public let offset: CGPoint
+    public let viewportSize: CGSize
+    public let contentSize: CGSize
+}
+
 /// Clipping container that scrolls its content via mouse wheel input.
 ///
 /// v1 limitations:
@@ -70,6 +76,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     public var wheelStep: Float = 30
     public let consumePolicy: ScrollConsumePolicy
     public let scrollbarGutter: ScrollbarGutter
+    public let onGeometryChange: ((ScrollGeometry) -> Void)?
 
     /// Width of the reserved lane under `.stable`: track + inset each side.
     static var scrollbarGutterWidth: Float { 12 }
@@ -77,10 +84,12 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     public init(_ axes: Axis = .vertical,
                 consumePolicy: ScrollConsumePolicy = .whenOffsetChanged,
                 scrollbarGutter: ScrollbarGutter = .overlay,
+                onGeometryChange: ((ScrollGeometry) -> Void)? = nil,
                 @ViewBuilder content: () -> Content) {
         self.axes = axes
         self.consumePolicy = consumePolicy
         self.scrollbarGutter = scrollbarGutter
+        self.onGeometryChange = onGeometryChange
         self.content = content()
     }
 
@@ -108,6 +117,11 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         }
         node.layoutDidUpdate = { node in
             Self.refreshScrollableContentSize(on: node)
+            let size = Self.cachedScrollableContentSize(for: node)
+            let viewport = Self.visibleViewportRect(for: node).size
+            node.contentOffset = CGPoint(x: min(node.contentOffset.x, max(0, size.width - viewport.width)),
+                                         y: min(node.contentOffset.y, max(0, size.height - viewport.height)))
+            onGeometryChange?(ScrollGeometry(offset: node.contentOffset, viewportSize: viewport, contentSize: size))
         }
 
         if let registry = InteractionRegistryHolder.current {
@@ -151,6 +165,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     nextOffset = .zero
                 }
                 node.contentOffset = nextOffset
+                onGeometryChange?(ScrollGeometry(offset: nextOffset, viewportSize: Self.visibleViewportRect(for: node).size,
+                                                  contentSize: Self.cachedScrollableContentSize(for: node)))
                 return consumePolicy.result(didScroll: nextOffset != previousOffset)
             }
             registry.setPointer(node, route: .scrollChrome) { event, pointerPhase, eventPhase in
@@ -170,6 +186,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                                            geometry: geometry,
                                                            hitSlop: CGFloat(trackHitSlop),
                                                            node: node) {
+                        onGeometryChange?(ScrollGeometry(offset: node.contentOffset, viewportSize: Self.visibleViewportRect(for: node).size,
+                                                          contentSize: Self.cachedScrollableContentSize(for: node)))
                         node.attachments[_ScrollViewAttachmentKeys.dragState] = state
                         PointerCaptureHolder.current?.acquire(node)
                         Self.setScrollbarChromeVisible(true, on: node)
@@ -180,6 +198,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                                            geometry: geometry,
                                                            hitSlop: CGFloat(trackHitSlop),
                                                            node: node) {
+                        onGeometryChange?(ScrollGeometry(offset: node.contentOffset, viewportSize: Self.visibleViewportRect(for: node).size,
+                                                          contentSize: Self.cachedScrollableContentSize(for: node)))
                         node.attachments[_ScrollViewAttachmentKeys.dragState] = state
                         PointerCaptureHolder.current?.acquire(node)
                         Self.setScrollbarChromeVisible(true, on: node)
@@ -216,6 +236,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     nextOffset.x = clampedOffset
                 }
                 node.contentOffset = nextOffset
+                onGeometryChange?(ScrollGeometry(offset: nextOffset, viewportSize: Self.visibleViewportRect(for: node).size,
+                                                  contentSize: Self.cachedScrollableContentSize(for: node)))
                 return .handled
             }
         }
