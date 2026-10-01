@@ -1,4 +1,4 @@
-﻿#if canImport(CoreGraphics)
+#if canImport(CoreGraphics)
 import CoreGraphics
 #endif
 import GuavaUIRuntime
@@ -39,6 +39,7 @@ extension TextField {
             registry.setPointer(node, route: .textInput) { event, phase, _ in
                 switch phase {
                 case .down:
+                    state.history.breakGroup()
                     if textField.clearable,
                        let hitX = state.clearHitX,
                        Float(event.x) >= hitX {

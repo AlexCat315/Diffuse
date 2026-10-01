@@ -170,16 +170,23 @@ public final class EventDispatcher {
         }
         let focusedPath = focusChain.focused.map(pathFromRoot)
         let preferredFocusedPath = preferredFocusedWheelPath(from: focusedPath)
+        let preferredHitPath = hitPath?.contains {
+            $0.attachments[WheelRoutingAttachmentKey.priority] as? WheelRoutingPriority == .preferHit
+        } == true ? hitPath : nil
 
         // Wheel delivery is target-first rather than full capture/target/bubble.
         // Nested scrollables need the deepest target to consume the gesture
         // before an ancestor ScrollView moves, otherwise inner editors can
         // never keep their own scroll context.
+        if let preferredHitPath,
+           deliverWheel(path: preferredHitPath, event: event) == .handled { return }
         if let preferredFocusedPath,
+           !sameWheelTarget(preferredFocusedPath, preferredHitPath),
            deliverWheel(path: preferredFocusedPath, event: event) == .handled {
             return
         }
         if let hitPath,
+           !sameWheelTarget(hitPath, preferredHitPath),
            !sameWheelTarget(hitPath, preferredFocusedPath),
            deliverWheel(path: hitPath, event: event) == .handled {
             return
@@ -190,6 +197,7 @@ public final class EventDispatcher {
            deliverWheel(path: focusedPath, event: event) == .handled {
             return
         }
+        if focusChain.hasModalScope { return }
         if deliverGlobalRoutes(kind: .wheel(event),
                                role: .scroll,
                                minPriority: .normal) == .handled {
@@ -209,6 +217,7 @@ public final class EventDispatcher {
     // MARK: - Key
 
     private func dispatchKey(_ event: KeyEvent, phase: KeyPhase) {
+        focusChain.ensureModalFocus()
         let kind = EventKind.key(event, phase)
         // A mounted transient overlay is visually and semantically above the
         // focused control. Give it first refusal so Escape/menu navigation is

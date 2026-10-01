@@ -38,7 +38,7 @@ struct ScriptCodeEditor: View {
                     syntaxColorAtUTF8Offset: { _, offset in highlighter.color(atUTF8Offset: offset) },
                     onChange: onChange,
                     onHoverChange: { anchor in handleHover(anchor) },
-                    onCaretChange: { state in handleCaret(state, in: text) },
+                    onCaretChange: { state in handleCaret(state, in: source.wrappedValue) },
                     textColor: theme.colors.onSurface,
                     cursorColor: theme.colors.onSurface,
                     selectionColor: theme.colors.selection

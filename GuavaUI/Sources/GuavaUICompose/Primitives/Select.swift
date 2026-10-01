@@ -22,6 +22,8 @@ public enum UICommonIcons {
                                                       subdirectory: "UIIcons")
     public static let formatjson = BundleImageResource.svg(named: "format-json", in: GuavaUIComposeResourceBundle.bundle, subdirectory: "UIIcons")
     public static let revert = BundleImageResource.svg(named: "revert", in: GuavaUIComposeResourceBundle.bundle, subdirectory: "UIIcons")
+    public static let format = BundleImageResource.svg(named: "format", in: GuavaUIComposeResourceBundle.bundle, subdirectory: "UIIcons")
+    public static let reset = BundleImageResource.svg(named: "reset", in: GuavaUIComposeResourceBundle.bundle, subdirectory: "UIIcons")
     public static let expand = BundleImageResource.svg(named: "expand", in: GuavaUIComposeResourceBundle.bundle, subdirectory: "UIIcons")
 }
 
@@ -211,21 +213,13 @@ public struct Menu: View {
 
     public var body: some View {
         let rowHeight: Float = 28
-        let shouldScroll = entries.count > maxVisibleRows
         let listHeight = Float(maxVisibleRows) * rowHeight
-        Box(direction: .column, alignItems: .stretch, spacing: 1) {
-            if shouldScroll {
-                ScrollView(.vertical,
-                           consumePolicy: .always,
-                           scrollbarGutter: .stable) {
-                    Box(direction: .column, alignItems: .stretch, spacing: 1) {
-                        rows()
-                    }
-                }
-                .frame(height: listHeight)
-            } else {
-                rows()
+        Box(direction: .column, alignItems: .stretch, spacing: 0) {
+            ScrollView(.vertical, consumePolicy: .always, scrollbarGutter: .stable) {
+                Box(direction: .column, alignItems: .stretch, spacing: 1) { rows() }
             }
+            .frame(maxHeight: listHeight)
+            .modifier(_MenuWindowBounds())
         }
         .background(.surfaceFloating)
         .cornerRadius(7)
@@ -898,5 +892,18 @@ private extension View {
         } else {
             self
         }
+    }
+}
+
+private struct _MenuWindowBounds: ViewModifier {
+    func apply(node: Node) {
+        let preferredHeight = node.layoutNode?.maxHeight ?? .greatestFiniteMagnitude
+        func constrain(_ node: Node) {
+            let bounds = portalWindowBounds(node)
+            let height = min(preferredHeight, max(0, Float(bounds.height) - 12))
+            if node.layoutNode?.maxHeight != height { node.layoutNode?.maxHeight = height }
+        }
+        constrain(node)
+        node.layoutDidUpdate = constrain
     }
 }

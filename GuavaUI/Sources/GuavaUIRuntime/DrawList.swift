@@ -50,6 +50,18 @@ public final class DrawList {
         viewportBounds = bounds
     }
 
+    /// Fade a completed subtree. The UI shader consumes straight RGBA tints,
+    /// so only alpha changes; RGB must retain its original brightness.
+    public func multiplyOpacity(_ opacity: Float, fromVertex start: Int) {
+        let factor = max(0, min(1, opacity))
+        guard factor < 1 else { return }
+        for index in start..<vertices.count {
+            let packed = vertices[index].color
+            let alpha = UInt32((Float(packed >> 24) * factor).rounded())
+            vertices[index].color = (packed & 0x00ff_ffff) | (alpha << 24)
+        }
+    }
+
     // MARK: - Clipping
 
     /// Push a clip rectangle. Subsequent draws will be intersected with the

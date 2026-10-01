@@ -92,7 +92,8 @@ struct EditorApplicationMenuBar: View {
                     title: action.title,
                     shortcut: shortcutLabel(key: action.keyEquivalent,
                                             modifiers: action.keyModifiers),
-                    isEnabled: action.isEnabled,
+                    isEnabled: EditorCommandDispatcher.isEnabled(action.command,
+                                                                  sceneCommandEnabled: action.isEnabled),
                     isSelected: action.isSelected,
                     action: {
                         onCommand(action.command)

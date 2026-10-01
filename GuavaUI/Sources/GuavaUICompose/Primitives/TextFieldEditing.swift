@@ -1,4 +1,4 @@
-﻿#if canImport(CoreGraphics)
+#if canImport(CoreGraphics)
 import CoreGraphics
 #endif
 import EngineKernel
@@ -114,25 +114,23 @@ extension TextField {
     /// when no selection exists. Both paths leave the cursor at the end of
     /// the inserted text and clear any selection.
     func insertReplacingSelection(_ incoming: String, state: FieldState) {
-        beginEdit(state, kind: .typing)
+        let selection = selectionRange(state)
+        let typing = incoming.count == 1 && incoming != "\n" && selection == nil && !state.isComposing
+        beginEdit(state, kind: typing ? .typing : .atomic)
         defer { endEdit(state) }
         guard !incoming.isEmpty else { return }
-        state.clearComposition()
-        deleteSelection(state: state)
         var currentText = text.wrappedValue
-        let cursor = clamp(state.cursorIndex, 0, currentText.count)
-        let toInsert: String
-        if let maxLength {
-            let remaining = max(0, maxLength - currentText.count)
-            guard remaining > 0 else { return }
-            toInsert = incoming.count > remaining ? String(incoming.prefix(remaining)) : incoming
-        } else {
-            toInsert = incoming
-        }
-        let insertionIndex = currentText.index(currentText.startIndex, offsetBy: cursor)
-        currentText.insert(contentsOf: toInsert, at: insertionIndex)
+        let cursor = selection?.lowerBound ?? clamp(state.cursorIndex, 0, currentText.count)
+        let removed = selection?.count ?? 0
+        let capacity = maxLength.map { max(0, $0 - (currentText.count - removed)) }
+        let insertion = capacity.map { String(incoming.prefix($0)) } ?? incoming
+        guard !insertion.isEmpty else { return }
+        let lower = currentText.index(currentText.startIndex, offsetBy: cursor)
+        let upper = currentText.index(lower, offsetBy: removed)
+        currentText.replaceSubrange(lower..<upper, with: insertion)
+        state.clearComposition()
         text.wrappedValue = currentText
-        state.cursorIndex = cursor + toInsert.count
+        state.cursorIndex = cursor + insertion.count
         state.selectionAnchor = nil
         state.preferredCaretX = nil
         recordCaretActivity(state)

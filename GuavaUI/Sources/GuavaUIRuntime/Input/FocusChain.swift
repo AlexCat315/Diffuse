@@ -14,16 +14,21 @@ public final class FocusChain {
     private final class Scope {
         weak var root: Node?
         weak var previous: Node?
+        weak var previousTreeRoot: Node?
         let visible: Bool
         let restoresCommands: Bool
         init(root: Node, previous: Node?, visible: Bool, restoresCommands: Bool) {
             self.root = root; self.previous = previous; self.visible = visible; self.restoresCommands = restoresCommands
+            var treeRoot = previous
+            while let parent = treeRoot?.parent { treeRoot = parent }
+            previousTreeRoot = treeRoot
         }
     }
     private var scopes: [Scope] = []
     private let registrar = ObservableStateRegistrar()
     public var activeScopeRoot: Node? { scopes.last?.root }
     public var hasModalScope: Bool { scopes.contains { !$0.restoresCommands && $0.root != nil } }
+    public var modalRoot: Node? { scopes.last(where: { !$0.restoresCommands })?.root }
 
     public init() {}
 
@@ -73,11 +78,13 @@ public final class FocusChain {
         if index < scopes.count {
             if let previous = scopes[index].previous, isDescendant(previous, of: root) {
                 scopes[index].previous = scope.previous
+                scopes[index].previousTreeRoot = scope.previousTreeRoot
             }
             return
         }
         if !shouldRestore, let focused, focused.parent != nil, permitsInput(focused) { return }
-        if let previous = scope.previous, previous.parent != nil,
+        if let previous = scope.previous, let treeRoot = scope.previousTreeRoot,
+           isDescendant(previous, of: treeRoot), previous.parent != nil,
            previous.isFocusable, previous.acceptsSubtreeInput, permitsInput(previous) {
             focus(previous, visible: scope.visible)
         } else if let active = activeScopeRoot {
@@ -146,6 +153,29 @@ public final class FocusChain {
 
     public func clear() {
         focus(nil)
+    }
+
+    public func contains(_ node: Node, in root: Node) -> Bool { isDescendant(node, of: root) }
+    public func beginModal(_ root: Node) { pushScope(root) }
+    public func endModal(_ root: Node) { popScope(root) }
+    public func ensureModalFocus() {
+        if let root = activeScopeRoot { settleScope(root) }
+    }
+
+    public func textEditAvailability(_ command: TextEditCommand) -> Bool? {
+        textEditActions?.canPerform(command)
+    }
+
+    @discardableResult
+    public func performTextEdit(_ command: TextEditCommand) -> Bool {
+        guard let actions = textEditActions else { return false }
+        if actions.canPerform(command) { actions.perform(command) }
+        return true
+    }
+
+    private var textEditActions: TextEditActions? {
+        guard let target = commandTarget, target.acceptsSubtreeInput, permitsInput(target) else { return nil }
+        return target.attachments[TextInputAttachmentKey.editActions] as? TextEditActions
     }
 
     // MARK: - Internal

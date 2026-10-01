@@ -1,5 +1,8 @@
 public enum WheelRoutingPriority: Sendable {
     case preferFocused
+    /// A transient overlay under the pointer takes precedence over a text
+    /// editor retaining focus behind it. May be attached to an ancestor.
+    case preferHit
 }
 
 /// Controls whether a wheel handler should consume an event after applying

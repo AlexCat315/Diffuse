@@ -38,7 +38,7 @@ private struct _ModalBarrierHost<Content: View>: _PrimitiveView {
             phase == .target ? .handled : .ignored
         }
         registry.setWheel(node, route: route) { _, phase in
-            phase == .target ? .handled : .ignored
+            phase == .capture ? .ignored : .handled
         }
     }
 

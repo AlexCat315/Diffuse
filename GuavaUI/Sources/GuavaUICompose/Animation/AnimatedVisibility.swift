@@ -71,6 +71,7 @@ private struct _VisibilityHost<Content: View>: _PrimitiveView {
         guard let state = node.firstResource(VisibilityState.self) else { return }
         state.onFinished = onFinished
         node.allowsHitTesting = isVisible
+        node.isInteractionEnabled = isVisible
         if !isVisible {
             if let focused = FocusChainHolder.current?.focused, !focused.acceptsSubtreeInput {
                 FocusChainHolder.current?.clear()

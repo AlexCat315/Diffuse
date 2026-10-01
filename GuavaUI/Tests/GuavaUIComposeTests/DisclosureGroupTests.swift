@@ -37,7 +37,7 @@ struct DisclosureGroupTests {
     } }
 
     @Test("Return and Space toggle content and reflow the following row")
-    func keyboardToggle() throws { try GlobalTestLock.locked {
+    func keyboardToggle() throws { try AnimatorScheduler.$current.withValue(AnimatorScheduler()) { try GlobalTestLock.locked {
         let previousRegistry = InteractionRegistryHolder.current
         let previousText = TextEnvironmentHolder.current
         let registry = InteractionRegistry()
@@ -64,6 +64,9 @@ struct DisclosureGroupTests {
                                      modifiers: [], isRepeat: false), .target) == .handled)
             graph.recomposer.commitAll()
             graph.computeLayout(width: 220, height: 400)
+            AnimatorScheduler.current.tick(deltaTime: 1)
+            graph.recomposer.commitAll()
+            graph.computeLayout(width: 220, height: 400)
             let layout = graph.layoutSnapshot()
             let following = try #require(layout.first { $0.debugName == "disclosure-following" }?.absoluteFrame)
             if harness.expanded {
@@ -75,7 +78,7 @@ struct DisclosureGroupTests {
                 #expect(following.minY == initialY)
             }
         }
-    } }
+    } } }
 
     @Test("disabled disclosure cannot be keyboard activated")
     func disabledHeader() { GlobalTestLock.locked {

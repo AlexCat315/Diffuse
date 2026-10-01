@@ -17,6 +17,12 @@ JsonField(text: $parameters) { committed in
 ## Behavior
 
 - `Cmd-Return` commits valid JSON.
-- Invalid JSON stays in the draft and does not overwrite the bound value.
-- `Format` pretty-prints with sorted keys for stable diffs.
-- `Revert` discards the current draft.
+- Invalid JSON stays in the draft across blur/refocus and does not overwrite the bound value.
+- Drag the lower grip to resize the inline editor; overflowing text scrolls inside the field.
+- The compact toolbar exposes format, revert and expand actions as SVG icons with tooltips. Validation errors appear only when needed.
+- `Format` pretty-prints with sorted keys for stable diffs. `Revert` restores the current edit's starting value.
+- Expand opens a centered editor with line numbers. Apply / Primary-Return commits valid JSON atomically; Cancel / Escape discards expanded-window changes.
+- Expanded editing requires a `PortalHost` at the window root, normally supplied by `LayerRoot`.
+- Text fields support Primary-Z, Primary-Shift-Z and Ctrl-Y. History includes cursor/selection, coalesces continuous typing and treats replacement/paste as one edit.
+
+Use `ResizableTextArea` separately for other multiline inputs. See [interaction primitives](interaction.md) for modal, context menu and transition APIs.
