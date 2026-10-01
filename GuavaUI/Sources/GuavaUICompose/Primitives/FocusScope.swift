@@ -18,16 +18,3 @@ public struct FocusScope<Content: View>: _PrimitiveView {
     public func _makeLayoutNode() -> LayoutNode? { nil }
     public var _children: [any View] { [content] }
 }
-
-final class ModalFocusResource: NodeResource {
-    weak var chain: FocusChain?
-    func mount(node: Node) {}
-    func bind(_ node: Node, chain next: FocusChain?, restoresCommands: Bool) {
-        if chain !== next { chain?.popScope(node); chain = next }
-        next?.pushScope(node, restoresCommands: restoresCommands)
-        if let captured = PointerCaptureHolder.current?.target, next?.permitsInput(captured) == false {
-            PointerCaptureHolder.current?.release()
-        }
-    }
-    func unmount(node: Node) { chain?.popScope(node); chain = nil }
-}

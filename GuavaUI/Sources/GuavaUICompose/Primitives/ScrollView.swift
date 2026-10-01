@@ -39,6 +39,12 @@ private struct _ScrollViewContentSizeCache {
     var structureVersion: UInt64
 }
 
+public struct ScrollGeometry: Equatable, Sendable {
+    public let offset: CGPoint
+    public let viewportSize: CGSize
+    public let contentSize: CGSize
+}
+
 /// Clipping container that scrolls its content via mouse wheel input.
 ///
 /// v1 limitations:
@@ -67,6 +73,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     public let content: Content
     public var onViewportChange: ((ScrollViewport) -> Void)?
     public var scrollOffset: Binding<CGPoint>?
+    public let onGeometryChange: ((ScrollGeometry) -> Void)?
 
     /// Pixels scrolled per wheel notch. SDL3 reports wheel deltas in lines.
     public var wheelStep: Float = 30
@@ -81,6 +88,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 scrollbarGutter: ScrollbarGutter = .overlay,
                 scrollOffset: Binding<CGPoint>? = nil,
                 onViewportChange: ((ScrollViewport) -> Void)? = nil,
+                onGeometryChange: ((ScrollGeometry) -> Void)? = nil,
                 @ViewBuilder content: () -> Content) {
         self.axes = axes
         self.consumePolicy = consumePolicy
@@ -88,6 +96,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         self.content = content()
         self.scrollOffset = scrollOffset
         self.onViewportChange = onViewportChange
+        self.onGeometryChange = onGeometryChange
     }
 
     public func _makeNode() -> Node {
@@ -104,6 +113,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             let snapshot = ScrollViewport(offset: node.contentOffset, size: size)
             if scrollOffset?.wrappedValue != node.contentOffset { scrollOffset?.wrappedValue = node.contentOffset }
             onViewportChange?(snapshot)
+            onGeometryChange?(ScrollGeometry(offset: node.contentOffset, viewportSize: size,
+                                            contentSize: Self.cachedScrollableContentSize(for: node)))
         }
         if let desired = scrollOffset?.wrappedValue, desired != node.contentOffset { node.contentOffset = desired }
         let axes = self.axes

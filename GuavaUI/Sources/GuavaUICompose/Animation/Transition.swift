@@ -20,6 +20,9 @@ public struct Transition: Equatable, Sendable {
     public static let identity = Transition(Effect())
     public static let opacity = Transition(Effect(opacity: 0))
     public static let collapse = Transition(Effect(collapse: true))
+    public static func offset(x: CGFloat = 0, y: CGFloat = 0) -> Transition {
+        Transition(Effect(x: Float(x), y: Float(y)))
+    }
     public static func move(edge: Edge, distance: Float = 16) -> Transition {
         let d = distance.isFinite ? distance : 0
         switch edge {

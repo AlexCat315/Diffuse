@@ -54,6 +54,27 @@ struct LayerAwareNodeRendererTests {
         #expect(layerList.vertices.last?.posY == referenceList.vertices.last?.posY)
     }
 
+    @Test("subtree fades preserve RGB and match cached and uncached rendering")
+    func subtreeFadeParity() {
+        let t = Tree()
+        let renderer = LayerAwareNodeRenderer()
+        renderer.render(tree: t.render, into: DrawList())
+        let cachedLeaf = t.render.renderObject(for: t.b)?.cachedLayerList
+        t.a.subtreeOpacity = 0.5
+        let faded = DrawList()
+        renderer.render(tree: t.render, into: faded)
+        let reference = DrawList()
+        NodeRenderer().render(root: t.root, into: reference)
+        #expect(faded.vertices.map(\.color) == reference.vertices.map(\.color))
+        #expect(faded.vertices.allSatisfy { $0.color >> 24 == 128 })
+        #expect(faded.vertices.first!.color & 0x00ff_ffff == 255)
+        #expect(t.render.renderObject(for: t.b)?.cachedLayerList === cachedLeaf)
+        t.a.subtreeOpacity = 1
+        let restored = DrawList()
+        renderer.render(tree: t.render, into: restored)
+        #expect(restored.vertices.allSatisfy { $0.color >> 24 == 255 })
+    }
+
     @Test("Second composite reuses the cached layer DrawList when nothing changed")
     func cacheReuse() {
         let t = Tree()

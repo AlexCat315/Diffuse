@@ -178,7 +178,7 @@ struct AssetBrowserPanel: View {
                                      onNavigate: { navigateSelection(from: asset.id, direction: $0, modifiers: $1, visibleIDs: visibleAssetIDs) },
                                      onSelectAll: { selection.selectAll(in: visibleAssetIDs) },
                                      onClearSelection: { selection.clear() }, onActivate: { activateAsset(asset) })
-                            .contextMenu(assetContextEntries(asset), onOpen: { selectAsset(asset.id, modifiers: [], visibleIDs: visibleAssetIDs) })
+                            .contextMenu(onOpen: { selectContextAsset(asset.id, visibleIDs: visibleAssetIDs) }, entries: { assetContextEntries(asset, visibleAssets: listing.assets) })
                     }
                 }
                 .padding(horizontal: 6, vertical: 6)
@@ -189,7 +189,7 @@ struct AssetBrowserPanel: View {
                         for folder in listing.folders {
                             AssetFolderTile(name: folder.name, onOpen: { navigate(to: folder.path) })
                         }
-                        listing.assets.map { gridAsset($0, visibleIDs: visibleAssetIDs) }
+                        listing.assets.map { gridAsset($0, visibleIDs: visibleAssetIDs, visibleAssets: listing.assets) }
 
                     }.padding(horizontal: 10, vertical: 10)
                 }.flex()
@@ -197,19 +197,35 @@ struct AssetBrowserPanel: View {
         }
     }
 
-    private func gridAsset(_ asset: EditorAsset, visibleIDs: [String]) -> AnyView {
+    private func gridAsset(_ asset: EditorAsset, visibleIDs: [String], visibleAssets: [EditorAsset]) -> AnyView {
         AnyView(AssetTile(asset: asset, app: app,
                                       isSelected: selection.selectedIDs.contains(asset.id),
                                       onSelect: { selectAsset(asset.id, modifiers: $0, visibleIDs: visibleIDs) },
                                       onNavigate: { navigateSelection(from: asset.id, direction: $0, modifiers: $1, visibleIDs: visibleIDs) },
                                       onSelectAll: { selection.selectAll(in: visibleIDs) },
                                       onClearSelection: { selection.clear() }, onActivate: { activateAsset(asset) })
-                                .contextMenu(assetContextEntries(asset), onOpen: { selectAsset(asset.id, modifiers: [], visibleIDs: visibleIDs) }))
+                                .contextMenu(onOpen: { selectContextAsset(asset.id, visibleIDs: visibleIDs) }, entries: { assetContextEntries(asset, visibleAssets: visibleAssets) }))
     }
 
-    private func assetContextEntries(_ asset: EditorAsset) -> [MenuEntry] {
-        [.item(MenuItem(id: "open", title: L("Open"), action: { activateAsset(asset) })),
-         .item(MenuItem(id: "copy-path", title: L("Copy Path"), action: { ClipboardHolder.write?(asset.relativePath) }))]
+    private func selectContextAsset(_ id: String, visibleIDs: [String]) {
+        if !selection.selectedIDs.contains(id) { selectAsset(id, modifiers: [], visibleIDs: visibleIDs) }
+    }
+
+    private func assetContextEntries(_ target: EditorAsset, visibleAssets: [EditorAsset]) -> [MenuEntry] {
+        let selected = visibleAssets.filter { selection.selectedIDs.contains($0.id) }
+        let assets = selected.isEmpty ? [target] : selected
+        return [
+            .item(MenuItem(id: "open", title: L("Open"), action: { activateAsset(target) })),
+            .item(MenuItem(id: "asset-add", title: L("Add to Scene"),
+                           isEnabled: assets.contains { $0.kind.isMesh } && app.store.state.playbackState == .stopped,
+                           action: { _ = app.spawnAssets(assets) })),
+            .item(MenuItem(id: "asset-reveal", title: L("Reveal"), action: { revealAssets(assets) })),
+            .item(MenuItem(id: "copy-path", title: L("Copy Path"), action: {
+                ClipboardHolder.write?(assets.map(\.relativePath).joined(separator: "\n"))
+            })),
+            .separator("asset-refresh"),
+            .item(MenuItem(id: "asset-reload", title: L("Reload"), action: reloadAssets)),
+        ]
     }
 
     private func selectAsset(_ assetID: String,

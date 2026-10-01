@@ -144,6 +144,7 @@ private struct _PortalEntrySlot: _PrimitiveView {
         let node = Node()
         node.attachments[LayoutDebugAttachmentKey.layoutRole] = "portal-entry"
         node.attachments[LayoutDebugAttachmentKey.debugName] = entry.id
+        node.attachments[WheelRoutingAttachmentKey.priority] = WheelRoutingPriority.preferHit
         return node
     }
 

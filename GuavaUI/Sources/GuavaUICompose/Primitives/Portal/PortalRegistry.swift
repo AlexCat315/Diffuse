@@ -1,4 +1,4 @@
-﻿#if canImport(CoreGraphics)
+#if canImport(CoreGraphics)
 import CoreGraphics
 #endif
 import Foundation
@@ -78,10 +78,19 @@ public final class PortalStore {
         entry.fillsWindow = fillsWindow; storage[id] = entry; notifyChanged()
     }
     func anchor(for id: String) -> CGRect? { dismissals[id]?.anchor() }
+    func frame(_ id: String) -> CGRect? { slotNodes[id]?.node?.absoluteFrame }
+
 
     public func updateContent(_ id: String, content: AnyView) {
         guard var entry = storage[id] else { return }
         entry.content = content
+        storage[id] = entry
+        notifyChanged()
+    }
+
+    func updatePresentation(_ id: String, position: CGPoint, width: Float?, content: AnyView) {
+        guard var entry = storage[id] else { return }
+        entry.position = position; entry.width = width; entry.content = content
         storage[id] = entry
         notifyChanged()
     }
@@ -230,8 +239,7 @@ final class PortalResource: NodeResource {
         }
         store = current
         if let id = entryID, current.contains(id) {
-            current.updatePosition(id, position: position)
-            current.updateContent(id, content: content)
+            current.updatePresentation(id, position: position, width: width, content: content)
         } else {
             entryID = current.register(position: position,
                                        width: width,
@@ -244,6 +252,8 @@ final class PortalResource: NodeResource {
         guard let id = entryID else { return }
         store?.updatePosition(id, position: position)
     }
+
+    var frame: CGRect? { entryID.flatMap { store?.frame($0) } }
 
     func setDismissal(anchor: @escaping () -> CGRect, dismiss: @escaping () -> Void) {
         guard let id = entryID else { return }

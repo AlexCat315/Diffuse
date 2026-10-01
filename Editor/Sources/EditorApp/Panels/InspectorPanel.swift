@@ -602,7 +602,8 @@ struct InspectorPanel: View {
             return AnyView(JsonField(text: binding, minHeight: minHeight,
                                      labels: JsonFieldLabels(format: L("Format"), revert: L("Revert"),
                                                              valid: L("Valid JSON"), empty: L("Empty saves as {}"),
-                                                             expand: L("Expand Editor"), done: L("Done"))))
+                                                             expand: L("Expand JSON Editor"), apply: L("Apply"), cancel: L("Cancel")))
+                .id(identity))
         case let .lightType(binding):
             return AnyView(InspectorLightTypeValue(binding: binding))
         case let .physicsSimulationMode(binding):
