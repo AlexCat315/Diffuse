@@ -129,7 +129,7 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
                 entity: key.entity,
                 deltaTime: context.deltaTimeSeconds
             )
-            instance.script.onDestroyHandler?(scriptContext)
+            invoke(\.onDestroyHandler, script: instance.script, context: scriptContext)
         }
     }
 
@@ -190,9 +190,10 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
                         script: Script?,
                         context: ScriptContext) {
         guard let script, let handler = script[keyPath: keyPath] else { return }
+        let previousContext = _guavaCurrentScriptContext
         guavaSetCurrentScriptContext(context)
+        defer { guavaSetCurrentScriptContext(previousContext) }
         handler(context)
-        guavaSetCurrentScriptContext(nil)
     }
 
     private func resolve(_ binding: ScriptBinding) -> (ScriptHandle, RegisteredScript)? {

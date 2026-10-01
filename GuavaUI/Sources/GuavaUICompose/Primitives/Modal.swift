@@ -74,9 +74,12 @@ private struct _ModalBackdrop<Content: View>: _PrimitiveView {
     func _children(for node: Node) -> [any View] {
         let bounds = portalWindowBounds(node)
         return [AnimatedVisibility(isVisible: true, transition: .opacity.combined(with: .move(edge: .bottom, distance: 12)), animateOnMount: true) {
-            content.frame(width: min(width, Float(max(0, bounds.width - 32))),
-                          height: min(height, Float(max(0, bounds.height - 32))))
+            content.frame(width: .percent(100), height: .percent(100))
                 .background(.surface).cornerRadius(8).border(.border, width: 1)
-        }]
+        }
+        // The animation host must own the dialog's size: flexible content
+        // otherwise has no definite height and can collapse to its flex basis.
+        .frame(width: min(width, Float(max(0, bounds.width - 32))),
+               height: min(height, Float(max(0, bounds.height - 32))))]
     }
 }

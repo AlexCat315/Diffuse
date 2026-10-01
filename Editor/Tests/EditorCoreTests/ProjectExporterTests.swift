@@ -1,10 +1,46 @@
 @testable import EditorCore
 import Foundation
 import SceneRuntime
+import ScriptRuntime
 import Testing
 
 @Suite("ProjectExporter", .serialized)
 struct ProjectExporterTests {
+
+    @Test("Swift sources without a build SDK fail instead of disappearing from the game")
+    func missingScriptSDKPreservesExport() throws {
+        let project = tempDir()
+        let output = project.appendingPathComponent("export")
+        defer { try? FileManager.default.removeItem(at: project) }
+        let manifest = EditorSceneAdapter().manifest()
+        _ = try ProjectExporter.export(manifest: manifest, appName: "Previous", to: output)
+        let descriptorURL = output.appendingPathComponent("build.json")
+        let previous = try Data(contentsOf: descriptorURL)
+        let scripts = project.appendingPathComponent("Scripts")
+        try FileManager.default.createDirectory(at: scripts, withIntermediateDirectories: true)
+        try Data("struct GameScript {}".utf8).write(to: scripts.appendingPathComponent("Player.swift"))
+        #expect(throws: ProjectExporterError.missingScriptBuildConfiguration) {
+            try ProjectExporter.export(manifest: manifest, appName: "Next", sourceProjectDirectory: project, to: output)
+        }
+        #expect(try Data(contentsOf: descriptorURL) == previous)
+    }
+
+    @Test("enabled missing bindings reject export while disabled bindings may remain")
+    func validatesEnabledScriptBindings() throws {
+        let output = tempDir()
+        defer { try? FileManager.default.removeItem(at: output) }
+        func manifest(enabled: Bool) -> EditorSceneManifest {
+            let binding = ScriptBinding(identifier: "game.missing", isEnabled: enabled)
+            let node = EditorSceneManifestNode(id: 1, name: "Missing", kind: "empty",
+                                               script: EditorSceneManifestScript(ScriptComponent(binding)))
+            return EditorSceneManifest(revision: 0, entityCount: 1, roots: [node])
+        }
+        #expect(throws: ProjectExporterError.unresolvedScriptBindings(["Missing: game.missing"])) {
+            try ProjectExporter.export(manifest: manifest(enabled: true), appName: "Demo", to: output)
+        }
+        _ = try ProjectExporter.export(manifest: manifest(enabled: false), appName: "Demo", to: output)
+        #expect(try ProjectExporter.readDescriptor(from: output).entityCount == 1)
+    }
 
     private func tempDir() -> URL {
         let url = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)

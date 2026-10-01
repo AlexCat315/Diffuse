@@ -190,4 +190,51 @@ struct KeyedReconcilerTests {
         let b = Node()
         #expect(a.id != b.id)
     }
+
+    @Test("Keys before ordinary modifiers survive updates and reorder")
+    func modifiedKeysPreserveNodes() {
+        let (tree, graph) = install(_TaggedNode(payload: "A").id("a").frame(height: 30).flex())
+        let parent = tree.root!
+        let originalA = parent.children[0]
+        let a = _TaggedNode(payload: "A2").id("a").frame(height: 30).flex()
+        let b = _TaggedNode(payload: "B").id("b").frame(height: 30).flex()
+        graph.reconcileChildren(parent: parent, layoutParent: graph.layoutRoot, newViews: [a, b])
+        let originalB = parent.children[1]
+        graph.reconcileChildren(parent: parent, layoutParent: graph.layoutRoot, newViews: [b, a])
+        graph.reconcileChildren(parent: parent, layoutParent: graph.layoutRoot, newViews: [b, a])
+        #expect(parent.children[0] === originalB)
+        #expect(parent.children[1] === originalA)
+        #expect(originalA.attachments["_initial"] as? String == "A")
+        #expect(originalA.attachments["_latest"] as? String == "A2")
+    }
+
+    @Test("Outermost key wins on materialisation and repeated updates")
+    func outerKeySurvivesUpdates() {
+        let view = _TaggedNode(payload: "A").id("inner").frame(height: 30).id("outer")
+        let (tree, graph) = install(view)
+        let original = tree.root!.children[0]
+        for _ in 0..<3 {
+            graph.reconcileChildren(parent: tree.root!, layoutParent: graph.layoutRoot, newViews: [view])
+            #expect(tree.root!.children[0] === original)
+            #expect(original.key == AnyHashable("outer"))
+        }
+    }
+
+    @Test("Scope and animation anchors keep child keys local")
+    func anchorKeysRemainLocal() {
+        let scoped = _TaggedNode(payload: "A").id("child").theme(.defaultDark).frame(height: 30)
+        let animated = _TaggedNode(payload: "A").id("child").animation(nil, value: 0).frame(height: 30)
+        let views: [any View] = [scoped, animated]
+        for view in views {
+            let tree = NodeTree()
+            let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+            graph.install(root: AnyView(view))
+            let original = tree.root!.children[0]
+            #expect(original.key == nil)
+            #expect(ViewGraph.slotKey(view) == nil)
+            graph.reconcileChildren(parent: tree.root!, layoutParent: graph.layoutRoot, newViews: [view])
+            #expect(tree.root!.children[0] === original)
+            #expect(original.children[0].key == AnyHashable("child"))
+        }
+    }
 }

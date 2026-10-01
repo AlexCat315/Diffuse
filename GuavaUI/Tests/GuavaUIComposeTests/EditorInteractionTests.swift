@@ -173,6 +173,61 @@ struct EditorInteractionTests: GuavaUIComposeSerializedSuite {
         #expect(PortalStoreHolder.current.entries.isEmpty)
     } }
 
+    @Test("expanded JSON has a centered editor and clickable footer after opening and resizing", arguments: [false, true])
+    func expandedJsonLayout(compactInitially: Bool) throws { try withRig { rig in
+        let store = Store()
+        store.text = "[\n" + (0..<30).map { "  {\"value\":\($0)}" }.joined(separator: ",\n") + "\n]"
+        let graph = rig.graph
+        graph.install(root: LayerRoot {
+            JsonField(text: Binding(get: { store.text }, set: { store.text = $0 }))
+                .frame(width: 280)
+        })
+        let largeWindow = CGSize(width: 1280, height: 800)
+        let compactWindow = CGSize(width: 640, height: 480)
+        var window = compactInitially ? compactWindow : largeWindow
+        func settle() {
+            for _ in 0..<3 {
+                graph.recomposer.commitAll(); AnimatorScheduler.current.tick(deltaTime: 1)
+                graph.recomposer.commitAll()
+                graph.computeLayout(width: Float(window.width), height: Float(window.height))
+            }
+        }
+        func named(_ name: String) throws -> Node {
+            try #require(all(rig.tree.root).first {
+                $0.attachments[LayoutDebugAttachmentKey.debugName] as? String == name
+            })
+        }
+        func click(_ node: Node) {
+            let frame = node.absoluteFrame
+            let event = MouseButtonEvent(button: .left, x: Float(frame.midX), y: Float(frame.midY), clicks: 1)
+            rig.dispatcher.dispatch(.mouseButtonDown(event)); settle()
+            rig.dispatcher.dispatch(.mouseButtonUp(event)); settle()
+        }
+        settle()
+        click(try named("json-expand"))
+        for size in [window, compactInitially ? largeWindow : compactWindow] {
+            window = size; settle()
+            let dialog = try named("json-expanded-editor")
+            let frame = dialog.absoluteFrame
+            let expectedSize = CGSize(width: min(760, size.width - 32), height: min(560, size.height - 32))
+            #expect(frame.width == expectedSize.width)
+            #expect(frame.height == expectedSize.height)
+            #expect(abs(frame.midX - size.width / 2) <= 1)
+            #expect(abs(frame.midY - size.height / 2) <= 1)
+            let editor = try #require(all(dialog).first { $0.attachments[TextField.surfaceMarkerKey] != nil })
+            #expect(editor.absoluteFrame.height > frame.height / 2)
+            #expect(frame.contains(editor.absoluteFrame))
+            let apply = try named("json-apply")
+            #expect(frame.contains(apply.absoluteFrame))
+            #expect(editor.absoluteFrame.maxY <= apply.absoluteFrame.minY)
+        }
+        rig.dispatcher.dispatch(.keyDown(key(Scancode.a, modifiers: .lgui)))
+        rig.dispatcher.dispatch(.textInput("{\"value\":42}")); settle()
+        click(try named("json-apply"))
+        #expect(store.text == "{\"value\":42}")
+        #expect(rig.focus.modalRoot == nil)
+    } }
+
     private struct ModalHarness: View {
         @State var shown = false
         @State var text = ""

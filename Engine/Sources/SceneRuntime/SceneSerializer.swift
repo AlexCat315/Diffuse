@@ -275,6 +275,11 @@ public enum SceneSerializer {
     /// Parent wiring is the caller's responsibility (entities must exist first).
     @discardableResult
     static func decodeEntity(_ obj: [String: Any], into scene: inout SceneRuntime) -> EntityID {
+        scene.withWorld { decodeEntity(obj, into: &$0) }
+    }
+
+    @discardableResult
+    static func decodeEntity(_ obj: [String: Any], into scene: inout RuntimeWorld) -> EntityID {
         let entity = scene.createEntity()
 
         if let name = jsonToString(obj["name"]) {
@@ -322,6 +327,15 @@ public enum SceneSerializer {
     static func loadEntities(
         _ entities: [Any],
         into scene: inout SceneRuntime,
+        restoreGameState: Bool = false
+    ) -> [EntityID] {
+        scene.withWorld { loadEntities(entities, into: &$0, restoreGameState: restoreGameState) }
+    }
+
+    @discardableResult
+    static func loadEntities(
+        _ entities: [Any],
+        into scene: inout RuntimeWorld,
         restoreGameState: Bool = false
     ) -> [EntityID] {
         var entityMap: [Int: EntityID] = [:]
@@ -450,7 +464,7 @@ public enum SceneSerializer {
     private static func restoreDestructionRuntimeState(
         from entities: [Any],
         entityMap: [Int: EntityID],
-        into scene: inout SceneRuntime
+        into scene: inout RuntimeWorld
     ) {
         var runtime = scene.resource(DestructionRuntimeStateResource.self)
             ?? DestructionRuntimeStateResource()
