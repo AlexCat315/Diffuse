@@ -291,6 +291,7 @@ public struct EditorState: Codable, Sendable {
     public var gizmoSpace: EditorGizmoSpace
     public var viewportShadingMode: EditorViewportShadingMode
     public var viewportShadowsEnabled: Bool
+    public var viewportGridEnabled: Bool
     public var viewportShadowMapResolution: UInt32
     public var viewportMaxShadowedDirectionalLights: Int
     public var viewportDirectionalCascadeCount: Int
@@ -352,6 +353,7 @@ public struct EditorState: Codable, Sendable {
         gizmoSpace: EditorGizmoSpace = .local,
         viewportShadingMode: EditorViewportShadingMode = .lit,
         viewportShadowsEnabled: Bool = true,
+        viewportGridEnabled: Bool = true,
         viewportShadowMapResolution: UInt32 = 1024,
         viewportMaxShadowedDirectionalLights: Int = 1,
         viewportDirectionalCascadeCount: Int = 1,
@@ -402,6 +404,7 @@ public struct EditorState: Codable, Sendable {
         self.gizmoSpace = gizmoSpace
         self.viewportShadingMode = viewportShadingMode
         self.viewportShadowsEnabled = viewportShadowsEnabled
+        self.viewportGridEnabled = viewportGridEnabled
         self.viewportShadowMapResolution = Self.sanitizedShadowMapResolution(viewportShadowMapResolution)
         self.viewportMaxShadowedDirectionalLights = Self.sanitizedMaxShadowedDirectionalLights(viewportMaxShadowedDirectionalLights)
         self.viewportDirectionalCascadeCount = Self.sanitizedDirectionalCascadeCount(viewportDirectionalCascadeCount)
@@ -479,6 +482,7 @@ public struct EditorState: Codable, Sendable {
         case gizmoSpace
         case viewportShadingMode
         case viewportShadowsEnabled
+        case viewportGridEnabled
         case viewportShadowMapResolution
         case viewportMaxShadowedDirectionalLights
         case viewportDirectionalCascadeCount
@@ -547,6 +551,7 @@ public struct EditorState: Codable, Sendable {
             gizmoSpace: try c.decodeIfPresent(EditorGizmoSpace.self, forKey: .gizmoSpace) ?? .local,
             viewportShadingMode: try c.decodeIfPresent(EditorViewportShadingMode.self, forKey: .viewportShadingMode) ?? .lit,
             viewportShadowsEnabled: try c.decodeIfPresent(Bool.self, forKey: .viewportShadowsEnabled) ?? true,
+            viewportGridEnabled: try c.decodeIfPresent(Bool.self, forKey: .viewportGridEnabled) ?? true,
             viewportShadowMapResolution: try c.decodeIfPresent(UInt32.self, forKey: .viewportShadowMapResolution) ?? 1024,
             viewportMaxShadowedDirectionalLights: try c.decodeIfPresent(Int.self, forKey: .viewportMaxShadowedDirectionalLights) ?? 1,
             viewportDirectionalCascadeCount: try c.decodeIfPresent(Int.self, forKey: .viewportDirectionalCascadeCount) ?? 1,
@@ -603,6 +608,7 @@ public struct EditorState: Codable, Sendable {
         try c.encode(gizmoSpace, forKey: .gizmoSpace)
         try c.encode(viewportShadingMode, forKey: .viewportShadingMode)
         try c.encode(viewportShadowsEnabled, forKey: .viewportShadowsEnabled)
+        try c.encode(viewportGridEnabled, forKey: .viewportGridEnabled)
         try c.encode(viewportShadowMapResolution, forKey: .viewportShadowMapResolution)
         try c.encode(viewportMaxShadowedDirectionalLights, forKey: .viewportMaxShadowedDirectionalLights)
         try c.encode(viewportDirectionalCascadeCount, forKey: .viewportDirectionalCascadeCount)

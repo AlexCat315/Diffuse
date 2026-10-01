@@ -970,6 +970,8 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     public func queueViewportRenderSettings(_ settings: RenderSettings) {
+        var settings = settings
+        settings.enableEditorGrid = store.state.viewportGridEnabled
         queueTrackedRenderSettings(settings)
     }
 
@@ -989,6 +991,15 @@ public final class EditorApplication: @unchecked Sendable {
             shadowsEnabled: enabled,
             shadingMode: store.state.viewportShadingMode))
         logConsole(enabled ? "Viewport shadows enabled" : "Viewport shadows disabled")
+    }
+
+    public func setViewportGridEnabled(_ enabled: Bool) {
+        guard store.state.viewportGridEnabled != enabled else { return }
+        store.dispatch(.setViewportGridEnabled(enabled))
+        var settings = lastQueuedRenderSettings
+        settings.enableEditorGrid = enabled
+        queueTrackedRenderSettings(settings)
+        requestDisplayRefresh()
     }
 
     /// Switches the viewport shading / debug-view mode and re-queues render
@@ -1180,7 +1191,8 @@ public final class EditorApplication: @unchecked Sendable {
             stage: .r4LightingPBRShadow,
             debugViewMode: RenderSettings.DebugViewMode(rawValue: shadingMode.debugViewIndex) ?? .shaded,
             shadowSettings: RenderShadowSettings(enabled: shadowsEnabled),
-            enableOffscreenViewport: true
+            enableOffscreenViewport: true,
+            enableEditorGrid: store.state.viewportGridEnabled
         )
     }
 
