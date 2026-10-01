@@ -21,13 +21,18 @@ public struct JsonFieldLabels: Sendable {
     public var revert: String
     public var valid: String
     public var empty: String
+    public var expand: String
+    public var done: String
 
     public init(format: String = "Format", revert: String = "Revert",
-                valid: String = "Valid JSON", empty: String = "Empty saves as {}") {
+                valid: String = "Valid JSON", empty: String = "Empty saves as {}",
+                expand: String = "Expand Editor", done: String = "Done") {
         self.format = format
         self.revert = revert
         self.valid = valid
         self.empty = empty
+        self.expand = expand
+        self.done = done
     }
 }
 
@@ -97,105 +102,83 @@ private struct _StatefulJsonField: View {
     @State var draft: String = ""
     @State var hasDraft: Bool = false
     @State var validation: JsonFieldValidation = .valid
+    @State var expanded = false
+    @State var history = TextEditHistory()
 
+    private var currentValidation: JsonFieldValidation {
+        hasDraft ? validation : JsonField.validate(field.text.wrappedValue)
+    }
+    private var value: Binding<String> {
+        Binding(get: { hasDraft ? draft : field.text.wrappedValue }, set: { next in
+            draft = next; hasDraft = true; validation = JsonField.validate(next)
+        })
+    }
     var body: some View {
-        let currentValidation = hasDraft ? validation : JsonField.validate(field.text.wrappedValue)
-
-        Box(direction: .column, alignItems: .stretch, spacing: 6) {
-            TextField(field.placeholder,
-                      text: Binding(
-                        get: { hasDraft ? draft : field.text.wrappedValue },
-                        set: { next in
-                            draft = next
-                            hasDraft = true
-                            validation = JsonField.validate(next)
-                        }
-                      ),
-                      axis: .vertical,
-                      showsLineNumbers: true,
-                      indentationWidth: 2,
-                      disabled: !field.isEnabled,
-                      onSubmit: {
-                        commitDraft()
-                      },
-                      onFocus: {
-                        if !hasDraft {
-                            draft = field.text.wrappedValue.isEmpty ? "{}" : field.text.wrappedValue
-                            validation = JsonField.validate(draft)
-                            hasDraft = true
-                        }
-                      },
-                      onBlur: {
-                        commitDraft()
-                      })
-                .font(.mono)
-                .frame(height: max(96, field.minHeight))
-                .border(borderColor(for: currentValidation), width: 1)
-                .cornerRadius(4)
-                .clipped()
-
-            Row(alignment: .center, spacing: 6) {
-                validationStatus(currentValidation)
-                    .flex(1, shrink: 1, basis: 0)
-
-                Button(role: .normal,
-                       isEnabled: field.isEnabled && currentValidation.isAcceptable,
-                       action: {
-                    formatDraft()
-                }) {
-                    Text(field.labels.format)
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceVariant)
-                }
-                .buttonStyle(.ghost)
-
-                Button(role: .normal,
-                       isEnabled: field.isEnabled,
-                       action: {
-                    draft = field.text.wrappedValue
-                    validation = JsonField.validate(draft)
-                    hasDraft = false
-                }) {
-                    Text(field.labels.revert)
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceVariant)
-                }
-                .buttonStyle(.ghost)
+        Box(direction: .column, alignItems: .stretch, spacing: 4) {
+            toolbar(showsExpand: true)
+            ResizableEditor(initialHeight: max(120, field.minHeight), minHeight: 120, maxHeight: 520) {
+                editor
+            }
+            .background(.surfaceSunken).cornerRadius(4).border(borderColor, width: 1).clipped()
+            errorMessage
+            Modal(isPresented: $expanded, width: 780, height: 600) {
+                Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                    toolbar(showsExpand: false)
+                    editor.flex(1, shrink: 1).frame(minHeight: 0)
+                    errorMessage
+                }.padding(12)
             }
         }
     }
-
-    private func validationStatus(_ validation: JsonFieldValidation) -> some View {
-        switch validation {
-        case .valid:
-            return AnyView(
-                Text(field.labels.valid)
-                    .font(.caption)
-                    .foregroundColor(.success)
-            )
-        case .empty:
-            return AnyView(
-                Text(field.labels.empty)
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
-            )
-        case let .invalid(message):
-            return AnyView(
-                Text(message, lineLimit: 2)
-                    .font(.caption)
-                    .foregroundColor(.error)
-                    .clipped()
-            )
+    private var editor: some View {
+        TextField(field.placeholder, text: value, axis: .vertical, maxVisibleLines: 200,
+                  showsLineNumbers: true, indentationWidth: 2, editHistory: history,
+                  disabled: !field.isEnabled, onSubmit: commitDraft,
+                  onFocus: {
+                    if !hasDraft {
+                        draft = field.text.wrappedValue.isEmpty ? "{}" : field.text.wrappedValue
+                        validation = JsonField.validate(draft); hasDraft = true
+                    }
+                  }, onBlur: commitDraft)
+            .font(.mono)
+            .textFieldStyle(_JsonEditorStyle())
+    }
+    private func toolbar(showsExpand: Bool) -> some View {
+        Row(alignment: .center, spacing: 4) {
+            Text("JSON").font(.caption).foregroundColor(.onSurfaceMuted)
+            if currentValidation.isAcceptable {
+                Icon(UICommonIcons.checkmark, size: 10, color: .onSurfaceMuted)
+            }
+            Spacer(minLength: 0)
+            Button(icon: .resource(UICommonIcons.formatjson), size: 12,
+                   isEnabled: field.isEnabled && currentValidation.isAcceptable,
+                   tooltip: field.labels.format, action: formatDraft).buttonStyle(.ghost).controlSize(.small)
+            Button(icon: .resource(UICommonIcons.revert), size: 12,
+                   isEnabled: field.isEnabled && hasDraft, tooltip: field.labels.revert, action: revertDraft)
+                .buttonStyle(.ghost).controlSize(.small)
+            if showsExpand {
+                Button(icon: .resource(UICommonIcons.expand), size: 12, tooltip: field.labels.expand) { expanded = true }
+                    .buttonStyle(.ghost).controlSize(.small)
+            } else {
+                Button(field.labels.done) { expanded = false }.buttonStyle(.primary).controlSize(.small)
+            }
+        }.frame(height: 26)
+    }
+    @ViewBuilder private var errorMessage: some View {
+        if case .invalid(let message) = currentValidation {
+            Text(message, lineLimit: 2).font(.caption).foregroundColor(.error)
         }
     }
-
-    private func borderColor(for validation: JsonFieldValidation) -> SemanticColorRef {
-        switch validation {
-        case .valid, .empty:
-            return .border
-        case .invalid:
-            return .error
-        }
+    private var borderColor: SemanticColorRef { currentValidation.isAcceptable ? .border : .error }
+    private func revertDraft() {
+        let before = value.wrappedValue
+        draft = field.text.wrappedValue; validation = JsonField.validate(draft); hasDraft = false
+        recordReplacement(before: before, after: draft)
+    }
+    private func recordReplacement(before: String, after: String) {
+        history.synchronize(before)
+        history.record(before: .init(text: before, cursor: before.count), after: .init(text: after, cursor: after.count),
+                       kind: .atomic, time: ProcessInfo.processInfo.systemUptime)
     }
 
     private func commitDraft() {
@@ -218,8 +201,16 @@ private struct _StatefulJsonField: View {
             validation = JsonField.validate(candidate)
             return
         }
+        recordReplacement(before: candidate, after: pretty)
         draft = pretty
         validation = .valid
         hasDraft = true
+    }
+}
+
+private struct _JsonEditorStyle: TextFieldStyle {
+    func makeBody(configuration: TextFieldStyleConfiguration) -> some View {
+        configuration.content.background(.surfaceSunken)
+            .border(configuration.isFocused ? .focusRing : .border, width: 1).cornerRadius(4)
     }
 }

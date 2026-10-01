@@ -249,6 +249,9 @@ struct HierarchyPanel: View {
                                                commitRename(entityID: entity.id)
                                            },
                                            onCancelRename: cancelRename)
+                            .contextMenu(contextEntries(for: entity.id, roots: hierarchyRoots, enabled: isAuthoringEnabled), onOpen: {
+                                store.dispatch(.setPrimarySelectedEntity(entity.id))
+                            })
                     }
                     .padding(horizontal: 4, vertical: 4)
                     .flex()
@@ -257,6 +260,16 @@ struct HierarchyPanel: View {
             }
             .frame(minWidth: 0, minHeight: 0)
         }
+    }
+
+    private func contextEntries(for entityID: UInt64, roots: [EditorSceneNode], enabled: Bool) -> [MenuEntry] {
+        let ids: Set<UInt64> = store.selectedEntityIDs.contains(entityID) ? store.selectedEntityIDs : [entityID]
+        return hierarchyActionEntries(selectedIDs: ids, roots: roots, isAuthoringEnabled: enabled,
+            containsLockedSelection: ids.contains { scene.isEntityLocked($0) },
+            containsRenderableSelection: ids.contains { scene.hierarchyHasRenderableContent($0) },
+            allSelectionHidden: ids.allSatisfy { !scene.isHierarchyVisible($0) },
+            allSelectionLocked: ids.allSatisfy { scene.isEntityLocked($0) },
+            canMoveSelectionToRoot: HierarchyPanelModel.canMoveSelectionToRoot(ids, in: roots))
     }
 
     private func updateSearchQuery(_ value: String) {

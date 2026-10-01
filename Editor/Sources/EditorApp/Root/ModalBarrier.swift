@@ -5,7 +5,7 @@ import GuavaUIRuntime
 /// everything behind stays inert (no visual dimming, per design preference),
 /// and centers its content. Lives in the portal layer, which is absolutely
 /// positioned over the whole window.
-struct ModalBarrier<Content: View>: _PrimitiveView {
+private struct _ModalBarrierHost<Content: View>: _PrimitiveView {
     let onBackgroundTap: (() -> Void)?
     let content: Content
 
@@ -23,7 +23,7 @@ struct ModalBarrier<Content: View>: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
-        clearOutsideFocus(node)
+
         guard let registry = InteractionRegistryHolder.current else { return }
         let onBackgroundTap = onBackgroundTap
         let route = InputHandlerRoute(role: .control,
@@ -42,20 +42,6 @@ struct ModalBarrier<Content: View>: _PrimitiveView {
         }
     }
 
-    /// A control behind the barrier holding focus (viewport, text field)
-    /// would keep winning key delivery over the modal's shortcuts; drop
-    /// focus unless it belongs to the barrier's own subtree.
-    private func clearOutsideFocus(_ node: Node) {
-        guard let chain = FocusChainHolder.current,
-              let focused = chain.focused else { return }
-        var cursor: Node? = focused
-        while let current = cursor {
-            if current === node { return }
-            cursor = current.parent
-        }
-        chain.clear()
-    }
-
     func _makeLayoutNode() -> LayoutNode? {
         let layout = LayoutNode()
         layout.positionType = .absolute
@@ -70,4 +56,13 @@ struct ModalBarrier<Content: View>: _PrimitiveView {
     }
 
     var _children: [any View] { [content] }
+}
+
+struct ModalBarrier<Content: View>: View {
+    let onBackgroundTap: (() -> Void)?
+    let content: Content
+    init(onBackgroundTap: (() -> Void)? = nil, @ViewBuilder content: () -> Content) {
+        self.onBackgroundTap = onBackgroundTap; self.content = content()
+    }
+    var body: some View { FocusScope { _ModalBarrierHost(onBackgroundTap: onBackgroundTap) { content } } }
 }

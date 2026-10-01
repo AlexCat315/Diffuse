@@ -13,7 +13,7 @@ struct ScriptPanel: View {
     @State private var searchText = ""
     @State private var hoverPresentation: ScriptEditorHoverPresentation = .hidden
     @State private var hoverSequence = ScriptEditorHoverSequence()
-    @State private var caretLabel = ""
+    @State private var histories: [String: TextEditHistory] = [:]
     @State private var isNavigatorVisible = false
     @State private var isActionsMenuPresented = false
     @State private var isFileMenuPresented = false
@@ -37,6 +37,13 @@ struct ScriptPanel: View {
             }
             .flex(1, shrink: 1)
         }
+    }
+
+    private func history(for documentID: String) -> TextEditHistory {
+        if let history = histories[documentID] { return history }
+        let history = TextEditHistory()
+        var next = histories; next[documentID] = history; histories = next
+        return history
     }
 
     private var toolbar: some View {
@@ -189,15 +196,12 @@ struct ScriptPanel: View {
             } else if visibleDocuments.isEmpty {
                 EditorPanelEmptyState(L("No matching scripts")).flex(1, shrink: 1)
             } else {
-                ScrollView(.vertical, scrollbarGutter: .stable) {
-                    Column(alignment: .leading, spacing: 1) {
-                        for document in visibleDocuments {
-                            ScriptFileRow(document: document,
-                                          isSelected: document.file.identifier == workspace.selectedScriptID,
-                                          action: { select(document.file) })
-                        }
-                    }
-                    .padding(horizontal: 5, vertical: 6)
+                VirtualStack(visibleDocuments, id: \.file.identifier, rowHeight: 50,
+                             scrollToIndex: visibleDocuments.firstIndex { $0.file.identifier == workspace.selectedScriptID }) { document in
+                    ScriptFileRow(document: document,
+                                  isSelected: document.file.identifier == workspace.selectedScriptID,
+                                  action: { select(document.file) })
+                        .contextMenu(actionEntries, onOpen: { select(document.file) })
                 }
                 .background(.surfaceSunken)
                 .flex(1, shrink: 1)
@@ -224,12 +228,15 @@ struct ScriptPanel: View {
                 externalChangeBanner
                 ScriptCodeEditor(source: sourceText,
                                  hover: $hoverPresentation,
-                                 caretLabel: $caretLabel,
+                                 caretLabel: Binding(get: { app.store.scriptCaretLabel(for: selectedScript.identifier) },
+                                                     set: { app.store.setScriptCaretLabel($0, for: selectedScript.identifier) }),
                                  onChange: { text in
                                      app.scriptWorkspace.updateSelectedSource(text)
                                  },
+                                 editHistory: history(for: selectedScript.identifier),
                                  onHover: requestHover,
                                  onHoverEnd: cancelHover)
+                    .id(selectedScript.identifier)
                     .flex(1, shrink: 1)
                 if let languageServiceMessage {
                     Row(alignment: .center, spacing: 8) {
