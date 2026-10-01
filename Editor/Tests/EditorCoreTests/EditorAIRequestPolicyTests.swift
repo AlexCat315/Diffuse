@@ -34,7 +34,7 @@ struct EditorAIRequestPolicyTests {
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
-        let application = try EditorApplication(projectDirectory: project.path)
+        let application = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { application.shutdown() }
 
         #expect(application.submitNaturalLanguageIntent("keep this draft") == false)
@@ -49,7 +49,7 @@ struct EditorAIRequestPolicyTests {
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
-        let application = try EditorApplication(projectDirectory: project.path)
+        let application = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { application.shutdown() }
         let request = ConfirmationRequestBatch(
             batchID: "batch",
@@ -73,7 +73,7 @@ struct EditorAIRequestPolicyTests {
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
-        let application = try EditorApplication(projectDirectory: project.path)
+        let application = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { application.shutdown() }
         let entityID = try #require(application.store.state.selectedEntityID)
         let originalName = try #require(application.scene.entitySummary(id: entityID)?.name)
@@ -95,7 +95,7 @@ struct EditorAIRequestPolicyTests {
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
-        let application = try EditorApplication(projectDirectory: project.path)
+        let application = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { application.shutdown() }
         let entityID = try #require(application.store.state.selectedEntityID)
 
@@ -123,7 +123,7 @@ struct EditorAIRequestPolicyTests {
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
-        let application = try EditorApplication(projectDirectory: project.path)
+        let application = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { application.shutdown() }
         let entityID = try #require(application.store.state.selectedEntityID)
         let originalName = try #require(application.scene.entitySummary(id: entityID)?.name)

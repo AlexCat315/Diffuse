@@ -12,6 +12,7 @@ public enum EditorAction: Sendable {
     case setActiveLayoutPreset(EditorLayoutPreset)
     case setSceneRevision(UInt64)
     case markSceneSaved(UInt64)
+    case markSceneUnsaved
     case setSceneRecoveryPending(Bool)
     case requestClose(EditorPendingCloseRequest)
     case dismissCloseRequest
@@ -105,6 +106,9 @@ public enum EditorReducer {
         case let .markSceneSaved(revision):
             state.lastSavedSceneRevision = revision
             state.sceneRecoveryPending = false
+        case .markSceneUnsaved:
+            // A new empty document can have the same revision as the previous saved document.
+            state.lastSavedSceneRevision = state.sceneRevision &- 1
         case let .setSceneRecoveryPending(pending):
             state.sceneRecoveryPending = pending
         case let .requestClose(request):

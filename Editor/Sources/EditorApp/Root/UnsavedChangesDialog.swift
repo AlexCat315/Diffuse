@@ -92,8 +92,8 @@ struct UnsavedChangesDialog: View {
 
     private var message: String {
         switch request.action {
-        case .close:
-            return L("The scene has unsaved changes. Save before closing?")
+        case .close, .closeProject:
+            return L("The project has unsaved scene or script changes. Save before closing?")
         case .newScene:
             return L("The scene has unsaved changes. Save before creating a new scene?")
         case .openScene:
@@ -103,7 +103,7 @@ struct UnsavedChangesDialog: View {
 
     private var discardTitle: String {
         switch request.action {
-        case .close: return L("Close Without Saving")
+        case .close, .closeProject: return L("Close Without Saving")
         case .newScene: return L("Discard and Create New")
         case .openScene: return L("Discard and Open")
         }
@@ -111,13 +111,16 @@ struct UnsavedChangesDialog: View {
 
     private var saveTitle: String {
         switch request.action {
-        case .close: return L("Save and Close")
+        case .close, .closeProject: return L("Save and Close")
         case .newScene: return L("Save and Create New")
         case .openScene: return L("Save and Open")
         }
     }
 
     private func saveAndProceed() {
+        if request.action == .close || request.action == .closeProject {
+            guard app.scriptWorkspace.persistAll() else { return }
+        }
         guard app.saveSceneManifest() != nil else { return }
         proceed()
     }
@@ -139,9 +142,11 @@ struct UnsavedChangesDialog: View {
         app.store.dispatch(.dismissCloseRequest)
         switch request.action {
         case .newScene:
-            app.resetPreviewScene()
+            app.createEmptyScene()
         case .openScene:
             _ = openRequestedScene()
+        case .closeProject:
+            app.closeProject()
         case .close:
             let windowID = request.windowID
             MainActor.assumeIsolated {

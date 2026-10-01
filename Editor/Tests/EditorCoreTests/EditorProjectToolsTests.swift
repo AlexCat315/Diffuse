@@ -66,6 +66,8 @@ struct EditorProjectToolsTests {
         defer { try? FileManager.default.removeItem(at: root) }
         let app = try EditorApplication(projectDirectory: root.path)
         defer { app.shutdown() }
+        let cube = try #require(app.scene.spawnEntity(template: .cube))
+        app.store.dispatch(.setSelectedEntity(cube))
         app.submitDeleteSelectedEntityIntent()
         #expect(app.store.state.pendingConfirmationRequest != nil)
         await #expect(throws: EditorProjectToolError.self) { _ = try await call(app, "save_scene") }

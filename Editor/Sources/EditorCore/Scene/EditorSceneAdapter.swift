@@ -2417,6 +2417,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     var scene = SceneRuntime() {
         didSet { scene.setScriptDriver(scriptRuntime) }
     }
+    // Editor navigation works before the user adds a game camera. This pose is
+    // session state, never an authored entity or part of the scene manifest.
+    var editorViewportCamera = RenderCamera.fallbackPerspective
+    public var onViewportCameraChanged: (() -> Void)?
     let transactionExecutor = TransactionExecutor()
     private var initialSelectionID: UInt64?
     private var initialExpandedIDs: Set<UInt64> = []
@@ -2447,8 +2451,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         }
     }
 
-    public init() {
-        scene.bootstrapEditorPreviewScene()
+    public init(seedPreviewScene: Bool = true) {
+        if seedPreviewScene { scene.bootstrapEditorPreviewScene() }
         scene.setResource(InputActionMap.guavaDefault)
         scene.setScriptDriver(scriptRuntime)
         let defaults = scene.resource(SceneBootstrapDefaultsResource.self)

@@ -1,6 +1,7 @@
 import EditorCore
 
 enum EditorMenuCommand {
+    case closeProject
     case newScene
     case openScene
     case saveScene
