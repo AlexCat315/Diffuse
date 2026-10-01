@@ -136,6 +136,8 @@ public final class EditorApplication: @unchecked Sendable {
     private var renderSettingsGeneration: UInt64 = 0
     private var lastQueuedRenderSettings = RenderSettings()
     private var openSettingsWindowHandler: (() -> Void)?
+    private var closeProjectHandler: (() -> Void)?
+    private let ownsBackend: Bool
     private var displayInvalidationHandler: (() -> Void)?
     private var vsyncModeHandler: ((EditorVSyncMode) -> Void)?
     private var session: Session?
@@ -218,18 +220,20 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     public init(projectDirectory: String,
+                seedPreviewScene: Bool = false,
                 backendConfig: WGPUDeviceConfig? = nil,
                 backend: WGPUBackend? = nil,
                 events: PlatformEventBridge = PlatformEventBridge(),
                 initialAISettings: EditorAISettings = .default,
                 initialCapabilitySettings: EditorCapabilitySettings = .default,
                 trustedPluginHostExecutableURL: URL? = nil) throws {
+        self.ownsBackend = backend == nil
         let resolvedBackendConfig = backendConfig ?? .init()
         let resolvedBackend = backend ?? WGPUBackend(config: resolvedBackendConfig)
         _ = try EditorAssetCatalog.loadProject(at: projectDirectory)
         ProjectRuntimeResources.configureAudioSearchPaths(at: projectDirectory)
         let store = EditorStore()
-        let scene = EditorSceneAdapter()
+        let scene = EditorSceneAdapter(seedPreviewScene: seedPreviewScene)
         let observationDirectory = URL(fileURLWithPath: projectDirectory, isDirectory: true)
             .appendingPathComponent(".guava", isDirectory: true)
             .appendingPathComponent("observation", isDirectory: true)
@@ -319,6 +323,9 @@ public final class EditorApplication: @unchecked Sendable {
         Task { await ps.register(AppleVisionPerceptionWorker()) }
         #endif
 
+        scene.onViewportCameraChanged = { [weak self] in
+            self?.requestDisplayRefresh()
+        }
         scene.onRevisionChanged = { [weak self] revision in
             guard let self else { return }
             self.store.dispatch(.setSceneRevision(revision))
@@ -511,7 +518,9 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     public func shutdown() {
+        guard !isShuttingDown else { return }
         isShuttingDown = true
+        scriptWorkspace.shutdown()
         scene.endInteractiveEditHistoryGroup()
         let activeSession = session
         cancelActiveAIRequest()
@@ -548,7 +557,7 @@ public final class EditorApplication: @unchecked Sendable {
             store.unsubscribe(workspaceModeToken)
             self.workspaceModeToken = nil
         }
-        engine.shutdown()
+        engine.shutdown(shutdownBackend: ownsBackend)
     }
 
     private func flushContextMemoryBeforeShutdown() {
@@ -1169,13 +1178,38 @@ public final class EditorApplication: @unchecked Sendable {
         logConsole("Created new preview scene")
     }
 
+    /// New documents begin empty; preview fixtures are only created explicitly.
+    public func createEmptyScene() {
+        removeEditorAutosave()
+        _ = scene.load(manifest: EditorSceneManifest(revision: 0, entityCount: 0, roots: []))
+        reloadScriptsAfterSceneReplacement()
+        store.dispatch(.setSelectedEntity(nil))
+        store.dispatch(.markSceneUnsaved)
+        logConsole("Created new empty scene")
+    }
+
+    public func setCloseProjectHandler(_ handler: (() -> Void)?) {
+        closeProjectHandler = handler
+    }
+
+    public func requestCloseProject() {
+        if store.state.playbackState != .stopped { applyPlaybackState(.stopped) }
+        guard !hasUnsavedSceneChanges && !scriptWorkspace.snapshot.documents.contains(where: \.isDirty) else {
+            store.dispatch(.requestClose(EditorPendingCloseRequest(action: .closeProject)))
+            return
+        }
+        closeProject()
+    }
+
+    public func closeProject() { closeProjectHandler?() }
+
     public func requestNewScene() {
         guard store.state.playbackState == .stopped else {
             reportSceneAuthoringUnavailable("Stop simulation before creating a new scene.")
             return
         }
         guard hasUnsavedSceneChanges else {
-            resetPreviewScene()
+            createEmptyScene()
             return
         }
         store.dispatch(.requestClose(EditorPendingCloseRequest(action: .newScene)))

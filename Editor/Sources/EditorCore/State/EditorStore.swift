@@ -160,7 +160,7 @@ public final class EditorStore: @unchecked Sendable {
             mark(.activeLayoutPreset, old.activeLayoutPreset, new.activeLayoutPreset)
         case .setSceneRevision:
             mark(.sceneRevision, old.sceneRevision, new.sceneRevision)
-        case .markSceneSaved:
+        case .markSceneSaved, .markSceneUnsaved:
             mark(.lastSavedSceneRevision, old.lastSavedSceneRevision, new.lastSavedSceneRevision)
             mark(.sceneRecoveryPending, old.sceneRecoveryPending, new.sceneRecoveryPending)
         case .setSceneRecoveryPending:

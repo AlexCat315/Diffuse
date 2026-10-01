@@ -254,7 +254,8 @@ public final class EngineHost: @unchecked Sendable {
         }
     }
 
-    public func shutdown() {
+    /// Shared editor UI backends outlive individual project runtimes.
+    public func shutdown(shutdownBackend: Bool = true) {
         let shouldShutdown = state.withLock { state -> Bool in
             guard state.started else { return false }
             state.started = false
@@ -270,10 +271,12 @@ public final class EngineHost: @unchecked Sendable {
         ringBuffer = nil
 
         kernel.withLock { $0.shutdown() }
-        do {
-            try wgpuBackend.shutdown()
-        } catch {
-            // Do not crash process during teardown.
+        if shutdownBackend {
+            do {
+                try wgpuBackend.shutdown()
+            } catch {
+                // Do not crash process during teardown.
+            }
         }
         runtime.shutdown()
     }

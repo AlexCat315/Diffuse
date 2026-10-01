@@ -22,6 +22,8 @@ struct EditorLaunchRoot: View {
                            registry: bundle.registry)
         } else {
             WelcomeView(context: context)
+                .theme(EditorVisualTheme.make(dark: context.shellState?.themeMode != .light))
+                .controlSize(.small)
         }
     }
 }

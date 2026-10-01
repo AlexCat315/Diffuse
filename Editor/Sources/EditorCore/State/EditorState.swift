@@ -676,6 +676,7 @@ public struct EditorState: Codable, Sendable {
 
 public enum EditorPendingDocumentAction: Equatable, Sendable {
     case close
+    case closeProject
     case newScene
     case openScene
 }
