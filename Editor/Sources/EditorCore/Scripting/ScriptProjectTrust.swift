@@ -20,8 +20,9 @@ final class ScriptProjectTrustStore: @unchecked Sendable {
     private var trustedPaths: Set<String>
     let loadWarning: String?
 
-    init(storageURL: URL? = nil) {
-        self.storageURL = storageURL ?? Self.defaultStorageURL()
+    init(storageURL: URL? = nil,
+         environment: [String: String] = ProcessInfo.processInfo.environment) {
+        self.storageURL = storageURL ?? Self.defaultStorageURL(environment: environment)
         if let data = try? Data(contentsOf: self.storageURL),
            let document = try? JSONDecoder().decode(Document.self, from: data),
            document.version == 1 {
@@ -70,7 +71,12 @@ final class ScriptProjectTrustStore: @unchecked Sendable {
             .path
     }
 
-    private static func defaultStorageURL() -> URL {
+    private static func defaultStorageURL(environment: [String: String]) -> URL {
+        if let override = environment["GUAVA_EDITOR_STATE_DIRECTORY"],
+           !override.isEmpty {
+            return URL(fileURLWithPath: override, isDirectory: true)
+                .appendingPathComponent("script-workspace-trust.json")
+        }
         let fileManager = FileManager.default
         let base = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".guava", isDirectory: true)

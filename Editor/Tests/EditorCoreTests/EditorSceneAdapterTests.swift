@@ -36,6 +36,7 @@ struct EditorSceneAdapterTests {
     @Test("Viewport framing centers and fits a complete multi-selection")
     func viewportFramingFitsMultiSelection() throws {
         let adapter = EditorSceneAdapter()
+        adapter.setEditorViewportCameraEnabled(true)
         let left = adapter.scene.createEntity()
         let right = adapter.scene.createEntity()
         _ = adapter.scene.setLocalTransform(
@@ -54,14 +55,14 @@ struct EditorSceneAdapterTests {
 
         adapter.frameEntities(selectedIDs, viewportAspectRatio: 16.0 / 9.0)
 
-        let activeCamera = try #require(adapter.scene.extractedRenderScene?.activeCameraEntity)
-        let camera = try #require(adapter.scene.component(CameraComponent.self, for: activeCamera))
+        let camera = adapter.currentRenderCamera()
         #expect(simd_distance(camera.target, expectedCenter) < 1e-4)
     }
 
-    @Test("Viewport framing writes the correct world pose for a parented camera")
+    @Test("Viewport framing preserves a parented game camera and frames through the editor camera")
     func viewportFramingHandlesParentedCamera() throws {
         let adapter = EditorSceneAdapter()
+        adapter.setEditorViewportCameraEnabled(true)
         let nodes = flatten(adapter.roots)
         let cameraNode = try #require(nodes.first { $0.name == "Main Camera" })
         let selectedEntity = adapter.scene.createEntity()
@@ -85,22 +86,14 @@ struct EditorSceneAdapterTests {
         let expected = EditorViewportFraming.pose(camera: cameraBefore,
                                                   boundsMin: expectedMin,
                                                   boundsMax: expectedMax)
+        let manifestBefore = adapter.manifest()
 
         adapter.frameEntity(selectedEntity.rawValue)
 
-        let cameraEntity = entityID(cameraNode.id)
-        let camera = try #require(adapter.scene.component(CameraComponent.self, for: cameraEntity))
+        let camera = adapter.currentRenderCamera()
         #expect(simd_distance(camera.target, expected.target) < 1e-4)
-        let cameraLocal = try #require(adapter.entityLocalTranslation(cameraNode.id))
-        let parentWorld = adapter.entityParentWorldMatrix(cameraNode.id)
-        let expectedLocal4 = simd_inverse(parentWorld) * SIMD4<Float>(expected.eye, 1)
-        let expectedLocal = SIMD3<Float>(expectedLocal4.x / expectedLocal4.w,
-                                         expectedLocal4.y / expectedLocal4.w,
-                                         expectedLocal4.z / expectedLocal4.w)
-        #expect(simd_distance(cameraLocal, expectedLocal) < 1e-4)
-        adapter.scene.propagateTransforms()
-        let cameraWorld = try #require(adapter.scene.worldTransform(for: cameraEntity))
-        #expect(simd_distance(cameraWorld.translation, expected.eye) < 1e-3)
+        #expect(simd_distance(camera.eye, expected.eye) < 1e-4)
+        #expect(adapter.manifest() == manifestBefore)
     }
 
     @Test("Non-looping particles stop driving preview frames after they expire")

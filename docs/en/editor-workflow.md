@@ -50,3 +50,13 @@ Core panels share the same toolbar, search, count badge, and empty-state languag
 ## Playback
 
 Entering play mode snapshots the scene. Pause freezes simulation without discarding state, while stop restores the pre-play scene. The MCP `set_playback_state` tool uses the same `playing`, `paused`, and `stopped` states.
+
+Edit mode uses an independent editor camera. Orbit, pan, zoom, free-look, and selection framing preserve authored game cameras and do not create document changes or undo entries. Play and Pause use the scene's active game camera; Stop restores the previous editor view and the document's pre-play save state.
+
+Gameplay scripts run only during Play. Edit-mode refreshes and realtime preview do not execute gameplay logic. Pause preserves script instances and suspends callbacks; resuming continues those instances. Stop and project shutdown invoke `onDestroy` with the live scene still available, then release instances. The next Play invokes `onStart` again. Realtime animation preview remains available in Edit mode.
+
+## Native window regression
+
+On macOS development builds, run `python3 scripts/validate-editor-native-loop.py`. It starts real isolated Editor windows and exercises MCP connections, compilation, source replacement and recompilation, Play/Pause/Stop, and standalone export. The exported game is validated without a Swift toolchain. Both event-driven and continuous frame loops are covered by default.
+
+Projects, script trust, logs, and MCP transcripts stay in a new temporary directory, and each test app uses its own preferences domain. `GUAVA_EDITOR_STATE_DIRECTORY` isolates layouts and script trust. Project files and MCP tools cannot grant themselves script execution permission.

@@ -2417,10 +2417,16 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     var scene = SceneRuntime() {
         didSet { scene.setScriptDriver(scriptRuntime) }
     }
-    // Editor navigation works before the user adds a game camera. This pose is
-    // session state, never an authored entity or part of the scene manifest.
+    // Navigation is session state, independent of authored game cameras.
     var editorViewportCamera = RenderCamera.fallbackPerspective
+    public private(set) var usesEditorViewportCamera = false
     public var onViewportCameraChanged: (() -> Void)?
+
+    public func setEditorViewportCameraEnabled(_ enabled: Bool) {
+        guard usesEditorViewportCamera != enabled else { return }
+        usesEditorViewportCamera = enabled
+        onViewportCameraChanged?()
+    }
     let transactionExecutor = TransactionExecutor()
     private var initialSelectionID: UInt64?
     private var initialExpandedIDs: Set<UInt64> = []
