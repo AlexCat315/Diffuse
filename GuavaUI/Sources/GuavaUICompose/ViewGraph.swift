@@ -234,6 +234,12 @@ public final class ViewGraph {
             }
             break
         }
+        // Non-wrapping modifiers materialise onto the content's node. Match
+        // the key they inherit there even when .id precedes .frame/.flex/etc.
+        // Otherwise every parent update tears down that keyed subtree.
+        if key == nil, let modified = current as? _AnyModifiedContent {
+            key = modified._inheritedSlotKey
+        }
         return SlotInfo(view: view,
                         tag: String(reflecting: type(of: current)),
                         key: key)
@@ -421,8 +427,8 @@ public final class ViewGraph {
     /// `node.viewTag == slotTag(view)`.
     func updateInPlace(node: Node, view: any View, layoutParent: LayoutNode?) {
         if let identified = view as? _AnyIdentifiedView {
-            node.key = identified._id
             updateInPlace(node: node, view: identified._content, layoutParent: layoutParent)
+            node.key = identified._id
             return
         }
         if let any = view as? AnyView {

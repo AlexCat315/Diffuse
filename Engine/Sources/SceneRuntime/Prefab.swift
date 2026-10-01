@@ -48,8 +48,25 @@ public struct Prefab: Sendable, Equatable {
     public func instantiate(into scene: inout SceneRuntime,
                             parent: EntityID? = nil,
                             transform: LocalTransform? = nil) throws -> EntityID? {
+        try instantiateEntities(into: &scene, parent: parent, transform: transform).first
+    }
+
+    /// Returns the full document-order mapping for higher-level component serializers.
+    public func instantiateEntities(into scene: inout SceneRuntime,
+                                    parent: EntityID? = nil,
+                                    transform: LocalTransform? = nil) throws -> [EntityID] {
+        try scene.withWorld {
+            try instantiateEntities(into: &$0, parent: parent, transform: transform)
+        }
+    }
+
+    func instantiateEntities(into scene: inout RuntimeWorld,
+                             parent: EntityID? = nil,
+                             transform: LocalTransform? = nil) throws -> [EntityID] {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let entities = jsonToArrayValue(json["entities"])
+              let entities = jsonToArrayValue(json["entities"]),
+              entities.allSatisfy({ $0 is [String: Any] }),
+              parent.map({ scene.contains($0) }) ?? true
         else { throw SceneSerializerError.invalidFormat }
         let version = (json["version"] as? NSNumber)?.intValue ?? 0
         guard version == SceneSerializer.prefabVersion else {
@@ -57,11 +74,11 @@ public struct Prefab: Sendable, Equatable {
         }
 
         let created = SceneSerializer.loadEntities(entities, into: &scene)
-        guard let root = created.first else { return nil }
+        guard let root = created.first else { return [] }
 
         if let transform { _ = scene.setLocalTransform(transform, for: root) }
         if let parent { _ = scene.setParent(parent, for: root) }
-        return root
+        return created
     }
 }
 

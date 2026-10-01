@@ -1321,7 +1321,9 @@ private struct _TreeRowHost: _PrimitiveView {
                 }
             }
         }
-        registry.setPointer(node) { event, phase, _ in
+        registry.setPointer(node) { event, phase, eventPhase in
+            // Embedded controls get first refusal before selection or dragging.
+            guard eventPhase != .capture else { return .ignored }
             guard event.button == .left else { return .ignored }
             switch phase {
             case .down:
