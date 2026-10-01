@@ -50,6 +50,26 @@ public struct RuntimeScriptPhaseContext {
         worldPointer.pointee.contains(entity)
     }
 
+    /// Creates an entity immediately so the callback can configure its components.
+    /// Script iteration uses a snapshot; newly attached behaviors start on a later pass.
+    public func createEntity(named name: String? = nil,
+                             transform: LocalTransform = .identity) -> EntityID {
+        let entity = worldPointer.pointee.createEntity()
+        _ = worldPointer.pointee.setLocalTransform(transform, for: entity)
+        if let name { _ = worldPointer.pointee.setComponent(SceneNameComponent(value: name), for: entity) }
+        return entity
+    }
+
+    /// Returns entities in prefab document order, including the root at index zero.
+    public func instantiate(_ prefab: Prefab,
+                            parent: EntityID? = nil,
+                            transform: LocalTransform? = nil) throws -> [EntityID] {
+        let entities = try prefab.instantiateEntities(into: &worldPointer.pointee,
+                                                     parent: parent, transform: transform)
+        refreshTransformsIfNeeded()
+        return entities
+    }
+
     public func component<Component: RuntimeComponent>(
         _ type: Component.Type,
         for entity: EntityID
