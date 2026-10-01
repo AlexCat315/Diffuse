@@ -8,10 +8,8 @@ import GuavaUIRuntime
 /// vertical axis accepts explicit newline insertion and grows in height to fit
 /// those lines.
 ///
-/// v1 limitations:
-/// - State (cursor index, selection anchor, scroll offset) lives in a
-///   captured reference and is lost on recompose; an explicit `@State`
-///   cursor is a Phase 6.6 task.
+/// Editing history and selection live on the retained surface node. Primary-Z
+/// and Primary-Shift-Z undo/redo text before application shortcuts run.
 /// - Reads from `TextEnvironment` for shaping; without one installed the
 ///   field still accepts input but renders no glyphs.
 public struct TextField: View {
@@ -301,10 +299,19 @@ public struct TextField: View {
                                           isFocused: interactionState.isFocused)
 
         updateInteractionHandlers(for: node, state: state)
+        node.attachments[TextInputAttachmentKey.editActions] = TextEditActions(
+            canPerform: { command in
+                snapshot.synchronizeHistory(state)
+                guard !snapshot.disabled, !snapshot.readOnly else { return false }
+                return command == .undo ? !state.undoHistory.isEmpty : !state.redoHistory.isEmpty
+            },
+            perform: { command in snapshot.restoreEdit(state: state, redo: command == .redo) }
+        )
         node.attachments[WheelRoutingAttachmentKey.priority] = interactionState.isFocused
             ? WheelRoutingPriority.preferFocused
             : nil
         node.attachments[TextInputAttachmentKey.focusChangeHandler] = { [weak node] focused in
+            state.breakUndoGroup()
             node?.attachments[WheelRoutingAttachmentKey.priority] = focused
                 ? WheelRoutingPriority.preferFocused
                 : nil
@@ -445,7 +452,14 @@ public struct TextField: View {
         // Primary shortcuts take priority over plain bindings.
         if primaryModifier {
             switch event.scancode {
+            case Scancode.z:
+                if !blockMutations { restoreEdit(state: state, redo: shift) }
+                return true
+            case Scancode.y:
+                if !blockMutations { restoreEdit(state: state, redo: true) }
+                return true
             case Scancode.a:
+                state.breakUndoGroup()
                 state.selectionAnchor = 0
                 state.cursorIndex = count
                 recordCaretActivity(state)
@@ -496,10 +510,7 @@ public struct TextField: View {
                 let lo = s.index(s.startIndex, offsetBy: deleteTo)
                 let hi = s.index(s.startIndex, offsetBy: state.cursorIndex)
                 s.removeSubrange(lo..<hi)
-                text.wrappedValue = s
-                state.cursorIndex = deleteTo
-                recordCaretActivity(state)
-                onChange?(s)
+                applyEdit(s, cursor: deleteTo, state: state)
             }
             return true
         case Scancode.delete:
@@ -509,9 +520,7 @@ public struct TextField: View {
                 var s = text.wrappedValue
                 let removeAt = s.index(s.startIndex, offsetBy: state.cursorIndex)
                 s.remove(at: removeAt)
-                text.wrappedValue = s
-                recordCaretActivity(state)
-                onChange?(s)
+                applyEdit(s, cursor: state.cursorIndex, state: state)
             }
             return true
         case Scancode.arrowLeft:

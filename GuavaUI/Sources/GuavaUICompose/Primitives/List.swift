@@ -29,19 +29,11 @@ public struct List<Data: RandomAccessCollection, ID: Hashable, RowContent: View>
     }
 
     public var body: some View {
-        ScrollView(.vertical) {
-            Box(direction: .column, alignItems: .stretch, spacing: rowSpacing) {
-                for element in data {
-                    let selected = isSelected(element)
-                    _ListRowHost(
-                        isSelected: selected,
-                        rowHeight: rowHeight,
-                        onActivate: { activate(element) },
-                        content: AnyView(rowContent(element, selected))
-                    )
-                    .id(element[keyPath: id])
-                }
-            }
+        VirtualList(data, id: id, rowHeight: rowHeight, rowSpacing: rowSpacing) { element in
+            let selected = isSelected(element)
+            _ListRowHost(isSelected: selected, rowHeight: rowHeight,
+                         onActivate: { activate(element) },
+                         content: AnyView(rowContent(element, selected)))
         }
     }
 
@@ -89,7 +81,8 @@ struct _ListRowHost: _PrimitiveView {
     func _updateNode(_ node: Node) {
         guard let registry = InteractionRegistryHolder.current else { return }
         let captured = onActivate
-        registry.setPointer(node) { _, phase, _ in
+        registry.setPointer(node) { event, phase, _ in
+            guard event.button == .left else { return .ignored }
             switch phase {
             case .down:
                 node.attachments[Self.pressedKey] = true

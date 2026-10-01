@@ -18,3 +18,5 @@ Detailed GuavaUI component contracts are currently maintained in Chinese. They c
 Button, IconButton, Toggle, Checkbox, TextField, NumberField, Vec3Field, AssetRefField, JsonField, Slider, List, Tree, Panel, SplitView, ScrollView, TabView, Dock, and the Box/Row/Column layout primitives.
 
 Switch to Chinese from the header to browse every detailed component page. English component-by-component translation is intentionally outside the first website release.
+
+See [interaction primitives](interaction.md) for transitions, modals, context menus and virtual lists.

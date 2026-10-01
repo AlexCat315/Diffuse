@@ -1,5 +1,6 @@
 import EditorCore
 import GuavaUIApp
+import GuavaUIRuntime
 
 enum EditorNativeMenuBuilder {
     static func make(appName: String = "GuavaNext Editor",
@@ -9,6 +10,7 @@ enum EditorNativeMenuBuilder {
                      canUndo: Bool = false,
                      canRedo: Bool = false,
                      hasSelection: Bool = false,
+                     focusChain: @escaping @MainActor () -> FocusChain? = { FocusChainHolder.current },
                      onCommand: @escaping @MainActor (EditorMenuCommand) -> Void) -> NativeMenuBar {
         let model = EditorMenuModel.make(workspaceMode: workspaceMode,
                                          activeLayoutPreset: activeLayoutPreset,
@@ -18,12 +20,13 @@ enum EditorNativeMenuBuilder {
                                          hasSelection: hasSelection)
         let menus = model.menus.map { menu in
             NativeMenu(title: menu.title,
-                       items: menu.items.map { nativeItem($0, onCommand: onCommand) })
+                       items: menu.items.map { nativeItem($0, focusChain: focusChain, onCommand: onCommand) })
         }
         return NativeMenuBar(appName: appName, menus: menus)
     }
 
     private static func nativeItem(_ item: EditorApplicationMenuItem,
+                                   focusChain: @escaping @MainActor () -> FocusChain?,
                                    onCommand: @escaping @MainActor (EditorMenuCommand) -> Void) -> NativeMenuItem {
         switch item {
         case .separator:
@@ -34,6 +37,11 @@ enum EditorNativeMenuBuilder {
                                             keyModifiers: action.keyModifiers.nativeModifiers,
                                             isEnabled: action.isEnabled,
                                             isSelected: action.isSelected,
+                                            isEnabledProvider: {
+                                                EditorCommandDispatcher.isEnabled(action.command,
+                                                                                  sceneCommandEnabled: action.isEnabled,
+                                                                                  focusChain: focusChain())
+                                            },
                                             action: {
                                                 onCommand(action.command)
                                             }))

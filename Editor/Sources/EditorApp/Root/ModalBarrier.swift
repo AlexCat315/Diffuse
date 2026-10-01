@@ -19,11 +19,14 @@ struct ModalBarrier<Content: View>: _PrimitiveView {
         let node = Node()
         node.isHitTestable = true
         node.isFocusable = false
+        node.addResource(ModalFocusResource())
         return node
     }
 
     func _updateNode(_ node: Node) {
-        clearOutsideFocus(node)
+        node.firstResource(ModalFocusResource.self)?.activate(node: node, chain: FocusChainHolder.current)
+        let chain = FocusChainHolder.current
+        node.layoutDidUpdate = { _ in chain?.ensureModalFocus() }
         guard let registry = InteractionRegistryHolder.current else { return }
         let onBackgroundTap = onBackgroundTap
         let route = InputHandlerRoute(role: .control,
@@ -38,22 +41,8 @@ struct ModalBarrier<Content: View>: _PrimitiveView {
             phase == .target ? .handled : .ignored
         }
         registry.setWheel(node, route: route) { _, phase in
-            phase == .target ? .handled : .ignored
+            phase == .capture ? .ignored : .handled
         }
-    }
-
-    /// A control behind the barrier holding focus (viewport, text field)
-    /// would keep winning key delivery over the modal's shortcuts; drop
-    /// focus unless it belongs to the barrier's own subtree.
-    private func clearOutsideFocus(_ node: Node) {
-        guard let chain = FocusChainHolder.current,
-              let focused = chain.focused else { return }
-        var cursor: Node? = focused
-        while let current = cursor {
-            if current === node { return }
-            cursor = current.parent
-        }
-        chain.clear()
     }
 
     func _makeLayoutNode() -> LayoutNode? {
