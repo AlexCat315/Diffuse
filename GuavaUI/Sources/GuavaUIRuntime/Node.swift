@@ -39,6 +39,13 @@ public final class Node: @unchecked Sendable {
     /// Weak reference to avoid retain cycles.
     public private(set) weak var parent: Node?
 
+    /// Disables input for this entire subtree while retaining it for an exit transition.
+    public var isInteractionEnabled: Bool = true
+    /// Alpha applied to the complete rendered subtree, including cached layers.
+    public var subtreeOpacity: Float = 1 {
+        didSet { if oldValue != subtreeOpacity { markRenderDirty(reason: .styleSet(field: "subtreeOpacity")) } }
+    }
+
     // MARK: - State
 
     /// True after `markDirty()` and before the next `NodeTree.flush()`.
@@ -96,7 +103,7 @@ public final class Node: @unchecked Sendable {
     public var allowsHitTesting: Bool = true
 
     public var acceptsSubtreeInput: Bool {
-        allowsHitTesting && (parent?.acceptsSubtreeInput ?? true)
+        allowsHitTesting && isInteractionEnabled && (parent?.acceptsSubtreeInput ?? true)
     }
 
     /// When true, this node may receive keyboard focus (FocusChain consideration).

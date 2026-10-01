@@ -279,6 +279,7 @@ public struct TextField: View {
         state.hostNode = node
         if let editHistory { state.history = editHistory }
         normalizeIndices(state)
+        state.history.synchronize(text.wrappedValue)
         if !readOnly && !disabled {
             node.attachments[TextEditingCommands.undoKey] = { restoreHistory(state, redo: false) }
             node.attachments[TextEditingCommands.redoKey] = { restoreHistory(state, redo: true) }
@@ -316,10 +317,19 @@ public struct TextField: View {
                                           isFocused: interactionState.isFocused)
 
         updateInteractionHandlers(for: node, state: state)
+        node.attachments[TextInputAttachmentKey.editActions] = TextEditActions(
+            canPerform: { command in
+                state.history.synchronize(snapshot.text.wrappedValue)
+                guard !snapshot.disabled, !snapshot.readOnly else { return false }
+                return command == .undo ? state.history.canUndo : state.history.canRedo
+            },
+            perform: { command in snapshot.restoreHistory(state, redo: command == .redo) }
+        )
         node.attachments[WheelRoutingAttachmentKey.priority] = interactionState.isFocused
             ? WheelRoutingPriority.preferFocused
             : nil
         node.attachments[TextInputAttachmentKey.focusChangeHandler] = { [weak node] focused in
+            state.history.breakGroup()
             node?.attachments[WheelRoutingAttachmentKey.priority] = focused
                 ? WheelRoutingPriority.preferFocused
                 : nil

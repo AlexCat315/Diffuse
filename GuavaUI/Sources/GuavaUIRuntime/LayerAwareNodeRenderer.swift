@@ -142,6 +142,7 @@ public final class LayerAwareNodeRenderer {
                                           originX: Float,
                                           originY: Float,
                                           clipStack: [UIRect]) {
+        let firstVertex = list.vertices.count
         let width = Float(node.frame.size.width)
         let height = Float(node.frame.size.height)
 
@@ -196,6 +197,7 @@ public final class LayerAwareNodeRenderer {
             overlay(list, CGPoint(x: Double(originX), y: Double(originY)))
         }
 
+        list.multiplyOpacity(node.subtreeOpacity, fromVertex: firstVertex)
         if clipped {
             list.popClip()
         }

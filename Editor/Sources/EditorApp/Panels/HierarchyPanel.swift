@@ -249,9 +249,11 @@ struct HierarchyPanel: View {
                                                commitRename(entityID: entity.id)
                                            },
                                            onCancelRename: cancelRename)
-                            .contextMenu(contextEntries(for: entity.id, roots: hierarchyRoots, enabled: isAuthoringEnabled), onOpen: {
-                                store.dispatch(.setPrimarySelectedEntity(entity.id))
-                            })
+                            .contextMenu(onOpen: {
+                                if store.selectedEntityIDs.contains(entity.id) {
+                                    store.dispatch(.setPrimarySelectedEntity(entity.id))
+                                } else { store.dispatch(.setSelectedEntity(entity.id)) }
+                            }, entries: { contextEntries(for: entity.id, roots: hierarchyRoots, enabled: isAuthoringEnabled) })
                     }
                     .padding(horizontal: 4, vertical: 4)
                     .flex()

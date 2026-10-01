@@ -4,17 +4,25 @@ import GuavaUIRuntime
 
 public extension View {
     func contextMenu(_ entries: [MenuEntry], width: Float = 240,
-                     onOpen: (() -> Void)? = nil) -> some View {
-        _ContextMenu(content: self, entries: entries, width: width, onOpen: onOpen)
+                     onOpen: (() -> Void)? = nil) -> ContextMenu<Self> {
+        ContextMenu(width: width, entries: { entries }, onOpen: { onOpen?() }) { self }
+    }
+    func contextMenu(width: Float = 220, onOpen: @escaping () -> Void = {},
+                     entries: @escaping () -> [MenuEntry]) -> ContextMenu<Self> {
+        ContextMenu(width: width, entries: entries, onOpen: onOpen) { self }
     }
 }
 
-private struct _ContextMenu<Content: View>: View {
-    let content: Content; let entries: [MenuEntry]; let width: Float; let onOpen: (() -> Void)?
+public struct ContextMenu<Content: View>: View {
+    let content: Content; let entries: () -> [MenuEntry]; let width: Float; let onOpen: () -> Void
     @State private var point: CGPoint?
-    var body: some View {
-        _ContextMenuHost(content: content, entries: entries, width: width, point: point,
-                         onOpen: { position in onOpen?(); point = position }, onDismiss: { point = nil })
+    public init(width: Float = 220, entries: @escaping () -> [MenuEntry],
+                onOpen: @escaping () -> Void = {}, @ViewBuilder content: () -> Content) {
+        self.content = content(); self.entries = entries; self.width = width; self.onOpen = onOpen
+    }
+    public var body: some View {
+        _ContextMenuHost(content: content, entries: point == nil ? [] : entries(), width: width, point: point,
+                         onOpen: { position in onOpen(); point = position }, onDismiss: { point = nil })
     }
 }
 
@@ -24,7 +32,12 @@ private struct _ContextMenuHost<Content: View>: _PrimitiveView {
     func _makeNode() -> Node {
         let node = Node(); node.isHitTestable = true; node.addResource(PortalResource()); return node
     }
-    func _makeLayoutNode() -> LayoutNode? { nil }
+    func _makeLayoutNode() -> LayoutNode? {
+        let layout = LayoutNode()
+        layout.flexDirection = .column
+        layout.alignItems = .stretch
+        return layout
+    }
     func _updateNode(_ node: Node) {
         let route = InputHandlerRoute(role: .control, priority: .chrome, debugName: "context-menu")
         InteractionRegistryHolder.current?.setPointer(node, route: route) { event, phase, _ in
@@ -56,7 +69,7 @@ struct _PopupMenu: View {
         }
     }
     private func handleKey(_ key: KeyEvent) -> Bool {
-        if key.scancode == Scancode.escape { onDismiss(); return true }
+        if key.scancode == Scancode.escape || key.scancode == Scancode.tab { onDismiss(); return true }
         let enabled = enabledIndices
         guard !enabled.isEmpty else { return false }
         let current = enabled.firstIndex(of: highlighted) ?? 0

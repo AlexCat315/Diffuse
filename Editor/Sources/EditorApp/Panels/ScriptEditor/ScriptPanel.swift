@@ -201,7 +201,7 @@ struct ScriptPanel: View {
                     ScriptFileRow(document: document,
                                   isSelected: document.file.identifier == workspace.selectedScriptID,
                                   action: { select(document.file) })
-                        .contextMenu(actionEntries, onOpen: { select(document.file) })
+                        .contextMenu(onOpen: { select(document.file) }, entries: { actionEntries })
                 }
                 .background(.surfaceSunken)
                 .flex(1, shrink: 1)

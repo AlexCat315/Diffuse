@@ -27,6 +27,13 @@ private struct _ModalPresenter<Content: View>: _PrimitiveView {
     }
     func _makeLayoutNode() -> LayoutNode? { nil }
     func _updateNode(_ node: Node) {
+        present(node)
+        node.layoutDidUpdate = { node in
+            if node.attachments["modal.windowBounds"] as? CGRect != portalWindowBounds(node) { present(node) }
+        }
+    }
+    private func present(_ node: Node) {
+        node.attachments["modal.windowBounds"] = portalWindowBounds(node)
         let resource = node.firstResource(PortalResource.self)
         guard isPresented.wrappedValue || retained else { resource?.unmount(node: node); return }
         if isPresented.wrappedValue { onPresented() }
@@ -55,6 +62,7 @@ private struct _ModalBackdrop<Content: View>: _PrimitiveView {
         InteractionRegistryHolder.current?.setKey(node, route: .overlay) { event, _ in
             if event.scancode == Scancode.escape { onDismiss(); return .handled }; return .ignored
         }
+        InteractionRegistryHolder.current?.setWheel(node) { _, phase in phase == .capture ? .ignored : .handled }
     }
     func _makeLayoutNode() -> LayoutNode? {
         let layout = LayoutNode(); layout.positionType = .absolute
