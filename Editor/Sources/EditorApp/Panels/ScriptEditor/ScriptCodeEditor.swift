@@ -13,6 +13,7 @@ struct ScriptCodeEditor: View {
     let hover: Binding<ScriptEditorHoverPresentation>
     let caretLabel: Binding<String>
     let onChange: (String) -> Void
+    var editHistory: TextEditHistory? = nil
     /// Pointer rests on a character worth documenting.
     let onHover: (TextFieldHoverAnchor) -> Void
     /// Pointer left the field; any pending popup must go away.
@@ -31,6 +32,7 @@ struct ScriptCodeEditor: View {
                     maxVisibleLines: 48,
                     showsLineNumbers: true,
                     indentationWidth: 4,
+                    editHistory: editHistory,
                     lineNumberColor: theme.colors.onSurfaceMuted,
                     lineNumberGutterColor: theme.colors.surface,
                     syntaxColorAtUTF8Offset: { _, offset in highlighter.color(atUTF8Offset: offset) },
@@ -52,26 +54,9 @@ struct ScriptCodeEditor: View {
                 // pass so the editor's own clipping never trims it.
                 ScriptHoverOverlay(presentation: hover.wrappedValue)
 
-                Divider()
-                editorFooter(lineCount: Self.countLines(in: text))
             }
             .clipped()
         }
-    }
-
-    private func editorFooter(lineCount: Int) -> some View {
-        Row(alignment: .center, spacing: 12) {
-            Text("Swift").font(.caption).foregroundColor(.onSurfaceVariant)
-            Text("UTF-8").font(.caption).foregroundColor(.onSurfaceVariant)
-            Text(caretLabel.wrappedValue)
-                .font(.caption)
-                .foregroundColor(.onSurfaceVariant)
-            Spacer(minLength: 0)
-        }
-        .font(.caption)
-        .foregroundColor(.onSurfaceVariant)
-        .padding(horizontal: 10, vertical: 5)
-        .background(.surface)
     }
 
     private func handleHover(_ anchor: TextFieldHoverAnchor?) {

@@ -13,6 +13,8 @@ extension TextField {
     }
 
     func indentLines(width: Int, removing: Bool, state: FieldState) {
+        beginEdit(state, kind: .atomic)
+        defer { endEdit(state) }
         normalizeIndices(state)
         var characters = Array(text.wrappedValue)
         var cursor = state.cursorIndex

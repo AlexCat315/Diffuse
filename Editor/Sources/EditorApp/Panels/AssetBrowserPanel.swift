@@ -164,58 +164,52 @@ struct AssetBrowserPanel: View {
                     .flex()
             }
         } else {
-            ScrollView(.vertical, scrollbarGutter: .stable) {
-                switch viewMode {
-                case .grid:
+            if viewMode == .list {
+                let rows = listing.folders.map { AssetListingRow.folder($0) } + listing.assets.map { AssetListingRow.asset($0) }
+                VirtualStack(rows, id: \.id, rowHeight: 46, spacing: 2) { row in
+                    switch row {
+                    case .folder(let folder):
+                        AssetFolderListRow(name: folder.name, onOpen: { navigate(to: folder.path) })
+                            .contextMenu([.item(MenuItem(id: "open", title: L("Open"), action: { navigate(to: folder.path) }))])
+                    case .asset(let asset):
+                        AssetListRow(asset: asset, app: app,
+                                     isSelected: selection.selectedIDs.contains(asset.id),
+                                     onSelect: { selectAsset(asset.id, modifiers: $0, visibleIDs: visibleAssetIDs) },
+                                     onNavigate: { navigateSelection(from: asset.id, direction: $0, modifiers: $1, visibleIDs: visibleAssetIDs) },
+                                     onSelectAll: { selection.selectAll(in: visibleAssetIDs) },
+                                     onClearSelection: { selection.clear() }, onActivate: { activateAsset(asset) })
+                            .contextMenu(assetContextEntries(asset), onOpen: { selectAsset(asset.id, modifiers: [], visibleIDs: visibleAssetIDs) })
+                    }
+                }
+                .padding(horizontal: 6, vertical: 6)
+                .flex()
+            } else {
+                ScrollView(.vertical, scrollbarGutter: .stable) {
                     Box(direction: .row, alignItems: .flexStart, wrap: .wrap, spacing: 10) {
                         for folder in listing.folders {
-                            AssetFolderTile(name: folder.name,
-                                            onOpen: { navigate(to: folder.path) })
+                            AssetFolderTile(name: folder.name, onOpen: { navigate(to: folder.path) })
                         }
-                        for asset in listing.assets {
-                            AssetTile(asset: asset,
-                                      app: app,
-                                      isSelected: selection.selectedIDs.contains(asset.id),
-                                      onSelect: { selectAsset(asset.id,
-                                                              modifiers: $0,
-                                                              visibleIDs: visibleAssetIDs) },
-                                      onNavigate: { navigateSelection(from: asset.id,
-                                                                      direction: $0,
-                                                                      modifiers: $1,
-                                                                      visibleIDs: visibleAssetIDs) },
-                                      onSelectAll: { selection.selectAll(in: visibleAssetIDs) },
-                                      onClearSelection: { selection.clear() },
-                                      onActivate: { activateAsset(asset) })
-                        }
-                    }
-                    .padding(horizontal: 10, vertical: 10)
-                case .list:
-                    Box(direction: .column, alignItems: .stretch, spacing: 2) {
-                        for folder in listing.folders {
-                            AssetFolderListRow(name: folder.name,
-                                               onOpen: { navigate(to: folder.path) })
-                        }
-                        for asset in listing.assets {
-                            AssetListRow(asset: asset,
-                                         app: app,
-                                         isSelected: selection.selectedIDs.contains(asset.id),
-                                         onSelect: { selectAsset(asset.id,
-                                                                 modifiers: $0,
-                                                                 visibleIDs: visibleAssetIDs) },
-                                         onNavigate: { navigateSelection(from: asset.id,
-                                                                         direction: $0,
-                                                                         modifiers: $1,
-                                                                         visibleIDs: visibleAssetIDs) },
-                                         onSelectAll: { selection.selectAll(in: visibleAssetIDs) },
-                                         onClearSelection: { selection.clear() },
-                                         onActivate: { activateAsset(asset) })
-                        }
-                    }
-                    .padding(horizontal: 6, vertical: 6)
-                }
+                        listing.assets.map { gridAsset($0, visibleIDs: visibleAssetIDs) }
+
+                    }.padding(horizontal: 10, vertical: 10)
+                }.flex()
             }
-            .flex()
         }
+    }
+
+    private func gridAsset(_ asset: EditorAsset, visibleIDs: [String]) -> AnyView {
+        AnyView(AssetTile(asset: asset, app: app,
+                                      isSelected: selection.selectedIDs.contains(asset.id),
+                                      onSelect: { selectAsset(asset.id, modifiers: $0, visibleIDs: visibleIDs) },
+                                      onNavigate: { navigateSelection(from: asset.id, direction: $0, modifiers: $1, visibleIDs: visibleIDs) },
+                                      onSelectAll: { selection.selectAll(in: visibleIDs) },
+                                      onClearSelection: { selection.clear() }, onActivate: { activateAsset(asset) })
+                                .contextMenu(assetContextEntries(asset), onOpen: { selectAsset(asset.id, modifiers: [], visibleIDs: visibleIDs) }))
+    }
+
+    private func assetContextEntries(_ asset: EditorAsset) -> [MenuEntry] {
+        [.item(MenuItem(id: "open", title: L("Open"), action: { activateAsset(asset) })),
+         .item(MenuItem(id: "copy-path", title: L("Copy Path"), action: { ClipboardHolder.write?(asset.relativePath) }))]
     }
 
     private func selectAsset(_ assetID: String,
@@ -1134,4 +1128,10 @@ private enum AssetBrowserFocusRegistry {
             scrollView.contentOffset = offset
         }
     }
+}
+
+private enum AssetListingRow {
+    case folder(AssetFolderRef)
+    case asset(EditorAsset)
+    var id: String { switch self { case .folder(let folder): return "folder/" + folder.path; case .asset(let asset): return "asset/" + asset.id } }
 }

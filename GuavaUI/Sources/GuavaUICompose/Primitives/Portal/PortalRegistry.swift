@@ -9,6 +9,7 @@ public struct PortalEntry: Identifiable {
     public var position: CGPoint
     public var width: Float?
     public var content: AnyView
+    public var fillsWindow: Bool = false
 
     public init(id: String,
                 position: CGPoint,
@@ -60,7 +61,8 @@ public final class PortalStore {
         guard var entry = storage[id] else { return }
         if let slotNode = slotNodes[id]?.node {
             if slotNode.frame.origin != position {
-                slotNode.frame = CGRect(origin: position, size: slotNode.frame.size)
+                slotNode.frame = PortalPlacement.fit(position: position, size: slotNode.frame.size,
+                                                      in: portalWindowBounds(slotNode), anchor: anchor(for: id))
             }
         } else if slotNodes[id] != nil {
             slotNodes.removeValue(forKey: id)
@@ -70,6 +72,12 @@ public final class PortalStore {
         storage[id] = entry
         notifyChanged()
     }
+
+    func configure(_ id: String, fillsWindow: Bool) {
+        guard var entry = storage[id], entry.fillsWindow != fillsWindow else { return }
+        entry.fillsWindow = fillsWindow; storage[id] = entry; notifyChanged()
+    }
+    func anchor(for id: String) -> CGRect? { dismissals[id]?.anchor() }
 
     public func updateContent(_ id: String, content: AnyView) {
         guard var entry = storage[id] else { return }
@@ -211,7 +219,8 @@ final class PortalResource: NodeResource {
     func present(in resolvedStore: PortalStore? = nil,
                  position: CGPoint,
                  width: Float?,
-                 content: AnyView) {
+                 content: AnyView,
+                 fillsWindow: Bool = false) {
         let current = resolvedStore ?? PortalStoreHolder.current
         if let previous = store, previous !== current, let id = entryID {
             // The owning node moved to a different window's tree (e.g. a panel
@@ -228,6 +237,7 @@ final class PortalResource: NodeResource {
                                        width: width,
                                        content: content)
         }
+        if let id = entryID { current.configure(id, fillsWindow: fillsWindow) }
     }
 
     func updatePosition(_ position: CGPoint) {

@@ -316,8 +316,11 @@ struct ScrolledControlClickTests: GuavaUIComposeSerializedSuite {
             Issue.record("portal entry node was not materialized")
             return
         }
-        #expect(abs(portalEntryNode.absoluteFrame.minX - expected.x) < 0.5)
-        #expect(abs(portalEntryNode.absoluteFrame.minY - expected.y) < 0.5)
+        let fitted = PortalPlacement.fit(position: expected, size: portalEntryNode.frame.size,
+                                         in: portalWindowBounds(portalEntryNode),
+                                         anchor: PortalStoreHolder.current.anchor(for: updatedEntry.id))
+        #expect(abs(portalEntryNode.absoluteFrame.minX - fitted.minX) < 0.5)
+        #expect(abs(portalEntryNode.absoluteFrame.minY - fitted.minY) < 0.5)
     } }
 
     @Test("Stable scrollbar gutter reserves the trailing lane for content")

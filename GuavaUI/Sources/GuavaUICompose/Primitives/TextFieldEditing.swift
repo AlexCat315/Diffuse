@@ -12,6 +12,10 @@ extension TextField {
         /// outside recompose, so they must invalidate the node's cached layer
         /// themselves (`LayerAwareNodeRenderer` replays clean layers verbatim).
         weak var hostNode: Node?
+        var history = TextEditHistory()
+        var editDepth = 0
+        var editBefore: TextEditHistory.Snapshot?
+        var editKind: TextEditHistory.Kind = .atomic
         /// Cursor index measured in `Character` units from the start of `text`.
         var cursorIndex: Int = 0
         /// Selection anchor in `Character` units; `nil` means no selection.
@@ -90,6 +94,8 @@ extension TextField {
     /// was deleted; the caller should then skip its own delete-one logic.
     @discardableResult
     func deleteSelection(state: FieldState) -> Bool {
+        beginEdit(state, kind: .deletion)
+        defer { endEdit(state) }
         guard let range = selectionRange(state) else { return false }
         var currentText = text.wrappedValue
         let lower = currentText.index(currentText.startIndex, offsetBy: range.lowerBound)
@@ -108,6 +114,8 @@ extension TextField {
     /// when no selection exists. Both paths leave the cursor at the end of
     /// the inserted text and clear any selection.
     func insertReplacingSelection(_ incoming: String, state: FieldState) {
+        beginEdit(state, kind: .typing)
+        defer { endEdit(state) }
         guard !incoming.isEmpty else { return }
         state.clearComposition()
         deleteSelection(state: state)
@@ -134,6 +142,8 @@ extension TextField {
     /// Empty the field, fire `onClear`, and reset selection/cursor state.
     /// Invoked by both the trailing-edge clear icon and external callers.
     func performClear(state: FieldState) {
+        beginEdit(state, kind: .atomic)
+        defer { endEdit(state) }
         guard !text.wrappedValue.isEmpty else { return }
         text.wrappedValue = ""
         state.cursorIndex = 0

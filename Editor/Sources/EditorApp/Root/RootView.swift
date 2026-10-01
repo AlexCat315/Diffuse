@@ -26,8 +26,8 @@ struct EditorRootView: View {
                                     workspaceMode: store.workspaceMode,
                                     activeLayoutPreset: store.activeLayoutPreset,
                                     playbackState: store.playbackState,
-                                    canUndo: app.canUndo,
-                                    canRedo: app.canRedo,
+                                    canUndo: TextEditingCommands.canUndo ?? app.canUndo,
+                                    canRedo: TextEditingCommands.canRedo ?? app.canRedo,
                                     hasSelection: !store.selectedEntityIDs.isEmpty,
                                     onCommand: cb.handleMenuCommand
                                 )
@@ -60,7 +60,8 @@ struct EditorRootView: View {
                             .layoutRole("editor-workspace")
                             .debugName("editor-workspace")
 
-                        EditorStatusBar(store: store)
+                        EditorStatusBar(store: store, scriptWorkspace: app.scriptWorkspace,
+                                        showsScriptInfo: controller.document.groups.values.contains { $0.activePanelID == "scripts" && !$0.isCollapsed })
                     }
                     .background(.background)
                     .flex()
@@ -70,7 +71,7 @@ struct EditorRootView: View {
                            minHeight: 0)
                 } portals: {
                     PortalHost()
-                    AnimatedVisibility(isVisible: store.commandPaletteVisible, collapses: false) {
+                    AnimatedVisibility(isVisible: store.commandPaletteVisible, transition: .opacity.combined(with: .move(edge: .top, distance: 12))) {
                         CommandPaletteOverlay(app: app)
                     }
                     if let pendingClose = store.pendingCloseRequest {

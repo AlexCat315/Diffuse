@@ -100,6 +100,7 @@ public final class EventDispatcher {
                            phase: .capture) == .handled {
             return
         }
+        guard focusChain.permitsInput(hit.node) else { return }
         let previousFocus = focusChain.focused
         _ = deliver(path: hit.path, kind: .pointer(event, .down))
         // Give explicit handler focus changes priority; otherwise focus the
@@ -225,6 +226,10 @@ public final class EventDispatcher {
            invoke(node: captured, kind: kind, phase: .target) == .handled {
             return
         }
+        if phase == .down, !event.modifiers.isDisjoint(with: [.ctrl, .gui]),
+           [4, 6, 25, 27, 28, 29].contains(event.scancode), let focused = focusChain.focused,
+           interactions.handlers(for: focused).text != nil,
+           invoke(node: focused, kind: kind, phase: .target) == .handled { return }
         let focusedPath = focusChain.focused.map(pathFromRoot)
         if let focusedPath,
            deliverKeyPath(focusedPath, event: event, phase: phase) == .handled {
@@ -238,6 +243,7 @@ public final class EventDispatcher {
             else { focusChain.focusPrevious(in: root) }
             return
         }
+        if focusChain.hasModalScope { return }
         let excluded = Set((focusedPath ?? []).map(ObjectIdentifier.init))
         _ = deliverGlobalRoutes(kind: kind,
                                 role: .shortcut,
@@ -339,6 +345,11 @@ public final class EventDispatcher {
         candidates.reserveCapacity(routed.count)
         for item in routed where !excludedNodes.contains(ObjectIdentifier(item.node)) {
             guard item.node.acceptsSubtreeInput else { continue }
+            switch kind {
+            case .key, .text, .editing:
+                guard focusChain.permitsKeyboardInput(item.node) else { continue }
+            default: break
+            }
             guard let depth = depth(of: item.node, under: root) else { continue }
             candidates.append(RouteCandidate(node: item.node,
                                              route: item.route,
