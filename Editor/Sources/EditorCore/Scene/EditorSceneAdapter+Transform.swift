@@ -9,6 +9,7 @@ import SIMDCompat
 
 extension EditorSceneAdapter {
     public func currentRenderCamera() -> RenderCamera {
+        if usesEditorViewportCamera { return editorViewportCamera }
         if let extracted = scene.extractedRenderScene, extracted.activeCameraEntity != nil {
             return extracted.scene.camera
         }
@@ -101,9 +102,7 @@ extension EditorSceneAdapter {
 
     public func currentRenderScene() -> RenderScene {
         var renderScene = scene.renderScene
-        if scene.extractedRenderScene?.activeCameraEntity == nil {
-            renderScene.camera = editorViewportCamera
-        }
+        renderScene.camera = currentRenderCamera()
         return renderScene
     }
 
