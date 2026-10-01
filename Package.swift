@@ -66,6 +66,10 @@ let package = Package(
             path: "Editor/Sources/EditorApp",
             resources: [
                 .process("Resources"),
+            ],
+            linkerSettings: [
+                .unsafeFlags(["-Xlinker", "-export_dynamic"], .when(platforms: [.macOS])),
+                .unsafeFlags(["-Xlinker", "--export-dynamic"], .when(platforms: [.linux])),
             ]
         ),
     ],

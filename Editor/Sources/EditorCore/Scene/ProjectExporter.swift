@@ -8,6 +8,11 @@ public enum ProjectExporterError: Error, CustomStringConvertible, Equatable {
     case conflictingAssetDestination(String)
     case conflictingMeshIndex(Int)
     case outputContainsSourceProject(String)
+    case missingScriptBuildConfiguration
+    case unsupportedScriptExportTarget(String)
+    case unresolvedScriptBindings([String])
+    case conflictingScriptIdentifier(String)
+    case scriptPlayerValidationFailed(String)
 
     public var description: String {
         switch self {
@@ -23,6 +28,16 @@ public enum ProjectExporterError: Error, CustomStringConvertible, Equatable {
             return "multiple assets use export mesh index: \(index)"
         case let .outputContainsSourceProject(path):
             return "export output cannot contain the source project: \(path)"
+        case .missingScriptBuildConfiguration:
+            return "Swift scripts require built Engine modules and a Swift compiler before exporting."
+        case let .unsupportedScriptExportTarget(target):
+            return "Swift script export is not supported for \(target) yet."
+        case let .unresolvedScriptBindings(bindings):
+            return "export has unresolved script bindings: \(bindings.joined(separator: ", "))"
+        case let .conflictingScriptIdentifier(identifier):
+            return "project preset and Swift script share an identifier: \(identifier)"
+        case let .scriptPlayerValidationFailed(message):
+            return "exported Player could not load the compiled gameplay: \(message)"
         }
     }
 }
@@ -99,6 +114,7 @@ public enum ProjectExporter {
                               assets: [EditorAsset] = [],
                               sourceProjectDirectory: URL? = nil,
                               playerExecutableURL: URL? = nil,
+                              scriptBuildConfiguration: ProjectScriptBuildConfiguration? = nil,
                               to outputDirectory: URL) throws -> ProjectExportDescriptor {
         let fileManager = FileManager.default
         let assets = try validatedAssets(assets)
@@ -123,7 +139,12 @@ public enum ProjectExporter {
         try save.write(to: GameSaveDocument.url(slot: sceneSlot, projectDirectory: stagingDirectory.path))
 
         try copyAssets(assets, to: stagingDirectory, fileManager: fileManager)
+        var availableScriptIdentifiers = Set(ProjectScriptCatalog.builtIn.entries.map(\.identifier))
+        var hasCompiledScripts = false
         if let sourceProjectDirectory {
+            availableScriptIdentifiers = Set(try ProjectScriptCatalog.load(
+                projectDirectory: sourceProjectDirectory.path
+            ).entries.map(\.identifier))
             try copyAudioResources(from: sourceProjectDirectory,
                                    to: stagingDirectory,
                                    excluding: [outputDirectory, stagingDirectory],
@@ -131,7 +152,29 @@ public enum ProjectExporter {
             try copyProjectScriptCatalog(from: sourceProjectDirectory,
                                          to: stagingDirectory,
                                          fileManager: fileManager)
+            let compiledIdentifiers = try ProjectCompiledScripts.build(from: sourceProjectDirectory,
+                                                                      configuration: scriptBuildConfiguration,
+                                                                      into: stagingDirectory)
+            if let conflict = compiledIdentifiers.intersection(availableScriptIdentifiers).sorted().first {
+                throw ProjectExporterError.conflictingScriptIdentifier(conflict)
+            }
+            availableScriptIdentifiers.formUnion(compiledIdentifiers)
+            hasCompiledScripts = !compiledIdentifiers.isEmpty
         }
+        var unresolvedBindings: [String] = []
+        func validateScripts(_ nodes: [EditorSceneManifestNode]) {
+            for node in nodes {
+                for binding in node.script?.bindings ?? [] where binding.isEnabled {
+                    guard let identifier = binding.identifier, availableScriptIdentifiers.contains(identifier) else {
+                        unresolvedBindings.append("\(node.name): \(binding.identifier ?? "handle #\(binding.script)")")
+                        continue
+                    }
+                }
+                validateScripts(node.children)
+            }
+        }
+        validateScripts(manifest.roots)
+        guard unresolvedBindings.isEmpty else { throw ProjectExporterError.unresolvedScriptBindings(unresolvedBindings) }
 
         let assetList = ProjectExportAssetList(assets: assets.map {
             ProjectExportAsset(id: $0.id, name: $0.name, relativePath: $0.relativePath,
@@ -159,11 +202,35 @@ public enum ProjectExporter {
                                            projectDirectory: stagingDirectory,
                                            fileManager: fileManager)
             #endif
+            if hasCompiledScripts {
+                try validateCompiledPlayer(appName: appName, in: stagingDirectory)
+            }
         }
         try replaceBundle(at: outputDirectory,
                           with: stagingDirectory,
                           fileManager: fileManager)
         return descriptor
+    }
+
+    /// Catch missing host symbols/toolchain mismatches before replacing a working
+    /// export. This loads the game with zero simulation frames and opens no window.
+    private static func validateCompiledPlayer(appName: String, in projectDirectory: URL) throws {
+        let logURL = projectDirectory.appendingPathComponent(".script-validation-\(UUID()).log")
+        defer { try? FileManager.default.removeItem(at: logURL) }
+        FileManager.default.createFile(atPath: logURL.path, contents: nil)
+        let output = try FileHandle(forWritingTo: logURL)
+        defer { try? output.close() }
+        let process = Process()
+        process.executableURL = runnableExecutableURL(appName: appName, in: projectDirectory)
+        process.arguments = ["--validate-project", "--project", projectDirectory.path]
+        process.standardOutput = output
+        process.standardError = output
+        try process.run()
+        process.waitUntilExit()
+        let report = String(decoding: try Data(contentsOf: logURL), as: UTF8.self)
+        guard process.terminationStatus == 0, report.contains("GuavaPlayer project validation passed") else {
+            throw ProjectExporterError.scriptPlayerValidationFailed(String(report.suffix(8192)))
+        }
     }
 
     /// Reads back a previously written descriptor (used to validate or inspect a bundle).

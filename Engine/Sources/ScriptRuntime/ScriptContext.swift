@@ -98,6 +98,24 @@ public final class ScriptContext {
         phaseContext.contains(entity)
     }
 
+    @discardableResult
+    public func createEntity(named name: String? = nil,
+                             transform: LocalTransform = .identity) -> EntityID {
+        phaseContext.createEntity(named: name, transform: transform)
+    }
+
+    /// Instantiates a prefab and restores stable script bindings, when present.
+    @discardableResult
+    public func instantiate(_ prefab: Prefab,
+                            parent: EntityID? = nil,
+                            transform: LocalTransform? = nil) throws -> EntityID? {
+        let entities = try phaseContext.instantiate(prefab, parent: parent, transform: transform)
+        restoreScriptBindings(from: prefab.data, entities: entities) { component, entity in
+            _ = phaseContext.setComponent(component, for: entity)
+        }
+        return entities.first
+    }
+
     public func component<Component: RuntimeComponent>(_ type: Component.Type) -> Component? {
         phaseContext.component(type, for: entity)
     }
