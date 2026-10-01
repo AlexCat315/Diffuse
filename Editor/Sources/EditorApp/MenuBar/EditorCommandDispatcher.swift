@@ -1,6 +1,7 @@
 import EditorCore
 import Foundation
 import GuavaUIApp
+import GuavaUICompose
 import GuavaUIWorkspace
 #if canImport(AppKit)
 import AppKit
@@ -24,9 +25,9 @@ enum EditorCommandDispatcher {
             EditorRootViewFactory.activatePanel("assets", in: controller)
             EditorAssetImportCoordinator.requestImport(app: app)
         case .undo:
-            app.undo()
+            if !TextEditingCommands.undo() { app.undo() }
         case .redo:
-            app.redo()
+            if !TextEditingCommands.redo() { app.redo() }
         case .duplicateSelection:
             guard EditorSceneAuthoringPolicy.canEditScene(during: store.state.playbackState) else {
                 app.logConsole("Stop simulation before duplicating entities", severity: .warning)

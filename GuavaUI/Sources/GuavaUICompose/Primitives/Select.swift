@@ -20,6 +20,9 @@ public enum UICommonIcons {
     public static let close = BundleImageResource.svg(named: "close",
                                                       in: GuavaUIComposeResourceBundle.bundle,
                                                       subdirectory: "UIIcons")
+    public static let formatjson = BundleImageResource.svg(named: "format-json", in: GuavaUIComposeResourceBundle.bundle, subdirectory: "UIIcons")
+    public static let revert = BundleImageResource.svg(named: "revert", in: GuavaUIComposeResourceBundle.bundle, subdirectory: "UIIcons")
+    public static let expand = BundleImageResource.svg(named: "expand", in: GuavaUIComposeResourceBundle.bundle, subdirectory: "UIIcons")
 }
 
 public enum KeyboardShortcutPlatform: Sendable, Equatable {
@@ -615,7 +618,12 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
             .present(in: portalStore,
                      position: position,
                      width: width,
-                     content: AnyView(content))
+                     content: AnyView(FocusScope(restoresCommands: true) {
+                        _MenuKeyHost(onKey: { event in
+                            if event.scancode == Scancode.escape { onDismiss(); return true }
+                            return keyHandler?(event, .target) == .handled
+                        }) { content }
+                     }))
         node.firstResource(PortalResource.self)?.setDismissal(
             anchor: { [weak node] in node.map { Self.anchorFrame(for: $0) ?? .zero } ?? .zero },
             dismiss: onDismiss
@@ -637,23 +645,7 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
                                                      placement: placement))
         }
 
-        // Keyboard handler
-        node.isFocusable = true
-        if let registry = InteractionRegistryHolder.current {
-            registry.setKey(node, route: .overlay) { event, phase in
-                if event.scancode == Scancode.escape {
-                    onDismiss()
-                    return .handled
-                }
-                return keyHandler?(event, phase) ?? .ignored
-            }
-            if node.attachments["__popover_autofocused"] == nil {
-                node.attachments["__popover_autofocused"] = true
-                FocusChainHolder.current?.focus(node)
-            }
-        } else {
-            InteractionRegistryHolder.current?.remove(node)
-        }
+        node.isFocusable = false
     }
 
     func _makeLayoutNode() -> LayoutNode? {

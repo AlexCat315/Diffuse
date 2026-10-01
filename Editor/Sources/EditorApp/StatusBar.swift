@@ -7,6 +7,12 @@ import Foundation
 /// Right: latest status/console message.
 struct EditorStatusBar: View {
     let store: EditorStore
+    let showsScriptInfo: Bool
+    private var workspace: Observed<ScriptWorkspaceModel, ScriptWorkspaceSnapshot>
+    init(store: EditorStore, scriptWorkspace: ScriptWorkspaceModel, showsScriptInfo: Bool) {
+        self.store = store; self.showsScriptInfo = showsScriptInfo
+        workspace = Observed(\.snapshot, on: scriptWorkspace)
+    }
 
     var body: some View {
         let _ = store.viewportSurfaceRevision
@@ -35,6 +41,14 @@ struct EditorStatusBar: View {
                 .foregroundColor(.onSurfaceMuted)
 
             Spacer(minLength: 0)
+
+            if showsScriptInfo, let document = workspace.wrappedValue.selectedDocument {
+                Text("Swift").font(.caption).foregroundColor(.onSurfaceMuted)
+                Text("UTF-8").font(.caption).foregroundColor(.onSurfaceMuted)
+                Text(store.scriptCaretLabel(for: document.file.identifier))
+                    .font(.caption).foregroundColor(.onSurfaceVariant)
+                Divider(axis: .vertical).frame(height: 12)
+            }
 
             // Status message can be long (AI output, console entries); cap
             // width and clip so it never pushes other items off screen.

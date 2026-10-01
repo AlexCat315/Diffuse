@@ -37,6 +37,7 @@ public struct TextField: View {
     public let showsLineNumbers: Bool
     /// Opt-in code editing: Tab/Shift-Tab indent lines and Return preserves indentation.
     public let indentationWidth: Int?
+    public let editHistory: TextEditHistory?
     public let lineNumberColor: Color?
     /// Gutter background behind the line numbers. `nil` falls back to the
     /// theme's `surfaceVariant`, which suits light inputs; code editors on a
@@ -93,6 +94,7 @@ public struct TextField: View {
                 maxVisibleLines: Int = 6,
                 showsLineNumbers: Bool = false,
                 indentationWidth: Int? = nil,
+                editHistory: TextEditHistory? = nil,
                 lineNumberColor: Color? = nil,
                 lineNumberGutterColor: Color? = nil,
                 syntaxColorAtUTF8Offset: ((String, Int) -> Color?)? = nil,
@@ -127,6 +129,7 @@ public struct TextField: View {
         self.maxVisibleLines = max(1, maxVisibleLines)
         self.showsLineNumbers = showsLineNumbers
         self.indentationWidth = indentationWidth.map { max(1, min(8, $0)) }
+        self.editHistory = editHistory
         self.lineNumberColor = lineNumberColor
         self.lineNumberGutterColor = lineNumberGutterColor
         self.syntaxColorAtUTF8Offset = syntaxColorAtUTF8Offset
@@ -274,7 +277,18 @@ public struct TextField: View {
             node.attachments["__textfield_state"] = state
         }
         state.hostNode = node
+        if let editHistory { state.history = editHistory }
         normalizeIndices(state)
+        if !readOnly && !disabled {
+            node.attachments[TextEditingCommands.undoKey] = { restoreHistory(state, redo: false) }
+            node.attachments[TextEditingCommands.redoKey] = { restoreHistory(state, redo: true) }
+            node.attachments[TextEditingCommands.canUndoKey] = { state.history.canUndo }
+            node.attachments[TextEditingCommands.canRedoKey] = { state.history.canRedo }
+        } else {
+            for key in [TextEditingCommands.undoKey, TextEditingCommands.redoKey, TextEditingCommands.canUndoKey, TextEditingCommands.canRedoKey] {
+                node.attachments.removeValue(forKey: key)
+            }
+        }
         let snapshot = self
         let paintIdentity = PaintIdentity(text: text.wrappedValue,
                                           placeholder: placeholder,
@@ -444,6 +458,16 @@ public struct TextField: View {
         // (typing, paste, cut, backspace, delete, newline insert) is silently
         // dropped — matching Element Plus' readonly Input behaviour.
         let blockMutations = readOnly
+
+        if primaryModifier, event.scancode == 29 || event.scancode == 28 {
+            guard !blockMutations else { return true }
+            restoreHistory(state, redo: event.scancode == 28 || shift)
+            return true
+        }
+        let editKind: TextEditHistory.Kind = !primaryModifier && (event.scancode == Scancode.backspace || event.scancode == Scancode.delete) ? .deletion : .atomic
+        beginEdit(state, kind: editKind)
+        defer { endEdit(state) }
+        if primaryModifier || [Scancode.arrowLeft, Scancode.arrowRight, Scancode.arrowUp, Scancode.arrowDown, Scancode.home, Scancode.end, Scancode.return, 43].contains(event.scancode) { state.history.breakGroup() }
 
         // Primary shortcuts take priority over plain bindings.
         if primaryModifier {

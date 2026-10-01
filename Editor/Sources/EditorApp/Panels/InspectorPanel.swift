@@ -81,15 +81,11 @@ struct InspectorPanel: View {
                             : "\(visibleFieldCount) / \(totalFieldCount)",
                         onCancel: { updateSearchText("") }
                     ) {
-                        EditorPanelIconButton(UICommonIcons.chevronDown,
-                                              tooltip: L("Expand All"),
-                                              isEnabled: trimmedSearchText.isEmpty) {
-                            setSections(sections, collapsed: false)
-                        }
-                        EditorPanelIconButton(UICommonIcons.chevronRight,
-                                              tooltip: L("Collapse All"),
-                                              isEnabled: trimmedSearchText.isEmpty) {
-                            setSections(sections, collapsed: true)
+                        let hasExpanded = sections.contains { !collapsedIDs.contains($0.id) }
+                        EditorPanelIconButton(hasExpanded ? UICommonIcons.chevronDown : UICommonIcons.chevronRight,
+                                              tooltip: hasExpanded ? L("Collapse All") : L("Expand All"),
+                                              isEnabled: trimmedSearchText.isEmpty && !sections.isEmpty) {
+                            setSections(sections, collapsed: hasExpanded)
                         }
                     }
 
@@ -605,7 +601,8 @@ struct InspectorPanel: View {
         case let .json(binding, minHeight):
             return AnyView(JsonField(text: binding, minHeight: minHeight,
                                      labels: JsonFieldLabels(format: L("Format"), revert: L("Revert"),
-                                                             valid: L("Valid JSON"), empty: L("Empty saves as {}"))))
+                                                             valid: L("Valid JSON"), empty: L("Empty saves as {}"),
+                                                             expand: L("Expand Editor"), done: L("Done"))))
         case let .lightType(binding):
             return AnyView(InspectorLightTypeValue(binding: binding))
         case let .physicsSimulationMode(binding):

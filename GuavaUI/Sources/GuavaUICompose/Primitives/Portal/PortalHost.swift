@@ -149,6 +149,16 @@ private struct _PortalEntrySlot: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         store.attachSlotNode(entry.id, node: node)
+        node.clipsToBounds = !entry.fillsWindow
+        node.layoutDidUpdate = { node in
+            guard !entry.fillsWindow else { return }
+            let window = portalWindowBounds(node)
+            let fitted = PortalPlacement.fit(position: entry.position, size: node.frame.size,
+                                              in: window, anchor: store.anchor(for: entry.id))
+            node.frame = fitted
+            node.layoutNode?.maxWidth = Float(max(0, window.width - 12))
+            node.layoutNode?.maxHeight = Float(max(0, window.height - 12))
+        }
     }
 
     func _makeLayoutNode() -> LayoutNode? {
@@ -166,10 +176,17 @@ private struct _PortalEntrySlot: _PrimitiveView {
         layout.positionType = .absolute
         layout.setPosition(Float(entry.position.x), edge: .left)
         layout.setPosition(Float(entry.position.y), edge: .top)
-        layout.width = entry.width
+        layout.width = entry.fillsWindow ? nil : entry.width
+        if entry.fillsWindow {
+            layout.setPosition(0, edge: .left); layout.setPosition(0, edge: .top)
+            layout.setPosition(0, edge: .right); layout.setPosition(0, edge: .bottom)
+        }
     }
 
-    var _children: [any View] {
-        [entry.content]
+    func _children(for node: Node) -> [any View] {
+        if entry.fillsWindow { return [entry.content] }
+        let window = portalWindowBounds(node)
+        return [ScrollView(.vertical, scrollbarGutter: .overlay) { entry.content }
+            .frame(maxWidth: Float(max(0, window.width - 12)), maxHeight: Float(max(0, window.height - 12)))]
     }
 }
