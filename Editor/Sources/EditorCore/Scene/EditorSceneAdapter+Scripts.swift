@@ -103,7 +103,7 @@ extension EditorSceneAdapter {
         return scriptCatalogEntries.first?.identifier ?? "guava.rotator"
     }
 
-    public func unresolvedScriptBindingDescriptions() -> [String] {
+    public func unresolvedScriptBindingDescriptions(onlyEnabled: Bool = false) -> [String] {
         var descriptions: [String] = []
         for entity in scene.entities(with: ScriptComponent.self) {
             guard let bindings = scene.component(ScriptComponent.self, for: entity)?.bindings else {
@@ -111,7 +111,8 @@ extension EditorSceneAdapter {
             }
             let entityName = scene.component(SceneNameComponent.self, for: entity)?.value
                 ?? "Entity \(entity.index)"
-            for (index, binding) in bindings.enumerated() where !scriptRuntime.canResolve(binding) {
+            for (index, binding) in bindings.enumerated()
+                where (!onlyEnabled || binding.isEnabled) && !scriptRuntime.canResolve(binding) {
                 let reference = binding.identifier ?? "handle #\(binding.script.rawValue)"
                 descriptions.append("\(entityName) · binding \(index + 1): \(reference)")
             }

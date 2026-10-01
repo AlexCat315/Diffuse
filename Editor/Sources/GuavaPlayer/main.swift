@@ -100,7 +100,30 @@ private func runPlayer() throws {
     }
 }
 
-if CommandLine.arguments.contains("--validate-install") {
+if CommandLine.arguments.contains("--validate-project") {
+    do {
+        guard let project = resolveProjectDirectory() else {
+            throw NSError(domain: "GuavaPlayer", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "Project validation requires --project <directory>."])
+        }
+        var frames = 0
+        if let index = CommandLine.arguments.firstIndex(of: "--simulation-frames") {
+            guard CommandLine.arguments.indices.contains(index + 1),
+                  let count = Int(CommandLine.arguments[index + 1]), (0...600).contains(count) else {
+                throw NSError(domain: "GuavaPlayer", code: 2,
+                              userInfo: [NSLocalizedDescriptionKey: "--simulation-frames must be between 0 and 600."])
+            }
+            frames = count
+        }
+        let app = try GameApplication(projectDirectory: project)
+        app.simulateFrames(frames)
+        let report = "GuavaPlayer project validation passed (\(app.compiledScriptCount) compiled scripts, \(app.scene.manifest().entityCount) entities, \(frames) simulation frames)\n"
+        FileHandle.standardOutput.write(Data(report.utf8))
+    } catch {
+        FileHandle.standardError.write(Data("[GuavaPlayer] project validation failed: \(error)\n".utf8))
+        exit(1)
+    }
+} else if CommandLine.arguments.contains("--validate-install") {
     do {
         let report = try PlayerInstallValidator.validateLayout()
         FileHandle.standardOutput.write(Data("\(report)\n".utf8))

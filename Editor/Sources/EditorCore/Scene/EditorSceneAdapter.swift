@@ -2420,7 +2420,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     let transactionExecutor = TransactionExecutor()
     private var initialSelectionID: UInt64?
     private var initialExpandedIDs: Set<UInt64> = []
-    let scriptRuntime = ScriptRuntime()
+    public let scriptRuntime = ScriptRuntime()
     var scriptCatalogEntries: [ProjectScriptCatalogEntry] = []
     var managedScriptIdentifiers: Set<String> = []
     var dynamicScriptDisplayNames: [String: String] = [:]

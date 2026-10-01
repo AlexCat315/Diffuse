@@ -24,9 +24,11 @@ let guavaExportedSymbols: [String] = [
     "guava_submit_character_command",
 ]
 
-/// Linker settings that export the `guava_*` C ABI symbols from a Windows
-/// executable so dynamically loaded script libraries can import them.
+/// Expose host Swift symbols to gameplay libraries on macOS/Linux and the
+/// existing C ABI surface on Windows.
 let guavaScriptExportLinkerSettings: [LinkerSetting] = [
+    .unsafeFlags(["-Xlinker", "-export_dynamic"], .when(platforms: [.macOS])),
+    .unsafeFlags(["-Xlinker", "--export-dynamic"], .when(platforms: [.linux])),
     .unsafeFlags(
         guavaExportedSymbols.flatMap { ["-Xlinker", "/EXPORT:\($0)"] },
         .when(platforms: [.windows])
@@ -115,6 +117,7 @@ let package = Package(
             name: "GameRuntime",
             dependencies: [
                 "EditorCore",
+                .product(name: "ScriptRuntime", package: "Engine"),
                 .product(name: "EngineCore", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
