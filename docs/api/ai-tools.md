@@ -23,19 +23,21 @@ swift run --package-path guava-mcp GuavaMCP
 
 | 工具 | 用途 |
 | --- | --- |
-| `get_scene_entities` | 返回实体、ID、组件和主要属性 |
-| `find_entities` | 按条件查找实体 |
-| `get_selection` / `select_entity` | 读取或更新编辑器选择 |
-| `get_ai_entity` | 读取 AI 可见的实体语义记录 |
-| `execute_edit_plan` | 执行结构化场景编辑步骤 |
-| `set_playback_state` | 控制播放、暂停与停止 |
-| `undo` / `redo` | 操作编辑历史 |
-| `analyze_image` | 分析参考图像 |
-| `get_context_memory` | 读取上下文记忆 |
+| `search_capabilities` | 搜索当前可用的场景能力，取得精确工具名；搜索后工具列表会更新 |
+| `submit_plan` | 按顺序提交场景写入草稿，交给编辑器预览和确认 |
+| `get_project_info` / `get_scripting_api` | 查询项目、脚本信任、模型配置和游戏脚本 API |
+| `list_scripts` / `read_script` / `write_script` | 读写顶层 Swift 源码，保留稳定脚本 ID 并检查源文件哈希 |
+| `compile_scripts` | 编译已信任项目的脚本，返回每个文件的真实编译诊断 |
+| `get_runtime_state` | 查询实体数量、未解析的脚本绑定和脚本上报的游戏状态 |
+| `save_scene` / `export_project` | 保存已应用的场景，导出经过验证的独立 Player 游戏 |
+| `set_playback_state` | 播放、暂停或停止；停止恢复编辑状态 |
+| `get_console_messages` | 读取最近的编译、导出和运行诊断 |
+
+内置 AI 助手与 MCP 共用项目工具。Anthropic、OpenAI Responses、兼容 Chat Completions 的调用格式均可使用；`respond` 允许助手直接回答问题或报告项目操作结果。工具执行失败会作为结果反馈给模型，支持继续检查和修正。Responses 显式设置 `strict: false`，由 Guava 校验参数，保留可选字段语义（参见 [OpenAI Docs](https://developers.openai.com/api/docs/guides/function-calling)）。真实模型推理仍需在编辑器 AI 设置中配置服务商和 API Key；MCP 本身不需要模型 Key。
 
 ## AI 能力如何暴露
 
-编辑器 AI 的场景写入采用动态能力协议。模型初始只获得 `search_capabilities`、`submit_plan` 和当前允许的少量读取能力；搜索后，宿主从同一个 `CapabilityRegistry` 按需注入最多 16 个精确工具。工具名包含能力版本和 Schema Hash 的短摘要，例如 `cap_scene_set_transform_v1_a91c`，工具名到真实能力 ID 的映射只在当前 `ExposureSnapshot` 中有效。
+编辑器 AI 的场景写入采用动态能力协议。场景能力部分初始只暴露 `search_capabilities`、`submit_plan` 和当前允许的少量读取能力，项目工具独立提供；搜索后，宿主从同一个 `CapabilityRegistry` 按需注入最多 16 个精确工具。工具名包含能力版本和 Schema Hash 的短摘要，例如 `cap_scene_set_transform_v1_a91c`，工具名到真实能力 ID 的映射只在当前 `ExposureSnapshot` 中有效。
 
 所有内建场景写能力都由类型化 `GuavaCapability` 声明生成输入 Decoder、严格 JSON Schema、Provider/MCP 工具、权限元数据和稳定 Schema Hash。`SceneEditOp` 只保留为旧请求的线协议和诊断表示，不能再回退生成 AI mutation；若 Registry 中存在写能力但缺少同 Hash 的类型化注册，提交会以 `capabilityUnavailable` 安全失败。
 
@@ -45,7 +47,7 @@ Draft 在场景 revision、插件授权或 PluginHost generation 变化、Schema
 
 ## 安全边界
 
-工具使用 `scene:<number>` 形式的实体引用。变更前应先读取当前场景，基于真实 ID 构造计划；涉及多步修改时优先使用 `execute_edit_plan`，让编辑器统一验证并执行。
+工具使用 `scene:<number>` 形式的实体引用。变更前应先读取当前场景，基于真实 ID 构造计划；多步修改应先逐项创建能力草稿，再用 `submit_plan` 提交，让编辑器统一验证和预览。
 
 ## 本地插件能力契约
 

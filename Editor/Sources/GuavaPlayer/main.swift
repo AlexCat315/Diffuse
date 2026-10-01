@@ -43,6 +43,7 @@ private struct GamePlayerRootView: View {
     var body: some View {
         ViewportHost(
             surface: state.viewportSurface,
+            automaticallyFocus: true,
             onInputEvent: { app.enqueueInput($0) },
             onDrawableSizeChange: { app.setViewportDrawableSize($0) },
             onScreenFrameChange: { frame in
@@ -93,7 +94,8 @@ private func runPlayer() throws {
             let logical = playerState.logicalSize
             inGameUIHost.tick(width: Int(logical.width.rounded()),
                               height: Int(logical.height.rounded()),
-                              contentScale: max(1, ContentScaleHolder.current))
+                              contentScale: max(1, ContentScaleHolder.current),
+                              canvas: app.scene.currentInGameCanvas())
         }
     ) {
         GamePlayerRootView(app: app, state: playerState)

@@ -23,18 +23,21 @@ swift run --package-path guava-mcp GuavaMCP
 
 | Tool | Purpose |
 | --- | --- |
-| `get_scene_entities` / `find_entities` | Inspect and find scene entities |
-| `get_selection` / `select_entity` | Read or update editor selection |
-| `get_ai_entity` | Read the AI-visible semantic record |
-| `execute_edit_plan` | Apply a structured scene edit plan |
-| `set_playback_state` | Play, pause, or stop simulation |
-| `undo` / `redo` | Navigate edit history |
-| `analyze_image` | Analyze a reference image |
-| `get_context_memory` | Read context memory |
+| `search_capabilities` | Discover exact versioned scene tools; tools/list changes after a search |
+| `submit_plan` | Submit ordered write drafts for the editor's review |
+| `get_project_info` / `get_scripting_api` | Inspect project, trust, provider availability and gameplay API |
+| `list_scripts` / `read_script` / `write_script` | Read and edit top-level Swift sources with stable identities and source hashes |
+| `compile_scripts` | Compile trusted sources and return real per-file diagnostics |
+| `get_runtime_state` | Inspect entity count, unresolved bindings and script-reported state |
+| `save_scene` / `export_project` | Save the authored scene and create a validated runnable Player export |
+| `set_playback_state` | Play, pause or stop simulation |
+| `get_console_messages` | Read recent build, export and runtime diagnostics |
+
+The built-in assistant uses the same project tools with Anthropic, OpenAI Responses and compatible Chat Completions providers. `respond` lets it finish a question or project-only task without submitting an empty scene edit. Workspace failures return to the model as tool results so it can inspect and repair them. Optional parameters stay optional in Responses using explicit `strict: false` and Guava's own schema validation ([OpenAI Docs](https://developers.openai.com/api/docs/guides/function-calling)). Live inference requires a configured provider and key in editor settings; MCP itself does not require a model key.
 
 ## How AI capabilities are exposed
 
-Editor AI uses a dynamic capability protocol for scene writes. The model initially receives only `search_capabilities`, `submit_plan`, and a small set of currently allowed read capabilities. After a search, the host injects at most 16 exact tools from the shared `CapabilityRegistry`. A generated name includes the capability version and a short schema-hash suffix, such as `cap_scene_set_transform_v1_a91c`; its mapping to the real capability ID exists only in the current `ExposureSnapshot`.
+Editor AI uses a dynamic capability protocol for scene writes. Scene capability exposure initially contains `search_capabilities`, `submit_plan`, and a small set of allowed read capabilities; project tools are provided separately. After a search, the host injects at most 16 exact tools from the shared `CapabilityRegistry`. A generated name includes the capability version and a short schema-hash suffix, such as `cap_scene_set_transform_v1_a91c`; its mapping to the real capability ID exists only in the current `ExposureSnapshot`.
 
 Every built-in scene write derives its input decoder, strict JSON Schema, Provider/MCP tool, access metadata, and stable schema hash from a typed `GuavaCapability` declaration. `SceneEditOp` remains only as a legacy wire and diagnostic representation and can no longer fall back to producing AI mutations. If a write contract exists in the Registry without a typed registration carrying the same hash, submission fails closed with `capabilityUnavailable`.
 

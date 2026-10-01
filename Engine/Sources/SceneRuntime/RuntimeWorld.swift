@@ -30,12 +30,20 @@ public struct LocalTransform: RuntimeComponent, Sendable, Equatable {
         self.matrix = matrix
     }
 
-    public init(translation: SIMD3<Float>) {
-        self.matrix = translationMatrix(translation)
+    public init(translation: SIMD3<Float>,
+                rotation: simd_quatf = simd_quatf(angle: 0, axis: SIMD3<Float>(0, 1, 0)),
+                scale: SIMD3<Float> = SIMD3<Float>(repeating: 1)) {
+        self.matrix = simd_float4x4(rotation) * simd_float4x4(diagonal: SIMD4<Float>(scale.x, scale.y, scale.z, 1))
+        self.matrix.columns.3 = SIMD4<Float>(translation.x, translation.y, translation.z, 1)
+    }
+
+    public init(rotation: simd_quatf, scale: SIMD3<Float> = SIMD3<Float>(repeating: 1)) {
+        self.init(translation: .zero, rotation: rotation, scale: scale)
     }
 
     public var translation: SIMD3<Float> {
-        SIMD3<Float>(matrix.columns.3.x, matrix.columns.3.y, matrix.columns.3.z)
+        get { SIMD3<Float>(matrix.columns.3.x, matrix.columns.3.y, matrix.columns.3.z) }
+        set { matrix.columns.3 = SIMD4<Float>(newValue.x, newValue.y, newValue.z, 1) }
     }
 
     public var rotation: simd_quatf {
