@@ -5,7 +5,7 @@ import GuavaUIRuntime
 /// everything behind stays inert (no visual dimming, per design preference),
 /// and centers its content. Lives in the portal layer, which is absolutely
 /// positioned over the whole window.
-struct ModalBarrier<Content: View>: _PrimitiveView {
+private struct _ModalBarrierHost<Content: View>: _PrimitiveView {
     let onBackgroundTap: (() -> Void)?
     let content: Content
 
@@ -19,14 +19,11 @@ struct ModalBarrier<Content: View>: _PrimitiveView {
         let node = Node()
         node.isHitTestable = true
         node.isFocusable = false
-        node.addResource(ModalFocusResource())
         return node
     }
 
     func _updateNode(_ node: Node) {
-        node.firstResource(ModalFocusResource.self)?.activate(node: node, chain: FocusChainHolder.current)
-        let chain = FocusChainHolder.current
-        node.layoutDidUpdate = { _ in chain?.ensureModalFocus() }
+
         guard let registry = InteractionRegistryHolder.current else { return }
         let onBackgroundTap = onBackgroundTap
         let route = InputHandlerRoute(role: .control,
@@ -59,4 +56,13 @@ struct ModalBarrier<Content: View>: _PrimitiveView {
     }
 
     var _children: [any View] { [content] }
+}
+
+struct ModalBarrier<Content: View>: View {
+    let onBackgroundTap: (() -> Void)?
+    let content: Content
+    init(onBackgroundTap: (() -> Void)? = nil, @ViewBuilder content: () -> Content) {
+        self.onBackgroundTap = onBackgroundTap; self.content = content()
+    }
+    var body: some View { FocusScope { _ModalBarrierHost(onBackgroundTap: onBackgroundTap) { content } } }
 }

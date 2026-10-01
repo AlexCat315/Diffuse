@@ -69,6 +69,12 @@ private struct _PortalHostPrimitive: _PrimitiveView {
             onStoreResolved(ambientStore)
         }
         let resolvedStore = store ?? treeStore ?? ambientStore
+        InteractionRegistryHolder.current?.setPointer(node, route: .overlay) { event, phase, _ in
+            if phase == .down {
+                resolvedStore.dismissOutside(CGPoint(x: CGFloat(event.x), y: CGFloat(event.y)))
+            }
+            return .ignored
+        }
         node.attachments[LayoutDebugAttachmentKey.debugName] =
             "portal-host-\(ObjectIdentifier(resolvedStore))-entries-\(resolvedStore.entries.count)"
         if let observer = node.attachments[PortalHostObserver.attachmentKey] as? PortalHostObserver {
@@ -144,19 +150,15 @@ private struct _PortalEntrySlot: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         store.attachSlotNode(entry.id, node: node)
-        var root = node
-        while let parent = root.parent { root = parent }
-        if entry.constrainToWindow, root.frame.width > 0 {
-            node.layoutNode?.maxWidth = max(0, Float(root.frame.width) - 8)
-        }
+        node.clipsToBounds = !entry.fillsWindow
         node.layoutDidUpdate = { node in
-            var root = node
-            while let parent = root.parent { root = parent }
-            if entry.constrainToWindow, root.frame.width > 0 {
-                let width = max(0, Float(root.frame.width) - 8)
-                if node.layoutNode?.maxWidth != width { node.layoutNode?.maxWidth = width }
-            }
-            store.fitPosition(entry.id)
+            guard !entry.fillsWindow else { return }
+            let window = portalWindowBounds(node)
+            let fitted = PortalPlacement.fit(position: entry.position, size: node.frame.size,
+                                              in: window, anchor: store.anchor(for: entry.id))
+            node.frame = fitted
+            node.layoutNode?.maxWidth = Float(max(0, window.width - 12))
+            node.layoutNode?.maxHeight = Float(max(0, window.height - 12))
         }
     }
 
@@ -175,10 +177,17 @@ private struct _PortalEntrySlot: _PrimitiveView {
         layout.positionType = .absolute
         layout.setPosition(Float(entry.position.x), edge: .left)
         layout.setPosition(Float(entry.position.y), edge: .top)
-        layout.width = entry.width
+        layout.width = entry.fillsWindow ? nil : entry.width
+        if entry.fillsWindow {
+            layout.setPosition(0, edge: .left); layout.setPosition(0, edge: .top)
+            layout.setPosition(0, edge: .right); layout.setPosition(0, edge: .bottom)
+        }
     }
 
-    var _children: [any View] {
-        [entry.content]
+    func _children(for node: Node) -> [any View] {
+        if entry.fillsWindow { return [entry.content] }
+        let window = portalWindowBounds(node)
+        return [ScrollView(.vertical, scrollbarGutter: .overlay) { entry.content }
+            .frame(maxWidth: Float(max(0, window.width - 12)), maxHeight: Float(max(0, window.height - 12)))]
     }
 }

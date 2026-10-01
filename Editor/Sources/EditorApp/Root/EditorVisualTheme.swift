@@ -48,8 +48,8 @@ enum EditorVisualTheme {
     }
 }
 
-/// Source panes intentionally stay dark in both chrome themes. Do not resolve
-/// their foregrounds against the surrounding light inspector/toolbar palette.
+/// Base colors for the editor's dark theme. Source panes resolve their colors
+/// through the active semantic theme, including the light palette.
 enum EditorCodePalette {
     static let background = Color(red: 0x1A, green: 0x22, blue: 0x32)
     static let gutter = Color(red: 0x15, green: 0x1C, blue: 0x2A)

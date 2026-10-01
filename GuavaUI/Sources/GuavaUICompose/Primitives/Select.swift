@@ -20,10 +20,11 @@ public enum UICommonIcons {
     public static let close = BundleImageResource.svg(named: "close",
                                                       in: GuavaUIComposeResourceBundle.bundle,
                                                       subdirectory: "UIIcons")
+    public static let formatjson = BundleImageResource.svg(named: "format-json", in: GuavaUIComposeResourceBundle.bundle, subdirectory: "UIIcons")
+    public static let revert = BundleImageResource.svg(named: "revert", in: GuavaUIComposeResourceBundle.bundle, subdirectory: "UIIcons")
     public static let format = BundleImageResource.svg(named: "format", in: GuavaUIComposeResourceBundle.bundle, subdirectory: "UIIcons")
     public static let reset = BundleImageResource.svg(named: "reset", in: GuavaUIComposeResourceBundle.bundle, subdirectory: "UIIcons")
     public static let expand = BundleImageResource.svg(named: "expand", in: GuavaUIComposeResourceBundle.bundle, subdirectory: "UIIcons")
-
 }
 
 public enum KeyboardShortcutPlatform: Sendable, Equatable {
@@ -550,8 +551,8 @@ public struct Popover<Label: View, Content: View>: View {
             if isPresented.wrappedValue {
                 _PopoverOverlayHost(width: width,
                                     placement: placement,
-                                    keyHandler: onKey,
-                                    onDismiss: { isPresented.wrappedValue = false }) {
+                                    onDismiss: { isPresented.wrappedValue = false },
+                                    keyHandler: onKey) {
                     Box(direction: .column, alignItems: .stretch, spacing: 0) {
                         content
                     }
@@ -577,8 +578,8 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
 
     init(width: Float?,
          placement: PopoverPlacement,
-         keyHandler: ((KeyEvent, EventPhase) -> EventResult)? = nil,
          onDismiss: @escaping () -> Void,
+         keyHandler: ((KeyEvent, EventPhase) -> EventResult)? = nil,
          @ViewBuilder content: () -> Content) {
         self.width = width
         self.placement = placement
@@ -611,7 +612,16 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
             .present(in: portalStore,
                      position: position,
                      width: width,
-                     content: AnyView(content))
+                     content: AnyView(FocusScope(restoresCommands: true) {
+                        _MenuKeyHost(onKey: { event in
+                            if event.scancode == Scancode.escape { onDismiss(); return true }
+                            return keyHandler?(event, .target) == .handled
+                        }) { content }
+                     }))
+        node.firstResource(PortalResource.self)?.setDismissal(
+            anchor: { [weak node] in node.map { Self.anchorFrame(for: $0) ?? .zero } ?? .zero },
+            dismiss: onDismiss
+        )
         node.attachments[LayoutDebugAttachmentKey.debugName] =
             "popover-store-\(ObjectIdentifier(portalStore))-entries-\(portalStore.entries.count)"
         node.updateOverlayDraw(identity: PositionIdentity(width: width,
@@ -620,31 +630,16 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
             node.firstResource(PortalResource.self)?
                 .updatePosition(Self.popoverPosition(for: node,
                                                      width: width,
-                                                     placement: placement),
-                                anchorFrame: Self.anchorFrame(for: node))
+                                                     placement: placement))
         }
         node.layoutDidUpdate = { [width, placement] node in
             node.firstResource(PortalResource.self)?
                 .updatePosition(Self.popoverPosition(for: node,
                                                      width: width,
-                                                     placement: placement),
-                                anchorFrame: Self.anchorFrame(for: node))
+                                                     placement: placement))
         }
 
-        if let registry = InteractionRegistryHolder.current {
-            registry.setKey(node, route: .overlay) { event, phase in
-                if event.scancode == Scancode.escape { onDismiss(); return .handled }
-                return keyHandler?(event, phase) ?? .ignored
-            }
-            registry.setPointer(node, route: .overlay) { event, pointerPhase, _ in
-                guard pointerPhase == .down else { return .ignored }
-                let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
-                if node.firstResource(PortalResource.self)?.frame?.contains(point) == true { return .ignored }
-                if Self.anchorFrame(for: node)?.contains(point) == true { return .ignored }
-                onDismiss()
-                return .handled
-            }
-        }
+        node.isFocusable = false
     }
 
     func _makeLayoutNode() -> LayoutNode? {
@@ -904,12 +899,9 @@ private struct _MenuWindowBounds: ViewModifier {
     func apply(node: Node) {
         let preferredHeight = node.layoutNode?.maxHeight ?? .greatestFiniteMagnitude
         func constrain(_ node: Node) {
-            var root = node
-            while let parent = root.parent { root = parent }
-            if root.frame.height > 0 {
-                let height = min(preferredHeight, max(0, Float(root.frame.height) - 8))
-                if node.layoutNode?.maxHeight != height { node.layoutNode?.maxHeight = height }
-            }
+            let bounds = portalWindowBounds(node)
+            let height = min(preferredHeight, max(0, Float(bounds.height) - 12))
+            if node.layoutNode?.maxHeight != height { node.layoutNode?.maxHeight = height }
         }
         constrain(node)
         node.layoutDidUpdate = constrain

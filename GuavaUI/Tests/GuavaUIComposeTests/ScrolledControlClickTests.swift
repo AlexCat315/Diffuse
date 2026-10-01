@@ -228,11 +228,11 @@ struct ScrolledControlClickTests: GuavaUIComposeSerializedSuite {
         guard let measuredSlot = firstNode(in: tree.root, where: {
             $0.attachments[LayoutDebugAttachmentKey.layoutRole] as? String == "portal-entry"
         }) else { Issue.record("portal entry was not materialized"); return }
-        let expected = OverlayPlacement.fit(
-            CGPoint(x: boxOrigin.x, y: boxOrigin.y + popoverBox.frame.height),
+        let expected = PortalPlacement.fit(
+            position: CGPoint(x: boxOrigin.x, y: boxOrigin.y + popoverBox.frame.height),
             size: measuredSlot.frame.size, in: tree.root!.absoluteFrame, anchor: popoverBox.absoluteFrame)
-        #expect(abs(entry.position.x - expected.x) < 0.5)
-        #expect(abs(entry.position.y - expected.y) < 0.5)
+        #expect(abs(measuredSlot.absoluteFrame.minX - expected.minX) < 0.5)
+        #expect(abs(measuredSlot.absoluteFrame.minY - expected.minY) < 0.5)
     } }
 
     @Test("Open Select keeps a capped internal menu and follows its trigger while parent scrolls")
@@ -313,11 +313,11 @@ struct ScrolledControlClickTests: GuavaUIComposeSerializedSuite {
         guard let measuredSlot = firstNode(in: tree.root, where: {
             $0.attachments[LayoutDebugAttachmentKey.layoutRole] as? String == "portal-entry"
         }) else { Issue.record("portal entry was not materialized"); return }
-        let expected = OverlayPlacement.fit(
-            CGPoint(x: boxOrigin.x, y: boxOrigin.y + popoverBox.frame.height),
+        let expected = PortalPlacement.fit(
+            position: CGPoint(x: boxOrigin.x, y: boxOrigin.y + popoverBox.frame.height),
             size: measuredSlot.frame.size, in: tree.root!.absoluteFrame, anchor: popoverBox.absoluteFrame)
-        #expect(abs(updatedEntry.position.x - expected.x) < 0.5)
-        #expect(abs(updatedEntry.position.y - expected.y) < 0.5)
+        #expect(abs(measuredSlot.absoluteFrame.minX - expected.minX) < 0.5)
+        #expect(abs(measuredSlot.absoluteFrame.minY - expected.minY) < 0.5)
         #expect(updatedEntry.position.y < initialPosition.y - 20)
 
         guard let portalEntryNode = firstNode(in: tree.root, where: {
@@ -326,8 +326,11 @@ struct ScrolledControlClickTests: GuavaUIComposeSerializedSuite {
             Issue.record("portal entry node was not materialized")
             return
         }
-        #expect(abs(portalEntryNode.absoluteFrame.minX - expected.x) < 0.5)
-        #expect(abs(portalEntryNode.absoluteFrame.minY - expected.y) < 0.5)
+        let fitted = PortalPlacement.fit(position: expected.origin, size: portalEntryNode.frame.size,
+                                         in: portalWindowBounds(portalEntryNode),
+                                         anchor: PortalStoreHolder.current.anchor(for: updatedEntry.id))
+        #expect(abs(portalEntryNode.absoluteFrame.minX - fitted.minX) < 0.5)
+        #expect(abs(portalEntryNode.absoluteFrame.minY - fitted.minY) < 0.5)
     } }
 
     @Test("Stable scrollbar gutter reserves the trailing lane for content")

@@ -80,7 +80,9 @@ public final class EventDispatcher {
     private func dispatchPointerDown(_ event: MouseButtonEvent) {
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
         lastCursor = point
-        if deliverGlobalRoutes(kind: .pointer(event, .down), role: .overlay, minPriority: .modal) == .handled {
+        if deliverGlobalRoutes(kind: .pointer(event, .down),
+                               role: .overlay,
+                               minPriority: .modal) == .handled {
             return
         }
         if deliverGlobalRoutes(kind: .pointer(event, .down),
@@ -88,17 +90,24 @@ public final class EventDispatcher {
                                minPriority: .chrome) == .handled {
             return
         }
-        guard let hit = hitTest(point: point) else { return }
+        guard let hit = hitTest(point: point) else {
+            if event.button == .left { focusChain.focus(nil, visible: false) }
+            return
+        }
         if deliverPriority(path: hit.path,
                            kind: .pointer(event, .down),
                            minPriority: .chrome,
                            phase: .capture) == .handled {
             return
         }
+        guard focusChain.permitsInput(hit.node) else { return }
+        let previousFocus = focusChain.focused
         _ = deliver(path: hit.path, kind: .pointer(event, .down))
-        // Auto-focus on click for focusable targets.
-        if hit.node.isFocusable {
-            focusChain.focus(hit.node)
+        // Give explicit handler focus changes priority; otherwise focus the
+        // clicked control or blur an editor when clicking the canvas.
+        if event.button == .left, focusChain.focused === previousFocus {
+            let target = hit.path.reversed().first { $0.isFocusable && $0.acceptsSubtreeInput }
+            focusChain.focus(target, visible: false)
         }
     }
 
@@ -170,9 +179,7 @@ public final class EventDispatcher {
         // before an ancestor ScrollView moves, otherwise inner editors can
         // never keep their own scroll context.
         if let preferredHitPath,
-           deliverWheel(path: preferredHitPath, event: event) == .handled {
-            return
-        }
+           deliverWheel(path: preferredHitPath, event: event) == .handled { return }
         if let preferredFocusedPath,
            !sameWheelTarget(preferredFocusedPath, preferredHitPath),
            deliverWheel(path: preferredFocusedPath, event: event) == .handled {
@@ -190,7 +197,7 @@ public final class EventDispatcher {
            deliverWheel(path: focusedPath, event: event) == .handled {
             return
         }
-        if focusChain.modalRoot != nil { return }
+        if focusChain.hasModalScope { return }
         if deliverGlobalRoutes(kind: .wheel(event),
                                role: .scroll,
                                minPriority: .normal) == .handled {
@@ -220,11 +227,6 @@ public final class EventDispatcher {
                                minPriority: .modal) == .handled {
             return
         }
-        if event.scancode == 43 /* SDL_SCANCODE_TAB */, phase == .down, let root = tree.root {
-            if event.modifiers.hasShift { focusChain.focusPrevious(in: root) }
-            else { focusChain.focusNext(in: root) }
-            return
-        }
         // Pointer-capture intercept: while a node owns capture (typically a
         // drag in progress), give its key handler the first opportunity to
         // consume the event. Lets drags implement Esc-to-cancel without
@@ -233,12 +235,24 @@ public final class EventDispatcher {
            invoke(node: captured, kind: kind, phase: .target) == .handled {
             return
         }
+        if phase == .down, !event.modifiers.isDisjoint(with: [.ctrl, .gui]),
+           [4, 6, 25, 27, 28, 29].contains(event.scancode), let focused = focusChain.focused,
+           interactions.handlers(for: focused).text != nil,
+           invoke(node: focused, kind: kind, phase: .target) == .handled { return }
         let focusedPath = focusChain.focused.map(pathFromRoot)
         if let focusedPath,
            deliverKeyPath(focusedPath, event: event, phase: phase) == .handled {
             return
         }
-        if focusChain.modalRoot != nil { return }
+        // Editable code surfaces can consume Tab above. Other controls use
+        // the framework's keyboard traversal rather than requiring a host hook.
+        if phase == .down, event.scancode == 43,
+           event.modifiers.isDisjoint(with: [.ctrl, .gui, .alt]), let root = tree.root {
+            if event.modifiers.isDisjoint(with: .shift) { focusChain.focusNext(in: root) }
+            else { focusChain.focusPrevious(in: root) }
+            return
+        }
+        if focusChain.hasModalScope { return }
         let excluded = Set((focusedPath ?? []).map(ObjectIdentifier.init))
         _ = deliverGlobalRoutes(kind: kind,
                                 role: .shortcut,
@@ -339,6 +353,12 @@ public final class EventDispatcher {
         var candidates: [RouteCandidate] = []
         candidates.reserveCapacity(routed.count)
         for item in routed where !excludedNodes.contains(ObjectIdentifier(item.node)) {
+            guard item.node.acceptsSubtreeInput else { continue }
+            switch kind {
+            case .key, .text, .editing:
+                guard focusChain.permitsKeyboardInput(item.node) else { continue }
+            default: break
+            }
             guard let depth = depth(of: item.node, under: root) else { continue }
             candidates.append(RouteCandidate(node: item.node,
                                              route: item.route,
@@ -407,11 +427,6 @@ public final class EventDispatcher {
     }
 
     private func invoke(node: Node, kind: EventKind, phase: EventPhase) -> EventResult {
-        var ancestor: Node? = node
-        while let current = ancestor {
-            if !current.isInteractionEnabled { return .ignored }
-            ancestor = current.parent
-        }
         let handlers = interactions.handlers(for: node)
         let result: EventResult = switch kind {
         case .pointer(let e, let pp): handlers.pointer?(e, pp, phase) ?? .ignored

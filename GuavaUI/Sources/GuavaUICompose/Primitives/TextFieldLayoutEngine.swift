@@ -80,7 +80,12 @@ extension TextField {
                 )
             }
 
-            let replaceRange = textField.selectionRange(state) ?? (state.cursorIndex..<state.cursorIndex)
+            let count = current.count
+            let cursor = clamp(state.cursorIndex, 0, count)
+            let selection = textField.selectionRange(state)
+            let lowerBound = clamp(selection?.lowerBound ?? cursor, 0, count)
+            let upperBound = clamp(selection?.upperBound ?? cursor, lowerBound, count)
+            let replaceRange = lowerBound..<upperBound
             var preview = current
             let lower = preview.index(preview.startIndex, offsetBy: replaceRange.lowerBound)
             let upper = preview.index(preview.startIndex, offsetBy: replaceRange.upperBound)
@@ -145,9 +150,9 @@ extension TextField {
             let frameWidth = Float(node.frame.width)
             let insetX = textField.horizontalInset(theme: node.theme)
             let textOriginX = Float(origin.x) + insetX + addonLeading
-                  let baseTextOriginY = Float(origin.y) + textField.textOriginYOffset(frameHeight: Float(node.frame.height),
+            let baseTextOriginY = Float(origin.y) + textField.textOriginYOffset(frameHeight: Float(node.frame.height),
                                                                                 lineHeight: lineHeight)
-                  refreshScrollMetrics(node: node,
+            refreshScrollMetrics(node: node,
                                    state: state,
                                    renderCache: renderCache,
                                    lineHeight: lineHeight)
@@ -159,10 +164,13 @@ extension TextField {
                                          lineHeight: lineHeight,
                                          layout: renderCache.layout)
             let caretBottom = rawCaret.topY + lineHeight
-            if caretBottom - state.scrollOffsetY > state.visibleTextHeight {
-                state.scrollOffsetY = min(state.maxScrollY, caretBottom - state.visibleTextHeight)
-            } else if rawCaret.topY < state.scrollOffsetY {
-                state.scrollOffsetY = max(0, rawCaret.topY)
+            if state.needsCaretReveal {
+                if caretBottom - state.scrollOffsetY > state.visibleTextHeight {
+                    state.scrollOffsetY = min(state.maxScrollY, caretBottom - state.visibleTextHeight)
+                } else if rawCaret.topY < state.scrollOffsetY {
+                    state.scrollOffsetY = max(0, rawCaret.topY)
+                }
+                state.needsCaretReveal = false
             }
             node.contentOffset = CGPoint(x: 0, y: CGFloat(state.scrollOffsetY))
 

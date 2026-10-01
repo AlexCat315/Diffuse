@@ -126,24 +126,34 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
         let treeState = derivedState()
         let entries = visibleEntries(using: treeState)
         let entriesByToken = Dictionary(uniqueKeysWithValues: entries.map { ($0.nodeKey, $0) })
-        let guideRows = entries.map {
-            _TreeGuideRowSnapshot(depth: $0.depth,
-                                  ancestorHasNextSiblings: $0.ancestorHasNextSiblings,
-                                  hasNextSibling: $0.hasNextSibling,
-                                  hasChildren: $0.hasChildren,
-                                  isExpanded: $0.isExpanded)
-        }
         let activeDrag = dragState
+        _TreeKeyboardHost(onKey: { event in
+            activeModifiers = event.modifiers
+            if onKeyCommand?(event, treeState.selectedIDs) == true { return true }
+            let current = entries.first { $0.nodeKey == selectionKey.wrappedValue }
+                ?? entries.first { $0.id == selection.wrappedValue }
+                ?? entries.first { treeState.selectedIDs.contains($0.id) }
+                ?? entries.first
+            guard let current else { return false }
+            switch event.scancode {
+            case Scancode.arrowDown: moveSelection(from: current.nodeKey, delta: 1, entries: entries)
+            case Scancode.arrowUp: moveSelection(from: current.nodeKey, delta: -1, entries: entries)
+            case Scancode.arrowLeft: collapseOrSelectParent(current, entries: entries)
+            case Scancode.arrowRight: expandOrSelectFirstChild(current, entries: entries)
+            default: return false
+            }
+            return true
+        }) {
         _TreeGhostContainer(dragCursorPos: activeDrag != nil ? dragCursorPos : nil,
                             rowHeight: rowHeight) {
-        ScrollView(.vertical) {
-            _TreeGuideOverlayHost(rows: guideRows,
-                                  rowHeight: rowHeight,
-                                  rowSpacing: rowSpacing,
-                                  indentation: indentation,
+        VirtualStack(entries, id: \.nodeKey, rowHeight: rowHeight, spacing: rowSpacing,
+                     scrollToIndex: entries.firstIndex { $0.nodeKey == selectionKey.wrappedValue || $0.id == selection.wrappedValue }) { entry in
+            _TreeGuideOverlayHost(rows: [_TreeGuideRowSnapshot(depth: entry.depth,
+                                  ancestorHasNextSiblings: entry.ancestorHasNextSiblings,
+                                  hasNextSibling: entry.hasNextSibling, hasChildren: entry.hasChildren,
+                                  isExpanded: entry.isExpanded)],
+                                  rowHeight: rowHeight, rowSpacing: 0, indentation: indentation,
                                   showsIndentGuides: showsIndentGuides) {
-                Box(direction: .column, alignItems: .stretch, spacing: rowSpacing) {
-                    for entry in entries {
                         let token = entry.nodeKey
                         let isSel = treeState.usesNodeKeySelection
                             ? treeState.selectedNodeKeys.contains(token)
@@ -219,11 +229,10 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                             content: AnyView(rowContent(entry.element, isSel, entry.isExpanded, entry.depth))
                         )
                         .id(token)
-                    }
-                }
             }
         }
         } // _TreeGhostContainer
+        } // persistent keyboard target
     }
 
     private var expandedNodeKeys: Set<TreeNodeKey<ID>> {
@@ -1238,7 +1247,7 @@ private struct _TreeRowHost: _PrimitiveView {
     func _makeNode() -> Node {
         let n = Node()
         n.isHitTestable = true
-        n.isFocusable = true
+        n.isFocusable = false
         return n
     }
 
@@ -1313,9 +1322,15 @@ private struct _TreeRowHost: _PrimitiveView {
             }
         }
         registry.setPointer(node) { event, phase, _ in
+            guard event.button == .left else { return .ignored }
             switch phase {
             case .down:
-                FocusChainHolder.current?.focus(node)
+                var keyboardTarget = node
+                while let parent = keyboardTarget.parent {
+                    keyboardTarget = parent
+                    if parent.attachments["tree-keyboard-root"] != nil { break }
+                }
+                FocusChainHolder.current?.focus(keyboardTarget, visible: false)
                 node.attachments[Self.pressedKey] = true
                 if isDragEnabled {
                     node.attachments[Self.dragStateKey] = _TreeRowPressState(downX: event.x,
@@ -1564,4 +1579,16 @@ private extension UIRect {
                width: max(0, width - dx * 2),
                height: max(0, height - dy * 2))
     }
+}
+
+private struct _TreeKeyboardHost<Content: View>: _PrimitiveView {
+    let onKey: (KeyEvent) -> Bool; let content: Content
+    init(onKey: @escaping (KeyEvent) -> Bool, @ViewBuilder content: () -> Content) { self.onKey = onKey; self.content = content() }
+    func _makeNode() -> Node {
+        let node = Node(); node.isHitTestable = false; node.isFocusable = true
+        node.attachments["tree-keyboard-root"] = true; return node
+    }
+    func _makeLayoutNode() -> LayoutNode? { nil }
+    func _updateNode(_ node: Node) { InteractionRegistryHolder.current?.setKey(node) { event, _ in onKey(event) ? .handled : .ignored } }
+    var _children: [any View] { [content] }
 }

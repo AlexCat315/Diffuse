@@ -246,7 +246,7 @@ extension InspectorPanel {
                         minValue: 0.01,
                         maxValue: nil,
                         step: 0.1,
-                        showsStepper: true)
+                        showsStepper: false)
         }
 
         private func quaternionField(_ label: String, axis: Int) -> some View {

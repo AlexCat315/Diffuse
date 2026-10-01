@@ -29,7 +29,7 @@ public struct List<Data: RandomAccessCollection, ID: Hashable, RowContent: View>
     }
 
     public var body: some View {
-        VirtualList(data, id: id, rowHeight: rowHeight, rowSpacing: rowSpacing) { element in
+        VirtualStack(data, id: id, rowHeight: rowHeight, spacing: rowSpacing) { element in
             let selected = isSelected(element)
             _ListRowHost(isSelected: selected, rowHeight: rowHeight,
                          onActivate: { activate(element) },

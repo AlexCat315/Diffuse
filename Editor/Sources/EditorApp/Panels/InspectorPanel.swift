@@ -81,11 +81,11 @@ struct InspectorPanel: View {
                             : "\(visibleFieldCount) / \(totalFieldCount)",
                         onCancel: { updateSearchText("") }
                     ) {
-                        let hasExpandedSections = sections.contains { !collapsedIDs.contains($0.id) }
-                        EditorPanelIconButton(hasExpandedSections ? UICommonIcons.chevronRight : UICommonIcons.chevronDown,
-                                              tooltip: hasExpandedSections ? L("Collapse All") : L("Expand All"),
+                        let hasExpanded = sections.contains { !collapsedIDs.contains($0.id) }
+                        EditorPanelIconButton(hasExpanded ? UICommonIcons.chevronDown : UICommonIcons.chevronRight,
+                                              tooltip: hasExpanded ? L("Collapse All") : L("Expand All"),
                                               isEnabled: trimmedSearchText.isEmpty && !sections.isEmpty) {
-                            setSections(sections, collapsed: hasExpandedSections)
+                            setSections(sections, collapsed: hasExpanded)
                         }
                     }
 
@@ -260,7 +260,6 @@ struct InspectorPanel: View {
         let minValue: Float?
         let maxValue: Float?
         let step: Float?
-        let showsStepper: Bool
 
         var body: some View {
             NumberField(value: binding,
@@ -269,7 +268,7 @@ struct InspectorPanel: View {
                         minValue: minValue,
                         maxValue: maxValue,
                         step: step,
-                        showsStepper: showsStepper)
+                        showsStepper: false)
                 .frame(minWidth: 96)
                 .flex()
         }
@@ -589,14 +588,12 @@ struct InspectorPanel: View {
             return AnyView(InspectorNumberValue(binding: binding,
                                                 minValue: nil,
                                                 maxValue: nil,
-                                                step: nil,
-                                                showsStepper: false))
-        case let .constrainedNumber(binding, min, max, step, showsStepper):
+                                                step: nil))
+        case let .constrainedNumber(binding, min, max, step, _):
             return AnyView(InspectorNumberValue(binding: binding,
                                                 minValue: min,
                                                 maxValue: max,
-                                                step: step,
-                                                showsStepper: showsStepper))
+                                                step: step))
         case let .vector3(x, y, z):
             return AnyView(InspectorVectorValue(x: x, y: y, z: z))
         case let .color(binding):

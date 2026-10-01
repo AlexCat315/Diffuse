@@ -71,12 +71,14 @@ public struct ScrollView<Content: View>: _PrimitiveView {
 
     public let axes: Axis
     public let content: Content
+    public var onViewportChange: ((ScrollViewport) -> Void)?
+    public var scrollOffset: Binding<CGPoint>?
+    public let onGeometryChange: ((ScrollGeometry) -> Void)?
 
     /// Pixels scrolled per wheel notch. SDL3 reports wheel deltas in lines.
     public var wheelStep: Float = 30
     public let consumePolicy: ScrollConsumePolicy
     public let scrollbarGutter: ScrollbarGutter
-    public let onGeometryChange: ((ScrollGeometry) -> Void)?
 
     /// Width of the reserved lane under `.stable`: track + inset each side.
     static var scrollbarGutterWidth: Float { 12 }
@@ -84,13 +86,17 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     public init(_ axes: Axis = .vertical,
                 consumePolicy: ScrollConsumePolicy = .whenOffsetChanged,
                 scrollbarGutter: ScrollbarGutter = .overlay,
+                scrollOffset: Binding<CGPoint>? = nil,
+                onViewportChange: ((ScrollViewport) -> Void)? = nil,
                 onGeometryChange: ((ScrollGeometry) -> Void)? = nil,
                 @ViewBuilder content: () -> Content) {
         self.axes = axes
         self.consumePolicy = consumePolicy
         self.scrollbarGutter = scrollbarGutter
-        self.onGeometryChange = onGeometryChange
         self.content = content()
+        self.scrollOffset = scrollOffset
+        self.onViewportChange = onViewportChange
+        self.onGeometryChange = onGeometryChange
     }
 
     public func _makeNode() -> Node {
@@ -102,6 +108,15 @@ public struct ScrollView<Content: View>: _PrimitiveView {
 
     public func _updateNode(_ node: Node) {
         let theme = node.theme
+        let report: (Node) -> Void = { node in
+            let size = Self.visibleViewportRect(for: node).size
+            let snapshot = ScrollViewport(offset: node.contentOffset, size: size)
+            if scrollOffset?.wrappedValue != node.contentOffset { scrollOffset?.wrappedValue = node.contentOffset }
+            onViewportChange?(snapshot)
+            onGeometryChange?(ScrollGeometry(offset: node.contentOffset, viewportSize: size,
+                                            contentSize: Self.cachedScrollableContentSize(for: node)))
+        }
+        if let desired = scrollOffset?.wrappedValue, desired != node.contentOffset { node.contentOffset = desired }
         let axes = self.axes
         let step = self.wheelStep
         let consumePolicy = self.consumePolicy
@@ -117,11 +132,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         }
         node.layoutDidUpdate = { node in
             Self.refreshScrollableContentSize(on: node)
-            let size = Self.cachedScrollableContentSize(for: node)
-            let viewport = Self.visibleViewportRect(for: node).size
-            node.contentOffset = CGPoint(x: min(node.contentOffset.x, max(0, size.width - viewport.width)),
-                                         y: min(node.contentOffset.y, max(0, size.height - viewport.height)))
-            onGeometryChange?(ScrollGeometry(offset: node.contentOffset, viewportSize: viewport, contentSize: size))
+            report(node)
         }
 
         if let registry = InteractionRegistryHolder.current {
@@ -165,8 +176,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     nextOffset = .zero
                 }
                 node.contentOffset = nextOffset
-                onGeometryChange?(ScrollGeometry(offset: nextOffset, viewportSize: Self.visibleViewportRect(for: node).size,
-                                                  contentSize: Self.cachedScrollableContentSize(for: node)))
+                report(node)
                 return consumePolicy.result(didScroll: nextOffset != previousOffset)
             }
             registry.setPointer(node, route: .scrollChrome) { event, pointerPhase, eventPhase in
@@ -186,8 +196,6 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                                            geometry: geometry,
                                                            hitSlop: CGFloat(trackHitSlop),
                                                            node: node) {
-                        onGeometryChange?(ScrollGeometry(offset: node.contentOffset, viewportSize: Self.visibleViewportRect(for: node).size,
-                                                          contentSize: Self.cachedScrollableContentSize(for: node)))
                         node.attachments[_ScrollViewAttachmentKeys.dragState] = state
                         PointerCaptureHolder.current?.acquire(node)
                         Self.setScrollbarChromeVisible(true, on: node)
@@ -198,8 +206,6 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                                            geometry: geometry,
                                                            hitSlop: CGFloat(trackHitSlop),
                                                            node: node) {
-                        onGeometryChange?(ScrollGeometry(offset: node.contentOffset, viewportSize: Self.visibleViewportRect(for: node).size,
-                                                          contentSize: Self.cachedScrollableContentSize(for: node)))
                         node.attachments[_ScrollViewAttachmentKeys.dragState] = state
                         PointerCaptureHolder.current?.acquire(node)
                         Self.setScrollbarChromeVisible(true, on: node)
@@ -236,8 +242,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     nextOffset.x = clampedOffset
                 }
                 node.contentOffset = nextOffset
-                onGeometryChange?(ScrollGeometry(offset: nextOffset, viewportSize: Self.visibleViewportRect(for: node).size,
-                                                  contentSize: Self.cachedScrollableContentSize(for: node)))
+                report(node)
                 return .handled
             }
         }
@@ -274,6 +279,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 node.contentOffset = CGPoint(x: min(node.contentOffset.x, maxOffsetX),
                                              y: min(node.contentOffset.y, maxOffsetY))
             }
+            report(node)
             let opacity = node.attachments[_ScrollViewAttachmentKeys.chromeOpacity] as? Float ?? 0
             guard opacity > 0.001 else { return }
             let offX = Float(node.contentOffset.x)
@@ -570,4 +576,10 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             return track.insetBy(dx: 0, dy: -hitSlop)
         }
     }
+}
+
+public struct ScrollViewport: Equatable {
+    public var offset: CGPoint
+    public var size: CGSize
+    public init(offset: CGPoint, size: CGSize) { self.offset = offset; self.size = size }
 }

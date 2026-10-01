@@ -1,77 +1,36 @@
-#if canImport(CoreGraphics)
-import CoreGraphics
-#endif
 import Foundation
 import EngineKernel
 import GuavaUIRuntime
 
-/// Window-local context menu, opened by right-click without starting a row drag.
-public struct ContextMenu<Content: View>: View {
-    let content: Content
-    let width: Float
-    let entries: () -> [MenuEntry]
-    let onOpen: () -> Void
-    @State private var position: CGPoint? = nil
-    @State private var highlightedIndex = 0
-
-    public init(width: Float = 220, entries: @escaping () -> [MenuEntry],
-                onOpen: @escaping () -> Void = {}, @ViewBuilder content: () -> Content) {
-        self.width = width
-        self.entries = entries
-        self.onOpen = onOpen
-        self.content = content()
+public extension View {
+    func contextMenu(_ entries: [MenuEntry], width: Float = 240,
+                     onOpen: (() -> Void)? = nil) -> ContextMenu<Self> {
+        ContextMenu(width: width, entries: { entries }, onOpen: { onOpen?() }) { self }
     }
-
-    public var body: some View {
-        let menuEntries = position == nil ? [] : entries()
-        let items = menuEntries.compactMap { entry -> MenuItem? in
-            if case .item(let item) = entry { return item }
-            return nil
-        }
-        _ContextMenuRegion(content: content, position: position, width: width,
-                           menu: AnyView(Menu(menuEntries, width: width, highlightedIndex: highlightedIndex,
-                                              onItemActivated: { position = nil })),
-                           onOpen: { point in
-                               onOpen()
-                               highlightedIndex = 0
-                               position = point
-                           }, onDismiss: { position = nil }, onKey: { event in
-            switch event.scancode {
-            case Scancode.escape, Scancode.tab:
-                position = nil
-            case Scancode.arrowDown, Scancode.arrowUp:
-                guard !items.isEmpty else { return }
-                let direction = event.scancode == Scancode.arrowDown ? 1 : -1
-                var next = highlightedIndex
-                for _ in items.indices {
-                    next = (next + direction + items.count) % items.count
-                    if items[next].isEnabled { highlightedIndex = next; break }
-                }
-            case Scancode.return, Scancode.keypadEnter:
-                if items.indices.contains(highlightedIndex), items[highlightedIndex].isEnabled {
-                    position = nil
-                    items[highlightedIndex].action()
-                }
-            default: break
-            }
-        })
+    func contextMenu(width: Float = 220, onOpen: @escaping () -> Void = {},
+                     entries: @escaping () -> [MenuEntry]) -> ContextMenu<Self> {
+        ContextMenu(width: width, entries: entries, onOpen: onOpen) { self }
     }
 }
 
-private struct _ContextMenuRegion<Content: View>: _PrimitiveView {
-    let content: Content
-    let position: CGPoint?
-    let width: Float
-    let menu: AnyView
-    let onOpen: (CGPoint) -> Void
-    let onDismiss: () -> Void
-    let onKey: (KeyEvent) -> Void
+public struct ContextMenu<Content: View>: View {
+    let content: Content; let entries: () -> [MenuEntry]; let width: Float; let onOpen: () -> Void
+    @State private var point: CGPoint?
+    public init(width: Float = 220, entries: @escaping () -> [MenuEntry],
+                onOpen: @escaping () -> Void = {}, @ViewBuilder content: () -> Content) {
+        self.content = content(); self.entries = entries; self.width = width; self.onOpen = onOpen
+    }
+    public var body: some View {
+        _ContextMenuHost(content: content, entries: point == nil ? [] : entries(), width: width, point: point,
+                         onOpen: { position in onOpen(); point = position }, onDismiss: { point = nil })
+    }
+}
 
+private struct _ContextMenuHost<Content: View>: _PrimitiveView {
+    let content: Content; let entries: [MenuEntry]; let width: Float; let point: CGPoint?
+    let onOpen: (CGPoint) -> Void; let onDismiss: () -> Void
     func _makeNode() -> Node {
-        let node = Node()
-        node.isHitTestable = true
-        node.addResource(PortalResource())
-        return node
+        let node = Node(); node.isHitTestable = true; node.addResource(PortalResource()); return node
     }
     func _makeLayoutNode() -> LayoutNode? {
         let layout = LayoutNode()
@@ -80,35 +39,59 @@ private struct _ContextMenuRegion<Content: View>: _PrimitiveView {
         return layout
     }
     func _updateNode(_ node: Node) {
-        let resource = node.firstResource(PortalResource.self)
-        if let position {
-            resource?.present(in: node.compositionValue(of: PortalStoreEnvironment.key),
-                              position: position, width: width, content: menu)
-        } else { resource?.unmount(node: node) }
-        guard let registry = InteractionRegistryHolder.current else { return }
-        registry.setPointer(node, route: position == nil ? .control : .overlay) { event, pointerPhase, phase in
-            let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
-            if position != nil {
-                if resource?.frame?.contains(point) == true { return .ignored }
-                if pointerPhase == .down { onDismiss(); return .handled }
-                return .ignored
-            }
-            guard phase == .capture || phase == .target, event.button == .right else { return .ignored }
-            if pointerPhase == .down { onOpen(point) }
+        let route = InputHandlerRoute(role: .control, priority: .chrome, debugName: "context-menu")
+        InteractionRegistryHolder.current?.setPointer(node, route: route) { event, phase, _ in
+            guard event.button == .right || (event.button == .left && !event.modifiers.isDisjoint(with: .ctrl)) else { return .ignored }
+            if phase == .down { onOpen(CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))) }
             return .handled
         }
-        if position != nil {
-            registry.setKey(node, route: .overlay) { event, _ in onKey(event); return .handled }
-        } else {
-            registry.setKey(node) { _, _ in .ignored }
-        }
+        let resource = node.firstResource(PortalResource.self)
+        guard let point else { resource?.unmount(node: node); return }
+        resource?.present(in: node.compositionValue(of: PortalStoreEnvironment.key), position: point, width: width,
+                          content: AnyView(_PopupMenu(entries: entries, width: width, onDismiss: onDismiss)))
+        resource?.setDismissal(anchor: { .zero }, dismiss: onDismiss)
     }
     var _children: [any View] { [content] }
 }
 
-public extension View {
-    func contextMenu(width: Float = 220, onOpen: @escaping () -> Void = {},
-                     entries: @escaping () -> [MenuEntry]) -> ContextMenu<Self> {
-        ContextMenu(width: width, entries: entries, onOpen: onOpen) { self }
+struct _PopupMenu: View {
+    let entries: [MenuEntry]; let width: Float; let onDismiss: () -> Void
+    @State private var highlighted: Int = 0
+    private var enabledIndices: [Int] {
+        entries.indices.filter { if case .item(let item) = entries[$0] { return item.isEnabled }; return false }
     }
+    var body: some View {
+        FocusScope(restoresCommands: true) {
+            _MenuKeyHost(onKey: handleKey) {
+                Menu(entries, width: width, maxVisibleRows: 12, highlightedIndex: highlighted,
+                     onItemActivated: onDismiss)
+            }
+        }
+    }
+    private func handleKey(_ key: KeyEvent) -> Bool {
+        if key.scancode == Scancode.escape || key.scancode == Scancode.tab { onDismiss(); return true }
+        let enabled = enabledIndices
+        guard !enabled.isEmpty else { return false }
+        let current = enabled.firstIndex(of: highlighted) ?? 0
+        switch key.scancode {
+        case Scancode.arrowDown: highlighted = enabled[(current + 1) % enabled.count]; return true
+        case Scancode.arrowUp: highlighted = enabled[(current - 1 + enabled.count) % enabled.count]; return true
+        case Scancode.return, Scancode.keypadEnter:
+            let index = enabled.contains(highlighted) ? highlighted : enabled[0]
+            if case .item(let item) = entries[index] { item.action(); onDismiss() }
+            return true
+        default: return false
+        }
+    }
+}
+
+struct _MenuKeyHost<Content: View>: _PrimitiveView {
+    let onKey: (KeyEvent) -> Bool; let content: Content
+    init(onKey: @escaping (KeyEvent) -> Bool, @ViewBuilder content: () -> Content) { self.onKey = onKey; self.content = content() }
+    func _makeNode() -> Node { let node = Node(); node.isHitTestable = false; return node }
+    func _makeLayoutNode() -> LayoutNode? { nil }
+    func _updateNode(_ node: Node) {
+        InteractionRegistryHolder.current?.setKey(node, route: .overlay) { event, _ in onKey(event) ? .handled : .ignored }
+    }
+    var _children: [any View] { [content] }
 }

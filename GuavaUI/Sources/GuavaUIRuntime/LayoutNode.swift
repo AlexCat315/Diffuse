@@ -25,7 +25,7 @@ public final class LayoutNode: @unchecked Sendable {
     /// Retained children — prevents the underlying YGNodeRefs from dangling.
     public private(set) var children: [LayoutNode] = []
 
-    private weak var parent: LayoutNode?
+    public private(set) weak var parent: LayoutNode?
     private var subtreeLayoutDirtyHint = false
 
     /// Side table for style metadata that affects measurement but is not part
