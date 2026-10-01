@@ -13,6 +13,7 @@ struct ScriptCodeEditor: View {
     let hover: Binding<ScriptEditorHoverPresentation>
     let caretLabel: Binding<String>
     let onChange: (String) -> Void
+    var editHistory: TextEditHistory? = nil
     /// Pointer rests on a character worth documenting.
     let onHover: (TextFieldHoverAnchor) -> Void
     /// Pointer left the field; any pending popup must go away.
@@ -20,35 +21,42 @@ struct ScriptCodeEditor: View {
 
     var body: some View {
         let text = source.wrappedValue
-        let highlighter = SwiftSyntaxHighlighter(text)
-        Box(direction: .column, alignItems: .stretch, spacing: 0) {
-            TextField(
-                "",
-                text: source,
-                axis: .vertical,
-                maxVisibleLines: 48,
-                showsLineNumbers: true,
-                lineNumberColor: EditorCodePalette.lineNumber,
-                lineNumberGutterColor: EditorCodePalette.gutter,
-                syntaxColorAtUTF8Offset: { _, offset in highlighter.color(atUTF8Offset: offset) },
-                onChange: onChange,
-                onHoverChange: { anchor in handleHover(anchor) },
-                onCaretChange: { state in handleCaret(state, in: source.wrappedValue) },
-                textColor: EditorCodePalette.foreground
-            )
-            .textFieldStyle(ScriptCodeEditorTextFieldStyle())
-            .font(.mono)
-            .frame(minHeight: 0)
-            .padding(horizontal: 4, vertical: 4)
-            .background(EditorCodePalette.background)
-            .flex(1, shrink: 1)
+        ThemeReader { theme in
+            let light = theme.colors.surfaceSunken.r > 0.5
+            let highlighter = SwiftSyntaxHighlighter(text, light: light)
+            Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                TextField(
+                    "",
+                    text: source,
+                    axis: .vertical,
+                    maxVisibleLines: 48,
+                    showsLineNumbers: true,
+                    indentationWidth: 4,
+                    editHistory: editHistory,
+                    lineNumberColor: theme.colors.onSurfaceMuted,
+                    lineNumberGutterColor: theme.colors.surface,
+                    syntaxColorAtUTF8Offset: { _, offset in highlighter.color(atUTF8Offset: offset) },
+                    onChange: onChange,
+                    onHoverChange: { anchor in handleHover(anchor) },
+                    onCaretChange: { state in handleCaret(state, in: source.wrappedValue) },
+                    textColor: theme.colors.onSurface,
+                    cursorColor: theme.colors.onSurface,
+                    selectionColor: theme.colors.selection
+                )
+                .textFieldStyle(ScriptCodeEditorTextFieldStyle())
+                .font(.mono)
+                .frame(minHeight: 0)
+                .padding(horizontal: 4, vertical: 4)
+                .background(.surfaceSunken)
+                .flex(1, shrink: 1)
 
-            // Contributes no layout; the popup is painted through the tooltip
-            // pass so the editor's own clipping never trims it.
-            ScriptHoverOverlay(presentation: hover.wrappedValue)
+                // Contributes no layout; the popup is painted through the tooltip
+                // pass so the editor's own clipping never trims it.
+                ScriptHoverOverlay(presentation: hover.wrappedValue)
 
+            }
+            .clipped()
         }
-        .clipped()
     }
 
     private func handleHover(_ anchor: TextFieldHoverAnchor?) {
@@ -75,6 +83,6 @@ struct ScriptCodeEditor: View {
 private struct ScriptCodeEditorTextFieldStyle: TextFieldStyle {
     func makeBody(configuration: TextFieldStyleConfiguration) -> some View {
         configuration.content
-            .background(EditorCodePalette.background)
+            .background(.surfaceSunken)
     }
 }

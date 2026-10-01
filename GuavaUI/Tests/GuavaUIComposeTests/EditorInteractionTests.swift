@@ -40,7 +40,7 @@ struct EditorInteractionTests: GuavaUIComposeSerializedSuite {
                 TextEnvironmentHolder.current = oldText
                 PortalStoreHolder.current = oldStore
             }
-            try test(rig)
+            try AnimatorScheduler.$current.withValue(AnimatorScheduler()) { try test(rig) }
         }
     }
     private func all(_ node: Node?) -> [Node] {
@@ -96,7 +96,7 @@ struct EditorInteractionTests: GuavaUIComposeSerializedSuite {
         #expect(store.text == "{}")
         rig.focus.focus(node); graph.recomposer.commitAll()
         let state = try #require(node.attachments["__textfield_state"] as? TextField.FieldState)
-        #expect(state.lastKnownText == "{ invalid")
+        #expect(state.history.currentText == "{ invalid")
         dispatcher.dispatch(.keyDown(key(Scancode.a, modifiers: .lgui)))
         dispatcher.dispatch(.textInput("{\"ok\":true}"))
         rig.focus.clear(); graph.recomposer.commitAll()
@@ -137,7 +137,10 @@ struct EditorInteractionTests: GuavaUIComposeSerializedSuite {
             JsonField(text: Binding(get: { store.text }, set: { store.text = $0 }))
         })
         func settle() {
-            for _ in 0..<3 { graph.recomposer.commitAll(); graph.computeLayout(width: 640, height: 480) }
+            for _ in 0..<3 {
+                graph.recomposer.commitAll(); AnimatorScheduler.current.tick(deltaTime: 1)
+                graph.recomposer.commitAll(); graph.computeLayout(width: 640, height: 480)
+            }
         }
         func activate(_ name: String) throws {
             let named = try #require(all(rig.tree.root).first { $0.attachments[LayoutDebugAttachmentKey.debugName] as? String == name })
@@ -210,6 +213,8 @@ struct EditorInteractionTests: GuavaUIComposeSerializedSuite {
         rig.dispatcher.dispatch(.keyDown(key(Scancode.s, modifiers: .lgui)))
         #expect(harness.store.actions == 0)
         rig.dispatcher.dispatch(.keyDown(key(Scancode.escape)))
+        graph.recomposer.commitAll()
+        AnimatorScheduler.current.tick(deltaTime: 1)
         for _ in 0..<3 { graph.recomposer.commitAll(); graph.computeLayout(width: 640, height: 480) }
         #expect(!harness.shown)
         #expect(rig.focus.focused === background)
@@ -225,12 +230,12 @@ struct EditorInteractionTests: GuavaUIComposeSerializedSuite {
         store.text = (0..<20).map { "Line \($0)" }.joined(separator: "\n")
         graph.install(root: LayerRoot {
             Column(spacing: 0) {
-            TextField(text: Binding(get: { store.text }, set: { store.text = $0 }), axis: .vertical)
-                .frame(height: 20)
-            Text("Row").frame(width: 230, height: 130)
-                .contextMenu(onOpen: { store.actions += 1 }, entries: {
-                    (0..<12).map { .item(MenuItem(id: $0, title: "Action \($0)", action: {})) }
-                })
+                TextField(text: Binding(get: { store.text }, set: { store.text = $0 }), axis: .vertical, maxVisibleLines: 1)
+                    .frame(height: 20)
+                Text("Row").frame(width: 230, height: 130).debugName("context-test-target")
+                    .contextMenu(onOpen: { store.actions += 1 }, entries: {
+                        (0..<12).map { .item(MenuItem(id: $0, title: "Action \($0)", action: {})) }
+                    })
             }
         })
         graph.computeLayout(width: 240, height: 160)
@@ -245,7 +250,7 @@ struct EditorInteractionTests: GuavaUIComposeSerializedSuite {
         #expect(slot.absoluteFrame.maxX <= 240)
         #expect(slot.absoluteFrame.minY >= 0)
         #expect(slot.absoluteFrame.maxY <= 160)
-        let scroll = try #require(all(slot).first { rig.registry.handlers(for: $0).wheel != nil })
+        let scroll = try #require(all(slot).last { rig.registry.handlers(for: $0).wheel != nil })
         let backgroundOffset = backgroundInput.contentOffset.y
         dispatcher.dispatch(.mouseWheel(MouseWheelEvent(x: 0, y: -1,
                                                         mouseX: Float(slot.absoluteFrame.midX),
@@ -286,6 +291,18 @@ struct EditorInteractionTests: GuavaUIComposeSerializedSuite {
         rig.focus.endModal(modal)
         rig.dispatcher.dispatch(.mouseWheel(MouseWheelEvent(x: 0, y: -1)))
         #expect(store.actions == 1)
+    } }
+
+    @Test("closing a modal cannot restore focus into a detached subtree")
+    func detachedFocusRestoration() { withRig { rig in
+        let root = Node(), container = Node(), previous = Node(), modal = Node()
+        root.addChild(container); container.addChild(previous); root.addChild(modal)
+        previous.isFocusable = true; modal.isFocusable = true
+        rig.focus.focus(previous)
+        rig.focus.beginModal(modal)
+        root.removeChild(container)
+        rig.focus.endModal(modal)
+        #expect(rig.focus.focused == nil)
     } }
 
     struct Item { let id: Int }
@@ -330,10 +347,10 @@ struct EditorInteractionTests: GuavaUIComposeSerializedSuite {
             AnimatorScheduler.current.tick(deltaTime: 0.05)
             let transitioning = try #require(all(rig.tree.root).first { !$0.isInteractionEnabled })
             let interruptedOffset = transitioning.contentOffset
-            let interruptedOpacity = transitioning.subtreeOpacity
+            let interruptedOpacity = transitioning.opacity
             harness.shown = true; graph.recomposer.commitAll()
             #expect(transitioning.contentOffset == interruptedOffset)
-            #expect(transitioning.subtreeOpacity == interruptedOpacity)
+            #expect(transitioning.opacity == interruptedOpacity)
             AnimatorScheduler.current.tick(deltaTime: 1); graph.recomposer.commitAll()
             #expect(all(rig.tree.root).allSatisfy { $0.isInteractionEnabled })
             harness.shown = false; graph.recomposer.commitAll()

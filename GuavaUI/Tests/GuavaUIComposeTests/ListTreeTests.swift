@@ -421,6 +421,10 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
                                         roots: roots))
         graph.computeLayout(width: 280, height: 220)
 
+        graph.recomposer.commitAll()
+        graph.computeLayout(width: 280, height: 220)
+        graph.recomposer.commitAll()
+
         let buttons = orderedPointerNodes(in: tree.root!, registry: registry)
         let disclosure = buttons.min { $0.frame.width < $1.frame.width }!
         let row = buttons.first { $0 !== disclosure }

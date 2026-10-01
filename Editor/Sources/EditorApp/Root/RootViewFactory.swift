@@ -171,7 +171,7 @@ enum EditorRootViewFactory {
                             title: localizedPanelTitle(for: "console"),
                             preferredSlot: .bottom,
                             iconAssetKey: "panel.console") {
-                ConsolePanel(store: app.store)
+                EditorOutputPanel(app: app)
             },
             PanelDescriptor(id: "assets",
                             title: localizedPanelTitle(for: "assets"),
@@ -202,12 +202,6 @@ enum EditorRootViewFactory {
                             preferredSlot: .bottom,
                             iconAssetKey: "panel.developer-tools") {
                 DeveloperToolsPanel(app: app)
-            },
-            PanelDescriptor(id: "profiler",
-                            title: localizedPanelTitle(for: "profiler"),
-                            preferredSlot: .bottom,
-                            iconAssetKey: "panel.profiler") {
-                EditorProfilerPanel(app: app)
             },
             PanelDescriptor(id: "scripts",
                             title: localizedPanelTitle(for: "scripts"),
@@ -341,7 +335,29 @@ enum EditorRootViewFactory {
         next.ensureStandardEditorSlotSchema()
         let registeredIDs = Set(registry.ids)
 
-        for staleID in next.panels.keys where !registeredIDs.contains(staleID) {
+        // Migrate the redundant profiler tab into Developer Tools while
+        // preserving the user's active panel in saved layouts.
+        if !registeredIDs.contains("profiler"), registeredIDs.contains("developer-tools") {
+            let orderedGroups = next.groups.keys.sorted { $0.rawValue < $1.rawValue }
+            let preferredGroup = orderedGroups.first { next.groups[$0]?.activePanelID == "profiler" }
+                ?? orderedGroups.first { next.groups[$0]?.panels.contains("developer-tools") == true }
+                ?? orderedGroups.first { next.groups[$0]?.panels.contains("profiler") == true }
+            for groupID in orderedGroups {
+                guard var group = next.groups[groupID], group.panels.contains("profiler") else { continue }
+                group.panels = group.panels.map { $0 == "profiler" ? "developer-tools" : $0 }
+                    .reduce(into: []) { if !$0.contains($1) { $0.append($1) } }
+                if group.activePanelID == "profiler" { group.activePanelID = "developer-tools" }
+                next.groups[groupID] = group
+            }
+            // A panel can only occupy one group; prioritize the active profiler.
+            for groupID in orderedGroups {
+                guard var group = next.groups[groupID], group.panels.contains("developer-tools") else { continue }
+                if groupID != preferredGroup { group.panels.removeAll { $0 == "developer-tools" } }
+                next.groups[groupID] = group
+            }
+        }
+
+        for staleID in Array(next.panels.keys) where !registeredIDs.contains(staleID) {
             next.panels.removeValue(forKey: staleID)
         }
 
@@ -556,7 +572,6 @@ enum EditorWorkspaceDefaults {
             "bottom": WorkspaceTabGroup(id: "bottom",
                                         panels: ["assets",
                                                  "console",
-                                                 "profiler",
                                                  "confirmation-host",
                                                  "render-pipeline",
                                                  "developer-tools"],
@@ -605,7 +620,7 @@ enum EditorWorkspaceDefaults {
     private static func defaultBottomPanelID(for preset: EditorLayoutPreset) -> WorkspacePanelID {
         switch preset {
         case .levelWorkbench:
-            return "profiler"
+            return "developer-tools"
         case .levelDefault, .levelCinematics:
             return "assets"
         case .modelingDefault, .modelingSculpt:

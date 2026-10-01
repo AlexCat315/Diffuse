@@ -1,97 +1,82 @@
-#if canImport(CoreGraphics)
-import CoreGraphics
-#endif
 import Foundation
 import GuavaUIRuntime
 
-/// Centered, window-sized modal with focus trapping and focus restoration.
-/// The application root must provide a PortalHost (normally through LayerRoot).
 public struct Modal<Content: View>: View {
-    let isPresented: Binding<Bool>
-    let onDismiss: (() -> Void)?
-    let content: Content
-    public init(isPresented: Binding<Bool>, onDismiss: (() -> Void)? = nil,
+    private let isPresented: Binding<Bool>
+    private let width: Float
+    private let height: Float
+    private let content: Content
+    public init(isPresented: Binding<Bool>, width: Float = 760, height: Float = 560,
                 @ViewBuilder content: () -> Content) {
-        self.isPresented = isPresented
-        self.onDismiss = onDismiss
-        self.content = content()
+        self.isPresented = isPresented; self.width = width; self.height = height; self.content = content()
     }
+    @State private var retained = false
     public var body: some View {
-        if isPresented.wrappedValue {
-            _ModalPresenter(content: content, onDismiss: {
-                onDismiss?()
-                isPresented.wrappedValue = false
-            })
-        }
+        _ModalPresenter(isPresented: isPresented, retained: retained, width: width, height: height,
+                        content: content, onPresented: { if !retained { retained = true } },
+                        onExited: { if retained { retained = false } })
     }
 }
 
 private struct _ModalPresenter<Content: View>: _PrimitiveView {
-    let content: Content
-    let onDismiss: () -> Void
+    let isPresented: Binding<Bool>; let retained: Bool
+    let width: Float; let height: Float; let content: Content
+    let onPresented: () -> Void; let onExited: () -> Void
     func _makeNode() -> Node {
-        let node = Node()
-        node.addResource(PortalResource())
-        return node
+        let node = Node(); node.isHitTestable = false; node.addResource(PortalResource()); return node
     }
     func _makeLayoutNode() -> LayoutNode? { nil }
     func _updateNode(_ node: Node) {
         present(node)
         node.layoutDidUpdate = { node in
-            var root = node
-            while let parent = root.parent { root = parent }
-            if node.attachments["modal.windowSize"] as? CGSize != root.frame.size { present(node) }
+            if node.attachments["modal.windowBounds"] as? CGRect != portalWindowBounds(node) { present(node) }
         }
     }
     private func present(_ node: Node) {
-        var root = node
-        while let parent = root.parent { root = parent }
-        let size = root.frame.size
-        node.attachments["modal.windowSize"] = size
-        node.firstResource(PortalResource.self)?.present(
-            in: node.compositionValue(of: PortalStoreEnvironment.key), position: .zero,
-            width: Float(size.width), constrainToWindow: false,
-            content: AnyView(_ModalSurface(size: size, content: content, onDismiss: onDismiss)))
+        node.attachments["modal.windowBounds"] = portalWindowBounds(node)
+        let resource = node.firstResource(PortalResource.self)
+        guard isPresented.wrappedValue || retained else { resource?.unmount(node: node); return }
+        if isPresented.wrappedValue { onPresented() }
+        let store = node.compositionValue(of: PortalStoreEnvironment.key) ?? PortalStoreHolder.current
+        resource?.present(in: store, position: .zero, width: nil,
+                          content: AnyView(AnimatedVisibility(isVisible: isPresented.wrappedValue,
+                            transition: .opacity, animateOnMount: true,
+                            onVisibilitySettled: { visible in if !visible { onExited() } }) {
+                              FocusScope {
+                                _ModalBackdrop(width: width, height: height, onDismiss: { isPresented.wrappedValue = false }, content: content)
+                              }
+                          }.frame(width: .percent(100), height: .percent(100))), fillsWindow: true)
     }
+    var _children: [any View] { [] }
 }
 
-private struct _ModalSurface<Content: View>: _PrimitiveView {
-    let size: CGSize
-    let content: Content
-    let onDismiss: () -> Void
-    func _makeNode() -> Node {
-        let node = Node()
-        node.isHitTestable = true
-        node.addResource(ModalFocusResource())
-        return node
-    }
-    func _makeLayoutNode() -> LayoutNode? { LayoutNode() }
-    func _updateLayout(_ layout: LayoutNode) {
-        layout.width = Float(size.width)
-        layout.height = Float(size.height)
-        layout.flexDirection = .column
-        layout.alignItems = .center
-        layout.justifyContent = .center
-    }
+private struct _ModalBackdrop<Content: View>: _PrimitiveView {
+    let width: Float; let height: Float; let onDismiss: () -> Void; let content: Content
+    func _makeNode() -> Node { let node = Node(); node.isHitTestable = true; return node }
     func _updateNode(_ node: Node) {
-        node.backgroundColor = Color(r: 0, g: 0, b: 0, a: 0.25)
-        node.firstResource(ModalFocusResource.self)?.activate(node: node, chain: FocusChainHolder.current)
-        let chain = FocusChainHolder.current
-        node.layoutDidUpdate = { _ in chain?.ensureModalFocus() }
-        guard let registry = InteractionRegistryHolder.current else { return }
-        registry.setPointer(node) { _, _, phase in phase == .target ? .handled : .ignored }
-        registry.setWheel(node) { _, phase in phase == .capture ? .ignored : .handled }
-        registry.setKey(node) { event, phase in
-            guard phase != .capture else { return .ignored }
-            if event.scancode == Scancode.escape { onDismiss() }
-            return .handled
+        node.backgroundColor = node.theme.colors.background.multipliedAlpha(0.6)
+        InteractionRegistryHolder.current?.setPointer(node, route: InputHandlerRoute(role: .control, priority: .modal, debugName: "modal.backdrop")) { _, phase, eventPhase in
+            guard eventPhase == .target else { return .ignored }
+            if phase == .down { onDismiss() }; return .handled
         }
+        InteractionRegistryHolder.current?.setKey(node, route: .overlay) { event, _ in
+            if event.scancode == Scancode.escape { onDismiss(); return .handled }; return .ignored
+        }
+        InteractionRegistryHolder.current?.setWheel(node) { _, phase in phase == .capture ? .ignored : .handled }
     }
-    var _children: [any View] {
-        [TransitionView(isVisible: true, transition: .opacity.combined(with: .offset(y: 12)), motion: .fast) {
-            content
-        }
-        .frame(width: min(960, max(0, Float(size.width) - 48)),
-               height: min(720, max(0, Float(size.height) - 64)))]
+    func _makeLayoutNode() -> LayoutNode? {
+        let layout = LayoutNode(); layout.positionType = .absolute
+        layout.setPosition(0, edge: .left); layout.setPosition(0, edge: .top)
+        layout.setPosition(0, edge: .right); layout.setPosition(0, edge: .bottom)
+        layout.flexDirection = .column; layout.alignItems = .center; layout.justifyContent = .center
+        return layout
+    }
+    func _children(for node: Node) -> [any View] {
+        let bounds = portalWindowBounds(node)
+        return [AnimatedVisibility(isVisible: true, transition: .opacity.combined(with: .move(edge: .bottom, distance: 12)), animateOnMount: true) {
+            content.frame(width: min(width, Float(max(0, bounds.width - 32))),
+                          height: min(height, Float(max(0, bounds.height - 32))))
+                .background(.surface).cornerRadius(8).border(.border, width: 1)
+        }]
     }
 }

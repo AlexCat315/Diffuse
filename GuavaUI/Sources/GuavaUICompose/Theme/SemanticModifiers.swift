@@ -45,8 +45,11 @@ public struct SemanticFontModifier: ViewModifier {
 
     public func apply(node: Node) {
         let token = ref.resolve(node.theme)
+        guard node.attachments[StyleAttachmentKey.font] as? Font != token.font
+            || node.attachments[StyleAttachmentKey.lineHeight] as? Float != token.lineHeight else { return }
         node.attachments[StyleAttachmentKey.font] = token.font
         node.attachments[StyleAttachmentKey.lineHeight] = token.lineHeight
+        node.invalidateTextStyle()
     }
 
     public func apply(layout: LayoutNode) {
@@ -62,13 +65,9 @@ public struct SemanticFontModifier: ViewModifier {
         }
         layout.attachments[StyleAttachmentKey.font] = token.font
         layout.attachments[StyleAttachmentKey.lineHeight] = token.lineHeight
-        // Only nodes with a custom measure function (Text / TextField) may be
-        // marked dirty manually — Yoga aborts otherwise. Detect via presence
-        // of the `font` attachment slot, which only those primitives populate
-        // proactively in their own `_makeLayoutNode` measure callback path.
-        if layout.hasMeasureFunc {
-            layout.markDirty()
-        }
+        // Mark measured descendants too: style hosts often sit above the
+        // Text / TextField surface, and Yoga only permits dirtying measured nodes.
+        layout.invalidateTextMeasurements()
     }
 }
 

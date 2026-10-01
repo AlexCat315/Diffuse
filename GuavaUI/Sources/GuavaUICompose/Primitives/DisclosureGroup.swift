@@ -20,7 +20,7 @@ public struct DisclosureGroup<Label: View, Content: View>: View {
     }
 
     public var body: some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 0) {
+        Box(direction: .column, alignItems: .stretch, spacing: 4) {
             Button(isEnabled: isEnabled, action: {
                 isExpanded.wrappedValue.toggle()
             }) {
@@ -38,9 +38,8 @@ public struct DisclosureGroup<Label: View, Content: View>: View {
             .frame(height: 24)
             .debugName("disclosure-header")
 
-            TransitionView(isVisible: isExpanded.wrappedValue,
-                           transition: .opacity.combined(with: .offset(y: -4)), motion: .fast) {
-                content.padding(EdgeInsets(top: 4))
+            AnimatedVisibility(isVisible: isExpanded.wrappedValue) {
+                content
             }
         }
         .frame(minWidth: 0)

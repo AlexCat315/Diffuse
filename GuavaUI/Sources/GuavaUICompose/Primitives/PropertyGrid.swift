@@ -224,7 +224,7 @@ private struct _StatefulPropertyGrid: View {
             .frame(height: 26)
             .background(.surfaceVariant.opacity(0.65))
 
-            if !isCollapsed {
+            AnimatedVisibility(isVisible: !isCollapsed) {
                 Box(direction: .column, alignItems: .stretch, spacing: grid.rowSpacing) {
                     if section.rows.isEmpty {
                         Text(grid.emptyText)

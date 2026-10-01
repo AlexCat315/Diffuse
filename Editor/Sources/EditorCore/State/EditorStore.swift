@@ -63,6 +63,17 @@ public final class EditorStore: @unchecked Sendable {
         case chatMessages
         case consoleEntries
         case commandPaletteVisible
+        case scriptCaretLabel
+    }
+
+    private var scriptCaretLabels: [String: String] = [:]
+    public func scriptCaretLabel(for documentID: String) -> String {
+        read(.scriptCaretLabel, scriptCaretLabels[documentID] ?? "Ln 1, Col 1")
+    }
+    public func setScriptCaretLabel(_ label: String, for documentID: String) {
+        guard scriptCaretLabels[documentID] != label else { return }
+        scriptCaretLabels[documentID] = label
+        invalidate([.scriptCaretLabel])
     }
 
     private var storage: EditorState

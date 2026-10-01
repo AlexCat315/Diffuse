@@ -81,6 +81,18 @@ public final class DrawList {
 
     public var currentClip: UIRect? { clipStack.last }
 
+    /// Apply a container's alpha to descendant geometry, including cached
+    /// child layers. Local painters already apply their own node's opacity.
+    func multiplyOpacity(fromVertexIndex start: Int, by opacity: Float) {
+        let alpha = max(0, min(1, opacity))
+        guard alpha < 1 else { return }
+        for index in start..<vertices.count {
+            let packed = vertices[index].color
+            let next = UInt32((Float(packed >> 24) * alpha).rounded())
+            vertices[index].color = (packed & 0x00FF_FFFF) | (next << 24)
+        }
+    }
+
     // MARK: - Snapshot restore
 
     /// Replace the draw list contents with pre-built data from a `DrawListSnapshot`.
