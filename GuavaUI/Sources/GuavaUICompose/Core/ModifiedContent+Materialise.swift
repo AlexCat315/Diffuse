@@ -3,6 +3,10 @@ import GuavaUIRuntime
 /// Type-erased helper that lets `ViewGraph` materialise (and update) a
 /// `ModifiedContent` without knowing its generic parameters at the call site.
 public protocol _AnyModifiedContent {
+    /// Ordinary modifiers share their content's node and therefore its key.
+    /// Scope/around modifiers create a new anchor and keep the child's key local.
+    var _inheritedSlotKey: AnyHashable? { get }
+
     func _materialiseInto(parent: Node,
                           layoutParent: LayoutNode?,
                           graph: ViewGraph) -> [Node]
@@ -16,7 +20,17 @@ public protocol _AnyModifiedContent {
                         graph: ViewGraph)
 }
 
+public extension _AnyModifiedContent {
+    var _inheritedSlotKey: AnyHashable? { nil }
+}
+
 extension ModifiedContent: _AnyModifiedContent {
+
+    public var _inheritedSlotKey: AnyHashable? {
+        guard !(modifier is _ScopeApplyingModifier),
+              !(modifier is _AroundApplyingModifier) else { return nil }
+        return ViewGraph.slotKey(content)
+    }
 
     public func _materialiseInto(parent: Node,
                                  layoutParent: LayoutNode?,

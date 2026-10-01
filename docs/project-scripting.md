@@ -72,6 +72,45 @@ struct GameScript: ScriptBehavior {
 }
 ```
 
-Editor 启动及场景重载时会重新编译这些源文件，并将其加入 Inspector 的脚本选择列表；动态 Swift 脚本目前只在 Editor 进程内运行，不会随项目导出到 GuavaPlayer。`Scripts/scripts.json` 仍用于声明式 preset 和默认参数。需要 Player 支持动态 Swift 脚本时，还需增加对应的构建与打包流程。
+Editor 启动及场景重载时会重新编译这些源文件，并将其加入 Inspector 的脚本选择列表。项目必须先在 Scripts 面板中被明确标记为可信，才允许编译和运行原生脚本；项目文件不能自行授予信任。`Scripts/scripts.json` 仍用于声明式 preset 和默认参数。
 
 每个文件定义一个 `GameScript: ScriptBehavior` 类型即可。Editor 会生成动态库入口并为每个实体绑定创建独立实例。Editor 需要能在 `PATH` 中找到 Swift 编译器 `swiftc`。
+
+## 导出自定义玩法
+
+macOS 和 Linux 的项目导出会重新编译 `Scripts/*.swift`，把动态库写入 `Scripts/Compiled/`，并生成 `Scripts/compiled-scripts.json`。目录记录稳定脚本 ID、重命名前的兼容别名、目标平台/架构和产物校验和。Player 启动时加载这些预编译库，每个绑定仍获得独立实例，玩家机器无需安装 Swift 编译器或保留脚本源文件。
+
+导出使用当前宿主平台和架构，脚本 SDK、Swift 工具链与 GuavaPlayer 必须来自兼容的引擎构建。开发构建会从可执行文件旁发现 Engine 模块；独立安装的 SDK 可以由宿主设置 `GUAVA_ENGINE_MODULE_PATHS`、`GUAVA_ENGINE_CLANG_MODULE_MAP_PATHS`、`GUAVA_ENGINE_CLANG_INCLUDE_PATHS` 和 `GUAVA_SWIFTC_PATH`。没有 SDK、脚本编译失败、启用的绑定缺失或 Player 无法加载动态库时，导出明确失败，并保留上一次成功导出的游戏。
+
+Windows 当前仍可导出内置 preset；自定义 Swift 脚本导出会报告不支持，等待补齐完整 Swift 宿主符号桥接。脚本按文件独立编译，多文件共享模块和断点调试尚未提供。
+
+可在不打开窗口的情况下验证导出并模拟若干帧：
+
+```bash
+GuavaPlayer --validate-project --project /path/to/export --simulation-frames 120
+```
+
+## 在脚本中生成对象
+
+`createEntity` 立即返回可配置的实体。`destroyEntity` 和 `destroySelf` 在下一次命令应用阶段执行。
+
+```swift
+import SceneRuntime
+import ScriptRuntime
+import SIMDCompat
+
+struct GameScript: ScriptBehavior {
+  mutating func onStart(_ context: ScriptContext) {
+    let entity = context.createEntity(
+      named: "Bullet",
+      transform: LocalTransform(translation: SIMD3<Float>(0, 1, 0))
+    )
+    context.setComponent(
+      Collider(shape: .sphere(radius: 0.15, center: .zero)),
+      for: entity
+    )
+  }
+}
+```
+
+原生宿主可用 `Prefab.captureFull(from:root:)` 捕获包含稳定脚本绑定的模板，再用 `prefab.instantiateFull(into:)` 创建实例；也可以把 `Prefab` 存入场景资源后，由脚本通过 `context.instantiate(prefab, parent: context.entity)` 创建实例。层级与组件会被恢复，各实例的脚本状态相互独立。新实体不会插入正在遍历的脚本列表，其行为在之后的执行阶段启动。普通 `Prefab.capture` 继续只捕获 SceneRuntime 组件。

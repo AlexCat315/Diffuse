@@ -34,6 +34,12 @@ public struct SceneRuntime {
 
     public init() {}
 
+    /// Lets serializers reuse their world operations during a script phase without
+    /// constructing another simulation schedule or copying the scene's resources.
+    mutating func withWorld<Result>(_ body: (inout RuntimeWorld) throws -> Result) rethrows -> Result {
+        try body(&world)
+    }
+
     public var snapshot: SceneRuntimeSnapshot {
         world.snapshot
     }

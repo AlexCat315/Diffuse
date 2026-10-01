@@ -95,6 +95,7 @@ let package = Package(
                 .linkedFramework("GameController", .when(platforms: [.macOS])),
                 .linkedFramework("IOKit", .when(platforms: [.macOS])),
                 .linkedFramework("Metal", .when(platforms: [.macOS])),
+                .linkedFramework("QuartzCore", .when(platforms: [.macOS])),
                 .linkedFramework("UniformTypeIdentifiers", .when(platforms: [.macOS])),
                 // SDL3 static needs these Win32 system libraries at link time.
                 .linkedLibrary("winmm", .when(platforms: [.windows])),

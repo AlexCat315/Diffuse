@@ -4,6 +4,7 @@ import EngineKernel
 import Foundation
 import RHIWGPU
 import RenderBackend
+import ScriptRuntime
 
 /// Lightweight game host for the standalone player.
 ///
@@ -31,6 +32,8 @@ public final class GameApplication: @unchecked Sendable {
     private var _frameIndex: UInt64 = 0
     private let scriptCatalogMonitor: ProjectScriptCatalogMonitor?
     private var scriptCatalogReloadElapsed: Double = 0
+    private let projectScriptLoader: GameProjectScriptLoader
+    public let compiledScriptCount: Int
 
     /// Called on the main thread whenever the engine publishes a new viewport
     /// surface (i.e. a new rendered frame is ready). Used by the root view to
@@ -40,6 +43,8 @@ public final class GameApplication: @unchecked Sendable {
     public init(projectDirectory: String? = nil, backend: WGPUBackend? = nil) throws {
         let resolvedBackend = backend ?? WGPUBackend()
         let scene = EditorSceneAdapter()
+        let scriptLoader = GameProjectScriptLoader()
+        var compiledScriptCount = 0
         var scriptMonitor: ProjectScriptCatalogMonitor?
 
         if let dir = projectDirectory {
@@ -59,7 +64,8 @@ public final class GameApplication: @unchecked Sendable {
             do {
                 if let catalog = try monitor.loadIfChanged(force: true) {
                     let report = scene.applyProjectScriptCatalog(catalog)
-                    Self.writeScriptCatalogReport(report, diagnostics: catalog.diagnostics)
+                    Self.writeScriptCatalogReport(report, diagnostics: catalog.diagnostics,
+                                                  reportUnresolvedBindings: false)
                 }
             } catch {
                 _ = scene.applyProjectScriptCatalog(.builtIn)
@@ -69,9 +75,26 @@ public final class GameApplication: @unchecked Sendable {
             _ = scene.applyProjectScriptCatalog(.builtIn)
         }
 
+        if let dir = projectDirectory {
+            let projectURL = URL(fileURLWithPath: dir, isDirectory: true)
+            let entries = try scriptLoader.load(projectDirectory: projectURL, into: scene.scriptRuntime)
+            compiledScriptCount = entries.count
+            for entry in entries {
+                scene.registerDynamicScriptOption(identifier: entry.identifier, displayName: entry.displayName)
+            }
+            let unresolvedBindings = scene.unresolvedScriptBindingDescriptions(onlyEnabled: true)
+            if FileManager.default.fileExists(atPath: projectURL.appendingPathComponent("build.json").path),
+               !unresolvedBindings.isEmpty {
+                throw GameProjectScriptLoadError.missingBindings(unresolvedBindings)
+            }
+            for binding in unresolvedBindings { Self.writeStandardError("unresolved script binding: \(binding)") }
+        }
+
         self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: resolvedBackend)
         self.scene = scene
         self.scriptCatalogMonitor = scriptMonitor
+        self.projectScriptLoader = scriptLoader
+        self.compiledScriptCount = compiledScriptCount
     }
 
     public var viewportDrawableSize: RenderDrawableSize { _viewportDrawableSize }
@@ -137,6 +160,15 @@ public final class GameApplication: @unchecked Sendable {
         engine.shutdown()
     }
 
+    /// Exercises exported gameplay in CI without opening a window or GPU device.
+    public func simulateFrames(_ count: Int, deltaTime: Double = 1.0 / 60.0) {
+        for _ in 0..<max(0, count) {
+            _frameIndex &+= 1
+            scene.tickScene(deltaTime: deltaTime, frameIndex: _frameIndex,
+                            inputEvents: [], drivesAudio: false)
+        }
+    }
+
     private func reloadProjectScripts() {
         guard let scriptCatalogMonitor else { return }
         do {
@@ -150,13 +182,14 @@ public final class GameApplication: @unchecked Sendable {
 
     private static func writeScriptCatalogReport(
         _ report: EditorScriptCatalogApplyReport,
-        diagnostics: [ProjectScriptCatalogDiagnostic]
+        diagnostics: [ProjectScriptCatalogDiagnostic],
+        reportUnresolvedBindings: Bool = true
     ) {
         for diagnostic in diagnostics {
             writeStandardError("script catalog \(diagnostic.severity.rawValue): \(diagnostic.message)")
         }
-        for binding in report.unresolvedBindings {
-            writeStandardError("unresolved script binding: \(binding)")
+        if reportUnresolvedBindings {
+            for binding in report.unresolvedBindings { writeStandardError("unresolved script binding: \(binding)") }
         }
     }
 

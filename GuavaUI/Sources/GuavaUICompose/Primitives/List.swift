@@ -81,7 +81,9 @@ struct _ListRowHost: _PrimitiveView {
     func _updateNode(_ node: Node) {
         guard let registry = InteractionRegistryHolder.current else { return }
         let captured = onActivate
-        registry.setPointer(node) { event, phase, _ in
+        registry.setPointer(node) { event, phase, eventPhase in
+            // Embedded controls get first refusal before row selection.
+            guard eventPhase != .capture else { return .ignored }
             guard event.button == .left else { return .ignored }
             switch phase {
             case .down:
