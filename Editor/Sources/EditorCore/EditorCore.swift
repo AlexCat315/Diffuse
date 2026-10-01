@@ -163,6 +163,7 @@ public final class EditorApplication: @unchecked Sendable {
     private let editLog: EditLog
     private let contextMemoryStore: ContextMemoryStore?
     private var physicsPlaySnapshot: SceneRuntime?
+    private var physicsPlayAuthoringRevision: UInt64?
     private static let frameStatsDispatchInterval: Double = 1.0
     /// Accumulator for stable FPS averaging.
     private var frameTimingAccumulator: Double = 0
@@ -234,6 +235,8 @@ public final class EditorApplication: @unchecked Sendable {
         ProjectRuntimeResources.configureAudioSearchPaths(at: projectDirectory)
         let store = EditorStore()
         let scene = EditorSceneAdapter(seedPreviewScene: seedPreviewScene)
+        scene.setEditorViewportCameraEnabled(true)
+        scene.scriptRuntime.isGameplayExecutionEnabled = false
         let observationDirectory = URL(fileURLWithPath: projectDirectory, isDirectory: true)
             .appendingPathComponent(".guava", isDirectory: true)
             .appendingPathComponent("observation", isDirectory: true)
@@ -446,7 +449,8 @@ public final class EditorApplication: @unchecked Sendable {
         let viewportInput = EditorViewportInputController.shared
         let continuousViewportInteractionActive = viewportInput.isContinuousSceneInteractionActive
         let shouldAdvanceSceneSimulation =
-            state.viewportRealtimeEnabled || state.playbackState == .playing
+            (state.viewportRealtimeEnabled && state.playbackState == .stopped)
+                || state.playbackState == .playing
         if viewportInput.hasFreelookMovementInput {
             driveContinuousViewportCamera(deltaTime: simulationDelta)
         }
@@ -520,6 +524,8 @@ public final class EditorApplication: @unchecked Sendable {
     public func shutdown() {
         guard !isShuttingDown else { return }
         isShuttingDown = true
+        scene.scriptRuntime.isGameplayExecutionEnabled = false
+        scene.scriptRuntime.stop(in: &scene.scene)
         scriptWorkspace.shutdown()
         scene.endInteractiveEditHistoryGroup()
         let activeSession = session
@@ -1007,10 +1013,14 @@ public final class EditorApplication: @unchecked Sendable {
         switch next {
         case .playing:
             if physicsPlaySnapshot == nil {
+                scene.scriptRuntime.reset()
                 physicsPlaySnapshot = scene.scene
+                physicsPlayAuthoringRevision = store.state.sceneRevision
                 persistPhysicsPlaySnapshot()
             }
             scene.setAuthoringEnabled(false)
+            scene.setEditorViewportCameraEnabled(false)
+            scene.scriptRuntime.isGameplayExecutionEnabled = true
             var settings = scene.scene.physicsSettings
             settings.simulationMode = .play
             settings.backendKind = .jolt
@@ -1020,6 +1030,8 @@ public final class EditorApplication: @unchecked Sendable {
 
         case .paused:
             scene.setAuthoringEnabled(false)
+            scene.setEditorViewportCameraEnabled(false)
+            scene.scriptRuntime.isGameplayExecutionEnabled = false
             var settings = scene.scene.physicsSettings
             settings.simulationMode = .off
             scene.scene.setPhysicsSettings(settings)
@@ -1027,6 +1039,8 @@ public final class EditorApplication: @unchecked Sendable {
             logConsole("Physics simulation paused")
 
         case .stopped:
+            scene.scriptRuntime.isGameplayExecutionEnabled = false
+            scene.scriptRuntime.stop(in: &scene.scene)
             AudioEngine.shared.resetPlaybackState()
             // Fallback: restore from disk if the in-memory snapshot was lost (e.g. after a crash).
             if physicsPlaySnapshot == nil {
@@ -1048,8 +1062,12 @@ public final class EditorApplication: @unchecked Sendable {
                 scene.scene.setPhysicsSettings(settings)
             }
             scene.setAuthoringEnabled(true)
+            scene.setEditorViewportCameraEnabled(true)
             scene.notifyRevisionChanged(recordHistory: false)
-            store.dispatch(.setSceneRevision(scene.revision))
+            // Runtime preparation can advance the scene's internal revision
+            // without authored edits. Restore the document's pre-play baseline.
+            store.dispatch(.setSceneRevision(physicsPlayAuthoringRevision ?? scene.revision))
+            physicsPlayAuthoringRevision = nil
             store.dispatch(.setPlaybackState(.stopped))
             logConsole("Physics simulation stopped")
         }
@@ -1404,6 +1422,10 @@ public final class EditorApplication: @unchecked Sendable {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(authoredOutput.manifest)
             try data.write(to: sceneManifestURL, options: [.atomic])
+            store.dispatch(.setSceneRevision(authoredOutput.revision))
+            if authoredOutput.usedPlaySnapshot {
+                physicsPlayAuthoringRevision = authoredOutput.revision
+            }
             store.dispatch(.markSceneSaved(authoredOutput.revision))
             removeEditorAutosave()
             logConsole(authoredOutput.usedPlaySnapshot
@@ -1439,7 +1461,7 @@ public final class EditorApplication: @unchecked Sendable {
         }
         return (
             scene.manifest(selectedEntityID: store.state.selectedEntityID),
-            store.state.sceneRevision,
+            scene.revision,
             false
         )
     }

@@ -31,6 +31,41 @@ private struct StatefulScriptBehavior: ScriptBehavior {
 
 @Suite("ScriptRuntimeLifecycle")
 struct ScriptRuntimeLifecycleTests {
+    @Test("suspending and ending a session preserve factories and pass live parameters to destruction")
+    func sessionLifecycle() {
+        let recorder = ScriptLifecycleRecorder()
+        let scripts = ScriptRuntime()
+        let handle = scripts.register(named: "session", defaultParametersJSON: #"{"default":7}"#) {
+            Script(onStart: { _ in recorder.starts += 1 },
+                   onTick: { _ in recorder.ticks += 1 },
+                   onDestroy: { context in
+                       if context.localTransform != nil,
+                          context.doubleParameter("value") == 42,
+                          context.doubleParameter("default") == 7 { recorder.destroys += 1 }
+                   })
+        }
+        var scene = SceneRuntime()
+        scene.setScriptDriver(scripts)
+        let entity = scene.createEntity()
+        _ = scene.setLocalTransform(.identity, for: entity)
+        _ = scene.setComponent(ScriptComponent(ScriptBinding(handle, parametersJSON: #"{"value":42}"#)), for: entity)
+        scripts.isGameplayExecutionEnabled = false
+        _ = scene.tick(deltaTime: 0.1)
+        #expect(recorder.starts == 0 && recorder.ticks == 0)
+        scripts.isGameplayExecutionEnabled = true
+        _ = scene.tick(deltaTime: 0.1)
+        scripts.isGameplayExecutionEnabled = false
+        _ = scene.tick(deltaTime: 0.1)
+        #expect(recorder.starts == 1 && recorder.ticks == 1 && recorder.destroys == 0)
+        scripts.stop(in: &scene)
+        scripts.stop(in: &scene)
+        #expect(recorder.destroys == 1)
+        #expect(scripts.handle(named: "session") == handle)
+        scripts.isGameplayExecutionEnabled = true
+        _ = scene.tick(deltaTime: 0.1)
+        #expect(recorder.starts == 2 && recorder.ticks == 2)
+    }
+
     @Test("registered scripts run start once and drive same-frame world updates")
     func registeredScriptsRunLifecycleThroughSceneRuntime() {
         let recorder = ScriptLifecycleRecorder()
