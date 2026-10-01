@@ -949,7 +949,7 @@ extension EditorSceneAdapter {
             entityWorldPosition(rawID).map { (rawID, $0) }
         })
         guard !centersByID.isEmpty else { return }
-        guard let camID = activeCameraEntityRaw() else { return }
+        let camID = activeCameraEntityRaw()
         let cam = currentRenderCamera()
 
         let selectionIDs = Set(centersByID.keys)
@@ -1050,7 +1050,7 @@ extension EditorSceneAdapter {
     public func orbitCamera(deltaScreenX dx: Float,
                             deltaScreenY dy: Float,
                             in frame: ViewportScreenFrame) {
-        guard let camID = activeCameraEntityRaw() else { return }
+        let camID = activeCameraEntityRaw()
         let cam = currentRenderCamera()
         let forwardRaw = cam.target - cam.eye
         let distance = simd_length(forwardRaw)
@@ -1073,7 +1073,7 @@ extension EditorSceneAdapter {
     public func panCamera(deltaScreenX dx: Float,
                           deltaScreenY dy: Float,
                           in frame: ViewportScreenFrame) {
-        guard let camID = activeCameraEntityRaw() else { return }
+        let camID = activeCameraEntityRaw()
         let cam = currentRenderCamera()
         let forward = simd_normalize(cam.target - cam.eye)
         let rightRaw = simd_cross(forward, cam.up)
@@ -1091,7 +1091,7 @@ extension EditorSceneAdapter {
 
     /// Alt+RMB dolly: move the orbit eye along the current view vector while keeping the target stable.
     public func dollyCamera(deltaScreenY dy: Float) {
-        guard let camID = activeCameraEntityRaw() else { return }
+        let camID = activeCameraEntityRaw()
         let cam = currentRenderCamera()
         let forwardRaw = cam.target - cam.eye
         let dist = simd_length(forwardRaw)
@@ -1109,7 +1109,7 @@ extension EditorSceneAdapter {
                                pressedScancodes: Set<UInt32>,
                                modifiers: KeyModifiers,
                                deltaTime: Float = 1.0 / 60.0) {
-        guard let camID = activeCameraEntityRaw() else { return }
+        let camID = activeCameraEntityRaw()
         let cam = currentRenderCamera()
         var forward = cam.target - cam.eye
         let focusDistance = max(0.5, simd_length(forward))
@@ -1149,7 +1149,7 @@ extension EditorSceneAdapter {
 
     /// 滚轮缩放：factor < 1 拉近，> 1 推远。把 eye 沿 (eye - target) 方向缩放。
     public func zoomCamera(factor: Float) {
-        guard let camID = activeCameraEntityRaw() else { return }
+        let camID = activeCameraEntityRaw()
         let cam = currentRenderCamera()
         let offset = cam.eye - cam.target
         let r = simd_length(offset)
@@ -1161,7 +1161,7 @@ extension EditorSceneAdapter {
 
     /// ViewCube axis snap. `axis` is the desired camera forward direction in world space.
     public func lookAlongAxis(_ axis: SIMD3<Float>) {
-        guard let camID = activeCameraEntityRaw() else { return }
+        let camID = activeCameraEntityRaw()
         let cam = currentRenderCamera()
         let len = simd_length(axis)
         guard len > 1e-5 else { return }
@@ -1180,10 +1180,17 @@ extension EditorSceneAdapter {
 
     /// 直接覆盖相机实体的 eye（写入 LocalTransform 的平移列）和 CameraComponent.target。
     /// 保持原 LocalTransform 的旋转 / 缩放部分，因为相机的方向由 target 单独表达。
-    private func setCameraEye(_ entity: EntityID,
+    private func setCameraEye(_ entity: EntityID?,
                               eye: SIMD3<Float>,
                               target: SIMD3<Float>,
                               up: SIMD3<Float>? = nil) {
+        guard let entity else {
+            editorViewportCamera.eye = eye
+            editorViewportCamera.target = target
+            if let up { editorViewportCamera.up = up }
+            onViewportCameraChanged?()
+            return
+        }
         var local = scene.localTransform(for: entity) ?? LocalTransform()
         let parentWorld = entityParentWorldMatrix(entity.rawValue)
         let parentDeterminant = simd_determinant(parentWorld)

@@ -595,3 +595,28 @@
 "Expand JSON Editor" = "Expand JSON Editor";
 
 "Apply" = "Apply";
+
+// Project launcher
+"Create a blank project, open your work, or try a playable example." = "Create a blank project, open your work, or try a playable example.";
+"Projects" = "Projects";
+"Removing a recent entry keeps its files. Delete moves the project to Trash." = "Removing a recent entry keeps its files. Delete moves the project to Trash.";
+"No recent projects yet." = "No recent projects yet.";
+"Playable Example" = "Playable Example";
+"Collect 8 crystals in 50 seconds and avoid the sentinels. Includes the complete editable game script." = "Collect 8 crystals in 50 seconds and avoid the sentinels. Includes the complete editable game script.";
+"Play → Space to start · WASD move · Shift sprint · R restart" = "Play → Space to start · WASD move · Shift sprint · R restart";
+"Create Example Project..." = "Create Example Project...";
+"New Crystal Rush Project" = "New Crystal Rush Project";
+"New Blank Project" = "New Blank Project";
+"Project Name" = "Project Name";
+"Parent Folder" = "Parent Folder";
+"Browse..." = "Browse...";
+"Creates a separate copy and compiles its bundled script. When ready, click Play." = "Creates a separate copy and compiles its bundled script. When ready, click Play.";
+"Starts with an empty scene and empty Assets and Scripts folders." = "Starts with an empty scene and empty Assets and Scripts folders.";
+"Create and Open" = "Create and Open";
+"Remove Entry" = "Remove Entry";
+"Missing or invalid project — open its new location or remove this entry." = "Missing or invalid project — open its new location or remove this entry.";
+"Move Project to Trash?" = "Move Project to Trash?";
+"This moves the entire project folder, including assets and scripts. You can restore it from Trash." = "This moves the entire project folder, including assets and scripts. You can restore it from Trash.";
+"Move to Trash" = "Move to Trash";
+"Close Project / Welcome" = "Close Project / Welcome";
+"The project has unsaved scene or script changes. Save before closing?" = "The project has unsaved scene or script changes. Save before closing?";

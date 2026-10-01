@@ -122,6 +122,17 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
 
     deinit { directoryMonitor.stop() }
 
+    public func shutdown() {
+        directoryMonitor.stop()
+        for document in snapshot.documents { manager.cancelBuild(scriptID: document.file.identifier) }
+        let previousTask = languageServiceTask
+        previousTask?.cancel()
+        languageServiceTask = Task { [manager, previousTask] in
+            await previousTask?.value
+            await manager.stopLanguageService()
+        }
+    }
+
     public func startLanguageService() {
         guard !didStartLanguageService, !snapshot.documents.isEmpty else { return }
         didStartLanguageService = true
@@ -193,6 +204,14 @@ public final class ScriptWorkspaceModel: _ObservableObject, @unchecked Sendable 
             recordFailure(error.localizedDescription, at: index)
             return false
         }
+    }
+
+    @discardableResult
+    public func persistAll() -> Bool {
+        for index in snapshot.documents.indices {
+            guard persist(scriptAt: index) else { return false }
+        }
+        return true
     }
 
     @discardableResult

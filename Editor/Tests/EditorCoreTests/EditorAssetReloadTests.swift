@@ -12,7 +12,7 @@ struct EditorAssetReloadTests {
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project,
                                                 withIntermediateDirectories: true)
-        let application = try EditorApplication(projectDirectory: project.path)
+        let application = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { application.shutdown() }
         let before = application.store.presentationRevision
 

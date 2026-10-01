@@ -1,0 +1,13 @@
+# Crystal Rush
+
+An editable Guava example game.
+
+The launcher compiles the bundled Swift script when it creates this project.
+Open the Scripts panel to see compilation output, then click Play in the editor.
+Click the viewport and press Space to start. WASD moves, Shift sprints, R restarts.
+Collect 8 crystals within 50 seconds while avoiding the three sentinels.
+
+Scripts/CrystalRush.swift contains all gameplay and HUD code. The saved scene
+contains only Game Controller; the script creates the world when you click Play.
+Stop returns to the authored scene. Use File → Save Scene to save authoring changes.
+Use Build → Build and Run to export and launch the standalone game.

@@ -17,6 +17,14 @@ Guava Editor is built with GuavaUI, while EditorCore manages selection, panels, 
 
 Without `--project-dir`, the app shows a welcome surface and maintains recent projects. Passing a directory enters that project workspace directly.
 
+## Projects and the playable example
+
+New Project takes a name and an existing parent folder, then creates a separate child directory with `.guava/project.json`, a saved empty scene, `Assets/`, and `Scripts/`. It never overwrites an existing directory or adds preview entities or default scripts. Empty scenes use a separate editor navigation camera without adding authored entities. Open Project validates the selected root before starting its editor services; legacy `.guava` projects remain supported.
+
+Recent entries show their full paths. Remove Entry keeps the files. Delete asks for confirmation and moves a managed project to Trash; legacy folders can only be removed from Recents. Platforms without native Foundation trash support retain deleted projects in `Application Support/Guava/DeletedProjects`. File → Close Project / Welcome protects unsaved scene and script buffers before returning to the launcher. New Scene starts empty.
+
+Crystal Rush → Create Example Project creates an independent editable copy. The launcher grants execution only to the newly copied bundled script and compiles it. When compilation finishes, click Play, focus the viewport, and press Space. WASD moves, Shift sprints, and R restarts. Collect eight crystals within 50 seconds while avoiding sentinels. The authored scene contains Game Controller; `Scripts/CrystalRush.swift` creates the world and HUD on Play. Stop restores the authored scene, and Build and Run exports the standalone game.
+
 ## Core panels
 
 - **Hierarchy** browses entities and changes selection.

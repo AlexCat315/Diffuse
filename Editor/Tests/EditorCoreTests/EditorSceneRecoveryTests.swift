@@ -20,7 +20,7 @@ struct EditorSceneRecoveryTests {
         let encoder = JSONEncoder()
         try encoder.encode(authored.manifest(selectedEntityID: cubeID)).write(to: sceneURL)
 
-        let app = try EditorApplication(projectDirectory: project.path)
+        let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { app.shutdown() }
         let opened = try #require(app.openSceneManifest(at: sceneURL))
         #expect(opened.entityCount == authored.manifest().entityCount)
@@ -46,7 +46,7 @@ struct EditorSceneRecoveryTests {
         let corruptPayload = Data("not a game save".utf8)
         try corruptPayload.write(to: recoveryURL, options: .atomic)
 
-        let app = try EditorApplication(projectDirectory: project.path)
+        let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { app.shutdown() }
         #expect(app.restoreProjectSceneAtLaunch() == nil)
 
@@ -77,7 +77,7 @@ struct EditorSceneRecoveryTests {
         let memoryURL = guavaDirectory.appendingPathComponent("context_memory.json")
         try Data("not-json".utf8).write(to: memoryURL)
 
-        let app = try EditorApplication(projectDirectory: project.path)
+        let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
 
         #expect(!FileManager.default.fileExists(atPath: memoryURL.path))
         #expect(app.store.state.consoleEntries.contains {
@@ -105,7 +105,7 @@ struct EditorSceneRecoveryTests {
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
-        let app = try EditorApplication(projectDirectory: project.path)
+        let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { app.shutdown() }
 
         app.applyPlaybackState(.paused)
@@ -134,7 +134,7 @@ struct EditorSceneRecoveryTests {
         try encoder.encode(authored.manifest(selectedEntityID: sourceID))
             .write(to: snapshotURL, options: [.atomic])
 
-        let app = try EditorApplication(projectDirectory: project.path)
+        let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { app.shutdown() }
         let restoredManifest = try #require(app.restoreProjectSceneAtLaunch())
         let restoredID = try #require(app.store.state.selectedEntityID)
@@ -155,7 +155,7 @@ struct EditorSceneRecoveryTests {
                                     isDirectory: true)
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
-        let app = try EditorApplication(projectDirectory: project.path)
+        let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         let snapshotURL = project
             .appendingPathComponent(".guava", isDirectory: true)
             .appendingPathComponent("physics-play-snapshot.json")
@@ -175,7 +175,7 @@ struct EditorSceneRecoveryTests {
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
 
-        var first: EditorApplication? = try EditorApplication(projectDirectory: project.path)
+        var first: EditorApplication? = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { first?.shutdown() }
         let entityID = try #require(first?.scene.defaultSelectionID)
         let original = try #require(first?.scene.entityLocalTranslation(entityID))
@@ -189,7 +189,7 @@ struct EditorSceneRecoveryTests {
                                                projectDirectory: project.path)
         #expect(FileManager.default.fileExists(atPath: recoveryURL.path))
 
-        let restored = try EditorApplication(projectDirectory: project.path)
+        let restored = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { restored.shutdown() }
         let recoveredManifest = restored.restoreProjectSceneAtLaunch()
         let restoredID = try #require(restored.store.state.selectedEntityID)
@@ -211,7 +211,7 @@ struct EditorSceneRecoveryTests {
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
 
-        let app = try EditorApplication(projectDirectory: project.path)
+        let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { app.shutdown() }
         let entityID = try #require(app.scene.defaultSelectionID)
         let original = try #require(app.scene.entityLocalTranslation(entityID))
@@ -249,7 +249,7 @@ struct EditorSceneRecoveryTests {
         defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
 
-        let app = try EditorApplication(projectDirectory: project.path)
+        let app = try EditorApplication(projectDirectory: project.path, seedPreviewScene: true)
         defer { app.shutdown() }
         let entityID = try #require(app.scene.defaultSelectionID)
         let original = try #require(app.scene.entityLocalTranslation(entityID))
