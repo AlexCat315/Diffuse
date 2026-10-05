@@ -20,6 +20,8 @@ extension WGPURenderer {
         hasher.combine(camera.target)
         hasher.combine(camera.up)
         hasher.combine(camera.fovYRadians)
+        hasher.combine(camera.projection)
+        hasher.combine(camera.orthographicHeight)
         hasher.combine(camera.near)
         hasher.combine(camera.far)
         hasher.combine(packet.drawableSize.width)

@@ -194,6 +194,8 @@ public actor CapabilityDraftStore {
         for id in ids { drafts.removeValue(forKey: id) }
     }
 
+    public var hasPendingDrafts: Bool { !drafts.isEmpty }
+
     public func removeAll() {
         drafts.removeAll()
     }

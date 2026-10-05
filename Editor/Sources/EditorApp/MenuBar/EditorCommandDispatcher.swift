@@ -33,6 +33,8 @@ enum EditorCommandDispatcher {
         let store = app.store
 
         switch command {
+        case .closeProject:
+            app.requestCloseProject()
         case .newScene:
             app.requestNewScene()
         case .openScene:

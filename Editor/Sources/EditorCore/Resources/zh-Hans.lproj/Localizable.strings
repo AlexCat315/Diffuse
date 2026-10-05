@@ -88,3 +88,19 @@
 "Friction" = "摩擦";
 "Restitution" = "弹性";
 "Density" = "密度";
+
+// Project launcher
+"The project location must be an existing folder." = "请选择已存在的父文件夹。";
+"A file or folder with this project name already exists." = "此位置已存在同名文件或文件夹，请更改项目名称。";
+"The project folder no longer exists." = "项目文件夹不存在或已经移动。";
+"This folder is not a Guava project. Choose its project root or create a new project." = "此文件夹不是 Guava 项目。请选择项目根目录，或新建项目。";
+"This project uses an unsupported project format." = "此项目使用了不支持的项目格式。";
+"This project uses an unsupported scene format." = "此项目使用了不支持的场景格式。";
+"The saved scene contains duplicate entity IDs." = "保存的场景包含重复实体编号。";
+"The saved scene has an invalid entity count." = "保存的场景实体数量无效。";
+"This folder cannot be deleted as a project." = "此文件夹不能作为项目删除。";
+"Legacy projects can only be removed from Recents. Manage their files in the file manager." = "旧格式项目只能移除最近记录，请使用文件管理器管理其文件。";
+"Enter a valid project name (no path separators or special characters)." = "请输入有效的项目名称，不能包含路径分隔符或特殊字符。";
+"The bundled example project is missing. Reinstall the editor." = "内置示例缺失，请重新安装编辑器。";
+"Close the current project before opening another project." = "请先关闭当前项目，再打开其他项目。";
+"The project's .guava folder must not be a symbolic link." = "项目的 .guava 文件夹不能是符号链接。";

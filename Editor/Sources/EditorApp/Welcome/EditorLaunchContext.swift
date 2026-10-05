@@ -21,7 +21,7 @@ final class EditorLaunchContext: @unchecked Sendable {
     let backendConfig: WGPUDeviceConfig
     let backend: WGPUBackend
     let events: PlatformEventBridge
-    let shellState: EditorRootViewFactory.EditorShellState?
+    private(set) var shellState: EditorRootViewFactory.EditorShellState?
 
     var isProjectLoaded: Bool { bundle != nil }
     private let publisher = _ObservablePublisher<EditorLaunchContext>()
@@ -34,9 +34,15 @@ final class EditorLaunchContext: @unchecked Sendable {
         self.backend = backend
         self.events = events
         self.shellState = shellState
+        EditorLocalizationPreferences.language = shellState?.language ?? .system
     }
 
     @MainActor func loadProject(directory: String) throws {
+        let location = try EditorProjectLifecycle.inspect(URL(fileURLWithPath: directory, isDirectory: true))
+        guard bundle == nil else {
+            throw EditorProjectLifecycle.Failure("Close the current project before opening another project.")
+        }
+        let directory = location.directory.path
         let app = try EditorApplication(
             projectDirectory: directory,
             backendConfig: backendConfig,
@@ -45,6 +51,9 @@ final class EditorLaunchContext: @unchecked Sendable {
             initialAISettings: shellState?.aiSettings ?? .default,
             initialCapabilitySettings: shellState?.capabilitySettings ?? .default
         )
+        app.setCloseProjectHandler { [weak self] in
+            MainActor.assumeIsolated { self?.closeProject() }
+        }
         app.bootstrap()
 
         if let s = shellState {
@@ -105,6 +114,14 @@ final class EditorLaunchContext: @unchecked Sendable {
         guard let bundle else { return }
         let app = bundle.app
         let state = app.store.state
+        shellState = .init(workspaceMode: state.workspaceMode,
+                           activeLayoutPreset: state.activeLayoutPreset,
+                           themeMode: state.themeMode,
+                           language: state.language,
+                           vsyncMode: state.vsyncMode,
+                           primarySelectBehavior: state.primarySelectBehavior,
+                           aiSettings: state.aiSettings,
+                           capabilitySettings: state.capabilitySettings)
         EditorRootViewFactory.saveShellState(
             mode: state.workspaceMode,
             preset: state.activeLayoutPreset,
@@ -131,7 +148,39 @@ final class EditorLaunchContext: @unchecked Sendable {
         }
         workspacePersistenceTask?.cancel()
         workspacePersistenceTask = nil
+        app.setCloseProjectHandler(nil)
+        app.setOpenSettingsWindowHandler(nil)
+        app.setDisplayInvalidationHandler(nil)
+        app.setViewportRenderCompletionHandler(nil)
         app.shutdown()
+        self.bundle = nil
+        shellPreferenceToken = nil
+        nativeMenuToken = nil
+        workspaceSubscriptionToken = nil
+        nativeMenuState = nil
+    }
+
+    @MainActor func closeProject() {
+        if let settingsWindowID, let display, display.isWindowOpen(settingsWindowID) {
+            display.closeWindow(settingsWindowID)
+        }
+        settingsWindowID = nil
+        shutdown()
+        display?.setWindowCloseInterceptor { _ in true }
+        display?.installNativeMenuBar(NativeMenuBar(appName: "GuavaNext Editor", menus: []))
+        publisher.send()
+        display?.requestDisplay()
+    }
+
+    /// Only a freshly created, bundled example receives this explicit execution grant.
+    @MainActor func createProject(name: String, parent: URL, template: EditorProjectTemplate) throws {
+        let location = try EditorProjectLifecycle.create(name: name, parent: parent, template: template)
+        try loadProject(directory: location.directory.path)
+        if template == .crystalRush, let app = bundle?.app {
+            app.scriptWorkspace.setProjectTrusted(true)
+            app.scriptWorkspace.compileSelected()
+            app.logConsole("Preparing Crystal Rush", detail: "When compilation finishes, press Play, then Space to start. WASD moves, Shift sprints, R restarts.")
+        }
     }
 
     @MainActor private func wireDisplayHandlers(app: EditorApplication,
@@ -153,7 +202,7 @@ final class EditorLaunchContext: @unchecked Sendable {
             // Auxiliary windows (settings) close freely; only the main window
             // and whole-app quit guard the scene.
             if let windowID, windowID != display?.mainWindowID { return true }
-            guard app.hasUnsavedSceneChanges else {
+            guard app.hasUnsavedSceneChanges || app.scriptWorkspace.snapshot.documents.contains(where: \.isDirty) else {
                 return true
             }
             app.store.dispatch(.requestClose(EditorPendingCloseRequest(windowID: windowID)))

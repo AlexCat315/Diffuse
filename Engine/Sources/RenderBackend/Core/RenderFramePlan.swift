@@ -5,6 +5,7 @@ public enum RenderPassKind: String, Sendable, CaseIterable {
     case shadowPass
     case skybox
     case basePass
+    case editorGrid
     case particles
     case outline
     case inkPaperPost
@@ -22,7 +23,7 @@ public enum RenderPassKind: String, Sendable, CaseIterable {
     /// and reuse a snapshot when those inputs are unchanged.
     public static let opaquePasses: Set<RenderPassKind> = [
         .depthPrepass, .shadowPass, .skybox, .basePass,
-        .outline, .inkPaperPost, .ssao, .ssr, .taa
+        .outline, .inkPaperPost, .ssao, .ssr, .taa, .editorGrid
     ]
 }
 
@@ -92,6 +93,14 @@ enum RenderFramePlanner {
                 if settings.enableOffscreenViewport {
                     passes.append(.viewportResolve)
                 }
+        }
+
+        // Reference lines use scene depth, without contributing to depth or
+        // screen-space lighting. Draw before TAA so its history and current
+        // image both contain the grid, then include it in the opaque snapshot.
+        if settings.enableEditorGrid,
+           let lastOpaque = passes.lastIndex(where: { RenderPassKind.opaquePasses.contains($0) }) {
+            passes.insert(.editorGrid, at: passes.firstIndex(of: .taa) ?? passes.index(after: lastOpaque))
         }
 
         // Transparent billboard particles composite after every opaque and

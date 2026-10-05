@@ -284,6 +284,8 @@ public struct EditorState: Codable, Sendable {
     public var frameStatsHistory: [EditorFrameStatsHistorySample]
     public var particleDiagnosticsHistory: [EditorParticleDiagnosticsSample]
     public var viewportSurfaceRevision: UInt64
+    /// Session camera navigation is independent of the saved scene revision.
+    public var viewportCameraRevision: UInt64 = 0
     public var windowFocused: Bool
     public var windowMinimized: Bool
     public var windowOccluded: Bool
@@ -291,6 +293,7 @@ public struct EditorState: Codable, Sendable {
     public var gizmoSpace: EditorGizmoSpace
     public var viewportShadingMode: EditorViewportShadingMode
     public var viewportShadowsEnabled: Bool
+    public var viewportGridEnabled: Bool
     public var viewportShadowMapResolution: UInt32
     public var viewportMaxShadowedDirectionalLights: Int
     public var viewportDirectionalCascadeCount: Int
@@ -310,6 +313,9 @@ public struct EditorState: Codable, Sendable {
     public var translateSnapEnabled: Bool
     public var rotateSnapEnabled: Bool
     public var scaleSnapEnabled: Bool
+    public var translateSnapStep: Float
+    public var rotateSnapStepDegrees: Float
+    public var scaleSnapStep: Float
     public var primarySelectBehavior: SelectionPrimaryModifierBehavior
     public var presentation: EditorPresentationState
     public var vsyncMode: EditorVSyncMode
@@ -352,6 +358,7 @@ public struct EditorState: Codable, Sendable {
         gizmoSpace: EditorGizmoSpace = .local,
         viewportShadingMode: EditorViewportShadingMode = .lit,
         viewportShadowsEnabled: Bool = true,
+        viewportGridEnabled: Bool = true,
         viewportShadowMapResolution: UInt32 = 1024,
         viewportMaxShadowedDirectionalLights: Int = 1,
         viewportDirectionalCascadeCount: Int = 1,
@@ -365,6 +372,9 @@ public struct EditorState: Codable, Sendable {
         translateSnapEnabled: Bool = false,
         rotateSnapEnabled: Bool = false,
         scaleSnapEnabled: Bool = false,
+        translateSnapStep: Float = 0.5,
+        rotateSnapStepDegrees: Float = 5,
+        scaleSnapStep: Float = 0.05,
         primarySelectBehavior: SelectionPrimaryModifierBehavior = .subtract,
         themeMode: EditorThemeMode = .dark,
         language: EditorLanguage = .system,
@@ -402,6 +412,7 @@ public struct EditorState: Codable, Sendable {
         self.gizmoSpace = gizmoSpace
         self.viewportShadingMode = viewportShadingMode
         self.viewportShadowsEnabled = viewportShadowsEnabled
+        self.viewportGridEnabled = viewportGridEnabled
         self.viewportShadowMapResolution = Self.sanitizedShadowMapResolution(viewportShadowMapResolution)
         self.viewportMaxShadowedDirectionalLights = Self.sanitizedMaxShadowedDirectionalLights(viewportMaxShadowedDirectionalLights)
         self.viewportDirectionalCascadeCount = Self.sanitizedDirectionalCascadeCount(viewportDirectionalCascadeCount)
@@ -415,6 +426,9 @@ public struct EditorState: Codable, Sendable {
         self.translateSnapEnabled = translateSnapEnabled
         self.rotateSnapEnabled = rotateSnapEnabled
         self.scaleSnapEnabled = scaleSnapEnabled
+        self.translateSnapStep = Self.sanitizedTranslateSnapStep(translateSnapStep)
+        self.rotateSnapStepDegrees = Self.sanitizedRotateSnapStep(rotateSnapStepDegrees)
+        self.scaleSnapStep = Self.sanitizedScaleSnapStep(scaleSnapStep)
         self.primarySelectBehavior = primarySelectBehavior
         self.presentation = EditorPresentationState(themeMode: themeMode,
                                                     language: language,
@@ -479,6 +493,7 @@ public struct EditorState: Codable, Sendable {
         case gizmoSpace
         case viewportShadingMode
         case viewportShadowsEnabled
+        case viewportGridEnabled
         case viewportShadowMapResolution
         case viewportMaxShadowedDirectionalLights
         case viewportDirectionalCascadeCount
@@ -492,6 +507,9 @@ public struct EditorState: Codable, Sendable {
         case translateSnapEnabled
         case rotateSnapEnabled
         case scaleSnapEnabled
+        case translateSnapStep
+        case rotateSnapStepDegrees
+        case scaleSnapStep
         case primarySelectBehavior
         case presentation
         case themeMode
@@ -547,6 +565,7 @@ public struct EditorState: Codable, Sendable {
             gizmoSpace: try c.decodeIfPresent(EditorGizmoSpace.self, forKey: .gizmoSpace) ?? .local,
             viewportShadingMode: try c.decodeIfPresent(EditorViewportShadingMode.self, forKey: .viewportShadingMode) ?? .lit,
             viewportShadowsEnabled: try c.decodeIfPresent(Bool.self, forKey: .viewportShadowsEnabled) ?? true,
+            viewportGridEnabled: try c.decodeIfPresent(Bool.self, forKey: .viewportGridEnabled) ?? true,
             viewportShadowMapResolution: try c.decodeIfPresent(UInt32.self, forKey: .viewportShadowMapResolution) ?? 1024,
             viewportMaxShadowedDirectionalLights: try c.decodeIfPresent(Int.self, forKey: .viewportMaxShadowedDirectionalLights) ?? 1,
             viewportDirectionalCascadeCount: try c.decodeIfPresent(Int.self, forKey: .viewportDirectionalCascadeCount) ?? 1,
@@ -566,6 +585,9 @@ public struct EditorState: Codable, Sendable {
             translateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .translateSnapEnabled) ?? false,
             rotateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .rotateSnapEnabled) ?? false,
             scaleSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .scaleSnapEnabled) ?? false,
+            translateSnapStep: try c.decodeIfPresent(Float.self, forKey: .translateSnapStep) ?? 0.5,
+            rotateSnapStepDegrees: try c.decodeIfPresent(Float.self, forKey: .rotateSnapStepDegrees) ?? 5,
+            scaleSnapStep: try c.decodeIfPresent(Float.self, forKey: .scaleSnapStep) ?? 0.05,
             primarySelectBehavior: decodedPrimarySelectBehavior ?? legacyPrimarySelectBehavior ?? .subtract,
             themeMode: decodedPresentation?.themeMode ?? legacyThemeMode ?? .dark,
             language: decodedPresentation?.language ?? legacyLanguage ?? .system,
@@ -603,6 +625,7 @@ public struct EditorState: Codable, Sendable {
         try c.encode(gizmoSpace, forKey: .gizmoSpace)
         try c.encode(viewportShadingMode, forKey: .viewportShadingMode)
         try c.encode(viewportShadowsEnabled, forKey: .viewportShadowsEnabled)
+        try c.encode(viewportGridEnabled, forKey: .viewportGridEnabled)
         try c.encode(viewportShadowMapResolution, forKey: .viewportShadowMapResolution)
         try c.encode(viewportMaxShadowedDirectionalLights, forKey: .viewportMaxShadowedDirectionalLights)
         try c.encode(viewportDirectionalCascadeCount, forKey: .viewportDirectionalCascadeCount)
@@ -616,6 +639,9 @@ public struct EditorState: Codable, Sendable {
         try c.encode(translateSnapEnabled, forKey: .translateSnapEnabled)
         try c.encode(rotateSnapEnabled, forKey: .rotateSnapEnabled)
         try c.encode(scaleSnapEnabled, forKey: .scaleSnapEnabled)
+        try c.encode(translateSnapStep, forKey: .translateSnapStep)
+        try c.encode(rotateSnapStepDegrees, forKey: .rotateSnapStepDegrees)
+        try c.encode(scaleSnapStep, forKey: .scaleSnapStep)
         try c.encode(primarySelectBehavior, forKey: .primarySelectBehavior)
         try c.encode(presentation, forKey: .presentation)
         try c.encode(themeMode, forKey: .themeMode)
@@ -676,6 +702,7 @@ public struct EditorState: Codable, Sendable {
 
 public enum EditorPendingDocumentAction: Equatable, Sendable {
     case close
+    case closeProject
     case newScene
     case openScene
 }

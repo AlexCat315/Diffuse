@@ -16,6 +16,38 @@ private func runEditor() throws {
         FileHandle.standardOutput.write(Data("\(report)\n".utf8))
         return
     }
+    if CommandLine.arguments.contains("--mcp-headless") {
+        guard let directory = launchOptions.projectDirectory else {
+            throw EditorProjectToolError("--mcp-headless requires --project-dir <directory>.")
+        }
+        let app = try EditorApplication(projectDirectory: directory)
+        _ = app.openSceneManifest()
+        if CommandLine.arguments.contains("--trust-project-scripts") {
+            app.scriptWorkspace.setProjectTrusted(true)
+        }
+        // Explicit local automation accepts reversible previews only.
+        let approvalTimer: Timer?
+        var frameIndex: UInt64 = 0
+        if CommandLine.arguments.contains("--approve-scene-edits") {
+            approvalTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+                if let request = app.store.state.pendingConfirmationRequest,
+                   request.questions.allSatisfy({ $0.severity != .destructive }) {
+                    app.acceptPendingConfirmation()
+                }
+            }
+        } else { approvalTimer = nil }
+        defer { approvalTimer?.invalidate() }
+        let simulationTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { _ in
+            guard app.store.state.playbackState == .playing else { return }
+            frameIndex &+= 1
+            app.scene.tickScene(deltaTime: 1.0 / 60.0, frameIndex: frameIndex, inputEvents: [], drivesAudio: false)
+        }
+        defer { simulationTimer.invalidate() }
+        defer { app.shutdown() }
+        FileHandle.standardError.write(Data("Guava headless editor ready: \(directory)\n".utf8))
+        RunLoop.main.run()
+        return
+    }
     // The editor runs on the GuavaUICompose + AppRuntime stack. The GuavaKit
     // from-scratch rewrite served as the architecture blueprint for the
     // in-place runtime refactor and has been deleted
@@ -46,10 +78,10 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
         try context.loadProject(directory: dir)
     }
 
-    let inGameUIHost: InGameUIHost?
+    let inGameUIHost = InGameUIHost(backend: backend)
+    InGameUIRegistry.shared.provider = inGameUIHost
     if ProcessInfo.processInfo.environment["GUAVA_EDITOR_SAMPLE_HUD"] == "1" {
-        let host = InGameUIHost(backend: backend)
-        InGameUIRegistry.shared.provider = host
+        let host = inGameUIHost
 
         let initialBattleState = BattleStateMachine.reduce(
             BattleSampleFactory.makeThreeKingdomsDuel(),
@@ -63,10 +95,6 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
                                      hand: [], skills: [])
         )
         host.setRootView(InGameBattleHUDView(model: hudModel))
-        inGameUIHost = host
-    } else {
-        InGameUIRegistry.shared.provider = nil
-        inGameUIHost = nil
     }
 
     try AppRuntime.run(
@@ -95,13 +123,14 @@ private func runLegacyEditor(launchOptions: EditorAppLaunchOptions) throws {
         events: events,
         onTick: { dt in
             context.tick(deltaTime: dt)
-            if let inGameUIHost, context.bundle != nil {
+            if let bundle = context.bundle {
                 // HUD 布局用视口的逻辑尺寸；光栅化按窗口 content scale。
                 let scale = max(1, ContentScaleHolder.current)
                 let frame = EditorViewportDropTarget.frame
                 let logicalW = Int((frame?.width ?? 1280).rounded())
                 let logicalH = Int((frame?.height ?? 720).rounded())
-                inGameUIHost.tick(width: logicalW, height: logicalH, contentScale: scale)
+                inGameUIHost.tick(width: logicalW, height: logicalH, contentScale: scale,
+                                  canvas: bundle.app.scene.currentInGameCanvas())
             }
         },
         onDisplayReady: { display in

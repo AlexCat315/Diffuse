@@ -903,6 +903,11 @@ private extension RenderParticle {
 }
 
 public struct RenderCamera: Sendable, Equatable {
+    public enum Projection: String, Sendable, Codable, Hashable {
+        case perspective
+        case orthographic
+    }
+
     public var eye: SIMD3<Float>
     public var target: SIMD3<Float>
     public var up: SIMD3<Float>
@@ -910,6 +915,9 @@ public struct RenderCamera: Sendable, Equatable {
     public var aspectRatio: Float
     public var near: Float
     public var far: Float
+    public var projection: Projection
+    /// Full visible vertical extent in world units for orthographic views.
+    public var orthographicHeight: Float
 
     public init(eye: SIMD3<Float>,
                 target: SIMD3<Float> = .zero,
@@ -917,7 +925,9 @@ public struct RenderCamera: Sendable, Equatable {
                 fovYRadians: Float = .pi / 4,
                 aspectRatio: Float = 1,
                 near: Float = 0.1,
-                far: Float = 100.0) {
+                far: Float = 100.0,
+                projection: Projection = .perspective,
+                orthographicHeight: Float = 10) {
         self.eye = eye
         self.target = target
         self.up = up
@@ -925,6 +935,12 @@ public struct RenderCamera: Sendable, Equatable {
         self.aspectRatio = max(0.001, aspectRatio)
         self.near = near
         self.far = far
+        self.projection = projection
+        self.orthographicHeight = Self.sanitizedOrthographicHeight(orthographicHeight)
+    }
+
+    public static func sanitizedOrthographicHeight(_ value: Float) -> Float {
+        value.isFinite ? min(max(value, 0.01), 10_000) : 10
     }
 }
 

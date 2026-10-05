@@ -150,6 +150,7 @@ struct ShadowUniforms: Equatable, Sendable {
     var params3: SIMD4<Float>
     var atlasParams: SIMD4<Float>
     var cascadeSplits: SIMD4<Float>
+    /// xyz: eye position; w: 1 for orthographic view-dependent shading.
     var cameraPositionAndPadding: SIMD4<Float>
     var cameraForwardAndPadding: SIMD4<Float>
 
@@ -176,7 +177,8 @@ struct ShadowUniforms: Equatable, Sendable {
     /// model" — independent of whether any shadow is actually cast.
     static func disabled(mapResolution: UInt32,
                          cameraPosition: SIMD3<Float> = .zero,
-                         cameraForward: SIMD3<Float> = SIMD3<Float>(0, 0, -1)) -> ShadowUniforms {
+                         cameraForward: SIMD3<Float> = SIMD3<Float>(0, 0, -1),
+                         orthographic: Bool = false) -> ShadowUniforms {
         ShadowUniforms(
             lightViewProjection0: matrix_identity_float4x4,
             lightViewProjection1: matrix_identity_float4x4,
@@ -188,7 +190,7 @@ struct ShadowUniforms: Equatable, Sendable {
             params3: SIMD4<Float>(0.004, 0.55, 0, 0),
             atlasParams: SIMD4<Float>(0, 0, Float(mapResolution), Float(mapResolution)),
             cascadeSplits: .zero,
-            cameraPositionAndPadding: SIMD4<Float>(cameraPosition, 0),
+            cameraPositionAndPadding: SIMD4<Float>(cameraPosition, orthographic ? 1 : 0),
             cameraForwardAndPadding: SIMD4<Float>(cameraForward, 0)
         )
     }

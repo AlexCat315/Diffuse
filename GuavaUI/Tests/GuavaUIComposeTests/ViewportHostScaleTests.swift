@@ -9,6 +9,29 @@ import RenderBackend
 /// samples only the used sub-region of the grow-only allocated texture.
 @Suite("ViewportHost Scale", .serialized)
 struct ViewportHostScaleTests: GuavaUIComposeSerializedSuite {
+    @Test("standalone viewport accepts keys immediately without stealing subsequent focus")
+    func initialKeyboardFocus() { GlobalTestLock.locked {
+        let previous = FocusChainHolder.current
+        let focus = FocusChain()
+        FocusChainHolder.current = focus
+        defer { FocusChainHolder.current = previous }
+        let embedded = ViewportHost(surface: ViewportSurfaceState())
+        embedded._updateNode(embedded._makeNode())
+        #expect(focus.focused == nil)
+        let standalone = ViewportHost(surface: ViewportSurfaceState(), automaticallyFocus: true)
+        let node = standalone._makeNode()
+        standalone._updateNode(node)
+        #expect(focus.focused === node)
+        #expect(!focus.isFocusVisible)
+        let field = Node(); field.isFocusable = true
+        focus.focus(field)
+        standalone._updateNode(node)
+        #expect(focus.focused === field)
+        focus.clear()
+        standalone._updateNode(node)
+        #expect(focus.focused == nil)
+    } }
+
     private final class RecordingBridge: ViewportTextureBridge {
         var registeredSize: (width: UInt32, height: UInt32)?
         func textureID(surfaceID: UInt64, handle: UInt64, width: UInt32, height: UInt32) -> TextureID? {

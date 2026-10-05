@@ -87,6 +87,12 @@ actor DynamicScriptBuildCoordinator {
         let cancellation = ScriptCompilationCancellationToken()
         activeCompilations[scriptID] = ActiveCompilation(requestID: requestID,
                                                          cancellation: cancellation)
+        defer {
+            if activeCompilations[scriptID]?.requestID == requestID {
+                activeCompilations.removeValue(forKey: scriptID)
+            }
+            explicitlyCancelledRequestIDs.remove(requestID)
+        }
         let compiler = self.compiler
 
         let compilation = await Task.detached(priority: .userInitiated) {
@@ -97,10 +103,7 @@ actor DynamicScriptBuildCoordinator {
             }
         }.value
 
-        if activeCompilations[scriptID]?.requestID == requestID {
-            activeCompilations.removeValue(forKey: scriptID)
-        }
-        let wasExplicitlyCancelled = explicitlyCancelledRequestIDs.remove(requestID) != nil
+        let wasExplicitlyCancelled = explicitlyCancelledRequestIDs.contains(requestID)
 
         guard newestRequestByScriptID[scriptID] == requestID else {
             if case let .success(artifact) = compilation {
@@ -133,13 +136,24 @@ actor DynamicScriptBuildCoordinator {
 
                 let nextIdentifiers = Set([scriptID] + legacyIdentifiers)
                 let previousIdentifiers = registeredIdentifiers[scriptID] ?? []
-                _ = await MainActor.run {
+                let didRegister = await MainActor.run {
+                    // Cancellation can arrive after swiftc exits while the
+                    // registration waits behind UI work on the main actor.
+                    guard !cancellation.isCancelled else { return false }
                     for identifier in previousIdentifiers.subtracting(nextIdentifiers) {
                         scriptRuntime.unregister(named: identifier)
                     }
                     for identifier in nextIdentifiers {
                         scriptRuntime.register(named: identifier, factory)
                     }
+                    return true
+                }
+                guard didRegister else {
+                    if newestRequestByScriptID[scriptID] == requestID {
+                        loader.unload(scriptID: scriptID)
+                    }
+                    retireArtifact(at: artifact.outputPath)
+                    return newestRequestByScriptID[scriptID] == requestID ? .cancelled : .superseded
                 }
                 registeredIdentifiers[scriptID] = nextIdentifiers
                 if let previous = loadedArtifactPaths.updateValue(artifact.outputPath,

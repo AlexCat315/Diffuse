@@ -1,6 +1,20 @@
 ﻿import SIMDCompat
 
 public enum CameraMatrices {
+    /// Right-handed orthographic projection with WebGPU's 0...1 depth range.
+    public static func orthographicRH_ZO(height: Float, aspect: Float,
+                                         near: Float, far: Float) -> simd_float4x4 {
+        let safeHeight = max(height, Float.ulpOfOne)
+        let width = safeHeight * max(aspect, Float.ulpOfOne)
+        let depth = 1 / (near - far)
+        return simd_float4x4(rows: [
+            SIMD4<Float>(2 / width, 0, 0, 0),
+            SIMD4<Float>(0, 2 / safeHeight, 0, 0),
+            SIMD4<Float>(0, 0, depth, near * depth),
+            SIMD4<Float>(0, 0, 0, 1),
+        ])
+    }
+
     public static func perspectiveRH_ZO(fovYRadians: Float,
                                         aspect: Float,
                                         near: Float,

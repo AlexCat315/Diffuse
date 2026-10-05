@@ -129,6 +129,7 @@ public final class EditorApplication: @unchecked Sendable {
     private let events: PlatformEventBridge
     private var eventToken: PlatformEventBridge.SubscriptionToken?
     private var workspaceModeToken: EditorStore.SubscriptionToken?
+    private var snapSettingsToken: EditorStore.SubscriptionToken?
     private var pendingViewportEvents: [InputEvent] = []
     private var _viewportDrawableSize: RenderDrawableSize = .init(width: 1280, height: 720)
     private var lastViewportSurfaceState = ViewportSurfaceState()
@@ -136,6 +137,8 @@ public final class EditorApplication: @unchecked Sendable {
     private var renderSettingsGeneration: UInt64 = 0
     private var lastQueuedRenderSettings = RenderSettings()
     private var openSettingsWindowHandler: (() -> Void)?
+    private var closeProjectHandler: (() -> Void)?
+    private let ownsBackend: Bool
     private var displayInvalidationHandler: (() -> Void)?
     private var vsyncModeHandler: ((EditorVSyncMode) -> Void)?
     private var session: Session?
@@ -143,6 +146,7 @@ public final class EditorApplication: @unchecked Sendable {
     private var pendingWorldObservationTask: Task<Void, Never>?
     private var activeAIRequestID: UUID?
     private var activeAIRequestTask: Task<Void, Never>?
+    var projectToolBuildInProgress = false
     private var isShuttingDown = false
     private var pendingSessionProposal: Proposal?
     private var pendingAssistantMessageID: String?
@@ -160,6 +164,7 @@ public final class EditorApplication: @unchecked Sendable {
     private let editLog: EditLog
     private let contextMemoryStore: ContextMemoryStore?
     private var physicsPlaySnapshot: SceneRuntime?
+    private var physicsPlayAuthoringRevision: UInt64?
     private static let frameStatsDispatchInterval: Double = 1.0
     /// Accumulator for stable FPS averaging.
     private var frameTimingAccumulator: Double = 0
@@ -217,18 +222,22 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     public init(projectDirectory: String,
+                seedPreviewScene: Bool = false,
                 backendConfig: WGPUDeviceConfig? = nil,
                 backend: WGPUBackend? = nil,
                 events: PlatformEventBridge = PlatformEventBridge(),
                 initialAISettings: EditorAISettings = .default,
                 initialCapabilitySettings: EditorCapabilitySettings = .default,
                 trustedPluginHostExecutableURL: URL? = nil) throws {
+        self.ownsBackend = backend == nil
         let resolvedBackendConfig = backendConfig ?? .init()
         let resolvedBackend = backend ?? WGPUBackend(config: resolvedBackendConfig)
         _ = try EditorAssetCatalog.loadProject(at: projectDirectory)
         ProjectRuntimeResources.configureAudioSearchPaths(at: projectDirectory)
         let store = EditorStore()
-        let scene = EditorSceneAdapter()
+        let scene = EditorSceneAdapter(seedPreviewScene: seedPreviewScene)
+        scene.setEditorViewportCameraEnabled(true)
+        scene.scriptRuntime.isGameplayExecutionEnabled = false
         let observationDirectory = URL(fileURLWithPath: projectDirectory, isDirectory: true)
             .appendingPathComponent(".guava", isDirectory: true)
             .appendingPathComponent("observation", isDirectory: true)
@@ -318,6 +327,10 @@ public final class EditorApplication: @unchecked Sendable {
         Task { await ps.register(AppleVisionPerceptionWorker()) }
         #endif
 
+        scene.onViewportCameraChanged = { [weak self] in
+            self?.store.dispatch(.viewportCameraChanged)
+            self?.requestDisplayRefresh()
+        }
         scene.onRevisionChanged = { [weak self] revision in
             guard let self else { return }
             self.store.dispatch(.setSceneRevision(revision))
@@ -352,12 +365,16 @@ public final class EditorApplication: @unchecked Sendable {
                                            scriptEntries: scene.scriptCatalogEntries)
             let bus = observationBus
             let mem = contextMemoryStore
+            let projectTools = makeProjectToolExecutor()
             pendingAISetupTask = Task {
+                await initialSession.setProjectToolExecutor(projectTools)
                 await initialSession.setObservationBus(bus)
                 await initialSession.setContextMemory(mem)
                 await initialSession.setWorkflowContext(ctx)
             }
         }
+
+        restoreAndObserveViewportSnapSettings()
 
         // Keep Session's WorkflowContext in sync when the user switches workspace mode.
         var lastObservedMode: EditorWorkspaceMode = store.state.workspaceMode
@@ -436,7 +453,8 @@ public final class EditorApplication: @unchecked Sendable {
         let viewportInput = EditorViewportInputController.shared
         let continuousViewportInteractionActive = viewportInput.isContinuousSceneInteractionActive
         let shouldAdvanceSceneSimulation =
-            state.viewportRealtimeEnabled || state.playbackState == .playing
+            (state.viewportRealtimeEnabled && state.playbackState == .stopped)
+                || state.playbackState == .playing
         if viewportInput.hasFreelookMovementInput {
             driveContinuousViewportCamera(deltaTime: simulationDelta)
         }
@@ -508,7 +526,11 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     public func shutdown() {
+        guard !isShuttingDown else { return }
         isShuttingDown = true
+        scene.scriptRuntime.isGameplayExecutionEnabled = false
+        scene.scriptRuntime.stop(in: &scene.scene)
+        scriptWorkspace.shutdown()
         scene.endInteractiveEditHistoryGroup()
         let activeSession = session
         cancelActiveAIRequest()
@@ -545,7 +567,11 @@ public final class EditorApplication: @unchecked Sendable {
             store.unsubscribe(workspaceModeToken)
             self.workspaceModeToken = nil
         }
-        engine.shutdown()
+        if let snapSettingsToken {
+            store.unsubscribe(snapSettingsToken)
+            self.snapSettingsToken = nil
+        }
+        engine.shutdown(shutdownBackend: ownsBackend)
     }
 
     private func flushContextMemoryBeforeShutdown() {
@@ -916,42 +942,26 @@ public final class EditorApplication: @unchecked Sendable {
         return spawnAsset(asset, at: position) != nil
     }
 
-    /// 把视口内光标坐标投到世界 y=0 平面，作为资产落点。
-    /// 摄像机指向上方或与平面平行时退化为 (0,0,0)。
-    private func dropWorldPosition(cursorX: Float,
-                                   cursorY: Float,
-                                   frame: ViewportScreenFrame) -> SIMD3<Float> {
-        guard frame.width > 0, frame.height > 0 else { return .zero }
-        let camera = scene.scene.extractedRenderScene?.scene.camera
-            ?? RenderCamera.fallbackPerspective
-
-        let u = (cursorX - frame.x) / frame.width
-        let v = (cursorY - frame.y) / frame.height
-        let ndcX = 2 * u - 1
-        let ndcY = 1 - 2 * v
-
-        let forward = simd_normalize(camera.target - camera.eye)
-        let rightRaw = simd_cross(forward, camera.up)
-        guard simd_length(rightRaw) > 1e-5 else { return .zero }
-        let right = simd_normalize(rightRaw)
-        let up = simd_normalize(simd_cross(right, forward))
-
-        let aspect = frame.width / frame.height
-        let tanHalfFov = tanf(camera.fovYRadians * 0.5)
-        let dir = simd_normalize(forward
-                                 + right * (ndcX * aspect * tanHalfFov)
-                                 + up * (ndcY * tanHalfFov))
-
-        // 与 y = 0 平面相交。摄像机在平面下方或视线指向上方时退化。
-        if abs(dir.y) < 1e-4 { return .zero }
-        let t = -camera.eye.y / dir.y
-        if t <= 0 || t > 1_000 { return .zero }
-        var hit = camera.eye + dir * t
-        hit.y = 0
-        return hit
+    /// Projects onto the current reference grid plane for viewport asset drops.
+    /// Parallel or backward rays use the editor camera's focus point.
+    func dropWorldPosition(cursorX: Float,
+                           cursorY: Float,
+                           frame: ViewportScreenFrame) -> SIMD3<Float> {
+        let camera = scene.currentRenderCamera()
+        guard let projection = EditorViewportProjection(camera: camera, frame: frame) else { return .zero }
+        let ray = projection.cursorRay(x: cursorX, y: cursorY)
+        let normal = EditorGridPlane.make(camera: camera).normal
+        let denominator = simd_dot(ray.direction, normal)
+        guard abs(denominator) > 1e-4 else { return camera.target }
+        let t = -simd_dot(ray.origin, normal) / denominator
+        guard t >= 0, t <= 10_000 else { return camera.target }
+        return ray.origin + ray.direction * t
     }
 
     public func queueViewportRenderSettings(_ settings: RenderSettings) {
+        var settings = settings
+        settings.enableEditorGrid = store.state.viewportGridEnabled
+        settings.editorGridSpacing = viewportGridSpacing
         queueTrackedRenderSettings(settings)
     }
 
@@ -971,6 +981,46 @@ public final class EditorApplication: @unchecked Sendable {
             shadowsEnabled: enabled,
             shadingMode: store.state.viewportShadingMode))
         logConsole(enabled ? "Viewport shadows enabled" : "Viewport shadows disabled")
+    }
+
+    public func setViewportGridEnabled(_ enabled: Bool) {
+        guard store.state.viewportGridEnabled != enabled else { return }
+        store.dispatch(.setViewportGridEnabled(enabled))
+        var settings = lastQueuedRenderSettings
+        settings.enableEditorGrid = enabled
+        queueTrackedRenderSettings(settings)
+        requestDisplayRefresh()
+    }
+
+    private var viewportGridSpacing: Float {
+        store.state.translateSnapEnabled ? store.state.translateSnapStep : 1
+    }
+
+    private func restoreAndObserveViewportSnapSettings() {
+        let url = URL(fileURLWithPath: projectDirectory, isDirectory: true)
+            .appendingPathComponent(".guava/editor-snap-settings.json")
+        if let data = try? Data(contentsOf: url),
+           let saved = try? JSONDecoder().decode(EditorViewportSnapSettings.self, from: data) {
+            saved.restore(in: store)
+        }
+        var previous = EditorViewportSnapSettings(state: store.state)
+        snapSettingsToken = store.subscribe { [weak self] store in
+            let next = EditorViewportSnapSettings(state: store.state)
+            guard let self, next != previous else { return }
+            previous = next
+            do {
+                try JSONEncoder().encode(next).write(to: url, options: .atomic)
+            } catch {
+                self.logConsole("Could not save viewport snap settings", severity: .warning,
+                                detail: error.localizedDescription)
+            }
+            var settings = self.lastQueuedRenderSettings
+            settings.editorGridSpacing = self.viewportGridSpacing
+            if settings != self.lastQueuedRenderSettings {
+                self.queueTrackedRenderSettings(settings)
+            }
+            self.requestDisplayRefresh()
+        }
     }
 
     /// Switches the viewport shading / debug-view mode and re-queues render
@@ -995,10 +1045,14 @@ public final class EditorApplication: @unchecked Sendable {
         switch next {
         case .playing:
             if physicsPlaySnapshot == nil {
+                scene.scriptRuntime.reset()
                 physicsPlaySnapshot = scene.scene
+                physicsPlayAuthoringRevision = store.state.sceneRevision
                 persistPhysicsPlaySnapshot()
             }
             scene.setAuthoringEnabled(false)
+            scene.setEditorViewportCameraEnabled(false)
+            scene.scriptRuntime.isGameplayExecutionEnabled = true
             var settings = scene.scene.physicsSettings
             settings.simulationMode = .play
             settings.backendKind = .jolt
@@ -1008,6 +1062,8 @@ public final class EditorApplication: @unchecked Sendable {
 
         case .paused:
             scene.setAuthoringEnabled(false)
+            scene.setEditorViewportCameraEnabled(false)
+            scene.scriptRuntime.isGameplayExecutionEnabled = false
             var settings = scene.scene.physicsSettings
             settings.simulationMode = .off
             scene.scene.setPhysicsSettings(settings)
@@ -1015,6 +1071,8 @@ public final class EditorApplication: @unchecked Sendable {
             logConsole("Physics simulation paused")
 
         case .stopped:
+            scene.scriptRuntime.isGameplayExecutionEnabled = false
+            scene.scriptRuntime.stop(in: &scene.scene)
             AudioEngine.shared.resetPlaybackState()
             // Fallback: restore from disk if the in-memory snapshot was lost (e.g. after a crash).
             if physicsPlaySnapshot == nil {
@@ -1036,8 +1094,12 @@ public final class EditorApplication: @unchecked Sendable {
                 scene.scene.setPhysicsSettings(settings)
             }
             scene.setAuthoringEnabled(true)
+            scene.setEditorViewportCameraEnabled(true)
             scene.notifyRevisionChanged(recordHistory: false)
-            store.dispatch(.setSceneRevision(scene.revision))
+            // Runtime preparation can advance the scene's internal revision
+            // without authored edits. Restore the document's pre-play baseline.
+            store.dispatch(.setSceneRevision(physicsPlayAuthoringRevision ?? scene.revision))
+            physicsPlayAuthoringRevision = nil
             store.dispatch(.setPlaybackState(.stopped))
             logConsole("Physics simulation stopped")
         }
@@ -1150,7 +1212,9 @@ public final class EditorApplication: @unchecked Sendable {
             stage: .r4LightingPBRShadow,
             debugViewMode: RenderSettings.DebugViewMode(rawValue: shadingMode.debugViewIndex) ?? .shaded,
             shadowSettings: RenderShadowSettings(enabled: shadowsEnabled),
-            enableOffscreenViewport: true
+            enableOffscreenViewport: true,
+            enableEditorGrid: store.state.viewportGridEnabled,
+            editorGridSpacing: viewportGridSpacing
         )
     }
 
@@ -1166,13 +1230,38 @@ public final class EditorApplication: @unchecked Sendable {
         logConsole("Created new preview scene")
     }
 
+    /// New documents begin empty; preview fixtures are only created explicitly.
+    public func createEmptyScene() {
+        removeEditorAutosave()
+        _ = scene.load(manifest: EditorSceneManifest(revision: 0, entityCount: 0, roots: []))
+        reloadScriptsAfterSceneReplacement()
+        store.dispatch(.setSelectedEntity(nil))
+        store.dispatch(.markSceneUnsaved)
+        logConsole("Created new empty scene")
+    }
+
+    public func setCloseProjectHandler(_ handler: (() -> Void)?) {
+        closeProjectHandler = handler
+    }
+
+    public func requestCloseProject() {
+        if store.state.playbackState != .stopped { applyPlaybackState(.stopped) }
+        guard !hasUnsavedSceneChanges && !scriptWorkspace.snapshot.documents.contains(where: \.isDirty) else {
+            store.dispatch(.requestClose(EditorPendingCloseRequest(action: .closeProject)))
+            return
+        }
+        closeProject()
+    }
+
+    public func closeProject() { closeProjectHandler?() }
+
     public func requestNewScene() {
         guard store.state.playbackState == .stopped else {
             reportSceneAuthoringUnavailable("Stop simulation before creating a new scene.")
             return
         }
         guard hasUnsavedSceneChanges else {
-            resetPreviewScene()
+            createEmptyScene()
             return
         }
         store.dispatch(.requestClose(EditorPendingCloseRequest(action: .newScene)))
@@ -1367,6 +1456,10 @@ public final class EditorApplication: @unchecked Sendable {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
             let data = try encoder.encode(authoredOutput.manifest)
             try data.write(to: sceneManifestURL, options: [.atomic])
+            store.dispatch(.setSceneRevision(authoredOutput.revision))
+            if authoredOutput.usedPlaySnapshot {
+                physicsPlayAuthoringRevision = authoredOutput.revision
+            }
             store.dispatch(.markSceneSaved(authoredOutput.revision))
             removeEditorAutosave()
             logConsole(authoredOutput.usedPlaySnapshot
@@ -1402,7 +1495,7 @@ public final class EditorApplication: @unchecked Sendable {
         }
         return (
             scene.manifest(selectedEntityID: store.state.selectedEntityID),
-            store.state.sceneRevision,
+            scene.revision,
             false
         )
     }
@@ -2353,10 +2446,12 @@ public final class EditorApplication: @unchecked Sendable {
             let bus = self.observationBus
             let mem = self.contextMemoryStore
             let previousTask = pendingAISetupTask
+            let projectTools = makeProjectToolExecutor()
             pendingAISetupTask = Task {
                 await previousTask?.value
                 await oldSession?.cancelActiveRun()
                 if let newSession {
+                    await newSession.setProjectToolExecutor(projectTools)
                     await newSession.replaceWorldView(await worldContext.snapshot())
                     await newSession.setObservationBus(bus)
                     await newSession.setContextMemory(mem)
@@ -2710,6 +2805,7 @@ public final class EditorApplication: @unchecked Sendable {
         )
         session = nextSession
         if let nextSession {
+            await nextSession.setProjectToolExecutor(makeProjectToolExecutor())
             await nextSession.setObservationBus(observationBus)
             await nextSession.setContextMemory(contextMemoryStore)
             await nextSession.setWorkflowContext(Self.workflowContext(
@@ -2827,21 +2923,21 @@ public final class EditorApplication: @unchecked Sendable {
             return nil
         case .anthropic:
             guard let key = AIKeychain.load(provider: .anthropic) else { return nil }
-            return Session(config: .anthropic(apiKey: key, model: settings.model,
+            return Session(config: .anthropic(apiKey: key, model: settings.model, maxTokens: 8192,
                                               autoApprove: settings.autoApprove),
                            initialWorldView: initialWorldView,
                            pluginCapabilityExecutor: pluginCapabilityExecutor,
                            pluginQuerySnapshotProvider: pluginQuerySnapshotProvider)
         case .openai:
             guard let key = AIKeychain.load(provider: .openai) else { return nil }
-            return Session(config: .openAIResponses(apiKey: key, model: settings.model,
+            return Session(config: .openAIResponses(apiKey: key, model: settings.model, maxTokens: 8192,
                                                     autoApprove: settings.autoApprove),
                            initialWorldView: initialWorldView,
                            pluginCapabilityExecutor: pluginCapabilityExecutor,
                            pluginQuerySnapshotProvider: pluginQuerySnapshotProvider)
         case .deepseek:
             guard let key = AIKeychain.load(provider: .deepseek) else { return nil }
-            return Session(config: .deepSeek(apiKey: key, model: settings.model,
+            return Session(config: .deepSeek(apiKey: key, model: settings.model, maxTokens: 8192,
                                              autoApprove: settings.autoApprove),
                            initialWorldView: initialWorldView,
                            pluginCapabilityExecutor: pluginCapabilityExecutor,
@@ -3103,6 +3199,19 @@ public final class EditorApplication: @unchecked Sendable {
     private func startMCPBridge() {
         mcpBridge.onCommand = { [weak self] action, params in
             guard let self else { return ["ok": false, "error": "editor unavailable"] }
+            if action == "project_tool" {
+                do {
+                    guard let name = params["tool_name"] as? String,
+                          let arguments = params["arguments"] as? [String: Any] else {
+                        return ["ok": false, "error": "missing project tool name or arguments"]
+                    }
+                    let output = try await self.executeProjectTool(
+                        name: name, input: JSONSerialization.data(withJSONObject: arguments)
+                    )
+                    return try JSONSerialization.jsonObject(with: output) as? [String: Any]
+                        ?? ["ok": false, "error": "invalid project tool response"]
+                } catch { return ["ok": false, "error": error.localizedDescription] }
+            }
             return self.handleMCPAction(action, params: params)
         }
         mcpBridge.start()
