@@ -7,6 +7,30 @@ import Testing
 
 @Suite("Swift script compiler")
 struct SwiftScriptCompilerTests {
+    @Test("discovers Linux C intermediates once and excludes other configurations")
+    func discoversNativeModuleMaps() throws {
+        let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
+            .appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let products = root.appendingPathComponent("out/Products/Debug")
+        try FileManager.default.createDirectory(at: products, withIntermediateDirectories: true)
+        func write(_ relativePath: String, _ contents: String) throws -> String {
+            let file = root.appendingPathComponent("out/Intermediates.noindex/" + relativePath)
+            try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try contents.write(to: file, atomically: true, encoding: .utf8)
+            return file.path
+        }
+        _ = try write("GeneratedModuleMaps/CJoltBridge.modulemap", "module CJoltBridge { export * }")
+        _ = try write("GuavaEngine.build/Debug-linux-x86_64/CJoltBridge.build/module.modulemap", "module CJoltBridge { export * }")
+        _ = try write("GuavaEngine.build/Debug-linux-x86_64/CNativeBridge.build/module.modulemap", "module CNativeBridge { export * }")
+        _ = try write("GuavaEngine.build/Release-linux-x86_64/CReleaseBridge.build/module.modulemap", "module CReleaseBridge { export * }")
+        _ = try write("GeneratedModuleMaps/ContextMemory.modulemap", "module ContextMemory { header \"ContextMemory-Swift.h\" }")
+        let maps = SwiftScriptCompiler.discoverClangModuleMapPaths(in: products)
+        #expect(maps.count == 2)
+        #expect(maps.contains { $0.hasSuffix("GeneratedModuleMaps/CJoltBridge.modulemap") })
+        #expect(maps.contains { $0.hasSuffix("Debug-linux-x86_64/CNativeBridge.build/module.modulemap") })
+    }
+
     @Test("resolves compiler executables through PATH")
     func resolvesCompilerFromPATH() throws {
         let compilerURL = try SwiftScriptCompiler.resolveExecutableURL(for: "swiftc")
@@ -38,7 +62,8 @@ struct SwiftScriptCompilerTests {
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let fakeCompiler = directory.appendingPathComponent("slow-swiftc")
-        try "#!/bin/sh\nexec /bin/sleep 10\n".write(to: fakeCompiler,
+        let readyFile = directory.appendingPathComponent("compiler-started")
+        try "#!/bin/sh\ntrap '' TERM\ntouch \"$(dirname \"$0\")/compiler-started\"\nexec /bin/sleep 10\n".write(to: fakeCompiler,
                                                         atomically: true,
                                                         encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755],
@@ -48,7 +73,6 @@ struct SwiftScriptCompilerTests {
         let compiler = SwiftScriptCompiler(swiftcPath: fakeCompiler.path,
                                            outputDirectory: directory.appendingPathComponent("out"))
         let token = ScriptCompilationCancellationToken()
-        let started = ContinuousClock.now
         let compilation = Task.detached {
             Result {
                 try compiler.compile(sourcePath: source.path,
@@ -56,7 +80,12 @@ struct SwiftScriptCompilerTests {
                                      cancellation: token)
             }
         }
-        try? await Task.sleep(for: .milliseconds(100))
+        let deadline = ContinuousClock.now + .seconds(5)
+        while !FileManager.default.fileExists(atPath: readyFile.path), ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(FileManager.default.fileExists(atPath: readyFile.path), "The compiler must be running before cancellation")
+        let started = ContinuousClock.now
         token.cancel()
 
         switch await compilation.value {
@@ -84,15 +113,7 @@ struct SwiftScriptCompilerTests {
             fileManager.fileExists(atPath: $0.appendingPathComponent("SceneRuntime.swiftmodule").path)
         } ?? productCandidates[0]
 
-        let generatedMapsDirectory = engineRoot
-            .appendingPathComponent(".build/out/Intermediates.noindex/GeneratedModuleMaps", isDirectory: true)
-        let generatedMaps = (try? fileManager.contentsOfDirectory(
-            at: generatedMapsDirectory,
-            includingPropertiesForKeys: nil
-        )) ?? []
-        var moduleMapPaths = generatedMaps
-            .filter { $0.pathExtension == "modulemap" && $0.lastPathComponent.hasPrefix("C") }
-            .map(\.path)
+        var moduleMapPaths = SwiftScriptCompiler.discoverClangModuleMapPaths(in: productsDirectory)
 
         let bridgeRoot = engineRoot.appendingPathComponent("Sources/Bridge", isDirectory: true)
         if let enumerator = fileManager.enumerator(

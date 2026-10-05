@@ -1,8 +1,28 @@
 import CapabilityRuntime
+import Foundation
 import Testing
 
 @Suite("CapabilityRuntime")
 struct CapabilityRuntimeTests {
+    @Test("JSON zero and one remain numbers and cannot impersonate booleans")
+    func numericAndBooleanSchemasStayDistinct() throws {
+        for source in ["0", "1"] {
+            let data = Data(source.utf8)
+            try JSONSchemaValidator.validate(data: data, against: JSONSchema(type: .number))
+            try JSONSchemaValidator.validate(data: data, against: JSONSchema(type: .integer))
+            #expect(throws: JSONSchemaViolation.self) {
+                try JSONSchemaValidator.validate(data: data, against: JSONSchema(type: .boolean))
+            }
+        }
+        for source in ["false", "true"] {
+            let data = Data(source.utf8)
+            try JSONSchemaValidator.validate(data: data, against: JSONSchema(type: .boolean))
+            #expect(throws: JSONSchemaViolation.self) {
+                try JSONSchemaValidator.validate(data: data, against: JSONSchema(type: .number))
+            }
+        }
+        try JSONSchemaValidator.validate(NSNumber(value: Int8(1)), against: JSONSchema(type: .integer))
+    }
 
     // MARK: - CapabilityRegistry
 

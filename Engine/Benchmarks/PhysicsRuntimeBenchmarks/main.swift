@@ -6,6 +6,8 @@ import SIMDCompat
 import Darwin
 #elseif canImport(Glibc)
 import Glibc
+#elseif os(Windows)
+import WinSDK
 #endif
 
 private struct Configuration {
@@ -263,6 +265,10 @@ private func milliseconds(_ nanoseconds: UInt64) -> String {
 }
 
 private func peakResidentBytes() -> UInt64 {
+    #if os(Windows)
+    guard let counters = processMemoryCounters() else { return 0 }
+    return UInt64(counters.PeakWorkingSetSize)
+    #else
     var usage = rusage()
     #if os(macOS)
     guard getrusage(RUSAGE_SELF, &usage) == 0 else { return 0 }
@@ -271,7 +277,18 @@ private func peakResidentBytes() -> UInt64 {
     guard getrusage(RUSAGE_SELF.rawValue, &usage) == 0 else { return 0 }
     return UInt64(usage.ru_maxrss) * 1024
     #endif
+    #endif
 }
+
+#if os(Windows)
+private func processMemoryCounters() -> PROCESS_MEMORY_COUNTERS? {
+    var counters = PROCESS_MEMORY_COUNTERS()
+    let size = DWORD(MemoryLayout<PROCESS_MEMORY_COUNTERS>.size)
+    counters.cb = size
+    guard K32GetProcessMemoryInfo(GetCurrentProcess(), &counters, size) != 0 else { return nil }
+    return counters
+}
+#endif
 
 private func residentBytes() -> UInt64 {
     #if os(macOS)
@@ -290,6 +307,9 @@ private func residentBytes() -> UInt64 {
           let residentPages = contents.split(separator: " ").dropFirst().first.flatMap({ UInt64($0) })
     else { return 0 }
     return residentPages * UInt64(sysconf(Int32(_SC_PAGESIZE)))
+    #elseif os(Windows)
+    guard let counters = processMemoryCounters() else { return 0 }
+    return UInt64(counters.WorkingSetSize)
     #else
     return 0
     #endif

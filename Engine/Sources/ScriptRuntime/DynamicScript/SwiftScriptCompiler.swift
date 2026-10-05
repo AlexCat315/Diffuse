@@ -1,4 +1,9 @@
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 
 private final class ScriptCompilerOutputBox: @unchecked Sendable {
     private let lock = NSLock()
@@ -39,8 +44,20 @@ public final class ScriptCompilationCancellationToken: @unchecked Sendable {
         let runningProcess = process
         lock.unlock()
         if runningProcess?.isRunning == true {
-            runningProcess?.terminate()
+            if let runningProcess { Self.stop(runningProcess) }
         }
+    }
+
+    fileprivate static func stop(_ process: Process) {
+        guard process.isRunning else { return }
+        process.terminate()
+        #if os(macOS) || os(Linux)
+        // A child can inherit an ignored or blocked SIGTERM (for example from
+        // SDL). Bound cancellation time even when graceful termination fails.
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + .milliseconds(250)) {
+            if process.isRunning { _ = kill(process.processIdentifier, SIGKILL) }
+        }
+        #endif
     }
 
     fileprivate func register(_ process: Process) -> Bool {
@@ -221,7 +238,7 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
         try process.run()
         let mayContinue = cancellation?.register(process) ?? true
         defer { cancellation?.unregister(process) }
-        if !mayContinue, process.isRunning { process.terminate() }
+        if !mayContinue { ScriptCompilationCancellationToken.stop(process) }
 
         // Drain both pipes while swiftc is running. Waiting first can deadlock
         // once either pipe fills its kernel buffer (large diagnostics are common
@@ -315,6 +332,39 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
     """
 
     // MARK: - Argument construction
+
+    /// Finds generated C module maps in both SwiftPM build layouts. SwiftBuild
+    /// can place them inside per-target intermediates on Linux and Windows.
+    public static func discoverClangModuleMapPaths(in buildDirectory: URL) -> [String] {
+        let intermediates = buildDirectory.deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Intermediates.noindex", isDirectory: true)
+        let configuration = buildDirectory.lastPathComponent.lowercased()
+        var maps = Set<String>()
+        for root in [buildDirectory, intermediates] {
+            guard let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil,
+                                                             options: [.skipsHiddenFiles]) else { continue }
+            for case let file as URL in files where file.pathExtension == "modulemap" {
+                let components = file.pathComponents.map { $0.lowercased() }
+                if configuration == "debug", components.contains(where: { $0 == "release" || $0.hasPrefix("release-") }) { continue }
+                if configuration == "release", components.contains(where: { $0 == "debug" || $0.hasPrefix("debug-") }) { continue }
+                let parent = file.deletingLastPathComponent().lastPathComponent
+                if file.lastPathComponent.hasPrefix("C") || (parent.hasPrefix("C") && parent.hasSuffix(".build")) {
+                    maps.insert(file.path)
+                }
+            }
+        }
+        let declaration = try? NSRegularExpression(pattern: #"(?:^|\n)\s*(?:framework\s+)?module\s+(\w+)\s*\{"#)
+        var byModule: [String: String] = [:]
+        for path in maps.sorted() {
+            guard let contents = try? String(contentsOfFile: path, encoding: .utf8),
+                  !contents.contains("-Swift.h"),
+                  let match = declaration?.firstMatch(in: contents, range: NSRange(contents.startIndex..., in: contents)),
+                  let nameRange = Range(match.range(at: 1), in: contents) else { continue }
+            let name = String(contents[nameRange])
+            if byModule[name] == nil { byModule[name] = path }
+        }
+        return byModule.values.sorted()
+    }
 
     private func buildArguments(sourcePaths: [String], outputPath: String) throws -> [String] {
         var args: [String] = []

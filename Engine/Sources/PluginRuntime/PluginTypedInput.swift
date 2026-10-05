@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 
 public enum PluginTypedInputError: Error, Sendable, Equatable, CustomStringConvertible {
     case invalidJSON
@@ -204,24 +205,12 @@ public enum PluginTypedInputEncoder {
     }
 
     private static func booleanValue(_ value: Any) -> Bool? {
-        // Distinguish JSON true/false from JSON numbers without
-        // CFGetTypeID/CFBooleanGetTypeID, which are not exposed by
-        // swift-corelibs-foundation (Linux/Windows). See
-        // JSONSchema.booleanValue for the full rationale.
-        #if os(macOS) || os(iOS) || os(tvOS) || os(watchOS)
+        // Numeric zero and one also bridge to Bool. Only CFBoolean represents
+        // a JSON boolean, on Darwin and on swift-corelibs-foundation hosts.
         if let number = value as? NSNumber,
            CFGetTypeID(number) == CFBooleanGetTypeID() {
             return number.boolValue
         }
-        #else
-        if let number = value as? NSNumber,
-           String(cString: number.objCType) == "c" {
-            return number.boolValue
-        }
-        if let bool = value as? Bool {
-            return bool
-        }
-        #endif
         return nil
     }
 
