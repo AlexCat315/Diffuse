@@ -37,6 +37,39 @@ struct WelcomeWorkflowTests {
         }
     } }
 
+    @Test("launcher creates, closes and reopens blank projects on every platform")
+    func blankProjectRoundTrip() throws {
+        let parent = FileManager.default.temporaryDirectory.appendingPathComponent("guava-blank-round-trip-\(UUID())")
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: false)
+        let stateKey = "GUAVA_EDITOR_STATE_DIRECTORY"
+        let previousState = ProcessInfo.processInfo.environment[stateKey]
+        let previousRecents = UserDefaults.standard.object(forKey: "GuavaRecentProjects")
+        defer {
+            #expect(WorkbenchUITestSupport.setEnvironmentValue(previousState, for: stateKey))
+            if let previousRecents { UserDefaults.standard.set(previousRecents, forKey: "GuavaRecentProjects") }
+            else { UserDefaults.standard.removeObject(forKey: "GuavaRecentProjects") }
+            try? FileManager.default.removeItem(at: parent)
+        }
+        try #require(WorkbenchUITestSupport.setEnvironmentValue(parent.appendingPathComponent("editor-state").path,
+                                                               for: stateKey))
+        let backend = WGPUBackend(config: .init())
+        let context = EditorLaunchContext(backendConfig: .init(), backend: backend,
+                                          events: PlatformEventBridge(), shellState: nil)
+        defer { context.shutdown(); try? backend.shutdown() }
+        try context.createProject(name: "Empty", parent: parent, template: .blank)
+        let app = try #require(context.bundle?.app)
+        #expect(app.scene.entityCount == 0)
+        #expect(app.scriptWorkspace.snapshot.documents.isEmpty)
+        context.closeProject()
+        #expect(!context.isProjectLoaded)
+        try context.loadProject(directory: parent.appendingPathComponent("Empty").path)
+        #expect(context.isProjectLoaded)
+        #expect(context.bundle?.app.scene.entityCount == 0)
+    }
+
+    // ScriptBehavior libraries need the host Swift exports currently available
+    // on macOS/Linux. Windows still exercises the blank-project lifecycle above.
+    #if os(macOS) || os(Linux)
     @Test("launcher creates, compiles, plays, closes and reopens independent projects")
     func projectRoundTrip() async throws {
         let parent = FileManager.default.temporaryDirectory.appendingPathComponent("guava-launcher-round-trip-\(UUID())")
@@ -105,5 +138,6 @@ struct WelcomeWorkflowTests {
         #expect(context.bundle?.app.scene.entityCount == 1)
         #expect(context.bundle?.app.scriptWorkspace.snapshot.documents.count == 1)
     }
+    #endif
 
 }
