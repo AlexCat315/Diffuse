@@ -202,18 +202,11 @@ let package = Package(
             ],
             path: "Sources/Bridge/CImageDecodeBridge",
             publicHeadersPath: "include",
+            // SwiftPM passes these binary archives by their full paths, in
+            // dependency order (lunasvg before plutovg). Additional -l flags
+            // lack the artifact search paths and break Swift 6.4 Linux links.
             cxxSettings: [
                 .define("LUNASVG_BUILD_STATIC"),
-            ],
-            // GNU ld resolves static archives in a single left-to-right pass and
-            // does not re-scan an archive once passed. lunasvg references plutovg
-            // symbols, so on Linux the two archives must be wrapped in a group to
-            // resolve the cross-references. macOS ld64 re-scans automatically.
-            linkerSettings: [
-                .unsafeFlags(
-                    ["-Xlinker", "--start-group", "-llunasvg", "-lplutovg", "-Xlinker", "--end-group"],
-                    .when(platforms: [.linux])
-                ),
             ]
         ),
 
