@@ -422,13 +422,13 @@ print("destruction_partial_source_peak=\(partiallyFracturedSourcePeak) destructi
 if configuration.scenario == .activeGrid,
    configuration.bodyCount >= 10_000,
    percentile(sortedSteps, 0.95) > 16_670_000 || droppedSteps > 0 {
-    fputs("Physics benchmark gate failed: 10k p95 exceeds 16.67 ms or fixed steps were dropped.\n", stderr)
+    FileHandle.standardError.write(Data("Physics benchmark gate failed: 10k p95 exceeds 16.67 ms or fixed steps were dropped.\n".utf8))
     exit(1)
 }
 if configuration.scenario == .denseContact,
    configuration.bodyCount >= 2_000,
    droppedSteps > 0 {
-    fputs("Physics benchmark gate failed: dense-contact scenario dropped fixed steps.\n", stderr)
+    FileHandle.standardError.write(Data("Physics benchmark gate failed: dense-contact scenario dropped fixed steps.\n".utf8))
     exit(1)
 }
 if configuration.scenario == .cloth64,
@@ -436,7 +436,7 @@ if configuration.scenario == .cloth64,
    percentile(sortedSteps, 0.95) > configuration.maxSoftBodyStepNanoseconds
         || percentile(sortedVertexStream, 0.95) > configuration.maxVertexStreamNanoseconds
         || droppedSteps > 0 {
-    fputs("Physics benchmark gate failed: 64x64 cloth exceeded the step/vertex-stream budget or dropped fixed steps.\n", stderr)
+    FileHandle.standardError.write(Data("Physics benchmark gate failed: 64x64 cloth exceeded the step/vertex-stream budget or dropped fixed steps.\n".utf8))
     exit(1)
 }
 if configuration.scenario == .softBodyInstances,
@@ -445,7 +445,7 @@ if configuration.scenario == .softBodyInstances,
    percentile(sortedSteps, 0.95) > configuration.maxSoftBodyStepNanoseconds
         || percentile(sortedVertexStream, 0.95) > configuration.maxVertexStreamNanoseconds
         || droppedSteps > 0 {
-    fputs("Physics benchmark gate failed: medium soft-body instances exceeded the step/vertex-stream budget or dropped fixed steps.\n", stderr)
+    FileHandle.standardError.write(Data("Physics benchmark gate failed: medium soft-body instances exceeded the step/vertex-stream budget or dropped fixed steps.\n".utf8))
     exit(1)
 }
 if configuration.scenario == .destructionFragments,
@@ -453,7 +453,7 @@ if configuration.scenario == .destructionFragments,
         || destructionActivationNanoseconds > configuration.maxDestructionActivationNanoseconds
         || percentile(sortedSteps, 0.95) > configuration.maxDestructionStepNanoseconds
         || droppedSteps > 0 {
-    fputs("Physics benchmark gate failed: destructible activation missed its fragment count/burst/step budget or dropped fixed steps.\n", stderr)
+    FileHandle.standardError.write(Data("Physics benchmark gate failed: destructible activation missed its fragment count/burst/step budget or dropped fixed steps.\n".utf8))
     exit(1)
 }
 if configuration.scenario == .destructionIslands {
@@ -467,13 +467,13 @@ if configuration.scenario == .destructionIslands {
         || destructionActivationNanoseconds > configuration.maxDestructionActivationNanoseconds
         || percentile(sortedSteps, 0.95) > configuration.maxDestructionStepNanoseconds
         || droppedSteps > 0 {
-        fputs("Physics benchmark gate failed: incremental destruction islands missed their fragment/source/compound/proxy count, burst/step budget, or dropped fixed steps.\n", stderr)
+        FileHandle.standardError.write(Data("Physics benchmark gate failed: incremental destruction islands missed their fragment/source/compound/proxy count, burst/step budget, or dropped fixed steps.\n".utf8))
         exit(1)
     }
 }
 if initialResident > 0,
    finalResident > 0,
    residentGrowth > configuration.maxResidentGrowthBytes {
-    fputs("Physics benchmark gate failed: sustained resident-memory growth exceeded the configured budget.\n", stderr)
+    FileHandle.standardError.write(Data("Physics benchmark gate failed: sustained resident-memory growth exceeded the configured budget.\n".utf8))
     exit(1)
 }

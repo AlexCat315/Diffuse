@@ -1,8 +1,5 @@
 name: GuavaEditor CI
 
-env:
-  GUAVA_SWIFT_VERSION: "6.3.2"
-
 on:
   push:
     branches: [main]
@@ -11,12 +8,18 @@ on:
       - 'Engine/**'
       - 'GuavaUI/**'
       - '.github/workflows/ci-editor.yml'
+      - '.github/actions/setup-toolchains/**'
+      - 'bootstrap.py'
+      - 'cmake/**'
   pull_request:
     paths:
       - 'Editor/**'
       - 'Engine/**'
       - 'GuavaUI/**'
       - '.github/workflows/ci-editor.yml'
+      - '.github/actions/setup-toolchains/**'
+      - 'bootstrap.py'
+      - 'cmake/**'
 
 jobs:
   build:
@@ -27,22 +30,15 @@ jobs:
       matrix:
         include:
           - name: macOS
-            runs-on: macos-15
+            runs-on: macos-26
           - name: Linux
             runs-on: ubuntu-latest
           - name: Windows
-            # Match the release runner instead of floating to an untested image.
-            runs-on: windows-2025
+            runs-on: windows-2025-vs2026
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
-
-      - name: Select Xcode 26.3
-        if: runner.os == 'macOS'
-        run: |
-          sudo xcode-select -s /Applications/Xcode_26.3.app
-          xcodebuild -version
 
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
@@ -58,23 +54,8 @@ jobs:
             libxrandr-dev libxrender-dev libxss-dev libxtst-dev \
             mesa-common-dev ninja-build
 
-      - name: Install Swift
-        uses: SwiftyLab/setup-swift@latest
-        with:
-          swift-version: ${{ env.GUAVA_SWIFT_VERSION }}
-
-      - name: Verify Swift version
-        shell: bash
-        run: |
-          actual="$(swift --version | head -n 1)"
-          echo "$actual"
-          if [[ "$actual" != *"Swift version ${GUAVA_SWIFT_VERSION} "* ]]; then
-            echo "Expected Swift ${GUAVA_SWIFT_VERSION}; selected toolchain was: $actual" >&2
-            exit 1
-          fi
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Set up build toolchains
+        uses: ./.github/actions/setup-toolchains
 
       - name: Build native dependencies
         if: runner.os != 'Windows'

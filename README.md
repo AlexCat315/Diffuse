@@ -10,12 +10,15 @@
 
 ### 前置依赖
 
-- Swift 6.1+ (Swift toolchain)
-- CMake 3.20+
+- Swift 6.4.0 (Swift toolchain)
+- CMake 4.4.4
 - C/C++ 编译器：
   - macOS: Xcode Command Line Tools
   - Linux: GCC 或 Clang
-  - Windows: Visual Studio 2022 (C++ workload)
+  - Windows: Visual Studio 2026 (C++ workload)
+- Rust 1.99.0 / Cargo
+- Python 3.14
+- Node.js 26.10.0 / npm （官网）
 - Git
 
 ### 第一次构建
@@ -65,14 +68,14 @@ swift build --package-path guava-mcp # MCP 服务（运行: swift run GuavaMCP�
 
 | 库 | 形式 | 来源 |
 |----|------|------|
-| Yoga | CMake 源码编译 → `.artifactbundle` | submodule `GuavaUI/third-party/yoga` |
+| Yoga | SwiftPM 源码编译 | SwiftPM `facebook/yoga` 3.2.1 |
 | FreeType | CMake 源码编译 → `.artifactbundle` | submodule `GuavaUI/third-party/freetype` |
 | HarfBuzz | CMake 源码编译 → `.artifactbundle` | submodule `GuavaUI/third-party/harfbuzz` |
 | SDL3 | CMake 源码编译 → `.artifactbundle` | submodule `Engine/third-party/sdl3` |
 | Imath | CMake 源码编译 | submodule `Engine/third-party/imath` |
 | OpenEXR | CMake 源码编译 | submodule `Engine/third-party/openexr` |
 | JoltPhysics | CMake 源码编译 → `.artifactbundle` | submodule `Engine/third-party/jolt` |
-| wgpu-native | 配置时从 gfx-rs 公开 release 下载 | 无 submodule（Rust 项目，CMake 无法源码编译） |
+| wgpu-native | 固定 gfx-rs release tag，Cargo 源码编译 | 无 submodule（Rust 项目，CMake 无法源码编译） |
 | Wasmtime | 固定版本官方 C API 动态库 → `.xcframework` | Bytecode Alliance release（SHA-256 校验，macOS） |
 
 构建模式：每个 SPM 包的 native 依赖都在自己的 `<package>/third-party/` 下，CMake 编译产物落到 `<package>/vendor/`（gitignored），SPM 通过 `.binaryTarget(path:)` 消费。

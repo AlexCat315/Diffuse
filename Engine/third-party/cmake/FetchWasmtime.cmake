@@ -8,7 +8,7 @@ if(NOT APPLE)
     return()
 endif()
 
-set(WASMTIME_VERSION "45.0.0")
+set(WASMTIME_VERSION "49.0.2")
 set(WASMTIME_RELEASE_BASE
     "https://github.com/bytecodealliance/wasmtime/releases/download/v${WASMTIME_VERSION}")
 
@@ -16,12 +16,12 @@ if(GUAVA_TRIPLE STREQUAL "macos-arm64")
     set(WASMTIME_PLATFORM "aarch64-macos")
     set(WASMTIME_ARCHITECTURE "arm64")
     set(WASMTIME_ARCHIVE_SHA256
-        "43cd87ec7d398f2e799e81c7d4e143d930e0139953d3c5d2a9c4055789f29851")
+        "f7000ab1661495d09b9dc87a11b356941b4e6097f295434bcb30a8cf1393b0d5")
 elseif(GUAVA_TRIPLE STREQUAL "macos-x86_64")
     set(WASMTIME_PLATFORM "x86_64-macos")
     set(WASMTIME_ARCHITECTURE "x86_64")
     set(WASMTIME_ARCHIVE_SHA256
-        "92d6b32a31711127fde10acbf5b984fa37b94052cec783a4fca6edd0bb8cdd6f")
+        "1a1fd4bcec77d65bab1bdd4c38e4168825b7679c2f105bf573c4ef1cf5e779b1")
 else()
     message(FATAL_ERROR "Unsupported Apple triple for Wasmtime: ${GUAVA_TRIPLE}")
 endif()

@@ -89,7 +89,7 @@ install(CODE "
   \\\"artifacts\\\": {
     \\\"Jolt\\\": {
       \\\"type\\\": \\\"staticLibrary\\\",
-      \\\"version\\\": \\\"5.5.0\\\",
+      \\\"version\\\": \\\"5.6.0\\\",
       \\\"variants\\\": [
         {
           \\\"path\\\": \\\"${GUAVA_TRIPLE}/lib/${JOLT_LIB_FILENAME}\\\",
@@ -108,13 +108,13 @@ install(CODE "
 guava_git_revision(JOLT_SOURCE_REVISION "${CMAKE_SOURCE_DIR}/jolt")
 guava_add_artifact_build_manifest(
     ARTIFACT_NAME "Jolt"
-    VERSION "5.5.0"
+    VERSION "5.6.0"
     BUNDLE_DIR ${JOLT_BUNDLE}
     LIB_REL_PATH "${GUAVA_TRIPLE}/lib/${JOLT_LIB_FILENAME}"
     BUILD_SYSTEM "CMake ExternalProject"
     SOURCE_KIND "git-submodule"
     SOURCE_URL "Engine/third-party/jolt"
-    SOURCE_REF "5.5.0"
+    SOURCE_REF "5.6.0"
     SOURCE_REVISION ${JOLT_SOURCE_REVISION}
     NOTES "TARGET_UNIT_TESTS=OFF, TARGET_SAMPLES=OFF, static library"
     DEPENDS stage_jolt

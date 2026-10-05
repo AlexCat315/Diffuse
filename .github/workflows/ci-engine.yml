@@ -6,10 +6,16 @@ on:
     paths:
       - 'Engine/**'
       - '.github/workflows/ci-engine.yml'
+      - '.github/actions/setup-toolchains/**'
+      - 'bootstrap.py'
+      - 'cmake/**'
   pull_request:
     paths:
       - 'Engine/**'
       - '.github/workflows/ci-engine.yml'
+      - '.github/actions/setup-toolchains/**'
+      - 'bootstrap.py'
+      - 'cmake/**'
 
 jobs:
   build:
@@ -20,30 +26,18 @@ jobs:
       matrix:
         include:
           - name: macOS
-            runs-on: macos-15
+            runs-on: macos-26
           - name: Linux
             runs-on: ubuntu-latest
           - name: Windows
-            # Pinned: windows-latest now resolves to windows-2025-vs2026, whose
-            # MSVC (VS 18) intermittently ICEs compiling plutovg.
-            runs-on: windows-2025
+            runs-on: windows-2025-vs2026
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
 
-      # macOS ships Swift with Xcode; Linux/Windows install the toolchain.
-      - name: Select Xcode 26.3
-        if: runner.os == 'macOS'
-        run: |
-          sudo xcode-select -s /Applications/Xcode_26.3.app
-          xcodebuild -version
-
-      - name: Set up Swift
-        if: runner.os != 'macOS'
-        uses: SwiftyLab/setup-swift@latest
-        with:
-          swift-version: "6.3.2"
+      - name: Set up build toolchains
+        uses: ./.github/actions/setup-toolchains
 
       - name: Swift version
         shell: bash
@@ -63,16 +57,6 @@ jobs:
             libxrandr-dev libxrender-dev libxss-dev libxtst-dev \
             mesa-common-dev ninja-build
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      # Native C/C++ deps build the same way everywhere — CMake is
-      # cross-platform; only the Swift toolchain setup differs above.
-      # `--config Release` is required by multi-config generators (Visual Studio
-      # on Windows ignores CMAKE_BUILD_TYPE and would otherwise build Debug).
-      # `stage_sdl3` is a top-level ALL target that builds the subdirectory
-      # SDL3-static target — the VS generator cannot build `--target SDL3-static`
-      # directly (MSB1009).
       - name: Build native deps via CMake (SDL3 + Imath + OpenEXR + Jolt)
         shell: bash
         run: |

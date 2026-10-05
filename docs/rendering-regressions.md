@@ -1,3 +1,14 @@
+---
+path: /zh/docs/rendering-regressions
+title: 网格拾取、材质与大场景渲染
+description: 网格拾取、透明材质、大场景优化及 GPU 回归验证。
+locale: zh
+translationKey: docs.rendering-regressions
+category: 渲染
+order: 86
+kind: doc
+---
+
 # 网格拾取、材质与大场景渲染
 
 点击选中使用真实三角形表面和缓存 BVH；射线转换到模型空间后保留世界距离，支持旋转、非均匀缩放、负缩放以及当前骨骼姿势。软体使用当前模拟顶点。渲染模型未命中时，其碰撞体不会再次把空白区域选中；没有渲染网格的碰撞体仍可选中。框选继续使用屏幕包围区域。

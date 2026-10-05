@@ -51,7 +51,7 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries" FORCE)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "" FORCE)
 
 # Helper: emit info.json for a single-variant staticLibrary artifact bundle
-function(write_artifactbundle_info BUNDLE_DIR ARTIFACT_NAME LIB_REL_PATH)
+function(write_artifactbundle_info BUNDLE_DIR ARTIFACT_NAME LIB_REL_PATH ARTIFACT_VERSION)
     install(CODE "
         file(WRITE ${BUNDLE_DIR}/info.json
 \"{
@@ -59,7 +59,7 @@ function(write_artifactbundle_info BUNDLE_DIR ARTIFACT_NAME LIB_REL_PATH)
   \\\"artifacts\\\": {
     \\\"${ARTIFACT_NAME}\\\": {
       \\\"type\\\": \\\"staticLibrary\\\",
-      \\\"version\\\": \\\"1.0.0\\\",
+      \\\"version\\\": \\\"${ARTIFACT_VERSION}\\\",
       \\\"variants\\\": [
         {
           \\\"path\\\": \\\"${LIB_REL_PATH}\\\",

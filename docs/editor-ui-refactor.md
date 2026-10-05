@@ -1,3 +1,14 @@
+---
+path: /en/docs/editor-ui-refactor
+title: Editor UI reconstruction
+description: Editor workbench layout, shared controls, and visual acceptance requirements.
+locale: en
+translationKey: docs.editor-ui-refactor
+category: Editor
+order: 85
+kind: doc
+---
+
 # Editor UI reconstruction
 
 The reference is a compact engine workbench: hierarchy on the left, scene and
