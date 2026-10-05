@@ -212,7 +212,7 @@ public enum PluginRuntimeUnavailableError: Error, CustomStringConvertible {
     case unavailable
 
     public var description: String {
-        "Wasmtime 45.0.0 Component runtime is not linked; plugin execution is fail-closed"
+        "Wasmtime 49.0.2 Component runtime is not linked; plugin execution is fail-closed"
     }
 }
 
