@@ -63,7 +63,7 @@ struct FourTreeConsistencyTests {
     }
 
     @Test("Mirrors stay consistent across reorder / remove / insert churn")
-    func mirrorsStayConsistentUnderChurn() {
+    func mirrorsStayConsistentUnderChurn() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root: _Container())
@@ -92,10 +92,10 @@ struct FourTreeConsistencyTests {
             let leafTags = anchor.children.compactMap { $0.attachments["tag"] as? Int }
             #expect(leafTags == ids, "leaf order \(leafTags) != requested \(ids)")
         }
-    }
+    } }
 
     @Test("Hit-test order matches paint order after a reorder")
-    func hitAndPaintOrderAgreeAfterReorder() {
+    func hitAndPaintOrderAgreeAfterReorder() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root: _Container())
@@ -113,5 +113,5 @@ struct FourTreeConsistencyTests {
             .compactMap { $0.node?.attachments["tag"] as? Int }
         #expect(nodeTags == [2, 0, 1])
         #expect(renderTags == nodeTags)
-    }
+    } }
 }

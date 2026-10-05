@@ -90,7 +90,7 @@ struct AnimationValueModifierTests {
     }
 
     @Test("Initial render snaps even when animation is supplied")
-    func initialRenderSnaps() {
+    func initialRenderSnaps() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -102,10 +102,10 @@ struct AnimationValueModifierTests {
             #expect(leaf?.opacity == 0)
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("Subsequent value change animates implicitly")
-    func valueChangeAnimates() {
+    func valueChangeAnimates() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -127,10 +127,10 @@ struct AnimationValueModifierTests {
             scheduler.tick(deltaTime: 0.5)
             #expect(leaf?.opacity == 1.0)
         }
-    }
+    } }
 
     @Test("animation(nil, value:) writes instantly even on change")
-    func nilOptsOut() {
+    func nilOptsOut() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -146,10 +146,10 @@ struct AnimationValueModifierTests {
             #expect(leaf?.opacity == 1.0)
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("frame(width:) animates implicitly on value change")
-    func implicitFrameAnimates() {
+    func implicitFrameAnimates() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -174,10 +174,10 @@ struct AnimationValueModifierTests {
             #expect(layout?.width == 80)
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("frame(maxWidth:) animates implicitly on value change")
-    func implicitMaxFrameAnimates() {
+    func implicitMaxFrameAnimates() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -202,10 +202,10 @@ struct AnimationValueModifierTests {
             #expect(layout?.maxWidth == 200)
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("frame(width: .percent()) animates implicitly on value change")
-    func implicitPercentFrameAnimates() {
+    func implicitPercentFrameAnimates() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -221,10 +221,10 @@ struct AnimationValueModifierTests {
             scheduler.tick(deltaTime: 1.0)
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("frame(maxHeight:) animates implicitly on value change")
-    func implicitMaxHeightFrameAnimates() {
+    func implicitMaxHeightFrameAnimates() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -249,10 +249,10 @@ struct AnimationValueModifierTests {
             #expect(layout?.maxHeight == 100)
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("frame(height: .percent()) animates implicitly on value change")
-    func implicitPercentHeightFrameAnimates() {
+    func implicitPercentHeightFrameAnimates() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -268,5 +268,5 @@ struct AnimationValueModifierTests {
             scheduler.tick(deltaTime: 1.0)
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 }

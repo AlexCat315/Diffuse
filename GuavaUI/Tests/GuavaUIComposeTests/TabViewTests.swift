@@ -29,7 +29,7 @@ private func findProbe(_ root: Node, id: Int) -> Node? {
 struct TabViewTests {
 
     @Test("Initial render shows only the selected tab's content")
-    func showsActiveContent() {
+    func showsActiveContent() { GlobalTestLock.locked {
         var sel = 0
         let binding = Binding<Int>(get: { sel }, set: { sel = $0 })
         let tabs = [
@@ -44,10 +44,10 @@ struct TabViewTests {
         #expect(findProbe(tree.root!, id: 100) != nil)
         #expect(findProbe(tree.root!, id: 200) == nil)
         _ = graph // keep alive
-    }
+    } }
 
     @Test("Different initial selection picks the matching content")
-    func picksMatchingContent() {
+    func picksMatchingContent() { GlobalTestLock.locked {
         var sel = 1
         let binding = Binding<Int>(get: { sel }, set: { sel = $0 })
         let tabs = [
@@ -62,10 +62,10 @@ struct TabViewTests {
         #expect(findProbe(tree.root!, id: 100) == nil)
         #expect(findProbe(tree.root!, id: 200) != nil)
         _ = graph
-    }
+    } }
 
     @Test("Selection that misses every tab renders no tab content")
-    func missingSelectionRendersNothing() {
+    func missingSelectionRendersNothing() { GlobalTestLock.locked {
         var sel = 99
         let binding = Binding<Int>(get: { sel }, set: { sel = $0 })
         let tabs = [
@@ -80,5 +80,5 @@ struct TabViewTests {
         #expect(findProbe(tree.root!, id: 100) == nil)
         #expect(findProbe(tree.root!, id: 200) == nil)
         _ = graph
-    }
+    } }
 }

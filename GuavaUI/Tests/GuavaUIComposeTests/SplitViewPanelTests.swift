@@ -6,7 +6,7 @@ import GuavaUIRuntime
 struct SplitViewPanelTests {
 
     @Test("SplitView horizontal layout honours fraction and divider thickness")
-    func splitViewHorizontalLayout() {
+    func splitViewHorizontalLayout() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         let firstColor = Color(red: 255, green: 0, blue: 0)
@@ -39,10 +39,10 @@ struct SplitViewPanelTests {
         #expect(abs(second.frame.width - 299) <= 1)
         #expect(first.frame.height == 120)
         #expect(second.frame.height == 120)
-    }
+    } }
 
     @Test("Panel creates header and content regions (floating-island chrome)")
-    func panelShellLayout() {
+    func panelShellLayout() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
 
@@ -72,7 +72,7 @@ struct SplitViewPanelTests {
 
         #expect(header.frame.height == 34)
         #expect(content.frame.origin.y == 34)
-    }
+    } }
 
     private func materialisedRoot(in tree: NodeTree) -> Node {
         tree.root!.children.first!.children.first!

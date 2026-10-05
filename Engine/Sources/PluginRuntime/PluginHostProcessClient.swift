@@ -130,9 +130,11 @@ public final class PluginHostProcessClient: @unchecked Sendable {
     }
 
     private func stopLocked() {
+        // A synchronous Windows pipe read can keep CloseHandle waiting until
+        // the peer exits. Terminate the host before closing its pipe handles.
+        if process?.isRunning == true { process?.terminate() }
         try? input?.close()
         try? output?.close()
-        if process?.isRunning == true { process?.terminate() }
         process = nil
         input = nil
         output = nil

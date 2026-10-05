@@ -8,22 +8,22 @@ struct CompositionLocalTests {
     // MARK: - Direct Node API
 
     @Test("Node.compositionValue falls back to defaultValue when no provider exists")
-    func nodeFallsBackToDefault() {
+    func nodeFallsBackToDefault() { GlobalTestLock.locked {
         let local = CompositionLocal<Int>(defaultValue: 42)
         let node = Node()
         #expect(node.compositionValue(of: local) == 42)
-    }
+    } }
 
     @Test("Node.setCompositionValue stores per-node values")
-    func nodeStoresValue() {
+    func nodeStoresValue() { GlobalTestLock.locked {
         let local = CompositionLocal<String>(defaultValue: "default")
         let node = Node()
         node.setCompositionValue(local, "hello")
         #expect(node.compositionValue(of: local) == "hello")
-    }
+    } }
 
     @Test("Lookup walks up the parent chain")
-    func lookupWalksParents() {
+    func lookupWalksParents() { GlobalTestLock.locked {
         let local = CompositionLocal<Int>(defaultValue: -1)
         let root = Node()
         let mid = Node()
@@ -34,10 +34,10 @@ struct CompositionLocalTests {
         #expect(leaf.compositionValue(of: local) == 7)
         #expect(mid.compositionValue(of: local) == 7)
         #expect(root.compositionValue(of: local) == 7)
-    }
+    } }
 
     @Test("Nearest ancestor wins over a more distant one")
-    func nearestAncestorWins() {
+    func nearestAncestorWins() { GlobalTestLock.locked {
         let local = CompositionLocal<Int>(defaultValue: 0)
         let root = Node()
         let mid = Node()
@@ -47,10 +47,10 @@ struct CompositionLocalTests {
         root.setCompositionValue(local, 1)
         mid.setCompositionValue(local, 2)
         #expect(leaf.compositionValue(of: local) == 2)
-    }
+    } }
 
     @Test("Distinct CompositionLocal declarations are isolated")
-    func distinctLocalsAreIsolated() {
+    func distinctLocalsAreIsolated() { GlobalTestLock.locked {
         let a = CompositionLocal<Int>(defaultValue: 0)
         let b = CompositionLocal<Int>(defaultValue: 0)
         let node = Node()
@@ -58,12 +58,12 @@ struct CompositionLocalTests {
         node.setCompositionValue(b, 22)
         #expect(node.compositionValue(of: a) == 11)
         #expect(node.compositionValue(of: b) == 22)
-    }
+    } }
 
     // MARK: - Compose-layer .compositionLocal modifier
 
     @Test("compositionLocal modifier writes onto the wrapper node")
-    func modifierWritesOntoWrapper() {
+    func modifierWritesOntoWrapper() { GlobalTestLock.locked {
         let local = CompositionLocal<Int>(defaultValue: 0)
         let tree = NodeTree()
         let recomp = Recomposer()
@@ -75,10 +75,10 @@ struct CompositionLocalTests {
         // the wrapper viewTag). The provider value lives on it.
         let wrapper = tree.root!.children.first!
         #expect(wrapper.compositionValue(of: local) == 99)
-    }
+    } }
 
     @Test("Descendants resolve the provider via parent walk")
-    func descendantsResolveProvider() {
+    func descendantsResolveProvider() { GlobalTestLock.locked {
         let local = CompositionLocal<String>(defaultValue: "default")
         let tree = NodeTree()
         let recomp = Recomposer()
@@ -98,5 +98,5 @@ struct CompositionLocalTests {
             cursor = next
         }
         #expect(cursor.compositionValue(of: local) == "themed")
-    }
+    } }
 }

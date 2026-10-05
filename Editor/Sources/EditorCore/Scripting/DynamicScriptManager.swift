@@ -182,7 +182,7 @@ public final class DynamicScriptManager: @unchecked Sendable {
     }
 
     public func scriptFile(at url: URL) throws -> ScriptFile? {
-        try scanScriptFiles().first { $0.url.standardizedFileURL == url.standardizedFileURL }
+        try scanScriptFiles().first { ProjectFilePath.sameLocation($0.url, url) }
     }
 
     public func startLanguageService(
