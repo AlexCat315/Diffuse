@@ -25,7 +25,7 @@ public enum ProjectRuntimeResources {
     /// tests without mutating the process-wide audio engine.
     static func discoverAudioSearchPaths(at rootPath: String) -> [URL] {
         let fileManager = FileManager.default
-        let root = URL(fileURLWithPath: rootPath, isDirectory: true).standardizedFileURL
+        let root = ProjectFilePath.canonicalURL(URL(fileURLWithPath: rootPath, isDirectory: true))
         var directories: [URL] = [root]
         var seen = Set([pathKey(root)])
         let properties: [URLResourceKey] = [.isDirectoryKey, .isRegularFileKey]
@@ -52,10 +52,6 @@ public enum ProjectRuntimeResources {
     }
 
     private static func pathKey(_ url: URL) -> String {
-        #if os(Windows)
-        return url.standardizedFileURL.path.lowercased()
-        #else
-        return url.standardizedFileURL.path
-        #endif
+        ProjectFilePath.comparableComponents(url).joined(separator: "/")
     }
 }

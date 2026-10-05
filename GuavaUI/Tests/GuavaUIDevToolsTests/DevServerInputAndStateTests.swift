@@ -44,12 +44,9 @@ final class DevServerInputAndStateTests: XCTestCase {
             let env: [String: Any] = ["type": "mirror.input", "payload": payload]
             let data = try JSONSerialization.data(withJSONObject: env)
             try await task.send(.string(String(data: data, encoding: .utf8)!))
-        }
-
-        // Allow the @MainActor Task scheduled from the server queue to run.
-        for _ in 0..<50 {
-            if !received.events.isEmpty { break }
-            try await Task.sleep(nanoseconds: 10_000_000)
+            // Keep the connection alive until the server has delivered the
+            // event. Closing immediately after send races its actor dispatch.
+            try await Self.waitUntil { !received.events.isEmpty }
         }
 
         XCTAssertEqual(received.events.count, 1)
@@ -105,11 +102,7 @@ final class DevServerInputAndStateTests: XCTestCase {
             ]
             let restoreData = try JSONSerialization.data(withJSONObject: restoreReq)
             try await task.send(.string(String(data: restoreData, encoding: .utf8)!))
-        }
-
-        for _ in 0..<50 {
-            if restored.snapshot != nil { break }
-            try await Task.sleep(nanoseconds: 10_000_000)
+            try await Self.waitUntil { restored.snapshot != nil }
         }
 
         XCTAssertEqual(captureBox.value, ["foo": "bar", "scroll": "42"])
@@ -212,6 +205,14 @@ final class DevServerInputAndStateTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    @MainActor
+    private static func waitUntil(_ condition: @MainActor () -> Bool) async throws {
+        let deadline = ContinuousClock.now + .seconds(5)
+        while !condition(), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
 
     private static func scancode(for webCode: String) -> UInt32? {
         let event = InputBridge.event(from: MirrorInputPayload(

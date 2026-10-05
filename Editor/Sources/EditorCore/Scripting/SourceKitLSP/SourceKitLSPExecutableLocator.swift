@@ -14,8 +14,7 @@ public enum SourceKitLSPExecutableLocator {
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) throws -> URL {
         if let override = environment[overrideEnvironmentKey], !override.isEmpty {
-            let url = URL(fileURLWithPath: override)
-            guard FileManager.default.isExecutableFile(atPath: url.path) else {
+            guard let url = try? SwiftScriptCompiler.resolveExecutableURL(for: override, environment: environment) else {
                 throw SourceKitLSPClientError.executableNotFound(override)
             }
             return url
