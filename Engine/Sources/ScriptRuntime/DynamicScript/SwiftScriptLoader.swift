@@ -1,4 +1,11 @@
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#elseif os(Windows)
+import WinSDK
+#endif
 
 /// Loads compiled Swift script dynamic libraries (`.dylib`/`.so`/`.dll`)
 /// into the engine process and extracts the `Script` they produce.
@@ -21,7 +28,7 @@ public final class SwiftScriptLoader: @unchecked Sendable {
     #if canImport(Darwin) || canImport(Glibc)
     private typealias LibraryHandle = UnsafeMutableRawPointer
     #elseif os(Windows)
-    private typealias LibraryHandle = UnsafeMutableRawPointer // HMODULE
+    private typealias LibraryHandle = HMODULE
     #endif
 
     private final class LoadedLibrary: @unchecked Sendable {
@@ -97,12 +104,11 @@ public final class SwiftScriptLoader: @unchecked Sendable {
         }
         return handle
         #elseif os(Windows)
-        let wide = path.withCString(encodedAs: UTF16.self) { $0 }
-        let module = LoadLibraryW(wide)
+        let module = path.withCString(encodedAs: UTF16.self) { LoadLibraryW($0) }
         guard let module else {
             throw ScriptLoadError.dlopenFailed("LoadLibraryW failed")
         }
-        return UnsafeMutableRawPointer(module)
+        return module
         #else
         throw ScriptLoadError.unsupportedPlatform
         #endif
@@ -112,7 +118,10 @@ public final class SwiftScriptLoader: @unchecked Sendable {
         #if canImport(Darwin) || canImport(Glibc)
         return name.withCString { dlsym(handle, $0) }
         #elseif os(Windows)
-        return name.withCString { GetProcAddress(handle, $0) }
+        return name.withCString {
+            guard let function = GetProcAddress(handle, $0) else { return nil }
+            return unsafeBitCast(function, to: UnsafeMutableRawPointer.self)
+        }
         #else
         return nil
         #endif
@@ -122,7 +131,7 @@ public final class SwiftScriptLoader: @unchecked Sendable {
         #if canImport(Darwin) || canImport(Glibc)
         dlclose(handle)
         #elseif os(Windows)
-        FreeLibrary(handle)
+        _ = FreeLibrary(handle)
         #endif
     }
 }

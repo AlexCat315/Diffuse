@@ -228,6 +228,8 @@ jobs:
       - name: Build Editor, Player, and MCP
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           swift build -c release --package-path Editor --product EditorApp
           swift build -c release --package-path Editor --product GuavaPlayer
           swift build -c release --package-path Engine --product GuavaPluginHost
@@ -238,6 +240,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
 
           $editorBin = (swift build -c release --package-path Editor --product EditorApp --show-bin-path).Trim()
           $playerBin = (swift build -c release --package-path Editor --product GuavaPlayer --show-bin-path).Trim()
