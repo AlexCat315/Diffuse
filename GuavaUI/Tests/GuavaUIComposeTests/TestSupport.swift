@@ -19,9 +19,10 @@ func systemTestFontPath() -> String {
     return candidates.first { fm.fileExists(atPath: $0) } ?? ""
 }
 
-/// All compose tests that mutate the process-wide holders
+/// Compose tests that build UI graphs or mutate the process-wide holders
 /// (`InteractionRegistryHolder`, `FocusChainHolder`, `TextEnvironmentHolder`)
-/// must run under this lock. Swift Testing parallelises across suites, and
+/// must use this lock: even reading a shared text environment mutates its
+/// font caches. Each scope also owns its animation scheduler. Swift Testing parallelises across suites, and
 /// `.serialized` only orders cases inside a single suite.
 enum GlobalTestLock {
     static let lock = NSLock()
@@ -29,7 +30,7 @@ enum GlobalTestLock {
     static func locked<T>(_ body: () throws -> T) rethrows -> T {
         lock.lock()
         defer { lock.unlock() }
-        return try body()
+        return try AnimatorScheduler.$current.withValue(AnimatorScheduler(), operation: body)
     }
 }
 

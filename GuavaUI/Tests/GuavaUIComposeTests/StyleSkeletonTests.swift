@@ -6,7 +6,7 @@ import GuavaUIRuntime
 struct StyleSkeletonTests {
 
     @Test("TextFieldStyleEnvironment defaults to DefaultTextFieldStyle")
-    func textFieldDefault() {
+    func textFieldDefault() { GlobalTestLock.locked {
         let node = Node()
         let any = node.compositionValue(of: TextFieldStyleEnvironment.key)
         let cfg = TextFieldStyleConfiguration(
@@ -19,10 +19,10 @@ struct StyleSkeletonTests {
         // Body should not be EmptyView — DefaultTextFieldStyle wraps the
         // content in a padded background.
         #expect(!(body is EmptyView))
-    }
+    } }
 
     @Test(".textFieldStyle(_:) overrides the environment")
-    func textFieldOverride() {
+    func textFieldOverride() { GlobalTestLock.locked {
         struct Probe: TextFieldStyle {
             func makeBody(configuration: TextFieldStyleConfiguration) -> some View {
                 Text("probe")
@@ -40,10 +40,10 @@ struct StyleSkeletonTests {
             isFocused: false, isEditing: false, isError: false, isEnabled: true,
             theme: .defaultDark))
         #expect(body is Text)
-    }
+    } }
 
     @Test("PanelStyleEnvironment defaults to DefaultPanelStyle")
-    func panelDefault() {
+    func panelDefault() { GlobalTestLock.locked {
         let node = Node()
         let any = node.compositionValue(of: PanelStyleEnvironment.key)
         let cfg = PanelStyleConfiguration(
@@ -51,10 +51,10 @@ struct StyleSkeletonTests {
             content: AnyView(EmptyView()), isActive: false, theme: .defaultDark)
         let body = any.makeBody(cfg)
         #expect(!(body is EmptyView))
-    }
+    } }
 
     @Test("ListRowStyleEnvironment defaults to DefaultListRowStyle and applies selection fill")
-    func listRowSelected() {
+    func listRowSelected() { GlobalTestLock.locked {
         let any = AnyListRowStyle(DefaultListRowStyle())
         let cfg = ListRowStyleConfiguration(
             content: AnyView(EmptyView()),
@@ -62,10 +62,10 @@ struct StyleSkeletonTests {
             theme: .defaultDark)
         // Smoke: body should be produced without crashing.
         _ = any.makeBody(cfg)
-    }
+    } }
 
     @Test("TreeRowStyle environment is wired and depth flows in")
-    func treeRowDepth() {
+    func treeRowDepth() { GlobalTestLock.locked {
         let any = AnyTreeRowStyle(DefaultTreeRowStyle())
         let cfg = TreeRowStyleConfiguration(
             content: AnyView(EmptyView()),
@@ -75,10 +75,10 @@ struct StyleSkeletonTests {
             isSelected: false, isHovered: false, isEnabled: true,
             theme: .defaultDark)
         _ = any.makeBody(cfg)
-    }
+    } }
 
     @Test("DividerStyle default produces a Divider primitive with the theme divider color")
-    func dividerDefault() {
+    func dividerDefault() { GlobalTestLock.locked {
         let any = AnyDividerStyle(DefaultDividerStyle())
         let cfg = DividerStyleConfiguration(
             orientation: .horizontal, thickness: 1, theme: .defaultDark)
@@ -86,10 +86,10 @@ struct StyleSkeletonTests {
         let divider = body as? Divider
         #expect(divider != nil)
         #expect(divider?.color == Theme.defaultDark.colors.divider)
-    }
+    } }
 
     @Test("All five style environments fall back to their Default* implementation")
-    func allEnvironmentsHaveDefaults() {
+    func allEnvironmentsHaveDefaults() { GlobalTestLock.locked {
         let n = Node()
         // Smoke: every key resolves to a non-nil any-style at the default node.
         _ = n.compositionValue(of: TextFieldStyleEnvironment.key)
@@ -97,5 +97,5 @@ struct StyleSkeletonTests {
         _ = n.compositionValue(of: ListRowStyleEnvironment.key)
         _ = n.compositionValue(of: TreeRowStyleEnvironment.key)
         _ = n.compositionValue(of: DividerStyleEnvironment.key)
-    }
+    } }
 }

@@ -14,7 +14,7 @@ struct ThemeEnvironmentTests {
     }
 
     @Test(".theme(_:) makes Node.theme return the provided theme")
-    func themeProvision() {
+    func themeProvision() { GlobalTestLock.locked {
         var custom = Theme.defaultDark
         custom.colors.accent = Color(r: 0.9, g: 0.1, b: 0.1)
 
@@ -25,10 +25,10 @@ struct ThemeEnvironmentTests {
 
         let leaf = descendant(of: tree.root!)
         #expect(leaf.theme.colors.accent == Color(r: 0.9, g: 0.1, b: 0.1))
-    }
+    } }
 
     @Test("Without .theme(_:), Node.theme falls back to Theme.defaultDark")
-    func themeFallback() {
+    func themeFallback() { GlobalTestLock.locked {
         let tree = NodeTree()
         let recomp = Recomposer()
         let graph = ViewGraph(tree: tree, recomposer: recomp)
@@ -36,10 +36,10 @@ struct ThemeEnvironmentTests {
 
         let leaf = descendant(of: tree.root!)
         #expect(leaf.theme.colors.accent == Theme.defaultDark.colors.accent)
-    }
+    } }
 
     @Test("Semantic background resolves against the provided theme on first install")
-    func semanticBackgroundOnInstall() {
+    func semanticBackgroundOnInstall() { GlobalTestLock.locked {
         var custom = Theme.defaultDark
         custom.colors.surface = Color(r: 0.5, g: 0.0, b: 0.5)
 
@@ -54,10 +54,10 @@ struct ThemeEnvironmentTests {
         // primitive node (a descendant of the synthetic theme anchor).
         let leaf = descendant(of: tree.root!)
         #expect(leaf.backgroundColor == Color(r: 0.5, g: 0.0, b: 0.5))
-    }
+    } }
 
     @Test("Semantic foreground resolves against the provided theme")
-    func semanticForegroundOnInstall() {
+    func semanticForegroundOnInstall() { GlobalTestLock.locked {
         var custom = Theme.defaultDark
         custom.colors.onSurface = Color(r: 0.1, g: 0.9, b: 0.2)
 
@@ -70,10 +70,10 @@ struct ThemeEnvironmentTests {
 
         let leaf = descendant(of: tree.root!)
         #expect(leaf.foregroundColor == Color(r: 0.1, g: 0.9, b: 0.2))
-    }
+    } }
 
     @Test("Semantic font writes both font and lineHeight attachments")
-    func semanticFontWritesAttachments() {
+    func semanticFontWritesAttachments() { GlobalTestLock.locked {
         let tree = NodeTree()
         let recomp = Recomposer()
         let graph = ViewGraph(tree: tree, recomposer: recomp)
@@ -85,10 +85,10 @@ struct ThemeEnvironmentTests {
         let lineHeight = leaf.attachments[StyleAttachmentKey.lineHeight] as? Float
         #expect(font == Theme.defaultDark.typography.title.font)
         #expect(lineHeight == Theme.defaultDark.typography.title.lineHeight)
-    }
+    } }
 
     @Test("Nested .theme(_:) overrides an outer one for descendants")
-    func nestedThemeOverrides() {
+    func nestedThemeOverrides() { GlobalTestLock.locked {
         var outer = Theme.defaultDark
         outer.colors.accent = Color(r: 1, g: 0, b: 0)
         var inner = Theme.defaultDark
@@ -104,5 +104,5 @@ struct ThemeEnvironmentTests {
         let leaf = descendant(of: tree.root!)
         // Innermost wins.
         #expect(leaf.theme.colors.accent == Color(r: 0, g: 1, b: 0))
-    }
+    } }
 }

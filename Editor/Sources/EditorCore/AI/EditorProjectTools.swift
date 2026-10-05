@@ -118,7 +118,7 @@ extension EditorApplication {
             let source = args["source"] as? String ?? ""
             guard source.utf8.count <= 262_144 else { throw EditorProjectToolError("Source exceeds 256 KiB.") }
             if FileManager.default.fileExists(atPath: url.path) {
-                guard scriptWorkspace.snapshot.documents.first(where: { $0.file.url.standardizedFileURL == url.standardizedFileURL })?.isDirty != true else {
+                guard scriptWorkspace.snapshot.documents.first(where: { ProjectFilePath.sameLocation($0.file.url, url) })?.isDirty != true else {
                     throw EditorProjectToolError("The editor has unsaved changes for \(url.lastPathComponent). Save or resolve them first.")
                 }
                 let current = CapabilityDigest.sha256(try boundedScriptData(at: url))
@@ -133,7 +133,7 @@ extension EditorApplication {
                     throw EditorProjectToolError("Could not create script. Check editor diagnostics.")
                 }
             }
-            let file = try dynamicScriptManager.scanScriptFiles().first { $0.url.standardizedFileURL == url.standardizedFileURL }
+            let file = try dynamicScriptManager.scriptFile(at: url)
             if let file { scene.registerDynamicScriptOption(identifier: file.identifier, displayName: file.displayName) }
             result["filename"] = url.lastPathComponent
             result["identifier"] = file?.identifier

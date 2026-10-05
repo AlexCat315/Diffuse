@@ -28,7 +28,7 @@ struct RenderTreeMirrorTests {
     }
 
     @Test("Install mirrors the entire Node tree, sets back-pointers, and counts the root")
-    func installBuildsMirror() {
+    func installBuildsMirror() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root: _LayerNode { _ in })
@@ -40,10 +40,10 @@ struct RenderTreeMirrorTests {
         #expect(root.renderObject === renderRoot)
         #expect(graph.renderTree.objectCount >= 1)
         #expect(renderRoot?.isLayerRoot == true) // root always
-    }
+    } }
 
     @Test("Plain primitive without clip/opacity/shadow is not a layer root")
-    func nonLayerLeafIsNotALayerRoot() {
+    func nonLayerLeafIsNotALayerRoot() { GlobalTestLock.locked {
         struct Wrapper: View {
             var body: some View {
                 _LayerNode { _ in }
@@ -56,10 +56,10 @@ struct RenderTreeMirrorTests {
         let leaf = tree.root!.children.first!.children.first!
         let leafObj = graph.renderTree.renderObject(for: leaf)!
         #expect(leafObj.isLayerRoot == false)
-    }
+    } }
 
     @Test("clipsToBounds promotes a node to layer root")
-    func clipPromotesToLayerRoot() {
+    func clipPromotesToLayerRoot() { GlobalTestLock.locked {
         struct Wrapper: View {
             var body: some View {
                 _LayerNode { node in node.clipsToBounds = true }
@@ -71,10 +71,10 @@ struct RenderTreeMirrorTests {
         let leaf = tree.root!.children.first!.children.first!
         let obj = graph.renderTree.renderObject(for: leaf)!
         #expect(obj.isLayerRoot == true)
-    }
+    } }
 
     @Test("Sub-1.0 opacity promotes a node to layer root")
-    func opacityPromotesToLayerRoot() {
+    func opacityPromotesToLayerRoot() { GlobalTestLock.locked {
         struct Wrapper: View {
             var body: some View {
                 _LayerNode { node in node.opacity = 0.5 }
@@ -86,10 +86,10 @@ struct RenderTreeMirrorTests {
         let leaf = tree.root!.children.first!.children.first!
         let obj = graph.renderTree.renderObject(for: leaf)!
         #expect(obj.isLayerRoot == true)
-    }
+    } }
 
     @Test("Reconcile keeps RenderObjects for reused children")
-    func reconcileReusesRenderObjects() {
+    func reconcileReusesRenderObjects() { GlobalTestLock.locked {
         struct Initial: View {
             var body: some View {
                 _LayerNode { _ in }.id("a")
@@ -122,10 +122,10 @@ struct RenderTreeMirrorTests {
         #expect(mirror.children.count == 2)
         #expect(mirror.children[0] === renderB)
         #expect(mirror.children[1] === renderA)
-    }
+    } }
 
     @Test("Tearing down a node drops its mirror")
-    func tearDownClearsMirror() {
+    func tearDownClearsMirror() { GlobalTestLock.locked {
         struct Initial: View {
             var body: some View {
                 _LayerNode { _ in }.id("a")
@@ -151,10 +151,10 @@ struct RenderTreeMirrorTests {
         #expect(graph.renderTree.renderObject(for: bNode) == nil)
         let mirror = graph.renderTree.renderObject(for: anchor)!
         #expect(mirror.children.count == 1)
-    }
+    } }
 
     @Test("LayerInventory enumerates root + clipped descendants")
-    func layerInventoryEnumeratesLayerRoots() {
+    func layerInventoryEnumeratesLayerRoots() { GlobalTestLock.locked {
         struct Wrapper: View {
             var body: some View {
                 _LayerNode { _ in }                                           // not layer
@@ -170,5 +170,5 @@ struct RenderTreeMirrorTests {
         // Root is always one layer; plus the two promoted children.
         #expect(layers.count == 3)
         #expect(layers.first === graph.renderTree.root)
-    }
+    } }
 }

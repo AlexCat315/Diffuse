@@ -28,7 +28,7 @@ struct MarkerModifier: ViewModifier {
 struct ViewGraphTests {
 
     @Test("Install a single primitive view creates one child node")
-    func installSingle() {
+    func installSingle() { GlobalTestLock.locked {
         let tree = NodeTree()
         let recomp = Recomposer()
         let graph = ViewGraph(tree: tree, recomposer: recomp)
@@ -38,10 +38,10 @@ struct ViewGraphTests {
         // root → DebugNode
         #expect(tree.root?.children.count == 1)
         #expect(tree.root?.children.first?.frame.origin.x == 2)
-    }
+    } }
 
     @Test("TupleView expands into multiple sibling nodes")
-    func installTuple() {
+    func installTuple() { GlobalTestLock.locked {
         struct Three: View {
             var body: some View {
                 _DebugNode(label: "a")
@@ -57,10 +57,10 @@ struct ViewGraphTests {
         let anchor = tree.root?.children.first
         #expect(anchor?.children.count == 3)
         #expect(anchor?.children.map { Int($0.frame.origin.x) } == [1, 2, 3])
-    }
+    } }
 
     @Test("ModifiedContent.apply mutates the materialised node")
-    func modifiedContent() {
+    func modifiedContent() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         let view = _DebugNode(label: "x").modifier(MarkerModifier(value: 42))
@@ -68,10 +68,10 @@ struct ViewGraphTests {
 
         let n = tree.root?.children.first
         #expect(n?.frame.origin.y == 42)
-    }
+    } }
 
     @Test("Multiple modifiers stack in declaration order")
-    func modifierStack() {
+    func modifierStack() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         let view = _DebugNode(label: "x")
@@ -82,7 +82,7 @@ struct ViewGraphTests {
         let n = tree.root?.children.first
         #expect(n?.frame.origin.y == 10)
         #expect(n?.isHitTestable == false)
-    }
+    } }
 
     struct TransparentAnchorLeaf: View {
         let name: String
@@ -110,7 +110,7 @@ struct ViewGraphTests {
     }
 
     @Test("Reconcile reorders layout nodes produced by transparent user-view anchors")
-    func transparentAnchorLayoutReorder() {
+    func transparentAnchorLayoutReorder() { GlobalTestLock.locked {
         let tree = NodeTree()
         let recomp = Recomposer()
         let graph = ViewGraph(tree: tree, recomposer: recomp)
@@ -129,7 +129,7 @@ struct ViewGraphTests {
         stable = graph.layoutSnapshot().first { $0.debugName == "stable" }
         #expect(leading?.absoluteFrame.minX == 0)
         #expect(stable?.absoluteFrame.minX == 40)
-    }
+    } }
 }
 
 @Suite("State + Recomposer wiring")
@@ -155,7 +155,7 @@ struct StateWiringTests {
     }
 
     @Test("State write through binding triggers recompose on next commitAll")
-    func stateTriggersRecompose() {
+    func stateTriggersRecompose() { GlobalTestLock.locked {
         let tree = NodeTree()
         let recomp = Recomposer()
         let graph = ViewGraph(tree: tree, recomposer: recomp)
@@ -178,10 +178,10 @@ struct StateWiringTests {
         // DebugNode whose label is "xxx" (length 3).
         #expect(anchor?.children.count == 1)
         #expect(anchor?.children.first?.frame.origin.x == 3)
-    }
+    } }
 
     @Test("Multiple state writes within one frame collapse into a single recompose")
-    func deduplication() {
+    func deduplication() { GlobalTestLock.locked {
         let tree = NodeTree()
         let recomp = Recomposer()
         let graph = ViewGraph(tree: tree, recomposer: recomp)
@@ -196,10 +196,10 @@ struct StateWiringTests {
 
         let anchor = tree.root?.children.first
         #expect(anchor?.children.first?.frame.origin.x == 5)
-    }
+    } }
 
     @Test("computeLayoutIfNeeded skips stable frames and reruns after layout changes")
-    func computeLayoutIfNeededGate() {
+    func computeLayoutIfNeededGate() { GlobalTestLock.locked {
         let tree = NodeTree()
         let recomp = Recomposer()
         let graph = ViewGraph(tree: tree, recomposer: recomp)
@@ -215,7 +215,7 @@ struct StateWiringTests {
         #expect(graph.layoutNeedsUpdate(width: 200, height: 200))
         #expect(graph.computeLayoutIfNeeded(width: 200, height: 200))
         #expect(!graph.computeLayoutIfNeeded(width: 200, height: 200))
-    }
+    } }
 }
 
 // MARK: - Phase 6.6 reconcile
@@ -245,7 +245,7 @@ struct ReconcileTests {
     }
 
     @Test("Same-shape recompose reuses the existing Node and its attachments")
-    func reuseSameShape() {
+    func reuseSameShape() { GlobalTestLock.locked {
         let tree = NodeTree()
         let recomp = Recomposer()
         let graph = ViewGraph(tree: tree, recomposer: recomp)
@@ -265,7 +265,7 @@ struct ReconcileTests {
         #expect(afterChild?.frame.origin.x == 7)
         #expect(afterChild?.attachments["__count"] as? Int == 2)
         #expect(afterChild.map { ObjectIdentifier($0) } == identityBefore)
-    }
+    } }
 
     /// Tag mismatch at index 0 → child is torn down and a fresh one built.
     struct SwapHarness: View {
@@ -280,7 +280,7 @@ struct ReconcileTests {
     }
 
     @Test("Tag mismatch tears down the old Node and rebuilds")
-    func teardownOnMismatch() {
+    func teardownOnMismatch() { GlobalTestLock.locked {
         let tree = NodeTree()
         let recomp = Recomposer()
         let graph = ViewGraph(tree: tree, recomposer: recomp)
@@ -300,12 +300,12 @@ struct ReconcileTests {
         #expect(after?.frame.origin.x == 100)
         #expect(after?.attachments["__count"] as? Int == 1)
         #expect(after.map { ObjectIdentifier($0) } != firstIdentity)
-    }
+    } }
 
     /// Primitive Node `attachments` survive across recompose — proves the
     /// design used for TextField's FieldState.
     @Test("Node.attachments survive a same-shape recompose")
-    func attachmentsPersist() {
+    func attachmentsPersist() { GlobalTestLock.locked {
         let tree = NodeTree()
         let recomp = Recomposer()
         let graph = ViewGraph(tree: tree, recomposer: recomp)
@@ -319,7 +319,7 @@ struct ReconcileTests {
         recomp.commitAll()
 
         #expect(anchor?.children.first?.attachments["__user"] as? String == "preserved")
-    }
+    } }
 
     /// Modifier values change across recomposes — modifier is re-applied to
     /// the same Node.
@@ -331,7 +331,7 @@ struct ReconcileTests {
     }
 
     @Test("Modifier re-applies to the reused Node when its value changes")
-    func modifierReapply() {
+    func modifierReapply() { GlobalTestLock.locked {
         let tree = NodeTree()
         let recomp = Recomposer()
         let graph = ViewGraph(tree: tree, recomposer: recomp)
@@ -347,5 +347,5 @@ struct ReconcileTests {
 
         #expect(anchor?.children.first?.frame.origin.y == 99)
         #expect(anchor?.children.first.map { ObjectIdentifier($0) } == identity)
-    }
+    } }
 }

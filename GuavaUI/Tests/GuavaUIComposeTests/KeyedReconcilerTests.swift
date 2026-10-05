@@ -38,15 +38,15 @@ struct KeyedReconcilerTests {
     }
 
     @Test(".id(_:) stamps the key onto the produced node")
-    func idStampsKey() {
+    func idStampsKey() { GlobalTestLock.locked {
         let (tree, _) = install(_TaggedNode(payload: "a").id("first"))
         let n = tree.root?.children.first
         #expect(n?.key == AnyHashable("first"))
         #expect(n?.viewTag?.contains("_TaggedNode") == true)
-    }
+    } }
 
     @Test("Keyed children survive reorder with state intact")
-    func keyedReorderPreservesState() {
+    func keyedReorderPreservesState() { GlobalTestLock.locked {
         struct Initial: View {
             var body: some View {
                 _TaggedNode(payload: "A").id("a")
@@ -83,10 +83,10 @@ struct KeyedReconcilerTests {
         #expect(originalA.attachments["_initial"] as? String == "A")
         #expect(originalB.attachments["_initial"] as? String == "B")
         #expect(originalC.attachments["_initial"] as? String == "C")
-    }
+    } }
 
     @Test("Unkeyed siblings still match by sequential type position")
-    func unkeyedSequentialMatching() {
+    func unkeyedSequentialMatching() { GlobalTestLock.locked {
         struct Initial: View {
             var body: some View {
                 _TaggedNode(payload: "A")
@@ -116,10 +116,10 @@ struct KeyedReconcilerTests {
         // Same identity, but `_latest` updated to the new payload.
         #expect(originalA.attachments["_latest"] as? String == "A2")
         #expect(originalB.attachments["_latest"] as? String == "B2")
-    }
+    } }
 
     @Test("Removed keyed siblings are torn down; remaining ones survive")
-    func teardownDropsRemovedKeyedChildren() {
+    func teardownDropsRemovedKeyedChildren() { GlobalTestLock.locked {
         struct Initial: View {
             var body: some View {
                 _TaggedNode(payload: "A").id("a")
@@ -148,10 +148,10 @@ struct KeyedReconcilerTests {
         #expect(anchor.children.count == 2)
         #expect(anchor.children[0] === originalA)
         #expect(anchor.children[1] === originalC)
-    }
+    } }
 
     @Test("Adding a new keyed sibling materialises a fresh node")
-    func insertNewKeyedSibling() {
+    func insertNewKeyedSibling() { GlobalTestLock.locked {
         struct Initial: View {
             var body: some View {
                 _TaggedNode(payload: "A").id("a")
@@ -182,17 +182,17 @@ struct KeyedReconcilerTests {
         #expect(anchor.children[1] !== originalA && anchor.children[1] !== originalB)
         #expect(anchor.children[1].key == AnyHashable("x"))
         #expect(anchor.children[2] === originalB)
-    }
+    } }
 
     @Test("ElementID is unique per Node instance")
-    func elementIDUniqueness() {
+    func elementIDUniqueness() { GlobalTestLock.locked {
         let a = Node()
         let b = Node()
         #expect(a.id != b.id)
-    }
+    } }
 
     @Test("Keys before ordinary modifiers survive updates and reorder")
-    func modifiedKeysPreserveNodes() {
+    func modifiedKeysPreserveNodes() { GlobalTestLock.locked {
         let (tree, graph) = install(_TaggedNode(payload: "A").id("a").frame(height: 30).flex())
         let parent = tree.root!
         let originalA = parent.children[0]
@@ -206,10 +206,10 @@ struct KeyedReconcilerTests {
         #expect(parent.children[1] === originalA)
         #expect(originalA.attachments["_initial"] as? String == "A")
         #expect(originalA.attachments["_latest"] as? String == "A2")
-    }
+    } }
 
     @Test("Outermost key wins on materialisation and repeated updates")
-    func outerKeySurvivesUpdates() {
+    func outerKeySurvivesUpdates() { GlobalTestLock.locked {
         let view = _TaggedNode(payload: "A").id("inner").frame(height: 30).id("outer")
         let (tree, graph) = install(view)
         let original = tree.root!.children[0]
@@ -218,10 +218,10 @@ struct KeyedReconcilerTests {
             #expect(tree.root!.children[0] === original)
             #expect(original.key == AnyHashable("outer"))
         }
-    }
+    } }
 
     @Test("Scope and animation anchors keep child keys local")
-    func anchorKeysRemainLocal() {
+    func anchorKeysRemainLocal() { GlobalTestLock.locked {
         let scoped = _TaggedNode(payload: "A").id("child").theme(.defaultDark).frame(height: 30)
         let animated = _TaggedNode(payload: "A").id("child").animation(nil, value: 0).frame(height: 30)
         let views: [any View] = [scoped, animated]
@@ -236,5 +236,5 @@ struct KeyedReconcilerTests {
             #expect(tree.root!.children[0] === original)
             #expect(original.children[0].key == AnyHashable("child"))
         }
-    }
+    } }
 }

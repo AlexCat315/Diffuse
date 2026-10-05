@@ -11,7 +11,7 @@ import GuavaUIRuntime
 struct PrimitiveLayoutTests {
 
     @Test("Box(direction: row) lays children horizontally")
-    func boxRow() {
+    func boxRow() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
@@ -29,10 +29,10 @@ struct PrimitiveLayoutTests {
         #expect(kids.count == 2)
         #expect(kids[0].frame == CGRect(x: 0,  y: 0, width: 50, height: 30))
         #expect(kids[1].frame == CGRect(x: 50, y: 0, width: 70, height: 40))
-    }
+    } }
 
     @Test("Column stacks vertically")
-    func column() {
+    func column() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
@@ -49,10 +49,10 @@ struct PrimitiveLayoutTests {
         #expect(kids[0].frame.origin.y == 0)
         #expect(kids[1].frame.origin.y == 20)
         #expect(kids[2].frame.origin.y == 50)
-    }
+    } }
 
     @Test("Spacer absorbs remaining space in a Row")
-    func spacerInRow() {
+    func spacerInRow() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
@@ -68,10 +68,10 @@ struct PrimitiveLayoutTests {
         #expect(kids.count == 3)
         #expect(kids[0].frame.origin.x == 0)
         #expect(kids[2].frame.origin.x == 160)  // 200 - 40
-    }
+    } }
 
     @Test("Box alignment convenience maps center-bottom for columns")
-    func boxAlignmentColumnMapping() {
+    func boxAlignmentColumnMapping() { GlobalTestLock.locked {
         let layout = LayoutNode()
         let box = Box(direction: .column, alignment: .bottom) {
             EmptyView()
@@ -82,10 +82,10 @@ struct PrimitiveLayoutTests {
         #expect(layout.flexDirection == .column)
         #expect(layout.alignItems == .center)
         #expect(layout.justifyContent == .flexEnd)
-    }
+    } }
 
     @Test("Box alignment convenience respects reverse row directions")
-    func boxAlignmentRowReverseMapping() {
+    func boxAlignmentRowReverseMapping() { GlobalTestLock.locked {
         let layout = LayoutNode()
         let box = Box(direction: .rowReverse, alignment: .topLeading) {
             EmptyView()
@@ -96,10 +96,10 @@ struct PrimitiveLayoutTests {
         #expect(layout.flexDirection == .rowReverse)
         #expect(layout.alignItems == .flexStart)
         #expect(layout.justifyContent == .flexEnd)
-    }
+    } }
 
     @Test("Padding modifier insets children")
-    func padding() {
+    func padding() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
@@ -118,10 +118,10 @@ struct PrimitiveLayoutTests {
         let inner = outer?.children.first
         #expect(inner?.frame.origin == CGPoint(x: 20, y: 20))
         #expect(inner?.frame.size == CGSize(width: 50, height: 50))
-    }
+    } }
 
     @Test("Background modifier sets node fill")
-    func background() {
+    func background() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
@@ -132,37 +132,37 @@ struct PrimitiveLayoutTests {
         graph.computeLayout(width: 100, height: 100)
         let box = tree.root?.children.first
         #expect(box?.backgroundColor == Color(red: 255, green: 0, blue: 0))
-    }
+    } }
 
     @Test("Opacity modifier sets node opacity")
-    func opacity() {
+    func opacity() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root: Box { EmptyView() }.opacity(0.5))
         let box = tree.root?.children.first
         #expect(box?.opacity == 0.5)
-    }
+    } }
 
     @Test("Clipped sets clipsToBounds")
-    func clipped() {
+    func clipped() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root: Box { EmptyView() }.clipped())
         let box = tree.root?.children.first
         #expect(box?.clipsToBounds == true)
-    }
+    } }
 
     @Test("CornerRadius modifier sets node radius")
-    func cornerRadius() {
+    func cornerRadius() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root: Box { EmptyView() }.cornerRadius(12))
         let box = tree.root?.children.first
         #expect(box?.cornerRadius == 12)
-    }
+    } }
 
     @Test("Image draw uses texture tint and fixed layout size")
-    func imageDrawUsesTintAndOpacity() {
+    func imageDrawUsesTintAndOpacity() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
@@ -186,10 +186,10 @@ struct PrimitiveLayoutTests {
         let alphaByte = (packed >> 24) & 0xFF
         #expect(redByte >= 250)
         #expect(alphaByte >= 126 && alphaByte <= 129)
-    }
+    } }
 
     @Test("Image stretch mode fills container")
-    func imageStretchModeFillsContainer() {
+    func imageStretchModeFillsContainer() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
@@ -212,10 +212,10 @@ struct PrimitiveLayoutTests {
         #expect(xs.max() == 100)
         #expect(ys.min() == 0)
         #expect(ys.max() == 100)
-    }
+    } }
 
     @Test("Image fit mode preserves aspect ratio")
-    func imageFitModePreservesAspectRatio() {
+    func imageFitModePreservesAspectRatio() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
@@ -238,10 +238,10 @@ struct PrimitiveLayoutTests {
         #expect(xs.max() == 100)
         #expect(ys.min() == 25)
         #expect(ys.max() == 75)
-    }
+    } }
 
     @Test("Image fill mode preserves aspect ratio and overdraws")
-    func imageFillModePreservesAspectRatioAndOverdraws() {
+    func imageFillModePreservesAspectRatioAndOverdraws() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
@@ -264,10 +264,10 @@ struct PrimitiveLayoutTests {
         #expect(xs.max() == 150)
         #expect(ys.min() == 0)
         #expect(ys.max() == 100)
-    }
+    } }
 
     @Test("Modifier stack: padding + frame + background")
-    func stack() {
+    func stack() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
@@ -280,5 +280,5 @@ struct PrimitiveLayoutTests {
         let box = tree.root?.children.first
         #expect(box?.frame.size == CGSize(width: 80, height: 80))
         #expect(box?.backgroundColor == Color.white)
-    }
+    } }
 }

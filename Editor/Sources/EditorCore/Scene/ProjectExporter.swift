@@ -489,24 +489,12 @@ public enum ProjectExporter {
         let excludedURLs = excludedDirectories.map {
             $0.resolvingSymlinksInPath().standardizedFileURL
         }
-        let properties: [URLResourceKey] = [.isDirectoryKey, .isRegularFileKey]
-        guard let enumerator = fileManager.enumerator(at: sourceRoot,
-                                                      includingPropertiesForKeys: properties,
-                                                      options: [.skipsHiddenFiles, .skipsPackageDescendants]) else {
-            return
+        let files = try ProjectResourceWalker.files(in: sourceRoot, fileManager: fileManager) { directory in
+            excludedResourceDirectories.contains(directory.lastPathComponent.lowercased())
+                || excludedURLs.contains(where: { pathContains(directory, root: $0) })
         }
-        for case let source as URL in enumerator {
-            let values = try source.resourceValues(forKeys: Set(properties))
-            if values.isDirectory == true {
-                let resolvedURL = source.resolvingSymlinksInPath().standardizedFileURL
-                if excludedResourceDirectories.contains(source.lastPathComponent.lowercased())
-                    || excludedURLs.contains(where: { pathContains(resolvedURL, root: $0) }) {
-                    enumerator.skipDescendants()
-                }
-                continue
-            }
-            guard values.isRegularFile == true,
-                  audioExtensions.contains(source.pathExtension.lowercased()) else { continue }
+        for source in files {
+            guard audioExtensions.contains(source.pathExtension.lowercased()) else { continue }
             let resolvedSource = source.resolvingSymlinksInPath().standardizedFileURL
             guard let relativePath = relativePath(of: resolvedSource, within: sourceRoot) else {
                 continue

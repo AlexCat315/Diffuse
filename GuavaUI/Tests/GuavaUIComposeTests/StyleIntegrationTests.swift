@@ -26,7 +26,7 @@ struct StyleIntegrationTests {
     // MARK: - Divider
 
     @Test("Semantic .background(.divider) resolves against the active appearance")
-    func dividerFollowsTheme() {
+    func dividerFollowsTheme() { GlobalTestLock.locked {
         // Use the SemanticBackgroundModifier path (resolved at apply time)
         // rather than the primitive's `_updateNode`-time fallback.
         let tree = NodeTree()
@@ -38,12 +38,12 @@ struct StyleIntegrationTests {
 
         let hit = allNodes(in: tree).first { $0.backgroundColor == Theme.defaultLight.colors.divider }
         #expect(hit != nil)
-    }
+    } }
 
     // MARK: - Panel
 
     @Test("Panel default style uses theme surface for the body background")
-    func panelBodyUsesThemeSurface() {
+    func panelBodyUsesThemeSurface() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
@@ -57,10 +57,10 @@ struct StyleIntegrationTests {
         let nodes = allNodes(in: tree)
         let surfaceHits = nodes.filter { $0.backgroundColor == Theme.defaultDark.colors.surfaceSunken }
         #expect(!surfaceHits.isEmpty)
-    }
+    } }
 
     @Test("Switching appearance flips Panel chrome from dark to light")
-    func panelFollowsAppearanceFlip() {
+    func panelFollowsAppearanceFlip() { GlobalTestLock.locked {
         // Dark panel: surface should be the dark theme's `surface`.
         let darkTree = NodeTree()
         let darkGraph = ViewGraph(tree: darkTree, recomposer: Recomposer())
@@ -80,12 +80,12 @@ struct StyleIntegrationTests {
         // Sanity: the two themes have different surface colors so the test
         // actually distinguishes them.
         #expect(Theme.defaultDark.colors.surfaceSunken != Theme.defaultLight.colors.surfaceSunken)
-    }
+    } }
 
     // MARK: - List row
 
     @Test("Selected List row paints theme.colors.selection")
-    func listRowSelectionFollowsTheme() {
+    func listRowSelectionFollowsTheme() { GlobalTestLock.locked {
         struct Row: Identifiable { let id: Int; let title: String }
         struct Harness: View {
             let items = [Row(id: 1, title: "A"), Row(id: 2, title: "B")]
@@ -106,12 +106,12 @@ struct StyleIntegrationTests {
         let hits = allNodes(in: tree).filter { $0.backgroundColor == selectedFill }
         // Exactly one row should carry the selected fill.
         #expect(hits.count == 1)
-    }
+    } }
 
     // MARK: - TextField
 
     @Test("TextField default chrome resolves to theme.colors.surfaceSunken")
-    func textFieldUsesThemeChrome() {
+    func textFieldUsesThemeChrome() { GlobalTestLock.locked {
         struct H: View {
             @State var s = ""
             var body: some View {
@@ -127,10 +127,10 @@ struct StyleIntegrationTests {
         let hit = nodes.first { $0.backgroundColor == Theme.defaultDark.colors.surfaceSunken }
         #expect(hit != nil)
         #expect(hit?.cornerRadius == Theme.defaultDark.radius.md)
-    }
+    } }
 
     @Test("TextField chrome flips with appearance")
-    func textFieldFlipsWithAppearance() {
+    func textFieldFlipsWithAppearance() { GlobalTestLock.locked {
         struct H: View {
             @State var s = ""
             let app: Appearance
@@ -151,12 +151,12 @@ struct StyleIntegrationTests {
         lightGraph.computeLayout(width: 200, height: 80)
         let lHit = allNodes(in: lightTree).first { $0.backgroundColor == Theme.defaultLight.colors.surfaceSunken }
         #expect(lHit != nil)
-    }
+    } }
 
     // MARK: - Button
 
     @Test("PrimaryButtonStyle paints theme.colors.accent in resting state")
-    func primaryButtonUsesThemeAccent() {
+    func primaryButtonUsesThemeAccent() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root: Button("Hi") {}.appearance(.light))
@@ -164,10 +164,10 @@ struct StyleIntegrationTests {
 
         let accentHit = allNodes(in: tree).first { $0.backgroundColor == Theme.defaultLight.colors.accent }
         #expect(accentHit != nil)
-    }
+    } }
 
     @Test("DestructiveButtonStyle paints theme.colors.error")
-    func destructiveButtonUsesThemeError() {
+    func destructiveButtonUsesThemeError() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
@@ -179,12 +179,12 @@ struct StyleIntegrationTests {
 
         let errorHit = allNodes(in: tree).first { $0.backgroundColor == Theme.defaultDark.colors.error }
         #expect(errorHit != nil)
-    }
+    } }
 
     // MARK: - Mixed scope
 
     @Test("Inner .appearance overrides outer for nested Panels")
-    func nestedAppearanceOverride() {
+    func nestedAppearanceOverride() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
@@ -205,5 +205,5 @@ struct StyleIntegrationTests {
         // dark, inner panel uses light.
         #expect(nodes.contains { $0.backgroundColor == darkSurface })
         #expect(nodes.contains { $0.backgroundColor == lightSurface })
-    }
+    } }
 }

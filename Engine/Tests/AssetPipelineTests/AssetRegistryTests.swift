@@ -1,4 +1,4 @@
-import AssetPipeline
+﻿import AssetPipeline
 import Foundation
 import Testing
 
@@ -54,7 +54,7 @@ struct AssetRegistryTests {
         #expect(registry.entry(for: entries[0].id) == entries[0])
         #expect(registry.meshAsset(for: entries[0].meshIndex)?.name == "triangle.gltf")
         #expect(registry.registeredMeshes().map(\ .meshIndex) == [AssetRegistry.importedMeshStartIndex])
-        #expect(registry.registeredMeshes().first?.sourceDirectory == meshesDir.path)
+        #expect(registry.registeredMeshes().first?.sourceDirectory == meshesDir.resolvingSymlinksInPath().path)
         #expect(entries[1].kind == .png)
         #expect(entries[1].kind.sceneKindLabel == "Texture")
         #expect(entries[1].kind.isTexture)
@@ -95,10 +95,10 @@ struct AssetRegistryTests {
         try writeTriangleGLTF(into: secondMeshes)
 
         _ = try registry.loadProject(at: parent.appendingPathComponent("First").path)
-        #expect(registry.registeredMeshes().first?.sourceDirectory == firstMeshes.path)
+        #expect(registry.registeredMeshes().first?.sourceDirectory == firstMeshes.resolvingSymlinksInPath().path)
 
         _ = try registry.loadProject(at: parent.appendingPathComponent("Second").path)
-        #expect(registry.registeredMeshes().first?.sourceDirectory == secondMeshes.path)
+        #expect(registry.registeredMeshes().first?.sourceDirectory == secondMeshes.resolvingSymlinksInPath().path)
     }
 
     @Test("build directory matching is case-insensitive")
