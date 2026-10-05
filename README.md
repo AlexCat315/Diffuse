@@ -17,7 +17,7 @@
   - Linux: GCC 或 Clang
   - Windows: Visual Studio 2026 (C++ workload)
 - Rust 1.99.0 / Cargo
-- Python 3.14
+- Python 3.14.8
 - Node.js 26.10.0 / npm （官网）
 - Git
 
