@@ -285,7 +285,7 @@ private func processMemoryCounters() -> PROCESS_MEMORY_COUNTERS? {
     var counters = PROCESS_MEMORY_COUNTERS()
     let size = DWORD(MemoryLayout<PROCESS_MEMORY_COUNTERS>.size)
     counters.cb = size
-    guard K32GetProcessMemoryInfo(GetCurrentProcess(), &counters, size) != 0 else { return nil }
+    guard K32GetProcessMemoryInfo(GetCurrentProcess(), &counters, size) else { return nil }
     return counters
 }
 #endif

@@ -285,9 +285,20 @@ jobs:
           }
 
           $swiftBin = Split-Path (Get-Command swift.exe).Source
-          Get-ChildItem $swiftBin -File -Filter "*.dll" |
-            Where-Object { $_.Name -match "^(swift|BlocksRuntime|dispatch|Foundation|CoreFoundation|_Foundation|XCTest|icu|libxml2|curl|zlib|vcruntime|msvcp|concrt)" } |
-            ForEach-Object { Copy-Item $_.FullName $packageDir -Force -ErrorAction SilentlyContinue }
+          # Swift installs runtime DLLs separately from its compiler. Follow
+          # the runner's DLL search order and keep the first copy of each DLL.
+          $runtimePaths = @($env:PATH -split ";") + @($swiftBin)
+          foreach ($runtimePath in ($runtimePaths | Select-Object -Unique)) {
+            if ([string]::IsNullOrWhiteSpace($runtimePath)) { continue }
+            if (-not (Test-Path $runtimePath -PathType Container)) { continue }
+            Get-ChildItem $runtimePath -File -Filter "*.dll" |
+              Where-Object { $_.Name -match "^(swift|BlocksRuntime|dispatch|Foundation|CoreFoundation|_Foundation|XCTest|icu|libxml2|curl|zlib|vcruntime|msvcp|concrt)" } |
+              ForEach-Object {
+                if (-not (Test-Path (Join-Path $packageDir $_.Name))) {
+                  Copy-Item $_.FullName $packageDir
+                }
+              }
+          }
 
           # Windows resolves DLLs beside each executable. Helpers live one
           # directory below the main runtime, so give them the same dependency
