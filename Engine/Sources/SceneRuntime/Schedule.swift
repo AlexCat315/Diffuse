@@ -1904,7 +1904,8 @@ public struct RuntimeWorldSchedule {
                 entity: entity,
                 instance: RenderInstance(
                     mesh: RenderMeshHandle(meshIndex: renderMesh.meshIndex,
-                                           assetID: renderMesh.assetID ?? view.assetReferences[entity]?.assetID),
+                                           assetID: renderMesh.assetID ?? view.assetReferences[entity]?.assetID,
+                                           levelsOfDetail: renderMesh.levelsOfDetail),
                     // Jolt streams soft-body vertices in world space. Drawing
                     // them with the authored ECS transform would apply it twice.
                     transform: deformableEntities.contains(entity)

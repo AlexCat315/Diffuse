@@ -81,6 +81,12 @@ public struct GPUParticleSimulationEventSnapshot: Sendable, Equatable {
 }
 
 public struct RenderFrameStats: Sendable {
+    public var visibleMeshInstanceCount: Int = 0
+    public var culledMeshInstanceCount: Int = 0
+    public var lodMeshInstanceCount: Int = 0
+    public var meshBatchCount: Int = 0
+    public var instancedMeshBatchCount: Int = 0
+    public var submittedMeshTriangleCount: Int = 0
     public var frameIndex: Int
     public var passCount: Int
     public var drawCallCount: Int

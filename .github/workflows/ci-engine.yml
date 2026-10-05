@@ -117,7 +117,8 @@ jobs:
         # Run the package as a whole so every current and future test target is
         # exercised. Real GPU and host Vision smoke cases remain opt-in via
         # GUAVA_RUN_GPU_SMOKE_TESTS / GUAVA_RUN_VISION_SMOKE_TESTS and are
-        # skipped on ordinary CI runners.
+        # skipped on ordinary CI runners. Dedicated Metal regressions run in
+        # ci-gpu.yml once GUAVA_GPU_CI_ENABLED and its runner are configured.
         run: swift test
 
       - name: Run M7 destruction performance gates

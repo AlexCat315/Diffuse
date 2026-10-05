@@ -2,6 +2,7 @@ struct Uniforms {
     mvp : mat4x4<f32>,
     model : mat4x4<f32>,
     color_tint : vec4<f32>,
+    material : vec4<f32>, // mode, cutoff, double-sided, use instance storage
 };
 
 struct StylizedStyle {
@@ -30,6 +31,13 @@ struct SceneLights {
 @group(0) @binding(3) var base_color_texture : texture_2d<f32>;
 @group(0) @binding(4) var<uniform> scene_lights : SceneLights;
 @group(0) @binding(8) var<storage, read> joint_palette : array<mat4x4<f32>>;
+@group(0) @binding(12) var<storage, read> mesh_instances : array<Uniforms>;
+
+fn instance_uniform(index : u32) -> Uniforms {
+    if u.material.w > 0.5 { return mesh_instances[index]; }
+    return u;
+}
+
 @group(0) @binding(9) var normal_map_texture : texture_2d<f32>;
 
 struct VsIn {
@@ -55,18 +63,19 @@ struct VsOut {
 };
 
 @vertex
-fn vs_main(in : VsIn) -> VsOut {
+fn vs_main(in : VsIn, @builtin(instance_index) instance_index : u32) -> VsOut {
+    let draw = instance_uniform(instance_index);
     var out : VsOut;
     let skin    = skin_matrix(in.joints, in.weights);
     let local   = skin * vec4<f32>(in.pos, 1.0);
-    let world   = u.model * local;
-    let normal  = u.model * (skin * vec4<f32>(in.normal, 0.0));
-    let tangent = u.model * (skin * vec4<f32>(in.tangent.xyz, 0.0));
+    let world   = draw.model * local;
+    let normal  = draw.model * (skin * vec4<f32>(in.normal, 0.0));
+    let tangent = draw.model * (skin * vec4<f32>(in.tangent.xyz, 0.0));
     let N = safe_normalize(normal.xyz);
     let T = safe_normalize(tangent.xyz);
     let B = cross(N, T) * in.tangent.w;
-    out.position   = u.mvp * local;
-    out.color      = in.color;
+    out.position   = draw.mvp * local;
+    out.color      = in.color * draw.color_tint.rgb;
     out.normal     = N;
     out.uv         = in.uv;
     out.material_index = in.material_index;
@@ -168,12 +177,17 @@ fn scene_lambert(normal : vec3<f32>, world_pos : vec3<f32>) -> f32 {
 }
 
 @fragment
-fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
+fn fs_main(in : VsOut, @builtin(front_facing) front_facing : bool) -> @location(0) vec4<f32> {
+    let coverage = textureSample(base_color_texture, base_color_sampler, in.uv).a * u.color_tint.a;
+    let front = front_facing;
+    if !front && u.material.z < 0.5 { discard; }
+    if u.material.x > 0.5 && u.material.x < 1.5 && coverage < u.material.y { discard; }
+    let alpha = select(1.0, coverage, u.material.x > 1.5);
     let nm_sample  = textureSample(normal_map_texture, base_color_sampler, in.uv).rgb;
     let tangent_n  = nm_sample * 2.0 - 1.0;
-    let N = safe_normalize(in.normal);
-    let T = safe_normalize(in.tangent);
-    let B = safe_normalize(in.bitangent);
+    let N = safe_normalize(in.normal) * select(-1.0, 1.0, front);
+    let T = safe_normalize(in.tangent) * select(-1.0, 1.0, front);
+    let B = safe_normalize(in.bitangent) * select(-1.0, 1.0, front);
     let normal = safe_normalize(mat3x3<f32>(T, B, N) * tangent_n);
     let lambert = scene_lambert(normal, in.world_pos);
     let ramp = toon_ramp(lambert);
@@ -184,5 +198,5 @@ fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
     let texel = textureSample(base_color_texture, base_color_sampler, in.uv).rgb;
     let base = mix(ink_wash, in.color * texel, 0.78);
     let shaded = base * (0.28 + ramp * 0.92 + rim * style.params.y + material_bias + grain);
-    return vec4<f32>(shaded, 1.0);
+    return vec4<f32>(shaded, alpha);
 }
