@@ -270,7 +270,7 @@ jobs:
 
           $swiftBin = Split-Path (Get-Command swift.exe).Source
           Get-ChildItem $swiftBin -File -Filter "*.dll" |
-            Where-Object { $_.Name -match "^(swift|BlocksRuntime|dispatch|Foundation|FoundationXML|XCTest|icu|libxml2|curl|zlib)" } |
+            Where-Object { $_.Name -match "^(swift|BlocksRuntime|dispatch|Foundation|CoreFoundation|_Foundation|XCTest|icu|libxml2|curl|zlib|vcruntime|msvcp|concrt)" } |
             ForEach-Object { Copy-Item $_.FullName $packageDir -Force -ErrorAction SilentlyContinue }
 
           # Windows resolves DLLs beside each executable. Helpers live one
@@ -279,13 +279,15 @@ jobs:
           Get-ChildItem $packageDir -File -Filter "*.dll" |
             ForEach-Object { Copy-Item $_.FullName (Join-Path $packageDir "Tools") -Force }
 
-          & (Join-Path $packageDir "EditorApp.exe") --validate-install
-          if ($LASTEXITCODE -ne 0) { throw "Packaged EditorApp validation failed" }
-          & (Join-Path $packageDir "GuavaPlayer.exe") --validate-install
-          if ($LASTEXITCODE -ne 0) { throw "Packaged GuavaPlayer validation failed" }
-
+          $buildPath = $env:PATH
           $emptyInput = New-TemporaryFile
           try {
+            # Keep the build toolchain out of DLL lookup during package checks.
+            $env:PATH = "$packageDir;$env:SystemRoot\System32;$env:SystemRoot"
+            & (Join-Path $packageDir "EditorApp.exe") --validate-install
+            if ($LASTEXITCODE -ne 0) { throw "Packaged EditorApp validation failed" }
+            & (Join-Path $packageDir "GuavaPlayer.exe") --validate-install
+            if ($LASTEXITCODE -ne 0) { throw "Packaged GuavaPlayer validation failed" }
             foreach ($helper in @("GuavaPluginHost.exe", "GuavaMCP.exe")) {
               $helperPath = Join-Path (Join-Path $packageDir "Tools") $helper
               $process = Start-Process -FilePath $helperPath -RedirectStandardInput $emptyInput.FullName -NoNewWindow -Wait -PassThru
@@ -294,6 +296,7 @@ jobs:
               }
             }
           } finally {
+            $env:PATH = $buildPath
             Remove-Item $emptyInput -Force
           }
 
@@ -426,6 +429,8 @@ jobs:
           EOF
           chmod +x "$package_dir/run-editor.sh"
 
+          # Resolve Swift libraries from this package during validation.
+          export LD_LIBRARY_PATH="$package_dir/Lib"
           if ldd "$package_dir/EditorApp" "$package_dir/GuavaPlayer" \
             "$package_dir/Tools/GuavaPluginHost" "$package_dir/Tools/GuavaMCP" \
             | grep -q 'not found'; then
