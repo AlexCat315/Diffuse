@@ -93,49 +93,57 @@ extension EditorSceneAdapter {
 
     // MARK: - Picking
 
-    /// 把视口光标坐标投成世界射线，对所有有渲染实例的实体做 OBB 命中测试：
-    /// 取最近命中。OBB 用「unit cube ([-1,1]^3) × 实例 world transform」近似，
-    /// 与渲染端 mesh 归一化保持一致；不依赖 collider，纯渲染网格也能选中。
-    /// 若没有命中渲染实例，再回退到 collider raycast 兜底（带 collider 的隐藏体）。
+    /// Picks the nearest actual mesh surface. Collider fallback is restricted
+    /// to entities without a rendered mesh, so a surface miss stays a miss.
     public func pickEntity(cursorX: Float,
                            cursorY: Float,
                            in frame: ViewportScreenFrame) -> UInt64? {
-        guard let ray = viewportRay(cursorX: cursorX, cursorY: cursorY, in: frame) else {
-            return nil
-        }
-        if let hit = pickRenderedEntity(ray: ray) {
-            return hit
-        }
-        let query = SceneRaycastQuery(origin: ray.origin,
-                                      direction: ray.direction,
-                                      maxDistance: 10_000,
-                                      includeTriggers: true)
-        return scene.raycast(query)?.entity.rawValue
+        guard let ray = viewportRay(cursorX: cursorX, cursorY: cursorY, in: frame) else { return nil }
+        if let hit = pickRenderedEntity(ray: ray) { return hit }
+        return scene.physicsRaycast(
+            PhysicsRaycastQuery(origin: ray.origin, direction: ray.direction, maxDistance: 10_000),
+            filter: PhysicsQueryFilter(ignoredEntities: Set(scene.extractedRenderScene?.instanceEntities ?? []),
+                                       includeTriggers: true))?.entity.rawValue
     }
 
     private func pickRenderedEntity(ray: ViewportRay) -> UInt64? {
         guard let extracted = scene.extractedRenderScene else { return nil }
-        var bestT: Float = .greatestFiniteMagnitude
-        var bestEntity: EntityID?
-        for (idx, entity) in extracted.instanceEntities.enumerated() {
-            let inst = extracted.scene.instances[idx]
-            let local = MeshBoundsRegistry.shared.bounds(for: inst.meshIndex)
-                       ?? (min: SIMD3<Float>(-0.5, -0.5, -0.5),
-                           max: SIMD3<Float>(0.5, 0.5, 0.5))
-            let aabb = worldAABB(forLocalMin: local.min,
-                                 localMax: local.max,
-                                 transformedBy: inst.transform)
-            if let t = rayAABBIntersect(origin: ray.origin,
-                                        direction: ray.direction,
-                                        aabbMin: aabb.min,
-                                        aabbMax: aabb.max),
-               t > 0, t < bestT
-            {
-                bestT = t
-                bestEntity = entity
+        let palettes = currentJointPaletteMap()
+        let deformables = Dictionary(extracted.scene.deformableMeshes.map { ($0.entity, $0) }, uniquingKeysWith: { first, _ in first })
+        var nearest: Float = 10_000
+        var selected: EntityID?
+        for (index, entity) in extracted.instanceEntities.enumerated() {
+            let instance = extracted.scene.instances[index]
+            let surface: MeshPickingSurface?
+            let transform: simd_float4x4
+            if let deformable = deformables[entity], deformable.isValid {
+                surface = MeshPickingSurface(positions: deformable.positions, indices: deformable.triangleIndices)
+                transform = matrix_identity_float4x4
+            } else {
+                let joints = palettes.palette(for: entity)?.matrices ?? []
+                var selectedSurface = MeshPickingRegistry.shared.surface(for: instance.meshIndex, jointMatrices: joints)
+                if joints.isEmpty {
+                    let p = instance.transform.columns.3
+                    let distance = simd_distance(currentRenderCamera().eye, SIMD3<Float>(p.x, p.y, p.z))
+                    for lod in instance.mesh.levelsOfDetail.sorted(by: { $0.minimumDistance < $1.minimumDistance })
+                        where lod.minimumDistance.isFinite && distance >= lod.minimumDistance {
+                        if let simplified = MeshPickingRegistry.shared.surface(for: lod.meshIndex) { selectedSurface = simplified }
+                    }
+                }
+                surface = selectedSurface
+                transform = instance.transform
+            }
+            let determinant = simd_determinant(transform)
+            guard let surface, determinant.isFinite, determinant != 0 else { continue }
+            let inverse = simd_inverse(transform)
+            let origin = inverse * SIMD4<Float>(ray.origin, 1)
+            let direction = inverse * SIMD4<Float>(ray.direction, 0)
+            if let distance = surface.hitDistance(origin: SIMD3<Float>(origin.x, origin.y, origin.z),
+                direction: SIMD3<Float>(direction.x, direction.y, direction.z), maxDistance: nearest) {
+                nearest = distance; selected = entity
             }
         }
-        return bestEntity?.rawValue
+        return selected?.rawValue
     }
 
     /// 返回与屏幕矩形相交的实体集合。用于视口框选。

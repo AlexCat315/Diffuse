@@ -5,15 +5,18 @@ public struct RenderMeshComponent: RuntimeComponent, Sendable, Equatable {
     public var isVisible: Bool
     public var colorTint: SIMD3<Float>
     public var assetID: String?
+    public var levelsOfDetail: [RenderMeshLOD]
 
     public init(meshIndex: Int,
                 isVisible: Bool = true,
                 colorTint: SIMD3<Float> = SIMD3<Float>(1, 1, 1),
-                assetID: String? = nil) {
+                assetID: String? = nil,
+                levelsOfDetail: [RenderMeshLOD] = []) {
         self.meshIndex = meshIndex
         self.isVisible = isVisible
         self.colorTint = colorTint
         self.assetID = assetID
+        self.levelsOfDetail = levelsOfDetail
     }
 }
 
@@ -24,25 +27,37 @@ public struct RenderMaterialComponent: RuntimeComponent, Sendable, Equatable {
     public var metallicFactor: Float
     public var roughnessFactor: Float
     public var emissiveFactor: SIMD3<Float>
+    public var alphaMode: MaterialAlphaMode?
+    public var alphaCutoff: Float?
+    public var doubleSided: Bool?
 
     public init(baseColorFactor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1),
                 baseColorTextureIndex: Int? = nil,
                 normalTextureIndex: Int? = nil,
                 metallicFactor: Float = 0,
                 roughnessFactor: Float = 1,
-                emissiveFactor: SIMD3<Float> = .zero) {
+                emissiveFactor: SIMD3<Float> = .zero,
+                alphaMode: MaterialAlphaMode? = nil,
+                alphaCutoff: Float? = nil,
+                doubleSided: Bool? = nil) {
         let material = RenderMaterial(baseColorFactor: baseColorFactor,
                                       baseColorTextureIndex: baseColorTextureIndex,
                                       normalTextureIndex: normalTextureIndex,
                                       metallicFactor: metallicFactor,
                                       roughnessFactor: roughnessFactor,
-                                      emissiveFactor: emissiveFactor)
+                                      emissiveFactor: emissiveFactor,
+                                      alphaMode: alphaMode,
+                                      alphaCutoff: alphaCutoff,
+                                      doubleSided: doubleSided)
         self.baseColorFactor = material.baseColorFactor
         self.baseColorTextureIndex = material.baseColorTextureIndex
         self.normalTextureIndex = material.normalTextureIndex
         self.metallicFactor = material.metallicFactor
         self.roughnessFactor = material.roughnessFactor
         self.emissiveFactor = material.emissiveFactor
+        self.alphaMode = material.alphaMode
+        self.alphaCutoff = material.alphaCutoff
+        self.doubleSided = material.doubleSided
     }
 
     public var renderMaterial: RenderMaterial {
@@ -51,7 +66,10 @@ public struct RenderMaterialComponent: RuntimeComponent, Sendable, Equatable {
                        normalTextureIndex: normalTextureIndex,
                        metallicFactor: metallicFactor,
                        roughnessFactor: roughnessFactor,
-                       emissiveFactor: emissiveFactor)
+                       emissiveFactor: emissiveFactor,
+                       alphaMode: alphaMode,
+                       alphaCutoff: alphaCutoff,
+                       doubleSided: doubleSided)
     }
 }
 

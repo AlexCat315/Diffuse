@@ -1,17 +1,32 @@
 ﻿import Foundation
 import SIMDCompat
 
-/// Renderer-facing scene description extracted from `SceneRuntime`.
-/// `RenderScene` is the complete data contract handed from SceneRuntime to
-/// RenderBackend: camera, draw instances, lights, material overrides, and the
-/// scene environment for one frame.
+/// glTF-compatible coverage semantics, shared by imported and runtime materials.
+public enum MaterialAlphaMode: String, Codable, Sendable, Equatable, Hashable {
+    case opaque = "OPAQUE"
+    case mask = "MASK"
+    case blend = "BLEND"
+}
+
+/// An authored simplified mesh selected at and beyond a world-space distance.
+public struct RenderMeshLOD: Codable, Sendable, Equatable, Hashable {
+    public var meshIndex: Int
+    public var minimumDistance: Float
+    public init(meshIndex: Int, minimumDistance: Float) {
+        self.meshIndex = meshIndex
+        self.minimumDistance = minimumDistance.isFinite ? max(0, minimumDistance) : 0
+    }
+}
+
 public struct RenderMeshHandle: Sendable, Equatable {
     public var meshIndex: Int
     public var assetID: String?
+    public var levelsOfDetail: [RenderMeshLOD]
 
-    public init(meshIndex: Int, assetID: String? = nil) {
+    public init(meshIndex: Int, assetID: String? = nil, levelsOfDetail: [RenderMeshLOD] = []) {
         self.meshIndex = meshIndex
         self.assetID = assetID
+        self.levelsOfDetail = levelsOfDetail.sorted { $0.minimumDistance < $1.minimumDistance }
     }
 }
 
@@ -22,19 +37,29 @@ public struct RenderMaterial: Sendable, Equatable {
     public var metallicFactor: Float
     public var roughnessFactor: Float
     public var emissiveFactor: SIMD3<Float>
+    /// nil inherits the imported primitive's material.
+    public var alphaMode: MaterialAlphaMode?
+    public var alphaCutoff: Float?
+    public var doubleSided: Bool?
 
     public init(baseColorFactor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1),
                 baseColorTextureIndex: Int? = nil,
                 normalTextureIndex: Int? = nil,
                 metallicFactor: Float = 0,
                 roughnessFactor: Float = 1,
-                emissiveFactor: SIMD3<Float> = .zero) {
+                emissiveFactor: SIMD3<Float> = .zero,
+                alphaMode: MaterialAlphaMode? = nil,
+                alphaCutoff: Float? = nil,
+                doubleSided: Bool? = nil) {
         self.baseColorFactor = baseColorFactor
         self.baseColorTextureIndex = baseColorTextureIndex
         self.normalTextureIndex = normalTextureIndex
         self.metallicFactor = max(0, min(1, metallicFactor))
         self.roughnessFactor = max(0, min(1, roughnessFactor))
         self.emissiveFactor = emissiveFactor
+        self.alphaMode = alphaMode
+        self.alphaCutoff = alphaCutoff.map { $0.isFinite ? max($0, 0) : 0.5 }
+        self.doubleSided = doubleSided
     }
 
     public static let fallback = RenderMaterial()
@@ -97,7 +122,7 @@ public struct RenderEnvironment: Sendable, Equatable {
     public static let fallback = RenderEnvironment()
 }
 
-/// One `RenderInstance` = one draw call. `meshIndex` references a mesh
+/// Compatible instances can share an instanced draw. `meshIndex` references a mesh
 /// previously registered with the renderer's mesh table.
 public struct RenderInstance: Sendable {
     public var entity: EntityID?
@@ -944,6 +969,9 @@ public struct RenderCamera: Sendable, Equatable {
     }
 }
 
+/// Renderer-facing scene description extracted from `SceneRuntime`.
+/// The complete data contract handed to RenderBackend for one frame: camera,
+/// draw instances, lights, material overrides, and the scene environment.
 public struct RenderScene: Sendable {
     public var camera: RenderCamera
     public var instances: [RenderInstance]
