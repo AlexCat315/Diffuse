@@ -326,6 +326,51 @@ struct RenderBackendGPUSmokeTests {
         #expect(hidden == background)
     }
 
+    @Test("editor grid and world axes remain visible at grazing angles and beyond the scene far plane",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the GPU test"),
+          arguments: [RenderCamera(eye: SIMD3<Float>(6, 0.15, 8), far: 20),
+                      RenderCamera(eye: SIMD3<Float>(6000, 5000, 8000)),
+                      RenderCamera(eye: SIMD3<Float>(0, 5000, 0), up: SIMD3<Float>(0, 0, -1),
+                                   projection: .orthographic, orthographicHeight: 4000)])
+    func editorGridUnbounded(camera: RenderCamera) throws {
+        let backend = WGPUBackend(config: WGPUDeviceConfig(validationEnabled: true))
+        try backend.initialize()
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer { renderer = nil; try? backend.shutdown() }
+        let r = try #require(renderer)
+        r.initialize()
+        let width: UInt32 = 384
+        let height: UInt32 = 256
+        var packet = RenderPacket(
+            frameIndex: 0, deltaTime: 1.0 / 60.0,
+            drawableSize: RenderDrawableSize(width: width, height: height),
+            scene: RenderScene(camera: camera, instances: []),
+            sceneSnapshot: SceneRuntimeSnapshot(entityCount: 0, revision: 0),
+            renderSettings: RenderSettings(stage: .r4LightingPBRShadow, enableOffscreenViewport: true),
+            simulationTimeSeconds: 0)
+        r.render(packet: packet)
+        let texture = try #require(r.offscreenColorTexture)
+        let baseline = try readbackBGRA8(texture: texture, width: width, height: height, backend: backend)
+        packet.renderSettings.enableEditorGrid = true
+        packet.frameIndex += 1
+        r.render(packet: packet)
+        let grid = try readbackBGRA8(texture: texture, width: width, height: height, backend: backend)
+        #expect(zip(grid, baseline).count { $0.distance(from: $1) > 12 } > 500)
+        #expect(grid.count { Int($0.r) > Int($0.g) + 30 && Int($0.r) > Int($0.b) + 30 } > 10)
+        #expect(grid.count { Int($0.b) > Int($0.r) + 30 && Int($0.b) > Int($0.g) + 30 } > 10)
+        // Changing the scene's far plane must not reveal a larger grid, move
+        // the reference axes, or produce an abrupt boundary through the view.
+        packet.scene.camera.far = 100_000
+        packet.frameIndex += 1
+        r.render(packet: packet)
+        let extended = try readbackBGRA8(texture: texture, width: width, height: height, backend: backend)
+        #expect(zip(grid, extended).count { $0.distance(from: $1) > 3 } < grid.count / 100)
+        try writeDebugPPMIfRequested(pixels: grid, width: width, height: height,
+            environmentKey: "GUAVA_GRID_SMOKE_OUTPUT",
+            filenameSuffix: camera.projection == .orthographic ? "-distant-ortho"
+                : (camera.eye.y > 100 ? "-distant" : "-grazing"))
+    }
+
     @Test("editor grid is occluded by geometry and absent when looking away from the ground",
           .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the GPU test"),
           arguments: [RenderCamera.Projection.perspective, .orthographic])

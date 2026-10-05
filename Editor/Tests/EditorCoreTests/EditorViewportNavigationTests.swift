@@ -80,6 +80,45 @@ struct EditorViewportNavigationTests {
         #expect(snapped.columns.3.x == 0.75)
     }
 
+    @Test("gizmo keeps its screen size and supports picking and dragging beyond the far plane",
+          arguments: [RenderCamera.Projection.perspective, .orthographic],
+          [Float(5), 500, 50_000])
+    func distantGizmo(projection: RenderCamera.Projection, distance: Float) throws {
+        let camera = RenderCamera(eye: SIMD3<Float>(0, 0, distance), fovYRadians: .pi / 3,
+                                  projection: projection, orthographicHeight: distance)
+        let length = EditorGizmoController.axisLength(camera: camera, position: .zero,
+                                                     viewportHeight: frame.height)
+        let snapshot = EditorGizmoController.Snapshot(mode: .translate, space: .world,
+            camera: camera, frame: frame, entityID: 1, entityWorldPosition: .zero,
+            entityWorldMatrix: matrix_identity_float4x4, entityLocalMatrix: matrix_identity_float4x4,
+            parentWorldMatrix: matrix_identity_float4x4, axisLength: length)
+        let projector = try #require(ScreenProjector(snapshot))
+        let tip = try #require(projector.project(SIMD3<Float>(length, 0, 0)))
+        #expect(abs(tip.x - 496) < 0.01 && abs(tip.y - 300) < 0.01)
+        #expect(projector.project(camera.eye + SIMD3<Float>(0, 0, 1)) == nil)
+        let sceneProjection = try #require(EditorViewportProjection(camera: camera, frame: frame))
+        if distance > camera.far { #expect(sceneProjection.project(.zero) == nil) }
+        let controller = EditorGizmoController()
+        controller.updateSnapshot(snapshot)
+        let drag = try #require(controller.beginDrag(cursorX: tip.x - 4, cursorY: tip.y))
+        #expect(drag.axis == .x)
+        let moved = try #require(controller.updateDrag(cursorX: tip.x + 20, cursorY: tip.y))
+        #expect(abs(moved.columns.3.x / length - 0.25) < 0.001)
+    }
+
+    @Test("gizmo screen size accounts for field of view, viewport height, and off-center pivots",
+          arguments: [Float.pi / 6, .pi / 2], [Float(300), 1200])
+    func gizmoProjectionScale(fov: Float, height: Float) throws {
+        let camera = RenderCamera(eye: SIMD3<Float>(0, 0, 500), fovYRadians: fov)
+        let pivot = SIMD3<Float>(200, 0, 0)
+        let frame = ViewportScreenFrame(x: 40, y: 20, width: 1600, height: height)
+        let p = try #require(EditorViewportProjection(camera: camera, frame: frame))
+        let length = EditorGizmoController.axisLength(camera: camera, position: pivot, viewportHeight: height)
+        let origin = try #require(p.project(pivot, clipToFarPlane: false))
+        let tip = try #require(p.project(pivot + SIMD3<Float>(length, 0, 0), clipToFarPlane: false))
+        #expect(abs(tip.x - origin.x - 96) < 0.01)
+    }
+
     @Test("custom rotation and scale steps preserve the other transform components")
     func rotationAndScaleSteps() {
         let angle: Float = 22 * .pi / 180

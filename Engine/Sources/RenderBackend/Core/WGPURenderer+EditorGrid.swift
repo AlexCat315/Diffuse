@@ -4,10 +4,10 @@ import SceneRuntime
 import SIMDCompat
 
 struct EditorGridUniforms {
-    var inverseViewProjection: simd_float4x4
-    var viewProjection: simd_float4x4
+    var inverseRelativeViewProjection: simd_float4x4
+    var relativeViewProjection: simd_float4x4
     var cameraPosition: SIMD4<Float>
-    /// Used viewport dimensions, minor spacing, distance fade limit.
+    /// Used viewport dimensions, base spacing, reserved.
     var viewport: SIMD4<Float>
     var planeU: SIMD4<Float>
     var planeV: SIMD4<Float>
@@ -60,7 +60,7 @@ extension WGPURenderer {
         colorView: GPUTextureView,
         depthView: GPUTextureView,
         camera: RenderCamera,
-        viewProjection: simd_float4x4,
+        cameraMatrices: RenderCameraMatrices,
         drawableSize: RenderDrawableSize,
         hdr: Bool
     ) throws {
@@ -70,17 +70,18 @@ extension WGPURenderer {
         }
         guard let editorGridUniformBuffer else { return }
         let plane = EditorGridPlane.make(camera: camera)
-        let height = camera.projection == .orthographic
-            ? camera.orthographicHeight : abs(camera.eye.y)
-        let baseSpacing = max(0.001, activeRenderSettings.editorGridSpacing)
-        let spacing = baseSpacing * pow(Float(10), floor(log10(max(height * 0.1 / baseSpacing, 1))))
+        // Unproject relative to the eye: translating a near-plane point back
+        // into a distant world loses the precision needed for stable rays.
+        var rotation = cameraMatrices.view
+        rotation.columns.3 = SIMD4<Float>(0, 0, 0, 1)
+        let relativeViewProjection = cameraMatrices.projection * rotation
         var uniforms = EditorGridUniforms(
-            inverseViewProjection: simd_inverse(viewProjection),
-            viewProjection: viewProjection,
+            inverseRelativeViewProjection: simd_inverse(relativeViewProjection),
+            relativeViewProjection: relativeViewProjection,
             cameraPosition: SIMD4<Float>(camera.eye, 1),
             viewport: SIMD4<Float>(Float(max(drawableSize.width, 1)),
                                    Float(max(drawableSize.height, 1)),
-                                   spacing, max(100, height * 40)),
+                                   max(0.001, activeRenderSettings.editorGridSpacing), 0),
             planeU: SIMD4<Float>(plane.u, plane.uAxis),
             planeV: SIMD4<Float>(plane.v, plane.vAxis)
         )
