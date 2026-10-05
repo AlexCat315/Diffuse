@@ -214,10 +214,10 @@ struct PluginRuntimeTests {
 
     @Test("Wasmtime CLI accepts only the exact pinned release")
     func wasmtimeVersionMatchIsExact() {
-        #expect(WasmtimeCLIComponentRuntime.isPinnedVersionOutput("wasmtime 45.0.0\n"))
-        #expect(WasmtimeCLIComponentRuntime.isPinnedVersionOutput("wasmtime 45.0.0 build-hash"))
-        #expect(!WasmtimeCLIComponentRuntime.isPinnedVersionOutput("wasmtime 145.0.0"))
-        #expect(!WasmtimeCLIComponentRuntime.isPinnedVersionOutput("wasmtime 45.0.0-rc.1"))
+        #expect(WasmtimeCLIComponentRuntime.isPinnedVersionOutput("wasmtime 49.0.2\n"))
+        #expect(WasmtimeCLIComponentRuntime.isPinnedVersionOutput("wasmtime 49.0.2 build-hash"))
+        #expect(!WasmtimeCLIComponentRuntime.isPinnedVersionOutput("wasmtime 149.0.2"))
+        #expect(!WasmtimeCLIComponentRuntime.isPinnedVersionOutput("wasmtime 49.0.2-rc.1"))
     }
 
     @Test("CLI runtime rejects custom host imports until an embedded linker is available")
@@ -239,7 +239,7 @@ struct PluginRuntimeTests {
         let script = """
         #!/bin/sh
         if [ "$1" = "--version" ]; then
-          printf 'wasmtime 45.0.0\\n'
+          printf 'wasmtime 49.0.2\\n'
           exit 0
         fi
         exit 99
@@ -403,7 +403,7 @@ struct PluginRuntimeTests {
             limits: .secureDefault
         )
 
-        #expect(runtime.runtimeVersion == "45.0.0")
+        #expect(runtime.runtimeVersion == "49.0.2")
         #expect(String(decoding: prepared, as: UTF8.self) == "true")
         let disabled = try runtime.prepare(
             package,
@@ -433,7 +433,7 @@ struct PluginRuntimeTests {
         )
         #expect(handshake.ok)
         #expect(handshakeJSON["protocol_version"] as? Int == 5)
-        #expect(handshakeJSON["wasmtime_version"] as? String == "45.0.0")
+        #expect(handshakeJSON["wasmtime_version"] as? String == "49.0.2")
         #expect(handshakeJSON["runtime_mode"] as? String == "embedded")
         #expect(handshakeJSON["ambient_wasi"] as? Bool == false)
 

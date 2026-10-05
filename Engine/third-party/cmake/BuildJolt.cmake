@@ -50,6 +50,12 @@ ExternalProject_Add(jolt_ep
         -DTARGET_PERFORMANCE_TEST=OFF
         -DTARGET_SAMPLES=OFF
         -DTARGET_VIEWER=OFF
+        # Guava's physics bridge uses the CPU library. Jolt 5.6 enables
+        # optional GPU hair/compute backends that require separate shader SDKs.
+        -DJPH_USE_DX12=OFF
+        -DJPH_USE_VK=OFF
+        -DJPH_USE_MTL=OFF
+        -DJPH_USE_CPU_COMPUTE=OFF
         # Library config
         -DENABLE_INSTALL=ON
         -DOVERRIDE_CXX_FLAGS=OFF
