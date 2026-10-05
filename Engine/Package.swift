@@ -1,5 +1,5 @@
 // swift-tools-version: 6.1
-// GuavaEngine 0.0.1
+// GuavaEngine 0.0.9
 import PackageDescription
 
 #if os(macOS)

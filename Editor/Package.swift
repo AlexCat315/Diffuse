@@ -1,5 +1,5 @@
 // swift-tools-version: 6.1
-// GuavaEditor 0.0.1
+// GuavaEditor 0.0.9
 import PackageDescription
 
 // MARK: - C ABI exports for dynamically loaded Swift scripts
