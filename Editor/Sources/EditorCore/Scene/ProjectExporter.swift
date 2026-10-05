@@ -521,27 +521,15 @@ public enum ProjectExporter {
     }
 
     private static func pathContains(_ candidate: URL, root: URL) -> Bool {
-        let candidateComponents = comparablePathComponents(candidate)
-        let rootComponents = comparablePathComponents(root)
-        guard candidateComponents.count >= rootComponents.count else { return false }
-        return candidateComponents.prefix(rootComponents.count).elementsEqual(rootComponents)
+        ProjectFilePath.contains(candidate, in: root)
     }
 
     private static func relativePath(of candidate: URL, within root: URL) -> String? {
         guard pathContains(candidate, root: root) else { return nil }
-        let candidateComponents = candidate.standardizedFileURL.pathComponents
-        let rootComponentCount = root.standardizedFileURL.pathComponents.count
+        let candidateComponents = ProjectFilePath.components(candidate)
+        let rootComponentCount = ProjectFilePath.components(root).count
         guard candidateComponents.count > rootComponentCount else { return nil }
         return candidateComponents.dropFirst(rootComponentCount).joined(separator: "/")
-    }
-
-    private static func comparablePathComponents(_ url: URL) -> [String] {
-        let components = url.standardizedFileURL.pathComponents
-        #if os(Windows)
-        return components.map { $0.lowercased() }
-        #else
-        return components
-        #endif
     }
 
     private static func copyProjectScriptCatalog(from sourceDirectory: URL,

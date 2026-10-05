@@ -234,8 +234,10 @@ struct MultiWindowSmokeTests {
     @Test("Event-driven frame delta excludes idle time")
     func eventDrivenFrameDeltaExcludesIdleTime() throws {
         let shell = MockShell(eventBatches: [])
-        shell.pollDelay = 0.005
+        var frameTime = 100.0
+        shell.onPoll = { frameTime += 0.005 }
         let host = SDL3PlatformHost(shellFactory: { shell })
+        host.frameClock = { frameTime }
         host.setFrameRateMode(.eventDriven)
 
         let tree = NodeTree()
@@ -257,7 +259,7 @@ struct MultiWindowSmokeTests {
         host.run()
 
         #expect(deltas.count >= 2)
-        #expect((deltas.last ?? 1) < 0.02)
+        #expect(abs((deltas.last ?? 1) - 0.005) < 1e-9)
     }
 
     @MainActor
@@ -516,6 +518,7 @@ private final class MockShell: Shell {
     var eventBatches: [[WindowInputEvent]]
     var refreshRate: Double?
     var pollDelay: TimeInterval = 0
+    var onPoll: (() -> Void)?
     var waitTimeouts: [TimeInterval] = []
     var cursorRequests: [CursorRequest] = []
     var textInputAreas: [WindowID: TextInputArea?] = [:]
@@ -563,6 +566,7 @@ private final class MockShell: Shell {
 
     @discardableResult
     func pollWindowEvents() -> [WindowInputEvent] {
+        onPoll?()
         if pollDelay > 0 {
             Thread.sleep(forTimeInterval: pollDelay)
         }

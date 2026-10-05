@@ -17,10 +17,8 @@ struct ProjectRuntimeResourcesTests {
         try Data([2]).write(to: generated.appendingPathComponent("stale.wav"))
 
         let directories = ProjectRuntimeResources.discoverAudioSearchPaths(at: root.path)
-        let paths = Set(directories.map { $0.standardizedFileURL.path })
-
-        #expect(paths.contains(root.standardizedFileURL.path))
-        #expect(paths.contains(audio.standardizedFileURL.path))
-        #expect(!paths.contains(generated.standardizedFileURL.path))
+        #expect(directories.contains { ProjectFilePath.sameLocation($0, root) })
+        #expect(directories.contains { ProjectFilePath.sameLocation($0, audio) })
+        #expect(!directories.contains { ProjectFilePath.sameLocation($0, generated) })
     }
 }

@@ -288,10 +288,17 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
     public static func resolveExecutableURL(for executable: String,
                                             environment: [String: String] = ProcessInfo.processInfo.environment) throws -> URL {
         let fileManager = FileManager.default
+        func isExecutable(_ url: URL) -> Bool {
+            // Windows SHGetFileInfo can resolve a missing name through the
+            // system search path. Validate this exact candidate first.
+            var isDirectory = ObjCBool(false)
+            return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory)
+                && !isDirectory.boolValue && fileManager.isExecutableFile(atPath: url.path)
+        }
         let hasDirectory = executable.contains("/") || executable.contains("\\")
         if hasDirectory {
             let url = URL(fileURLWithPath: executable)
-            guard fileManager.isExecutableFile(atPath: url.path) else {
+            guard isExecutable(url) else {
                 throw ScriptCompileError.executableNotFound(executable)
             }
             return url
@@ -321,7 +328,7 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
             for candidate in candidates {
                 let url = URL(fileURLWithPath: directoryPath, isDirectory: true)
                     .appendingPathComponent(candidate)
-                if fileManager.isExecutableFile(atPath: url.path) {
+                if isExecutable(url) {
                     return url
                 }
             }

@@ -376,7 +376,9 @@ struct ProjectExporterTests {
         try FileManager.default.createDirectory(at: playerBuild, withIntermediateDirectories: true)
         #if os(Windows)
         let player = playerBuild.appendingPathComponent("custom-player.exe")
-        try Data("player".utf8).write(to: player)
+        let systemRoot = ProcessInfo.processInfo.environment["SystemRoot"] ?? "C:\\Windows"
+        try FileManager.default.copyItem(at: URL(fileURLWithPath: systemRoot).appendingPathComponent("System32/cmd.exe"),
+                                         to: player)
         #else
         let player = playerBuild.appendingPathComponent("custom-player")
         try Data("#!/bin/sh\nexit 0\n".utf8).write(to: player)
