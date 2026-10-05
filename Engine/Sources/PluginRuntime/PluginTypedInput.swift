@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(CoreFoundation)
 import CoreFoundation
+#endif
 
 public enum PluginTypedInputError: Error, Sendable, Equatable, CustomStringConvertible {
     case invalidJSON
@@ -205,13 +207,15 @@ public enum PluginTypedInputEncoder {
     }
 
     private static func booleanValue(_ value: Any) -> Bool? {
-        // Numeric zero and one also bridge to Bool. Only CFBoolean represents
-        // a JSON boolean, on Darwin and on swift-corelibs-foundation hosts.
-        if let number = value as? NSNumber,
-           CFGetTypeID(number) == CFBooleanGetTypeID() {
-            return number.boolValue
-        }
-        return nil
+        guard let number = value as? NSNumber else { return nil }
+        // Numeric zero and one also bridge to Bool. Windows Foundation keeps
+        // its boolean singletons internal and does not expose CoreFoundation.
+        #if canImport(CoreFoundation)
+        guard CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
+        #else
+        guard number === NSNumber(value: true) || number === NSNumber(value: false) else { return nil }
+        #endif
+        return number.boolValue
     }
 
     private static func appendFixed<T: FixedWidthInteger>(_ value: T,

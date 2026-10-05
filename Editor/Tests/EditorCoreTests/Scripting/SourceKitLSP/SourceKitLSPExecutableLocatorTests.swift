@@ -6,12 +6,13 @@ import Testing
 struct SourceKitLSPExecutableLocatorTests {
     @Test("resolves SourceKit-LSP from an explicit executable override")
     func resolvesExplicitSourceKitPath() throws {
+        let executable = try makeStubExecutable(contents: "")
+        defer { try? FileManager.default.removeItem(at: executable.deletingLastPathComponent()) }
         let url = try SourceKitLSPExecutableLocator.resolveExecutableURL(environment: [
-            SourceKitLSPExecutableLocator.overrideEnvironmentKey:
-                "/Library/Developer/CommandLineTools/usr/bin/sourcekit-lsp",
+            SourceKitLSPExecutableLocator.overrideEnvironmentKey: executable.path,
         ])
 
-        #expect(url.path == "/Library/Developer/CommandLineTools/usr/bin/sourcekit-lsp")
+        #expect(url.path == executable.path)
     }
 
     @Test("reports the override path when it is not executable")
@@ -25,11 +26,13 @@ struct SourceKitLSPExecutableLocatorTests {
 
     @Test("falls through to PATH before consulting xcrun")
     func findsFromPath() throws {
+        let executable = try makeStubExecutable(contents: "")
+        defer { try? FileManager.default.removeItem(at: executable.deletingLastPathComponent()) }
         let url = try SourceKitLSPExecutableLocator.resolveExecutableURL(
-            environment: ["PATH": "/Library/Developer/CommandLineTools/usr/bin"]
+            environment: ["PATH": executable.deletingLastPathComponent().path]
         )
 
-        #expect(url.lastPathComponent == "sourcekit-lsp")
+        #expect(url.path == executable.path)
     }
 
     @Test("fails with a descriptive error when nothing can be found")
@@ -45,12 +48,20 @@ struct SourceKitLSPExecutableLocatorTests {
 
     @Test("detects optional flags from a stub --help output")
     func probesCapabilities() throws {
+        #if os(Windows)
+        // POSIX shell stubs cannot execute on Windows. Exercise the same help
+        // parser there; missing-process fallback is checked on every platform.
+        let capabilities = SourceKitLSPExecutableLocator.capabilities(fromHelpOutput:
+            "Usage: sourcekit-lsp [--default-workspace-type <type>] [--scratch-path <path>]")
+        #else
         let script = """
         #!/bin/sh
         echo "Usage: sourcekit-lsp [--default-workspace-type <type>] [--scratch-path <path>]"
         """
         let url = try makeStubExecutable(contents: script)
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         let capabilities = SourceKitLSPExecutableLocator.probeCapabilities(executableURL: url)
+        #endif
 
         #expect(capabilities.supportsDefaultWorkspaceType)
         #expect(capabilities.supportsScratchPath)
@@ -89,10 +100,16 @@ struct SourceKitLSPExecutableLocatorTests {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("guava-lsp-stub-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        #if os(Windows)
+        let url = directory.appendingPathComponent("sourcekit-lsp.exe")
+        #else
         let url = directory.appendingPathComponent("sourcekit-lsp")
+        #endif
         try Data(contents.utf8).write(to: url)
+        #if !os(Windows)
         try FileManager.default.setAttributes([.posixPermissions: 0o755],
                                               ofItemAtPath: url.path)
+        #endif
         return url
     }
 }

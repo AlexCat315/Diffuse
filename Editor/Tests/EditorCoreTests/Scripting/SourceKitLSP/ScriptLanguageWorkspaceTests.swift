@@ -1,4 +1,5 @@
 import Foundation
+import ScriptRuntime
 import Testing
 @testable import EditorCore
 
@@ -48,8 +49,8 @@ struct ScriptLanguageWorkspaceTests {
 
         let dump = Pipe()
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-        process.arguments = ["swift", "package", "dump-package", "--package-path", workspace.rootURL.path]
+        process.executableURL = try SwiftScriptCompiler.resolveExecutableURL(for: "swift")
+        process.arguments = ["package", "dump-package", "--package-path", workspace.rootURL.path]
         process.standardOutput = dump
         process.standardError = dump
         try process.run()

@@ -285,7 +285,8 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
         return CompilationResult(outputPath: outputPath, stdout: stdout, stderr: stderr)
     }
 
-    static func resolveExecutableURL(for executable: String) throws -> URL {
+    public static func resolveExecutableURL(for executable: String,
+                                            environment: [String: String] = ProcessInfo.processInfo.environment) throws -> URL {
         let fileManager = FileManager.default
         let hasDirectory = executable.contains("/") || executable.contains("\\")
         if hasDirectory {
@@ -296,10 +297,17 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
             return url
         }
 
-        let path = ProcessInfo.processInfo.environment["PATH"] ?? ""
+        func environmentValue(_ key: String) -> String? {
+            #if os(Windows)
+            return environment.first { $0.key.caseInsensitiveCompare(key) == .orderedSame }?.value
+            #else
+            return environment[key]
+            #endif
+        }
+        let path = environmentValue("PATH") ?? ""
         #if os(Windows)
         let pathSeparator: Character = ";"
-        let extensions = (ProcessInfo.processInfo.environment["PATHEXT"] ?? ".EXE;.CMD;.BAT")
+        let extensions = (environmentValue("PATHEXT") ?? ".EXE;.CMD;.BAT")
             .split(separator: ";")
             .map { executable + $0 }
         let candidates = [executable] + (URL(fileURLWithPath: executable).pathExtension.isEmpty ? extensions : [])
@@ -336,9 +344,10 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
     /// Finds generated C module maps in both SwiftPM build layouts. SwiftBuild
     /// can place them inside per-target intermediates on Linux and Windows.
     public static func discoverClangModuleMapPaths(in buildDirectory: URL) -> [String] {
+        let buildDirectory = buildDirectory.resolvingSymlinksInPath()
         let intermediates = buildDirectory.deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Intermediates.noindex", isDirectory: true)
-        let configuration = buildDirectory.lastPathComponent.lowercased()
+        let configuration = buildDirectory.lastPathComponent.lowercased().split(separator: "-").first.map(String.init) ?? ""
         var maps = Set<String>()
         for root in [buildDirectory, intermediates] {
             guard let files = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil,

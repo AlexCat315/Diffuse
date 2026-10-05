@@ -76,6 +76,10 @@ extension SourceKitLSPExecutableLocator {
         }
 
         let help = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        return capabilities(fromHelpOutput: help)
+    }
+
+    static func capabilities(fromHelpOutput help: String) -> SourceKitLSPCapabilities {
         guard !help.isEmpty else { return .optimistic }
         return SourceKitLSPCapabilities(
             supportsDefaultWorkspaceType: help.contains("--default-workspace-type"),

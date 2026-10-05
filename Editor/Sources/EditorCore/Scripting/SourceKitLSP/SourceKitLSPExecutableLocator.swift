@@ -1,4 +1,5 @@
 import Foundation
+import ScriptRuntime
 
 /// Locates a usable `sourcekit-lsp` executable on the host.
 ///
@@ -20,15 +21,17 @@ public enum SourceKitLSPExecutableLocator {
             return url
         }
 
-        if let pathURL = executable(named: "sourcekit-lsp", path: environment["PATH"] ?? "") {
+        if let pathURL = try? SwiftScriptCompiler.resolveExecutableURL(for: "sourcekit-lsp", environment: environment) {
             return pathURL
         }
 
-        if let xcrunURL = executable(named: "xcrun", path: environment["PATH"] ?? "") {
+        #if os(macOS)
+        if let xcrunURL = try? SwiftScriptCompiler.resolveExecutableURL(for: "xcrun", environment: environment) {
             if let found = try? resolveViaXcrun(xcrunURL), FileManager.default.isExecutableFile(atPath: found.path) {
                 return found
             }
         }
+        #endif
 
         throw SourceKitLSPClientError.executableNotFound("sourcekit-lsp")
     }
@@ -52,12 +55,4 @@ public enum SourceKitLSPExecutableLocator {
         return URL(fileURLWithPath: path)
     }
 
-    private static func executable(named name: String, path: String) -> URL? {
-        for directory in path.split(separator: ":", omittingEmptySubsequences: false) {
-            let base = directory.isEmpty ? "/usr/bin" : String(directory)
-            let candidate = URL(fileURLWithPath: base, isDirectory: true).appendingPathComponent(name)
-            if FileManager.default.isExecutableFile(atPath: candidate.path) { return candidate }
-        }
-        return nil
-    }
 }
