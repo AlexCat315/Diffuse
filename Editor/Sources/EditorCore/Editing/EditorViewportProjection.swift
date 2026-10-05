@@ -27,12 +27,7 @@ public struct EditorViewportProjection {
         let up = simd_normalize(simd_cross(right, forward))
         let aspect = frame.width / frame.height
         let view = CameraMatrices.lookAtRH(eye: camera.eye, target: camera.target, up: up)
-        let projection = CameraMatrices.perspectiveRH_ZO(
-            fovYRadians: camera.fovYRadians,
-            aspect: aspect,
-            near: camera.near,
-            far: camera.far
-        )
+        let projection = camera.projectionMatrix(aspect: aspect)
 
         self.camera = camera
         self.frame = frame
@@ -48,7 +43,7 @@ public struct EditorViewportProjection {
 
     public func project(_ worldPoint: SIMD3<Float>) -> (x: Float, y: Float)? {
         let clip = viewProjectionMatrix * SIMD4<Float>(worldPoint, 1)
-        guard clip.w > 1e-4 else { return nil }
+        guard clip.w > 1e-4, clip.z >= 0, clip.z <= clip.w else { return nil }
         let ndcX = clip.x / clip.w
         let ndcY = clip.y / clip.w
         let sx = frame.x + (ndcX * 0.5 + 0.5) * frame.width
@@ -61,6 +56,12 @@ public struct EditorViewportProjection {
         let v = (y - frame.y) / frame.height
         let ndcX = 2 * u - 1
         let ndcY = 1 - 2 * v
+        if camera.projection == .orthographic {
+            let halfHeight = RenderCamera.sanitizedOrthographicHeight(camera.orthographicHeight) * 0.5
+            return (camera.eye + cameraForward * camera.near
+                    + cameraRight * (ndcX * aspect * halfHeight)
+                    + cameraUp * (ndcY * halfHeight), cameraForward)
+        }
         let direction = simd_normalize(
             cameraForward
             + cameraRight * (ndcX * aspect * tanHalfFov)
@@ -80,11 +81,14 @@ public enum EditorViewportFraming {
         public var eye: SIMD3<Float>
         public var target: SIMD3<Float>
         public var up: SIMD3<Float>
+        public var orthographicHeight: Float?
 
-        public init(eye: SIMD3<Float>, target: SIMD3<Float>, up: SIMD3<Float>) {
+        public init(eye: SIMD3<Float>, target: SIMD3<Float>, up: SIMD3<Float>,
+                    orthographicHeight: Float? = nil) {
             self.eye = eye
             self.target = target
             self.up = up
+            self.orthographicHeight = orthographicHeight
         }
     }
 
@@ -135,6 +139,8 @@ public enum EditorViewportFraming {
         safeUp = simd_normalize(safeUp)
         return Pose(eye: target + backward * distance,
                     target: target,
-                    up: safeUp)
+                    up: safeUp,
+                    orthographicHeight: camera.projection == .orthographic
+                        ? radius * 2 * safePadding / min(1, aspect) : nil)
     }
 }

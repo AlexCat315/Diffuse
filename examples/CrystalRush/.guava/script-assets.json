@@ -1,0 +1,16 @@
+{
+  "assets" : [
+    {
+      "contentFingerprint" : "5c9a5cd840f0541b3e8fdd04d224d7ce",
+      "fileSystemIdentity" : "16777233:34318064",
+      "id" : {
+        "rawValue" : "F8097892-F6BF-4A3A-9BD3-998A843EA625"
+      },
+      "legacyIdentifiers" : [
+        "scripts.crystalrush"
+      ],
+      "relativePath" : "CrystalRush.swift"
+    }
+  ],
+  "version" : 1
+}

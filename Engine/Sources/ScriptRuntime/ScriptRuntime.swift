@@ -28,6 +28,10 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
     private let inputProcessor = InputStateProcessor()
     private let animationRuntime = AnimationRuntime()
 
+    /// Editor preview can evaluate animation without running gameplay scripts.
+    /// Pausing leaves existing instances intact so resuming keeps their state.
+    public var isGameplayExecutionEnabled = true
+
     public init() {}
 
     public func tick(deltaTime: Double) {
@@ -103,6 +107,29 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
         inputProcessor.reset()
     }
 
+    /// Ends gameplay while its live scene still supplies valid entity context.
+    /// Factories stay registered so a later Play starts fresh instances.
+    public func stop(in scene: inout SceneRuntime) {
+        scene.runScriptDriver(ScriptSessionStopDriver(runtime: self), deltaTime: 0)
+    }
+
+    fileprivate func endSession(context: inout RuntimeScriptPhaseContext) {
+        let instances = activeInstances
+        activeInstances.removeAll(keepingCapacity: true)
+        for key in instances.keys.sorted(by: {
+            $0.entity == $1.entity ? $0.binding.uuidString < $1.binding.uuidString : $0.entity.rawValue < $1.entity.rawValue
+        }) {
+            guard let instance = instances[key] else { continue }
+            let binding = context.component(ScriptComponent.self, for: key.entity)?.bindings.first { $0.id == key.binding }
+            let registered = registeredScripts[instance.registrationHandle]
+            let scriptContext = ScriptContext(phaseContext: context, entity: key.entity, deltaTime: 0,
+                                               parametersJSON: binding?.parametersJSON ?? "{}",
+                                               defaultParametersJSON: registered?.defaultParametersJSON ?? "{}")
+            invoke(\.onDestroyHandler, script: instance.script, context: scriptContext)
+        }
+        inputProcessor.reset()
+    }
+
     public func run(context: inout RuntimeScriptPhaseContext) {
         prepareFrame(context: &context)
         runPrePhysics(context: &context)
@@ -115,11 +142,13 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
     }
 
     public func runPrePhysics(context: inout RuntimeScriptPhaseContext) {
+        guard isGameplayExecutionEnabled else { return }
         executeBoundScripts(context: context, phase: .prePhysics)
     }
 
     public func runPostPhysics(context: inout RuntimeScriptPhaseContext) {
         animationRuntime.tick(context: &context, deltaTime: context.deltaTimeSeconds)
+        guard isGameplayExecutionEnabled else { return }
         let liveInstances = executeBoundScripts(context: context, phase: .postPhysics)
 
         for key in Set(activeInstances.keys).subtracting(liveInstances) {
@@ -246,4 +275,11 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
     ) -> PhysicsSweepHit? {
         runtime.physicsSweepShape(query, filter: filter)
     }
+}
+
+private final class ScriptSessionStopDriver: RuntimeScriptDriver, @unchecked Sendable {
+    let runtime: ScriptRuntime
+    init(runtime: ScriptRuntime) { self.runtime = runtime }
+    func run(context: inout RuntimeScriptPhaseContext) { runtime.endSession(context: &context) }
+    func reset() {}
 }

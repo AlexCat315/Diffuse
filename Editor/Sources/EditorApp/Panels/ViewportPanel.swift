@@ -18,6 +18,8 @@ struct ViewportPanel: View {
         StoreScope(app.store) { store in
             let _ = store.viewportSurfaceRevision
             let _ = store.sceneRevision
+            let _ = store.viewportCameraRevision
+            let camera = scene.currentRenderCamera()
             let surface = app.currentViewportSurfaceState()
             let selectedEntityID = store.selectedEntityID
             let selectedEntityIDs = store.selectedEntityIDs
@@ -27,6 +29,7 @@ struct ViewportPanel: View {
             let gizmoSpace = store.gizmoSpace
             let shadingMode = store.viewportShadingMode
             let shadowsEnabled = store.viewportShadowsEnabled
+            let gridEnabled = store.viewportGridEnabled
             let renderScalePercent = store.viewportRenderScalePercent
             let interactionDownscaleEnabled = store.viewportInteractionDownscaleEnabled
             let realtimeEnabled = store.viewportRealtimeEnabled
@@ -87,10 +90,13 @@ struct ViewportPanel: View {
                     ViewportChromeLayout {
                         ViewportChromeInputBlocker {
                             ViewportInfoBar(entity: entity,
+                                            camera: camera,
+                                            snapStore: app.store,
                                             gizmoMode: gizmoMode,
                                             gizmoSpace: gizmoSpace,
                                             shadingMode: shadingMode,
                                             shadowsEnabled: shadowsEnabled,
+                                            gridEnabled: gridEnabled,
                                             renderScalePercent: renderScalePercent,
                                             interactionDownscaleEnabled: interactionDownscaleEnabled,
                                             realtimeEnabled: realtimeEnabled,
@@ -110,8 +116,17 @@ struct ViewportPanel: View {
                                             onSelectShadingMode: { mode in
                                                 app.setViewportShadingMode(mode)
                                             },
+                                            onSelectProjection: { projection in
+                                                scene.setViewportProjection(projection)
+                                            },
+                                            onSelectViewAxis: { axis in
+                                                scene.lookAlongAxis(axis, orthographic: true)
+                                            },
                                             onToggleShadows: {
                                                 app.setViewportShadowsEnabled(!shadowsEnabled)
+                                            },
+                                            onToggleGrid: {
+                                                app.setViewportGridEnabled(!gridEnabled)
                                             },
                                             onSelectRenderScale: { percent in
                                                 app.setViewportRenderScalePercent(percent)
@@ -270,9 +285,9 @@ struct ViewportPanel: View {
                       let newMatrix = EditorGizmoController.shared.updateDrag(
                           cursorX: motion.x, cursorY: motion.y)
                 else { return }
-                let snapped = applyGizmoSnapping(newMatrix,
-                                                 mode: drag.mode,
-                                                 state: app.store.state)
+                let snapped = EditorTransformSnapping.apply(newMatrix,
+                                                            mode: drag.mode,
+                                                            state: app.store.state)
                 applyGizmoDragMatrix(snapped, drag: drag)
                 app.enqueueViewportInput(event)
                 return
@@ -521,7 +536,8 @@ struct ViewportPanel: View {
         let camera = scene.currentRenderCamera()
         let dist = simd_length(world - camera.eye)
         // 距离自适应，与旧引擎 gizmo_pass.scaleForSelection 保持一致。
-        let axisLength = max(0.7, min(3.4, dist * 0.2))
+        let axisLength = camera.projection == .orthographic
+            ? camera.orthographicHeight * 0.16 : max(0.7, min(3.4, dist * 0.2))
         let parentWorld = scene.entityParentWorldMatrix(id)
         EditorGizmoController.shared.updateSnapshot(
             EditorGizmoController.Snapshot(
@@ -1088,124 +1104,6 @@ struct ViewportPanel: View {
         EditorViewportProjection(camera: scene.currentRenderCamera(), frame: frame)?.project(world)
     }
 
-    private func applyGizmoSnapping(_ matrix: simd_float4x4,
-                                    mode: EditorGizmoController.Mode,
-                                    state: EditorState) -> simd_float4x4 {
-        var result = matrix
-        switch mode {
-        case .translate:
-            guard state.translateSnapEnabled else { return result }
-            let step: Float = 0.5
-            result.columns.3.x = quantize(result.columns.3.x, step: step)
-            result.columns.3.y = quantize(result.columns.3.y, step: step)
-            result.columns.3.z = quantize(result.columns.3.z, step: step)
-            return result
-        case .rotate:
-            guard state.rotateSnapEnabled else { return result }
-            let snapped = snapRotation(result, stepDegrees: 5)
-            return snapped
-        case .scale:
-            guard state.scaleSnapEnabled else { return result }
-            let snapped = snapScale(result, step: 0.05, minScale: 0.05)
-            return snapped
-        }
-    }
-
-    private func snapRotation(_ matrix: simd_float4x4,
-                              stepDegrees: Float) -> simd_float4x4 {
-        let decomp = decomposeTRS(matrix)
-        let euler = quaternionToEulerXYZ(decomp.rotation)
-        let step = stepDegrees * (.pi / 180)
-        let snappedEuler = SIMD3<Float>(
-            quantize(euler.x, step: step),
-            quantize(euler.y, step: step),
-            quantize(euler.z, step: step)
-        )
-        let snappedQ = eulerXYZToQuaternion(snappedEuler)
-        return composeTRS(translation: decomp.translation,
-                          rotation: snappedQ,
-                          scale: decomp.scale)
-    }
-
-    private func snapScale(_ matrix: simd_float4x4,
-                           step: Float,
-                           minScale: Float) -> simd_float4x4 {
-        let decomp = decomposeTRS(matrix)
-        let snapped = SIMD3<Float>(
-            max(minScale, quantize(decomp.scale.x, step: step)),
-            max(minScale, quantize(decomp.scale.y, step: step)),
-            max(minScale, quantize(decomp.scale.z, step: step))
-        )
-        return composeTRS(translation: decomp.translation,
-                          rotation: decomp.rotation,
-                          scale: snapped)
-    }
-
-    private func quantize(_ value: Float, step: Float) -> Float {
-        guard step > 1e-6 else { return value }
-        return (value / step).rounded() * step
-    }
-
-    private func decomposeTRS(_ matrix: simd_float4x4)
-        -> (translation: SIMD3<Float>, rotation: simd_quatf, scale: SIMD3<Float>) {
-        let t = SIMD3<Float>(matrix.columns.3.x, matrix.columns.3.y, matrix.columns.3.z)
-        let c0 = SIMD3<Float>(matrix.columns.0.x, matrix.columns.0.y, matrix.columns.0.z)
-        let c1 = SIMD3<Float>(matrix.columns.1.x, matrix.columns.1.y, matrix.columns.1.z)
-        let c2 = SIMD3<Float>(matrix.columns.2.x, matrix.columns.2.y, matrix.columns.2.z)
-        let sx = max(simd_length(c0), 1e-8)
-        let sy = max(simd_length(c1), 1e-8)
-        let sz = max(simd_length(c2), 1e-8)
-        let r0 = c0 / sx
-        let r1 = c1 / sy
-        let r2 = c2 / sz
-        let rotM = simd_float3x3(columns: (r0, r1, r2))
-        return (t, simd_quatf(rotM), SIMD3<Float>(sx, sy, sz))
-    }
-
-    private func composeTRS(translation t: SIMD3<Float>,
-                            rotation r: simd_quatf,
-                            scale s: SIMD3<Float>) -> simd_float4x4 {
-        let rm = simd_float3x3(r)
-        var out = matrix_identity_float4x4
-        out.columns.0 = SIMD4<Float>(rm.columns.0 * s.x, 0)
-        out.columns.1 = SIMD4<Float>(rm.columns.1 * s.y, 0)
-        out.columns.2 = SIMD4<Float>(rm.columns.2 * s.z, 0)
-        out.columns.3 = SIMD4<Float>(t, 1)
-        return out
-    }
-
-    private func quaternionToEulerXYZ(_ q: simd_quatf) -> SIMD3<Float> {
-        let x = q.imag.x
-        let y = q.imag.y
-        let z = q.imag.z
-        let w = q.real
-
-        let sinrCosp = 2 * (w * x + y * z)
-        let cosrCosp = 1 - 2 * (x * x + y * y)
-        let roll = atan2f(sinrCosp, cosrCosp)
-
-        let sinp = 2 * (w * y - z * x)
-        let pitch: Float
-        if abs(sinp) >= 1 {
-            pitch = copysignf(.pi * 0.5, sinp)
-        } else {
-            pitch = asinf(sinp)
-        }
-
-        let sinyCosp = 2 * (w * z + x * y)
-        let cosyCosp = 1 - 2 * (y * y + z * z)
-        let yaw = atan2f(sinyCosp, cosyCosp)
-
-        return SIMD3<Float>(roll, pitch, yaw)
-    }
-
-    private func eulerXYZToQuaternion(_ euler: SIMD3<Float>) -> simd_quatf {
-        let qx = simd_quatf(angle: euler.x, axis: SIMD3<Float>(1, 0, 0))
-        let qy = simd_quatf(angle: euler.y, axis: SIMD3<Float>(0, 1, 0))
-        let qz = simd_quatf(angle: euler.z, axis: SIMD3<Float>(0, 0, 1))
-        return qz * qy * qx
-    }
-
     private func wheelZoomRatio(_ wheelDelta: Float) -> Float {
         let scaled = max(-4, min(4, wheelDelta * 1.2))
         return expf(-scaled * 0.16)
@@ -1236,7 +1134,7 @@ struct ViewportChromeLayout<Toolbar: View, Cube: View>: View {
     }
 }
 
-private func viewportPopoverDismissOnEscape(_ isPresented: Binding<Bool>)
+func viewportPopoverDismissOnEscape(_ isPresented: Binding<Bool>)
     -> (KeyEvent, EventPhase) -> EventResult {
     { event, phase in
         guard phase == .target || phase == .bubble,
@@ -1428,7 +1326,7 @@ private struct ViewCubeControl: _PrimitiveView {
                                            eventY: event.y,
                                            node: node,
                                            camera: scene.currentRenderCamera()) {
-                    scene.lookAlongAxis(axis)
+                    scene.lookAlongAxis(axis, orthographic: true)
                 }
                 if node.attachments[Self.historyGroupActiveKey] as? Bool == true {
                     scene.endInteractiveEditHistoryGroup()
@@ -1647,10 +1545,13 @@ private struct ViewCubeControl: _PrimitiveView {
 
 private struct ViewportInfoBar: View {
     let entity: EditorSceneEntitySummary?
+    let camera: RenderCamera
+    let snapStore: EditorStore
     let gizmoMode: EditorGizmoMode
     let gizmoSpace: EditorGizmoSpace
     let shadingMode: EditorViewportShadingMode
     let shadowsEnabled: Bool
+    let gridEnabled: Bool
     let renderScalePercent: Int
     let interactionDownscaleEnabled: Bool
     let realtimeEnabled: Bool
@@ -1660,7 +1561,10 @@ private struct ViewportInfoBar: View {
     let onSelectGizmoMode: (EditorGizmoMode) -> Void
     let onSelectGizmoSpace: (EditorGizmoSpace) -> Void
     let onSelectShadingMode: (EditorViewportShadingMode) -> Void
+    let onSelectProjection: (RenderCamera.Projection) -> Void
+    let onSelectViewAxis: (SIMD3<Float>) -> Void
     let onToggleShadows: () -> Void
+    let onToggleGrid: () -> Void
     let onSelectRenderScale: (Int) -> Void
     let onToggleInteractionDownscale: () -> Void
     let onToggleRealtime: () -> Void
@@ -1727,6 +1631,7 @@ private struct ViewportInfoBar: View {
                        tooltip: "\(L("Frame Selected")) · F",
                        action: onFrameSelection)
                     .buttonStyle(.plain)
+                ViewportSnapSelector(store: snapStore, isEnabled: isAuthoringEnabled)
             }
             .padding(3)
             .background(.surfaceFloating)
@@ -1734,8 +1639,18 @@ private struct ViewportInfoBar: View {
             .border(.divider, width: 1)
 
             Row(alignment: .center, spacing: 5) {
+                ViewportProjectionSelector(camera: camera,
+                                           isEnabled: isAuthoringEnabled,
+                                           onSelectProjection: onSelectProjection,
+                                           onSelectAxis: onSelectViewAxis)
                 ViewModeSelector(shadingMode: shadingMode,
                                  onSelect: onSelectShadingMode)
+                Button(icon: .resource(ViewportToolbarIcon.wireframe.resource),
+                       size: 15,
+                       isSelected: gridEnabled,
+                       tooltip: L("Reference Grid"),
+                       action: onToggleGrid)
+                    .buttonStyle(.toggle)
                 Button(icon: .resource(ViewportToolbarIcon.shadows.resource),
                            size: 15,
                            isSelected: shadowsEnabled,

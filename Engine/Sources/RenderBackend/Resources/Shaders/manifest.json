@@ -1,6 +1,11 @@
 {
   "programs": [
     {
+      "name": "editor_grid",
+      "vertex": "WGSL/editor_grid.wgsl",
+      "fragment": "WGSL/editor_grid.wgsl"
+    },
+    {
       "name": "particles",
       "vertex": "WGSL/particles.wgsl",
       "fragment": "WGSL/particles.wgsl"

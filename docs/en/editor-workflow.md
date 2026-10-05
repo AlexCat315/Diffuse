@@ -17,6 +17,14 @@ Guava Editor is built with GuavaUI, while EditorCore manages selection, panels, 
 
 Without `--project-dir`, the app shows a welcome surface and maintains recent projects. Passing a directory enters that project workspace directly.
 
+## Projects and the playable example
+
+New Project takes a name and an existing parent folder, then creates a separate child directory with `.guava/project.json`, a saved empty scene, `Assets/`, and `Scripts/`. It never overwrites an existing directory or adds preview entities or default scripts. Empty scenes use a separate editor navigation camera without adding authored entities. Open Project validates the selected root before starting its editor services; legacy `.guava` projects remain supported.
+
+Recent entries show their full paths. Remove Entry keeps the files. Delete asks for confirmation and moves a managed project to Trash; legacy folders can only be removed from Recents. Platforms without native Foundation trash support retain deleted projects in `Application Support/Guava/DeletedProjects`. File → Close Project / Welcome protects unsaved scene and script buffers before returning to the launcher. New Scene starts empty.
+
+Crystal Rush → Create Example Project creates an independent editable copy. The launcher grants execution only to the newly copied bundled script and compiles it. When compilation finishes, click Play, focus the viewport, and press Space. WASD moves, Shift sprints, and R restarts. Collect eight crystals within 50 seconds while avoiding sentinels. The authored scene contains Game Controller; `Scripts/CrystalRush.swift` creates the world and HUD on Play. Stop restores the authored scene, and Build and Run exports the standalone game.
+
 ## Core panels
 
 - **Hierarchy** browses entities and changes selection.
@@ -39,6 +47,24 @@ Core panels share the same toolbar, search, count badge, and empty-state languag
 - **Developer Tools** brings Profiler, Monitors, Render, Particles, Debugger, and Trace into one workbench. Debugger summarizes editor, frame/render, viewport, and selection state; its console supports search, severity filters, newest-first ordering, and expandable details. Trace aligns frame-budget, CPU/GPU-present, render-pass, particle, and console signals across frames. Pause or capture a window, filter and sort by track/severity/text, inspect event evidence and recommendations alongside neighboring-frame context, then jump to the owning diagnostic tab.
 - **Settings** switches the model default with the AI provider and clears any unsubmitted API-key draft when providers change, preventing credentials from being saved to the wrong service. Removing a system-stored credential requires a second confirmation, and validation failures are visibly marked as errors.
 
+## Orthographic views and snapping
+
+The viewport's **Perspective / Orthographic** menu switches projection and offers Front, Back, Left, Right, Top, and Bottom orthographic views. Clicking an axis endpoint on the view cube also enters the corresponding orthographic view. Switching projection preserves the apparent scale at the focus plane. In orthographic mode, wheel zoom and dolly adjust the visible extent, middle-drag pans by screen distance, and `F` fits the complete selection.
+
+The reference grid uses the XZ ground plane in perspective. Orthographic views use a dark background and the facing XY, YZ, or XZ plane, with red X, green Y, and blue Z axes.
+
+The **Snapping** menu offers independent switches and steps for movement, rotation, and scaling. Default steps are `0.5` world units, `5°`, and `0.05`; all three switches start off. Press Return or leave a number field to commit a new value. When movement snapping is enabled, grid spacing follows its step, showing integer multiples when zoomed out to remain readable. Snap settings are saved per project and restored on reopening.
+
 ## Playback
 
 Entering play mode snapshots the scene. Pause freezes simulation without discarding state, while stop restores the pre-play scene. The MCP `set_playback_state` tool uses the same `playing`, `paused`, and `stopped` states.
+
+Edit mode uses an independent editor camera. Orbit, pan, zoom, free-look, and selection framing preserve authored game cameras and do not create document changes or undo entries. Play and Pause use the scene's active game camera; Stop restores the previous editor view and the document's pre-play save state.
+
+Gameplay scripts run only during Play. Edit-mode refreshes and realtime preview do not execute gameplay logic. Pause preserves script instances and suspends callbacks; resuming continues those instances. Stop and project shutdown invoke `onDestroy` with the live scene still available, then release instances. The next Play invokes `onStart` again. Realtime animation preview remains available in Edit mode.
+
+## Native window regression
+
+On macOS development builds, run `python3 scripts/validate-editor-native-loop.py`. It starts real isolated Editor windows and exercises MCP connections, compilation, source replacement and recompilation, Play/Pause/Stop, and standalone export. The exported game is validated without a Swift toolchain. Both event-driven and continuous frame loops are covered by default.
+
+Projects, script trust, logs, and MCP transcripts stay in a new temporary directory, and each test app uses its own preferences domain. `GUAVA_EDITOR_STATE_DIRECTORY` isolates layouts and script trust. Project files and MCP tools cannot grant themselves script execution permission.

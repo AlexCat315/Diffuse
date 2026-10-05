@@ -72,3 +72,19 @@
 "Parameters" = "Parameters";
 "Bindings" = "Bindings";
 "No scripts" = "No scripts";
+
+// Project launcher
+"The project location must be an existing folder." = "The project location must be an existing folder.";
+"A file or folder with this project name already exists." = "A file or folder with this project name already exists.";
+"The project folder no longer exists." = "The project folder no longer exists.";
+"This folder is not a Guava project. Choose its project root or create a new project." = "This folder is not a Guava project. Choose its project root or create a new project.";
+"This project uses an unsupported project format." = "This project uses an unsupported project format.";
+"This project uses an unsupported scene format." = "This project uses an unsupported scene format.";
+"The saved scene contains duplicate entity IDs." = "The saved scene contains duplicate entity IDs.";
+"The saved scene has an invalid entity count." = "The saved scene has an invalid entity count.";
+"This folder cannot be deleted as a project." = "This folder cannot be deleted as a project.";
+"Legacy projects can only be removed from Recents. Manage their files in the file manager." = "Legacy projects can only be removed from Recents. Manage their files in the file manager.";
+"Enter a valid project name (no path separators or special characters)." = "Enter a valid project name (no path separators or special characters).";
+"The bundled example project is missing. Reinstall the editor." = "The bundled example project is missing. Reinstall the editor.";
+"Close the current project before opening another project." = "Close the current project before opening another project.";
+"The project's .guava folder must not be a symbolic link." = "The project's .guava folder must not be a symbolic link.";

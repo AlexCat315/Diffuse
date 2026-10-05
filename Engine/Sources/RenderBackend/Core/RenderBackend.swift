@@ -35,6 +35,9 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var shadowBindGroupLayout: GPUBindGroupLayout?
     private var shadowPipelineLayout: GPUPipelineLayout?
     var skyboxPipeline: GPURenderPipeline?
+    var editorGridPipelineLDR: GPURenderPipeline?
+    var editorGridPipelineHDR: GPURenderPipeline?
+    var editorGridUniformBuffer: GPUBuffer?
     var tonemapPipeline: GPURenderPipeline?
     var bloomPipeline: GPURenderPipeline?
     var inkPaperPostPipeline: GPURenderPipeline?
@@ -353,7 +356,10 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 opaqueStableFrames += 1
             }
             let requiredStableFrames = activeRenderSettings.enableTAA ? Self.taaCacheWarmupFrames : 0
+            // A moving frame omits SSR. Capture only once its full-quality pass
+            // has run, otherwise a static view can keep the reduced image forever.
             let opaqueConverged = opaqueStableFrames >= requiredStableFrames
+                && (!activeRenderSettings.enableSSR || !opaqueChanged)
             let canUseOpaqueCache = usesHDRFrameGraph
                 && opaqueSnapshotTarget != nil
                 && sceneColorTarget != nil
@@ -407,6 +413,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             depthView: depthView,
                             pipeline: skyboxPipeline,
                             viewProj: cameraMatrices.viewProjection,
+                            orthographic: packet.scene.camera.projection == .orthographic,
                             depthLoadOp: depthPrepassEncoded ? .load : .clear
                         )
                         passDrawCallCount = 1
@@ -460,6 +467,18 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             viewProj: cameraMatrices.viewProjection,
                             hdr: usesHDRFrameGraph
                         )
+
+                    case .editorGrid:
+                        try encodeEditorGridPass(
+                            encoder: encoder,
+                            colorView: usesHDRFrameGraph ? hdrCurrent?.view ?? colorTarget.view : colorTarget.view,
+                            depthView: depthView,
+                            camera: packet.scene.camera,
+                            viewProjection: cameraMatrices.viewProjection,
+                            drawableSize: packet.drawableSize,
+                            hdr: usesHDRFrameGraph
+                        )
+                        passDrawCallCount = 1
 
                     case .outline:
                         let outlinePipeline = try ensureOutlinePipeline(hdr: usesHDRFrameGraph)
@@ -609,7 +628,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                     cpuBaseEncodeNS &+= passElapsedNS
                 case .inkPaperPost, .ssao, .ssr, .taa, .bloom, .tonemap, .fxaa:
                     cpuPostProcessEncodeNS &+= passElapsedNS
-                case .particles, .outline, .depthPrepass, .shadowPass, .viewportResolve:
+                case .editorGrid, .particles, .outline, .depthPrepass, .shadowPass, .viewportResolve:
                     break
                 }
             }
@@ -740,7 +759,10 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     }
 
     private func uploadBuiltinMeshes() throws {
-        let cube = BuiltinMesh.cube()
+        // Gameplay and authored materials determine colour. Keep the optional
+        // per-face diagnostic cube available in AssetPipeline, but don't multiply
+        // every material by rainbow vertex colours in the default mesh table.
+        let cube = BuiltinMesh.cube(color: SIMD3<Float>(repeating: 1))
         let cubeMesh = try uploadMesh(cube)
         let cubeBounds = cube.localBounds
         var objAsset: MeshAsset?
@@ -1349,12 +1371,13 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         depthView: GPUTextureView,
         pipeline: GPURenderPipeline,
         viewProj: simd_float4x4,
+        orthographic: Bool,
         depthLoadOp: GPULoadOp = .clear
     ) throws {
         guard let skyboxUniformBuffer else { return }
         var uniforms = SkyboxUniforms(
             invViewProj: simd_inverse(viewProj),
-            skyTint: SIMD4<Float>(0.10, 0.20, 0.42, 1.0),
+            skyTint: SIMD4<Float>(0.10, 0.20, 0.42, orthographic ? 1 : 0),
             horizonTint: SIMD4<Float>(0.95, 0.48, 0.18, 1.0),
             groundTint: SIMD4<Float>(0.03, 0.04, 0.05, 1.0)
         )

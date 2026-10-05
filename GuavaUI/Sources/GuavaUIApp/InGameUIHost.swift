@@ -49,8 +49,9 @@ public final class InGameUIHost: InGameUIProviding, @unchecked Sendable {
     /// frame — typically inside the `onTick` callback passed to `AppRuntime.run`.
     /// `width`/`height` are logical points; pass the window's content scale so
     /// HUD text rasterizes at physical-pixel resolution.
-    public func tick(width: Int, height: Int, contentScale: Float = 1) {
-        bridge.tick(width: width, height: height, contentScale: contentScale)
+    public func tick(width: Int, height: Int, contentScale: Float = 1,
+                     canvas: InGameCanvas = InGameCanvas()) {
+        bridge.tick(width: width, height: height, contentScale: contentScale, canvas: canvas)
     }
 
     // MARK: - InGameUIProviding (render thread)

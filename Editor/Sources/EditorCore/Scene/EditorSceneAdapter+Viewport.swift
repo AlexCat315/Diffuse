@@ -943,14 +943,13 @@ extension EditorSceneAdapter {
     }
 
     /// Fits a complete selection, including each selected entity's rendered
-    /// descendants, in one camera transaction.
+    /// descendants, without changing authored cameras or the undo history.
     public func frameEntities(_ rawIDs: Set<UInt64>, viewportAspectRatio: Float? = nil) {
         let centersByID = Dictionary(uniqueKeysWithValues: rawIDs.compactMap { rawID in
             entityWorldPosition(rawID).map { (rawID, $0) }
         })
         guard !centersByID.isEmpty else { return }
-        guard let camID = activeCameraEntityRaw() else { return }
-        let cam = currentRenderCamera()
+        let cam = editorViewportCamera
 
         let selectionIDs = Set(centersByID.keys)
         let relevantBounds = viewportWorldBounds().filter { bounds in
@@ -975,7 +974,8 @@ extension EditorSceneAdapter {
                                               boundsMin: lower,
                                               boundsMax: upper,
                                               viewportAspectRatio: viewportAspectRatio)
-        setCameraEye(camID, eye: pose.eye, target: pose.target, up: pose.up)
+        setEditorCameraPose(eye: pose.eye, target: pose.target, up: pose.up,
+                            orthographicHeight: pose.orthographicHeight)
     }
 
     private static func isFinite(_ vector: SIMD3<Float>) -> Bool {
@@ -1045,13 +1045,31 @@ extension EditorSceneAdapter {
 
     // MARK: - Camera control
 
-    /// 用屏幕像素 delta 控制活动相机绕 target 球面旋转。
+    /// Switch projection without changing the apparent scale at the focus plane.
+    public func setViewportProjection(_ projection: RenderCamera.Projection) {
+        guard isAuthoringEnabled else { return }
+        let cam = editorViewportCamera
+        guard cam.projection != projection else { return }
+        let distance = max(0.2, simd_length(cam.eye - cam.target))
+        let tanHalfFOV = max(0.01, tanf(cam.fovYRadians * 0.5))
+        if projection == .orthographic {
+            setEditorCameraPose(eye: cam.eye, target: cam.target,
+                                projection: projection,
+                                orthographicHeight: distance * 2 * tanHalfFOV)
+        } else {
+            let backward = simd_normalize(cam.eye - cam.target)
+            let newDistance = max(0.2, cam.orthographicHeight / (2 * tanHalfFOV))
+            setEditorCameraPose(eye: cam.target + backward * newDistance,
+                                target: cam.target, projection: projection)
+        }
+    }
+
+    /// 用屏幕像素 delta 控制编辑器相机绕 target 球面旋转。
     /// 与旧 Editor backend 一致：delta 直接乘 `orbit_sensitivity = 0.01`。
     public func orbitCamera(deltaScreenX dx: Float,
                             deltaScreenY dy: Float,
                             in frame: ViewportScreenFrame) {
-        guard let camID = activeCameraEntityRaw() else { return }
-        let cam = currentRenderCamera()
+        let cam = editorViewportCamera
         let forwardRaw = cam.target - cam.eye
         let distance = simd_length(forwardRaw)
         guard distance > 1e-4 else { return }
@@ -1064,17 +1082,16 @@ extension EditorSceneAdapter {
 
         let nextForward = forwardFromAngles(yaw: yaw, pitch: pitch)
         let newEye = cam.target - nextForward * distance
-        setCameraEye(camID, eye: newEye, target: cam.target, up: SIMD3<Float>(0, 1, 0))
+        setEditorCameraPose(eye: newEye, target: cam.target, up: SIMD3<Float>(0, 1, 0))
         _ = frame
     }
 
     /// 在相机右 / 上方向上平移 eye 与 target，保持视线方向不变。
-    /// dx / dy 是屏幕像素，距离越远平移越快，与 Blender / Unity 行为一致。
+    /// 正交视图按可见高度换算像素；透视视图随焦点距离调整平移速度。
     public func panCamera(deltaScreenX dx: Float,
                           deltaScreenY dy: Float,
                           in frame: ViewportScreenFrame) {
-        guard let camID = activeCameraEntityRaw() else { return }
-        let cam = currentRenderCamera()
+        let cam = editorViewportCamera
         let forward = simd_normalize(cam.target - cam.eye)
         let rightRaw = simd_cross(forward, cam.up)
         guard simd_length(rightRaw) > 1e-5 else { return }
@@ -1082,17 +1099,26 @@ extension EditorSceneAdapter {
         let up = simd_normalize(simd_cross(right, forward))
         let dist = max(0.5, simd_length(cam.eye - cam.target))
         let factors = panSpeedFactors(width: frame.width, height: frame.height)
-        let move = -right * (dx * factors.x * dist * 0.01)
+        let move: SIMD3<Float>
+        if cam.projection == .orthographic {
+            let unitsPerPixel = cam.orthographicHeight / max(frame.height, 1)
+            move = -right * (dx * unitsPerPixel) + up * (dy * unitsPerPixel)
+        } else {
+            move = -right * (dx * factors.x * dist * 0.01)
                  + up * (dy * factors.y * dist * 0.01)
+        }
         let newEye = cam.eye + move
         let newTarget = cam.target + move
-        setCameraEye(camID, eye: newEye, target: newTarget)
+        setEditorCameraPose(eye: newEye, target: newTarget)
     }
 
-    /// Alt+RMB dolly: move the orbit eye along the current view vector while keeping the target stable.
+    /// Alt+RMB dolly adjusts orthographic extent or perspective eye distance.
     public func dollyCamera(deltaScreenY dy: Float) {
-        guard let camID = activeCameraEntityRaw() else { return }
-        let cam = currentRenderCamera()
+        let cam = editorViewportCamera
+        if cam.projection == .orthographic {
+            zoomCamera(factor: expf(max(-4, min(4, dy * 0.01))))
+            return
+        }
         let forwardRaw = cam.target - cam.eye
         let dist = simd_length(forwardRaw)
         guard dist > 1e-4 else { return }
@@ -1100,7 +1126,7 @@ extension EditorSceneAdapter {
         let step = -dy * 1.2 * 0.01 * zoomSpeed(distance: dist)
         let newDist = max(0.2, min(500, dist - step))
         let newEye = cam.target - forward * newDist
-        setCameraEye(camID, eye: newEye, target: cam.target)
+        setEditorCameraPose(eye: newEye, target: cam.target)
     }
 
     /// RMB freelook: rotate around the eye and optionally move with WASDQE.
@@ -1109,8 +1135,7 @@ extension EditorSceneAdapter {
                                pressedScancodes: Set<UInt32>,
                                modifiers: KeyModifiers,
                                deltaTime: Float = 1.0 / 60.0) {
-        guard let camID = activeCameraEntityRaw() else { return }
-        let cam = currentRenderCamera()
+        let cam = editorViewportCamera
         var forward = cam.target - cam.eye
         let focusDistance = max(0.5, simd_length(forward))
         guard focusDistance > 1e-4 else { return }
@@ -1128,7 +1153,8 @@ extension EditorSceneAdapter {
         if abs(simd_dot(nextForward, worldUp)) > 0.985 {
             nextForward = simd_normalize(yaw.act(forward))
         }
-        right = simd_normalize(simd_cross(nextForward, worldUp))
+        let referenceUp = abs(simd_dot(nextForward, worldUp)) > 0.985 ? cam.up : worldUp
+        right = simd_normalize(simd_cross(nextForward, referenceUp))
         let up = simd_normalize(simd_cross(right, nextForward))
 
         var move = SIMD3<Float>(repeating: 0)
@@ -1144,64 +1170,60 @@ extension EditorSceneAdapter {
 
         let newEye = cam.eye + translation
         let newTarget = newEye + nextForward * focusDistance
-        setCameraEye(camID, eye: newEye, target: newTarget, up: up)
+        setEditorCameraPose(eye: newEye, target: newTarget, up: up)
     }
 
-    /// 滚轮缩放：factor < 1 拉近，> 1 推远。把 eye 沿 (eye - target) 方向缩放。
+    /// 滚轮缩放：factor < 1 拉近，> 1 推远。正交模式调整可见高度。
     public func zoomCamera(factor: Float) {
-        guard let camID = activeCameraEntityRaw() else { return }
-        let cam = currentRenderCamera()
+        let cam = editorViewportCamera
+        guard factor.isFinite, factor > 0 else { return }
+        if cam.projection == .orthographic {
+            setEditorCameraPose(eye: cam.eye, target: cam.target,
+                                orthographicHeight: cam.orthographicHeight * factor)
+            return
+        }
         let offset = cam.eye - cam.target
         let r = simd_length(offset)
         if r < 1e-4 { return }
         let newR = max(0.2, min(500, r * factor))
         let newEye = cam.target + simd_normalize(offset) * newR
-        setCameraEye(camID, eye: newEye, target: cam.target)
+        setEditorCameraPose(eye: newEye, target: cam.target)
     }
 
     /// ViewCube axis snap. `axis` is the desired camera forward direction in world space.
-    public func lookAlongAxis(_ axis: SIMD3<Float>) {
-        guard let camID = activeCameraEntityRaw() else { return }
-        let cam = currentRenderCamera()
+    public func lookAlongAxis(_ axis: SIMD3<Float>, orthographic: Bool = false) {
+        guard isAuthoringEnabled else { return }
+        if orthographic { setViewportProjection(.orthographic) }
+        let cam = editorViewportCamera
         let len = simd_length(axis)
         guard len > 1e-5 else { return }
         let forward = axis / len
         let dist = max(0.5, simd_length(cam.eye - cam.target))
         let newEye = cam.target - forward * dist
         let up = viewUp(forForward: forward)
-        setCameraEye(camID, eye: newEye, target: cam.target, up: up)
+        setEditorCameraPose(eye: newEye, target: cam.target, up: up)
     }
 
     // MARK: - Internal
 
-    private func activeCameraEntityRaw() -> EntityID? {
-        scene.extractedRenderScene?.activeCameraEntity
-    }
-
-    /// 直接覆盖相机实体的 eye（写入 LocalTransform 的平移列）和 CameraComponent.target。
-    /// 保持原 LocalTransform 的旋转 / 缩放部分，因为相机的方向由 target 单独表达。
-    private func setCameraEye(_ entity: EntityID,
-                              eye: SIMD3<Float>,
-                              target: SIMD3<Float>,
-                              up: SIMD3<Float>? = nil) {
-        var local = scene.localTransform(for: entity) ?? LocalTransform()
-        let parentWorld = entityParentWorldMatrix(entity.rawValue)
-        let parentDeterminant = simd_determinant(parentWorld)
-        guard parentDeterminant.isFinite, abs(parentDeterminant) > 1e-8 else { return }
-        let localEye = simd_inverse(parentWorld) * SIMD4<Float>(eye, 1)
-        guard localEye.x.isFinite, localEye.y.isFinite, localEye.z.isFinite,
-              localEye.w.isFinite, abs(localEye.w) > 1e-8 else { return }
-        local.matrix.columns.3 = SIMD4<Float>(localEye.x / localEye.w,
-                                              localEye.y / localEye.w,
-                                              localEye.z / localEye.w,
-                                              1)
-        _ = applySceneTransaction(intentVerb: "scene.set_camera_pose",
-                                  summary: "Update camera pose",
-                                  targetRawIDs: [entity.rawValue],
-                                  mutations: [.setCameraPose(entityID: entity.rawValue,
-                                                             localTransform: local,
-                                                             target: target,
-                                                             up: up)])
+    private func setEditorCameraPose(eye: SIMD3<Float>,
+                                     target: SIMD3<Float>,
+                                     up: SIMD3<Float>? = nil,
+                                     projection: RenderCamera.Projection? = nil,
+                                     orthographicHeight: Float? = nil) {
+        guard isAuthoringEnabled else { return }
+        editorViewportCamera.eye = eye
+        editorViewportCamera.target = target
+        if let up { editorViewportCamera.up = up }
+        if let projection { editorViewportCamera.projection = projection }
+        if let orthographicHeight {
+            editorViewportCamera.orthographicHeight = RenderCamera.sanitizedOrthographicHeight(orthographicHeight)
+        }
+        if usesEditorViewportCamera {
+            onViewportCameraChanged?()
+        } else {
+            setEditorViewportCameraEnabled(true)
+        }
     }
 
     private func viewUp(forForward forward: SIMD3<Float>) -> SIMD3<Float> {

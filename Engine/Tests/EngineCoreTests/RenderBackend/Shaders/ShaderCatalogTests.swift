@@ -3,6 +3,29 @@ import Testing
 
 @Suite("ShaderCatalog")
 struct ShaderCatalogTests {
+    @Test("editor grid follows screen-space lighting and precedes particles in every stage")
+    func editorGridPassOrdering() throws {
+        let catalog = try ShaderCatalog()
+        _ = try catalog.loadWGSLRenderModule(named: "editor_grid")
+        #expect(!RenderSettings().enableEditorGrid)
+        for stage in RenderSettings.ReplacementStage.allCases {
+            var settings = RenderSettings(stage: stage, enableSSAO: true,
+                                          enableSSR: true, enableTAA: true,
+                                          enableOffscreenViewport: true)
+            #expect(!RenderFramePlanner.makePlan(settings: settings).passes.contains(.editorGrid))
+            settings.enableEditorGrid = true
+            let passes = RenderFramePlanner.makePlan(settings: settings).passes
+            let gridIndex = try #require(passes.firstIndex(of: .editorGrid))
+            let particleIndex = try #require(passes.firstIndex(of: .particles))
+            #expect(gridIndex < particleIndex)
+            #expect(RenderPassKind.opaquePasses.contains(.editorGrid))
+            for pass in [RenderPassKind.basePass, .ssao, .ssr] {
+                if let index = passes.firstIndex(of: pass) { #expect(index < gridIndex) }
+            }
+            if let taa = passes.firstIndex(of: .taa) { #expect(gridIndex < taa) }
+        }
+    }
+
     @Test("catalog resolves a WGSL-only shader inventory")
     func catalogResolvesPrograms() throws {
         let catalog = try ShaderCatalog()

@@ -652,3 +652,42 @@
 "Expand JSON Editor" = "展开 JSON 编辑器";
 
 "Apply" = "应用";
+
+// Project launcher
+"Create a blank project, open your work, or try a playable example." = "创建空白项目、打开已有作品，或试玩完整示例。";
+"Projects" = "项目";
+"Removing a recent entry keeps its files. Delete moves the project to Trash." = "移除记录会保留文件；删除会将整个项目移入废纸篓。";
+"No recent projects yet." = "暂无最近项目。";
+"Playable Example" = "可玩示例";
+"Collect 8 crystals in 50 seconds and avoid the sentinels. Includes the complete editable game script." = "在 50 秒内收集 8 颗水晶，躲避巡逻者。附带可编辑的完整游戏脚本。";
+"Play → Space to start · WASD move · Shift sprint · R restart" = "点击播放 → 空格开始 · WASD 移动 · Shift 冲刺 · R 重开";
+"Create Example Project..." = "创建示例项目…";
+"New Crystal Rush Project" = "新建 Crystal Rush 项目";
+"New Blank Project" = "新建空白项目";
+"Project Name" = "项目名称";
+"Parent Folder" = "保存位置（父文件夹）";
+"Browse..." = "浏览…";
+"Creates a separate copy and compiles its bundled script. When ready, click Play." = "创建独立副本并编译示例脚本；就绪后点击播放。";
+"Starts with an empty scene and empty Assets and Scripts folders." = "创建空白场景，以及空的 Assets 和 Scripts 文件夹。";
+"Create and Open" = "创建并打开";
+"Remove Entry" = "移除记录";
+"Missing or invalid project — open its new location or remove this entry." = "项目已移动或无效：请从新位置打开，或移除此记录。";
+"Move Project to Trash?" = "将项目移入废纸篓？";
+"This moves the entire project folder, including assets and scripts. You can restore it from Trash." = "这将移动整个项目文件夹，包括资源和脚本。之后可从废纸篓恢复。";
+"Move to Trash" = "移入废纸篓";
+"Close Project / Welcome" = "关闭项目 / 返回启动页";
+"The project has unsaved scene or script changes. Save before closing?" = "项目包含未保存的场景或脚本修改。关闭前是否保存？";
+"Reference Grid" = "参考网格";
+
+"Perspective" = "透视";
+"Orthographic" = "正交";
+"Front" = "前视图";
+"Back" = "后视图";
+"Right" = "右视图";
+"Left" = "左视图";
+"Top" = "顶视图";
+"Bottom" = "底视图";
+"Snapping" = "吸附";
+"Snap Steps" = "吸附步长";
+"World Units" = "世界单位";
+"Scale Increment" = "缩放增量";

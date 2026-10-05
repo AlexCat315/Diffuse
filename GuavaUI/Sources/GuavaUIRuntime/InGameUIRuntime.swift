@@ -38,8 +38,9 @@ public final class InGameUIRenderer: InGameUIProviding, @unchecked Sendable {
         height: Int,
         deltaTime: Double
     ) {
-        guard let snapshot = source.consume(),
-              !snapshot.isEmpty,
+        guard let snapshot = source.consume() else { return }
+        if let dirty = snapshot.atlasDirty { pendingAtlasDirty = dirty }
+        guard !snapshot.isEmpty,
               let encoder = commandEncoder as? GPUCommandEncoder,
               let view = colorView as? GPUTextureView,
               width > 0, height > 0
@@ -65,7 +66,6 @@ public final class InGameUIRenderer: InGameUIProviding, @unchecked Sendable {
         }
         guard configuredFormat != nil else { return }
 
-        if let dirty = snapshot.atlasDirty { pendingAtlasDirty = dirty }
         if let dirty = pendingAtlasDirty {
             do {
                 try dirty.pixels.withUnsafeBufferPointer { ptr in

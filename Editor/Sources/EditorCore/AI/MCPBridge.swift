@@ -3,91 +3,128 @@ import Foundation
 import Network
 #endif
 
-/// Embedded TCP server on 127.0.0.1:9898.
-/// Receives newline-delimited JSON commands from the guava-mcp CLI and
-/// dispatches them to the registered handler on the main queue.
+/// Loopback-only JSON bridge. Clients have independent buffers and async handlers.
 public final class MCPBridge: @unchecked Sendable {
     public static let port: UInt16 = 9898
-
-    /// Called on the main queue: (action, params) → response dict.
-    public var onCommand: ((String, [String: Any]) -> [String: Any])?
+    public static let maximumMessageBytes = 1_048_576
+    public var onCommand: (@MainActor (String, [String: Any]) async -> [String: Any])?
+    public private(set) var boundPort: UInt16?
+    public private(set) var lastError: String?
+    private let requestedPort: UInt16
 
     #if canImport(Network)
+    private final class Client: @unchecked Sendable {
+        let id = UUID()
+        let connection: NWConnection
+        var buffer = Data()
+        var pendingLines: [Data] = []
+        var processing = false
+        init(_ connection: NWConnection) { self.connection = connection }
+    }
     private var listener: NWListener?
-    private var connection: NWConnection?
-    private var receiveBuffer = Data()
+    private var clients: [UUID: Client] = [:]
     private let queue = DispatchQueue.main
     #endif
 
-    public init() {}
+    public init(port: UInt16? = nil) {
+        requestedPort = port ?? ProcessInfo.processInfo.environment["GUAVA_MCP_PORT"]
+            .flatMap(UInt16.init) ?? Self.port
+    }
 
     public func start() {
         #if canImport(Network)
-        queue.async { [weak self] in self?._start() }
+        queue.async { [weak self] in self?.startListener() }
+        #else
+        lastError = "The editor TCP bridge requires the Network framework on this platform."
         #endif
     }
 
     public func stop() {
         #if canImport(Network)
         queue.async { [weak self] in
-            self?.connection?.cancel()
-            self?.listener?.cancel()
-            self?.connection = nil
-            self?.listener = nil
+            guard let self else { return }
+            for client in self.clients.values { client.connection.cancel() }
+            self.clients.removeAll()
+            self.listener?.cancel()
+            self.listener = nil
+            self.boundPort = nil
         }
         #endif
     }
 
     #if canImport(Network)
-    private func _start() {
+    private func startListener() {
         guard listener == nil else { return }
-        let params = NWParameters.tcp
-        params.allowLocalEndpointReuse = true
-        guard let nwPort = NWEndpoint.Port(rawValue: MCPBridge.port),
-              let l = try? NWListener(using: params, on: nwPort)
-        else { return }
-        l.newConnectionHandler = { [weak self] conn in
-            guard let self else { return }
-            self.queue.async { [weak self] in self?.accept(conn) }
-        }
-        l.start(queue: queue)
-        self.listener = l
-    }
-
-    private func accept(_ conn: NWConnection) {
-        connection?.cancel()
-        connection = conn
-        receiveBuffer = Data()
-        conn.start(queue: queue)
-        scheduleReceive(conn)
-    }
-
-    private func scheduleReceive(_ conn: NWConnection) {
-        conn.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, complete, error in
-            guard let self else { return }
-            if let data, !data.isEmpty {
-                self.receiveBuffer.append(data)
-                self.drainBuffer(conn)
+        let parameters = NWParameters.tcp
+        parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: requestedPort)!)
+        do {
+            let listener = try NWListener(using: parameters)
+            listener.stateUpdateHandler = { [weak self, weak listener] state in
+                guard let self else { return }
+                switch state {
+                case .ready: self.boundPort = listener?.port?.rawValue; self.lastError = nil
+                case let .failed(error): self.lastError = error.localizedDescription; self.listener = nil
+                default: break
+                }
             }
-            if !complete && error == nil {
-                self.scheduleReceive(conn)
+            listener.newConnectionHandler = { [weak self] connection in
+                guard let self else { connection.cancel(); return }
+                let client = Client(connection)
+                self.clients[client.id] = client
+                connection.start(queue: self.queue)
+                self.receive(client)
             }
+            self.listener = listener
+            listener.start(queue: queue)
+        } catch { lastError = error.localizedDescription }
+    }
+
+    private func receive(_ client: Client) {
+        client.connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { [weak self] data, _, complete, error in
+            guard let self, self.clients[client.id] != nil else { return }
+            if let data { client.buffer.append(data) }
+            guard client.buffer.count <= Self.maximumMessageBytes else {
+                self.close(client)
+                return
+            }
+            while let newline = client.buffer.firstIndex(of: 10) {
+                let line = Data(client.buffer[..<newline])
+                client.buffer.removeSubrange(...newline)
+                if !line.isEmpty { client.pendingLines.append(line) }
+            }
+            guard client.pendingLines.count <= 64 else { self.close(client); return }
+            self.processNext(client)
+            if complete || error != nil { self.close(client) }
+            else { self.receive(client) }
         }
     }
 
-    private func drainBuffer(_ conn: NWConnection) {
-        while let newlineIndex = receiveBuffer.firstIndex(of: UInt8(ascii: "\n")) {
-            let lineData = Data(receiveBuffer[receiveBuffer.startIndex..<newlineIndex])
-            receiveBuffer = Data(receiveBuffer[receiveBuffer.index(after: newlineIndex)...])
-            guard !lineData.isEmpty,
-                  let json = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
-                  let action = json["action"] as? String
-            else { continue }
-            let result = onCommand?(action, json) ?? ["ok": false, "error": "no handler registered"]
-            guard var responseData = try? JSONSerialization.data(withJSONObject: result) else { continue }
-            responseData.append(UInt8(ascii: "\n"))
-            conn.send(content: responseData, completion: .idempotent)
+    private func processNext(_ client: Client) {
+        guard !client.processing, !client.pendingLines.isEmpty else { return }
+        let data = client.pendingLines.removeFirst()
+        client.processing = true
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let result: [String: Any]
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let action = json["action"] as? String {
+                result = await self.onCommand?(action, json) ?? ["ok": false, "error": "editor handler unavailable"]
+            } else { result = ["ok": false, "error": "invalid JSON command"] }
+            self.send(result, to: client)
+            client.processing = false
+            if self.clients[client.id] != nil { self.processNext(client) }
         }
+    }
+
+    private func send(_ result: [String: Any], to client: Client) {
+        guard var data = try? JSONSerialization.data(withJSONObject: result) else { return }
+        data.append(10)
+        client.connection.send(content: data, completion: .idempotent)
+    }
+
+    private func close(_ client: Client) {
+        clients.removeValue(forKey: client.id)
+        client.connection.cancel()
     }
     #endif
 }

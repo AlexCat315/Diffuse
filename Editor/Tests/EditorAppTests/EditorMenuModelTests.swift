@@ -30,6 +30,7 @@ struct EditorMenuModelTests {
                                                 hasSelection: true)).map(\.command)
         func has(_ predicate: (EditorMenuCommand) -> Bool) -> Bool { cmds.contains(where: predicate) }
 
+        #expect(has { if case .closeProject = $0 { return true }; return false })
         #expect(has { if case .newScene = $0 { return true }; return false })
         #expect(has { if case .openScene = $0 { return true }; return false })
         #expect(has { if case .saveScene = $0 { return true }; return false })

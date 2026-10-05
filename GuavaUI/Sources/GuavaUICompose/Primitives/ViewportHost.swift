@@ -25,6 +25,7 @@ public struct ViewportScreenFrame: Equatable, Sendable {
 
 public struct ViewportHost<Overlay: View>: _PrimitiveView {
     public let surface: ViewportSurfaceState
+    public let automaticallyFocus: Bool
     public let onInputEvent: ((InputEvent) -> Void)?
     public let onDrawableSizeChange: ((RenderDrawableSize) -> Void)?
     public let onScreenFrameChange: ((ViewportScreenFrame) -> Void)?
@@ -32,12 +33,14 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
     public let overlay: Overlay
 
     public init(surface: ViewportSurfaceState,
+                automaticallyFocus: Bool = false,
                 onInputEvent: ((InputEvent) -> Void)? = nil,
                 onDrawableSizeChange: ((RenderDrawableSize) -> Void)? = nil,
                 onScreenFrameChange: ((ViewportScreenFrame) -> Void)? = nil,
                 onDrawOverlay: ((DrawList, ViewportScreenFrame) -> Void)? = nil,
                 @ViewBuilder overlay: () -> Overlay) {
         self.surface = surface
+        self.automaticallyFocus = automaticallyFocus
         self.onInputEvent = onInputEvent
         self.onDrawableSizeChange = onDrawableSizeChange
         self.onScreenFrameChange = onScreenFrameChange
@@ -55,6 +58,13 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
 
     public func _updateNode(_ node: Node) {
         let snap = self
+        // A standalone game owns the initial keyboard target. Embedded editor
+        // viewports retain click-to-focus and never take another control's focus.
+        if snap.automaticallyFocus, node.attachments["__viewport_initial_focus"] == nil,
+           let focus = FocusChainHolder.current, focus.focused == nil {
+            focus.focus(node, visible: false)
+            if focus.focused === node { node.attachments["__viewport_initial_focus"] = true }
+        }
         node.animatableSet(\.backgroundColor, to: snap.surface.isValid
             ? node.theme.colors.surfaceSunken
             : node.theme.colors.surfaceVariant)
@@ -178,11 +188,13 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
 
 public extension ViewportHost where Overlay == EmptyView {
     init(surface: ViewportSurfaceState,
+         automaticallyFocus: Bool = false,
          onInputEvent: ((InputEvent) -> Void)? = nil,
          onDrawableSizeChange: ((RenderDrawableSize) -> Void)? = nil,
          onScreenFrameChange: ((ViewportScreenFrame) -> Void)? = nil,
          onDrawOverlay: ((DrawList, ViewportScreenFrame) -> Void)? = nil) {
         self.init(surface: surface,
+                  automaticallyFocus: automaticallyFocus,
                   onInputEvent: onInputEvent,
                   onDrawableSizeChange: onDrawableSizeChange,
                   onScreenFrameChange: onScreenFrameChange,

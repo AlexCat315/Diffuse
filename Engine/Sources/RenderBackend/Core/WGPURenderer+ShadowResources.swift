@@ -106,7 +106,8 @@ extension WGPURenderer {
             ShadowAtlasPlan(
                 uniforms: .disabled(mapResolution: tileSize,
                                     cameraPosition: scene.camera.eye,
-                                    cameraForward: disabledCameraForward),
+                                    cameraForward: disabledCameraForward,
+                                    orthographic: scene.camera.projection == .orthographic),
                 lights: [],
                 tileSize: tileSize,
                 atlasSize: atlasSize,
@@ -238,7 +239,8 @@ extension WGPURenderer {
                 Float(atlasSize)
             ),
             cascadeSplits: packedCascadeSplits,
-            cameraPositionAndPadding: SIMD4<Float>(scene.camera.eye, 0),
+            cameraPositionAndPadding: SIMD4<Float>(scene.camera.eye,
+                scene.camera.projection == .orthographic ? 1 : 0),
             cameraForwardAndPadding: SIMD4<Float>(cameraForward, 0)
         )
         return ShadowAtlasPlan(
@@ -501,7 +503,9 @@ private func cameraFrustumCorners(
     let tanHalfFov = tan(max(camera.fovYRadians, 0.001) * 0.5)
 
     func corners(at distance: Float) -> [SIMD3<Float>] {
-        let height = max(distance, 0.001) * tanHalfFov
+        let height = camera.projection == .orthographic
+            ? RenderCamera.sanitizedOrthographicHeight(camera.orthographicHeight) * 0.5
+            : max(distance, 0.001) * tanHalfFov
         let width = height * max(aspect, Float.ulpOfOne)
         let center = camera.eye + forward * distance
         return [
