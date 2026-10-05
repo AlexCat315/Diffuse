@@ -678,3 +678,16 @@
 "Close Project / Welcome" = "关闭项目 / 返回启动页";
 "The project has unsaved scene or script changes. Save before closing?" = "项目包含未保存的场景或脚本修改。关闭前是否保存？";
 "Reference Grid" = "参考网格";
+
+"Perspective" = "透视";
+"Orthographic" = "正交";
+"Front" = "前视图";
+"Back" = "后视图";
+"Right" = "右视图";
+"Left" = "左视图";
+"Top" = "顶视图";
+"Bottom" = "底视图";
+"Snapping" = "吸附";
+"Snap Steps" = "吸附步长";
+"World Units" = "世界单位";
+"Scale Increment" = "缩放增量";

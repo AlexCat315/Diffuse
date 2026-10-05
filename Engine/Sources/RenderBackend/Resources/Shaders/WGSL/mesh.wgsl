@@ -409,7 +409,9 @@ fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
     let normal = safe_normalize(mat3x3<f32>(T, B, N) * tangent_n);
 
     let cam = shadow.camera_position_and_padding.xyz;
-    let V = safe_normalize(cam - in.world_pos);
+    let V = select(safe_normalize(cam - in.world_pos),
+                   -shadow.camera_forward_and_padding.xyz,
+                   shadow.camera_position_and_padding.w > 0.5);
     // Reflect the environment with the SMOOTH geometric normal — using the
     // detail-normal here turns the high-frequency normal map into reflection
     // noise. The detail normal is still used for direct lighting below.

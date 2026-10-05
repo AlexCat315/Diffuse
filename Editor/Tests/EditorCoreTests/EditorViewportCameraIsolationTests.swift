@@ -18,6 +18,7 @@ struct EditorViewportCameraIsolationTests {
         let before = adapter.manifest()
         let cameraBefore = adapter.currentRenderCamera()
         let frame = ViewportScreenFrame(x: 0, y: 0, width: 800, height: 600)
+        adapter.setViewportProjection(.orthographic)
         adapter.orbitCamera(deltaScreenX: 30, deltaScreenY: 10, in: frame)
         adapter.panCamera(deltaScreenX: 20, deltaScreenY: 10, in: frame)
         adapter.dollyCamera(deltaScreenY: 15)
@@ -41,6 +42,7 @@ struct EditorViewportCameraIsolationTests {
         let app = try EditorApplication(projectDirectory: directory.path, seedPreviewScene: true)
         defer { app.shutdown() }
         app.scene.tickScene()
+        app.scene.lookAlongAxis(SIMD3<Float>(0, -1, 0), orthographic: true)
         app.scene.zoomCamera(factor: 0.7)
         let editorCamera = app.scene.currentRenderCamera()
         let gameCamera = try #require(app.scene.scene.extractedRenderScene?.scene.camera)
@@ -53,6 +55,7 @@ struct EditorViewportCameraIsolationTests {
         #expect(app.scene.currentRenderScene().camera == gameCamera)
         app.scene.orbitCamera(deltaScreenX: 40, deltaScreenY: 20,
                               in: ViewportScreenFrame(x: 0, y: 0, width: 800, height: 600))
+        app.scene.setViewportProjection(.perspective)
         app.applyPlaybackState(.paused)
         #expect(app.scene.currentRenderCamera() == gameCamera)
         app.applyPlaybackState(.stopped)

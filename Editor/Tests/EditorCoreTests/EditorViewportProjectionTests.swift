@@ -6,6 +6,54 @@ import Testing
 
 @Suite("EditorViewportProjection")
 struct EditorViewportProjectionTests {
+    @Test("orthographic picking rays are parallel, offset, and round-trip at every depth")
+    func orthographicParallelRays() throws {
+        let camera = RenderCamera(eye: SIMD3<Float>(0, 0, 5), target: .zero,
+                                  near: 0.1, far: 100,
+                                  projection: .orthographic, orthographicHeight: 6)
+        let p = try #require(EditorViewportProjection(camera: camera,
+            frame: ViewportScreenFrame(x: 40, y: 20, width: 800, height: 600)))
+        let left = p.cursorRay(x: 240, y: 320)
+        let right = p.cursorRay(x: 640, y: 320)
+        #expect(left.direction == SIMD3<Float>(0, 0, -1))
+        #expect(left.direction == right.direction)
+        #expect(abs(right.origin.x - left.origin.x - 4) < 1e-5)
+        #expect(abs(left.origin.z - 4.9) < 1e-5)
+        let nearPoint = try #require(p.project(SIMD3<Float>(1.5, -0.8, 0)))
+        let farPoint = try #require(p.project(SIMD3<Float>(1.5, -0.8, -40)))
+        #expect(abs(nearPoint.x - farPoint.x) < 1e-5)
+        #expect(abs(nearPoint.y - farPoint.y) < 1e-5)
+        let ray = p.cursorRay(x: nearPoint.x, y: nearPoint.y)
+        #expect(abs(ray.origin.x - 1.5) < 1e-5 && abs(ray.origin.y + 0.8) < 1e-5)
+        #expect(p.project(SIMD3<Float>(0, 0, 4.95)) == nil)
+        #expect(p.project(SIMD3<Float>(0, 0, -100)) == nil)
+    }
+
+    @Test("orthographic framing fits bounds even in a narrow viewport")
+    func orthographicFramingFits() throws {
+        var camera = RenderCamera(eye: SIMD3<Float>(6, 5, 8), target: .zero,
+                                  projection: .orthographic, orthographicHeight: 1)
+        let lower = SIMD3<Float>(-2, -1, -3)
+        let upper = SIMD3<Float>(4, 5, 1)
+        let pose = EditorViewportFraming.pose(camera: camera, boundsMin: lower, boundsMax: upper,
+                                              viewportAspectRatio: 0.5)
+        camera.eye = pose.eye
+        camera.target = pose.target
+        camera.up = pose.up
+        camera.orthographicHeight = try #require(pose.orthographicHeight)
+        let p = try #require(EditorViewportProjection(camera: camera,
+            frame: ViewportScreenFrame(x: 0, y: 0, width: 400, height: 800)))
+        for x in [lower.x, upper.x] {
+            for y in [lower.y, upper.y] {
+                for z in [lower.z, upper.z] {
+                    let screen = try #require(p.project(SIMD3<Float>(x, y, z)))
+                    #expect(screen.x >= 20 && screen.x <= 380)
+                    #expect(screen.y >= 40 && screen.y <= 760)
+                }
+            }
+        }
+    }
+
 
     private func makeProjection() -> EditorViewportProjection {
         let camera = RenderCamera(eye: SIMD3<Float>(0, 0, 5),

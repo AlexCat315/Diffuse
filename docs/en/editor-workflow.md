@@ -47,6 +47,14 @@ Core panels share the same toolbar, search, count badge, and empty-state languag
 - **Developer Tools** brings Profiler, Monitors, Render, Particles, Debugger, and Trace into one workbench. Debugger summarizes editor, frame/render, viewport, and selection state; its console supports search, severity filters, newest-first ordering, and expandable details. Trace aligns frame-budget, CPU/GPU-present, render-pass, particle, and console signals across frames. Pause or capture a window, filter and sort by track/severity/text, inspect event evidence and recommendations alongside neighboring-frame context, then jump to the owning diagnostic tab.
 - **Settings** switches the model default with the AI provider and clears any unsubmitted API-key draft when providers change, preventing credentials from being saved to the wrong service. Removing a system-stored credential requires a second confirmation, and validation failures are visibly marked as errors.
 
+## Orthographic views and snapping
+
+The viewport's **Perspective / Orthographic** menu switches projection and offers Front, Back, Left, Right, Top, and Bottom orthographic views. Clicking an axis endpoint on the view cube also enters the corresponding orthographic view. Switching projection preserves the apparent scale at the focus plane. In orthographic mode, wheel zoom and dolly adjust the visible extent, middle-drag pans by screen distance, and `F` fits the complete selection.
+
+The reference grid uses the XZ ground plane in perspective. Orthographic views use a dark background and the facing XY, YZ, or XZ plane, with red X, green Y, and blue Z axes.
+
+The **Snapping** menu offers independent switches and steps for movement, rotation, and scaling. Default steps are `0.5` world units, `5°`, and `0.05`; all three switches start off. Press Return or leave a number field to commit a new value. When movement snapping is enabled, grid spacing follows its step, showing integer multiples when zoomed out to remain readable. Snap settings are saved per project and restored on reopening.
+
 ## Playback
 
 Entering play mode snapshots the scene. Pause freezes simulation without discarding state, while stop restores the pre-play scene. The MCP `set_playback_state` tool uses the same `playing`, `paused`, and `stopped` states.
