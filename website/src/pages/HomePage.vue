@@ -54,7 +54,7 @@ const primaryAsset = computed(() => latest.value?.assets.find((asset) => asset.n
     <section class="release-section section-shell section-space">
       <div class="release-card">
         <div><p class="eyebrow"><MonitorDown :size="14" /> {{ t.github.latest }}</p><h2>{{ t.home.releaseTitle }}</h2><p>{{ t.home.releaseIntro }}</p></div>
-        <div class="release-version"><span>{{ latest?.tag ?? 'v0.0.7' }}</span><small>{{ latest?.publishedAt?.slice(0, 10) ?? '2026-07-05' }}</small></div>
+        <div class="release-version"><span>{{ latest?.tag ?? 'v0.0.9' }}</span><small>{{ latest?.publishedAt?.slice(0, 10) ?? '2026-10-06' }}</small></div>
         <div class="release-actions">
           <a v-if="primaryAsset" :href="primaryAsset.downloadUrl" class="button"><Download :size="17" /> {{ t.actions.download }}</a>
           <RouterLink v-else :to="`/${locale}/download`" class="button"><Download :size="17" /> {{ t.actions.download }}</RouterLink>

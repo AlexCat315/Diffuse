@@ -17,7 +17,7 @@ const platforms = computed(() => [
 
 <template>
   <main>
-    <section class="page-hero section-shell"><p class="eyebrow"><Download :size="14" /> {{ t.download.eyebrow }}</p><h1>{{ t.download.title }}</h1><p>{{ t.download.description }}</p><div class="version-pill"><i></i>{{ latest?.tag ?? 'v0.0.7' }} <span>{{ latest?.publishedAt?.slice(0, 10) ?? '2026-07-05' }}</span></div></section>
+    <section class="page-hero section-shell"><p class="eyebrow"><Download :size="14" /> {{ t.download.eyebrow }}</p><h1>{{ t.download.title }}</h1><p>{{ t.download.description }}</p><div class="version-pill"><i></i>{{ latest?.tag ?? 'v0.0.9' }} <span>{{ latest?.publishedAt?.slice(0, 10) ?? '2026-10-06' }}</span></div></section>
     <section class="section-shell download-grid">
       <article v-for="platform in platforms" :key="platform.key">
         <component :is="platform.icon" :size="31" /><div><h2>{{ platform.title }}</h2><p>{{ platform.detail }}</p></div>
