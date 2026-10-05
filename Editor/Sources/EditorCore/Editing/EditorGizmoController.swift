@@ -14,6 +14,23 @@ public final class EditorGizmoController: @unchecked Sendable {
 
     public static let shared = EditorGizmoController()
 
+    /// World length corresponding to a fixed logical screen size at the pivot.
+    /// Drawing and hit testing consume the same length through the snapshot.
+    public static func axisLength(camera: RenderCamera, position: SIMD3<Float>,
+                                  viewportHeight: Float, screenLength: Float = 96) -> Float {
+        let visibleHeight: Float
+        if camera.projection == .orthographic {
+            visibleHeight = RenderCamera.sanitizedOrthographicHeight(camera.orthographicHeight)
+        } else {
+            let forward = camera.target - camera.eye
+            let length = simd_length(forward)
+            let direction = length > 1e-5 ? forward / length : SIMD3<Float>(0, 0, -1)
+            let depth = max(camera.near, simd_dot(position - camera.eye, direction))
+            visibleHeight = 2 * depth * tanf(camera.fovYRadians * 0.5)
+        }
+        return visibleHeight * screenLength / max(1, viewportHeight)
+    }
+
     public enum Mode: Sendable {
         case translate
         case rotate
@@ -713,7 +730,7 @@ public struct ScreenProjector {
     }
 
     public func project(_ worldPoint: SIMD3<Float>) -> (x: Float, y: Float)? {
-        projection.project(worldPoint)
+        projection.project(worldPoint, clipToFarPlane: false)
     }
 
     public func cursorRay(x: Float, y: Float) -> (origin: SIMD3<Float>, direction: SIMD3<Float>)? {
