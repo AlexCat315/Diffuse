@@ -110,7 +110,7 @@ void guava_wasmtime_buffer_delete(guava_wasmtime_buffer_t *buffer) {
   buffer->size = 0;
 }
 
-const char *guava_wasmtime_runtime_version(void) { return "45.0.0"; }
+const char *guava_wasmtime_runtime_version(void) { return WASMTIME_VERSION; }
 
 guava_wasmtime_runtime_t *
 guava_wasmtime_runtime_new(guava_wasmtime_buffer_t *error) {

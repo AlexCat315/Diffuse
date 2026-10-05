@@ -38,7 +38,7 @@ public enum WasmtimeCLIError: Error, Sendable, Equatable, CustomStringConvertibl
 /// Process (never through a shell). Package WIT validation rejects all ambient
 /// WASI imports before this runner is reached.
 public final class WasmtimeCLIComponentRuntime: WASIComponentRuntime, @unchecked Sendable {
-    public static let pinnedVersion = "45.0.0"
+    public static let pinnedVersion = "49.0.2"
     public let runtimeVersion = pinnedVersion
     public let executableURL: URL
 
