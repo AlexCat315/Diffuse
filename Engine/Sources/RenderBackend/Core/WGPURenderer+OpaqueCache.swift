@@ -77,6 +77,7 @@ extension WGPURenderer {
         hasher.combine(instance.entity)
         hasher.combine(instance.mesh.meshIndex)
         hasher.combine(instance.mesh.assetID)
+        hasher.combine(instance.mesh.levelsOfDetail)
         Self.combine(&hasher, instance.transform)
         hasher.combine(instance.colorTint)
         let material = instance.material
@@ -86,6 +87,9 @@ extension WGPURenderer {
         hasher.combine(material.metallicFactor)
         hasher.combine(material.roughnessFactor)
         hasher.combine(material.emissiveFactor)
+        hasher.combine(material.alphaMode)
+        hasher.combine(material.alphaCutoff)
+        hasher.combine(material.doubleSided)
         return hasher.finalize()
     }
 

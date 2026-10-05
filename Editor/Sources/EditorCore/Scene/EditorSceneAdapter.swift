@@ -514,29 +514,34 @@ public struct EditorSceneManifestRenderMesh: Codable, Sendable, Equatable {
     public let isVisible: Bool
     public let colorTint: EditorSceneManifestVector3?
     public let assetID: String?
+    public let levelsOfDetail: [RenderMeshLOD]?
 
     public init(meshIndex: Int,
                 isVisible: Bool,
                 colorTint: EditorSceneManifestVector3? = nil,
-                assetID: String? = nil) {
+                assetID: String? = nil,
+                levelsOfDetail: [RenderMeshLOD]? = nil) {
         self.meshIndex = meshIndex
         self.isVisible = isVisible
         self.colorTint = colorTint
         self.assetID = assetID
+        self.levelsOfDetail = levelsOfDetail
     }
 
     public init(_ component: RenderMeshComponent) {
         self.init(meshIndex: component.meshIndex,
                   isVisible: component.isVisible,
                   colorTint: EditorSceneManifestVector3(component.colorTint),
-                  assetID: component.assetID)
+                  assetID: component.assetID,
+                  levelsOfDetail: component.levelsOfDetail.isEmpty ? nil : component.levelsOfDetail)
     }
 
     var component: RenderMeshComponent {
         RenderMeshComponent(meshIndex: meshIndex,
                             isVisible: isVisible,
                             colorTint: colorTint?.simdValue ?? SIMD3<Float>(1, 1, 1),
-                            assetID: assetID)
+                            assetID: assetID,
+                            levelsOfDetail: levelsOfDetail ?? [])
     }
 }
 
@@ -547,19 +552,28 @@ public struct EditorSceneManifestRenderMaterial: Codable, Sendable, Equatable {
     public let metallicFactor: Float
     public let roughnessFactor: Float
     public let emissiveFactor: EditorSceneManifestVector3
+    public let alphaMode: MaterialAlphaMode?
+    public let alphaCutoff: Float?
+    public let doubleSided: Bool?
 
     public init(baseColorFactor: EditorSceneManifestVector4,
                 baseColorTextureIndex: Int? = nil,
                 normalTextureIndex: Int? = nil,
                 metallicFactor: Float,
                 roughnessFactor: Float,
-                emissiveFactor: EditorSceneManifestVector3) {
+                emissiveFactor: EditorSceneManifestVector3,
+                alphaMode: MaterialAlphaMode? = nil,
+                alphaCutoff: Float? = nil,
+                doubleSided: Bool? = nil) {
         self.baseColorFactor = baseColorFactor
         self.baseColorTextureIndex = baseColorTextureIndex
         self.normalTextureIndex = normalTextureIndex
         self.metallicFactor = metallicFactor
         self.roughnessFactor = roughnessFactor
         self.emissiveFactor = emissiveFactor
+        self.alphaMode = alphaMode
+        self.alphaCutoff = alphaCutoff
+        self.doubleSided = doubleSided
     }
 
     public init(_ component: RenderMaterialComponent) {
@@ -568,7 +582,8 @@ public struct EditorSceneManifestRenderMaterial: Codable, Sendable, Equatable {
                   normalTextureIndex: component.normalTextureIndex,
                   metallicFactor: component.metallicFactor,
                   roughnessFactor: component.roughnessFactor,
-                  emissiveFactor: EditorSceneManifestVector3(component.emissiveFactor))
+                  emissiveFactor: EditorSceneManifestVector3(component.emissiveFactor),
+                  alphaMode: component.alphaMode, alphaCutoff: component.alphaCutoff, doubleSided: component.doubleSided)
     }
 
     var component: RenderMaterialComponent {
@@ -577,7 +592,8 @@ public struct EditorSceneManifestRenderMaterial: Codable, Sendable, Equatable {
                                 normalTextureIndex: normalTextureIndex,
                                 metallicFactor: metallicFactor,
                                 roughnessFactor: roughnessFactor,
-                                emissiveFactor: emissiveFactor.simdValue)
+                                emissiveFactor: emissiveFactor.simdValue,
+                                alphaMode: alphaMode, alphaCutoff: alphaCutoff, doubleSided: doubleSided)
     }
 }
 

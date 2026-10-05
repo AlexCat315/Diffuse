@@ -32,22 +32,6 @@ struct DeformableMeshUploadReport: Sendable, Equatable {
     var rejectedMeshCount: Int = 0
 }
 
-/// Per-instance GPU resources (uniform buffer + bind group). One slot per draw call.
-struct InstanceResources {
-    let uniformBuffer: GPUBuffer
-    let bindGroup: GPUBindGroup
-}
-
-extension InstanceResources: @unchecked Sendable {}
-
-struct InstanceResourceKey: Equatable, Sendable {
-    let entity: EntityID?
-    let meshIndex: Int
-    let baseColorTextureIndex: Int?
-    let normalTextureIndex: Int?
-    let jointPaletteMatrixCount: Int
-}
-
 let maxSceneLightUniformCount = 8
 let maxShadowAtlasTileCount = 4
 let maxShadowedDirectionalLightCount = maxShadowAtlasTileCount
@@ -241,16 +225,6 @@ struct ShadowAtlasPlan: Equatable, Sendable {
         }
     }
 }
-
-/// Shared uniform-buffer path using dynamic bind offsets.
-struct DynamicInstanceResources {
-    let uniformBuffer: GPUBuffer
-    let bindGroup: GPUBindGroup
-    let stride: UInt64
-    let capacity: Int
-}
-
-extension DynamicInstanceResources: @unchecked Sendable {}
 
 struct RenderTextureTarget {
     let texture: GPUTexture
