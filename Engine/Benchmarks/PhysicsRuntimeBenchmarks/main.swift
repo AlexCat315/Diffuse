@@ -264,10 +264,11 @@ private func milliseconds(_ nanoseconds: UInt64) -> String {
 
 private func peakResidentBytes() -> UInt64 {
     var usage = rusage()
-    guard getrusage(RUSAGE_SELF, &usage) == 0 else { return 0 }
     #if os(macOS)
+    guard getrusage(RUSAGE_SELF, &usage) == 0 else { return 0 }
     return UInt64(usage.ru_maxrss)
     #else
+    guard getrusage(RUSAGE_SELF.rawValue, &usage) == 0 else { return 0 }
     return UInt64(usage.ru_maxrss) * 1024
     #endif
 }

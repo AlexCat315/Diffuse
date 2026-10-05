@@ -207,7 +207,7 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
         #endif
 
         let sourcePaths = [sourcePath, shimURL.path]
-        let args = buildArguments(sourcePaths: sourcePaths, outputPath: outputPath)
+        let args = try buildArguments(sourcePaths: sourcePaths, outputPath: outputPath)
 
         let process = Process()
         process.executableURL = try Self.resolveExecutableURL(for: swiftcPath)
@@ -316,7 +316,7 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
 
     // MARK: - Argument construction
 
-    private func buildArguments(sourcePaths: [String], outputPath: String) -> [String] {
+    private func buildArguments(sourcePaths: [String], outputPath: String) throws -> [String] {
         var args: [String] = []
 
         args.append("-O")
@@ -341,6 +341,10 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
         args.append(contentsOf: ["-L", outputDirectory.path])
 
         #if os(macOS)
+        // Standalone Swift toolchains do not discover Xcode's SDK like the
+        // Apple compiler does. SwiftPM sets it for its own builds, but scripts
+        // are compiled by a separate swiftc process.
+        args.append(contentsOf: ["-sdk", try Self.macOSSDKPath()])
         args.append(contentsOf: ["-Xlinker", "-undefined", "-Xlinker", "dynamic_lookup"])
         #elseif os(Linux)
         args.append(contentsOf: ["-Xlinker", "--allow-shlib-undefined"])
@@ -422,6 +426,32 @@ public final class SwiftScriptCompiler: @unchecked Sendable {
 
     // MARK: - Platform helpers
 
+    #if os(macOS)
+    private static func macOSSDKPath() throws -> String {
+        if let sdk = ProcessInfo.processInfo.environment["SDKROOT"],
+           !sdk.isEmpty, FileManager.default.fileExists(atPath: sdk) {
+            return sdk
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
+        process.arguments = ["--sdk", "macosx", "--show-sdk-path"]
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = output
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        let sdk = String(decoding: data, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard process.terminationStatus == 0,
+              FileManager.default.fileExists(atPath: sdk) else {
+            throw ScriptCompileError.sdkNotFound(sdk)
+        }
+        return sdk
+    }
+    #endif
+
     /// The platform's dynamic library file extension.
     public static var dylibExtension: String {
         #if os(macOS)
@@ -441,6 +471,7 @@ public enum ScriptCompileError: Error, LocalizedError, Equatable {
     case compilationFailed(exitCode: Int, stderr: String, stdout: String)
     case importLibraryFailed(exitCode: Int, stderr: String)
     case executableNotFound(String)
+    case sdkNotFound(String)
 
     public var errorDescription: String? {
         switch self {
@@ -455,6 +486,8 @@ public enum ScriptCompileError: Error, LocalizedError, Equatable {
             return "Swift script import library generation failed with exit code \(exitCode):\n\(stderr)"
         case let .executableNotFound(name):
             return "Could not find executable '\(name)' on PATH."
+        case let .sdkNotFound(diagnostic):
+            return "Could not find the macOS SDK with xcrun: \(diagnostic)"
         }
     }
 }
