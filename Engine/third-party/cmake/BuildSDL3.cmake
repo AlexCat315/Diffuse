@@ -77,7 +77,7 @@ install(CODE "
   \\\"artifacts\\\": {
     \\\"SDL3\\\": {
       \\\"type\\\": \\\"staticLibrary\\\",
-      \\\"version\\\": \\\"3.4.8\\\",
+      \\\"version\\\": \\\"3.4.18\\\",
       \\\"variants\\\": [
         {
           \\\"path\\\": \\\"${GUAVA_TRIPLE}/lib/${SDL3_LIB_FILENAME}\\\",
@@ -120,13 +120,13 @@ add_custom_target(stage_sdl3 ALL
 guava_git_revision(SDL3_SOURCE_REVISION "${CMAKE_SOURCE_DIR}/sdl3")
 guava_add_artifact_build_manifest(
     ARTIFACT_NAME "SDL3"
-    VERSION "3.4.8"
+    VERSION "3.4.18"
     BUNDLE_DIR ${SDL3_BUNDLE}
     LIB_REL_PATH "${GUAVA_TRIPLE}/lib/${SDL3_LIB_FILENAME}"
     BUILD_SYSTEM "CMake"
     SOURCE_KIND "git-submodule"
     SOURCE_URL "Engine/third-party/sdl3"
-    SOURCE_REF "3.4.8"
+    SOURCE_REF "3.4.18"
     SOURCE_REVISION ${SDL3_SOURCE_REVISION}
     NOTES "static library staged from SDL3-static"
     DEPENDS stage_sdl3

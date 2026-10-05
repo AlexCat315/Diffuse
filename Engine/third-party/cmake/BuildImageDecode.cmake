@@ -4,6 +4,7 @@
 include(FetchContent)
 
 set(LUNASVG_VERSION "v3.5.0")
+set(PLUTOVG_VERSION "v1.3.3")
 set(LIBWEBP_VERSION "v1.6.0")
 
 set(LUNASVG_BUNDLE ${GUAVA_VENDOR_DIR}/lunasvg.artifactbundle)
@@ -42,6 +43,10 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/sammycage/lunasvg.git
     GIT_TAG ${LUNASVG_VERSION}
     GIT_SHALLOW TRUE
+    PATCH_COMMAND ${CMAKE_COMMAND}
+        -DREPO_DIR=<SOURCE_DIR>/plutovg
+        -DPLUTOVG_VERSION=${PLUTOVG_VERSION}
+        -P ${CMAKE_CURRENT_LIST_DIR}/UpdatePlutovg.cmake
 )
 FetchContent_Declare(
     libwebp
@@ -107,11 +112,12 @@ function(write_static_artifact_bundle bundle artifact version triple spm_triple 
 endfunction()
 
 write_static_artifact_bundle(${LUNASVG_BUNDLE} "lunasvg" "3.5.0" ${GUAVA_TRIPLE} ${GUAVA_SPM_TRIPLE} ${LUNASVG_LIB_FILENAME})
-write_static_artifact_bundle(${PLUTOVG_BUNDLE} "plutovg" "1.0.0" ${GUAVA_TRIPLE} ${GUAVA_SPM_TRIPLE} ${PLUTOVG_LIB_FILENAME})
+write_static_artifact_bundle(${PLUTOVG_BUNDLE} "plutovg" "1.3.3" ${GUAVA_TRIPLE} ${GUAVA_SPM_TRIPLE} ${PLUTOVG_LIB_FILENAME})
 write_static_artifact_bundle(${WEBP_BUNDLE} "webp" "1.6.0" ${GUAVA_TRIPLE} ${GUAVA_SPM_TRIPLE} ${WEBP_LIB_FILENAME})
 write_static_artifact_bundle(${SHARPYUV_BUNDLE} "sharpyuv" "1.6.0" ${GUAVA_TRIPLE} ${GUAVA_SPM_TRIPLE} ${SHARPYUV_LIB_FILENAME})
 
 guava_git_revision(LUNASVG_SOURCE_REVISION "${lunasvg_SOURCE_DIR}")
+guava_git_revision(PLUTOVG_SOURCE_REVISION "${lunasvg_SOURCE_DIR}/plutovg")
 guava_git_revision(LIBWEBP_SOURCE_REVISION "${libwebp_SOURCE_DIR}")
 
 guava_add_artifact_build_manifest(
@@ -130,15 +136,15 @@ guava_add_artifact_build_manifest(
 
 guava_add_artifact_build_manifest(
     ARTIFACT_NAME "plutovg"
-    VERSION "1.0.0"
+    VERSION "1.3.3"
     BUNDLE_DIR ${PLUTOVG_BUNDLE}
     LIB_REL_PATH "${GUAVA_TRIPLE}/lib/${PLUTOVG_LIB_FILENAME}"
     BUILD_SYSTEM "CMake FetchContent"
     SOURCE_KIND "git-subdirectory"
-    SOURCE_URL "https://github.com/sammycage/lunasvg.git"
-    SOURCE_REF ${LUNASVG_VERSION}
-    SOURCE_REVISION ${LUNASVG_SOURCE_REVISION}
-    NOTES "plutovg target is vendored by lunasvg"
+    SOURCE_URL "https://github.com/sammycage/plutovg.git"
+    SOURCE_REF ${PLUTOVG_VERSION}
+    SOURCE_REVISION ${PLUTOVG_SOURCE_REVISION}
+    NOTES "vendored plutovg updated to the pinned release before lunasvg configuration"
     DEPENDS stage_image_decode
 )
 

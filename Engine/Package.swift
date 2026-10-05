@@ -66,7 +66,7 @@ let package = Package(
         .executable(name: "GuavaPluginHost", targets: ["GuavaPluginHost"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.12.0"),
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.15.1"),
     ],
     targets: [
         // MARK: - C Bridges

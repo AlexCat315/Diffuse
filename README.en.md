@@ -16,7 +16,7 @@ Guava's core thesis: **creative intent, world state, runtime execution, and AI u
 
 | Layer | Technology |
 |-------|-----------|
-| Primary language | Swift 6.1+ |
+| Primary language | Swift 6.4.0 |
 | Render backend | WebGPU (wgpu-native) |
 | UI layout | Yoga (Meta) |
 | Text shaping / rendering | HarfBuzz + FreeType |
@@ -84,12 +84,15 @@ Full roadmap with per-milestone acceptance criteria (in Chinese): [`docs/roadmap
 
 ### Prerequisites
 
-- Swift 6.1+ (official Swift toolchain)
-- CMake 3.20+
+- Swift 6.4.0 (official Swift toolchain)
+- CMake 4.4.4
 - A C/C++ toolchain:
   - **macOS**: Xcode Command Line Tools
   - **Linux**: GCC or Clang
-  - **Windows**: Visual Studio 2022 (C++ workload)
+  - **Windows**: Visual Studio 2026 (C++ workload)
+- Rust 1.99.0 / Cargo
+- Python 3.14
+- Node.js 26.10.0 / npm (website)
 - Git
 
 ### First build
@@ -139,14 +142,14 @@ swift build --package-path guava-mcp # MCP server (run: swift run GuavaMCP)
 
 | Library | Form | Source |
 |---------|------|--------|
-| Yoga | CMake source build → `.artifactbundle` | submodule under `GuavaUI/third-party/yoga` |
+| Yoga | SwiftPM source build | SwiftPM `facebook/yoga` 3.2.1 |
 | FreeType | CMake source build → `.artifactbundle` | submodule under `GuavaUI/third-party/freetype` |
 | HarfBuzz | CMake source build → `.artifactbundle` | submodule under `GuavaUI/third-party/harfbuzz` |
 | SDL3 | CMake source build → `.artifactbundle` | submodule under `Engine/third-party/sdl3` |
 | Imath | CMake source build | submodule under `Engine/third-party/imath` |
 | OpenEXR | CMake source build | submodule under `Engine/third-party/openexr` |
 | JoltPhysics | CMake source build → `.artifactbundle` | submodule under `Engine/third-party/jolt` |
-| wgpu-native | prebuilt binary downloaded from gfx-rs releases at configure time | no submodule |
+| wgpu-native | Cargo source build from a pinned gfx-rs release tag | no submodule |
 | Wasmtime | pinned official C API dynamic library → `.xcframework` | Bytecode Alliance release (SHA-256 verified, macOS) |
 
 The pattern is uniform: each SPM package owns its native deps under `<package>/third-party/`, CMake builds them into `<package>/vendor/` (gitignored), and the package consumes them via `.binaryTarget(path:)`.
@@ -203,7 +206,7 @@ GitHub Actions workflows live under `.github/workflows/`:
 
 - `ci-engine.yml` — Engine package matrix.
 - `ci-editor.yml` — Editor package.
-- `ci-guava-ui.yml` — GuavaUI package.
+- `ci-guavaui.yml` — GuavaUI package.
 - `ci-guava-mcp.yml` — MCP server package.
 - `release.yml` — release builds.
 

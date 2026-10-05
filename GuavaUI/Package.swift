@@ -15,8 +15,8 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../Engine"),
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.12.0"),
-        .package(url: "https://github.com/facebook/yoga.git", from: "3.0.0"),
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.15.1"),
+        .package(url: "https://github.com/facebook/yoga.git", from: "3.2.1"),
     ],
     targets: [
         // MARK: - Native deps (built by GuavaUI/third-party/CMakeLists.txt)

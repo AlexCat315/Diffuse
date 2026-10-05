@@ -42,13 +42,16 @@ if sys.platform == "win32" and "VCToolsInstallDir" not in env:
             if os.path.exists(c):
                 vcvars = c
 
-    # Fallback: well-known VS 2022 edition paths
+    # Fallback: well-known Visual Studio edition paths
     if vcvars is None:
-        for ed in ["Community", "Professional", "Enterprise", "BuildTools"]:
-            c = os.path.join(pf, "Microsoft Visual Studio", "2022", ed,
-                             "VC", "Auxiliary", "Build", "vcvarsall.bat")
-            if os.path.exists(c):
-                vcvars = c
+        for edition in ["2026", "2022"]:
+            for ed in ["Community", "Professional", "Enterprise", "BuildTools"]:
+                c = os.path.join(pf, "Microsoft Visual Studio", edition, ed,
+                                 "VC", "Auxiliary", "Build", "vcvarsall.bat")
+                if os.path.exists(c):
+                    vcvars = c
+                    break
+            if vcvars:
                 break
 
     if vcvars:
@@ -64,7 +67,7 @@ if sys.platform == "win32" and "VCToolsInstallDir" not in env:
                 k, _, v = line.partition("=")
                 env[k] = v
     else:
-        print("warning: VS 2022 C++ tools not found — cmake may fail to link.", file=sys.stderr)
+        print("warning: Visual Studio C++ tools not found — cmake may fail to link.", file=sys.stderr)
 
 # ── Sentinels ─────────────────────────────────────────────────────────────────
 
@@ -92,6 +95,14 @@ def shell(*args: str) -> None:
     if r.returncode != 0:
         print(f"error: {Path(args[0]).name} exited {r.returncode}", file=sys.stderr)
         sys.exit(r.returncode)
+
+# --force must invalidate ExternalProject configure/build/install stamps too.
+# Merely rerunning CMake can silently reuse libraries from an older submodule.
+if force:
+    for package in ("Engine", "GuavaUI"):
+        build_dir = root / package / "build" / "native"
+        if build_dir.exists():
+            shutil.rmtree(build_dir)
 
 # ── Engine ────────────────────────────────────────────────────────────────────
 
