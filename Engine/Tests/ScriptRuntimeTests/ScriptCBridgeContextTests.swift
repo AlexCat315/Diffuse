@@ -11,25 +11,33 @@ struct ScriptCBridgeContextTests {
         let ready = DispatchGroup()
         ready.enter()
         ready.enter()
-        DispatchQueue.concurrentPerform(iterations: 2) { index in
-            let deltaTime = index == 0 ? 0.125 : 0.75
-            let scripts = ScriptRuntime()
-            let handle = scripts.register(Script().onUpdate { context in
-                ready.leave()
-                guard ready.wait(timeout: .now() + 5) == .success else {
-                    Issue.record("The other scene did not reach its callback")
-                    return
-                }
-                #expect(guavaDeltaTime() == Float(context.deltaTime))
-                #expect(_guavaCurrentScriptContext === context)
-            })
-            var scene = SceneRuntime()
-            scene.setScriptDriver(scripts)
-            let entity = scene.createEntity()
-            _ = scene.setComponent(ScriptComponent(handle), for: entity)
-            _ = scene.tick(deltaTime: deltaTime)
-            #expect(_guavaCurrentScriptContext == nil)
+        let finished = DispatchGroup()
+        for index in 0..<2 {
+            finished.enter()
+            // A concurrentPerform worker may run serially on a small CI host.
+            // Dedicated threads guarantee both callbacks can reach the barrier.
+            Thread {
+                defer { finished.leave() }
+                let deltaTime = index == 0 ? 0.125 : 0.75
+                let scripts = ScriptRuntime()
+                let handle = scripts.register(Script().onUpdate { context in
+                    ready.leave()
+                    guard ready.wait(timeout: .now() + 5) == .success else {
+                        Issue.record("The other scene did not reach its callback")
+                        return
+                    }
+                    #expect(guavaDeltaTime() == Float(context.deltaTime))
+                    #expect(_guavaCurrentScriptContext === context)
+                })
+                var scene = SceneRuntime()
+                scene.setScriptDriver(scripts)
+                let entity = scene.createEntity()
+                _ = scene.setComponent(ScriptComponent(handle), for: entity)
+                _ = scene.tick(deltaTime: deltaTime)
+                #expect(_guavaCurrentScriptContext == nil)
+            }.start()
         }
+        #expect(finished.wait(timeout: .now() + 10) == .success)
     }
 
     @Test("nested scene callbacks restore the outer bridge context")

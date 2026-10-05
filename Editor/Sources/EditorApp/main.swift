@@ -9,6 +9,27 @@ import RHIWGPU
 import CardBattleRuntime
 
 @MainActor
+private final class HeadlessEditorDriver {
+    let app: EditorApplication
+    private var frameIndex: UInt64 = 0
+
+    init(app: EditorApplication) { self.app = app }
+
+    func approvePendingPreview() {
+        if let request = app.store.state.pendingConfirmationRequest,
+           request.questions.allSatisfy({ $0.severity != .destructive }) {
+            app.acceptPendingConfirmation()
+        }
+    }
+
+    func tick() {
+        guard app.store.state.playbackState == .playing else { return }
+        frameIndex &+= 1
+        app.scene.tickScene(deltaTime: 1.0 / 60.0, frameIndex: frameIndex, inputEvents: [], drivesAudio: false)
+    }
+}
+
+@MainActor
 private func runEditor() throws {
     let launchOptions = try EditorAppLaunchOptions.load()
     if launchOptions.validateInstall {
@@ -26,22 +47,22 @@ private func runEditor() throws {
             app.scriptWorkspace.setProjectTrusted(true)
         }
         // Explicit local automation accepts reversible previews only.
+        let driver = HeadlessEditorDriver(app: app)
         let approvalTimer: Timer?
-        var frameIndex: UInt64 = 0
         if CommandLine.arguments.contains("--approve-scene-edits") {
-            approvalTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-                if let request = app.store.state.pendingConfirmationRequest,
-                   request.questions.allSatisfy({ $0.severity != .destructive }) {
-                    app.acceptPendingConfirmation()
-                }
+            let timer = Timer(timeInterval: 0.1, repeats: true) { @Sendable _ in
+                MainActor.assumeIsolated { driver.approvePendingPreview() }
             }
+            RunLoop.main.add(timer, forMode: .default)
+            approvalTimer = timer
         } else { approvalTimer = nil }
         defer { approvalTimer?.invalidate() }
-        let simulationTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { _ in
-            guard app.store.state.playbackState == .playing else { return }
-            frameIndex &+= 1
-            app.scene.tickScene(deltaTime: 1.0 / 60.0, frameIndex: frameIndex, inputEvents: [], drivesAudio: false)
+        let simulationTimer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { @Sendable _ in
+            // Both timers are installed only on the main run loop, so these
+            // synchronous callbacks can safely enter the editor's main actor.
+            MainActor.assumeIsolated { driver.tick() }
         }
+        RunLoop.main.add(simulationTimer, forMode: .default)
         defer { simulationTimer.invalidate() }
         defer { app.shutdown() }
         FileHandle.standardError.write(Data("Guava headless editor ready: \(directory)\n".utf8))

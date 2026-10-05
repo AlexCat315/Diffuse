@@ -388,7 +388,10 @@ let package = Package(
                 "SIMDCompat",
                 "SceneRuntime",
             ],
-            path: "Benchmarks/PhysicsRuntimeBenchmarks"
+            path: "Benchmarks/PhysicsRuntimeBenchmarks",
+            linkerSettings: [
+                .linkedLibrary("kernel32", .when(platforms: [.windows])),
+            ]
         ),
         .executableTarget(
             name: "RenderBackendBenchmarks",
