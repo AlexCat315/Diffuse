@@ -129,6 +129,7 @@ public final class EditorApplication: @unchecked Sendable {
     private let events: PlatformEventBridge
     private var eventToken: PlatformEventBridge.SubscriptionToken?
     private var workspaceModeToken: EditorStore.SubscriptionToken?
+    private var snapSettingsToken: EditorStore.SubscriptionToken?
     private var pendingViewportEvents: [InputEvent] = []
     private var _viewportDrawableSize: RenderDrawableSize = .init(width: 1280, height: 720)
     private var lastViewportSurfaceState = ViewportSurfaceState()
@@ -327,6 +328,7 @@ public final class EditorApplication: @unchecked Sendable {
         #endif
 
         scene.onViewportCameraChanged = { [weak self] in
+            self?.store.dispatch(.viewportCameraChanged)
             self?.requestDisplayRefresh()
         }
         scene.onRevisionChanged = { [weak self] revision in
@@ -371,6 +373,8 @@ public final class EditorApplication: @unchecked Sendable {
                 await initialSession.setWorkflowContext(ctx)
             }
         }
+
+        restoreAndObserveViewportSnapSettings()
 
         // Keep Session's WorkflowContext in sync when the user switches workspace mode.
         var lastObservedMode: EditorWorkspaceMode = store.state.workspaceMode
@@ -562,6 +566,10 @@ public final class EditorApplication: @unchecked Sendable {
         if let workspaceModeToken {
             store.unsubscribe(workspaceModeToken)
             self.workspaceModeToken = nil
+        }
+        if let snapSettingsToken {
+            store.unsubscribe(snapSettingsToken)
+            self.snapSettingsToken = nil
         }
         engine.shutdown(shutdownBackend: ownsBackend)
     }
@@ -934,44 +942,26 @@ public final class EditorApplication: @unchecked Sendable {
         return spawnAsset(asset, at: position) != nil
     }
 
-    /// 把视口内光标坐标投到世界 y=0 平面，作为资产落点。
-    /// 摄像机指向上方或与平面平行时退化为 (0,0,0)。
-    private func dropWorldPosition(cursorX: Float,
-                                   cursorY: Float,
-                                   frame: ViewportScreenFrame) -> SIMD3<Float> {
-        guard frame.width > 0, frame.height > 0 else { return .zero }
-        let camera = scene.scene.extractedRenderScene?.scene.camera
-            ?? RenderCamera.fallbackPerspective
-
-        let u = (cursorX - frame.x) / frame.width
-        let v = (cursorY - frame.y) / frame.height
-        let ndcX = 2 * u - 1
-        let ndcY = 1 - 2 * v
-
-        let forward = simd_normalize(camera.target - camera.eye)
-        let rightRaw = simd_cross(forward, camera.up)
-        guard simd_length(rightRaw) > 1e-5 else { return .zero }
-        let right = simd_normalize(rightRaw)
-        let up = simd_normalize(simd_cross(right, forward))
-
-        let aspect = frame.width / frame.height
-        let tanHalfFov = tanf(camera.fovYRadians * 0.5)
-        let dir = simd_normalize(forward
-                                 + right * (ndcX * aspect * tanHalfFov)
-                                 + up * (ndcY * tanHalfFov))
-
-        // 与 y = 0 平面相交。摄像机在平面下方或视线指向上方时退化。
-        if abs(dir.y) < 1e-4 { return .zero }
-        let t = -camera.eye.y / dir.y
-        if t <= 0 || t > 1_000 { return .zero }
-        var hit = camera.eye + dir * t
-        hit.y = 0
-        return hit
+    /// Projects onto the current reference grid plane for viewport asset drops.
+    /// Parallel or backward rays use the editor camera's focus point.
+    func dropWorldPosition(cursorX: Float,
+                           cursorY: Float,
+                           frame: ViewportScreenFrame) -> SIMD3<Float> {
+        let camera = scene.currentRenderCamera()
+        guard let projection = EditorViewportProjection(camera: camera, frame: frame) else { return .zero }
+        let ray = projection.cursorRay(x: cursorX, y: cursorY)
+        let normal = EditorGridPlane.make(camera: camera).normal
+        let denominator = simd_dot(ray.direction, normal)
+        guard abs(denominator) > 1e-4 else { return camera.target }
+        let t = -simd_dot(ray.origin, normal) / denominator
+        guard t >= 0, t <= 10_000 else { return camera.target }
+        return ray.origin + ray.direction * t
     }
 
     public func queueViewportRenderSettings(_ settings: RenderSettings) {
         var settings = settings
         settings.enableEditorGrid = store.state.viewportGridEnabled
+        settings.editorGridSpacing = viewportGridSpacing
         queueTrackedRenderSettings(settings)
     }
 
@@ -1000,6 +990,37 @@ public final class EditorApplication: @unchecked Sendable {
         settings.enableEditorGrid = enabled
         queueTrackedRenderSettings(settings)
         requestDisplayRefresh()
+    }
+
+    private var viewportGridSpacing: Float {
+        store.state.translateSnapEnabled ? store.state.translateSnapStep : 1
+    }
+
+    private func restoreAndObserveViewportSnapSettings() {
+        let url = URL(fileURLWithPath: projectDirectory, isDirectory: true)
+            .appendingPathComponent(".guava/editor-snap-settings.json")
+        if let data = try? Data(contentsOf: url),
+           let saved = try? JSONDecoder().decode(EditorViewportSnapSettings.self, from: data) {
+            saved.restore(in: store)
+        }
+        var previous = EditorViewportSnapSettings(state: store.state)
+        snapSettingsToken = store.subscribe { [weak self] store in
+            let next = EditorViewportSnapSettings(state: store.state)
+            guard let self, next != previous else { return }
+            previous = next
+            do {
+                try JSONEncoder().encode(next).write(to: url, options: .atomic)
+            } catch {
+                self.logConsole("Could not save viewport snap settings", severity: .warning,
+                                detail: error.localizedDescription)
+            }
+            var settings = self.lastQueuedRenderSettings
+            settings.editorGridSpacing = self.viewportGridSpacing
+            if settings != self.lastQueuedRenderSettings {
+                self.queueTrackedRenderSettings(settings)
+            }
+            self.requestDisplayRefresh()
+        }
     }
 
     /// Switches the viewport shading / debug-view mode and re-queues render
@@ -1192,7 +1213,8 @@ public final class EditorApplication: @unchecked Sendable {
             debugViewMode: RenderSettings.DebugViewMode(rawValue: shadingMode.debugViewIndex) ?? .shaded,
             shadowSettings: RenderShadowSettings(enabled: shadowsEnabled),
             enableOffscreenViewport: true,
-            enableEditorGrid: store.state.viewportGridEnabled
+            enableEditorGrid: store.state.viewportGridEnabled,
+            editorGridSpacing: viewportGridSpacing
         )
     }
 

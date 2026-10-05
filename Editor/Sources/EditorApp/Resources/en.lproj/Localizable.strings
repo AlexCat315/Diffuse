@@ -621,3 +621,16 @@
 "Close Project / Welcome" = "Close Project / Welcome";
 "The project has unsaved scene or script changes. Save before closing?" = "The project has unsaved scene or script changes. Save before closing?";
 "Reference Grid" = "Reference Grid";
+
+"Perspective" = "Perspective";
+"Orthographic" = "Orthographic";
+"Front" = "Front";
+"Back" = "Back";
+"Right" = "Right";
+"Left" = "Left";
+"Top" = "Top";
+"Bottom" = "Bottom";
+"Snapping" = "Snapping";
+"Snap Steps" = "Snap Steps";
+"World Units" = "World Units";
+"Scale Increment" = "Scale Increment";

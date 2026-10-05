@@ -113,8 +113,10 @@ public struct RenderSettings: Sendable, Equatable {
         set { shadowSettings.enabled = newValue }
     }
     public var enableOffscreenViewport: Bool
-    /// Editor reference grid on the XZ plane. Runtime rendering leaves it off.
+    /// Editor reference grid, facing orthographic views or on XZ in perspective.
+    /// Runtime rendering leaves it off.
     public var enableEditorGrid: Bool
+    public var editorGridSpacing: Float
     public var enableStylizedCharacterShading: Bool
     public var stylizedCharacterStyle: StylizedCharacterStyle
 
@@ -133,6 +135,7 @@ public struct RenderSettings: Sendable, Equatable {
         shadowSettings: RenderShadowSettings? = nil,
         enableOffscreenViewport: Bool = false,
         enableEditorGrid: Bool = false,
+        editorGridSpacing: Float = 1,
         enableStylizedCharacterShading: Bool = false,
         stylizedCharacterStyle: StylizedCharacterStyle = .colorfulInkCard
     ) {
@@ -149,6 +152,8 @@ public struct RenderSettings: Sendable, Equatable {
         self.shadowSettings = shadowSettings ?? RenderShadowSettings(enabled: enableShadows)
         self.enableOffscreenViewport = enableOffscreenViewport
         self.enableEditorGrid = enableEditorGrid
+        self.editorGridSpacing = editorGridSpacing.isFinite && editorGridSpacing > 0
+            ? editorGridSpacing : 1
         self.enableStylizedCharacterShading = enableStylizedCharacterShading
         self.stylizedCharacterStyle = stylizedCharacterStyle
     }

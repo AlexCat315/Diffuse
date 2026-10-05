@@ -9,6 +9,30 @@ struct EditorGridUniforms {
     var cameraPosition: SIMD4<Float>
     /// Used viewport dimensions, minor spacing, distance fade limit.
     var viewport: SIMD4<Float>
+    var planeU: SIMD4<Float>
+    var planeV: SIMD4<Float>
+}
+
+/// Axis-aligned reference plane facing an orthographic editor view.
+public struct EditorGridPlane {
+    public let u: SIMD3<Float>
+    public let v: SIMD3<Float>
+    public let uAxis: Float
+    public let vAxis: Float
+    public var normal: SIMD3<Float> { simd_cross(u, v) }
+
+    public static func make(camera: RenderCamera) -> EditorGridPlane {
+        let forward = simd_abs(camera.target - camera.eye)
+        if camera.projection == .orthographic {
+            if forward.z >= forward.x, forward.z >= forward.y {
+                return EditorGridPlane(u: SIMD3<Float>(1, 0, 0), v: SIMD3<Float>(0, 1, 0), uAxis: 0, vAxis: 1)
+            }
+            if forward.x >= forward.y {
+                return EditorGridPlane(u: SIMD3<Float>(0, 0, 1), v: SIMD3<Float>(0, 1, 0), uAxis: 2, vAxis: 1)
+            }
+        }
+        return EditorGridPlane(u: SIMD3<Float>(1, 0, 0), v: SIMD3<Float>(0, 0, 1), uAxis: 0, vAxis: 2)
+    }
 }
 
 extension WGPURenderer {
@@ -45,15 +69,20 @@ extension WGPURenderer {
             editorGridUniformBuffer = try backend.createBuffer(size: 256, usage: [.uniform, .copyDst])
         }
         guard let editorGridUniformBuffer else { return }
-        let height = abs(camera.eye.y)
-        let spacing = pow(Float(10), floor(log10(max(height * 0.1, 1))))
+        let plane = EditorGridPlane.make(camera: camera)
+        let height = camera.projection == .orthographic
+            ? camera.orthographicHeight : abs(camera.eye.y)
+        let baseSpacing = max(0.001, activeRenderSettings.editorGridSpacing)
+        let spacing = baseSpacing * pow(Float(10), floor(log10(max(height * 0.1 / baseSpacing, 1))))
         var uniforms = EditorGridUniforms(
             inverseViewProjection: simd_inverse(viewProjection),
             viewProjection: viewProjection,
             cameraPosition: SIMD4<Float>(camera.eye, 1),
             viewport: SIMD4<Float>(Float(max(drawableSize.width, 1)),
                                    Float(max(drawableSize.height, 1)),
-                                   spacing, max(100, height * 40))
+                                   spacing, max(100, height * 40)),
+            planeU: SIMD4<Float>(plane.u, plane.uAxis),
+            planeV: SIMD4<Float>(plane.v, plane.vAxis)
         )
         writeUniform(&uniforms, buffer: editorGridUniformBuffer)
         let bindGroup = try makeBindGroup(pipeline: pipeline, entries: [

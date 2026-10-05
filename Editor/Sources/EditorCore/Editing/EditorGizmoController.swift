@@ -685,6 +685,7 @@ public final class EditorGizmoController: @unchecked Sendable {
 // MARK: - Projection helpers
 
 public struct ScreenProjector {
+    private let projection: EditorViewportProjection
     public let viewMatrix: simd_float4x4
     public let projMatrix: simd_float4x4
     public let frame: ViewportScreenFrame
@@ -699,6 +700,7 @@ public struct ScreenProjector {
         let frame = snapshot.frame
         let cam = snapshot.camera
         guard let projection = EditorViewportProjection(camera: cam, frame: frame) else { return nil }
+        self.projection = projection
         self.frame = frame
         self.cameraEye = cam.eye
         self.viewMatrix = projection.viewMatrix
@@ -711,25 +713,11 @@ public struct ScreenProjector {
     }
 
     public func project(_ worldPoint: SIMD3<Float>) -> (x: Float, y: Float)? {
-        let viewSpace = viewMatrix * SIMD4<Float>(worldPoint, 1)
-        let clip = projMatrix * viewSpace
-        guard clip.w > 1e-4 else { return nil }
-        let ndcX = clip.x / clip.w
-        let ndcY = clip.y / clip.w
-        let sx = frame.x + (ndcX * 0.5 + 0.5) * frame.width
-        let sy = frame.y + (1 - (ndcY * 0.5 + 0.5)) * frame.height
-        return (sx, sy)
+        projection.project(worldPoint)
     }
 
     public func cursorRay(x: Float, y: Float) -> (origin: SIMD3<Float>, direction: SIMD3<Float>)? {
-        let u = (x - frame.x) / frame.width
-        let v = (y - frame.y) / frame.height
-        let ndcX = 2 * u - 1
-        let ndcY = 1 - 2 * v
-        let dir = simd_normalize(cameraForward
-                                 + cameraRight * (ndcX * aspect * tanHalfFov)
-                                 + cameraUp * (ndcY * tanHalfFov))
-        return (cameraEye, dir)
+        projection.cursorRay(x: x, y: y)
     }
 
 }

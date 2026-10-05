@@ -284,6 +284,8 @@ public struct EditorState: Codable, Sendable {
     public var frameStatsHistory: [EditorFrameStatsHistorySample]
     public var particleDiagnosticsHistory: [EditorParticleDiagnosticsSample]
     public var viewportSurfaceRevision: UInt64
+    /// Session camera navigation is independent of the saved scene revision.
+    public var viewportCameraRevision: UInt64 = 0
     public var windowFocused: Bool
     public var windowMinimized: Bool
     public var windowOccluded: Bool
@@ -311,6 +313,9 @@ public struct EditorState: Codable, Sendable {
     public var translateSnapEnabled: Bool
     public var rotateSnapEnabled: Bool
     public var scaleSnapEnabled: Bool
+    public var translateSnapStep: Float
+    public var rotateSnapStepDegrees: Float
+    public var scaleSnapStep: Float
     public var primarySelectBehavior: SelectionPrimaryModifierBehavior
     public var presentation: EditorPresentationState
     public var vsyncMode: EditorVSyncMode
@@ -367,6 +372,9 @@ public struct EditorState: Codable, Sendable {
         translateSnapEnabled: Bool = false,
         rotateSnapEnabled: Bool = false,
         scaleSnapEnabled: Bool = false,
+        translateSnapStep: Float = 0.5,
+        rotateSnapStepDegrees: Float = 5,
+        scaleSnapStep: Float = 0.05,
         primarySelectBehavior: SelectionPrimaryModifierBehavior = .subtract,
         themeMode: EditorThemeMode = .dark,
         language: EditorLanguage = .system,
@@ -418,6 +426,9 @@ public struct EditorState: Codable, Sendable {
         self.translateSnapEnabled = translateSnapEnabled
         self.rotateSnapEnabled = rotateSnapEnabled
         self.scaleSnapEnabled = scaleSnapEnabled
+        self.translateSnapStep = Self.sanitizedTranslateSnapStep(translateSnapStep)
+        self.rotateSnapStepDegrees = Self.sanitizedRotateSnapStep(rotateSnapStepDegrees)
+        self.scaleSnapStep = Self.sanitizedScaleSnapStep(scaleSnapStep)
         self.primarySelectBehavior = primarySelectBehavior
         self.presentation = EditorPresentationState(themeMode: themeMode,
                                                     language: language,
@@ -496,6 +507,9 @@ public struct EditorState: Codable, Sendable {
         case translateSnapEnabled
         case rotateSnapEnabled
         case scaleSnapEnabled
+        case translateSnapStep
+        case rotateSnapStepDegrees
+        case scaleSnapStep
         case primarySelectBehavior
         case presentation
         case themeMode
@@ -571,6 +585,9 @@ public struct EditorState: Codable, Sendable {
             translateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .translateSnapEnabled) ?? false,
             rotateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .rotateSnapEnabled) ?? false,
             scaleSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .scaleSnapEnabled) ?? false,
+            translateSnapStep: try c.decodeIfPresent(Float.self, forKey: .translateSnapStep) ?? 0.5,
+            rotateSnapStepDegrees: try c.decodeIfPresent(Float.self, forKey: .rotateSnapStepDegrees) ?? 5,
+            scaleSnapStep: try c.decodeIfPresent(Float.self, forKey: .scaleSnapStep) ?? 0.05,
             primarySelectBehavior: decodedPrimarySelectBehavior ?? legacyPrimarySelectBehavior ?? .subtract,
             themeMode: decodedPresentation?.themeMode ?? legacyThemeMode ?? .dark,
             language: decodedPresentation?.language ?? legacyLanguage ?? .system,
@@ -622,6 +639,9 @@ public struct EditorState: Codable, Sendable {
         try c.encode(translateSnapEnabled, forKey: .translateSnapEnabled)
         try c.encode(rotateSnapEnabled, forKey: .rotateSnapEnabled)
         try c.encode(scaleSnapEnabled, forKey: .scaleSnapEnabled)
+        try c.encode(translateSnapStep, forKey: .translateSnapStep)
+        try c.encode(rotateSnapStepDegrees, forKey: .rotateSnapStepDegrees)
+        try c.encode(scaleSnapStep, forKey: .scaleSnapStep)
         try c.encode(primarySelectBehavior, forKey: .primarySelectBehavior)
         try c.encode(presentation, forKey: .presentation)
         try c.encode(themeMode, forKey: .themeMode)
