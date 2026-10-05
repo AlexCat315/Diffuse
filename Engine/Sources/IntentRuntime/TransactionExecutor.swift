@@ -856,13 +856,15 @@ public struct TransactionExecutor {
 
             case let .setRenderMaterialComponent(entityID, baseColorFactor, baseColorTextureIndex, normalTextureIndex, metallicFactor, roughnessFactor, emissiveFactor):
                 let entity = try requireEntity(entityID, in: scene)
+                let existing = scene.component(RenderMaterialComponent.self, for: entity)
                 let component = RenderMaterialComponent(
                     baseColorFactor: baseColorFactor,
                     baseColorTextureIndex: baseColorTextureIndex,
                     normalTextureIndex: normalTextureIndex,
                     metallicFactor: metallicFactor,
                     roughnessFactor: roughnessFactor,
-                    emissiveFactor: emissiveFactor
+                    emissiveFactor: emissiveFactor,
+                    alphaMode: existing?.alphaMode, alphaCutoff: existing?.alphaCutoff, doubleSided: existing?.doubleSided
                 )
                 _ = scene.setComponent(component, for: entity)
 
