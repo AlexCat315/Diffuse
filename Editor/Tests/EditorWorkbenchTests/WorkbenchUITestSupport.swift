@@ -3,9 +3,26 @@ import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
 import Testing
+#if os(Windows)
+import WinSDK
+#endif
 
 enum WorkbenchUITestSupport {
     private static let lock = NSRecursiveLock()
+
+    static func setEnvironmentValue(_ value: String?, for key: String) -> Bool {
+        #if os(Windows)
+        return key.withCString(encodedAs: UTF16.self) { name in
+            if let value {
+                return value.withCString(encodedAs: UTF16.self) { SetEnvironmentVariableW(name, $0) }
+            }
+            return SetEnvironmentVariableW(name, nil)
+        }
+        #else
+        if let value { return setenv(key, value, 1) == 0 }
+        return unsetenv(key) == 0
+        #endif
+    }
 
     static func withEnvironment<T>(_ work: (InteractionRegistry, FocusChain) throws -> T) throws -> T {
         lock.lock()
