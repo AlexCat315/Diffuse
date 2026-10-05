@@ -8,8 +8,12 @@ runs:
       shell: bash
       run: |
         sudo xcode-select -s /Applications/Xcode_27.0.app
+        echo "DEVELOPER_DIR=/Applications/Xcode_27.0.app/Contents/Developer" >> "$GITHUB_ENV"
+        echo "TOOLCHAINS=com.apple.dt.toolchain.XcodeDefault" >> "$GITHUB_ENV"
+        echo "/Applications/Xcode_27.0.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin" >> "$GITHUB_PATH"
         xcodebuild -version
     - uses: SwiftyLab/setup-swift@v1.14.1
+      if: runner.os != 'macOS'
       with:
         swift-version: '6.4.0'
     - uses: dtolnay/rust-toolchain@1.99.0
