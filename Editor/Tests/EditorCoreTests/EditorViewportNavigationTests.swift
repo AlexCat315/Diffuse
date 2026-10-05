@@ -163,7 +163,14 @@ struct EditorViewportNavigationTests {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
         defer { try? FileManager.default.removeItem(at: directory) }
         let app = try EditorApplication(projectDirectory: directory.path)
-        let scene = app.scene.manifest()
+        func sceneContent() throws -> Data {
+            let encoded = try JSONEncoder().encode(app.scene.manifest())
+            var content = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+            // Export timestamps describe when a snapshot was requested.
+            content.removeValue(forKey: "lastModifiedAt")
+            return try JSONSerialization.data(withJSONObject: content, options: [.sortedKeys])
+        }
+        let scene = try sceneContent()
         var displayRequests = 0
         app.setDisplayInvalidationHandler { displayRequests += 1 }
         app.store.dispatch(.setTranslateSnapEnabled(true))
@@ -173,7 +180,8 @@ struct EditorViewportNavigationTests {
         app.store.dispatch(.setRotateSnapStepDegrees(15))
         app.store.dispatch(.setScaleSnapStep(0.1))
         #expect(displayRequests == 6)
-        #expect(app.scene.manifest() == scene && !app.hasUnsavedSceneChanges)
+        #expect(try sceneContent() == scene)
+        #expect(!app.hasUnsavedSceneChanges)
         let settings = EditorViewportSnapSettings(state: app.store.state)
         let url = directory.appendingPathComponent(".guava/editor-snap-settings.json")
         #expect(try JSONDecoder().decode(EditorViewportSnapSettings.self, from: Data(contentsOf: url)) == settings)

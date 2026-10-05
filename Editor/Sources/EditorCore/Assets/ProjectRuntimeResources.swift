@@ -1,4 +1,5 @@
 import AudioRuntime
+import AssetPipeline
 import Foundation
 
 /// Discovers project resources that are consumed directly at runtime rather than
@@ -28,20 +29,13 @@ public enum ProjectRuntimeResources {
         let root = ProjectFilePath.canonicalURL(URL(fileURLWithPath: rootPath, isDirectory: true))
         var directories: [URL] = [root]
         var seen = Set([pathKey(root)])
-        let properties: [URLResourceKey] = [.isDirectoryKey, .isRegularFileKey]
-        if let enumerator = fileManager.enumerator(at: root,
-                                                   includingPropertiesForKeys: properties,
-                                                   options: [.skipsHiddenFiles, .skipsPackageDescendants]) {
-            for case let url as URL in enumerator {
-                guard let values = try? url.resourceValues(forKeys: Set(properties)) else { continue }
-                if values.isDirectory == true {
-                    if excludedDirectories.contains(url.lastPathComponent.lowercased()) {
-                        enumerator.skipDescendants()
-                    }
-                    continue
-                }
-                guard values.isRegularFile == true,
-                      audioExtensions.contains(url.pathExtension.lowercased()) else { continue }
+        if let files = try? ProjectResourceWalker.files(in: root, fileManager: fileManager,
+                                                       continueOnError: true,
+                                                       excludingDirectory: {
+            excludedDirectories.contains($0.lastPathComponent.lowercased())
+        }) {
+            for url in files {
+                guard audioExtensions.contains(url.pathExtension.lowercased()) else { continue }
                 let directory = url.deletingLastPathComponent().standardizedFileURL
                 if seen.insert(pathKey(directory)).inserted {
                     directories.append(directory)

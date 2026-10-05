@@ -25,6 +25,7 @@ struct RenderThreadTests {
         let runtime = NoopRuntime()
         let consumer = TestConsumer()
         let rendered = FrameRecorder()
+        let reports = DispatchSemaphore(value: 0)
 
         let thread = RenderThread(
             runtime: runtime,
@@ -32,6 +33,7 @@ struct RenderThreadTests {
             consumer: consumer,
             onFrameRendered: { report in
                 rendered.append(report.frameIndex)
+                reports.signal()
             }
         )
         thread.start()
@@ -43,7 +45,9 @@ struct RenderThreadTests {
         ring.publish(Self.makePacket(frameIndex: 1))
         thread.requestRender()
         consumer.releaseFirstRender()
-        consumer.waitForRenderedFrames(count: 2)
+        for _ in 0..<2 {
+            #expect(reports.wait(timeout: .now() + 2) == .success)
+        }
 
         #expect(rendered.snapshot() == [0, 1])
 
@@ -160,7 +164,6 @@ private struct NoopRuntime: EngineRuntime {
 private final class TestConsumer: RenderPacketConsumer, @unchecked Sendable {
     private let started = DispatchSemaphore(value: 0)
     private let releaseFirst = DispatchSemaphore(value: 0)
-    private let rendered = DispatchSemaphore(value: 0)
     private let renderCountLock = NSLock()
     private var renderCount = 0
 
@@ -175,7 +178,6 @@ private final class TestConsumer: RenderPacketConsumer, @unchecked Sendable {
         if current == 1 {
             releaseFirst.wait()
         }
-        rendered.signal()
     }
 
     func currentFrameStats() -> RenderFrameStats {
@@ -195,12 +197,6 @@ private final class TestConsumer: RenderPacketConsumer, @unchecked Sendable {
         releaseFirst.signal()
     }
 
-    func waitForRenderedFrames(count: Int) {
-        for _ in 0..<count {
-            let result = rendered.wait(timeout: .now() + 2)
-            #expect(result == .success)
-        }
-    }
 }
 
 private final class FastConsumer: RenderPacketConsumer, @unchecked Sendable {

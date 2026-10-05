@@ -108,7 +108,7 @@ struct WithAnimationPropertiesTests {
     }
 
     @Test("backgroundColor animates through the scheduler")
-    func backgroundAnimates() {
+    func backgroundAnimates() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -134,10 +134,10 @@ struct WithAnimationPropertiesTests {
             #expect(node?.backgroundColor?.r == 1.0)
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("foregroundColor animates through the scheduler")
-    func foregroundAnimates() {
+    func foregroundAnimates() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -158,10 +158,10 @@ struct WithAnimationPropertiesTests {
             #expect(node?.foregroundColor?.r == 0.5)
             #expect(node?.foregroundColor?.g == 0.25)
         }
-    }
+    } }
 
     @Test("cornerRadius animates through the scheduler")
-    func cornerRadiusAnimates() {
+    func cornerRadiusAnimates() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -185,10 +185,10 @@ struct WithAnimationPropertiesTests {
             scheduler.tick(deltaTime: 0.5)
             #expect(node?.cornerRadius == 10)
         }
-    }
+    } }
 
     @Test("Equal target value does not register a controller")
-    func noOpForEqualTarget() {
+    func noOpForEqualTarget() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -204,10 +204,10 @@ struct WithAnimationPropertiesTests {
             recomp.commitAll()
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("frame(width:) animates through the scheduler")
-    func frameWidthAnimates() {
+    func frameWidthAnimates() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -233,10 +233,10 @@ struct WithAnimationPropertiesTests {
             #expect(layout?.width == 80)
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("padding animates through the scheduler")
-    func paddingAnimates() {
+    func paddingAnimates() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -262,10 +262,10 @@ struct WithAnimationPropertiesTests {
             #expect((layout?.attachments["__layout.padding.insets"] as? EdgeInsets) == .init(all: 10))
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("frame(maxWidth:) animates through the scheduler")
-    func frameMaxWidthAnimates() {
+    func frameMaxWidthAnimates() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -291,10 +291,10 @@ struct WithAnimationPropertiesTests {
             #expect(layout?.maxWidth == 200)
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("frame(maxHeight:) animates through the scheduler")
-    func frameMaxHeightAnimates() {
+    func frameMaxHeightAnimates() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -320,10 +320,10 @@ struct WithAnimationPropertiesTests {
             #expect(layout?.maxHeight == 100)
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("frame(width: .percent()) animates through the scheduler")
-    func frameWidthRatioDimensionAnimates() {
+    func frameWidthRatioDimensionAnimates() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -348,10 +348,10 @@ struct WithAnimationPropertiesTests {
             scheduler.tick(deltaTime: 0.5)
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("frame(height: .percent()) animates through the scheduler")
-    func frameHeightRatioDimensionAnimates() {
+    func frameHeightRatioDimensionAnimates() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -372,10 +372,10 @@ struct WithAnimationPropertiesTests {
             scheduler.tick(deltaTime: 0.5)
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("frame width mode switch snaps and does not keep controller")
-    func frameWidthModeSwitchSnaps() {
+    func frameWidthModeSwitchSnaps() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -392,10 +392,10 @@ struct WithAnimationPropertiesTests {
             // points -> percent mode change is non-interpolable and should snap.
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("frame height mode switch snaps and does not keep controller")
-    func frameHeightModeSwitchSnaps() {
+    func frameHeightModeSwitchSnaps() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -411,10 +411,10 @@ struct WithAnimationPropertiesTests {
 
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("typed frame dimension API animates points values")
-    func typedDimensionPointsAnimate() {
+    func typedDimensionPointsAnimate() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -440,10 +440,10 @@ struct WithAnimationPropertiesTests {
             #expect(layout?.width == 80)
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("framePercent convenience maps to percent width animation")
-    func framePercentConvenienceAnimates() {
+    func framePercentConvenienceAnimates() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -461,5 +461,5 @@ struct WithAnimationPropertiesTests {
             scheduler.tick(deltaTime: 1.0)
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 }

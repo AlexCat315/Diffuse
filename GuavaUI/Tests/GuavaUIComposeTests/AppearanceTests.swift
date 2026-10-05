@@ -6,23 +6,23 @@ import GuavaUIRuntime
 struct AppearanceTests {
 
     @Test("Theme.defaultLight has light surface")
-    func lightSurface() {
+    func lightSurface() { GlobalTestLock.locked {
         let bg = Theme.defaultLight.colors.background
         // Light theme background should be near-white (channel sum well above
         // 2.5/3.0 in 0…1 space).
         let sum = Float(bg.r) + Float(bg.g) + Float(bg.b)
         #expect(sum > 2.7)
-    }
+    } }
 
     @Test("Theme.defaultDark has dark surface")
-    func darkSurface() {
+    func darkSurface() { GlobalTestLock.locked {
         let bg = Theme.defaultDark.colors.background
         let sum = Float(bg.r) + Float(bg.g) + Float(bg.b)
         #expect(sum < 0.5)
-    }
+    } }
 
     @Test(".appearance(.light) installs DefaultLightTheme on the subtree")
-    func appearanceLight() {
+    func appearanceLight() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root: _DebugNode(label: "x").appearance(.light))
@@ -30,10 +30,10 @@ struct AppearanceTests {
         var cursor = tree.root!
         while let next = cursor.children.first { cursor = next }
         #expect(cursor.theme.colors.background == Theme.defaultLight.colors.background)
-    }
+    } }
 
     @Test(".appearance(.dark) installs DefaultDarkTheme on the subtree")
-    func appearanceDark() {
+    func appearanceDark() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root: _DebugNode(label: "x").appearance(.dark))
@@ -41,10 +41,10 @@ struct AppearanceTests {
         var cursor = tree.root!
         while let next = cursor.children.first { cursor = next }
         #expect(cursor.theme.colors.background == Theme.defaultDark.colors.background)
-    }
+    } }
 
     @Test("Inner .appearance overrides outer for descendants")
-    func nestedAppearance() {
+    func nestedAppearance() { GlobalTestLock.locked {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
@@ -56,5 +56,5 @@ struct AppearanceTests {
         var cursor = tree.root!
         while let next = cursor.children.first { cursor = next }
         #expect(cursor.theme.colors.background == Theme.defaultLight.colors.background)
-    }
+    } }
 }

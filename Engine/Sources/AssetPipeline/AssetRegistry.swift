@@ -326,8 +326,8 @@ public final class AssetRegistry: @unchecked Sendable {
     ]
 
     private static func relativePath(of candidate: URL, within root: URL) -> String? {
-        let candidateComponents = candidate.standardizedFileURL.pathComponents
-        let rootComponents = root.standardizedFileURL.pathComponents
+        let candidateComponents = candidate.resolvingSymlinksInPath().path.split(separator: "/").map(String.init)
+        let rootComponents = root.resolvingSymlinksInPath().path.split(separator: "/").map(String.init)
         guard candidateComponents.count > rootComponents.count else { return nil }
 
         #if os(Windows)
@@ -344,23 +344,11 @@ public final class AssetRegistry: @unchecked Sendable {
     }
 
     private func findImportableAssets(in rootURL: URL) throws -> [(url: URL, kind: ImportableAssetKind)] {
-        let properties: [URLResourceKey] = [.isRegularFileKey, .isHiddenKey, .isDirectoryKey]
-        guard let enumerator = FileManager.default.enumerator(at: rootURL,
-                                                              includingPropertiesForKeys: properties,
-                                                              options: [.skipsHiddenFiles, .skipsPackageDescendants]) else {
-            return []
+        let files = try ProjectResourceWalker.files(in: rootURL) {
+            Self.buildDirectoryNames.contains($0.lastPathComponent.lowercased())
         }
-
         var results: [(url: URL, kind: ImportableAssetKind)] = []
-        for case let url as URL in enumerator {
-            let values = try url.resourceValues(forKeys: Set(properties))
-            if values.isDirectory == true {
-                if Self.buildDirectoryNames.contains(url.lastPathComponent.lowercased()) {
-                    enumerator.skipDescendants()
-                }
-                continue
-            }
-            guard values.isRegularFile == true else { continue }
+        for url in files {
             switch url.pathExtension.lowercased() {
             case "gltf":
                 results.append((url, .gltf))

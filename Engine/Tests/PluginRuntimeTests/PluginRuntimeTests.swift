@@ -719,7 +719,9 @@ struct PluginRuntimeTests {
         let executable = URL(fileURLWithPath:
             ProcessInfo.processInfo.environment["ComSpec"]
                 ?? "C:\\Windows\\System32\\cmd.exe")
-        let launchArguments = ["/d", "/s", "/c", "ping -n 6 127.0.0.1 >nul"]
+        // A built-in loop stays in the host process, matching exec sleep on
+        // Unix; an external ping child would keep inherited pipes open.
+        let launchArguments = ["/d", "/s", "/c", "for /l %n in (0,0,1) do @rem"]
         #else
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

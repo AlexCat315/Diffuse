@@ -24,7 +24,7 @@ struct WithAnimationOpacityTests {
     }
 
     @Test("Plain mutation writes opacity instantly")
-    func plainMutationIsInstant() {
+    func plainMutationIsInstant() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -42,10 +42,10 @@ struct WithAnimationOpacityTests {
             #expect(node?.opacity == 1.0)
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("withAnimation defers opacity through the scheduler")
-    func animatedMutationGoesThroughScheduler() {
+    func animatedMutationGoesThroughScheduler() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -74,10 +74,10 @@ struct WithAnimationOpacityTests {
             #expect(node?.opacity == 1.0)
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("withAnimation(nil) opts out of an outer animation")
-    func nilAnimationOptsOut() {
+    func nilAnimationOptsOut() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -99,10 +99,10 @@ struct WithAnimationOpacityTests {
             #expect(node?.opacity == 1.0)
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("withAnimation default overload uses Animation.default")
-    func defaultOverloadAnimates() {
+    func defaultOverloadAnimates() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -124,10 +124,10 @@ struct WithAnimationOpacityTests {
             #expect(node?.opacity == 1.0)
             #expect(scheduler.activeCount == 0)
         }
-    }
+    } }
 
     @Test("withAnimation rethrows errors from the body")
-    func rethrowsError() {
+    func rethrowsError() { try GlobalTestLock.locked {
         var observed = false
         do {
             let _: Void = try withAnimation(Animation(duration: 0.1, curve: .linear)) {
@@ -141,10 +141,10 @@ struct WithAnimationOpacityTests {
         } catch {
             Issue.record("unexpected error: \(error)")
         }
-    }
+    } }
 
     @Test("ActiveAnimationContext.current is nil outside withAnimation")
-    func contextNilOutside() {
+    func contextNilOutside() { GlobalTestLock.locked {
         #expect(ActiveAnimationContext.current == nil)
-    }
+    } }
 }
