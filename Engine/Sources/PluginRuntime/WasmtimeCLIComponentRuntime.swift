@@ -219,7 +219,9 @@ public final class WasmtimeCLIComponentRuntime: WASIComponentRuntime, @unchecked
         let finished = DispatchSemaphore(value: 0)
         process.terminationHandler = { _ in finished.signal() }
         try process.run()
-        guard finished.wait(timeout: .now() + .seconds(2)) == .success else {
+        // Foundation may dispatch the termination callback after the child
+        // has exited when other plugin tests occupy the worker queues.
+        guard finished.wait(timeout: .now() + .seconds(2)) == .success || !process.isRunning else {
             process.terminate()
 #if canImport(Darwin) || canImport(Glibc)
             if process.isRunning { _ = kill(process.processIdentifier, SIGKILL) }

@@ -282,6 +282,63 @@ static bool validate_string_function(
   return true;
 }
 
+// Wasmtime 49 reflects imports/exports through an owned extern descriptor.
+// Extract an owned item before deleting that descriptor; callers continue to
+// own and delete the item while keeping its original component type alive.
+static bool component_type_import_item(
+    const wasmtime_component_type_t *type, const wasm_engine_t *engine,
+    const char *name, size_t name_size, wasmtime_component_item_t *item) {
+  wasmtime_component_extern_t *external = NULL;
+  if (!wasmtime_component_type_import_get(type, engine, name, name_size,
+                                          &external)) {
+    return false;
+  }
+  wasmtime_component_extern_type(external, item);
+  wasmtime_component_extern_delete(external);
+  return true;
+}
+
+static bool component_type_export_item(
+    const wasmtime_component_type_t *type, const wasm_engine_t *engine,
+    const char *name, size_t name_size, wasmtime_component_item_t *item) {
+  wasmtime_component_extern_t *external = NULL;
+  if (!wasmtime_component_type_export_get(type, engine, name, name_size,
+                                          &external)) {
+    return false;
+  }
+  wasmtime_component_extern_type(external, item);
+  wasmtime_component_extern_delete(external);
+  return true;
+}
+
+static bool instance_type_export_item(
+    const wasmtime_component_instance_type_t *type,
+    const wasm_engine_t *engine, const char *name, size_t name_size,
+    wasmtime_component_item_t *item) {
+  wasmtime_component_extern_t *external = NULL;
+  if (!wasmtime_component_instance_type_export_get(type, engine, name,
+                                                   name_size, &external)) {
+    return false;
+  }
+  wasmtime_component_extern_type(external, item);
+  wasmtime_component_extern_delete(external);
+  return true;
+}
+
+static bool instance_type_export_item_at(
+    const wasmtime_component_instance_type_t *type,
+    const wasm_engine_t *engine, size_t index, const char **name,
+    size_t *name_size, wasmtime_component_item_t *item) {
+  wasmtime_component_extern_t *external = NULL;
+  if (!wasmtime_component_instance_type_export_nth(type, engine, index, name,
+                                                   name_size, &external)) {
+    return false;
+  }
+  wasmtime_component_extern_type(external, item);
+  wasmtime_component_extern_delete(external);
+  return true;
+}
+
 static bool validate_query_import(const wasmtime_component_item_t *item,
                                   guava_wasmtime_runtime_t *runtime,
                                   const char *import_name,
@@ -300,7 +357,7 @@ static bool validate_query_import(const wasmtime_component_item_t *item,
     return false;
   }
   wasmtime_component_item_t query;
-  if (!wasmtime_component_instance_type_export_get(
+  if (!instance_type_export_item(
           instance, runtime->engine, "query", strlen("query"), &query)) {
     (void)set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
                     "import %s is missing query", import_name);
@@ -544,7 +601,7 @@ static guava_wasmtime_status_t validate_contract(
                        "expected import name is null");
     }
     wasmtime_component_item_t item;
-    if (!wasmtime_component_type_import_get(type, runtime->engine, name,
+    if (!component_type_import_item(type, runtime->engine, name,
                                             strlen(name), &item)) {
       wasmtime_component_type_delete(type);
       return set_error(error, GUAVA_WASMTIME_CONTRACT_MISMATCH,
@@ -563,7 +620,7 @@ static guava_wasmtime_status_t validate_contract(
                      "component must export exactly the capabilities interface");
   }
   wasmtime_component_item_t capabilities = {0};
-  bool has_capabilities = wasmtime_component_type_export_get(
+  bool has_capabilities = component_type_export_item(
       type, runtime->engine, capabilities_interface_name,
       strlen(capabilities_interface_name),
       &capabilities);
@@ -593,7 +650,7 @@ static guava_wasmtime_status_t validate_contract(
     const char *export_name = NULL;
     size_t export_name_size = 0;
     wasmtime_component_item_t item = {0};
-    if (!wasmtime_component_instance_type_export_nth(
+    if (!instance_type_export_item_at(
             instance, runtime->engine, export_index, &export_name,
             &export_name_size, &item)) {
       wasmtime_component_item_delete(&capabilities);
@@ -652,7 +709,7 @@ static guava_wasmtime_status_t validate_contract(
     wasmtime_component_item_t exported_input_type = {0};
     bool has_exported_input_type = input_type_name_size > 0 &&
         (size_t)input_type_name_size < sizeof(input_type_name) &&
-        wasmtime_component_instance_type_export_get(
+        instance_type_export_item(
             instance, runtime->engine, input_type_name,
             (size_t)input_type_name_size, &exported_input_type);
     if (!has_exported_input_type ||
@@ -666,7 +723,7 @@ static guava_wasmtime_status_t validate_contract(
                        "component is missing exported input type for %s", name);
     }
     wasmtime_component_item_delete(&exported_input_type);
-    bool has_function = wasmtime_component_instance_type_export_get(
+    bool has_function = instance_type_export_item(
         instance, runtime->engine, name, strlen(name), &function);
     if (!has_function ||
         function.kind != WASMTIME_COMPONENT_ITEM_COMPONENT_FUNC ||
