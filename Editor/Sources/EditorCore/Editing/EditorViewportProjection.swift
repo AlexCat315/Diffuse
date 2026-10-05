@@ -41,11 +41,18 @@ public struct EditorViewportProjection {
         self.tanHalfFov = tanf(camera.fovYRadians * 0.5)
     }
 
-    public func project(_ worldPoint: SIMD3<Float>) -> (x: Float, y: Float)? {
-        let clip = viewProjectionMatrix * SIMD4<Float>(worldPoint, 1)
-        guard clip.w > 1e-4, clip.z >= 0, clip.z <= clip.w else { return nil }
-        let ndcX = clip.x / clip.w
-        let ndcY = clip.y / clip.w
+    /// Editor handles may remain visible beyond the scene's far plane.
+    /// Near-plane and behind-camera rejection still apply to those overlays.
+    public func project(_ worldPoint: SIMD3<Float>, clipToFarPlane: Bool = true) -> (x: Float, y: Float)? {
+        let offset = worldPoint - camera.eye
+        let depth = simd_dot(offset, cameraForward)
+        guard depth >= camera.near, depth > 1e-4,
+              !clipToFarPlane || depth <= camera.far else { return nil }
+        let halfHeight = camera.projection == .orthographic
+            ? RenderCamera.sanitizedOrthographicHeight(camera.orthographicHeight) * 0.5
+            : depth * tanHalfFov
+        let ndcX = simd_dot(offset, cameraRight) / (halfHeight * aspect)
+        let ndcY = simd_dot(offset, cameraUp) / halfHeight
         let sx = frame.x + (ndcX * 0.5 + 0.5) * frame.width
         let sy = frame.y + (1 - (ndcY * 0.5 + 0.5)) * frame.height
         return (sx, sy)

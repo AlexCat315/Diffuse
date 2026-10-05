@@ -534,10 +534,8 @@ struct ViewportPanel: View {
             return
         }
         let camera = scene.currentRenderCamera()
-        let dist = simd_length(world - camera.eye)
-        // 距离自适应，与旧引擎 gizmo_pass.scaleForSelection 保持一致。
-        let axisLength = camera.projection == .orthographic
-            ? camera.orthographicHeight * 0.16 : max(0.7, min(3.4, dist * 0.2))
+        let axisLength = EditorGizmoController.axisLength(
+            camera: camera, position: world, viewportHeight: frame.height)
         let parentWorld = scene.entityParentWorldMatrix(id)
         EditorGizmoController.shared.updateSnapshot(
             EditorGizmoController.Snapshot(
@@ -674,6 +672,10 @@ struct ViewportPanel: View {
         case .rotate: Color(r: 1.0, g: 0.72, b: 0.32, a: 0.88)
         case .scale: Color(r: 0.95, g: 0.95, b: 0.98, a: 0.9)
         }
+        list.addRect(UIRect(x: originScreen.x - centerSize * 0.5 - 1,
+                            y: originScreen.y - centerSize * 0.5 - 1,
+                            width: centerSize + 2, height: centerSize + 2),
+                     color: Color(r: 0.04, g: 0.05, b: 0.07, a: 0.8))
         list.addRect(UIRect(x: originScreen.x - centerSize * 0.5,
                             y: originScreen.y - centerSize * 0.5,
                             width: centerSize, height: centerSize),
@@ -695,14 +697,22 @@ struct ViewportPanel: View {
             let baseColor = axis.color
             let isActive = activeAxis == axis
             let color = Color(r: baseColor.x, g: baseColor.y, b: baseColor.z,
-                              a: isActive ? 1.0 : 0.85)
-            let thickness: Float = isActive ? 4 : 2
+                              a: 1.0)
+            let thickness: Float = isActive ? 4 : 2.5
+            let outline = Color(r: 0.04, g: 0.05, b: 0.07, a: 0.8)
+            list.addLine(fromX: originScreen.x, fromY: originScreen.y,
+                         toX: tip.x, toY: tip.y,
+                         thickness: thickness + 2, color: outline)
             list.addLine(fromX: originScreen.x, fromY: originScreen.y,
                          toX: tip.x, toY: tip.y,
                          thickness: thickness, color: color)
             let handleSize: Float = isActive ? 12 : 9
             switch tipShape {
             case .square, .filledSquare:
+                list.addRect(UIRect(x: tip.x - handleSize * 0.5 - 1,
+                                    y: tip.y - handleSize * 0.5 - 1,
+                                    width: handleSize + 2, height: handleSize + 2),
+                             color: outline)
                 list.addRect(UIRect(x: tip.x - handleSize * 0.5,
                                     y: tip.y - handleSize * 0.5,
                                     width: handleSize, height: handleSize),
@@ -722,8 +732,8 @@ struct ViewportPanel: View {
             let baseColor = axis.color
             let isActive = activeAxis == axis
             let color = Color(r: baseColor.x, g: baseColor.y, b: baseColor.z,
-                              a: isActive ? 1.0 : 0.7)
-            let thickness: Float = isActive ? 3 : 1.5
+                              a: 1.0)
+            let thickness: Float = isActive ? 3 : 2
             var prev: (x: Float, y: Float)?
             for i in 0...segments {
                 let t = Float(i) / Float(segments) * 2 * .pi
@@ -731,6 +741,10 @@ struct ViewportPanel: View {
                             + (basisU * cosf(t) + basisV * sinf(t)) * radius
                 guard let p = projector.project(world) else { prev = nil; continue }
                 if let prevP = prev {
+                    list.addLine(fromX: prevP.x, fromY: prevP.y,
+                                 toX: p.x, toY: p.y,
+                                 thickness: thickness + 2,
+                                 color: Color(r: 0.04, g: 0.05, b: 0.07, a: 0.8))
                     list.addLine(fromX: prevP.x, fromY: prevP.y,
                                  toX: p.x, toY: p.y,
                                  thickness: thickness, color: color)

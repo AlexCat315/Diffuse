@@ -478,7 +478,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             colorView: usesHDRFrameGraph ? hdrCurrent?.view ?? colorTarget.view : colorTarget.view,
                             depthView: depthView,
                             camera: packet.scene.camera,
-                            viewProjection: cameraMatrices.viewProjection,
+                            cameraMatrices: cameraMatrices,
                             drawableSize: packet.drawableSize,
                             hdr: usesHDRFrameGraph
                         )
