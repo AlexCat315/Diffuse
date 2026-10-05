@@ -3,16 +3,11 @@ description: Install the verified release toolchains on macOS, Linux and Windows
 runs:
   using: composite
   steps:
-    - name: Select installed Xcode
+    - name: Select Xcode 27.0
       if: runner.os == 'macOS'
       shell: bash
       run: |
-        for xcode in /Applications/Xcode_27.0.app /Applications/Xcode_26.6.app /Applications/Xcode.app; do
-          if [ -d "$xcode" ]; then
-            sudo xcode-select -s "$xcode"
-            break
-          fi
-        done
+        sudo xcode-select -s /Applications/Xcode_27.0.app
         xcodebuild -version
     - uses: SwiftyLab/setup-swift@v1.14.1
       with:

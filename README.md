@@ -13,7 +13,7 @@
 - Swift 6.4.0 (Swift toolchain)
 - CMake 4.4.4
 - C/C++ 编译器：
-  - macOS: Xcode Command Line Tools
+  - macOS: Xcode 27.0 / Command Line Tools
   - Linux: GCC 或 Clang
   - Windows: Visual Studio 2026 (C++ workload)
 - Rust 1.99.0 / Cargo
