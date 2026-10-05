@@ -1,5 +1,5 @@
 // swift-tools-version: 5.9
-// guava-mcp 0.0.1
+// guava-mcp 0.0.9
 import PackageDescription
 
 let package = Package(

@@ -253,7 +253,7 @@ func handle(_ msg: [String: Any]) {
             "result": [
                 "protocolVersion": supportedVersions.contains(requestedVersion) ? requestedVersion : supportedVersions[0],
                 "capabilities": ["tools": ["listChanged": true] as [String: Any]] as [String: Any],
-                "serverInfo": ["name": "guava", "version": "0.1.0"] as [String: Any],
+                "serverInfo": ["name": "guava", "version": "0.0.9"] as [String: Any],
             ] as [String: Any],
         ])
 

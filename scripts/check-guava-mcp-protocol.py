@@ -6,7 +6,10 @@ from pathlib import Path
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
+configured_server = os.environ.get('GUAVA_MCP_EXECUTABLE')
 candidates = [ROOT / 'guava-mcp/.build/out/Products/Debug/GuavaMCP', ROOT / 'guava-mcp/.build/debug/GuavaMCP']
+if configured_server:
+    candidates = [Path(configured_server)]
 server = next(path for path in candidates if path.is_file())
 requests = [
     json.dumps({'jsonrpc': '2.0', 'id': 8, 'method': 'tools/call', 'params': {'name': 'compile_scripts', 'arguments': []}}),
