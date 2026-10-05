@@ -35,20 +35,8 @@ public struct ProjectScriptBuildConfiguration: Sendable {
                         FileManager.default.fileExists(atPath: directory.appendingPathComponent("\($0).swiftmodule").path)
                     }
                 }.map(\.path)
-        var discoveredMaps: [String] = []
-        let generatedMaps = buildDirectory.deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Intermediates.noindex/GeneratedModuleMaps", isDirectory: true)
-        for directory in [buildDirectory, generatedMaps] {
-            for child in (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? [] {
-                if child.pathExtension == "modulemap", child.lastPathComponent.hasPrefix("C") {
-                    discoveredMaps.append(child.path)
-                } else if child.pathExtension == "build", child.lastPathComponent.hasPrefix("C") {
-                    let moduleMap = child.appendingPathComponent("module.modulemap")
-                    if FileManager.default.fileExists(atPath: moduleMap.path) { discoveredMaps.append(moduleMap.path) }
-                }
-            }
-        }
-        var moduleMaps = configuredPaths("GUAVA_ENGINE_CLANG_MODULE_MAP_PATHS") ?? discoveredMaps.sorted()
+        var moduleMaps = configuredPaths("GUAVA_ENGINE_CLANG_MODULE_MAP_PATHS") ??
+            SwiftScriptCompiler.discoverClangModuleMapPaths(in: buildDirectory)
         var includePaths = Set(moduleMaps.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path })
         let regex = try? NSRegularExpression(pattern: #"umbrella\s+"([^"]+)""#)
         for path in moduleMaps {

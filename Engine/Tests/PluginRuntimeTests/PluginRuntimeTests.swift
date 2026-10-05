@@ -8,6 +8,22 @@ import Testing
 
 @Suite("PluginRuntime security boundary")
 struct PluginRuntimeTests {
+    @Test("typed inputs distinguish numeric zero and one from booleans")
+    func typedNumbersAreNotBooleans() throws {
+        let type = WITValueType.record([
+            WITRecordField(name: "enabled", type: .bool),
+            WITRecordField(name: "count", type: .u16),
+        ])
+        for count in [0, 1] {
+            let input = Data("{\"enabled\":true,\"count\":\(count)}".utf8)
+            let encoded = try PluginTypedInputEncoder.encode(input, as: type)
+            #expect(Array(encoded) == [0x47, 0x54, 0x56, 0x31, 1, UInt8(count), 0])
+            #expect(throws: PluginTypedInputError.typeMismatch(path: "$.enabled", expected: "bool")) {
+                try PluginTypedInputEncoder.encode(Data("{\"enabled\":\(count),\"count\":1}".utf8), as: type)
+            }
+        }
+    }
+
     @Test("length-prefixed RPC rejects trailing and oversized frames")
     func frameCodecIsStrict() throws {
         let request = PluginHostRequest(method: .handshake)
