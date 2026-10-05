@@ -193,8 +193,8 @@ struct ShaderCatalogTests {
             )
         )
 
-        let expectedR4: [RenderPassKind] = [.depthPrepass, .shadowPass, .skybox, .basePass, .particles, .tonemap, .viewportResolve]
-        let expectedR5: [RenderPassKind] = [.depthPrepass, .skybox, .basePass, .ssao, .ssr, .taa, .particles, .bloom, .tonemap, .fxaa, .viewportResolve]
+        let expectedR4: [RenderPassKind] = [.depthPrepass, .shadowPass, .skybox, .basePass, .transparentMeshes, .particles, .tonemap, .viewportResolve]
+        let expectedR5: [RenderPassKind] = [.depthPrepass, .skybox, .basePass, .ssao, .ssr, .taa, .transparentMeshes, .particles, .bloom, .tonemap, .fxaa, .viewportResolve]
 
         #expect(r4.passes == expectedR4)
         #expect(r5.passes == expectedR5)
@@ -202,7 +202,7 @@ struct ShaderCatalogTests {
 
     @Test("progressive refinement drops SSR only while the opaque scene is moving")
     func motionRefinementDropsSSR() {
-        let full: [RenderPassKind] = [.depthPrepass, .skybox, .basePass, .ssao, .ssr, .taa, .particles, .bloom, .tonemap, .viewportResolve]
+        let full: [RenderPassKind] = [.depthPrepass, .skybox, .basePass, .ssao, .ssr, .taa, .transparentMeshes, .particles, .bloom, .tonemap, .viewportResolve]
 
         // Settled: full quality, SSR present.
         #expect(RenderFramePlanner.motionRefinedPasses(full, opaqueMoving: false) == full)
@@ -243,7 +243,7 @@ struct ShaderCatalogTests {
         #expect(renderSettings.enableShadows)
         renderSettings.enableShadows = false
         #expect(!renderSettings.shadowSettings.enabled)
-        #expect(RenderFramePlanner.makePlan(settings: renderSettings).passes == [.depthPrepass, .skybox, .basePass, .particles, .tonemap])
+        #expect(RenderFramePlanner.makePlan(settings: renderSettings).passes == [.depthPrepass, .skybox, .basePass, .transparentMeshes, .particles, .tonemap])
     }
 
     @Test("stylized character shading schedules outline after base pass")
@@ -256,7 +256,7 @@ struct ShaderCatalogTests {
             )
         )
 
-        #expect(plan.passes == [.depthPrepass, .skybox, .basePass, .outline, .inkPaperPost, .particles, .bloom, .tonemap])
+        #expect(plan.passes == [.depthPrepass, .skybox, .basePass, .outline, .inkPaperPost, .transparentMeshes, .particles, .bloom, .tonemap])
     }
 
     @Test("stylized character settings carry card ink style parameters")

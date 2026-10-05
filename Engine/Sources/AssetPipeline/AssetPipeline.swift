@@ -1,5 +1,6 @@
 import Foundation
 import SIMDCompat
+import SceneRuntime
 
 public struct AssetPipeline {
     public init() {}
@@ -52,6 +53,9 @@ public struct MeshMaterial: Sendable, Equatable {
     public var metallicRoughnessTextureIndex: Int?
     public var metallicFactor: Float
     public var roughnessFactor: Float
+    public var alphaMode: MaterialAlphaMode
+    public var alphaCutoff: Float
+    public var doubleSided: Bool
 
     public init(name: String? = nil,
                 baseColorFactor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1),
@@ -59,7 +63,10 @@ public struct MeshMaterial: Sendable, Equatable {
                 normalTextureIndex: Int? = nil,
                 metallicRoughnessTextureIndex: Int? = nil,
                 metallicFactor: Float = 1,
-                roughnessFactor: Float = 1) {
+                roughnessFactor: Float = 1,
+                alphaMode: MaterialAlphaMode = .opaque,
+                alphaCutoff: Float = 0.5,
+                doubleSided: Bool = false) {
         self.name = name
         self.baseColorFactor = baseColorFactor
         self.baseColorTextureIndex = baseColorTextureIndex
@@ -67,6 +74,9 @@ public struct MeshMaterial: Sendable, Equatable {
         self.metallicRoughnessTextureIndex = metallicRoughnessTextureIndex
         self.metallicFactor = metallicFactor
         self.roughnessFactor = roughnessFactor
+        self.alphaMode = alphaMode
+        self.alphaCutoff = alphaCutoff.isFinite ? max(alphaCutoff, 0) : 0.5
+        self.doubleSided = doubleSided
     }
 
     public static let fallback = MeshMaterial()

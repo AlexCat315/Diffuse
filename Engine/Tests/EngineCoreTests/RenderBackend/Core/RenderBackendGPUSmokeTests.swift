@@ -1,4 +1,5 @@
 ﻿import Foundation
+import AssetPipeline
 import RHIWGPU
 import SceneRuntime
 import Testing
@@ -9,6 +10,186 @@ private let gpuSmokeEnabled = ProcessInfo.processInfo.environment["GUAVA_RUN_GPU
 
 @Suite("RenderBackendGPUSmoke", .serialized)
 struct RenderBackendGPUSmokeTests {
+    @Test("transparent panes blend in distance order and opaque snapshots do not accumulate them",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1"),
+          arguments: [RenderSettings.ReplacementStage.r3ViewportInterop, .r5PostProcess])
+    func materialTransparency(stage: RenderSettings.ReplacementStage) throws {
+        AssetRegistry.shared.registerForTesting(materialQuad(), at: 2)
+        defer { AssetRegistry.shared.unregisterTestingMesh(at: 2) }
+        let backend = WGPUBackend(config: WGPUDeviceConfig(validationEnabled: true)); try backend.initialize()
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer { renderer = nil; try? backend.shutdown() }
+        let r = try #require(renderer); r.initialize()
+        var rear = matrix_identity_float4x4; rear.columns.3.z = -1
+        let opaque = RenderInstance(meshIndex: 2, transform: rear, colorTint: SIMD3(1, 0, 0))
+        let glass = RenderInstance(meshIndex: 2, transform: matrix_identity_float4x4, colorTint: SIMD3(0, 1, 0),
+            material: RenderMaterial(baseColorFactor: SIMD4(1, 1, 1, 0.5), alphaMode: .blend))
+        var packet = materialPacket(instances: [opaque], stage: stage)
+        r.render(packet: packet)
+        let texture = try #require(r.offscreenColorTexture)
+        let baseline = try readbackBGRA8(texture: texture, width: 128, height: 128, backend: backend)
+        packet.frameIndex += 1; packet.scene.instances = [glass, opaque]
+        r.render(packet: packet)
+        let blended = try readbackBGRA8(texture: texture, width: 128, height: 128, backend: backend)
+        let center = blended[64 * 128 + 64]
+        #expect(center.g > 50 && center.r > 50)
+        #expect(Int(center.g) > Int(baseline[64 * 128 + 64].g) + 30)
+        #expect(r.lastFrameStats.passDrawCallCounts[.depthPrepass] == 1)
+        #expect(r.lastFrameStats.passDrawCallCounts[.basePass] == 1)
+        #expect(r.lastFrameStats.passDrawCallCounts[.transparentMeshes] == 1)
+        packet.frameIndex += 1; packet.scene.instances.reverse()
+        r.render(packet: packet)
+        #expect(try readbackBGRA8(texture: texture, width: 128, height: 128, backend: backend) == blended)
+        if stage == .r5PostProcess { #expect(r.lastFrameUsedOpaqueCache) }
+        // Two transparent surfaces must sort independently of extraction order.
+        var farGlass = glass; farGlass.transform.columns.3.z = -0.5; farGlass.colorTint = SIMD3(0, 0, 1)
+        packet.scene.instances = [glass, farGlass, opaque]; packet.frameIndex += 1
+        r.render(packet: packet)
+        let ordered = try readbackBGRA8(texture: texture, width: 128, height: 128, backend: backend)
+        packet.scene.instances.reverse(); packet.frameIndex += 1; r.render(packet: packet)
+        #expect(try readbackBGRA8(texture: texture, width: 128, height: 128, backend: backend) == ordered)
+        try writeDebugPPMIfRequested(pixels: ordered, width: 128, height: 128, filenameSuffix: "-glass-\(stage.rawValue)")
+    }
+
+    @Test("double-sided thin surfaces render back faces in PBR and stylized shading",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1"), arguments: [false, true], [false, true])
+    func materialDoubleSided(stylized: Bool, mirrored: Bool) throws {
+        var mesh = materialQuad(); mesh.indices = [0, 2, 1, 0, 3, 2]
+        mesh.materials[0].doubleSided = true
+        AssetRegistry.shared.registerForTesting(mesh, at: 2)
+        defer { AssetRegistry.shared.unregisterTestingMesh(at: 2) }
+        let backend = WGPUBackend(config: WGPUDeviceConfig(validationEnabled: true)); try backend.initialize()
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer { renderer = nil; try? backend.shutdown() }
+        let r = try #require(renderer); r.initialize()
+        var transform = matrix_identity_float4x4
+        if mirrored { transform.columns.0.x = -1 }
+        var packet = materialPacket(instances: [RenderInstance(meshIndex: 2, transform: transform)], stage: .r3ViewportInterop)
+        packet.renderSettings.enableStylizedCharacterShading = stylized
+        r.render(packet: packet)
+        let texture = try #require(r.offscreenColorTexture)
+        let both = try readbackBGRA8(texture: texture, width: 128, height: 128, backend: backend)
+        packet.frameIndex += 1; packet.scene.instances[0].material.doubleSided = false
+        r.render(packet: packet)
+        let one = try readbackBGRA8(texture: texture, width: 128, height: 128, backend: backend)
+        #expect(both[64 * 128 + 64].distance(from: one[64 * 128 + 64]) > 50)
+    }
+
+    @Test("primitive alpha settings remain independent in one mesh and render bundles",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1"), arguments: [false, true])
+    func materialPrimitiveCoverage(bundles: Bool) throws {
+        var mesh = materialQuad()
+        mesh.materials = [MeshMaterial(baseColorFactor: SIMD4(1, 1, 1, 0), alphaMode: .opaque),
+                          MeshMaterial(baseColorFactor: SIMD4(1, 1, 1, 0.25), alphaMode: .mask)]
+        mesh.submeshes = [MeshSubmesh(indexStart: 0, indexCount: 3, materialIndex: 0),
+                          MeshSubmesh(indexStart: 3, indexCount: 3, materialIndex: 1)]
+        AssetRegistry.shared.registerForTesting(mesh, at: 2)
+        defer { AssetRegistry.shared.unregisterTestingMesh(at: 2) }
+        let backend = WGPUBackend(config: WGPUDeviceConfig(validationEnabled: true)); try backend.initialize()
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer { renderer = nil; try? backend.shutdown() }
+        let r = try #require(renderer); r.initialize()
+        var packet = materialPacket(instances: [], stage: .r3ViewportInterop)
+        packet.renderSettings.enableRenderBundles = bundles
+        r.render(packet: packet)
+        let texture = try #require(r.offscreenColorTexture)
+        let background = try readbackBGRA8(texture: texture, width: 128, height: 128, backend: backend)
+        packet.scene.instances = [RenderInstance(meshIndex: 2, transform: matrix_identity_float4x4)]
+        packet.frameIndex += 1; r.render(packet: packet)
+        let masked = try readbackBGRA8(texture: texture, width: 128, height: 128, backend: backend)
+        #expect(masked[48 * 128 + 48] == background[48 * 128 + 48])
+        #expect(masked[80 * 128 + 80].distance(from: background[80 * 128 + 80]) > 50)
+        // Coverage exactly at the cutoff is kept, rather than discarded.
+        packet.scene.instances[0].material.alphaCutoff = 0.25
+        packet.frameIndex += 1; r.render(packet: packet)
+        let solid = try readbackBGRA8(texture: texture, width: 128, height: 128, backend: backend)
+        #expect(solid[48 * 128 + 48].distance(from: background[48 * 128 + 48]) > 50)
+        #expect(r.lastFrameStats.passDrawCallCounts[.basePass] == 2)
+    }
+
+    @Test("alpha-masked textures cut the same holes in color, camera depth and shadows",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1"))
+    func materialMaskDepthAndShadow() throws {
+        var mesh = materialQuad()
+        mesh.materials[0].alphaMode = .mask
+        mesh.materials[0].baseColorTextureIndex = 0
+        mesh.materials[0].doubleSided = true
+        AssetRegistry.shared.registerForTesting(mesh, at: 2)
+        defer { AssetRegistry.shared.unregisterTestingMesh(at: 2) }
+        let backend = WGPUBackend(config: WGPUDeviceConfig(validationEnabled: true)); try backend.initialize()
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer { renderer = nil; try? backend.shutdown() }
+        let r = try #require(renderer); r.initialize()
+        var packet = materialPacket(instances: [], stage: .r4LightingPBRShadow)
+        packet.renderSettings.shadowSettings = RenderShadowSettings(enabled: true, mapResolution: 128)
+        packet.scene.lights = [RenderLight(direction: SIMD3(0, 0, -1), castShadows: true)]
+        r.render(packet: packet)
+        let color = try #require(r.offscreenColorTexture)
+        let baseline = try readbackBGRA8(texture: color, width: 128, height: 128, backend: backend)
+        let texture = try backend.createTexture(width: 1, height: 1, format: .rgba8Unorm, usage: [.textureBinding, .copyDst])
+        let texel: [UInt8] = [255, 255, 255, 0]
+        texel.withUnsafeBytes { bytes in
+            backend.writeTexture(texture, data: bytes.baseAddress!, dataSize: bytes.count,
+                bytesPerRow: 4, rowsPerImage: 1, width: 1, height: 1)
+        }
+        r.meshTextureResources[2] = [0: GPUMeshTextureResource(texture: texture, view: try texture.createView(), width: 1, height: 1, sourcePath: "test-alpha")]
+        packet.scene.instances = [RenderInstance(meshIndex: 2, transform: matrix_identity_float4x4)]
+        packet.frameIndex += 1; r.render(packet: packet)
+        let masked = try readbackBGRA8(texture: color, width: 128, height: 128, backend: backend)
+        #expect(masked == baseline)
+        let atlas = try #require(r.shadowMapTarget)
+        let emptyShadow = try readbackShadowDepth(texture: atlas.colorTexture, size: atlas.size, backend: backend)
+        #expect(emptyShadow.allSatisfy { $0 > 0.99 })
+        // OPAQUE must ignore the texture's zero alpha, including in shadows.
+        packet.scene.instances[0].material.alphaMode = .opaque
+        packet.frameIndex += 1; r.render(packet: packet)
+        #expect(try readbackBGRA8(texture: color, width: 128, height: 128, backend: backend) != baseline)
+        let solidShadow = try readbackShadowDepth(texture: atlas.colorTexture, size: atlas.size, backend: backend)
+        #expect(solidShadow.contains { $0 < 0.99 })
+        try writeDebugPPMIfRequested(pixels: masked, width: 128, height: 128, filenameSuffix: "-mask")
+    }
+
+    @Test("culling, instancing, render bundles and distance LOD reduce submitted mesh work",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1"), arguments: [false, true])
+    func largeSceneMeshBatches(bundles: Bool) throws {
+        AssetRegistry.shared.registerForTesting(materialQuad(), at: 2)
+        defer { AssetRegistry.shared.unregisterTestingMesh(at: 2) }
+        let backend = WGPUBackend(config: WGPUDeviceConfig(validationEnabled: true)); try backend.initialize()
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer { renderer = nil; try? backend.shutdown() }
+        let r = try #require(renderer); r.initialize()
+        var instances = (0..<100).map { i in
+            var matrix = matrix_identity_float4x4; matrix.columns.3.x = Float(i % 10) * 0.2 - 0.9
+            matrix.columns.3.y = Float(i / 10) * 0.2 - 0.9
+            return RenderInstance(meshIndex: 0, transform: matrix, colorTint: SIMD3(Float(i) / 100, 0.5, 1))
+        }
+        var outside = instances[0]; outside.transform.columns.3.x = 100; instances.append(outside)
+        var packet = materialPacket(instances: instances, stage: .r3ViewportInterop)
+        packet.renderSettings.enableRenderBundles = bundles
+        r.render(packet: packet)
+        #expect(r.lastFrameStats.culledMeshInstanceCount == 1)
+        #expect(r.lastFrameStats.visibleMeshInstanceCount == 100)
+        #expect(r.lastFrameStats.passDrawCallCounts[.basePass] == 1)
+        #expect(r.lastFrameStats.instancedMeshBatchCount == 1)
+        let texture = try #require(r.offscreenColorTexture)
+        let batched = try readbackBGRA8(texture: texture, width: 128, height: 128, backend: backend)
+        packet.renderSettings.enableMeshInstancing = false; packet.frameIndex += 1
+        r.render(packet: packet)
+        #expect(r.lastFrameStats.passDrawCallCounts[.basePass] == 100)
+        #expect(try readbackBGRA8(texture: texture, width: 128, height: 128, backend: backend) == batched)
+        packet.renderSettings.enableFrustumCulling = false; packet.frameIndex += 1
+        r.render(packet: packet)
+        #expect(r.lastFrameStats.passDrawCallCounts[.basePass] == 101)
+        packet.scene.instances = [RenderInstance(mesh: RenderMeshHandle(meshIndex: 0,
+            levelsOfDetail: [RenderMeshLOD(meshIndex: 2, minimumDistance: 4)]), transform: matrix_identity_float4x4)]
+        packet.frameIndex += 1; r.render(packet: packet)
+        #expect(r.lastFrameStats.lodMeshInstanceCount == 1)
+        #expect(r.lastFrameStats.submittedMeshTriangleCount == 2)
+        packet.renderSettings.enableDistanceLOD = false; packet.frameIndex += 1; r.render(packet: packet)
+        #expect(r.lastFrameStats.lodMeshInstanceCount == 0)
+        #expect(r.lastFrameStats.submittedMeshTriangleCount == 12)
+    }
+
     @Test("orthographic editor grid follows all reference planes and invalidates camera and spacing caches",
           .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the GPU test"),
           arguments: [SIMD3<Float>(0, 0, 8), SIMD3<Float>(8, 0, 0), SIMD3<Float>(0, 8, 0)])
@@ -3215,4 +3396,42 @@ private func scale(_ value: SIMD3<Float>) -> simd_float4x4 {
         SIMD4<Float>(0, 0, value.z, 0),
         SIMD4<Float>(0, 0, 0, 1),
     ])
+}
+
+private func materialQuad() -> MeshAsset {
+    var vertices: [Float] = []
+    for (position, uv) in [(SIMD3<Float>(-1, -1, 0), SIMD2<Float>(0, 1)),
+                           (SIMD3<Float>(1, -1, 0), SIMD2<Float>(1, 1)),
+                           (SIMD3<Float>(1, 1, 0), SIMD2<Float>(1, 0)),
+                           (SIMD3<Float>(-1, 1, 0), SIMD2<Float>(0, 0))] {
+        MeshAsset.appendVertex(to: &vertices, position: position, normal: SIMD3(0, 0, 1), uv: uv)
+    }
+    return MeshAsset(name: "material-quad", vertices: vertices, indices: [0, 1, 2, 0, 2, 3])
+}
+
+private func materialPacket(instances: [RenderInstance], stage: RenderSettings.ReplacementStage) -> RenderPacket {
+    RenderPacket(frameIndex: 0, deltaTime: 1.0 / 60,
+        drawableSize: RenderDrawableSize(width: 128, height: 128),
+        scene: RenderScene(camera: RenderCamera(eye: SIMD3(0, 0, 5), target: .zero,
+            projection: .orthographic, orthographicHeight: 4), instances: instances),
+        sceneSnapshot: SceneRuntimeSnapshot(entityCount: instances.count, revision: 0),
+        renderSettings: RenderSettings(stage: stage, debugViewMode: .unlit, enableOffscreenViewport: true),
+        simulationTimeSeconds: 0)
+}
+
+private func readbackShadowDepth(texture: GPUTexture, size: UInt32, backend: WGPUBackend) throws -> [Float] {
+    let bytesPerRow = alignedCopyBytesPerRow(size * 8)
+    let byteCount = UInt64(bytesPerRow * size)
+    let buffer = try backend.createBuffer(size: byteCount, usage: [.copyDst, .mapRead])
+    let encoder = try backend.createCommandEncoder()
+    encoder.copyTextureToBuffer(source: texture, destination: buffer, bytesPerRow: bytesPerRow,
+        rowsPerImage: size, width: size, height: size)
+    backend.submit(try encoder.finish())
+    try backend.bufferMapSync(buffer, size: byteCount)
+    defer { buffer.unmap() }
+    let base = try #require(buffer.getMappedRange(size: byteCount))
+    return (0..<Int(size * size)).map { i in
+        let offset = (i / Int(size)) * Int(bytesPerRow) + (i % Int(size)) * 8
+        return Float(Float16(bitPattern: base.load(fromByteOffset: offset, as: UInt16.self)))
+    }
 }

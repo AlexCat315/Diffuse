@@ -6,6 +6,7 @@ public enum RenderPassKind: String, Sendable, CaseIterable {
     case skybox
     case basePass
     case editorGrid
+    case transparentMeshes
     case particles
     case outline
     case inkPaperPost
@@ -109,7 +110,7 @@ enum RenderFramePlanner {
         // boundary that the opaque-render cache snapshots: everything up to
         // (and excluding) particles is a pure function of the opaque inputs.
         if let lastOpaque = passes.lastIndex(where: { RenderPassKind.opaquePasses.contains($0) }) {
-            passes.insert(.particles, at: passes.index(after: lastOpaque))
+            passes.insert(contentsOf: [.transparentMeshes, .particles], at: passes.index(after: lastOpaque))
         }
 
         return RenderFramePlan(passes: passes)

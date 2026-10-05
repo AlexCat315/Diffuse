@@ -2,128 +2,20 @@ import RHIWGPU
 import SceneRuntime
 import SIMDCompat
 
-private struct MeshInstanceUniforms {
+struct MeshInstanceUniforms {
     var mvp: simd_float4x4
     var model: simd_float4x4
     var colorTint: SIMD4<Float>
+    var material: SIMD4<Float> = .zero
 }
 
 extension WGPURenderer {
-    func writeInstanceUniforms(scene: RenderScene, viewProj: simd_float4x4) {
-        if let dyn = dynamicInstanceResources {
-            for (i, instance) in scene.instances.enumerated() {
-                var u = MeshInstanceUniforms(
-                    mvp: viewProj * instance.transform,
-                    model: instance.transform,
-                    colorTint: effectiveBaseColor(for: instance)
-                )
-                let offset = UInt64(i) * dyn.stride
-                withUnsafeBytes(of: &u) { raw in
-                    if let base = raw.baseAddress {
-                        backend.writeBuffer(
-                            dyn.uniformBuffer, data: base, size: raw.count, offset: offset)
-                    }
-                }
-            }
-            return
-        }
-
-        for (i, instance) in scene.instances.enumerated() where i < instanceResources.count {
-            var u = MeshInstanceUniforms(
-                mvp: viewProj * instance.transform,
-                model: instance.transform,
-                colorTint: effectiveBaseColor(for: instance)
-            )
-            withUnsafeBytes(of: &u) { raw in
-                if let base = raw.baseAddress {
-                    backend.writeBuffer(instanceResources[i].uniformBuffer, data: base, size: raw.count)
-                }
-            }
-        }
-    }
-
-    func ensureInstanceResources(scene: RenderScene, pipeline: GPURenderPipeline, jointPaletteMap: JointPaletteMap = JointPaletteMap()) throws {
-        let instanceCount = scene.instances.count
-        let resourceKeys = scene.instances.map {
-            InstanceResourceKey(entity: $0.entity,
-                                meshIndex: $0.meshIndex,
-                                baseColorTextureIndex: $0.material.baseColorTextureIndex,
-                                normalTextureIndex: $0.material.normalTextureIndex,
-                                jointPaletteMatrixCount: $0.entity.flatMap { jointPaletteMap.palette(for: $0)?.matrices.count } ?? 0)
-        }
-
-        let hasJointPalettes = resourceKeys.contains { $0.jointPaletteMatrixCount > 0 }
-        let useDynamicOffsets = instanceCount > dynamicOffsetThreshold && !hasJointPalettes
-        let bindGroupLayout: GPUBindGroupLayout
-        if let meshBindGroupLayout {
-            bindGroupLayout = meshBindGroupLayout
-        } else {
-            bindGroupLayout = try pipeline.getBindGroupLayout(group: 0)
-        }
-
-        if useDynamicOffsets {
-            if let dyn = dynamicInstanceResources,
-               dyn.capacity >= instanceCount,
-               instanceResourceShadowGeneration == shadowResourceGeneration {
-                instanceResourceKeys = resourceKeys
-                return
-            }
-            instanceResources.removeAll(keepingCapacity: false)
-            instanceResourceKeys = resourceKeys
-
-            let totalSize = UInt64(max(instanceCount, 1)) * dynamicUniformStride
-            let uniformBuffer = try backend.createBuffer(size: totalSize, usage: [.uniform, .copyDst])
-            let bindGroup = try backend.createBindGroup(
-                layout: bindGroupLayout,
-                entries: try meshBindGroupEntries(instanceUniformBuffer: uniformBuffer)
-            )
-            dynamicInstanceResources = DynamicInstanceResources(
-                uniformBuffer: uniformBuffer,
-                bindGroup: bindGroup,
-                stride: dynamicUniformStride,
-                capacity: instanceCount
-            )
-            instanceResourceShadowGeneration = shadowResourceGeneration
-            return
-        }
-
-        if dynamicInstanceResources == nil
-            && instanceResources.count == instanceCount
-            && instanceResourceKeys == resourceKeys
-            && instanceResourceShadowGeneration == shadowResourceGeneration {
-            return
-        }
-
-        dynamicInstanceResources = nil
-        instanceResources.removeAll(keepingCapacity: false)
-        instanceResourceKeys = resourceKeys
-        for instance in scene.instances {
-            let uniformBuffer = try backend.createBuffer(
-                size: UInt64(MemoryLayout<MeshInstanceUniforms>.stride),
-                usage: [.uniform, .copyDst]
-            )
-            let paletteBuffer = instance.entity.flatMap { jointPaletteBuffers[$0] } ?? fallbackJointPaletteBuffer
-            let bindGroup = try backend.createBindGroup(
-                layout: bindGroupLayout,
-                entries: try meshBindGroupEntries(
-                    instanceUniformBuffer: uniformBuffer,
-                    baseColorTextureView: baseColorTextureView(for: instance),
-                    normalMapTextureView: normalMapTextureView(for: instance),
-                    metallicRoughnessTextureView: metallicRoughnessTextureView(for: instance),
-                    jointPaletteBuffer: paletteBuffer
-                )
-            )
-            instanceResources.append(
-                InstanceResources(uniformBuffer: uniformBuffer, bindGroup: bindGroup))
-        }
-        instanceResourceShadowGeneration = shadowResourceGeneration
-    }
-
     func meshBindGroupEntries(instanceUniformBuffer: GPUBuffer,
                               baseColorTextureView: GPUTextureView? = nil,
                               normalMapTextureView: GPUTextureView? = nil,
                               metallicRoughnessTextureView: GPUTextureView? = nil,
-                              jointPaletteBuffer: GPUBuffer? = nil) throws -> [GPUBindGroupEntry] {
+                              jointPaletteBuffer: GPUBuffer? = nil,
+                              instanceStorageBuffer: GPUBuffer? = nil) throws -> [GPUBindGroupEntry] {
         try ensureStylizedCharacterUniformBuffer()
         try ensureMeshSamplingFallbackResources()
         try ensureIBLEnvironment()
@@ -143,6 +35,10 @@ extension WGPURenderer {
         else {
             throw WGPUBackendError.initFailed("mesh bind group resources missing")
         }
+        if fallbackInstanceStorageBuffer == nil {
+            fallbackInstanceStorageBuffer = try backend.createBuffer(size: UInt64(MemoryLayout<MeshInstanceUniforms>.stride), usage: [.storage, .copyDst])
+        }
+        let instances = instanceStorageBuffer ?? fallbackInstanceStorageBuffer!
         let textureView = baseColorTextureView ?? fallbackMeshTextureView
         let normalView  = normalMapTextureView ?? fallbackNormalMapTextureView
         let mrView      = metallicRoughnessTextureView ?? fallbackMetallicRoughnessTextureView
@@ -186,92 +82,8 @@ extension WGPURenderer {
             GPUBindGroupEntry(binding: 9, textureView: normalView),
             GPUBindGroupEntry(binding: 10, textureView: mrView),
             GPUBindGroupEntry(binding: 11, textureView: iblView),
+            GPUBindGroupEntry(binding: 12, buffer: instances, offset: 0, size: instances.size),
         ]
-    }
-
-    func baseColorTextureView(for instance: RenderInstance) -> GPUTextureView? {
-        let meshIndex = instance.meshIndex
-        if let textureIndex = instance.material.baseColorTextureIndex {
-            return meshTextureResources[meshIndex]?[textureIndex]?.view
-        }
-        guard let materialSet = MeshMaterialRegistry.shared.materials(for: meshIndex),
-              let textureIndex = materialSet.materials.compactMap(\.baseColorTextureIndex).first
-        else {
-            return nil
-        }
-        return meshTextureResources[meshIndex]?[textureIndex]?.view
-    }
-
-    func baseColorTextureView(for meshIndex: Int, materialIndex: Int) -> GPUTextureView? {
-        guard let materialSet = MeshMaterialRegistry.shared.materials(for: meshIndex),
-              materialSet.materials.indices.contains(materialIndex),
-              let textureIndex = materialSet.materials[materialIndex].baseColorTextureIndex
-        else { return nil }
-        return meshTextureResources[meshIndex]?[textureIndex]?.view
-    }
-
-    func normalMapTextureView(for instance: RenderInstance) -> GPUTextureView? {
-        let meshIndex = instance.meshIndex
-        if let textureIndex = instance.material.normalTextureIndex {
-            return meshTextureResources[meshIndex]?[textureIndex]?.view
-        }
-        guard let materialSet = MeshMaterialRegistry.shared.materials(for: meshIndex),
-              let textureIndex = materialSet.materials.compactMap(\.normalTextureIndex).first
-        else { return nil }
-        return meshTextureResources[meshIndex]?[textureIndex]?.view
-    }
-
-    func normalMapTextureView(for meshIndex: Int, materialIndex: Int) -> GPUTextureView? {
-        guard let materialSet = MeshMaterialRegistry.shared.materials(for: meshIndex),
-              materialSet.materials.indices.contains(materialIndex),
-              let textureIndex = materialSet.materials[materialIndex].normalTextureIndex
-        else { return nil }
-        return meshTextureResources[meshIndex]?[textureIndex]?.view
-    }
-
-    func metallicRoughnessTextureView(for instance: RenderInstance) -> GPUTextureView? {
-        let meshIndex = instance.meshIndex
-        guard let materialSet = MeshMaterialRegistry.shared.materials(for: meshIndex),
-              let textureIndex = materialSet.materials.compactMap(\.metallicRoughnessTextureIndex).first
-        else { return nil }
-        return meshTextureResources[meshIndex]?[textureIndex]?.view
-    }
-
-    func metallicRoughnessTextureView(for meshIndex: Int, materialIndex: Int) -> GPUTextureView? {
-        guard let materialSet = MeshMaterialRegistry.shared.materials(for: meshIndex),
-              materialSet.materials.indices.contains(materialIndex),
-              let textureIndex = materialSet.materials[materialIndex].metallicRoughnessTextureIndex
-        else { return nil }
-        return meshTextureResources[meshIndex]?[textureIndex]?.view
-    }
-
-    func makeSubmeshBindGroup(instanceUniformBuffer: GPUBuffer,
-                              meshIndex: Int,
-                              materialIndex: Int,
-                              jointPaletteBuffer: GPUBuffer?) throws -> GPUBindGroup {
-        guard let bindGroupLayout = meshBindGroupLayout else {
-            throw WGPUBackendError.initFailed("mesh bind group layout not initialized")
-        }
-        return try backend.createBindGroup(
-            layout: bindGroupLayout,
-            entries: try meshBindGroupEntries(
-                instanceUniformBuffer: instanceUniformBuffer,
-                baseColorTextureView: baseColorTextureView(for: meshIndex, materialIndex: materialIndex),
-                normalMapTextureView: normalMapTextureView(for: meshIndex, materialIndex: materialIndex),
-                metallicRoughnessTextureView: metallicRoughnessTextureView(for: meshIndex, materialIndex: materialIndex),
-                jointPaletteBuffer: jointPaletteBuffer
-            )
-        )
-    }
-
-    func effectiveBaseColor(for instance: RenderInstance) -> SIMD4<Float> {
-        let materialColor = instance.material.baseColorFactor
-        return SIMD4<Float>(
-            instance.colorTint.x * materialColor.x,
-            instance.colorTint.y * materialColor.y,
-            instance.colorTint.z * materialColor.z,
-            materialColor.w
-        )
     }
 
     func ensureStylizedCharacterUniformBuffer() throws {

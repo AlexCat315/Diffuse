@@ -1,0 +1,64 @@
+name: GPU rendering regression
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'Engine/**'
+      - 'Editor/**'
+      - 'scripts/test-gpu-regression.sh'
+      - '.github/workflows/ci-gpu.yml'
+  schedule:
+    - cron: '17 19 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gpu-regression-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render:
+    # Enable scheduled/push runs after connecting a Metal-capable runner.
+    # Manual dispatch can be used to verify the runner before enabling them.
+    if: vars.GUAVA_GPU_CI_ENABLED == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted, macOS, ARM64, guava-gpu]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Verify build tools and hardware
+        run: |
+          mkdir -p "$RUNNER_TEMP/guava-gpu-regression"
+          swift --version
+          cmake --version
+          cargo --version
+          system_profiler SPDisplaysDataType > "$RUNNER_TEMP/guava-gpu-regression/device.log"
+          cat "$RUNNER_TEMP/guava-gpu-regression/device.log"
+
+      - name: Build native dependencies
+        run: |
+          cmake -S Engine/third-party -B Engine/build/native -DCMAKE_BUILD_TYPE=Release
+          cmake --build Engine/build/native --parallel --config Release
+          cmake --build Engine/build/native --parallel --config Release --target stage_sdl3
+          cmake --build Engine/build/native --parallel --config Release --target stage_image_decode
+          cmake --install Engine/build/native --config Release --prefix "$RUNNER_TEMP/guava-native-install"
+
+      - name: Run actual GPU regressions
+        env:
+          GUAVA_GPU_TEST_OUTPUT_DIR: ${{ runner.temp }}/guava-gpu-regression
+        run: bash scripts/test-gpu-regression.sh
+
+      - name: Save pixel captures, test report and device log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-regression-${{ github.run_id }}
+          path: ${{ runner.temp }}/guava-gpu-regression
+          if-no-files-found: warn
+          retention-days: 14
