@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(CoreFoundation)
 import CoreFoundation
+#endif
 
 /// The JSON types supported by Guava capability inputs.
 public enum JSONSchemaType: String, Codable, Sendable, Equatable {
@@ -455,13 +457,15 @@ public enum JSONSchemaValidator {
     }
 
     private static func booleanValue(_ value: Any) -> Bool? {
-        // NSNumber(0/1) can also bridge to Bool. Check its Core Foundation
-        // type instead; importing CoreFoundation exposes this API on all hosts.
-        if let number = value as? NSNumber,
-           CFGetTypeID(number) == CFBooleanGetTypeID() {
-            return number.boolValue
-        }
-        return nil
+        guard let number = value as? NSNumber else { return nil }
+        // Numeric zero and one also bridge to Bool. Windows Foundation keeps
+        // its boolean singletons internal and does not expose CoreFoundation.
+        #if canImport(CoreFoundation)
+        guard CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
+        #else
+        guard number === NSNumber(value: true) || number === NSNumber(value: false) else { return nil }
+        #endif
+        return number.boolValue
     }
 }
 

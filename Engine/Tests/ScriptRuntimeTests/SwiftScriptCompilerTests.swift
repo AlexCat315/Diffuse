@@ -12,7 +12,7 @@ struct SwiftScriptCompilerTests {
         let root = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
             .appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
-        let products = root.appendingPathComponent("out/Products/Debug")
+        let products = root.appendingPathComponent("out/Products/Debug-linux-x86_64")
         try FileManager.default.createDirectory(at: products, withIntermediateDirectories: true)
         func write(_ relativePath: String, _ contents: String) throws -> String {
             let file = root.appendingPathComponent("out/Intermediates.noindex/" + relativePath)
@@ -25,7 +25,10 @@ struct SwiftScriptCompilerTests {
         _ = try write("GuavaEngine.build/Debug-linux-x86_64/CNativeBridge.build/module.modulemap", "module CNativeBridge { export * }")
         _ = try write("GuavaEngine.build/Release-linux-x86_64/CReleaseBridge.build/module.modulemap", "module CReleaseBridge { export * }")
         _ = try write("GeneratedModuleMaps/ContextMemory.modulemap", "module ContextMemory { header \"ContextMemory-Swift.h\" }")
-        let maps = SwiftScriptCompiler.discoverClangModuleMapPaths(in: products)
+        let alias = root.appendingPathComponent(".build/debug")
+        try FileManager.default.createDirectory(at: alias.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: products)
+        let maps = SwiftScriptCompiler.discoverClangModuleMapPaths(in: alias)
         #expect(maps.count == 2)
         #expect(maps.contains { $0.hasSuffix("GeneratedModuleMaps/CJoltBridge.modulemap") })
         #expect(maps.contains { $0.hasSuffix("Debug-linux-x86_64/CNativeBridge.build/module.modulemap") })

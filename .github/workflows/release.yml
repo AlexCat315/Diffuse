@@ -126,6 +126,13 @@ jobs:
           swift build -c release --package-path Engine --product GuavaPluginHost
           swift build -c release --package-path guava-mcp
 
+      - name: Test packages before release
+        shell: bash
+        run: |
+          swift test --package-path Engine
+          swift test --package-path GuavaUI
+          swift test --package-path Editor
+
       - name: Package
         id: package
         shell: bash
@@ -234,6 +241,15 @@ jobs:
           swift build -c release --package-path Editor --product GuavaPlayer
           swift build -c release --package-path Engine --product GuavaPluginHost
           swift build -c release --package-path guava-mcp
+
+      - name: Test packages before release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
+          swift test --package-path Engine
+          swift test --package-path GuavaUI
+          swift test --package-path Editor
 
       - name: Package
         id: package
@@ -374,6 +390,13 @@ jobs:
           swift build -c release --package-path Editor --product GuavaPlayer
           swift build -c release --package-path Engine --product GuavaPluginHost
           swift build -c release --package-path guava-mcp
+
+      - name: Test packages before release
+        shell: bash
+        run: |
+          swift test --package-path Engine
+          swift test --package-path GuavaUI
+          swift test --package-path Editor
 
       - name: Package
         id: package
