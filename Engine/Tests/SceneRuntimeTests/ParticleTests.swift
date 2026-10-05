@@ -6,6 +6,55 @@ import SIMDCompat
 @Suite("Particles")
 struct ParticleTests {
 
+    @Test("clearing an emitter preserves authoring and the next random sample")
+    func clearPreservesConfigurationAndRandomStream() {
+        var emitter = ParticleEmitter(emissionRate: 0,
+                                      maxParticles: 16,
+                                      lifetime: 5,
+                                      spawnRadius: 2,
+                                      velocityRandomness: SIMD3<Float>(1, 2, 3),
+                                      seed: 73)
+        emitter.emit(2)
+        emitter.advance(deltaTime: 0.1)
+        let configuration = emitter.moduleStack
+        var continued = emitter
+
+        emitter.clear()
+
+        #expect(emitter.particles.isEmpty)
+        #expect(emitter.lastFrameSpawnedParticles.isEmpty)
+        #expect(emitter.lastFrameEvents.isEmpty)
+        #expect(emitter.lastFrameStats == .empty)
+        #expect(emitter.moduleStack == configuration)
+        #expect(continued.aliveCount == 2)
+
+        emitter.emit(1)
+        continued.emit(1)
+        #expect(emitter.particles.first == continued.particles.last)
+    }
+
+    @Test("module-based initialization creates an independent seeded simulation")
+    func moduleInitializationStartsFreshSimulation() {
+        var source = ParticleEmitter(emissionRate: 0,
+                                     maxParticles: 16,
+                                     lifetime: 5,
+                                     spawnRadius: 2,
+                                     velocityRandomness: SIMD3<Float>(1, 2, 3),
+                                     seed: 73)
+        let configuration = source.moduleStack
+        source.emit(3)
+        var restored = ParticleEmitter(moduleStack: configuration)
+
+        #expect(restored.aliveCount == 0)
+        #expect(restored.lastFrameStats == .empty)
+        #expect(restored.moduleStack == configuration)
+
+        restored.emit(3)
+        #expect(restored.particles == source.particles)
+        restored.clear()
+        #expect(source.aliveCount == 3)
+    }
+
     @Test("module stack mirrors and applies legacy emitter configuration")
     func moduleStackMirrorsAndAppliesLegacyEmitterConfiguration() throws {
         let emitter = ParticleEmitter(looping: false,
