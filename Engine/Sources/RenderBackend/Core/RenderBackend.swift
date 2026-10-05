@@ -356,7 +356,10 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 opaqueStableFrames += 1
             }
             let requiredStableFrames = activeRenderSettings.enableTAA ? Self.taaCacheWarmupFrames : 0
+            // A moving frame omits SSR. Capture only once its full-quality pass
+            // has run, otherwise a static view can keep the reduced image forever.
             let opaqueConverged = opaqueStableFrames >= requiredStableFrames
+                && (!activeRenderSettings.enableSSR || !opaqueChanged)
             let canUseOpaqueCache = usesHDRFrameGraph
                 && opaqueSnapshotTarget != nil
                 && sceneColorTarget != nil
@@ -410,6 +413,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             depthView: depthView,
                             pipeline: skyboxPipeline,
                             viewProj: cameraMatrices.viewProjection,
+                            orthographic: packet.scene.camera.projection == .orthographic,
                             depthLoadOp: depthPrepassEncoded ? .load : .clear
                         )
                         passDrawCallCount = 1
@@ -1367,12 +1371,13 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         depthView: GPUTextureView,
         pipeline: GPURenderPipeline,
         viewProj: simd_float4x4,
+        orthographic: Bool,
         depthLoadOp: GPULoadOp = .clear
     ) throws {
         guard let skyboxUniformBuffer else { return }
         var uniforms = SkyboxUniforms(
             invViewProj: simd_inverse(viewProj),
-            skyTint: SIMD4<Float>(0.10, 0.20, 0.42, 1.0),
+            skyTint: SIMD4<Float>(0.10, 0.20, 0.42, orthographic ? 1 : 0),
             horizonTint: SIMD4<Float>(0.95, 0.48, 0.18, 1.0),
             groundTint: SIMD4<Float>(0.03, 0.04, 0.05, 1.0)
         )

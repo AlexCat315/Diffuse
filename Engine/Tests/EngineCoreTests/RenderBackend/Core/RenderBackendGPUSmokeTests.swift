@@ -9,6 +9,62 @@ private let gpuSmokeEnabled = ProcessInfo.processInfo.environment["GUAVA_RUN_GPU
 
 @Suite("RenderBackendGPUSmoke", .serialized)
 struct RenderBackendGPUSmokeTests {
+    @Test("orthographic editor grid follows all reference planes and invalidates camera and spacing caches",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the GPU test"),
+          arguments: [SIMD3<Float>(0, 0, 8), SIMD3<Float>(8, 0, 0), SIMD3<Float>(0, 8, 0)])
+    func editorGridOrthographicPlanes(eye: SIMD3<Float>) throws {
+        let backend = WGPUBackend(config: WGPUDeviceConfig(validationEnabled: true))
+        try backend.initialize()
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer { renderer = nil; try? backend.shutdown() }
+        let activeRenderer = try #require(renderer)
+        activeRenderer.initialize()
+        let size: UInt32 = 256
+        let up = eye.y > 0 ? SIMD3<Float>(0, 0, -1) : SIMD3<Float>(0, 1, 0)
+        var packet = RenderPacket(
+            frameIndex: 0, deltaTime: 1.0 / 60.0,
+            drawableSize: RenderDrawableSize(width: size, height: size),
+            scene: RenderScene(camera: RenderCamera(eye: eye, target: .zero, up: up,
+                projection: .orthographic, orthographicHeight: 8), instances: []),
+            sceneSnapshot: SceneRuntimeSnapshot(entityCount: 0, revision: 0),
+            renderSettings: RenderSettings(stage: .r4LightingPBRShadow, enableOffscreenViewport: true),
+            simulationTimeSeconds: 0)
+        activeRenderer.render(packet: packet)
+        let texture = try #require(activeRenderer.offscreenColorTexture)
+        let baseline = try readbackBGRA8(texture: texture, width: size, height: size, backend: backend)
+        packet.frameIndex += 1
+        packet.renderSettings.enableEditorGrid = true
+        packet.renderSettings.editorGridSpacing = 0.5
+        activeRenderer.render(packet: packet)
+        let grid = try readbackBGRA8(texture: texture, width: size, height: size, backend: backend)
+        try writeDebugPPMIfRequested(pixels: grid, width: size, height: size,
+            environmentKey: "GUAVA_GRID_SMOKE_OUTPUT",
+            filenameSuffix: eye.x > 0 ? "-side" : (eye.y > 0 ? "-top" : "-front"))
+        #expect(zip(grid, baseline).count { $0.distance(from: $1) > 12 } > 500)
+        if eye.x == 0 { #expect(grid.count { Int($0.r) > Int($0.b) + 30 && Int($0.r) > Int($0.g) + 30 } > 10) }
+        if eye.y == 0 { #expect(grid.count { Int($0.g) > Int($0.r) + 30 && Int($0.g) > Int($0.b) + 30 } > 10) }
+        if eye.z == 0 { #expect(grid.count { Int($0.b) > Int($0.r) + 30 && Int($0.b) > Int($0.g) + 30 } > 10) }
+        packet.frameIndex += 1
+        activeRenderer.render(packet: packet)
+        #expect(activeRenderer.lastFrameUsedOpaqueCache)
+        #expect(try readbackBGRA8(texture: texture, width: size, height: size, backend: backend) == grid)
+        packet.frameIndex += 1
+        packet.scene.camera.orthographicHeight = 4
+        activeRenderer.render(packet: packet)
+        #expect(!activeRenderer.lastFrameUsedOpaqueCache)
+        let zoomed = try readbackBGRA8(texture: texture, width: size, height: size, backend: backend)
+        #expect(zoomed != grid)
+        packet.frameIndex += 1
+        packet.renderSettings.editorGridSpacing = 0.25
+        activeRenderer.render(packet: packet)
+        #expect(!activeRenderer.lastFrameUsedOpaqueCache)
+        #expect(try readbackBGRA8(texture: texture, width: size, height: size, backend: backend) != zoomed)
+        packet.frameIndex += 1
+        packet.scene.camera.projection = .perspective
+        activeRenderer.render(packet: packet)
+        #expect(!activeRenderer.lastFrameUsedOpaqueCache)
+    }
+
     @Test("editor grid paints an empty viewport and survives the opaque cache",
           .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the GPU test"),
           arguments: [RenderSettings.ReplacementStage.r3ViewportInterop, .r4LightingPBRShadow, .r5PostProcess])
@@ -90,8 +146,9 @@ struct RenderBackendGPUSmokeTests {
     }
 
     @Test("editor grid is occluded by geometry and absent when looking away from the ground",
-          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the GPU test"))
-    func editorGridDepthAndHorizon() throws {
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the GPU test"),
+          arguments: [RenderCamera.Projection.perspective, .orthographic])
+    func editorGridDepthAndHorizon(projection: RenderCamera.Projection) throws {
         let backend = WGPUBackend(config: WGPUDeviceConfig(validationEnabled: true))
         try backend.initialize()
         var renderer: WGPURenderer? = WGPURenderer(backend: backend)
@@ -102,17 +159,32 @@ struct RenderBackendGPUSmokeTests {
             frameIndex: 0, deltaTime: 1.0 / 60.0,
             drawableSize: RenderDrawableSize(width: 128, height: 128),
             scene: RenderScene(
-                camera: RenderCamera(eye: SIMD3<Float>(0, 8, 0), target: .zero, up: SIMD3<Float>(0, 0, -1)),
+                camera: RenderCamera(eye: SIMD3<Float>(0, 8, 0), target: .zero, up: SIMD3<Float>(0, 0, -1),
+                                     projection: projection, orthographicHeight: 8),
                 instances: [RenderInstance(meshIndex: 0,
                     transform: translation(SIMD3<Float>(0, 1, 0)) * scale(SIMD3<Float>(4, 0.5, 4)))]
             ),
             sceneSnapshot: SceneRuntimeSnapshot(entityCount: 1, revision: 1),
-            renderSettings: RenderSettings(stage: .r3ViewportInterop, enableOffscreenViewport: true),
+            renderSettings: RenderSettings(
+                stage: projection == .orthographic ? .r5PostProcess : .r3ViewportInterop,
+                enableSSAO: projection == .orthographic, enableSSR: projection == .orthographic,
+                enableOffscreenViewport: true),
             simulationTimeSeconds: 0
         )
         activeRenderer.render(packet: packet)
+        if projection == .orthographic {
+            // Motion refinement skips SSR until the camera has settled.
+            #expect(activeRenderer.currentFrameStats().passDrawCallCounts[.ssr] == nil)
+            packet.frameIndex += 1
+            activeRenderer.render(packet: packet)
+            #expect(!activeRenderer.lastFrameUsedOpaqueCache)
+        }
         let texture = try #require(activeRenderer.offscreenColorTexture)
         let baseline = try readbackBGRA8(texture: texture, width: 128, height: 128, backend: backend)
+        if projection == .orthographic {
+            #expect(activeRenderer.currentFrameStats().passDrawCallCounts[.ssao] == 1)
+            #expect(activeRenderer.currentFrameStats().passDrawCallCounts[.ssr] == 1)
+        }
         packet.renderSettings.enableEditorGrid = true
         activeRenderer.render(packet: packet)
         let occluded = try readbackBGRA8(texture: texture, width: 128, height: 128, backend: backend)
@@ -3099,7 +3171,8 @@ private func writeDebugPPMIfRequested(
     pixels: [BGRAPixel],
     width: UInt32,
     height: UInt32,
-    environmentKey: String = "GUAVA_GPU_SMOKE_OUTPUT"
+    environmentKey: String = "GUAVA_GPU_SMOKE_OUTPUT",
+    filenameSuffix: String = ""
 ) throws {
     guard let output = ProcessInfo.processInfo.environment[environmentKey],
           !output.isEmpty
@@ -3114,7 +3187,11 @@ private func writeDebugPPMIfRequested(
         data.append(pixel.g)
         data.append(pixel.b)
     }
-    try data.write(to: URL(fileURLWithPath: output))
+    let url = URL(fileURLWithPath: output)
+    let destination = filenameSuffix.isEmpty ? url
+        : url.deletingLastPathComponent().appendingPathComponent(
+            "\(url.deletingPathExtension().lastPathComponent)\(filenameSuffix).\(url.pathExtension)")
+    try data.write(to: destination)
 }
 
 private func averageLuminance(_ pixels: [BGRAPixel]) -> Double {

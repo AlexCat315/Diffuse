@@ -2,6 +2,7 @@
 
 struct SkyboxUniforms {
     var invViewProj: simd_float4x4
+    /// RGB sky color; w selects the neutral orthographic backdrop.
     var skyTint: SIMD4<Float>
     var horizonTint: SIMD4<Float>
     var groundTint: SIMD4<Float>

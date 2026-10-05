@@ -23,15 +23,20 @@ fn vs_main(@builtin(vertex_index) vertex_index : u32) -> VsOut {
     let pos = positions[vertex_index];
     let clip = vec4<f32>(pos, 1.0, 1.0);
     let world = u.inv_view_proj * clip;
+    let near_world = u.inv_view_proj * vec4<f32>(pos, 0.0, 1.0);
 
     var out : VsOut;
     out.position = vec4<f32>(pos, 1.0, 1.0);
-    out.world_dir = normalize(world.xyz / max(world.w, 0.00001));
+    out.world_dir = normalize(world.xyz / world.w - near_world.xyz / near_world.w);
     return out;
 }
 
 @fragment
 fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
+    // A neutral backdrop keeps the orthographic construction grid readable.
+    if u.sky_tint.w > 0.5 {
+        return vec4<f32>(u.ground_tint.rgb, 1.0);
+    }
     let dir = normalize(in.world_dir);
     let horizon_mix = smoothstep(-0.15, 0.45, dir.y);
     let upper = mix(u.horizon_tint.rgb, u.sky_tint.rgb, smoothstep(0.15, 0.95, dir.y));

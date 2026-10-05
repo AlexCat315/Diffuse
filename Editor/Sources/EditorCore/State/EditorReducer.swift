@@ -24,6 +24,7 @@ public enum EditorAction: Sendable {
     case setViewportShadingMode(EditorViewportShadingMode)
     case setViewportShadowsEnabled(Bool)
     case setViewportGridEnabled(Bool)
+    case viewportCameraChanged
     case setViewportRenderScalePercent(Int)
     case setViewportInteractionDownscale(Bool)
     case setViewportRealtime(Bool)
@@ -32,6 +33,9 @@ public enum EditorAction: Sendable {
     case setTranslateSnapEnabled(Bool)
     case setRotateSnapEnabled(Bool)
     case setScaleSnapEnabled(Bool)
+    case setTranslateSnapStep(Float)
+    case setRotateSnapStepDegrees(Float)
+    case setScaleSnapStep(Float)
     case setPrimarySelectBehavior(SelectionPrimaryModifierBehavior)
     case setThemeMode(EditorThemeMode)
     case setLanguage(EditorLanguage)
@@ -162,6 +166,15 @@ public enum EditorReducer {
 
         case let .setScaleSnapEnabled(enabled):
             state.scaleSnapEnabled = enabled
+
+        case .viewportCameraChanged:
+            state.viewportCameraRevision &+= 1
+        case let .setTranslateSnapStep(step):
+            state.translateSnapStep = EditorState.sanitizedTranslateSnapStep(step)
+        case let .setRotateSnapStepDegrees(step):
+            state.rotateSnapStepDegrees = EditorState.sanitizedRotateSnapStep(step)
+        case let .setScaleSnapStep(step):
+            state.scaleSnapStep = EditorState.sanitizedScaleSnapStep(step)
         case let .setPrimarySelectBehavior(behavior):
             state.primarySelectBehavior = behavior
         case let .setThemeMode(mode):
