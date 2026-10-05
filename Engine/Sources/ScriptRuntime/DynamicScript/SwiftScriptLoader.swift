@@ -38,9 +38,10 @@ public final class SwiftScriptLoader: @unchecked Sendable {
             self.handle = handle
         }
 
-        deinit {
-            SwiftScriptLoader.closeLibrary(handle)
-        }
+        // Swift registers metadata and protocol conformances process-wide.
+        // Unmapping an image leaves those runtime records pointing into freed
+        // memory, even after all Script instances have been released. Keep the
+        // OS loader's reference for the lifetime of this process.
     }
 
     private var loadedLibraries: [String: LoadedLibrary] = [:]
@@ -59,7 +60,6 @@ public final class SwiftScriptLoader: @unchecked Sendable {
         let handle = try openLibrary(path: libraryPath)
 
         guard let symbol = lookupSymbol(handle: handle, name: "guavaCreateScript") else {
-            Self.closeLibrary(handle)
             throw ScriptLoadError.symbolNotFound("guavaCreateScript")
         }
 
@@ -80,12 +80,13 @@ public final class SwiftScriptLoader: @unchecked Sendable {
         }
     }
 
-    /// Unloads a previously loaded script library by its ID.
+    /// Removes the current generation by ID. Its Swift image stays mapped
+    /// because the runtime can still consult its metadata.
     public func unload(scriptID: String) {
         loadedLibraries.removeValue(forKey: scriptID)
     }
 
-    /// Unloads every loaded library.
+    /// Removes every current generation while preserving registered Swift images.
     public func unloadAll() {
         loadedLibraries.removeAll()
     }
@@ -127,13 +128,6 @@ public final class SwiftScriptLoader: @unchecked Sendable {
         #endif
     }
 
-    private static func closeLibrary(_ handle: LibraryHandle) {
-        #if canImport(Darwin) || canImport(Glibc)
-        dlclose(handle)
-        #elseif os(Windows)
-        _ = FreeLibrary(handle)
-        #endif
-    }
 }
 
 public enum ScriptLoadError: Error, Equatable {
