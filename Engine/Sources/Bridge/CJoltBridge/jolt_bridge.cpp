@@ -640,8 +640,8 @@ private:
                 settings.mCombinedRestitution,
                 1.0f,
                 4);
-            for (const auto& impulse : estimation.mImpulses) {
-                contact_impulse += std::max(0.0f, impulse.mContactImpulse);
+            for (float impulse : estimation.mContactImpulse) {
+                contact_impulse += std::max(0.0f, impulse);
             }
         }
 

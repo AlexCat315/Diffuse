@@ -169,7 +169,7 @@ public actor SourceKitLSPClient {
         let rootURI = workspaceURL.standardizedFileURL.absoluteString
         return [
             "processId": ProcessInfo.processInfo.processIdentifier,
-            "clientInfo": ["name": "GuavaEditor", "version": "0.0.1"],
+            "clientInfo": ["name": "GuavaEditor", "version": "0.0.9"],
             "rootUri": rootURI,
             "workspaceFolders": [["uri": rootURI, "name": workspaceURL.lastPathComponent]],
             "capabilities": Self.clientCapabilities,

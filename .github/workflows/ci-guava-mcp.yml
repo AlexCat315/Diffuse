@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'guava-mcp/**'
+      - 'Engine/**'
       - '.github/workflows/ci-guava-mcp.yml'
       - '.github/actions/setup-toolchains/**'
       - 'bootstrap.py'
@@ -12,15 +13,14 @@ on:
   pull_request:
     paths:
       - 'guava-mcp/**'
+      - 'Engine/**'
       - '.github/workflows/ci-guava-mcp.yml'
       - '.github/actions/setup-toolchains/**'
       - 'bootstrap.py'
       - 'cmake/**'
 
-# guava-mcp is pure Swift with no native dependencies, so it builds on every
-# platform Swift supports. Compile it on all three to keep the per-OS socket
-# code (#if os(Windows) / Glibc / Darwin) honest — a macOS-only job let a
-# Windows-only compile break slip through unnoticed.
+# SwiftPM validates every Engine binary target even when GuavaMCP only
+# imports Swift products. Bootstrap native artifacts before package resolution.
 jobs:
   build:
     name: Build (${{ matrix.name }})
@@ -37,9 +37,29 @@ jobs:
             runs-on: windows-2025-vs2026
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          submodules: recursive
 
       - name: Set up build toolchains
         uses: ./.github/actions/setup-toolchains
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev libdbus-1-dev libdrm-dev libegl1-mesa-dev \
+            libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libibus-1.0-dev \
+            libjack-jackd2-dev libpipewire-0.3-dev libpulse-dev libsndio-dev \
+            libudev-dev libwayland-dev libx11-dev libxcursor-dev libxext-dev \
+            libxfixes-dev libxi-dev libxinerama-dev libxkbcommon-dev \
+            libxrandr-dev libxrender-dev libxss-dev libxtst-dev \
+            mesa-common-dev ninja-build
+
+      - name: Build native dependencies
+        shell: bash
+        run: python bootstrap.py --force
 
       - name: Swift version
         run: swift --version
