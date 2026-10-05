@@ -5,6 +5,34 @@ import SIMDCompat
 
 @Suite("GLTFImporter")
 struct GLTFImporterTests {
+    @Test("imports glTF alpha coverage, cutoff and sidedness with spec defaults")
+    func alphaMaterials() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        var data = Data()
+        append([Float(-1), -1, 0, 1, -1, 0, 0, 1, 0], to: &data)
+        let json = """
+        {"asset":{"version":"2.0"},
+         "buffers":[{"uri":"data:application/octet-stream;base64,\(data.base64EncodedString())","byteLength":36}],
+         "bufferViews":[{"buffer":0,"byteLength":36}],
+         "accessors":[{"bufferView":0,"componentType":5126,"count":3,"type":"VEC3"}],
+         "materials":[{}, {"alphaMode":"MASK","alphaCutoff":0.3,"doubleSided":true},
+                       {"alphaMode":"BLEND","pbrMetallicRoughness":{"baseColorFactor":[1,1,1,0.25]}}],
+         "meshes":[{"primitives":[{"attributes":{"POSITION":0},"material":1}]}],
+         "nodes":[{"mesh":0}],"scenes":[{"nodes":[0]}],"scene":0}
+        """
+        let url = root.appendingPathComponent("alpha.gltf")
+        try Data(json.utf8).write(to: url)
+        let mesh = try GLTFImporter.load(path: url.path)
+        #expect(mesh.materials[0].alphaMode == .opaque)
+        #expect(mesh.materials[0].alphaCutoff == 0.5 && !mesh.materials[0].doubleSided)
+        #expect(mesh.materials[1].alphaMode == .mask && mesh.materials[1].alphaCutoff == 0.3)
+        #expect(mesh.materials[1].doubleSided)
+        #expect(mesh.materials[2].alphaMode == .blend && mesh.materials[2].baseColorFactor.w == 0.25)
+        #expect(mesh.submeshes[0].materialIndex == 1)
+    }
+
     @Test("loads external-buffer gltf mesh and applies node translation")
     func loadsExternalBufferMesh() throws {
         let tempRoot = FileManager.default.temporaryDirectory

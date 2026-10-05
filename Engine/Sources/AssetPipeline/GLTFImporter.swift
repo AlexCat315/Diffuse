@@ -1,4 +1,5 @@
 import Foundation
+import SceneRuntime
 import SIMDCompat
 
 /// Per-primitive topology using shared vertex pool with optional index remap.
@@ -1085,6 +1086,9 @@ private struct GLTFMaterial: Decodable {
     let name: String?
     let pbrMetallicRoughness: GLTFPBRMetallicRoughness?
     let normalTexture: GLTFTextureInfo?
+    let alphaMode: MaterialAlphaMode?
+    let alphaCutoff: Float?
+    let doubleSided: Bool?
 }
 
 private struct GLTFPBRMetallicRoughness: Decodable {
@@ -1184,7 +1188,10 @@ private extension GLTFDocument {
                 normalTextureIndex: material.normalTexture?.index,
                 metallicRoughnessTextureIndex: pbr?.metallicRoughnessTexture?.index,
                 metallicFactor: pbr?.metallicFactor ?? 1,
-                roughnessFactor: pbr?.roughnessFactor ?? 1
+                roughnessFactor: pbr?.roughnessFactor ?? 1,
+                alphaMode: material.alphaMode ?? .opaque,
+                alphaCutoff: material.alphaCutoff ?? 0.5,
+                doubleSided: material.doubleSided ?? false
             )
         }
     }

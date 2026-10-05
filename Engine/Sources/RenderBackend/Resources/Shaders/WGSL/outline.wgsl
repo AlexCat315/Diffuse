@@ -2,6 +2,7 @@ struct Uniforms {
     mvp : mat4x4<f32>,
     model : mat4x4<f32>,
     color_tint : vec4<f32>,
+    material : vec4<f32>, // mode, cutoff, double-sided, use instance storage
 };
 
 struct StylizedStyle {
@@ -12,8 +13,17 @@ struct StylizedStyle {
 };
 
 @group(0) @binding(0) var<uniform> u : Uniforms;
+@group(0) @binding(2) var base_color_sampler : sampler;
+@group(0) @binding(3) var base_color_texture : texture_2d<f32>;
 @group(0) @binding(1) var<uniform> style : StylizedStyle;
 @group(0) @binding(8) var<storage, read> joint_palette : array<mat4x4<f32>>;
+@group(0) @binding(12) var<storage, read> mesh_instances : array<Uniforms>;
+
+fn instance_uniform(index : u32) -> Uniforms {
+    if u.material.w > 0.5 { return mesh_instances[index]; }
+    return u;
+}
+
 
 struct VsIn {
     @location(0) pos            : vec3<f32>,
@@ -28,16 +38,19 @@ struct VsIn {
 
 struct VsOut {
     @builtin(position) position : vec4<f32>,
+    @location(0) uv : vec2<f32>,
 };
 
 @vertex
-fn vs_main(in : VsIn) -> VsOut {
+fn vs_main(in : VsIn, @builtin(instance_index) instance_index : u32) -> VsOut {
+    let draw = instance_uniform(instance_index);
     var out : VsOut;
     let skin = skin_matrix(in.joints, in.weights);
     let local = skin * vec4<f32>(in.pos, 1.0);
     let normal = skin * vec4<f32>(in.normal, 0.0);
     let expanded = local.xyz + safe_normalize(normal.xyz) * style.params.w;
-    out.position = u.mvp * vec4<f32>(expanded, 1.0);
+    out.position = draw.mvp * vec4<f32>(expanded, 1.0);
+    out.uv = in.uv;
     return out;
 }
 
@@ -79,6 +92,8 @@ fn safe_normalize(v : vec3<f32>) -> vec3<f32> {
 }
 
 @fragment
-fn fs_main() -> @location(0) vec4<f32> {
+fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
+    let coverage = textureSample(base_color_texture, base_color_sampler, in.uv).a * u.color_tint.a;
+    if u.material.x > 0.5 && coverage < u.material.y { discard; }
     return vec4<f32>(0.03, 0.03, 0.04, 1.0);
 }

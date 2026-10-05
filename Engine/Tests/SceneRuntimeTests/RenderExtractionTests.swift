@@ -58,14 +58,16 @@ struct RenderExtractionTests {
 
         let parent = runtime.createEntity()
         _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(1, 0, 0)), for: parent)
-        _ = runtime.setComponent(RenderMeshComponent(meshIndex: 1, assetID: "hero.mesh"), for: parent)
+        _ = runtime.setComponent(RenderMeshComponent(meshIndex: 1, assetID: "hero.mesh",
+            levelsOfDetail: [RenderMeshLOD(meshIndex: 3, minimumDistance: 20)]), for: parent)
         _ = runtime.setComponent(
             RenderMaterialComponent(baseColorFactor: SIMD4<Float>(0.8, 0.6, 0.4, 0.9),
                                     baseColorTextureIndex: 3,
                                     normalTextureIndex: 4,
                                     metallicFactor: 0.7,
                                     roughnessFactor: 0.25,
-                                    emissiveFactor: SIMD3<Float>(0.1, 0.2, 0.3)),
+                                    emissiveFactor: SIMD3<Float>(0.1, 0.2, 0.3),
+                                    alphaMode: .blend, alphaCutoff: 0.3, doubleSided: true),
             for: parent
         )
 
@@ -113,6 +115,10 @@ struct RenderExtractionTests {
         #expect(extracted.instanceEntities == [parent, child])
         #expect(extracted.scene.instances[0].entity == parent)
         #expect(extracted.scene.instances[0].mesh.assetID == "hero.mesh")
+        #expect(extracted.scene.instances[0].mesh.levelsOfDetail == [RenderMeshLOD(meshIndex: 3, minimumDistance: 20)])
+        #expect(extracted.scene.instances[0].material.alphaMode == .blend)
+        #expect(extracted.scene.instances[0].material.alphaCutoff == 0.3)
+        #expect(extracted.scene.instances[0].material.doubleSided == true)
         #expect(extracted.scene.instances[1].mesh.assetID == "child.asset")
         #expect(extracted.scene.instances[0].material.baseColorFactor == SIMD4<Float>(0.8, 0.6, 0.4, 0.9))
         #expect(extracted.scene.instances[0].material.baseColorTextureIndex == 3)
