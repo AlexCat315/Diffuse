@@ -12,6 +12,7 @@ public enum EditorAction: Sendable {
     case setActiveLayoutPreset(EditorLayoutPreset)
     case setSceneRevision(UInt64)
     case markSceneSaved(UInt64)
+    case markSceneUnsaved
     case setSceneRecoveryPending(Bool)
     case requestClose(EditorPendingCloseRequest)
     case dismissCloseRequest
@@ -22,6 +23,8 @@ public enum EditorAction: Sendable {
     case setGizmoSpace(EditorGizmoSpace)
     case setViewportShadingMode(EditorViewportShadingMode)
     case setViewportShadowsEnabled(Bool)
+    case setViewportGridEnabled(Bool)
+    case viewportCameraChanged
     case setViewportRenderScalePercent(Int)
     case setViewportInteractionDownscale(Bool)
     case setViewportRealtime(Bool)
@@ -30,6 +33,9 @@ public enum EditorAction: Sendable {
     case setTranslateSnapEnabled(Bool)
     case setRotateSnapEnabled(Bool)
     case setScaleSnapEnabled(Bool)
+    case setTranslateSnapStep(Float)
+    case setRotateSnapStepDegrees(Float)
+    case setScaleSnapStep(Float)
     case setPrimarySelectBehavior(SelectionPrimaryModifierBehavior)
     case setThemeMode(EditorThemeMode)
     case setLanguage(EditorLanguage)
@@ -105,6 +111,9 @@ public enum EditorReducer {
         case let .markSceneSaved(revision):
             state.lastSavedSceneRevision = revision
             state.sceneRecoveryPending = false
+        case .markSceneUnsaved:
+            // A new empty document can have the same revision as the previous saved document.
+            state.lastSavedSceneRevision = state.sceneRevision &- 1
         case let .setSceneRecoveryPending(pending):
             state.sceneRecoveryPending = pending
         case let .requestClose(request):
@@ -131,6 +140,9 @@ public enum EditorReducer {
         case let .setViewportShadowsEnabled(enabled):
             state.viewportShadowsEnabled = enabled
 
+        case let .setViewportGridEnabled(enabled):
+            state.viewportGridEnabled = enabled
+
         case let .setViewportRenderScalePercent(percent):
             state.viewportRenderScalePercent = EditorState.sanitizedRenderScalePercent(percent)
 
@@ -154,6 +166,15 @@ public enum EditorReducer {
 
         case let .setScaleSnapEnabled(enabled):
             state.scaleSnapEnabled = enabled
+
+        case .viewportCameraChanged:
+            state.viewportCameraRevision &+= 1
+        case let .setTranslateSnapStep(step):
+            state.translateSnapStep = EditorState.sanitizedTranslateSnapStep(step)
+        case let .setRotateSnapStepDegrees(step):
+            state.rotateSnapStepDegrees = EditorState.sanitizedRotateSnapStep(step)
+        case let .setScaleSnapStep(step):
+            state.scaleSnapStep = EditorState.sanitizedScaleSnapStep(step)
         case let .setPrimarySelectBehavior(behavior):
             state.primarySelectBehavior = behavior
         case let .setThemeMode(mode):

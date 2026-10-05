@@ -24,7 +24,7 @@ public struct InGameUIColor: Sendable, Equatable {
 }
 
 /// A single draw command emitted by a game script into the overlay canvas.
-public enum InGameCanvasCommand: Sendable {
+public enum InGameCanvasCommand: Sendable, Equatable {
     case label(text: String, x: Float, y: Float, fontSize: Float, color: InGameUIColor)
     case rect(x: Float, y: Float, w: Float, h: Float, color: InGameUIColor, cornerRadius: Float)
     case progressBar(
@@ -40,7 +40,7 @@ public enum InGameCanvasCommand: Sendable {
 /// Coordinates are in screen pixels (top-left origin).
 /// Scripts accumulate draw commands each frame via `ctx.drawUI { ... }`;
 /// the renderer consumes and clears this at the start of the next frame.
-public struct InGameCanvas: Sendable {
+public struct InGameCanvas: Sendable, Equatable {
     public var commands: [InGameCanvasCommand]
 
     public init() {

@@ -94,6 +94,7 @@ public actor Session {
     private var lastSubmittedExposureSnapshot: CapabilityExposureSnapshot?
     private var lastSubmittedCapabilityDrafts: [CapabilityInvocationDraft] = []
     private var activeInferenceID: UUID?
+    private var projectToolExecutor: ProjectToolset.Executor?
 
     private static let anthropicAPIVersion = "2023-06-01"
     private static let maxEntityPromptCount = 100
@@ -149,6 +150,10 @@ public actor Session {
         } else {
             await mem.remove(id: "workflow:active")
         }
+    }
+
+    public func setProjectToolExecutor(_ executor: ProjectToolset.Executor?) {
+        projectToolExecutor = executor
     }
 
     private static func workflowPayload(from ctx: WorkflowContext) -> [String: String] {
@@ -803,6 +808,7 @@ public actor Session {
                              capabilitySnapshot: CapabilityExposureSnapshot? = nil) -> [String: Any] {
         let allMessages = buildMessages() + extraMessages
         let snapshot = capabilitySnapshot ?? initialCapabilitySnapshot()
+        let projectTools = projectToolExecutor == nil ? [] : ProjectToolset.providerDefinitions(format: config.apiFormat)
         switch config.apiFormat {
         case .anthropic:
             return [
@@ -810,7 +816,7 @@ public actor Session {
                 "max_tokens": config.maxTokens,
                 "system": systemPrompt(),
                 "tools": CapabilityToolset.anthropicTools(snapshot: snapshot,
-                                                           registry: capabilityRegistry),
+                                                           registry: capabilityRegistry) + projectTools,
                 "tool_choice": ["type": "any"],
                 "messages": allMessages,
             ]
@@ -821,7 +827,7 @@ public actor Session {
                 "model": config.model,
                 "max_tokens": config.maxTokens,
                 "tools": CapabilityToolset.openAITools(snapshot: snapshot,
-                                                        registry: capabilityRegistry),
+                                                        registry: capabilityRegistry) + projectTools,
                 "tool_choice": "required",
                 "messages": messages,
             ]
@@ -831,7 +837,7 @@ public actor Session {
                 "max_output_tokens": config.maxTokens,
                 "instructions": systemPrompt(),
                 "tools": CapabilityToolset.openAIResponsesTools(snapshot: snapshot,
-                                                                  registry: capabilityRegistry),
+                                                                  registry: capabilityRegistry) + projectTools,
                 "tool_choice": "required",
                 "input": allMessages,
             ]
@@ -897,9 +903,21 @@ public actor Session {
         You are the AI scene-editing core of Guava, a native real-time game and cinematic engine.
         Discover needed abilities with `search_capabilities`, call the returned exact capability \
         tools to create write drafts, then finish with `submit_plan` using the ordered draft IDs. \
-        Capability tool calls never apply writes directly. Always finish with `submit_plan` — never \
-        respond with plain text.
+        Capability tool calls never apply writes directly. Finish scene edits with `submit_plan`. \
+        Always finish through a tool call; do not respond with unstructured plain text.
         """)
+
+        if projectToolExecutor != nil {
+            parts.append("""
+            Project tools are also available: inspect the project and scripting API, read/write \
+            Swift sources, compile them, inspect diagnostics, save, export and control playback. \
+            These host workspace operations return their actual result; do not claim success \
+            without checking it. Never grant script trust yourself. Read before overwriting and \
+            use the returned source hash. Scene changes still require capability drafts and review. \
+            For answers or completed project-only work, finish with `respond`. For scene changes, \
+            finish with `submit_plan`. Do not save or export unapplied drafts.
+            """)
+        }
 
         var entitySection = "Scene entities (JSON):\n\(entityIndexJSON())"
         if let note = entityTruncationNote() { entitySection += "\n\n" + note }
@@ -1330,6 +1348,43 @@ public actor Session {
                                           snapshot: CapabilityExposureSnapshot) async throws
         -> CapabilityToolHandling {
         let revision = worldView.sceneRevision ?? 0
+
+        if let executor = projectToolExecutor, let tool = ProjectToolset.definition(named: call.name) {
+            do {
+                try JSONSchemaValidator.validate(data: Data(call.inputJSON.utf8), against: tool.schema)
+            } catch {
+                throw CapabilityDraftError.invalidInput(String(describing: error))
+            }
+            if call.name == ProjectToolset.responseTool.name {
+                guard !(await capabilityDraftStore.hasPendingDrafts) else {
+                    throw CapabilityDraftError.invalidInput("Use submit_plan for scene drafts.")
+                }
+                let plan = SceneEditPlan(summary: call.input["message"] as? String ?? "", steps: [])
+                let json = String(decoding: try JSONEncoder().encode(plan), as: UTF8.self)
+                return .completed(plan: plan, inputJSON: json, snapshot: snapshot)
+            }
+            if ["save_scene", "export_project", "set_playback_state"].contains(call.name),
+               await capabilityDraftStore.hasPendingDrafts {
+                throw CapabilityDraftError.invalidInput("Submit pending scene drafts for review before saving, exporting or playing.")
+            }
+            let output: Data
+            do {
+                output = try await executor(call.name, Data(call.inputJSON.utf8))
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                // Workspace failures are observations the model can act on (e.g.
+                // compile diagnostics or a stale source hash), not a dead session.
+                try Task.checkCancellation()
+                output = try JSONSerialization.data(withJSONObject: [
+                    "ok": false, "error": String(error.localizedDescription.prefix(16_384)),
+                ])
+            }
+            guard output.count <= 524_288, (try? JSONSerialization.jsonObject(with: output)) != nil else {
+                throw SessionError.malformedResponse(detail: "project tool returned an invalid or oversized result")
+            }
+            return .exchange(resultJSON: String(decoding: output, as: UTF8.self), snapshot: snapshot)
+        }
 
         let contract: CapabilityContract
         switch call.name {

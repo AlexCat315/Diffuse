@@ -77,7 +77,8 @@ fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
 
     let view_pos = get_view_pos(in.uv, depth);
     let normal = reconstruct_normal(in.uv, view_pos);
-    let view_dir = normalize(-view_pos);
+    let view_dir = select(normalize(-view_pos), vec3<f32>(0.0, 0.0, 1.0),
+                          u.projection[3][3] > 0.5);
     let reflect_dir = reflect(-view_dir, normal);
     if (reflect_dir.z > 0.0) {
         return vec4<f32>(textureSample(scene_texture, ssr_sampler, tex_uv(in.uv)).rgb, 1.0);

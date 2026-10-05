@@ -30,6 +30,7 @@ public final class EditorStore: @unchecked Sendable {
         case frameStatsHistory
         case particleDiagnosticsHistory
         case viewportSurfaceRevision
+        case viewportCameraRevision
         case windowFocused
         case windowMinimized
         case windowOccluded
@@ -38,6 +39,7 @@ public final class EditorStore: @unchecked Sendable {
         case gizmoSpace
         case viewportShadingMode
         case viewportShadowsEnabled
+        case viewportGridEnabled
         case viewportRenderScalePercent
         case viewportInteractionDownscaleEnabled
         case viewportRealtimeEnabled
@@ -46,6 +48,9 @@ public final class EditorStore: @unchecked Sendable {
         case translateSnapEnabled
         case rotateSnapEnabled
         case scaleSnapEnabled
+        case translateSnapStep
+        case rotateSnapStepDegrees
+        case scaleSnapStep
         case primarySelectBehavior
         case presentation
         case themeMode
@@ -160,7 +165,7 @@ public final class EditorStore: @unchecked Sendable {
             mark(.activeLayoutPreset, old.activeLayoutPreset, new.activeLayoutPreset)
         case .setSceneRevision:
             mark(.sceneRevision, old.sceneRevision, new.sceneRevision)
-        case .markSceneSaved:
+        case .markSceneSaved, .markSceneUnsaved:
             mark(.lastSavedSceneRevision, old.lastSavedSceneRevision, new.lastSavedSceneRevision)
             mark(.sceneRecoveryPending, old.sceneRecoveryPending, new.sceneRecoveryPending)
         case .setSceneRecoveryPending:
@@ -181,6 +186,8 @@ public final class EditorStore: @unchecked Sendable {
             mark(.viewportShadingMode, old.viewportShadingMode, new.viewportShadingMode)
         case .setViewportShadowsEnabled:
             mark(.viewportShadowsEnabled, old.viewportShadowsEnabled, new.viewportShadowsEnabled)
+        case .setViewportGridEnabled:
+            mark(.viewportGridEnabled, old.viewportGridEnabled, new.viewportGridEnabled)
         case .setViewportRenderScalePercent:
             mark(.viewportRenderScalePercent, old.viewportRenderScalePercent, new.viewportRenderScalePercent)
         case .setViewportInteractionDownscale:
@@ -203,6 +210,14 @@ public final class EditorStore: @unchecked Sendable {
             mark(.rotateSnapEnabled, old.rotateSnapEnabled, new.rotateSnapEnabled)
         case .setScaleSnapEnabled:
             mark(.scaleSnapEnabled, old.scaleSnapEnabled, new.scaleSnapEnabled)
+        case .viewportCameraChanged:
+            mark(.viewportCameraRevision, old.viewportCameraRevision, new.viewportCameraRevision)
+        case .setTranslateSnapStep:
+            mark(.translateSnapStep, old.translateSnapStep, new.translateSnapStep)
+        case .setRotateSnapStepDegrees:
+            mark(.rotateSnapStepDegrees, old.rotateSnapStepDegrees, new.rotateSnapStepDegrees)
+        case .setScaleSnapStep:
+            mark(.scaleSnapStep, old.scaleSnapStep, new.scaleSnapStep)
         case .setPrimarySelectBehavior:
             mark(.primarySelectBehavior, old.primarySelectBehavior, new.primarySelectBehavior)
         case .setThemeMode:
@@ -300,6 +315,7 @@ extension EditorStore {
         read(.particleDiagnosticsHistory, storage.particleDiagnosticsHistory)
     }
     public var viewportSurfaceRevision: UInt64 { read(.viewportSurfaceRevision, storage.viewportSurfaceRevision) }
+    public var viewportCameraRevision: UInt64 { read(.viewportCameraRevision, storage.viewportCameraRevision) }
     public var windowFocused: Bool { read(.windowFocused, storage.windowFocused) }
     public var windowMinimized: Bool { read(.windowMinimized, storage.windowMinimized) }
     public var windowOccluded: Bool { read(.windowOccluded, storage.windowOccluded) }
@@ -320,6 +336,7 @@ extension EditorStore {
     public var gizmoSpace: EditorGizmoSpace { read(.gizmoSpace, storage.gizmoSpace) }
     public var viewportShadingMode: EditorViewportShadingMode { read(.viewportShadingMode, storage.viewportShadingMode) }
     public var viewportShadowsEnabled: Bool { read(.viewportShadowsEnabled, storage.viewportShadowsEnabled) }
+    public var viewportGridEnabled: Bool { read(.viewportGridEnabled, storage.viewportGridEnabled) }
     public var viewportRenderScalePercent: Int { read(.viewportRenderScalePercent, storage.viewportRenderScalePercent) }
     public var viewportInteractionDownscaleEnabled: Bool {
         read(.viewportInteractionDownscaleEnabled, storage.viewportInteractionDownscaleEnabled)
@@ -336,6 +353,9 @@ extension EditorStore {
     public var translateSnapEnabled: Bool { read(.translateSnapEnabled, storage.translateSnapEnabled) }
     public var rotateSnapEnabled: Bool { read(.rotateSnapEnabled, storage.rotateSnapEnabled) }
     public var scaleSnapEnabled: Bool { read(.scaleSnapEnabled, storage.scaleSnapEnabled) }
+    public var translateSnapStep: Float { read(.translateSnapStep, storage.translateSnapStep) }
+    public var rotateSnapStepDegrees: Float { read(.rotateSnapStepDegrees, storage.rotateSnapStepDegrees) }
+    public var scaleSnapStep: Float { read(.scaleSnapStep, storage.scaleSnapStep) }
     public var primarySelectBehavior: SelectionPrimaryModifierBehavior { read(.primarySelectBehavior, storage.primarySelectBehavior) }
     public var presentation: EditorPresentationState { read(.presentation, storage.presentation) }
     public var presentationRevision: UInt64 { read(.uiRefreshRevision, storage.presentation.revision) }

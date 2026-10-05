@@ -30,6 +30,8 @@ struct EditorMenuModel {
                 action(L("Save Scene"), key: "s", command: .saveScene),
                 .separator,
                 action(L("Import Assets..."), key: "", command: .importAssets),
+                .separator,
+                action(L("Close Project / Welcome"), key: "", command: .closeProject),
             ]),
             EditorApplicationMenu(title: L("Edit"), items: [
                 action(L("Undo"), key: "z", enabled: canAuthorScene && canUndo, command: .undo),

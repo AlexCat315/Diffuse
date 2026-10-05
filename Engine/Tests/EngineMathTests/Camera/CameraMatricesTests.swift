@@ -4,6 +4,18 @@ import Testing
 
 @Suite("CameraMatrices")
 struct CameraMatricesTests {
+    @Test("orthographic projection maps its visible rectangle and depth to clip space")
+    func orthographicClipConvention() {
+        let projection = CameraMatrices.orthographicRH_ZO(height: 6, aspect: 2, near: 0.5, far: 20)
+        let nearCorner = projection * SIMD4<Float>(6, 3, -0.5, 1)
+        let farCorner = projection * SIMD4<Float>(-6, -3, -20, 1)
+        #expect(simd_distance(nearCorner, SIMD4<Float>(1, 1, 0, 1)) < 1e-5)
+        #expect(simd_distance(farCorner, SIMD4<Float>(-1, -1, 1, 1)) < 1e-5)
+        let shallow = projection * SIMD4<Float>(2, 1, -2, 1)
+        let deep = projection * SIMD4<Float>(2, 1, -15, 1)
+        #expect(shallow.x == deep.x && shallow.y == deep.y && shallow.w == deep.w)
+    }
+
     @Test("perspectiveRH_ZO matches renderer projection convention")
     func perspectiveMatchesRendererConvention() {
         let projection = CameraMatrices.perspectiveRH_ZO(

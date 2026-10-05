@@ -9,7 +9,11 @@ import SIMDCompat
 
 extension EditorSceneAdapter {
     public func currentRenderCamera() -> RenderCamera {
-        scene.extractedRenderScene?.scene.camera ?? RenderCamera.fallbackPerspective
+        if usesEditorViewportCamera { return editorViewportCamera }
+        if let extracted = scene.extractedRenderScene, extracted.activeCameraEntity != nil {
+            return extracted.scene.camera
+        }
+        return editorViewportCamera
     }
 
     @discardableResult
@@ -97,7 +101,9 @@ extension EditorSceneAdapter {
     }
 
     public func currentRenderScene() -> RenderScene {
-        scene.renderScene
+        var renderScene = scene.renderScene
+        renderScene.camera = currentRenderCamera()
+        return renderScene
     }
 
     public func currentParticleFrameStats() -> ParticleFrameStatsResource {

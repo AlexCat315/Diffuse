@@ -122,3 +122,11 @@ GuavaUI/vendor/
 # Allow build/development scripts in engine package
 !legacy/zig-engine/build/merge_compile_commands.py
 *.sln
+
+# Reproducible example exports and editor-local observation history
+examples/*/export/
+examples/*/validation/
+examples/*/.guava/observation/
+examples/*/.guava/edit_log.jsonl
+examples/*/.guava/context-memory/
+examples/*/Scripts/.guava/

@@ -32,6 +32,9 @@ extension WGPURenderer {
 
     func applyPacketRenderSettingsIfNeeded(_ settings: RenderSettings, frameIndex: Int) {
         guard settings != activeRenderSettings else { return }
+        if settings.enableEditorGrid != activeRenderSettings.enableEditorGrid {
+            historyValid = false
+        }
         activeRenderSettings = settings
         settingsGeneration &+= 1
         if !settings.enableTAA {
