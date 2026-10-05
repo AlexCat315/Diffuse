@@ -204,6 +204,8 @@ public final class SDL3PlatformHost: PlatformHost {
 
     private var frameRateMode: PlatformFrameRateMode = .eventDriven
     private var frameTimingLogCounter = 0
+    // Tests can advance frame time independently of OS scheduling latency.
+    var frameClock: () -> Double = TimingTrace.now
 
     public init(title: String = "GuavaUI",
                 mainWindowOptions: WindowOptions = WindowOptions(),
@@ -407,11 +409,11 @@ public final class SDL3PlatformHost: PlatformHost {
 
         _isRunning = true
         Logger.runtime.info("running — \(title)")
-        var lastLoopTime = TimingTrace.now()
+        var lastLoopTime = frameClock()
         var lastFramePreparationTime: Double?
 
         while _isRunning && shell.isRunning && !sessions.isEmpty {
-            let frameStart = TimingTrace.now()
+            let frameStart = frameClock()
             let loopDeltaTime = frameStart - lastLoopTime
             lastLoopTime = frameStart
             var framePreparationDelta = loopDeltaTime
@@ -584,7 +586,7 @@ public final class SDL3PlatformHost: PlatformHost {
                 // A single long Thread.sleep can be timer-coalesced by the OS
                 // into multiple refresh intervals, which shows up as 50ms+
                 // "pacing" gaps even when frame work itself is only a few ms.
-                let remaining = (lastFramePreparationTime + targetFrameInterval) - TimingTrace.now()
+                let remaining = (lastFramePreparationTime + targetFrameInterval) - frameClock()
                 if remaining > Self.cadenceSpinThreshold {
                     Thread.sleep(forTimeInterval: min(remaining - Self.cadenceSpinThreshold,
                                                       Self.maxCadenceSleepInterval))

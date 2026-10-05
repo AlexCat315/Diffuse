@@ -28,11 +28,20 @@ struct SourceKitLSPExecutableLocatorTests {
     func findsFromPath() throws {
         let executable = try makeStubExecutable(contents: "")
         defer { try? FileManager.default.removeItem(at: executable.deletingLastPathComponent()) }
+        #if os(Windows)
+        let environment = ["Path": executable.deletingLastPathComponent().path, "PATHEXT": ".eXe;.CMD"]
+        #else
+        let environment = ["PATH": executable.deletingLastPathComponent().path]
+        #endif
         let url = try SourceKitLSPExecutableLocator.resolveExecutableURL(
-            environment: ["PATH": executable.deletingLastPathComponent().path]
+            environment: environment
         )
 
+        #if os(Windows)
+        #expect(url.path.caseInsensitiveCompare(executable.path) == .orderedSame)
+        #else
         #expect(url.path == executable.path)
+        #endif
     }
 
     @Test("fails with a descriptive error when nothing can be found")
@@ -105,8 +114,13 @@ struct SourceKitLSPExecutableLocatorTests {
         #else
         let url = directory.appendingPathComponent("sourcekit-lsp")
         #endif
+        #if os(Windows)
+        // Foundation checks the PE header on Windows, rather than a POSIX mode.
+        let systemRoot = ProcessInfo.processInfo.environment["SystemRoot"] ?? "C:\\Windows"
+        try FileManager.default.copyItem(at: URL(fileURLWithPath: systemRoot).appendingPathComponent("System32/cmd.exe"),
+                                         to: url)
+        #else
         try Data(contents.utf8).write(to: url)
-        #if !os(Windows)
         try FileManager.default.setAttributes([.posixPermissions: 0o755],
                                               ofItemAtPath: url.path)
         #endif

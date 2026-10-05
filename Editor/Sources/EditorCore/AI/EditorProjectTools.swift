@@ -194,7 +194,7 @@ extension EditorApplication {
     private func validateProjectScriptsDirectory() throws {
         let root = URL(fileURLWithPath: projectDirectory).resolvingSymlinksInPath().standardizedFileURL
         let scripts = dynamicScriptManager.scriptsDirectoryURL.resolvingSymlinksInPath().standardizedFileURL
-        guard scripts.path.hasPrefix(root.path + "/") else {
+        guard ProjectFilePath.contains(scripts, in: root, includingRoot: false) else {
             throw EditorProjectToolError("Scripts directory escapes the project.")
         }
     }
@@ -206,7 +206,9 @@ extension EditorApplication {
         try validateProjectScriptsDirectory()
         let scripts = dynamicScriptManager.scriptsDirectoryURL.resolvingSymlinksInPath().standardizedFileURL
         let url = scripts.appendingPathComponent(filename).resolvingSymlinksInPath().standardizedFileURL
-        guard url.deletingLastPathComponent() == scripts else { throw EditorProjectToolError("Script escapes the project.") }
+        guard ProjectFilePath.sameLocation(url.deletingLastPathComponent(), scripts) else {
+            throw EditorProjectToolError("Script escapes the project.")
+        }
         return url
     }
 
