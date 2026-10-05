@@ -1,0 +1,42 @@
+name: Guava build toolchains
+description: Install the verified release toolchains on macOS, Linux and Windows.
+runs:
+  using: composite
+  steps:
+    - name: Select installed Xcode
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        for xcode in /Applications/Xcode_27.0.app /Applications/Xcode_26.6.app /Applications/Xcode.app; do
+          if [ -d "$xcode" ]; then
+            sudo xcode-select -s "$xcode"
+            break
+          fi
+        done
+        xcodebuild -version
+    - uses: SwiftyLab/setup-swift@v1.14.1
+      with:
+        swift-version: '6.4.0'
+    - uses: dtolnay/rust-toolchain@1.99.0
+    - uses: actions/setup-python@v7.0.0
+      with:
+        python-version: '3.14'
+    - name: Install CMake and Ninja
+      shell: bash
+      run: python -m pip install cmake==4.4.4 ninja==1.13.2
+    - name: Verify toolchains
+      shell: bash
+      run: |
+        python - <<'PY'
+        import re
+        import subprocess
+        actual = subprocess.check_output(["swift", "--version"], text=True)
+        print(actual)
+        if not re.search(r"Swift version 6\.4(?:\.0)?(?:\s|$)", actual):
+            raise SystemExit("Expected Swift 6.4.0")
+        PY
+        rustc --version
+        cargo --version
+        cmake --version
+        ninja --version
+        python --version

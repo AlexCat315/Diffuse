@@ -1,3 +1,14 @@
+---
+path: /zh/docs/source-organization
+title: 源码组织
+description: Guava Engine 源码目录和模块职责。
+locale: zh
+translationKey: docs.source-organization
+category: 开发指南
+order: 88
+kind: doc
+---
+
 # 源码目录与初始化约定
 
 这次重构保持 Swift 模块、公开类型名和既有调用接口不变，按职责拆分原来的五个大文件。

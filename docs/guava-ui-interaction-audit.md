@@ -1,3 +1,14 @@
+---
+path: /zh/docs/guava-ui-interaction-audit
+title: GuavaUI 交互与框架能力审查
+description: GuavaUI 控件交互行为和框架能力的验证要求。
+locale: zh
+translationKey: docs.guava-ui-interaction-audit
+category: GuavaUI
+order: 87
+kind: doc
+---
+
 # GuavaUI 交互与框架能力审查（2026-09-30）
 
 GuavaUI 已有布局、状态重组、动画插值和调度、主题令牌、文本整形、IME、焦点链、输入路由和 Portal。问题并非完全没有框架层，而是这些底层能力尚未形成一致的组件契约。Button 参数齐全，不代表组合标签、禁用态、焦点和主题切换已经可靠。

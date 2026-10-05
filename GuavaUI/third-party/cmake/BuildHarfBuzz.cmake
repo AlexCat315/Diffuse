@@ -55,18 +55,18 @@ add_custom_target(stage_harfbuzz ALL
     COMMENT "Staging HarfBuzz into ${HARFBUZZ_VARIANT}"
 )
 
-write_artifactbundle_info(${HARFBUZZ_BUNDLE} "CHarfBuzz" "${GUAVA_TRIPLE}/lib/${HARFBUZZ_LIB_FILENAME}")
+write_artifactbundle_info(${HARFBUZZ_BUNDLE} "CHarfBuzz" "${GUAVA_TRIPLE}/lib/${HARFBUZZ_LIB_FILENAME}" "14.5.1")
 
 guava_git_revision(HARFBUZZ_SOURCE_REVISION "${CMAKE_SOURCE_DIR}/harfbuzz")
 guava_add_artifact_build_manifest(
     ARTIFACT_NAME "CHarfBuzz"
-    VERSION "1.0.0"
+    VERSION "14.5.1"
     BUNDLE_DIR ${HARFBUZZ_BUNDLE}
     LIB_REL_PATH "${GUAVA_TRIPLE}/lib/${HARFBUZZ_LIB_FILENAME}"
     BUILD_SYSTEM "CMake ExternalProject"
     SOURCE_KIND "git-submodule"
     SOURCE_URL "GuavaUI/third-party/harfbuzz"
-    SOURCE_REF "1.0.0"
+    SOURCE_REF "14.5.1"
     SOURCE_REVISION ${HARFBUZZ_SOURCE_REVISION}
     NOTES "HB_HAVE_FREETYPE=ON, HB_BUILD_TESTS=OFF, static library"
     DEPENDS stage_harfbuzz

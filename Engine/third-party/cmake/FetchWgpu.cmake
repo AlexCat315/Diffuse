@@ -3,9 +3,9 @@
 
 include(ExternalProject)
 
-set(WGPU_VERSION "v29.0.0.0")
-set(WGPU_TAG_OBJECT "e514ece6ea64af1dcfb7af37d7beeff0f8c5807b")
-set(WGPU_TAG_COMMIT "d2e3330ade4ae1bb238d76b485926f067e7ee64c")
+set(WGPU_VERSION "v29.0.1.1")
+set(WGPU_TAG_OBJECT "6aed50955d934ac36049ba8d002034841633ae02")
+set(WGPU_TAG_COMMIT "6aed50955d934ac36049ba8d002034841633ae02")
 set(WGPU_REPOSITORY "https://github.com/gfx-rs/wgpu-native.git")
 set(WGPU_BUNDLE ${GUAVA_VENDOR_DIR}/wgpu_native.artifactbundle)
 set(WGPU_VARIANT ${WGPU_BUNDLE}/${GUAVA_TRIPLE})
@@ -109,7 +109,7 @@ file(WRITE ${WGPU_BUNDLE}/info.json "{
     \"artifacts\": {
         \"wgpu_native\": {
             \"type\": \"staticLibrary\",
-            \"version\": \"29.0.0.0\",
+            \"version\": \"29.0.1.1\",
             \"variants\": [
                 {
                     \"path\": \"${GUAVA_TRIPLE}/lib/${WGPU_LIB}\",
@@ -126,7 +126,7 @@ file(WRITE ${WGPU_BUNDLE}/info.json "{
 
 guava_add_artifact_build_manifest(
     ARTIFACT_NAME "wgpu_native"
-    VERSION "29.0.0.0"
+    VERSION "29.0.1.1"
     BUNDLE_DIR ${WGPU_BUNDLE}
     LIB_REL_PATH "${GUAVA_TRIPLE}/lib/${WGPU_LIB}"
     BUILD_SYSTEM "Cargo"

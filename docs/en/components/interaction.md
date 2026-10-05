@@ -1,3 +1,14 @@
+---
+path: /en/docs/components/interaction
+title: Interaction controls
+description: GuavaUI interaction controls, disabled state, focus, and keyboard behavior.
+locale: en
+translationKey: docs.components.interaction
+category: Components
+order: 81
+kind: doc
+---
+
 # Interaction primitives
 
 `AnimatedVisibility` combines opacity, offset and size collapse, including asymmetric insertion and removal. It retains content until exit completes, suppresses input while exiting, and cancels superseded animations. `DisclosureGroup` and the expanded JSON editor use it. `TransitionView` provides a compatibility facade using theme motion tokens.

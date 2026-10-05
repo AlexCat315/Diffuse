@@ -8,7 +8,7 @@ on:
       tag:
         description: Release tag to publish assets to
         required: true
-        default: v0.0.5
+        default: v0.0.9
       target:
         description: Commit SHA or branch to use when creating a missing release
         required: false
@@ -16,9 +16,6 @@ on:
 
 permissions:
   contents: write
-
-env:
-  GUAVA_SWIFT_VERSION: "6.3.2"
 
 jobs:
   prepare-release:
@@ -55,7 +52,7 @@ jobs:
           echo "target=$target" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ steps.release.outputs.target }}
           fetch-depth: 0
@@ -69,7 +66,7 @@ jobs:
         shell: bash
         run: |
           tag="${{ steps.release.outputs.tag }}"
-          target="${{ steps.release.outputs.target }}"
+          target="${{ steps.pin.outputs.target }}"
 
           if [ "${{ github.event_name }}" = "release" ]; then
             echo "Release $tag was created by the triggering event; skipping re-creation."
@@ -77,62 +74,46 @@ jobs:
           fi
 
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release $tag already exists"
+            if [ "$(gh release view "$tag" --json isDraft --jq .isDraft)" = "true" ]; then
+              gh release edit "$tag" --target "$target"
+            else
+              echo "Release $tag already published; preserving its source commit"
+              test "$(git rev-parse "$tag^{commit}")" = "$target"
+            fi
           else
             gh release create "$tag" \
               --target "$target" \
               --title "$tag" \
+              --draft \
               --generate-notes
           fi
         env:
           GH_TOKEN: ${{ github.token }}
 
+  publish-release:
+    name: Publish verified release
+    needs: [prepare-release, build-editor-macos, build-editor-windows, build-editor-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish release after all packages pass validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.prepare-release.outputs.tag }}
+        run: gh release edit "$RELEASE_TAG" --draft=false --latest
+
   build-editor-macos:
     name: Editor macOS
     needs: prepare-release
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ needs.prepare-release.outputs.target }}
           submodules: recursive
 
-      - name: Select Xcode
-        shell: bash
-        run: |
-          for xcode in \
-            /Applications/Xcode_26.5.app \
-            /Applications/Xcode_26.4.1.app \
-            /Applications/Xcode_26.4.app \
-            /Applications/Xcode_26.3.app \
-            /Applications/Xcode_16.4.app \
-            /Applications/Xcode_16.3.app \
-            /Applications/Xcode.app
-          do
-            if [ -d "$xcode" ]; then
-              sudo xcode-select -s "$xcode"
-              break
-            fi
-          done
-          xcodebuild -version
-
-      - name: Install Swift
-        uses: SwiftyLab/setup-swift@latest
-        with:
-          swift-version: ${{ env.GUAVA_SWIFT_VERSION }}
-
-      - name: Verify Swift version
-        shell: bash
-        run: |
-          actual="$(swift --version | head -n 1)"
-          echo "$actual"
-          if [[ "$actual" != *"Swift version ${GUAVA_SWIFT_VERSION} "* ]]; then
-            echo "Expected Swift ${GUAVA_SWIFT_VERSION}; selected toolchain was: $actual" >&2
-            exit 1
-          fi
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Set up build toolchains
+        uses: ./.github/actions/setup-toolchains
 
       - name: Build native dependencies
         run: python3 bootstrap.py --force
@@ -224,36 +205,21 @@ jobs:
   build-editor-windows:
     name: Editor Windows
     needs: prepare-release
-    # Pinned: windows-latest now resolves to windows-2025-vs2026, whose MSVC
-    # (VS 18) intermittently ICEs compiling plutovg (CL.exe 0xE06D7363).
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ needs.prepare-release.outputs.target }}
           submodules: recursive
 
-      - name: Install Swift
-        uses: SwiftyLab/setup-swift@latest
-        with:
-          swift-version: ${{ env.GUAVA_SWIFT_VERSION }}
+      - name: Set up build toolchains
+        uses: ./.github/actions/setup-toolchains
 
       - name: Show toolchain
         shell: pwsh
         run: |
           swift --version
           cmake --version
-
-      - name: Verify Swift version
-        shell: pwsh
-        run: |
-          $actual = (swift --version | Select-Object -First 1)
-          if ($actual -notlike "*Swift version $env:GUAVA_SWIFT_VERSION *") {
-            Write-Error "Expected Swift $env:GUAVA_SWIFT_VERSION; selected toolchain was: $actual"
-          }
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
 
       - name: Build native dependencies
         shell: pwsh
@@ -343,7 +309,7 @@ jobs:
     needs: prepare-release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ needs.prepare-release.outputs.target }}
           submodules: recursive
@@ -382,28 +348,14 @@ jobs:
             ninja-build \
             patchelf
 
-      - name: Install Swift
-        uses: SwiftyLab/setup-swift@latest
-        with:
-          swift-version: ${{ env.GUAVA_SWIFT_VERSION }}
+      - name: Set up build toolchains
+        uses: ./.github/actions/setup-toolchains
 
       - name: Show toolchain
         shell: bash
         run: |
           swift --version
           cmake --version
-
-      - name: Verify Swift version
-        shell: bash
-        run: |
-          actual="$(swift --version | head -n 1)"
-          if [[ "$actual" != *"Swift version ${GUAVA_SWIFT_VERSION} "* ]]; then
-            echo "Expected Swift ${GUAVA_SWIFT_VERSION}; selected toolchain was: $actual" >&2
-            exit 1
-          fi
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
 
       - name: Build native dependencies
         shell: bash
@@ -452,9 +404,14 @@ jobs:
                 fi
               done
 
+          # Literal $ORIGIN is expanded by the ELF loader at runtime.
+          # shellcheck disable=SC2016
           patchelf --set-rpath '$ORIGIN/Lib:$ORIGIN' "$package_dir/EditorApp"
+          # shellcheck disable=SC2016
           patchelf --set-rpath '$ORIGIN/Lib:$ORIGIN' "$package_dir/GuavaPlayer"
+          # shellcheck disable=SC2016
           patchelf --set-rpath '$ORIGIN/../Lib:$ORIGIN/..' "$package_dir/Tools/GuavaPluginHost"
+          # shellcheck disable=SC2016
           patchelf --set-rpath '$ORIGIN/../Lib:$ORIGIN/..' "$package_dir/Tools/GuavaMCP"
 
           cat > "$package_dir/run-editor.sh" <<'EOF'

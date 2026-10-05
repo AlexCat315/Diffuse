@@ -10,8 +10,6 @@ include(ExternalProject)
 set(OCIO_OPENEXR_BUNDLE  ${GUAVA_VENDOR_DIR}/ocio_openexr.artifactbundle)
 set(OCIO_OPENEXR_VARIANT ${OCIO_OPENEXR_BUNDLE}/${GUAVA_TRIPLE})
 set(IMATH_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/imath-install)
-set(OPENEXR_EP_SOURCE_DIR ${CMAKE_BINARY_DIR}/openexr-src)
-set(OPENEXR_PATCH_SCRIPT ${CMAKE_CURRENT_LIST_DIR}/PatchOpenEXRSetup.cmake)
 
 if(WIN32)
     set(OPENEXR_MSVC_RUNTIME_ARG -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL)
@@ -45,20 +43,11 @@ ExternalProject_Add(imath_ep
 # ── ExternalProject: OpenEXR ──────────────────────────────────────────────────
 
 ExternalProject_Add(openexr_ep
-    SOURCE_DIR ${OPENEXR_EP_SOURCE_DIR}
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}/openexr
     BINARY_DIR ${CMAKE_BINARY_DIR}/openexr-build
     PREFIX ${CMAKE_BINARY_DIR}/openexr-ep
     INSTALL_DIR ${CMAKE_BINARY_DIR}/openexr-install
     DEPENDS imath_ep
-    DOWNLOAD_COMMAND
-        ${CMAKE_COMMAND} -E rm -rf ${OPENEXR_EP_SOURCE_DIR}
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_SOURCE_DIR}/openexr ${OPENEXR_EP_SOURCE_DIR}
-    UPDATE_COMMAND ""
-    PATCH_COMMAND
-        ${CMAKE_COMMAND}
-            -DOPENEXR_SOURCE_DIR=${OPENEXR_EP_SOURCE_DIR}
-            -P ${OPENEXR_PATCH_SCRIPT}
     CMAKE_ARGS
         -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/openexr-install
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
@@ -78,6 +67,7 @@ ExternalProject_Add(openexr_ep
         -DOPENEXR_FORCE_INTERNAL_IMATH=OFF
         -DOPENEXR_FORCE_INTERNAL_DEFLATE=ON
         -DOPENEXR_FORCE_INTERNAL_OPENJPH=ON
+        -DOPENEXR_FORCE_INTERNAL_ZSTD=ON
         -DOPENEXR_INSTALL_PKG_CONFIG=OFF
         -DOPENEXR_INSTALL_COMPAT_HEADERS=OFF
 )
@@ -93,13 +83,12 @@ if(APPLE)
 "execute_process(
     COMMAND /usr/bin/libtool -static
         -o \"${OPENEXR_COMBINED_LIB}\"
-        \"${OCIO_OPENEXR_VARIANT}/lib/libIex-3_4.a\"
-        \"${OCIO_OPENEXR_VARIANT}/lib/libIlmThread-3_4.a\"
+        \"${OCIO_OPENEXR_VARIANT}/lib/libIex-3_5.a\"
+        \"${OCIO_OPENEXR_VARIANT}/lib/libIlmThread-3_5.a\"
         \"${OCIO_OPENEXR_VARIANT}/lib/libImath-3_2.a\"
-        \"${OCIO_OPENEXR_VARIANT}/lib/libOpenEXR-3_4.a\"
-        \"${OCIO_OPENEXR_VARIANT}/lib/libOpenEXRCore-3_4.a\"
-        \"${OCIO_OPENEXR_VARIANT}/lib/libOpenEXRUtil-3_4.a\"
-        \"${OCIO_OPENEXR_VARIANT}/lib/libopenjph.a\"
+        \"${OCIO_OPENEXR_VARIANT}/lib/libOpenEXR-3_5.a\"
+        \"${OCIO_OPENEXR_VARIANT}/lib/libOpenEXRCore-3_5.a\"
+        \"${OCIO_OPENEXR_VARIANT}/lib/libOpenEXRUtil-3_5.a\"
     COMMAND_ERROR_IS_FATAL ANY)
 ")
 elseif(WIN32)
@@ -107,13 +96,12 @@ elseif(WIN32)
 "execute_process(
     COMMAND lib.exe
         \"/OUT:${OPENEXR_COMBINED_LIB}\"
-        \"${OCIO_OPENEXR_VARIANT}/lib/OpenEXR-3_4.lib\"
-        \"${OCIO_OPENEXR_VARIANT}/lib/OpenEXRUtil-3_4.lib\"
-        \"${OCIO_OPENEXR_VARIANT}/lib/OpenEXRCore-3_4.lib\"
-        \"${OCIO_OPENEXR_VARIANT}/lib/Iex-3_4.lib\"
-        \"${OCIO_OPENEXR_VARIANT}/lib/IlmThread-3_4.lib\"
+        \"${OCIO_OPENEXR_VARIANT}/lib/OpenEXR-3_5.lib\"
+        \"${OCIO_OPENEXR_VARIANT}/lib/OpenEXRUtil-3_5.lib\"
+        \"${OCIO_OPENEXR_VARIANT}/lib/OpenEXRCore-3_5.lib\"
+        \"${OCIO_OPENEXR_VARIANT}/lib/Iex-3_5.lib\"
+        \"${OCIO_OPENEXR_VARIANT}/lib/IlmThread-3_5.lib\"
         \"${OCIO_OPENEXR_VARIANT}/lib/Imath-3_2.lib\"
-        \"${OCIO_OPENEXR_VARIANT}/lib/openjph.0.24.lib\"
     COMMAND_ERROR_IS_FATAL ANY)
 ")
 else()  # Linux — GNU ar MRI script
@@ -121,13 +109,12 @@ else()  # Linux — GNU ar MRI script
     file(WRITE "${_combine_script}"
 "file(WRITE \"${_mri}\"
     \"CREATE ${OPENEXR_COMBINED_LIB}\\n\"
-    \"ADDLIB ${OCIO_OPENEXR_VARIANT}/lib/libIex-3_4.a\\n\"
-    \"ADDLIB ${OCIO_OPENEXR_VARIANT}/lib/libIlmThread-3_4.a\\n\"
+    \"ADDLIB ${OCIO_OPENEXR_VARIANT}/lib/libIex-3_5.a\\n\"
+    \"ADDLIB ${OCIO_OPENEXR_VARIANT}/lib/libIlmThread-3_5.a\\n\"
     \"ADDLIB ${OCIO_OPENEXR_VARIANT}/lib/libImath-3_2.a\\n\"
-    \"ADDLIB ${OCIO_OPENEXR_VARIANT}/lib/libOpenEXR-3_4.a\\n\"
-    \"ADDLIB ${OCIO_OPENEXR_VARIANT}/lib/libOpenEXRCore-3_4.a\\n\"
-    \"ADDLIB ${OCIO_OPENEXR_VARIANT}/lib/libOpenEXRUtil-3_4.a\\n\"
-    \"ADDLIB ${OCIO_OPENEXR_VARIANT}/lib/libopenjph.a\\n\"
+    \"ADDLIB ${OCIO_OPENEXR_VARIANT}/lib/libOpenEXR-3_5.a\\n\"
+    \"ADDLIB ${OCIO_OPENEXR_VARIANT}/lib/libOpenEXRCore-3_5.a\\n\"
+    \"ADDLIB ${OCIO_OPENEXR_VARIANT}/lib/libOpenEXRUtil-3_5.a\\n\"
     \"SAVE\\n\"
     \"END\\n\")
 execute_process(COMMAND ar -M INPUT_FILE \"${_mri}\" COMMAND_ERROR_IS_FATAL ANY)
@@ -162,7 +149,7 @@ file(WRITE \"${OCIO_OPENEXR_BUNDLE}/info.json\"
   \\\"artifacts\\\": {
     \\\"ocio_openexr\\\": {
       \\\"type\\\": \\\"staticLibrary\\\",
-      \\\"version\\\": \\\"3.4.0\\\",
+      \\\"version\\\": \\\"3.5.2\\\",
       \\\"variants\\\": [
         {
           \\\"path\\\": \\\"${GUAVA_TRIPLE}/lib/${OPENEXR_COMBINED_LIB_NAME}\\\",
@@ -186,14 +173,14 @@ guava_git_revision(IMATH_SOURCE_REVISION "${CMAKE_SOURCE_DIR}/imath")
 guava_git_revision(OPENEXR_SOURCE_REVISION "${CMAKE_SOURCE_DIR}/openexr")
 guava_add_artifact_build_manifest(
     ARTIFACT_NAME "ocio_openexr"
-    VERSION "3.4.0"
+    VERSION "3.5.2"
     BUNDLE_DIR ${OCIO_OPENEXR_BUNDLE}
     LIB_REL_PATH "${GUAVA_TRIPLE}/lib/${OPENEXR_COMBINED_LIB_NAME}"
     BUILD_SYSTEM "CMake ExternalProject"
     SOURCE_KIND "git-submodule"
     SOURCE_URL "Engine/third-party/openexr,Engine/third-party/imath"
-    SOURCE_REF "OpenEXR 3.4.0 + Imath"
+    SOURCE_REF "OpenEXR 3.5.2 + Imath 3.2.3"
     SOURCE_REVISION "openexr=${OPENEXR_SOURCE_REVISION},imath=${IMATH_SOURCE_REVISION}"
-    NOTES "combined static archive produced from OpenEXR, Imath, Iex, IlmThread, OpenEXRCore, OpenEXRUtil, and openjph"
+    NOTES "combined static archive produced from OpenEXR, Imath, Iex, IlmThread, OpenEXRCore, OpenEXRUtil; OpenJPH, libdeflate and zstd are vendored in OpenEXRCore"
     DEPENDS stage_ocio_openexr
 )
