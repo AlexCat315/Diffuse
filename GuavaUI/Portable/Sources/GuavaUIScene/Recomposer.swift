@@ -30,6 +30,7 @@ public final class Recomposer: @unchecked Sendable {
     private var pendingByID: [ObjectIdentifier: PendingScope] = [:]
     private var scanIndex = 0
     private let lock = NSLock()
+    public var timeline: PerformanceTimeline?
 
     public init() {}
 
@@ -81,6 +82,7 @@ public final class Recomposer: @unchecked Sendable {
     /// layout/draw.
     @discardableResult
     public func commitAll() -> Bool {
+        let trace = timeline?.begin()
         var committedIDs = Set<ObjectIdentifier>()
         var didCommit = false
 
@@ -105,6 +107,7 @@ public final class Recomposer: @unchecked Sendable {
         }
 
         compactPendingQueue()
+        if didCommit { timeline?.end(trace, phase: "recomposition", name: "Commit pending scopes") }
         return didCommit
     }
 

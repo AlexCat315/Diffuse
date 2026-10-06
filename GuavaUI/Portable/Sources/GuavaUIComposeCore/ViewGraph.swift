@@ -49,6 +49,7 @@ public final class ViewGraph {
 
     public let tree: NodeTree
     public let recomposer: Recomposer
+    public let stateRegistry = StateRegistry()
 
     /// Phase 3: layout tree owning the `LayoutNode` root + the text measure
     /// cache. Layout-side state migrating off `Node` lands here.
@@ -80,6 +81,7 @@ public final class ViewGraph {
     public init(tree: NodeTree, recomposer: Recomposer) {
         self.tree = tree
         self.recomposer = recomposer
+        recomposer.timeline = tree.timeline
         self.layoutTree = LayoutTree()
         self.renderTree = RenderTree()
     }
@@ -106,6 +108,8 @@ public final class ViewGraph {
     ///
     /// Call once per frame after `recomposer.commitAll()` and before draw.
     public func computeLayout(width: Float, height: Float) {
+        let trace = tree.timeline.begin()
+        defer { tree.timeline.end(trace, phase: "layout", name: "Yoga layout") }
         lastLayoutSize = (width, height)
         layoutRoot.calculateLayout(availableWidth: width, availableHeight: height)
         guard let root = tree.root else { return }
@@ -663,6 +667,11 @@ final class ViewScope {
     weak var layoutParent: LayoutNode?
     weak var invalidationLog: InvalidationLog?
     private var installed = false
+    private var stateRegistrations: [String] = []
+    private func clearStateRegistrations() {
+        for id in stateRegistrations { graph?.stateRegistry.unregister(id) }
+        stateRegistrations.removeAll(keepingCapacity: true)
+    }
 
     init(graph: ViewGraph, anchor: Node, view: any View, layoutParent: LayoutNode?) {
         self.graph = graph
@@ -689,12 +698,16 @@ final class ViewScope {
     /// `onChange` into the recomposer.
     private func wireDynamicProperties() {
         guard let graph = graph, let anchor = anchor else { return }
+        clearStateRegistrations()
         let scopeID = ObjectIdentifier(anchor)
 
         for child in Mirror(reflecting: view).children {
             guard let stateBox = child.value as? _StateErased else { continue }
             let field = child.label.map { $0.hasPrefix("_") ? String($0.dropFirst()) : $0 }
             let kind = stateBox._diagnosticKind
+            if let read = stateBox._devToolsRead,
+               let id = graph.stateRegistry.register(id: "\(anchor.id.rawValue):\(field ?? "State")", name: field ?? "State", valueType: stateBox._devToolsValueType,
+                    scopeID: String(anchor.id.rawValue), read: read) { stateRegistrations.append(id) }
             // `@State` adds a `_storage` member to the State struct; we identify
             // a `State<T>` by trying a bridging via its `_setOnChange` method.
             // Because State is generic we can't pattern match cleanly — call
@@ -719,6 +732,7 @@ final class ViewScope {
     }
 
     private func unwireDynamicProperties() {
+        clearStateRegistrations()
         for stateBox in dynamicPropertyBoxes(in: view) {
             stateBox._unwire()
         }
@@ -735,6 +749,9 @@ final class ViewScope {
     /// preserved (along with anything in `Node.attachments`).
     func recompose(reasons: [RecompositionReason] = [.init(kind: "manual")]) {
         guard installed, let anchor = anchor, let graph = graph else { return }
+        let trace = graph.tree.timeline.begin()
+        defer { graph.tree.timeline.end(trace, phase: "component", name: anchor.viewTag ?? "Component",
+            scopeID: String(anchor.id.rawValue), reasons: reasons) }
         let start = ContinuousClock.now
         let previous = graph.activeRecompositionScope
         graph.activeRecompositionScope = anchor.id.rawValue
@@ -887,6 +904,8 @@ fileprivate struct UnkeyedSlotQueue {
 /// Existential helper so `ViewScope` can wire state observers without knowing
 /// the concrete value type of every `@State`.
 public protocol _StateErased {
+    var _devToolsRead: (() -> String)? { get }
+    var _devToolsValueType: String { get }
     var _diagnosticKind: String { get }
     func _wire(invalidate: @escaping () -> Void)
     func _unwire()
@@ -896,6 +915,8 @@ public protocol _StateErased {
 }
 
 public extension _StateErased {
+    var _devToolsRead: (() -> String)? { nil }
+    var _devToolsValueType: String { String(reflecting: type(of: self)) }
     var _diagnosticKind: String { "dynamicProperty" }
     func _unwire() {}
 }

@@ -4,6 +4,7 @@ const state = {
   connected: false,
   capabilities: new Set(),
   tree: null,
+  treeRenderFrame: null,
   snapshot: null,
   selectedId: null,
   pendingSelectionId: null,
@@ -104,6 +105,7 @@ function connect() {
   setStatus("Connecting", false);
 
   ws.addEventListener("open", () => {
+    if (state.ws !== ws) return;
     state.connected = true;
     setStatus("Connected", true);
     setControls(true);
@@ -111,6 +113,7 @@ function connect() {
   });
 
   ws.addEventListener("message", (event) => {
+    if (state.ws !== ws) return;
     try {
       handleEnvelope(JSON.parse(event.data));
     } catch (error) {
@@ -154,6 +157,7 @@ function send(type, payload = undefined, expectsResponse = true) {
   const envelope = { type, payload };
   if (expectsResponse) envelope.id = state.requestId++;
   state.ws.send(JSON.stringify(envelope));
+  return envelope.id;
 }
 
 function sendInput(payload) {
@@ -176,6 +180,7 @@ if (new URLSearchParams(location.search).get("transport") === "browser") {
 }
 
 function handleEnvelope(env) {
+  if (handleObservationEnvelope(env)) return;
   switch (env.type) {
     case "hello":
       state.capabilities = new Set(env.payload?.capabilities ?? []);
@@ -183,6 +188,7 @@ function handleEnvelope(env) {
       if (hasCapability("tree")) send("tree.subscribe");
       if (hasCapability("log")) send("log.subscribe");
       if (hasCapability("timing")) send("timing.subscribe");
+      if (hasCapability("state.observe")) send("state.list");
       setControls(true);
       appendLog({
         level: "info",
@@ -194,11 +200,12 @@ function handleEnvelope(env) {
     case "tree.delta":
       state.snapshot = env.payload ?? null;
       state.tree = env.payload?.root ?? null;
-      if (env.payload?.inspection) syncInspection(env.payload.inspection);
-      syncSelection();
-      renderTree();
-      renderRuntime(env.payload);
-      renderRecompositionTable();
+      if (state.treeRenderFrame == null) state.treeRenderFrame = requestAnimationFrame(() => {
+        state.treeRenderFrame = null;
+        if (state.snapshot?.inspection) syncInspection(state.snapshot.inspection);
+        syncSelection(); renderTree(); renderRuntime(state.snapshot);
+        renderRecompositionTable(); renderStateRegistry();
+      });
       break;
     case "log.entry":
       appendLog(env.payload);
@@ -308,6 +315,8 @@ function selectNode(node) {
 function renderDetails(node) {
   renderInspection(node);
   renderSourceAnalysis(node);
+  renderStateRegistry();
+  observationControls();
   if (!node) {
     el.details.className = "details empty";
     el.details.textContent = "Select a node in the tree.";
@@ -342,6 +351,7 @@ function renderTiming(payload) {
     frame: payload.frame,
     fps: totalMs > 0 ? round(1000 / totalMs, 1) : null,
     currentMs: {
+      recomposition: payload.recompositionMs == null ? null : round(payload.recompositionMs),
       layout: round(payload.layoutMs),
       draw: round(payload.drawMs),
       present: round(payload.presentMs),
@@ -760,6 +770,7 @@ function compactTag(tag) {
 
 function setControls(enabled) {
   inspectionControls();
+  observationControls();
   el.connect.disabled = enabled;
   el.disconnect.disabled = !enabled;
   el.refreshTree.disabled = !enabled || !hasCapability("tree");
@@ -791,6 +802,9 @@ function hasCapability(name) {
 }
 
 function clearSessionViews() {
+  if (state.treeRenderFrame != null) cancelAnimationFrame(state.treeRenderFrame);
+  state.treeRenderFrame = null;
+  resetObservations();
   state.recording = false;
   state.tree = null;
   state.snapshot = null;

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GuavaUI DevTools</title>
-  <link rel="stylesheet" href="./styles.css?v=0.4">
+  <link rel="stylesheet" href="./styles.css?v=0.5">
 </head>
 <body>
   <main class="shell">
@@ -58,7 +58,7 @@
         <section class="analysisPanel">
           <strong>Source &amp; recomposition</strong>
           <div id="sourceLocation" class="sourceLocation">Select a component to locate its source.</div>
-          <div class="sourceActions"><select id="sourceEditor" aria-label="Editor"><option value="vscode">VS Code</option><option value="cursor">Cursor</option></select><a id="openSource" aria-disabled="true">Open source</a></div>
+          <div class="sourceActions"><select id="sourceEditor" aria-label="Editor"><option value="vscode">VS Code</option><option value="cursor">Cursor</option></select><a id="openSource" aria-disabled="true">Open source</a><a id="addSourceBreakpoint" aria-disabled="true">Add breakpoint</a></div>
           <details><summary>Editor path mapping</summary>
             <label>Build path prefix<input id="sourceBuildRoot" placeholder="/build/Guava-Engine" spellcheck="false"></label>
             <label>Local path prefix<input id="sourceLocalRoot" placeholder="/Users/me/Guava-Engine" spellcheck="false"></label>
@@ -104,6 +104,20 @@
           <span>Timing</span>
         </div>
         <pre id="timing" class="details empty">No timing sample.</pre>
+        <section class="analysisPanel">
+          <strong>Performance timeline</strong>
+          <div class="editActions"><button id="startTimeline" disabled>Record timeline</button><button id="stopTimeline" disabled>Stop</button><button id="exportTimeline" disabled>Export trace</button></div>
+          <select id="timelinePhase" aria-label="Timeline phase"><option value="">All stages</option><option value="recomposition">Recomposition commits</option><option value="component">Component bodies</option><option value="layout">Layout</option><option value="draw">Draw</option></select>
+          <div id="timelineStatus" class="panelStatus">Stopped</div><div id="timelineEvents" class="timelineEvents"></div>
+          <p class="panelStatus">CPU spans use one monotonic clock. Component and commit spans overlap. Draw measures command generation; GPU execution is excluded. Keeps the latest 2048 events.</p>
+        </section>
+        <section class="analysisPanel">
+          <strong>Observed state</strong><div id="stateWatchCount" class="panelStatus"></div>
+          <div class="editActions"><button id="refreshStates" disabled>Refresh exposed fields</button><button id="stopWatching" disabled>Stop watching</button></div>
+          <label><input id="stateSelectedOnly" type="checkbox"> Selected component only</label>
+          <div id="registeredStates" class="registeredStates"></div>
+          <p class="panelStatus">Only explicitly exposed fields are listed. Check a field to read its summary. This view is read-only.</p>
+        </section>
         <div class="paneHeader">
           <span>State checkpoint</span>
           <div>
@@ -148,7 +162,8 @@
 
   <script src="./browser-connection.js"></script>
   <script src="./inspection.js?v=0.4"></script>
-  <script src="./analysis.js?v=0.4"></script>
-  <script src="./app.js?v=0.4"></script>
+  <script src="./analysis.js?v=0.5"></script>
+  <script src="./observation.js?v=0.5"></script>
+  <script src="./app.js?v=0.5"></script>
 </body>
 </html>

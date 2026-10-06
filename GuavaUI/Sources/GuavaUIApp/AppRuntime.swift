@@ -197,6 +197,7 @@ public final class AppRuntime {
                                renderTree: graph.renderTree,
                                logSink: devToolsLogSink ?? LogTap.Sink())
             dev.attachFrameTap(backend: backend, renderer: renderer)
+            dev.stateRegistry = graph.stateRegistry
             dev.server.hostMainExecutor = { [weak self] operation in
                 self?.host.enqueueMainThreadWork {
                     MainActor.assumeIsolated {
@@ -626,6 +627,7 @@ public final class AppRuntime {
         let layoutEnd = TimingTrace.now()
 
         drawList.reset()
+        let drawTrace = tree.timeline.begin()
         if useLegacyRenderer {
             nodeRenderer.render(root: root, into: drawList)
         } else {
@@ -640,6 +642,7 @@ public final class AppRuntime {
         host.tooltips.drawAll(into: drawList)
         drawDevToolsOverlay(into: drawList)
         let drawEnd = TimingTrace.now()
+        tree.timeline.end(drawTrace, phase: "draw", name: "Encode draw list")
 
         do {
             if atlas?.isDirty == true {
@@ -733,6 +736,7 @@ public final class AppRuntime {
                     nodeCount: countNodes(root),
                     batchCount: drawList.batches.count
                 )
+                dev.notifyFrameFinished()
                 // Mirror needs a steady frame stream even when the UI is
                 // idle. Force the next frame so FrameTap keeps producing.
                 if dev.mirrorIsActive {

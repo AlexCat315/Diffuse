@@ -1204,6 +1204,7 @@ if let config = demoDevToolsConfig {
                          invalidationLog: host.invalidationLog,
                          renderTree: graph.renderTree,
                          logSink: demoDevToolsLogSink ?? LogTap.Sink())
+    tools.stateRegistry = graph.stateRegistry
     tools.attachFrameTap(backend: backend, renderer: renderer)
     tools.server.hostMainExecutor = { operation in
         host.enqueueMainThreadWork {
@@ -1540,7 +1541,9 @@ host.onFrame = { native in
 
     // 2. Walk node tree -> draw list.
     drawList.reset()
+    let drawTrace = tree.timeline.begin()
     nodeRenderer.render(root: root, into: drawList)
+    tree.timeline.end(drawTrace, phase: "draw", name: "Encode draw list")
     appendPerformanceHUD(to: drawList)
     appendDevToolsSelectionOverlay(to: drawList)
     let devToolsDrawEnd = TimingTrace.now()
@@ -1587,6 +1590,7 @@ host.onFrame = { native in
             nodeCount: demoNodeCount(root),
             batchCount: drawList.batches.count
         )
+        devTools?.notifyFrameFinished()
         if nextFrameIndex <= 5 || didAtlasUpload || didPreviewUpload {
             print(timing.summary(extra: [
                 "frameAttempt=\(nextFrameIndex)",
@@ -1669,6 +1673,7 @@ host.onFrame = { native in
                 nodeCount: demoNodeCount(root),
                 batchCount: drawList.batches.count
             )
+            tools.notifyFrameFinished()
         }
         if DemoFrameModeHolder.current == .benchmark || !DemoVSyncHolder.enabled {
             host.requestDisplay()

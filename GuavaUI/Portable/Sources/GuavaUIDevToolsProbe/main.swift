@@ -5,7 +5,7 @@ import GuavaUIDevToolsScene
 import GuavaUIComposeCore
 
 private struct ProbeComponent: View {
-    @State var count = 0
+    @State(expose: true) var count = 0
     var body: some View { EmptyView() }
 }
 
@@ -27,7 +27,7 @@ struct DevToolsProbe {
         graph.install(root: component)
         root.addChild(componentTree.root!)
         let inspector = SceneInspector(tree: tree)
-        server.advertisedCapabilities = ["tree", "select", "log", "timing", "state", "inspect", "style", "source", "recomposition"]
+        server.advertisedCapabilities = ["tree", "select", "log", "timing", "state", "inspect", "style", "source", "recomposition", "state.observe", "timeline"]
         server.snapshotProvider = {
             layout.calculateLayout(availableWidth: 320, availableHeight: 180); root.frame = layout.frame
             return inspector.snapshot()
@@ -37,14 +37,25 @@ struct DevToolsProbe {
         server.inspectionHandler = { inspector.editor.handle($0) }
         server.inspectionResetHandler = { inspector.editor.reset() }
         inspector.editor.onChange = { [weak server] in MainActor.assumeIsolated { server?.broadcastTreeDelta() } }
+        server.stateObservationProvider = { graph.stateRegistry.observation(ids: $0) }
+        server.timelineProvider = { componentTree.timeline.snapshot(after: $0) }
+        server.timelineCaptureHandler = { tree.timeline.setEnabled($0); componentTree.timeline.setEnabled($0) }
         server.stateCheckpointHandler = { state }
         server.stateRestoreHandler = {
             state = $0; component.count = $0["count"].flatMap(Int.init) ?? 0
-            recomposer.commitAll(); server.broadcastTreeDelta()
+            recomposer.commitAll(); server.broadcastTreeDelta(); server.broadcastObservations()
         }
         try server.start()
         defer { server.stop() }
         print("DevTools probe: ws://127.0.0.1:\(server.boundPort!)/")
-        while !Task.isCancelled { try await Task.sleep(for: .seconds(1)) }
+        while !Task.isCancelled {
+            try await Task.sleep(for: .milliseconds(100))
+            graph.computeLayout(width: 320, height: 180)
+            let trace = componentTree.timeline.begin()
+            let list = DrawList(); NodeRenderer().render(root: root, into: list)
+            componentTree.timeline.end(trace, phase: "draw", name: "Encode draw list")
+            // All Compose and host stages share the same recorder.
+            server.broadcastObservations()
+        }
     }
 }
