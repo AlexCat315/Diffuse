@@ -349,7 +349,9 @@ function renderTiming(payload) {
   el.timing.className = "details";
   el.timing.textContent = JSON.stringify({
     frame: payload.frame,
-    fps: totalMs > 0 ? round(1000 / totalMs, 1) : null,
+    presentation: payload.presented == null ? "unknown" : payload.presented ? "submitted" : "skipped",
+    // Reciprocal CPU work time is a throughput estimate, not observed display FPS.
+    cpuThroughputFPS: totalMs > 0 ? round(1000 / totalMs, 1) : null,
     currentMs: {
       recomposition: payload.recompositionMs == null ? null : round(payload.recompositionMs),
       layout: round(payload.layoutMs),

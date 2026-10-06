@@ -23,7 +23,8 @@ public final class TimingPublisher: @unchecked Sendable {
                        presentMs: Double,
                        totalMs: Double,
                        nodeCount: Int,
-                       batchCount: Int) {
+                       batchCount: Int,
+                       presented: Bool = true) {
         let delivery: (((TimingFramePayload) -> Void), UInt64)? = lock.withLock {
             guard let callback else { return nil }
             frame &+= 1
@@ -37,7 +38,8 @@ public final class TimingPublisher: @unchecked Sendable {
             presentMs: presentMs,
             totalMs: totalMs,
             nodeCount: nodeCount,
-            batchCount: batchCount
+            batchCount: batchCount,
+            presented: presented
         ))
     }
 }

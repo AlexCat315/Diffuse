@@ -1,4 +1,5 @@
 """Acceptance checks shared by Canvas/WebGPU and native socket verification."""
+from verify_pixels import wait_pixels
 
 def inspection_checks(page, inspector):
     page.evaluate("""window.inspectedNode = name => {
@@ -20,8 +21,12 @@ def inspection_checks(page, inspector):
     assert page.evaluate("inspectedNode('counter.value').flags.hitTestable") is False
     inspector.locator("#selectionPath button").filter(has_text="counter.card").click()
     frame = page.locator("#inspector").element_handle().content_frame()
+    page.wait_for_function("guavaDebug.snapshot.tree.inspection.selectedID === inspectedNode('counter.card').elementID")
+    frame.wait_for_function("!state.pendingSelectionId && findNode(state.tree,state.selectedId)?.debugName === 'counter.card'")
     # A delayed snapshot from before selection must not erase a focused draft
     # or cancel the edit timer while the new selection is awaiting confirmation.
+    # Confirm the real selection before simulating an acknowledgement so the
+    # test cannot clear an actual pending request with its synthetic snapshot.
     frame.evaluate("""() => {
       const node=findNode(state.tree,state.selectedId), previous=node.children[0];
       state.pendingSelectionId=state.selectedId;
@@ -36,24 +41,12 @@ def inspection_checks(page, inspector):
     assert page.evaluate("inspectedNode('counter.value').absoluteFrame.x-inspectedNode('counter.card').absoluteFrame.x") == 32
     inspector.locator("#backgroundColor").fill("#ff2020")
     page.wait_for_function("inspectedNode('counter.card').style.backgroundColor === '#ff2020ff'")
-    page.wait_for_function("""() => {
-      const n=inspectedNode('counter.card'), source=document.querySelector(guavaDebug.backend==='webgpu'?'#gpu':'#fallback');
-      const canvas=document.createElement('canvas');canvas.width=source.width;canvas.height=source.height;
-      const c=canvas.getContext('2d');c.drawImage(source,0,0);const r=source.width/guavaDebug.snapshot.width;
-      const p=c.getImageData(Math.round((n.absoluteFrame.x+n.absoluteFrame.w-12)*r),Math.round((n.absoluteFrame.y+30)*r),1,1).data;
-      return p[0]>220&&p[1]<50&&p[2]<50&&p[3]>200;
-    }""")
+    wait_pixels(page, "() => { const n=inspectedNode('counter.card').absoluteFrame;return [n.x+n.w-12,n.y+30,1,1]; }",
+                lambda pixels: any(r > 220 and g < 50 and b < 50 and a > 200 for r, g, b, a in pixels))
     inspector.locator("#foregroundColor").fill("#00ff00")
     page.wait_for_function("inspectedNode('counter.card').style.foregroundColor === '#00ff00ff'")
-    page.wait_for_function("""() => {
-      const label=guavaDebug.snapshot.labels.find(l=>l.text===String(guavaDebug.snapshot.count));
-      const source=document.querySelector(guavaDebug.backend==='webgpu'?'#gpu':'#fallback');
-      const canvas=document.createElement('canvas');canvas.width=source.width;canvas.height=source.height;
-      const c=canvas.getContext('2d');c.drawImage(source,0,0);const r=source.width/guavaDebug.snapshot.width;
-      const p=c.getImageData(Math.round(label.x*r),Math.round(label.y*r),Math.ceil(label.width*r),Math.ceil(label.size*1.4*r)).data;
-      let green=0;for(let i=0;i<p.length;i+=4)if(p[i]<80&&p[i+1]>180&&p[i+2]<80)green++;
-      return green>50;
-    }""")
+    wait_pixels(page, "() => { const l=guavaDebug.snapshot.labels.find(l=>l.text===String(guavaDebug.snapshot.count));return [l.x,l.y,l.width,l.size*1.4]; }",
+                lambda pixels: sum(r < 80 and g > 180 and b < 80 for r, g, b, a in pixels) > 50)
     assert frame.evaluate("findNode(state.tree,findNode(state.tree,state.selectedId).ownerScopeID).recomposition.count") == profile_before
     # Composition retains debug values; clearing restores the latest theme.
     page.locator("#theme").click()

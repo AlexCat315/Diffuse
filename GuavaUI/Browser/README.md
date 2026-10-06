@@ -9,6 +9,10 @@ Inspector 读取真实节点和失效记录，支持状态检查点、状态差�
 
 使用 Swift 6.4.0，以及**版本完全匹配**的官方 Wasm SDK：
 
+macOS 的 Xcode Swift 编译器即使也标记为 6.4，仍可能与官方 SDK 的预编译模块
+不兼容。此时应使用同版本的 swift.org 发布工具链，并把它的 `usr/bin` 放在
+当前构建命令的 `PATH` 最前；无需更改系统默认工具链。
+
 ```bash
 swift sdk install https://download.swift.org/swift-6.4.0-release/wasm-sdk/swift-6.4.0-RELEASE/swift-6.4.0-RELEASE_wasm.artifactbundle.tar.gz --checksum f07b7be3c586d92d7a07051fc6d303b87ebea67eadc40640ba59d5a8b79aa86d
 git submodule update --init GuavaUI/third-party/freetype GuavaUI/third-party/harfbuzz
@@ -150,24 +154,30 @@ Inspector 重连、缩放和原生 WebSocket。文字检查包含中文/Emoji �
 撤销/重做、清除及断开恢复，也通过真实原生 WebSocket 验证同一套编辑面板。
 分析验收覆盖准确 Swift 表达式行号、编辑器链接、Unicode/Windows 远端路径映射、
 真实 State 重组次数/原因/耗时和统计重置；原生 WebSocket 使用真实 Compose scope 验证。
+状态观察验收覆盖仅暴露 count/dark、真实 State 更新、重组/布局/绘制时间线、
+组件定位、trace 导出、停止录制和断开/重连清理。像素检查使用浏览器实际呈现的
+截图，避免 WebGPU 在呈现后复制画布时读到已失效的纹理。
 开发脚本验证真实 Swift 编译、错误恢复与状态保留，
 会临时修改宿主源码并在退出时还原。
 
 `python3 verify.py --require-webgpu` 强制 WebGPU 像素验收；
 `--require-hardware-gpu` 还拒绝软件适配器，严格模式不会强制 SwiftShader。
 `--skip-native` 只验证浏览器，`--screenshot` 在严格模式保存 WebGPU 画面。
+`--dist .build/release-preview` 可对指定 release 构建目录执行相同验收。
 `GUAVA_CHROMIUM` 指定 Chromium 路径，`GUAVA_CHROMIUM_ARGS` 是附加启动参数的 JSON 数组。
 CI 覆盖共享字体、Linux/Windows Portable 和浏览器流程，并上传构建产物。
 
 仓库还提供手动触发的 `GuavaUI hardware WebGPU acceptance` 工作流。配置带
 `self-hosted, linux, x64, guava-webgpu` 标签、可用物理 GPU/驱动、Chromium 系统依赖及
 CMake/Ninja/Python/Node 的 runner 后，从 Actions 手动运行，它会严格检查适配器和
-文字/几何像素，保存日志与 WebGPU 截图。当前云容器没有 `/dev/dri`，不能完成物理 GPU 验收。
+文字/几何像素，保存日志与 WebGPU 截图。
 
-本次 Linux/Swift 6.4.0 的完整桌面测试集、7 项字体集成测试、Portable、1×/2× 图集像素
-和真实 WebSocket 检查通过。物理 GPU 预检得到 `vendor=google`、
+此前 Linux/Swift 6.4.0 的完整桌面测试集、7 项字体集成测试、Portable、1×/2× 图集像素
+和真实 WebSocket 检查通过。该云容器没有 `/dev/dri`，物理 GPU 预检得到 `vendor=google`、
 `architecture=swiftshader`、`isFallbackAdapter=true`、`lost=true`，严格硬件验收按预期拒绝
-该环境；**真实 WebGPU 画面的严格像素验收仍待可用 GPU 环境完成**。
+该环境。macOS 上已通过 Canvas2D 1× 与 WebGPU/SwiftShader 2× 的实际呈现像素和
+状态观察/时间线验收，debug/release Wasm 均运行同一套检查；
+**物理 GPU 的严格验收仍待可用桌面环境完成**。
 开发重载与 debug/release Wasm 构建也已验证通过。
 
 The shared Inspector also supports explicitly exposed State summaries and an
@@ -186,3 +196,5 @@ GuavaUI GuavaUIDemo --shared-counter` from the repository root, then
 `python3 GuavaUI/Browser/verify_native_demo.py`. This checks live State values,
 actual padding-driven Yoga layout, CPU timeline spans, Metal mirror pixels and
 remote pointer input. The app remains running after the check.
+The check restores the original checkpoint. Add `--require-presented` to require
+primary swapchain submission; unlock the Mac and show the native window first.

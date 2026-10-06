@@ -18,6 +18,7 @@ public final class PlatformWindowSession {
     fileprivate var lastTextInputArea: TextInputArea?
     fileprivate var lastTextCursorAnimationTick: Double = 0
     fileprivate var needsDisplay = true
+    fileprivate var nextRenderAttemptTime: Double = 0
 
     public private(set) var drawableSize: (width: UInt32, height: UInt32)
     public private(set) var logicalSize: (width: UInt32, height: UInt32)
@@ -514,6 +515,7 @@ public final class SDL3PlatformHost: PlatformHost {
 
                 if session.updateMetrics(from: handle) {
                     session.needsDisplay = true
+                    session.nextRenderAttemptTime = 0
                     session.onResize?(session.drawableSize.width, session.drawableSize.height)
                     if id == mainWindowID {
                         drawableSize = session.drawableSize
@@ -533,6 +535,7 @@ public final class SDL3PlatformHost: PlatformHost {
 
                 let hasRenderInvalidation = session.tree.hasRenderUpdates
                 let shouldRender = (session.needsDisplay || hasRenderInvalidation)
+                    && frameStart >= session.nextRenderAttemptTime
                     && (!isCadenceDriven || frameDue)
 
                 if shouldRender, let surface = handle.renderSurface {
@@ -552,11 +555,18 @@ public final class SDL3PlatformHost: PlatformHost {
                         didRender = callback(surface) || didRender
                     }
                     if didRender {
+                        session.nextRenderAttemptTime = 0
                         session.withCurrent {
                             session.tree.flush()
                         }
                     } else {
                         session.needsDisplay = true
+                        // An occluded/unavailable swapchain must remain pending,
+                        // without redrawing the entire scene every 1 ms. Retry at
+                        // display cadence; native events can still wake SDL.
+                        session.nextRenderAttemptTime = frameClock() + 1.0 / Self.sanitizedDisplayRefreshRate(
+                            shell.displayRefreshRate(windowID: id)
+                        )
                     }
                     let renderMilliseconds = (TimingTrace.now() - renderStart) * 1000
                     if didRender {
@@ -600,12 +610,17 @@ public final class SDL3PlatformHost: PlatformHost {
                                                       Self.maxCadenceSleepInterval))
                 }
             } else if targetFrameInterval == nil {
+                let now = frameClock()
                 let hasImmediateWork = sessions.values.contains { session in
-                    session.needsDisplay || session.tree.hasRenderUpdates || session.recomposer.hasPending
+                    session.recomposer.hasPending ||
+                        ((session.needsDisplay || session.tree.hasRenderUpdates) && now >= session.nextRenderAttemptTime)
                 }
-                let timeout = hasImmediateWork
+                var timeout = hasImmediateWork
                     ? 0.001
                     : eventWaitTimeout(shell: shell, animationsActive: animationsActive)
+                for session in sessions.values where session.needsDisplay || session.tree.hasRenderUpdates {
+                    timeout = min(timeout, max(0.001, session.nextRenderAttemptTime - now))
+                }
                 // Event-driven windows sleep inside SDL. Native input and
                 // cross-thread display requests both wake this wait immediately,
                 // eliminating the old 1 ms polling loop without adding latency.
