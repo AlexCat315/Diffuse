@@ -393,6 +393,7 @@ public struct MirrorInputPayload: Codable, Sendable {
 public struct TimingFramePayload: Codable, Sendable {
     public var frame: UInt64
     /// Time spent on layout this frame, in milliseconds.
+    public var recompositionMs: Double?
     public var layoutMs: Double
     /// Time spent encoding the draw list this frame, in milliseconds.
     public var drawMs: Double
@@ -411,7 +412,9 @@ public struct TimingFramePayload: Codable, Sendable {
                 presentMs: Double,
                 totalMs: Double,
                 nodeCount: Int,
-                batchCount: Int) {
+                batchCount: Int,
+                recompositionMs: Double? = nil) {
+        self.recompositionMs = recompositionMs
         self.frame = frame
         self.layoutMs = layoutMs
         self.drawMs = drawMs

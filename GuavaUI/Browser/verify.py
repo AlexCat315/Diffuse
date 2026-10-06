@@ -14,6 +14,7 @@ import time
 from playwright.sync_api import sync_playwright
 from verify_inspection import inspection_checks, native_inspection_checks
 from verify_analysis import analysis_checks, native_analysis_checks
+from verify_observation import native_observation_checks
 
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
@@ -178,9 +179,9 @@ def preview_checks(browser, base_url, renderer, screenshot=None, scale=1):
     page.close()
 
 
-def native_checks(browser, base_url, native_port):
+def native_checks(browser, base_url, native_port, client_path="devtools/index.html", screenshot=None):
     page = browser.new_page()
-    page.goto(base_url + "devtools/index.html")
+    page.goto(base_url + client_path)
     page.locator("#endpoint").fill(f"ws://127.0.0.1:{native_port}/")
     page.locator("#connect").click()
     page.locator("#tree").filter(has_text="headless.root").wait_for()
@@ -192,6 +193,12 @@ def native_checks(browser, base_url, native_port):
     page.wait_for_function("document.querySelector('#stateSnapshot').value.includes('12')")
     native_analysis_checks(page)
     native_inspection_checks(page)
+    try:
+        native_observation_checks(page, screenshot)
+    except Exception:
+        print(page.evaluate("({capabilities:[...state.capabilities], registered:observation.registered, log:state.logEntries})"), flush=True)
+        page.screenshot(path="/tmp/guava-devtools-failure.png", full_page=True)
+        raise
     page.locator("#disconnect").click()
     page.locator("#connect").click()
     page.locator("#status").filter(has_text="Connected").wait_for()
@@ -204,12 +211,13 @@ def main():
     args.add_argument("--require-webgpu", action="store_true")
     args.add_argument("--require-hardware-gpu", action="store_true", help="Also reject software/fallback adapters")
     args.add_argument("--skip-native", action="store_true")
+    args.add_argument("--native-only", action="store_true", help="Verify the real WebSocket Inspector without a Wasm SDK or GPU")
     args.add_argument("--screenshot")
     options = args.parse_args()
     root = Path(__file__).resolve().parent
-    if not (root / "dist/guava.wasm").is_file():
+    if not options.native_only and not (root / "dist/guava.wasm").is_file():
         raise SystemExit("Run npm ci and npm run build first")
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(QuietHandler, directory=str(root / "dist")))
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(QuietHandler, directory=str(root.parent if options.native_only else root / "dist")))
     threading.Thread(target=server.serve_forever, daemon=True).start()
     native = None
     with tempfile.TemporaryFile(mode="w+") as log:
@@ -240,6 +248,9 @@ def main():
                 browser = playwright.chromium.launch(executable_path=executable, headless=True, args=flags)
                 try:
                     base_url = f"http://127.0.0.1:{server.server_port}/"
+                    if options.native_only:
+                        native_checks(browser, base_url, native_port, "DevTools/index.html", options.screenshot)
+                        return
                     preview_checks(browser, base_url, "canvas2d", None if strict_gpu else options.screenshot)
                     if options.require_hardware_gpu:
                         page = browser.new_page()

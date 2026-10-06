@@ -12,6 +12,7 @@ public final class NodeTree: @unchecked Sendable {
 
     /// The single root of the scene graph.
     public var root: Node?
+    public let timeline = PerformanceTimeline()
 
     public init() {}
 

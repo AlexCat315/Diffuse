@@ -412,3 +412,12 @@ textarea {
 .recompositionRow { display: flex; justify-content: space-between; gap: 8px; text-align: left; }
 .recompositionRow span:first-child { overflow: hidden; text-overflow: ellipsis; }
 .recompositionRow span:last-child { white-space: nowrap; font-size: 10px; }
+
+.registeredStates, .timelineEvents { max-height: 280px; overflow: auto; margin-top: 8px; }
+.stateWatchRow { display: grid; grid-template-columns: 18px 1fr; gap: 4px; margin: 10px 0; }
+.stateWatchRow code { grid-column: 2; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; }
+.timelineRow { display: block; width: 100%; text-align: left; font-size: 11px; margin: 4px 0; }
+.timelineRow:disabled { opacity: 1; color: inherit; cursor: default; }
+.timelineTrack { display: block; height: 5px; background: #1e293b; overflow: hidden; margin-top: 3px; }
+.timelineBar { display: block; height: 5px; background: #a78bfa; }
+.timelineBar.layout { background: #38bdf8; } .timelineBar.draw { background: #34d399; }

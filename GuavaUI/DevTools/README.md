@@ -121,3 +121,39 @@ session's `inputObserver`; controls are enabled only with capability `recording`
 
 Browser development reloads use `npm run dev`; successful complete builds restore
 checkpoints, and compile failures keep the previous page usable with an error overlay.
+
+## State observation, timeline and source breakpoints
+
+Use `@State(expose: true)` to register a field for read-only observation; a
+`summary:` callback can abbreviate or redact it. **Observed state** lists metadata
+without reading values. Check individual fields to watch their current summaries,
+or filter to the selected component. Custom hosts can register providers on
+`graph.stateRegistry`. Registration follows component lifetime.
+
+**Record timeline** captures actual component/commit, Yoga layout and draw-list
+CPU spans. Filter stages, click a component span to inspect it, then stop and
+**Export trace** for a Chrome/Perfetto-compatible JSON capture. Recording is opt-in
+and bounded; parent and child durations overlap. GPU execution is excluded.
+
+**Add breakpoint** forwards the mapped source coordinates to the companion
+GuavaUI-vscode extension's existing VS Code/Cursor debugger API. Build and reload
+that extension to enable its URI handler and node-tree context command. See
+[observation protocol](protocol-observation.md) for registration APIs, lifecycle,
+wire messages and bounds.
+
+This implements source navigation and an editor breakpoint API handoff for native
+Swift. A live VS Code/Cursor Swift/LLDB debug session has not been tested end to
+end; launch/attach, pause, stepping, stacks and debugger variables remain with
+the existing editor debugger. Wasm source debugging requires a separate tool
+integration that supports Swift/Wasm debug information.
+
+Run the native Inspector acceptance suite without a Wasm SDK or GPU:
+
+```bash
+swift build --package-path GuavaUI/Portable --product GuavaUIDevToolsProbe
+python3 GuavaUI/Browser/verify.py --native-only
+```
+
+The Python runner needs Playwright and Chromium. It exercises real WebSocket
+source/profile, picking/styles, selected state values, timeline start/stop/export,
+breakpoint URLs and disconnect/reconnect cleanup.

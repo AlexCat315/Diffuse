@@ -1,19 +1,21 @@
 import Foundation
 
 public enum DevToolsSubscription: String, Hashable, Sendable {
-    case tree, log, timing, mirror
+    case tree, log, timing, mirror, state, timeline
 }
 
 /// Transport-independent session state. Owned by the serial socket queue or
 /// browser thread; never accessed from the scene thread on native hosts.
 public final class DevToolsSession {
     public private(set) var subscriptions: Set<DevToolsSubscription> = []
+    public var watchedStateIDs: [String] = []
+    public var timelineSequence: UInt64 = 0
     public init() {}
     @discardableResult public func set(_ stream: DevToolsSubscription, enabled: Bool) -> Bool {
         if enabled { return subscriptions.insert(stream).inserted }
         return subscriptions.remove(stream) != nil
     }
-    public func reset() { subscriptions.removeAll() }
+    public func reset() { subscriptions.removeAll(); watchedStateIDs = []; timelineSequence = 0 }
 
     /// Shared validation before either host applies a command to its scene.
     public func validate(_ request: DevToolsEnvelope) -> DevToolsEnvelope? {
@@ -22,6 +24,10 @@ public final class DevToolsSession {
         }
         let message: String?
         switch request.type {
+        case "state.subscribe":
+            message = DevToolsCodec.decode(StateWatchPayload.self, request.payload)?.isValid == true ? nil : "state.subscribe requires up to 128 unique bounded IDs"
+        case "state.list", "state.unsubscribe", "timeline.subscribe", "timeline.unsubscribe":
+            message = request.payload == nil || request.payload?.objectValue?.isEmpty == true || request.payload.map({ if case .null = $0 { return true }; return false }) == true ? nil : "\(request.type) takes no payload"
         case "select.node":
             message = request.payload?.objectValue?["id"]?.stringValue == nil ? "select.node requires payload.id" : nil
         case "state.restore", "state.diff":

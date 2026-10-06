@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "GuavaUIBrowser",
+    platforms: [.macOS(.v13)],
     dependencies: [.package(path: "../Portable"), .package(path: "../Text")],
     targets: [
         .executableTarget(name: "GuavaUIBrowserPrototype", dependencies: [

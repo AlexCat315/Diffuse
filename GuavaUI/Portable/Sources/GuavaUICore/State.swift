@@ -33,9 +33,22 @@ public struct State<Value>: DynamicProperty {
 
     @usableFromInline
     internal let _storage: StateStorage<Value>
+    private let inspectionSummary: ((Value) -> String)?
 
-    public init(wrappedValue: Value) {
+    /// Explicitly opt a value into read-only DevTools observation. A custom
+    /// summary can redact secrets or abbreviate a large application value.
+    public init(wrappedValue: Value, expose: Bool = false, summary: ((Value) -> String)? = nil) {
         _storage = StateStorage(value: wrappedValue)
+        inspectionSummary = expose ? (summary ?? { String(describing: $0) }) : nil
+    }
+
+    public var _devToolsValueType: String { String(reflecting: Value.self) }
+
+    public var _devToolsRead: (() -> String)? {
+        guard let inspectionSummary else { return nil }
+        return { [weak storage = _storage] in
+            storage.map { inspectionSummary($0.value) } ?? "<released>"
+        }
     }
 
     public var wrappedValue: Value {

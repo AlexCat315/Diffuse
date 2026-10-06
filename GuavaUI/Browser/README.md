@@ -169,3 +169,20 @@ CMake/Ninja/Python/Node 的 runner 后，从 Actions 手动运行，它会严格
 `architecture=swiftshader`、`isFallbackAdapter=true`、`lost=true`，严格硬件验收按预期拒绝
 该环境；**真实 WebGPU 画面的严格像素验收仍待可用 GPU 环境完成**。
 开发重载与 debug/release Wasm 构建也已验证通过。
+
+The shared Inspector also supports explicitly exposed State summaries and an
+opt-in CPU timeline. `count` and `dark` are exposed by the shared demo; the note
+text remains private from observation. Compose/commit, layout and text/draw-list
+spans share one monotonic clock. Timeline export measures CPU generation, while
+WebGPU submission remains owned by JavaScript.
+
+`python3 verify.py --native-only` validates the real native WebSocket host and
+Inspector without building Wasm or requiring a GPU. Install Playwright/Chromium
+and build `GuavaUIDevToolsProbe` first. Full `verify.py` additionally exercises the
+Wasm renderer and input pipeline.
+
+For a live macOS GPU/mirror check, run `GUAVA_DEVTOOLS=1 swift run --package-path
+GuavaUI GuavaUIDemo --shared-counter` from the repository root, then
+`python3 GuavaUI/Browser/verify_native_demo.py`. This checks live State values,
+actual padding-driven Yoga layout, CPU timeline spans, Metal mirror pixels and
+remote pointer input. The app remains running after the check.
