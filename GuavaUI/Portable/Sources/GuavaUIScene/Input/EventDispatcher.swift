@@ -34,6 +34,8 @@ public final class EventDispatcher {
     /// Optional debug hook for tooling. It is invoked after each handler call
     /// with the resolved route metadata and result.
     public var eventSink: ((InputEvent) -> Void)?
+    /// Consumed diagnostic input never reaches application routes or recording.
+    public var eventInterceptor: ((InputEvent) -> Bool)?
     public var traceSink: ((InputDispatchTrace) -> Void)?
     private var activeCursor: SystemCursor = .arrow
 
@@ -60,7 +62,9 @@ public final class EventDispatcher {
 
     // MARK: - Public dispatch
 
-    public func dispatch(_ event: InputEvent) {
+    @discardableResult
+    public func dispatch(_ event: InputEvent) -> Bool {
+        if eventInterceptor?(event) == true { return false }
         eventSink?(event)
         switch event {
         case .mouseButtonDown(let e): dispatchPointerDown(e)
@@ -75,6 +79,7 @@ public final class EventDispatcher {
             // Window lifecycle events are not handled here.
             break
         }
+        return true
     }
 
     // MARK: - Pointer

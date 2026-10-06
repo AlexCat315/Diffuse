@@ -60,6 +60,7 @@ function schedule() {
     wasm.guava_set_scale(window.devicePixelRatio || 1);
     wasm.guava_render(width, height);
     lastFrame = readJSON(wasm.guava_snapshot(), wasm.guava_snapshot_size());
+    surface.style.cursor = lastFrame.tree.inspection?.picking ? "crosshair" : "default";
     updateAtlas(lastFrame);
     const vertices = readBytes(wasm.guava_vertices(), wasm.guava_vertex_bytes());
     const indexCount = wasm.guava_index_count();

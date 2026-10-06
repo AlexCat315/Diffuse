@@ -96,6 +96,11 @@ public final class DevServer: @unchecked Sendable {
     private var clients: [ObjectIdentifier: Client] = [:]
     private var recordingOwner: ObjectIdentifier?
     private var selectionOwner: ObjectIdentifier?
+    private var inspectionOwner: ObjectIdentifier?
+    private var inspectionLease: UUID?
+    @MainActor private var activeInspectionLease: UUID?
+    public var inspectionHandler: (@MainActor (DevToolsEnvelope) -> DevToolsEnvelope)?
+    public var inspectionResetHandler: (@MainActor () -> Void)?
 
     /// Capabilities announced in `hello`. DevTools configures this before
     /// start so clients do not expose controls with no host-side provider.
@@ -167,23 +172,26 @@ public final class DevServer: @unchecked Sendable {
     }
 
     public func stop() {
-        let cleanup = onQueueSync { () -> (Bool, Bool, Bool) in
+        let cleanup = onQueueSync { () -> (Bool, Bool, Bool, UUID?) in
             generation &+= 1
             isStarted = false
             let selection = selectionOwner != nil
             let mirror = clients.values.contains { $0.subscriptions.contains(.mirror) }
             let recording = recordingOwner != nil
+            let inspection = inspectionLease
             clients.removeAll()
             selectionOwner = nil
             recordingOwner = nil
-            return (selection, mirror, recording)
+            inspectionOwner = nil; inspectionLease = nil
+            return (selection, mirror, recording, inspection)
         }
         transport.stop()
-        if cleanup.0 || cleanup.1 || cleanup.2 {
+        if cleanup.0 || cleanup.1 || cleanup.2 || cleanup.3 != nil {
             runOnHostMain { [weak self] in
-                if cleanup.0 { self?.selectionClearHandler?() }
+                if cleanup.0, let self, self.onQueueSync({ self.selectionOwner == nil }) { self.selectionClearHandler?() }
                 if cleanup.1 { self?.mirrorStopHandler?() }
                 if cleanup.2 { _ = self?.recordingStopHandler?() }
+                if let lease = cleanup.3 { self?.resetInspection(lease: lease) }
             }
         }
     }
@@ -243,6 +251,25 @@ public final class DevServer: @unchecked Sendable {
         }
         guard let client = clients[ObjectIdentifier(conn)] else { return }
         if let error = client.session.validate(env) { send(error, on: conn); return }
+        if env.type.hasPrefix("inspect.") {
+            guard inspectionHandler != nil else { sendError(for: env, on: conn, code: "unsupported", message: "Host has no scene editor"); return }
+            let key = ObjectIdentifier(conn)
+            guard inspectionOwner == nil || inspectionOwner == key else {
+                sendError(for: env, on: conn, code: "busy", message: "Another inspector owns the temporary styles; disconnect it first"); return
+            }
+            if inspectionOwner == nil { inspectionOwner = key; inspectionLease = UUID() }
+            selectionOwner = key
+            let lease = inspectionLease!
+            runOnHostMain { [weak self] in
+                guard let self, self.onQueueSync({ self.clients[key] != nil && self.inspectionLease == lease && self.inspectionOwner == key }) else { return }
+                if self.activeInspectionLease != lease {
+                    if self.activeInspectionLease != nil { self.inspectionResetHandler?() }
+                    self.activeInspectionLease = lease
+                }
+                if let response = self.inspectionHandler?(env) { self.send(response, on: conn) }
+            }
+            return
+        }
         switch env.type {
         case "hello.ack":
             // Nothing to do — capabilities negotiation is one-way for now.
@@ -266,13 +293,17 @@ public final class DevServer: @unchecked Sendable {
             sendOK(for: env, on: conn)
 
         case "select.node":
+            if let owner = inspectionOwner, owner != ObjectIdentifier(conn) {
+                sendError(for: env, on: conn, code: "busy", message: "Another inspector owns the scene editor"); return
+            }
             let nodeId = env.payload?.objectValue?["id"]?.stringValue
             if let nodeId {
                 selectionOwner = ObjectIdentifier(conn)
                 runOnHostMain { [weak self] in
-                    self?.selectionHandler?(nodeId)
+                    guard let self, self.onQueueSync({ self.selectionOwner == ObjectIdentifier(conn) && self.clients[ObjectIdentifier(conn)] != nil }) else { return }
+                    self.selectionHandler?(nodeId)
+                    self.sendOK(for: env, on: conn)
                 }
-                sendOK(for: env, on: conn)
             } else {
                 sendError(
                     for: env,
@@ -286,7 +317,10 @@ public final class DevServer: @unchecked Sendable {
             let key = ObjectIdentifier(conn)
             if selectionOwner == key {
                 selectionOwner = nil
-                runOnHostMain { [weak self] in self?.selectionClearHandler?() }
+                runOnHostMain { [weak self] in
+                    guard let self, self.onQueueSync({ self.selectionOwner == nil }) else { return }
+                    self.selectionClearHandler?()
+                }
             }
             sendOK(for: env, on: conn)
 
@@ -532,6 +566,11 @@ public final class DevServer: @unchecked Sendable {
     private func removeClient(_ connection: any DevToolsConnection) {
         let key = ObjectIdentifier(connection)
         let wasMirroring = clients.removeValue(forKey: key)?.subscriptions.contains(.mirror) == true
+        if inspectionOwner == key {
+            let lease = inspectionLease!
+            inspectionOwner = nil; inspectionLease = nil
+            runOnHostMain { [weak self] in self?.resetInspection(lease: lease) }
+        }
         if recordingOwner == key {
             recordingOwner = nil
             runOnHostMain { [weak self] in _ = self?.recordingStopHandler?() }
@@ -539,7 +578,8 @@ public final class DevServer: @unchecked Sendable {
         if selectionOwner == key {
             selectionOwner = nil
             runOnHostMain { [weak self] in
-                self?.selectionClearHandler?()
+                guard let self, self.onQueueSync({ self.selectionOwner == nil }) else { return }
+                self.selectionClearHandler?()
             }
         }
         if wasMirroring, !clients.values.contains(where: { $0.subscriptions.contains(.mirror) }) {
@@ -547,6 +587,11 @@ public final class DevServer: @unchecked Sendable {
                 self?.mirrorStopHandler?()
             }
         }
+    }
+
+    @MainActor private func resetInspection(lease: UUID) {
+        guard activeInspectionLease == lease else { return }
+        activeInspectionLease = nil; inspectionResetHandler?()
     }
 
     private func onQueueSync<T>(_ operation: () throws -> T) rethrows -> T {
